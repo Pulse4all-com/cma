@@ -11,7 +11,7 @@
         "nl": "Niet ingeklokt / Ingeklokt / Je werkdag is be\u00ebindigd"
       },
       "definition": "Whether the person has a workday today and whether it is still open: the badge on the Clock in card (no day), the open-day card, or the ended-day card.",
-      "formula": "no row in cma.workday for (user, today in the user's zone) => 'Not clocked in' card; workday.status = 'open' => 'Clocked in' badge; status = 'ended' => 'Your workday has ended'. status itself is derived by cma.refresh_workday(): ended iff exactly one effective end event exists.",
+      "formula": "no row in cma.workday for (user, today in the user's zone) => 'Not clocked in' card; workday.status = 'open' => 'Clocked in' badge; status = 'ended' => 'Your workday has ended'. status itself is derived by cma.refresh_workday(): ended iff the day's last effective event is an end. A day can hold several sessions (start, end, start, end ...); an ended day that may take another one shows the Clock in card below the ended-day card (canClockInAgain).",
       "unit": "text",
       "grain": [
         "now"
@@ -93,7 +93,7 @@
       "status": [
         "verified"
       ],
-      "notes": "A visit opens nothing (decision 7 Oct 2026): rendering reads the day, only POST /api/v1/me/day/start opens one, and only for a person whose time is kept (cma.time_is_kept, 0003d). The refusal before the window start carries the database's own HH:MI (workdayStartsAt in live.ts parses the one passed-through text); no time is typed in code. :user_id in verify_sql: the person's id, since the page always reads the caller's own day."
+      "notes": "A visit opens nothing (decision 7 Oct 2026): rendering reads the day, only POST /api/v1/me/day/start opens one, and only for a person whose time is kept (cma.time_is_kept, 0003d). The refusal before the window start carries the database's own HH:MI (workdayStartsAt in live.ts parses the one passed-through text); no time is typed in code. :user_id in verify_sql: the person's id, since the page always reads the caller's own day. Clocking in again is the normal Clock in after a normal sign-in; a visit opens nothing. An ended day stays ended unless the tenant's workday.clock_in_again lets the person clock in again after their own log out, within the workday window; other resumes stay corrections (Decision log, 3 Nov 2026, #217)."
     },
     {
       "key": "welcome.clock.status",
@@ -195,8 +195,8 @@
         "en": "Clocked in at",
         "nl": "Ingeklokt om"
       },
-      "definition": "The time the person's workday started today.",
-      "formula": "workday.started_at = min(occurred_at) of the day's effective start event (refresh_workday); formatted hh:mm in the viewer's zone (fmtTime(startedAt, me.timeZone)).",
+      "definition": "The time the person's workday started today: the start of the first session.",
+      "formula": "workday.started_at = min(occurred_at) over the day's effective start events (refresh_workday), i.e. the first session's start; a later session's start does not move it (it is the open day's 'Back since', sessionStartedAt). Formatted hh:mm in the viewer's zone (fmtTime(startedAt, me.timeZone)).",
       "unit": "time_of_day",
       "grain": [
         "now"
@@ -266,7 +266,7 @@
         "en": "Time worked so far",
         "nl": "tot nu toe gewerkt"
       },
-      "definition": "How long the person has worked today: time in working statuses only, pauses excluded, up to now (or up to the day's window end).",
+      "definition": "How long the person has worked today across all sessions: time in working statuses only, pauses excluded, up to now (or up to the day's window end). The time between two sessions is not counted.",
       "formula": "workedSeconds = clock.closedSeconds + (now - runningSince when the current status is working), where now is capped at dayEndsAt (the window end); minutes = floor(seconds/60), shown as Xh YYm. closedSeconds = sum of closed or capped interval seconds where status.is_working; runningSince = start of the open, non-capped interval while its status is working (readDay, postgres.ts:77-102).",
       "unit": "minutes",
       "grain": [
@@ -365,7 +365,7 @@
       "status": [
         "verified"
       ],
-      "notes": "The clock counts the same seconds the database counts (verify equality to the minute; the page floors to whole minutes with fmtMinutes). The window end is read live from the tenant's settings, not snapshotted per day \u2014 see the window-retroactivity finding. Which hours the agent sees (working vs paid) was decided 7 Oct 2026: working time (open-decisions.md keeps the related money-column wording open)."
+      "notes": "The clock counts the same seconds the database counts (verify equality to the minute; the page floors to whole minutes with fmtMinutes). The window end is read live from the tenant's settings, not snapshotted per day \u2014 see the window-retroactivity finding. Which hours the agent sees (working vs paid) was decided 7 Oct 2026: working time (open-decisions.md keeps the related money-column wording open). The time between two sessions counts in no figure. Only stretches in working statuses are summed, and an ended session's stretches stand still."
     },
     {
       "key": "welcome.clock.clocked_out_at",
@@ -376,8 +376,8 @@
         "en": "Clocked out at",
         "nl": "Uitgeklokt om"
       },
-      "definition": "The time the ended day was clocked out, on the ended-day card.",
-      "formula": "workday.ended_at = max(occurred_at) of the day's effective end event (at most one, refresh_workday); hh:mm in the viewer's zone; empty while null (defensive \u2014 the card only shows for status 'ended', where ended_at is not null by check constraint).",
+      "definition": "The time the ended day was clocked out, on the ended-day card: the end of the last session.",
+      "formula": "workday.ended_at = max(occurred_at) over the day's effective end events, set only when the day's last effective event is an end (refresh_workday), i.e. the last session's end; hh:mm in the viewer's zone; empty while null (defensive: the card only shows for status 'ended', where ended_at is not null by check constraint).",
       "unit": "time_of_day",
       "grain": [
         "now"
@@ -449,7 +449,7 @@
       "status": [
         "verified"
       ],
-      "notes": "An end entered by the scheduler or a correction is visible as such on Team hours (chips) and in the day's history, not on this card."
+      "notes": "An end entered by the scheduler or a correction is visible as such on Team hours (chips) and in the day's history, not on this card. After a clock-in again the day is open and ended_at is null until the next end."
     },
     {
       "key": "welcome.needs_attention.days_not_clocked_out",
@@ -1284,8 +1284,8 @@
         "en": "Clocked out",
         "nl": "Uitgeklokt"
       },
-      "definition": "How many people whose time is kept have ended today's workday (hint: \"Today's day has ended\").",
-      "formula": "count of people where day is not null and (day.status = 'ended' or current status is null). cma.team_now() returns day_status 'ended' for a day with ended_at set.",
+      "definition": "How many people whose time is kept have ended today's workday (hint: \"Today's day has ended\"); a person who clocked in again is back in an open group until the next end.",
+      "formula": "count of people where day is not null and (day.status = 'ended' (the last effective event is an end) or current status is null). cma.team_now() returns day_status 'ended' for a day with ended_at set; ended_at is null again once the person clocks in again.",
       "unit": "count",
       "grain": [
         "now"
@@ -1584,8 +1584,8 @@
         "en": "Clocked in",
         "nl": "Ingeklokt"
       },
-      "definition": "When the person clocked in today, as a time of day in the person's own zone; the zone's short name is appended only when the person's clock differs from the viewer's.",
-      "formula": "fmtTime(day.started_at, person zone, viewer locale); zoneLabel = fmtZoneShort(...) only when !sameOffset(started_at, person zone, viewer zone). started_at is the workday's derived start (earliest effective start event).",
+      "definition": "When the person clocked in today (the first session's start), as a time of day in the person's own zone; the zone's short name is appended only when the person's clock differs from the viewer's.",
+      "formula": "fmtTime(day.started_at, person zone, viewer locale); zoneLabel = fmtZoneShort(...) only when !sameOffset(started_at, person zone, viewer zone). started_at is the workday's derived start (the earliest effective start event, i.e. the first session's start).",
       "unit": "time_of_day",
       "grain": [
         "now",
@@ -1651,7 +1651,7 @@
         "en": "Clocked out",
         "nl": "Uitgeklokt"
       },
-      "definition": "When the person ended today's day, in their own zone; empty while the day is open or there is no day.",
+      "definition": "When the person ended today's day (the last session's end), in their own zone; empty while the day is open (also after a clock-in again) or there is no day.",
       "formula": "fmtTime(day.ended_at, person zone, viewer locale) when ended_at is set, else empty.",
       "unit": "time_of_day",
       "grain": [
@@ -1718,7 +1718,7 @@
         "en": "Worked so far",
         "nl": "Tot nu gewerkt"
       },
-      "definition": "The seconds the person has worked today (working statuses only, pauses excluded), ticking on screen like the clock on My day.",
+      "definition": "The seconds the person has worked today across all sessions (working statuses only, pauses excluded, the time between sessions not counted), ticking on screen like the clock on My day.",
       "formula": "workedSeconds(clock, now) = closedSeconds + (runningSince ? secondsSince(runningSince, now) : 0). closedSeconds = sum of interval seconds where the interval's status is_working and (not open or capped); runningSince = start of the open working, uncapped stretch. The database counts an open stretch only to the workday window's end (cma.business_day_end, 0008b); an ended day has nothing running, so its figure stands still.",
       "unit": "seconds",
       "grain": [
@@ -1797,7 +1797,7 @@
       "status": [
         "discrepancy"
       ],
-      "notes": "Cross-page nuance (finding): workedSeconds() supports a dayEndsAt cap and My day passes it, but LiveBoard.tsx:93 calls it without one (deliberate per the lib comment: 'the Live board passes none and shows what its read returned'). Between two 10 s polls the board can therefore tick up to ~10 s past the workday window's end and snap back on the next read. The verify_sql reproduces the database's capped count; the on-screen figure adds the client tick since the read."
+      "notes": "Cross-page nuance (finding): workedSeconds() supports a dayEndsAt cap and My day passes it, but LiveBoard.tsx:93 calls it without one (deliberate per the lib comment: 'the Live board passes none and shows what its read returned'). Between two 10 s polls the board can therefore tick up to ~10 s past the workday window's end and snap back on the next read. The verify_sql reproduces the database's capped count; the on-screen figure adds the client tick since the read. The time between two sessions counts in no figure."
     },
     {
       "key": "live.people.shift_today",
@@ -6263,8 +6263,8 @@
         "en": "Clocked in",
         "nl": "Ingeklokt"
       },
-      "definition": "When the person's day started, in the day's own time zone.",
-      "formula": "workday.started_at, hh:mm in the day's snapshot zone (fmtTime(startedAt, d.timeZone)); the zone's short name (CEST, BST) appended only when the person's clock differs from the viewer's at that instant (sameOffset).",
+      "definition": "When the person's day started (the first session's start), in the day's own time zone.",
+      "formula": "workday.started_at (the first session's start), hh:mm in the day's snapshot zone (fmtTime(startedAt, d.timeZone)); the zone's short name (CEST, BST) appended only when the person's clock differs from the viewer's at that instant (sameOffset).",
       "unit": "time_of_day",
       "grain": [
         "per_day",
@@ -6323,7 +6323,7 @@
       "status": [
         "verified"
       ],
-      "notes": "decisions.md 7 Oct row 30 said 'Team hours keeps the name rule for now and can adopt this one'; the page has since adopted the sameOffset rule (team/hours/page.tsx:74), matching api.md."
+      "notes": "decisions.md 7 Oct row 30 said 'Team hours keeps the name rule for now and can adopt this one'; the page has since adopted the sameOffset rule (team/hours/page.tsx:74), matching api.md. A day of several sessions shows a neutral chip with the number of sessions (sessions, in the days of GET /api/v1/team/hours); the extra starts are in the day editor's history and in the status-changes export."
     },
     {
       "key": "team_hours.clocked_out",
@@ -6334,8 +6334,8 @@
         "en": "Clocked out",
         "nl": "Uitgeklokt"
       },
-      "definition": "When the day ended, in the day's own zone; empty while the day is open.",
-      "formula": "workday.ended_at, hh:mm in the day's snapshot zone; empty string when null.",
+      "definition": "When the day ended (the last session's end), in the day's own zone; empty while the day is open.",
+      "formula": "workday.ended_at (the last end, set when the last effective event is an end), hh:mm in the day's snapshot zone; empty string when null.",
       "unit": "time_of_day",
       "grain": [
         "per_day",
@@ -6416,7 +6416,7 @@
         "en": "Worked",
         "nl": "Gewerkt"
       },
-      "definition": "Time that person worked that day: statuses flagged working, pauses excluded, capped at the day's window end.",
+      "definition": "Time that person worked that day, summed over all sessions: statuses flagged working, pauses excluded, capped at the day's window end. The time between two sessions counts in no figure.",
       "formula": "minutes = floor(workday_summary.working_seconds / 60) per row (toTeamDay, postgres.ts:438); working_seconds = sum(interval seconds) where status.is_working; interval seconds = greatest(0, floor(epoch(least(coalesce(next_event, now()), window_end_of_day) - event_at))).",
       "unit": "minutes",
       "grain": [
@@ -6518,7 +6518,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Rounded down so the screen never shows more than was worked. Identical flooring on the Dashboard and in the hours CSV (decision 7 Oct 2026), proven cross-page by the same workday_summary source. A correction (Correct a day / Add day) changes this figure immediately: a replaced or voided event drops out of time_event_effective and the intervals are recomputed; corrections are never a figure of their own, the Corrected afterwards chip marks the row. The window end is read live, not snapshotted (see finding)."
+      "notes": "Rounded down so the screen never shows more than was worked. Identical flooring on the Dashboard and in the hours CSV (decision 7 Oct 2026), proven cross-page by the same workday_summary source. A correction (Correct a day / Add day) changes this figure immediately: a replaced or voided event drops out of time_event_effective and the intervals are recomputed; corrections are never a figure of their own, the Corrected afterwards chip marks the row. The window end is read live, not snapshotted (see finding). Stretches only: the blank between one session's end and the next session's start is not a stretch, so it adds nothing."
     },
     {
       "key": "team_hours.paid_minutes",
@@ -6529,7 +6529,7 @@
         "en": "Paid",
         "nl": "Betaald"
       },
-      "definition": "Time that day in statuses flagged paid (can include paid breaks), for payroll.",
+      "definition": "Time that day in statuses flagged paid (can include paid breaks), for payroll, summed over all sessions; the time between two sessions is not paid.",
       "formula": "minutes = floor(workday_summary.paid_seconds / 60) per row; paid_seconds = sum(interval seconds) where status.is_paid; same interval arithmetic and window cap as Worked.",
       "unit": "minutes",
       "grain": [
@@ -6561,7 +6561,7 @@
       "filters": [
         "as team_hours.worked_minutes, with is_paid instead of is_working"
       ],
-      "time": "As team_hours.worked_minutes.",
+      "time": "As team_hours.worked_minutes. The gap between two sessions is not a stretch.",
       "comparison": null,
       "settings": [
         {
@@ -68022,7 +68022,7 @@
         "en": "Worked today",
         "nl": "Vandaag gewerkt"
       },
-      "definition": "The running clock: time worked today in working statuses, ticking every second, pausing on non-working statuses and stopping at the day's window end.",
+      "definition": "The running clock: time worked today across all sessions in working statuses, ticking every second, pausing on non-working statuses and stopping at the day's window end. The time between sessions is not counted; after a clock-in again the clock continues from the closed total.",
       "formula": "h:mm:ss of workedSeconds(clock, now, dayEndsAt) = closedSeconds + max(0, floor((min(now, dayEndsAt) - runningSince)/1000)). closedSeconds = sum(interval seconds) where is_working and (closed or capped); runningSince = from_at of the open non-capped interval while its status is_working, else null (clock paused). dayEndsAt = business_day_end(date, day zone) = window end.",
       "unit": "seconds",
       "grain": [
@@ -68121,7 +68121,7 @@
       "status": [
         "verified"
       ],
-      "notes": "The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding."
+      "notes": "The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding. The time between two sessions counts in no figure. After an end nothing runs (runningSince null) until the next clock-in."
     },
     {
       "key": "my_day.started_at",
@@ -68132,8 +68132,8 @@
         "en": "Started at",
         "nl": "Gestart om"
       },
-      "definition": "When today's workday started.",
-      "formula": "workday.started_at (the effective start event's occurred_at), formatted hh:mm in the viewer's zone on the server (fmtTime).",
+      "definition": "When today's workday started: the first session's start (Start / Clocked in).",
+      "formula": "workday.started_at (the first effective start event's occurred_at; a later session does not move it), formatted hh:mm in the viewer's zone on the server (fmtTime).",
       "unit": "time_of_day",
       "grain": [
         "now"
@@ -68192,7 +68192,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Shown on the open day (top right) and on the ended-day card. Same source as Welcome's 'Clocked in at'."
+      "notes": "Shown on the open day (top right) and on the ended-day card. Same source as Welcome's 'Clocked in at'. An open day of several sessions keeps this 'Started at' and adds 'Back since' (sessionStartedAt, the latest session's start); the day's sessions count is in sessions."
     },
     {
       "key": "my_day.current_status",
@@ -68373,8 +68373,8 @@
         "en": "Ended at",
         "nl": "Be\u00ebindigd om"
       },
-      "definition": "When the ended day was clocked out, on the day-ended card.",
-      "formula": "workday.ended_at, formatted hh:mm in the viewer's zone.",
+      "definition": "When the ended day was clocked out (the last session's end), on the day-ended card.",
+      "formula": "workday.ended_at (the last end, set when the last effective event is an end), formatted hh:mm in the viewer's zone.",
       "unit": "time_of_day",
       "grain": [
         "now"
@@ -68433,7 +68433,7 @@
       "status": [
         "verified"
       ],
-      "notes": "An ended day stays ended (decision 5 Oct 2026); resuming is a correction."
+      "notes": "An ended day stays ended unless the tenant's workday.clock_in_again lets the person clock in again after their own log out, within the workday window; other resumes stay corrections (Decision log, 3 Nov 2026, #217). The card then shows the Clock in card below it (canClockInAgain)."
     },
     {
       "key": "my_hours.date",
@@ -68517,7 +68517,7 @@
         "en": "Start",
         "nl": "Start"
       },
-      "definition": "When the day started.",
+      "definition": "When the day started: the first session's start.",
       "formula": "workday_summary.started_at per day, hh:mm formatted in the viewer's current zone (me.timeZone), empty when null.",
       "unit": "time_of_day",
       "grain": [
@@ -68577,7 +68577,7 @@
       "status": [
         "discrepancy"
       ],
-      "notes": "Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding."
+      "notes": "Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding. A day of several sessions shows '2 sessions' next to the date; the start stays the first session's."
     },
     {
       "key": "my_hours.end",
@@ -68588,7 +68588,7 @@
         "en": "End",
         "nl": "Einde"
       },
-      "definition": "When the day was clocked out; 'still working' while it has no end.",
+      "definition": "When the day was clocked out (the last session's end); 'still working' while it has no end, also after a clock-in again.",
       "formula": "workday_summary.ended_at per day, hh:mm in the viewer's zone; the muted label 'still working' when ended_at is null (open day).",
       "unit": "time_of_day",
       "grain": [
@@ -68655,8 +68655,8 @@
         "en": "Pauses",
         "nl": "Pauzes"
       },
-      "definition": "Time that day in statuses that stop the clock (break, lunch and other non-working statuses).",
-      "formula": "pause_seconds = sum(cma.time_interval.seconds) of the day's intervals whose status has is_working = false; pauseMinutes = floor(pause_seconds/60); shown as Xh YYm. Interval seconds are capped at the day's window end like all counted time.",
+      "definition": "Time that day in statuses that stop the clock (break, lunch and other non-working statuses), summed over all sessions. The time between two sessions is not a pause.",
+      "formula": "pause_seconds = sum(cma.time_interval.seconds) of the day's intervals whose status has is_working = false; pauseMinutes = floor(pause_seconds/60); shown as Xh YYm; only stretches in non-working statuses count, never the span minus worked. Interval seconds are capped at the day's window end like all counted time.",
       "unit": "minutes",
       "grain": [
         "per_day"
@@ -68735,7 +68735,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked span. 0m shows for a day without pauses (a true zero, correct)."
+      "notes": "Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked time. On a day of several sessions the time between sessions is in neither, so pauses + duration is shorter than the span from first start to last end by that gap. 0m shows for a day without pauses (a true zero, correct)."
     },
     {
       "key": "my_hours.duration",
@@ -68746,7 +68746,7 @@
         "en": "Duration",
         "nl": "Duur"
       },
-      "definition": "Time worked that day: working statuses only, the same time the My day clock counts.",
+      "definition": "Time worked that day, summed over all sessions: working statuses only, the same time the My day clock counts.",
       "formula": "minutes = floor(workday_summary.working_seconds / 60) per day (minutesOf, postgres.ts:384). working_seconds = sum(interval seconds) where status.is_working, each interval capped at the day's window end; an open day runs to now().",
       "unit": "minutes",
       "grain": [
@@ -68838,7 +68838,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so)."
+      "notes": "Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so). The time between two sessions counts in no figure."
     },
     {
       "key": "my_hours.total_duration",
@@ -78833,7 +78833,7 @@
         "en": "Clocked in",
         "nl": "Ingeklokt"
       },
-      "definition": "The local time the day started, in the row's time zone.",
+      "definition": "The local time the day started (the first session's start), in the row's time zone.",
       "formula": "formatTime(started_at, row.timeZone): 24-hour hh:mm via Intl in the day's zone; no date, no offset.",
       "unit": "time_of_day",
       "grain": [
@@ -78899,7 +78899,7 @@
         "en": "Clocked out",
         "nl": "Uitgeklokt"
       },
-      "definition": "The local time the day ended; empty while it is open.",
+      "definition": "The local time the day ended (the last session's end); empty while it is open.",
       "formula": "ended_at ? formatTime(ended_at, row.timeZone) : '' (hh:mm in the day's zone).",
       "unit": "time_of_day",
       "grain": [
@@ -78965,7 +78965,7 @@
         "en": "Worked",
         "nl": "Gewerkt"
       },
-      "definition": "Time worked that day (working statuses), written in the tenant's duration format.",
+      "definition": "Time worked that day (working statuses, all sessions), written in the tenant's duration format; the time between sessions is not counted.",
       "formula": "formatDuration(working_seconds): minutes = floor(seconds/60) FIRST (the same whole minutes the screens show), then decimal hours with 2 decimals (round(minutes/60, 2)), hh:mm, or plain minutes; decimal mark from the settings.",
       "unit": "minutes",
       "grain": [
@@ -79074,7 +79074,7 @@
         "en": "Paid",
         "nl": "Betaald"
       },
-      "definition": "Time that day in paid statuses, for payroll, in the tenant's duration format.",
+      "definition": "Time that day in paid statuses, for payroll, in the tenant's duration format; the time between sessions is not paid.",
       "formula": "formatDuration(paid_seconds): floor to whole minutes first, then the chosen format.",
       "unit": "minutes",
       "grain": [
@@ -79166,7 +79166,7 @@
         "en": "Billable",
         "nl": "Factureerbaar"
       },
-      "definition": "Time that day in billable statuses (hours billed to or by the employer); only in the file, no screen shows it.",
+      "definition": "Time that day in billable statuses (hours billed to or by the employer); only in the file, no screen shows it. The time between sessions is not billable.",
       "formula": "formatDuration(billable_seconds): floor to whole minutes first, then the chosen format; billable_seconds = sum(interval seconds) where status.is_billable.",
       "unit": "minutes",
       "grain": [
@@ -79483,7 +79483,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Grain per_record = one row per status stretch of a day. File-wide conventions as the hours file (separator, BOM, CRLF, RFC 4180, formula guard, labels in the caller's language)."
+      "notes": "Grain per_record = one row per status stretch of a day. File-wide conventions as the hours file (separator, BOM, CRLF, RFC 4180, formula guard, labels in the caller's language). A day of several sessions gives one row per stretch in every session: each session's start and end are in the file, and the blank between two sessions has no row."
     },
     {
       "key": "export.status_changes_csv.person",
@@ -79880,7 +79880,7 @@
       "status": [
         "verified"
       ],
-      "notes": "The query's rows with kind in ('start','status') are the file's rows; drop the end rows after the lead(). An empty To with 'Not clocked out' = Yes marks a capped stretch whose counted Duration stops at the window end."
+      "notes": "The query's rows with kind in ('start','status') are the file's rows; drop the end rows after the lead(). An empty To with 'Not clocked out' = Yes marks a capped stretch whose counted Duration stops at the window end. A stretch ending in a session's end shows that end as its To; the next session's first row starts later, with no row for the gap between them."
     },
     {
       "key": "export.status_changes_csv.duration",
@@ -79977,7 +79977,7 @@
       "status": [
         "discrepancy"
       ],
-      "notes": "Each stretch is floored to whole minutes independently, so adding a day's stretch rows can fall short of the hours file's Worked/Paid (which floor the day's summed seconds once) by up to one minute per stretch. See finding. Keep only rows whose event kind is start/status (the lead() needs the end rows)."
+      "notes": "Each stretch is floored to whole minutes independently, so adding a day's stretch rows can fall short of the hours file's Worked/Paid (which floor the day's summed seconds once) by up to one minute per stretch. See finding. Keep only rows whose event kind is start/status (the lead() needs the end rows). Only stretches count: the gap between two sessions has no row and no duration."
     },
     {
       "key": "export.status_changes_csv.working",
