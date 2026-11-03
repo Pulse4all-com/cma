@@ -4,8 +4,9 @@
  * Correct a day and Add day: one native <dialog>, mounted per opening (the parent gives it a key),
  * so every opening starts from the day as it stands now.
  *
- * Rows show the day's effective events in the day's own zone. The earliest row is the clock-in;
- * "Clocked out" is a choice in the status list. Saving sends the smallest diff through
+ * Rows show the day's effective events in the day's own zone. A day is one or more sessions
+ * (addition 0008zp): the earliest row is the clock-in, a row after a clock-out clocks in again, and
+ * both carry the Clock-in badge; "Clocked out" is a choice in the status list. Saving sends the smallest diff through
  * POST /api/v1/team/days/{userId}/{date}/corrections, with one reason for the whole edit; the
  * database validates again and the caller is the approver (V1). Nothing here knows a status key.
  *
@@ -147,8 +148,10 @@ export function DayEditor({
       const live = rs.filter((r) => !r.end && /^\d{2}:\d{2}$/.test(r.time));
       const last = live.reduce<string | null>((m, r) => (m === null || r.time > m ? r.time : m), null);
       const row = newRow(last);
-      const endAt = rs.findIndex((r) => r.end);
-      return endAt < 0 ? [...rs, row] : [...rs.slice(0, endAt), row, ...rs.slice(endAt)];
+      // Before the day's last clock-out (the latest one), so the new row lands in the last session
+      const ends = rs.map((r, i) => ({ r, i })).filter(({ r }) => r.end);
+      const lastEnd = ends.reduce<{ r: EditorRow; i: number } | null>((m, x) => (m === null || x.r.time >= m.r.time ? x : m), null);
+      return lastEnd === null ? [...rs, row] : [...rs.slice(0, lastEnd.i), row, ...rs.slice(lastEnd.i)];
     });
   }
 
@@ -182,13 +185,13 @@ export function DayEditor({
 
   const rowProblem: Record<RowProblem, string> = {
     time: t.problemTime, gap: t.problemGap, ambiguous: t.problemAmbiguous, future: t.problemFuture, status: t.problemStatus,
-    inactive: t.problemInactive,
+    inactive: t.problemInactive, atEnd: t.problemAtEnd,
   };
   const dayProblem: Record<DayProblem, string> = {
-    empty: t.problemEmpty, firstIsEnd: t.problemFirstIsEnd, twoEnds: t.problemTwoEnds,
-    endNotLast: t.problemEndNotLast, noChange: t.problemNoChange,
+    empty: t.problemEmpty, firstIsEnd: t.problemFirstIsEnd, endAfterEnd: t.problemEndAfterEnd, noChange: t.problemNoChange,
   };
-  const startId = checked?.rows.find((r) => r.kind === "start")?.id;
+  /** Every row that clocks in: the day's first and each one after a clock-out (0008zp) */
+  const startIds = new Set(checked?.rows.filter((r) => r.kind === "start").map((r) => r.id) ?? []);
   const hasHistory = events.some((e) => !e.isEffective || e.source !== "user");
 
   return (
@@ -296,7 +299,7 @@ export function DayEditor({
                 const twice = checked.ambiguous[r.id];
                 return (
                   <tr key={r.id} className="border-b border-p4a-border align-top">
-                    <td className="px-3 py-2">{r.id === startId ? <Badge tone="info">{t.startLabel}</Badge> : null}</td>
+                    <td className="px-3 py-2">{startIds.has(r.id) ? <Badge tone="info">{t.startLabel}</Badge> : null}</td>
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
                         <input

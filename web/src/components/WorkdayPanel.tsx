@@ -19,6 +19,11 @@
  * refusal); a status live region says the new status in words. The current status button takes the
  * focus when the panel mounts, so the person who has just clocked in (the card is replaced by this
  * panel) keeps a place to work from, as the Clock in button had the focus before.
+ *
+ * Sessions (addition 0008zp): on a day clocked in again, "Started at" keeps the first session's start
+ * and a second line says since when the person is back. While the tenant lets people clock in again
+ * and the window is still open, End workday says until when that can happen; an ended day that can
+ * take another session says so, and the page shows the Clock in card again below it.
  */
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
@@ -59,6 +64,8 @@ export function WorkdayPanel({
   startedLabel,
   statusSinceLabel,
   endedLabel,
+  sessionStartedLabel = null,
+  dayEndsLabel,
   copy,
 }: {
   workday: Workday;
@@ -68,6 +75,10 @@ export function WorkdayPanel({
   startedLabel: string;
   statusSinceLabel: string | null;
   endedLabel: string | null;
+  /** The latest session's start, on a day with more than one session */
+  sessionStartedLabel?: string | null;
+  /** The window end of the day (dayEndsAt), for "until" when the person can clock in again */
+  dayEndsLabel: string;
   copy: Copy;
 }) {
   const router = useRouter();
@@ -82,6 +93,8 @@ export function WorkdayPanel({
   /** The status whose button gets the focus back once the change has landed */
   const refocus = useRef<string | null>(null);
   const working = workday.status === "working";
+  // Whether ending now still leaves room to clock in again today: the setting on, the window open
+  const againAfterEnd = workday.clockInAgain && now !== null && now < Date.parse(workday.dayEndsAt);
   const current = statuses.find((s) => s.key === workday.statusKey);
   const group = useRef<HTMLDivElement>(null);
 
@@ -165,7 +178,7 @@ export function WorkdayPanel({
         <div className="flex items-center gap-3">
           <Badge tone="neutral">{copy.myDay.dayEnded}</Badge>
         </div>
-        <p className="mt-4 text-body">{copy.myDay.dayEndedBody}</p>
+        <p className="mt-4 text-body">{workday.canClockInAgain ? copy.myDay.sessionEndedBody : copy.myDay.dayEndedBody}</p>
         <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-small">
           <dt className="text-p4a-muted">{copy.myDay.startedAt}</dt>
           <dd className="tabular">{startedLabel}</dd>
@@ -190,8 +203,13 @@ export function WorkdayPanel({
             {copy.myDay.workingSince} <span className="tabular text-p4a-body">{statusSinceLabel}</span>
           </span>
         ) : null}
-        <span className="ml-auto text-small text-p4a-muted">
+        <span className="ml-auto text-right text-small text-p4a-muted">
           {copy.myDay.startedAt} <span className="tabular text-p4a-body">{startedLabel}</span>
+          {sessionStartedLabel ? (
+            <span className="block" data-testid="back-since">
+              {copy.myDay.backSince} <span className="tabular text-p4a-body">{sessionStartedLabel}</span>
+            </span>
+          ) : null}
         </span>
       </div>
       <p className="mt-6 text-caption text-p4a-grey">{copy.myDay.workedToday}</p>
@@ -266,7 +284,7 @@ export function WorkdayPanel({
         onCancel={() => setConfirming(false)}
         busy={pending}
       >
-        {copy.myDay.confirmBody}
+        {againAfterEnd ? copy.myDay.confirmBodyAgain.replace("{time}", dayEndsLabel) : copy.myDay.confirmBody}
       </ConfirmDialog>
     </Card>
   );

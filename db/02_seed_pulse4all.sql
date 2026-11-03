@@ -5,7 +5,8 @@
 -- reasons and telephony settings, (after 0008j) the connected-call threshold, (after 0008l) the
 -- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows,
 -- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
--- 0008zi) its asset register catalogs and (after 0008zn) its Flash settings.
+-- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings and (after 0008zp) whether its people may clock in
+-- again on the same day.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -542,6 +543,29 @@ begin
     -- rerun of this seed keeps the value set then (on conflict do nothing)
     (v_subs, 'assets.required_refs', ''),
     (v_subs, 'commerce.required_contact_refs', '')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- Split shifts for Pulse4all Subscriptions (after addition 0008zp; Martin, 3 November 2026): Newco's agents work split
+-- shifts, so a person who logged out (or pressed End workday) may clock in again on the same day, within the workday
+-- window above (07:00 to 22:00). Pulse4all Invest keeps the default, off. Only a value the tenant does not have yet is
+-- added, so a change in Studio or through the Configuration API survives a rerun: false restores the earlier behaviour
+-- (an ended day stays ended) without a deploy. Two steps, as for the window: the catalog exists only from 0003b on.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null then
+    raise notice 'clocking in again does not exist yet (addition 0008zp): rerun this seed after 126_workday_sessions.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'workday.clock_in_again') then
+    raise notice 'clocking in again does not exist yet (addition 0008zp): rerun this seed after 126_workday_sessions.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  values (v_subs, 'workday.clock_in_again', 'true')
   on conflict (tenant_id, key) do nothing;
 end
 $$;

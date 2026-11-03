@@ -7,7 +7,10 @@
  * Covers the clock changes of Europe/Madrid in 2026 (29 March: 02:00 to 02:59 does not exist;
  * 25 October: 02:00 to 02:59 occurs twice), the order rules, and the diff: unchanged rows send
  * nothing, a changed row replaces its event, a removed row is voided, Add day starts with the start;
- * and a day imported from an earlier system (addition 0008d), in a status retired by the import.
+ * a day imported from an earlier system (addition 0008d), in a status retired by the import; and a day
+ * of sessions (addition 0008zp): a row after a clock-out clocks in again, a row whose kind changes
+ * replaces its event, two clock-outs need a clock-in between them, a new row at a clock-out's minute
+ * is refused while an untouched one stays.
  */
 import { check, instantsForLocal, localParts, normalizeTime, rowsFromEvents } from "../src/lib/corrections.ts";
 
@@ -91,14 +94,14 @@ expect("a future time is refused", check([], one("09:00"), "2026-10-05", TZ, Dat
 expect("the first row cannot be clocked out",
   run([{ id: "e", eventId: null, end: true, statusKey: null, time: "08:00", offset: null }, ...one("09:00")], "2026-10-05", []).dayProblems,
   ["firstIsEnd"], []);
-expect("two clock-outs are refused",
+expect("two clock-outs need a clock-in between them",
   run([...one("09:00"), { id: "e1", eventId: null, end: true, statusKey: null, time: "16:00", offset: null },
        { id: "e2", eventId: null, end: true, statusKey: null, time: "17:00", offset: null }], "2026-10-05", []).dayProblems,
-  ["twoEnds"], []);
-expect("nothing after the clock-out",
+  ["endAfterEnd"], []);
+expect("a row after the clock-out clocks in again",
   run([...one("09:00"), { id: "e", eventId: null, end: true, statusKey: null, time: "16:00", offset: null },
-       { id: "y", eventId: null, end: false, statusKey: "available", time: "17:00", offset: null }], "2026-10-05", []).dayProblems,
-  ["endNotLast"], []);
+       { id: "y", eventId: null, end: false, statusKey: "available", time: "17:00", offset: null }], "2026-10-05", []).rows.map((r) => r.kind),
+  ["start", "end", "start"], ["start", "end", "status"]);
 expect("an invalid time is refused", run(one("9.00"), "2026-10-05", []).rowProblems, { x: "time" }, {});
 
 // ---- a status no longer in use ------------------------------------------------------------------
@@ -144,6 +147,54 @@ expect("a removed gap voids both of its rows",
 expect("a moved session row needs a current status",
   onImported(importedRows.map((r) => (r.eventId === IMP(3) ? { ...r, time: "10:20" } : r))).rowProblems,
   { [IMP(3)]: "inactive" }, {});
+
+// ---- sessions (addition 0008zp) -------------------------------------------------------------------
+// A split shift: 09:00 to 13:00, out, 17:00 to 21:00 (Madrid, +02:00 on 5 October 2026)
+const SES = (n) => `00000000-0000-4000-8000-0000000002${String(n).padStart(2, "0")}`;
+const splitDay = [
+  ev(SES(1), "start", "2026-10-05T07:00:00Z", "available"),
+  ev(SES(2), "status", "2026-10-05T09:00:00Z", "break"),
+  ev(SES(3), "status", "2026-10-05T09:15:00Z", "available"),
+  ev(SES(4), "end", "2026-10-05T11:00:00Z"),
+  ev(SES(5), "start", "2026-10-05T15:00:00Z", "available"),
+  ev(SES(6), "end", "2026-10-05T19:00:00Z"),
+];
+const splitRows = rowsFromEvents(splitDay, TZ);
+const onSplit = (rows) => check(splitRows, rows, "2026-10-05", TZ, LATER);
+expect("a session's clock-in is a start again", onSplit(splitRows).rows.map((r) => r.kind),
+  ["start", "status", "status", "end", "start", "end"], ["start", "status", "status", "end", "status", "end"]);
+expect("an unchanged day of two sessions sends nothing", onSplit(splitRows).dayProblems, ["noChange"], []);
+expect("the second clock-in moved replaces it",
+  onSplit(splitRows.map((r) => (r.eventId === SES(5) ? { ...r, time: "17:30" } : r))).changes,
+  [{ kind: "start", at: "2026-10-05T17:30:00+02:00", statusKey: "available", supersedes: SES(5) }],
+  [{ kind: "status", at: "2026-10-05T17:30:00+02:00", statusKey: "available", supersedes: SES(5) }]);
+expect("removing the first clock-out merges the sessions: the clock-in becomes a status",
+  onSplit(splitRows.filter((r) => r.eventId !== SES(4))).changes,
+  [{ kind: "void", supersedes: SES(4) }, { kind: "status", at: "2026-10-05T17:00:00+02:00", statusKey: "available", supersedes: SES(5) }],
+  [{ kind: "void", supersedes: SES(4) }]);
+expect("a status that becomes a clock-out and one that becomes a clock-in replace their events",
+  run(original.map((r) => (r.eventId === ID(2) ? { ...r, end: true, statusKey: null } : r))).changes,
+  [{ kind: "end", at: "2026-10-05T11:00:00+02:00", supersedes: ID(2) },
+   { kind: "start", at: "2026-10-05T11:15:00+02:00", statusKey: "available", supersedes: ID(3) }],
+  [{ kind: "end", at: "2026-10-05T11:00:00+02:00", supersedes: ID(2) }]);
+expect("a new row at a clock-out's minute is refused",
+  onSplit([...splitRows, { id: "n13", eventId: null, end: false, statusKey: "available", time: "13:00", offset: null }]).rowProblems,
+  { n13: "atEnd" }, {});
+const closedAtLast = [
+  ev(SES(11), "start", "2026-10-05T07:00:00Z", "available"),
+  ev(SES(12), "status", "2026-10-05T17:12:00Z", "break"),
+  { ...ev(SES(13), "end", "2026-10-05T17:12:00Z"), source: "system", recordedAt: "2026-10-05T19:00:00Z" },
+];
+const closedRows = rowsFromEvents(closedAtLast, TZ);
+expect("an untouched status at the clock-out's minute stays a status", check(closedRows, closedRows, "2026-10-05", TZ, LATER).dayProblems,
+  ["noChange"], ["atEnd"]);
+expect("Add day with two sessions starts with the first clock-in",
+  run([{ id: "a1", eventId: null, end: true, statusKey: null, time: "21:00", offset: null },
+       { id: "a2", eventId: null, end: false, statusKey: "available", time: "17:00", offset: null },
+       { id: "a3", eventId: null, end: true, statusKey: null, time: "13:00", offset: null },
+       { id: "a4", eventId: null, end: false, statusKey: "available", time: "09:00", offset: null }], "2026-10-02", []).changes
+    .map((c) => `${c.kind} ${c.at.slice(11, 16)}`),
+  ["start 09:00", "end 13:00", "start 17:00", "end 21:00"], ["start 09:00", "start 17:00", "end 13:00", "end 21:00"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
