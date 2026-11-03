@@ -6,14 +6,16 @@
 -- tenant), so the verdict never depends on the time it runs. Block S checks the addition and the grants; blocks A1 to A10
 -- each work on a throwaway tenant inside a subtransaction that is always rolled back, so nothing stays and the script
 -- runs in dev and in prod. Cloud SQL Studio shows no notices: a check that fails raises "FAIL …" and stops its block;
--- every check that passed writes one row, and the last row is the verdict: "PASS | 30 PASS, 0 FAIL" (provoked:
--- "PROVOKED, NOT A PASS | 0 PASS, 30 FAIL"). A block that stopped
--- counts its checks as FAIL. Run as your own IAM login after 126_workday_sessions.sql, dev first, then prod; then 07
+-- every check that passed writes one row, and the last row is the verdict: "PASS | 31 PASS, 0 FAIL" (provoked:
+-- "PROVOKED, NOT A PASS | 0 PASS, 31 FAIL"). A block that stopped counts its checks as FAIL; the verdict is reached
+-- only when the client goes on after an error (psql -v ON_ERROR_STOP=0, as the provoked run does; with ON_ERROR_STOP=1
+-- the run ends at the first FAIL, which names the check). Run as your own IAM login after 126_workday_sessions.sql, dev first, then prod; then 07
 -- (block C), 10, 18, 20, 47, 51 and 111 again (unchanged, still PASS).
 --   S1  the addition 0008zp is recorded after 0008zn; the setting workday.clock_in_again exists, boolean, default false;
 --       cma.workday_can_clock_in_again is a stable invoker function executable by cma_app only; open_workday's definition
 --       calls it under a lock; refresh_workday's names the session rules
---   A1  setting off: open 09:00, end 13:00 (the person's own), open 17:00: the day stays ended with one start
+--   A1  setting off (not set, so the catalog's default): open 09:00, end 13:00 (the person's own), open 17:00: the day
+--       stays ended with one start
 --   A2  setting on: the same opens the day again (started_at 09:00, ended_at null, two starts); an end at 21:00 ends it;
 --       worked 4 h + 4 h; the gap 13:00 to 17:00 in no stretch; no pause; the status-changes export without the gap; the
 --       hours export 09:00 to 21:00 with 8 h worked; time per status and the day's events; nobody clocked in during the gap
@@ -22,7 +24,8 @@
 --   A5  not resumable: a day the scheduler closed, an end set by a correction, a day added by a correction, an imported
 --       day (a one-day batch as 111 loads it), a person whose time is no longer kept, another date, another tenant: each
 --       unchanged, nothing written
---   A6  cma.workday_can_clock_in_again agrees with cma.open_workday in every case of A1 to A5 (one row per block)
+--   A6  cma.workday_can_clock_in_again agrees with cma.open_workday in every case of A1 to A5 (one row per block); in A5
+--       the same day is resumable from its own tenant (the control) and not from another
 --   A7  corrections on a two-session day by a supervisor: the second start moved; the first end and the second start
 --       voided (one session, valid); a status between an end and the next start, two ends in a row, a start at the end's
 --       own instant and a start while a session is open are CMA04 with the rule named and nothing written; Add day with
@@ -58,7 +61,8 @@ as $$
 $$;
 
 -- A throwaway tenant: an admin, a manager, a supervisor, six agents and the tenant's scheduler; the window 07:00 to 22:00,
--- 17:00 and an hour's grace, workday.clock_in_again as asked; the statuses picked by flag. Its ids as jsonb.
+-- 17:00 and an hour's grace; workday.clock_in_again set to true when asked, else not set (the catalog's default); the
+-- statuses picked by flag. Its ids as jsonb.
 create or replace function pg_temp.v0008zp_tenant(p_slug text, p_again boolean)
 returns jsonb
 language plpgsql
@@ -84,7 +88,8 @@ begin
   insert into cma.tenant_setting (tenant_id, key, value)
   select v_t, s.key, s.value
   from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
-               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', p_again::text)) as s(ord, key, value)
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
   order by s.ord;
   v := v || jsonb_build_object(
     'default',      (select s.key from cma.work_status s where s.tenant_id = v_t and s.is_default and s.status = 'active'),
@@ -267,21 +272,26 @@ begin
     from cma.team_status_time(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid) r;
     if v_txt is distinct from (x ->> 'default') || ':28800:2'
        or (select string_agg(d.kind, ',' order by d.occurred_at, d.recorded_at) from cma.team_day((x ->> 'p1')::uuid, date '2026-03-10') d
-           where d.is_effective) <> 'start,end,start,end'
-       or (select h.working_seconds from cma.team_hours(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid) h) <> 28800 then
+           where d.is_effective) is distinct from 'start,end,start,end'
+       or (select h.working_seconds from cma.team_hours(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid) h) is distinct from 28800::bigint then
       raise exception 'FAIL A2: time per status, the day''s events or Team hours read [%]', v_txt;
     end if;
     v_rows := v_rows || array['27', 'A2 time per status, the day''s events, Team hours', 'PASS', v_txt || '; start,end,start,end'];
 
     -- A3. a third session, 21:30 to 21:50
     perform pg_temp.v0008zp_as(x, 'p1');
+    v_can := cma.workday_can_clock_in_again(w.id, pg_temp.v0008zp_at('21:30'));
     w := cma.open_workday(pg_temp.v0008zp_at('21:30'));
     w := cma.end_workday(w.id, pg_temp.v0008zp_at('21:50'));
     if w.status <> 'ended' or pg_temp.v0008zp_starts(w.id) <> 3 or w.ended_at <> pg_temp.v0008zp_at('21:50')
-       or (select s2.working_seconds from cma.workday_summary s2 where s2.workday_id = w.id) <> 30000 then
+       or (select s2.working_seconds from cma.workday_summary s2 where s2.workday_id = w.id) is distinct from 30000::bigint then
       raise exception 'FAIL A3: a third session gave % with % starts', w.status, pg_temp.v0008zp_starts(w.id);
     end if;
     v_rows := v_rows || array['30', 'A3 a third session, counted', 'PASS', 'three starts, 30000 s worked, ended 21:50'];
+    if not v_can then
+      raise exception 'FAIL A6 (A3): workday_can_clock_in_again said false where open_workday wrote a third start';
+    end if;
+    v_rows := v_rows || array['31', 'A6 the rule agrees with Clock in (A3)', 'PASS', 'true, a third start written'];
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
   end;
@@ -429,13 +439,16 @@ begin
     end if;
     v_rows := v_rows || array['52', 'A5 another date: the earlier day unchanged', 'PASS', 'the 11th opened its own day; the 10th ended, one start'];
 
-    -- another tenant: the day is not found there
+    -- another tenant: the day is not found there; from its own tenant it is resumable (the control)
+    if not cma.workday_can_clock_in_again(w.id, pg_temp.v0008zp_at('14:00')) then
+      raise exception 'FAIL A5: the control failed: the 10th''s day of p1 is not resumable at 14:00 from its own tenant';
+    end if;
     perform set_config('app.tenant_id', v_t2::text, true);
     if cma.workday_can_clock_in_again(w.id, pg_temp.v0008zp_at('14:00')) then
       raise exception 'FAIL A6 (A5): workday_can_clock_in_again said true for a day of another tenant';
     end if;
     v_agree := v_agree + 1;
-    v_rows := v_rows || array['53', 'A5 another tenant: false', 'PASS', 'the day of tenant one is not seen from tenant two'];
+    v_rows := v_rows || array['53', 'A5 another tenant: false', 'PASS', 'true from tenant one at 14:00, false from tenant two'];
     v_rows := v_rows || array['54', 'A6 the rule agrees with Clock in (A5)', 'PASS', v_agree || ' cases false, nothing written'];
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
@@ -558,10 +571,10 @@ begin
     x := pg_temp.v0008zp_tenant('verify-0008zp-a8', true);
     -- p2's published shift on the date, 09:00 to 20:00 (the owner writes it as it would have stood, as 47 does)
     insert into cma.roster_week (tenant_id, team_id, week_start, status, version, published_at, published_by)
-    values ((x ->> 't')::uuid, null, date_trunc('week', date '2026-03-10')::date, 'published', 1, now() - interval '3 days', (x ->> 'mgr')::uuid)
+    values ((x ->> 't')::uuid, null, date_trunc('week', date '2026-03-10')::date, 'published', 1, timestamptz '2026-03-06 12:00:00+01', (x ->> 'mgr')::uuid)
     returning id into v_week;
     insert into cma.roster_entry (tenant_id, roster_week_id, user_id, business_date, kind, start_time, end_time, recorded_at, recorded_by)
-    values ((x ->> 't')::uuid, v_week, (x ->> 'p2')::uuid, date '2026-03-10', 'shift', '09:00', '20:00', now() - interval '4 days', (x ->> 'mgr')::uuid);
+    values ((x ->> 't')::uuid, v_week, (x ->> 'p2')::uuid, date '2026-03-10', 'shift', '09:00', '20:00', timestamptz '2026-03-05 12:00:00+01', (x ->> 'mgr')::uuid);
     -- p1 out at 13:00, in again at 18:00; p2 out at 13:00, in again at 17:00; p3 out at 12:00, in again at 12:30; all left open
     for r in select * from (values ('p1', '13:00', '18:00'), ('p2', '13:00', '17:00'), ('p3', '12:00', '12:30')) as c(who, out_at, in_at) loop
       perform pg_temp.v0008zp_as(x, r.who);
@@ -590,10 +603,10 @@ begin
     v_rows := v_rows || array['81', 'A8 the closed days: counted, flagged for review', 'PASS', v_txt];
     if (select count(*) from cma.message m where m.title = 'Workday closed automatically') <> 3
        or (select m.body from cma.message m where m.target -> 'users' ? (x ->> 'p2'))
-          <> 'Your workday of Tue 10 Mar was closed automatically at 20:00 because you did not log out. Your supervisor will review it.'
+          is distinct from 'Your workday of Tue 10 Mar was closed automatically at 20:00 because you did not log out. Your supervisor will review it.'
        or exists (select 1 from cma.message m where m.title = 'Workday closed automatically'
                   and (select array_agg(d.user_id) from cma.message_delivery d where d.message_id = m.id)
-                      <> array[(m.target -> 'users' ->> 0)::uuid]) then
+                      is distinct from array[(m.target -> 'users' ->> 0)::uuid]) then
       raise exception 'FAIL A8: the notices read [%]', (select string_agg(m.body, ' | ') from cma.message m where m.title = 'Workday closed automatically');
     end if;
     v_rows := v_rows || array['82', 'A8 one notice per closed day, to that person', 'PASS', 'three notices; p2''s at 20:00'];
@@ -703,20 +716,21 @@ begin
 end
 $$;
 
--- Verdict: one row per check that passed, then the verdict (30 checks; a block that stopped counts its checks as FAIL)
+-- Verdict: one row per check that passed, then the verdict (31 checks; a block that stopped counts its checks as FAIL)
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zp
       union all
       select 999, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zp where result = 'PASS') = 30 then 'PASS'
+                  when (select count(*) from verify_0008zp where result = 'PASS') = 31 then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008zp where result = 'PASS'),
-                                        30 - (select count(*) from verify_0008zp where result = 'PASS'))) x
+                                        31 - (select count(*) from verify_0008zp where result = 'PASS'))) x
 order by ord;
 drop function if exists pg_temp.v0008zp_starts(uuid);
 drop function if exists pg_temp.v0008zp_day(jsonb, text, date);
 drop function if exists pg_temp.v0008zp_as(jsonb, text);
 drop function if exists pg_temp.v0008zp_tenant(text, boolean);
 drop function if exists pg_temp.v0008zp_at(text, date);
+drop table if exists pg_temp.verify_0008zp;
 reset role;

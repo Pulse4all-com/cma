@@ -148,10 +148,12 @@ export function DayEditor({
       const live = rs.filter((r) => !r.end && /^\d{2}:\d{2}$/.test(r.time));
       const last = live.reduce<string | null>((m, r) => (m === null || r.time > m ? r.time : m), null);
       const row = newRow(last);
-      // Before the day's last clock-out (the latest one), so the new row lands in the last session
+      // Into the last session: before its clock-out when the day ends with one (the latest clock-out lies
+      // after the latest other row), else at the end, where an open last session goes on
       const ends = rs.map((r, i) => ({ r, i })).filter(({ r }) => r.end);
       const lastEnd = ends.reduce<{ r: EditorRow; i: number } | null>((m, x) => (m === null || x.r.time >= m.r.time ? x : m), null);
-      return lastEnd === null ? [...rs, row] : [...rs.slice(0, lastEnd.i), row, ...rs.slice(lastEnd.i)];
+      const endsTheDay = lastEnd !== null && (last === null || lastEnd.r.time >= last);
+      return endsTheDay ? [...rs.slice(0, lastEnd.i), row, ...rs.slice(lastEnd.i)] : [...rs, row];
     });
   }
 

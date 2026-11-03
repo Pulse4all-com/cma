@@ -22,8 +22,9 @@ export default async function LogOutPage() {
   // The clock's figures at this moment, so the person sees what logging out ends (11 October 2026)
   const workedMinutes = today ? Math.floor(workedSeconds(today.clock, now.getTime(), today.dayEndsAt) / 60) : 0;
   const clockLine = today && dayOpen
+    // "clocked in at": the current session's start, the day's start on a day of one session (0008zp)
     ? (again ? copy.logOut.clockStopsAgain : copy.logOut.clockStops)
-        .replace("{start}", fmtTime(today.startedAt, me.timeZone, me.locale)).replace("{worked}", fmtMinutes(workedMinutes))
+        .replace("{start}", fmtTime(today.sessionStartedAt, me.timeZone, me.locale)).replace("{worked}", fmtMinutes(workedMinutes))
     : null;
 
   return (

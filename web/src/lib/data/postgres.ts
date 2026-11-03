@@ -479,13 +479,15 @@ type TeamRow = {
 
 /**
  * cma.team_hours with each day's sessions (addition 0008zp): the effective clock-ins of the person's day
- * on that date, read in the same query (the function's columns stay as they are)
+ * on that date, read in the same query (the function's columns stay as they are), in the function's own
+ * order. `args` are the call's bound parameters, never caller text
  */
-const TEAM_HOURS = `select t.*,
+const TEAM_HOURS = (args: string) => `select t.*,
          (select count(*) from cma.time_event_effective e
             join cma.workday w on w.tenant_id = e.tenant_id and w.id = e.workday_id
            where w.user_id = t.user_id and w.business_date = t.business_date and e.kind = 'start')::int as sessions
-    from cma.team_hours`;
+    from cma.team_hours(${args}) t
+   order by t.business_date, t.display_name, t.user_id`;
 
 type EventRow = {
   event_id: string;
@@ -539,7 +541,7 @@ function toTimeEvent(r: EventRow): TimeEvent {
 }
 
 async function readTeamDay(q: Querier, userId: string, date: DateKey): Promise<TeamDayDetail> {
-  const day = await q.query<TeamRow>(`${TEAM_HOURS}($2::date, $2::date, $1::uuid) t`, [userId, date]);
+  const day = await q.query<TeamRow>(TEAM_HOURS("$2::date, $2::date, $1::uuid"), [userId, date]);
   const events = await q.query<EventRow>(`select * from cma.team_day($1::uuid, $2::date)`, [userId, date]);
   return { day: day.rows[0] ? toTeamDay(day.rows[0]) : null, events: events.rows.map(toTimeEvent) };
 }
@@ -1644,7 +1646,7 @@ export const postgresData: CmaData = {
     assertDate(range.to, "to");
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<TeamRow>(
-        `${TEAM_HOURS}($1::date, $2::date, $3::uuid) t`,
+        TEAM_HOURS("$1::date, $2::date, $3::uuid"),
         [range.from, range.to, userId],
       );
       return { ...range, days: r.rows.map(toTeamDay) };

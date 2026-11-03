@@ -74,7 +74,7 @@ expect("a removed row voids its event", run(removed).changes,
 const earlier = [...original, { id: "n1", eventId: null, end: false, statusKey: "training", time: "08:30", offset: null }];
 expect("a new earlier row becomes the start", run(earlier).changes,
   [{ kind: "start", at: "2026-10-05T08:30:00+02:00", statusKey: "training" },
-   { kind: "status", at: "2026-10-05T09:00:00+02:00", statusKey: "available", supersedes: ID(1) }],
+   { kind: "status", at: "2026-10-05T07:00:00Z", statusKey: "available", supersedes: ID(1) }],
   [{ kind: "start", at: "2026-10-05T08:30:00+02:00", statusKey: "training" }]);
 
 const addDay = [
@@ -170,13 +170,13 @@ expect("the second clock-in moved replaces it",
   [{ kind: "status", at: "2026-10-05T17:30:00+02:00", statusKey: "available", supersedes: SES(5) }]);
 expect("removing the first clock-out merges the sessions: the clock-in becomes a status",
   onSplit(splitRows.filter((r) => r.eventId !== SES(4))).changes,
-  [{ kind: "void", supersedes: SES(4) }, { kind: "status", at: "2026-10-05T17:00:00+02:00", statusKey: "available", supersedes: SES(5) }],
+  [{ kind: "void", supersedes: SES(4) }, { kind: "status", at: "2026-10-05T15:00:00Z", statusKey: "available", supersedes: SES(5) }],
   [{ kind: "void", supersedes: SES(4) }]);
 expect("a status that becomes a clock-out and one that becomes a clock-in replace their events",
   run(original.map((r) => (r.eventId === ID(2) ? { ...r, end: true, statusKey: null } : r))).changes,
-  [{ kind: "end", at: "2026-10-05T11:00:00+02:00", supersedes: ID(2) },
-   { kind: "start", at: "2026-10-05T11:15:00+02:00", statusKey: "available", supersedes: ID(3) }],
-  [{ kind: "end", at: "2026-10-05T11:00:00+02:00", supersedes: ID(2) }]);
+  [{ kind: "end", at: "2026-10-05T09:00:00Z", supersedes: ID(2) },
+   { kind: "start", at: "2026-10-05T09:15:00Z", statusKey: "available", supersedes: ID(3) }],
+  [{ kind: "end", at: "2026-10-05T09:00:00Z", supersedes: ID(2) }]);
 expect("a new row at a clock-out's minute is refused",
   onSplit([...splitRows, { id: "n13", eventId: null, end: false, statusKey: "available", time: "13:00", offset: null }]).rowProblems,
   { n13: "atEnd" }, {});
@@ -188,6 +188,25 @@ const closedAtLast = [
 const closedRows = rowsFromEvents(closedAtLast, TZ);
 expect("an untouched status at the clock-out's minute stays a status", check(closedRows, closedRows, "2026-10-05", TZ, LATER).dayProblems,
   ["noChange"], ["atEnd"]);
+// Seconds the minute field cannot show (the review of 3 November 2026): out at 12:00:10, in again at 12:00:40
+const inMinute = [
+  ev(SES(21), "start", "2026-10-05T07:00:00Z", "available"),
+  ev(SES(22), "end", "2026-10-05T10:00:10Z"),
+  ev(SES(23), "start", "2026-10-05T10:00:40Z", "available"),
+  ev(SES(24), "end", "2026-10-05T15:00:00Z"),
+];
+const inMinuteRows = rowsFromEvents(inMinute, TZ);
+const onInMinute = check(inMinuteRows, inMinuteRows, "2026-10-05", TZ, LATER);
+expect("a clock-in again in the clock-out's minute opens without a problem",
+  [onInMinute.rows.map((r) => r.kind), onInMinute.rowProblems, onInMinute.dayProblems],
+  [["start", "end", "start", "end"], {}, ["noChange"]], [["start", "end", "status", "end"], { [SES(23)]: "atEnd" }, ["endAfterEnd"]]);
+expect("a moved row keeps the seconds of the rows it does not touch",
+  check(inMinuteRows, inMinuteRows.map((r) => (r.eventId === SES(24) ? { ...r, time: "18:00" } : r)), "2026-10-05", TZ, LATER).changes,
+  [{ kind: "end", at: "2026-10-05T18:00:00+02:00", supersedes: SES(24) }], []);
+expect("removing the day's first clock-in: the status after it clocks in, sent first",
+  run(original.filter((r) => r.eventId !== ID(1))).changes,
+  [{ kind: "start", at: "2026-10-05T09:00:00Z", statusKey: "break", supersedes: ID(2) }, { kind: "void", supersedes: ID(1) }],
+  [{ kind: "void", supersedes: ID(1) }, { kind: "start", at: "2026-10-05T09:00:00Z", statusKey: "break", supersedes: ID(2) }]);
 expect("Add day with two sessions starts with the first clock-in",
   run([{ id: "a1", eventId: null, end: true, statusKey: null, time: "21:00", offset: null },
        { id: "a2", eventId: null, end: false, statusKey: "available", time: "17:00", offset: null },

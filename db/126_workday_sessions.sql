@@ -2,8 +2,10 @@
 -- 126_workday_sessions.sql: addition 0008zp, split shifts: clock in again on the same day
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: whether a tenant's people may clock in again is the tenant setting
--- workday.clock_in_again, off by default, so a tenant that sets nothing keeps today's behaviour (Decision log,
--- 12 October 2026: defaults keep today's behaviour). Runs unchanged in every database, after 122_flash.sql (0008zn).
+-- workday.clock_in_again, off by default, so in a tenant that sets nothing a person's Clock in keeps today's behaviour
+-- (Decision log, 12 October 2026: defaults keep today's behaviour). The day's shape is not under the setting: in every
+-- tenant a supervisor's correction may now write a day of several sessions (an end, then a later start), where 0003
+-- refused a second start, and a day of several sessions stays valid when a tenant switches the setting off. Runs unchanged in every database, after 122_flash.sql (0008zn).
 -- Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 127_verify_workday_sessions.sql, then 02_seed_pulse4all.sql again (Pulse4all Subscriptions' value), then 07 (block C),
 -- 10, 18, 20, 47, 51 and 111 again (unchanged, still PASS); then prod, 126 before the merge (the web of this change reads
@@ -12,7 +14,7 @@
 -- 125 and 126 as briefed: the open pull request 216 (Flash watch cadence) holds 0008zo and 125. This addition needs
 -- nothing of it and runs before or after it.
 --
--- Why (Decision log, 3 November 2026; Martin): agents at Newco work split shifts. A person who logged out or pressed End
+-- Why (Decision log, 3 November 2026; Martin): agents work split shifts. A person who logged out or pressed End
 -- workday can sign in again and press Clock in on the same business day, the same process as in the morning. The workday
 -- becomes one or more sessions; the time between one session's end and the next session's start has no status and counts
 -- in no figure (not worked, not paid, not billable, not productive, not a pause). The original reason for "an ended day
@@ -38,7 +40,9 @@
 --                      the last end when the last effective event is an end, else null; status open or ended. A day with
 --                      one start and at most one end is valid exactly when it was before, but for two events at one
 --                      instant: they are taken in the views' order, so a status recorded after an end at the end's own
---                      instant is refused now (the interval view counted it as a stretch to the window end before)
+--                      instant is refused now (the interval view counted it as a stretch to the window end before), and
+--                      so is a status or an end recorded before the start at the start's own instant (a correction that
+--                      moves the start onto an existing status's time; 0003 refused only one strictly before it)
 --   clock in again     cma.open_workday() (replacing 0008b's, same signature and result): on today's ended day, when
 --                      cma.workday_can_clock_in_again(day, p_occurred_at) holds, the day is locked, the rule checked again
 --                      under the lock (two tabs pressing at once give one start: the second waits for the first's lock

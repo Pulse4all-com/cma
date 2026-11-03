@@ -203,7 +203,7 @@ export function WorkdayPanel({
             {copy.myDay.workingSince} <span className="tabular text-p4a-body">{statusSinceLabel}</span>
           </span>
         ) : null}
-        <span className="ml-auto text-right text-small text-p4a-muted">
+        <span className="ml-auto text-small text-p4a-muted">
           {copy.myDay.startedAt} <span className="tabular text-p4a-body">{startedLabel}</span>
           {sessionStartedLabel ? (
             <span className="block" data-testid="back-since">

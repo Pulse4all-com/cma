@@ -548,16 +548,17 @@ end
 $$;
 
 -- Split shifts for Pulse4all Subscriptions (after addition 0008zp; Martin, 3 November 2026): Newco's agents work split
--- shifts, so a person who logged out (or pressed End workday) may clock in again on the same day, within the workday
--- window above (07:00 to 22:00). Pulse4all Invest keeps the default, off. Only a value the tenant does not have yet is
--- added, so a change in Studio or through the Configuration API survives a rerun: false restores the earlier behaviour
--- (an ended day stays ended) without a deploy. Two steps, as for the window: the catalog exists only from 0003b on.
+-- shifts. The setting is the tenant's, so every person of Pulse4all Subscriptions whose time is kept, of every employer,
+-- may clock in again on the same day after their own log out (or End workday), within the tenant's workday window.
+-- Pulse4all Invest keeps the default, off. Only a value the tenant does not have yet is added, so a change in Studio or
+-- through the Configuration API survives a rerun: false restores the earlier behaviour (an ended day stays ended)
+-- without a deploy. Two steps: the settings catalog exists only from 0003b on, the setting from 0008zp.
 do $$
 declare
   v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
 begin
   if to_regclass('cma.setting') is null then
-    raise notice 'clocking in again does not exist yet (addition 0008zp): rerun this seed after 126_workday_sessions.sql';
+    raise notice 'the settings catalog does not exist yet (migration 0003b): rerun this seed after 13_tenant_settings.sql';
     return;
   end if;
   if not exists (select 1 from cma.setting where key = 'workday.clock_in_again') then
