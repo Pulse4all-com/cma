@@ -15,7 +15,12 @@
  *
  * Proves: the sweep processes due events, respects the backoff, parks an event at
  * ingest.max_attempts and never claims it again, reads a record without a contact again (once per
- * ten minutes) and records link_calls; the sweep's outbox guard (brief A5) reports an outbox action
+ * ten minutes) and records link_calls; a contact a store customer was linked to within the hour is taken in by the
+ * sweep's second read, once (addition 0008zn, D2), and one linked before by the linked_contact backfill, whose second run
+ * reads nothing; a contact forgotten by the privacy deletion and then linked again is taken in again; a linked contact
+ * the CRM does not return is read once per ten minutes; the newest link comes first, so 105 links to ids the CRM does
+ * not return never hold back a newer one; the reconcile takes in a link 3 hours old the sweep missed and not one 30
+ * hours old (its 26-hour look-back); the sweep's outbox guard (brief A5) reports an outbox action
  * still waiting ten minutes after it fell due (outboxPending, one warning per connection with the count
  * and no ids), not a fresh one, not another tenant's and not a delivered one; the forms poll refreshes the catalog keeping configuration,
  * reads polled forms only (a counted form, and a support form polled and not counted, whose submissions
@@ -307,6 +312,70 @@ expect("sweep: the contact taken in with its country through the alias", (await 
 expect("sweep: link_calls recorded once per run, succeeded", (await runs("link_calls")).map((r) => r.status), ["succeeded", "succeeded", "succeeded"], ["succeeded"]);
 expect("sweep: the run's totals count the processed event", s1.processed >= 1 && s1.failed === 0, true, false);
 
+// ---- A2. D2 (addition 0008zn): a contact a store customer is linked to is held -----------------------
+// Two store customers of an inactive commerce connection in tenant one, linked to two contacts the CMA does not hold:
+// one linked within the hour (the sweep's second read takes it in), one linked before (the linked_contact backfill does)
+const shop1 = (await q("insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, status) values ($1, 'shopify', 'Shop jobs one', $2, 'commerce', 'inactive') returning id",
+  [t1, `jobs-${RUN}.myshopify.com`]))[0].id;
+await q(`insert into cma.commerce_customer (tenant_id, connection_id, source_system, source_id, crm_connection_id, crm_contact_source_id, matched_at)
+         values ($1, $2, 'shopify', '7100000501', $3, '4300000501', now()), ($1, $2, 'shopify', '7100000502', $3, '4300000502', now() - interval '2 hours')`,
+  [t1, shop1, conn1]);
+fake.objects.contacts[4300000501] = { contact_country: "uk", lastmodifieddate: isoAgo(30) };
+fake.objects.contacts[4300000502] = { contact_country: "nl", lastmodifieddate: isoAgo(30) };
+const heldContact = async (id) => Number((await q("select count(*) as n from cma.crm_contact where connection_id = $1 and source_id = $2", [conn1, String(id)]))[0].n) === 1;
+const contactRereads = async (id) => Number((await q("select count(*) as n from cma.ingest_event where connection_id = $1 and event_key like $2", [conn1, `reread:contact:${id}:%`]))[0].n);
+await sweep();
+expect("D2 sweep: the contact linked within the hour taken in by the second read (one reread event), the one linked before not",
+  [await heldContact(4300000501), await heldContact(4300000502), await contactRereads(4300000501)], [true, false, 1], [false, false, 0]);
+await sweep({ now: () => Date.now() + 10 * 60_000 });
+expect("D2 sweep: held now, so not read again ten minutes later", await contactRereads(4300000501), 1, 2);
+
+// The CRM's privacy deletion forgets the contact (its row kept, marked deleted) and clears the store customer's link
+// (0008h); a store customer linked to it again has it taken in again, in the next ten minutes
+const linkOf = async (customer) => (await q("select crm_contact_source_id as id from cma.commerce_customer where connection_id = $1 and source_id = $2", [shop1, customer]))[0]?.id ?? null;
+const forgotten = async (id) => (await q("select source_deleted_at is not null as d from cma.crm_contact where connection_id = $1 and source_id = $2", [conn1, String(id)]))[0]?.d ?? null;
+await recordEvents(ctx1, conn1, [{ key: `hs:jobs-${RUN}-${++seq}`, sourceType: "contact.privacyDeletion", kind: "deleted", objectType: "contact",
+  objectId: "4300000501", occurredAt: new Date().toISOString(), raw: { portalId: "9000101", privacy: true } }]);
+await sweep();
+const afterForget = [await forgotten(4300000501), await linkOf("7100000501")];
+await q("update cma.commerce_customer set crm_connection_id = $1, crm_contact_source_id = '4300000501', matched_at = now() where connection_id = $2 and source_id = '7100000501'",
+  [conn1, shop1]);
+fake.objects.contacts[4300000501] = { contact_country: "uk", lastmodifieddate: isoAgo(1) };
+await sweep({ now: () => Date.now() + 20 * 60_000 });
+expect("D2 sweep: a contact forgotten by the privacy deletion, then linked again, is taken in again",
+  [...afterForget, await forgotten(4300000501), await contactRereads(4300000501)], [true, null, false, 2], [true, null, true, 1]);
+
+// Once per ten minutes: a linked contact the CRM does not return stays unheld; a second sweep in the same ten minutes
+// does not read it again, one in the next ten minutes does (fixed instants, so no run straddles a boundary)
+await q(`insert into cma.commerce_customer (tenant_id, connection_id, source_system, source_id, crm_connection_id, crm_contact_source_id, matched_at)
+         values ($1, $2, 'shopify', '7100000504', $3, '4300000504', now())`, [t1, shop1, conn1]);
+const readsOf = (from, to, id) => fake.requests.slice(from, to)
+  .filter((r) => r.path === "/crm/v3/objects/contacts/batch/read" && r.body.inputs.some((i) => String(i.id) === id)).length;
+const tenAt = (Math.floor(Date.now() / 600_000) + 6) * 600_000;
+const w0 = mark();
+await sweep({ now: () => tenAt + 1_000 });
+const w1 = mark();
+await sweep({ now: () => tenAt + 5 * 60_000 });
+const w2 = mark();
+await sweep({ now: () => tenAt + 10 * 60_000 + 1_000 });
+const w3 = mark();
+expect("D2 sweep: an unreadable linked contact read once per ten minutes (read, not again within them, again after)",
+  [readsOf(w0, w1, "4300000504"), readsOf(w1, w2, "4300000504"), readsOf(w2, w3, "4300000504"), await contactRereads(4300000504), await heldContact(4300000504)],
+  [1, 0, 1, 2, false], [1, 1, 1, 3, false]);
+
+// Newest first: 105 store customers linked half an hour ago to contacts the CRM does not return (lower ids), and one
+// linked now to a contact it does: the sweep's part of 100 takes the newer link in (by id it would never reach it)
+await q(`insert into cma.commerce_customer (tenant_id, connection_id, source_system, source_id, crm_connection_id, crm_contact_source_id, matched_at)
+         select $1, $2, 'shopify', (7200000600 + g)::text, $3, (4300000600 + g)::text, now() - interval '30 minutes' from generate_series(0, 104) g`,
+  [t1, shop1, conn1]);
+await q(`insert into cma.commerce_customer (tenant_id, connection_id, source_system, source_id, crm_connection_id, crm_contact_source_id, matched_at)
+         values ($1, $2, 'shopify', '7100000799', $3, '4300000799', now())`, [t1, shop1, conn1]);
+fake.objects.contacts[4300000799] = { contact_country: "nl", lastmodifieddate: isoAgo(30) };
+await sweep();
+expect("D2 sweep: newest link first, so 105 links to ids the CRM does not return never hold back a newer one", await heldContact(4300000799), true, false);
+// the unreadable links leave, so the backfill and reconcile below see only their own
+await q("update cma.commerce_customer set source_deleted_at = now() where connection_id = $1 and (source_id like '72000006%' or source_id like '72000007%' or source_id = '7100000504')", [shop1]);
+
 fake.failIds.add("4120000009");
 await recordEvents(ctx1, conn1, [created(4120000009)]);
 await sweep();
@@ -473,6 +542,13 @@ expect("backfill: a form whose kept fields changed is read again and fills empty
   [(await q("select source_id, kept_values from cma.form_submission where connection_id = $1 and source_form_id = $2 order by source_id", [conn1, FORM_C])).map((r) => [r.source_id, r.kept_values]),
     since(n0).filter((r) => r.path.endsWith(FORM_A)).length, (await runs("backfill")).at(-1)?.counts.upserted],
   [[["s-0001", { reason: "Moving" }], ["s-0002", { channel: "phone" }]], 0, 1], [[["s-0001", { reason: "Moving", channel: "web" }], ["s-0002", {}]], 1, 0]);
+// D2 (addition 0008zn): the linked_contact backfill takes in every contact linked before that the CMA does not hold, once
+await runBackfill({ connectionId: conn1, object: "linked_contact" });
+const lcCursor = async () => (await q("select cursor from cma.sync_cursor where connection_id = $1 and stream = 'backfill:linked_contact'", [conn1]))[0]?.cursor ?? null;
+expect("D2 backfill: the contact linked before taken in, the stream's cursor done", [await heldContact(4300000502), (await lcCursor())?.done], [true, true], [false, false]);
+n0 = mark();
+await runBackfill({ connectionId: conn1, object: "linked_contact" });
+expect("D2 backfill: a second run with the same start reads nothing", since(n0).filter((r) => r.path.includes("/contacts")).length, 0, 1);
 let usage = null;
 try {
   await runBackfill({ connectionId: conn1, object: "commerce_order" });
@@ -484,8 +560,16 @@ expect("backfill: an object the adapter does not backfill is refused", usage, tr
 // ---- D. The reconcile ----------------------------------------------------------------------------
 fake.objects.deals[4130000001] = { ...fake.objects.deals[4130000001], amount: "250", hs_lastmodifieddate: isoAgo(60) };
 fake.objects.deals[4130000003] = { ...fake.objects.deals[4130000003], amount: "333", hs_lastmodifieddate: isoAgo(30) };
+// D2 at the reconcile: a link 3 hours old (outside the sweep's hour) and one 30 hours old (outside the reconcile's 26
+// hours), to contacts modified long before the look-back, so only the linked contacts' window can read them
+await q(`insert into cma.commerce_customer (tenant_id, connection_id, source_system, source_id, crm_connection_id, crm_contact_source_id, matched_at)
+         values ($1, $2, 'shopify', '7100000505', $3, '4300000505', now() - interval '3 hours'),
+                ($1, $2, 'shopify', '7100000506', $3, '4300000506', now() - interval '30 hours')`, [t1, shop1, conn1]);
+fake.objects.contacts[4300000505] = { contact_country: "uk", lastmodifieddate: OLD };
+fake.objects.contacts[4300000506] = { contact_country: "nl", lastmodifieddate: OLD };
 await recordEvents(ctx1, conn1, [{ ...created(4130000003), kind: "changed", sourceType: "object.propertyChange" }]);
 await sweep();
+const sweptOld = [await heldContact(4300000505), await heldContact(4300000506)];
 expect("reconcile: setup, the webhook's newer read of a deal stored", (await deal(4130000003))?.amount, "333.00", "300.00");
 fake.objects.deals[4130000003] = { ...fake.objects.deals[4130000003], amount: "999", hs_lastmodifieddate: isoAgo(40) };
 fake.objects.contacts[4300000001].contact_country = "uk";
@@ -505,6 +589,8 @@ const contactReads = since(n0).filter((r) => r.path === "/crm/v3/objects/contact
 expect("reconcile: only held contacts are read", [contactReads.includes("4300000001"), contactReads.includes("4399999999")], [true, false], [true, true]);
 expect("reconcile: the unheld contact counted as skipped", recRuns.find((r) => r.stream === "contact")?.counts.skipped >= 1, true, false);
 expect("reconcile: the run's totals", [r1.runs, r1.failed], [6, 0], [5, 1]);
+expect("D2 reconcile: a link 3 hours old the sweep missed taken in by the 26-hour window, one 30 hours old not",
+  [...sweptOld, await heldContact(4300000505), await heldContact(4300000506), r1.linkedContacts], [false, false, true, false, 1], [false, false, true, true, 2]);
 n0 = mark();
 const r2 = await runReconcile({ connectionId: conn1 });
 expect("reconcile: a second run lists the same and reads nothing again", [r2.fetched > 0, r2.upserted, since(n0).filter((r) => r.path.endsWith("/batch/read")).length], [true, 0, 0], [true, 1, 1]);

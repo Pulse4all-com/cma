@@ -14,6 +14,10 @@
  * store's subscriptions (Juo, addition 0008zl: stream subscription, a subscription no longer returned
  * marked missing); a connection the adapter does not serve (skipReason: an asset register without a
  * token secret name, loaded from files; a subscriptions connection without one) gets one log line and no run.
+ * A CRM connection whose adapter holds records (HubSpot) then takes in the contacts store customers were linked to
+ * within the look-back that the CMA does not hold (addition 0008zn, D2: what the sweep's second read of the last hour
+ * did not reach), newest links first, in parts of 100, through the sweep's contact read-back; counted as
+ * linkedContacts in the run's log line, no sync_run row (as the sweep's second read), unless --object narrows the run.
  *
  * The daily floor (backlog CMA-069): an adapter that names one (HubSpot: api_daily_floor_pct, default
  * 25) has its streams pause once the source's remaining daily calls fall below it; a paused stream is
@@ -28,9 +32,11 @@ import { recordAndProcess, addCounts } from "../core/sync.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { rereadVersion } from "./sweep.mjs";
 import { measurePool } from "../core/db.mjs";
 
 export const DEFAULT_LOOKBACK_MINUTES = 26 * 60;
+const LINKED_PART = 100;
 /** Where a paused stream resumes: { from: ms }, the paused run's start; { from: null } once a run finished */
 export const resumeStream = (object) => `reconcile:${object}`;
 
@@ -53,6 +59,28 @@ export async function reconcileStream({ adapter, connection, store, budget, obje
   return { r, usage: budget.usage(mark) };
 }
 
+/**
+ * The contacts of one CRM connection's store-customer links made within maxAge that the CMA does not hold (addition
+ * 0008zn, D2), newest links first, in parts of 100, each part through the contact read-back under the sweep's second
+ * read key (reread:contact:<id>:<ten minutes>), so a contact the sweep read in the same ten minutes is not read again.
+ * An id the CRM no longer returns stays unheld and is passed over (the part's last id is the next part's start). Below
+ * the source's daily floor no further part is read (as a paused stream). Answers { read, paused }: the contacts read.
+ */
+export async function takeInLinkedContacts({ adapter, connection, store, budget, maxAge, nowMs = Date.now() }) {
+  const version = rereadVersion(nowMs);
+  let after = null;
+  let read = 0;
+  for (;;) {
+    if (budget.belowFloor?.()) return { read, paused: true };
+    const ids = await store.linkedContactIds({ after, limit: LINKED_PART, maxAge });
+    if (!ids.length) return { read, paused: false };
+    const counts = await recordAndProcess(adapter, connection, "contact", ids.map((id) => ({ id, version })), budget, { job: "reconcile", prefix: "reread" });
+    read += counts.upserted;
+    if (ids.length < LINKED_PART) return { read, paused: false };
+    after = ids[ids.length - 1];
+  }
+}
+
 export function runReconcile(options) {
   return measurePool("reconcile", () => reconcileJob(options));
 }
@@ -60,7 +88,7 @@ export function runReconcile(options) {
 async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOOKBACK_MINUTES, object = null, adapters = ADAPTERS } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:reconcile" });
-  const total = { connections: 0, notServed: 0, runs: 0, fetched: 0, upserted: 0, stale: 0, skipped: 0, eventsFailed: 0, paused: 0, failed: 0 };
+  const total = { connections: 0, notServed: 0, runs: 0, fetched: 0, upserted: 0, stale: 0, skipped: 0, eventsFailed: 0, paused: 0, linkedContacts: 0, failed: 0 };
   for (const c of connections) {
     const adapter = Object.hasOwn(adapters, c.adapter) ? adapters[c.adapter] : null;
     if (!adapter?.reconcile) continue;
@@ -112,6 +140,19 @@ async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOO
       } catch (err) {
         total.failed += 1;
         warn("reconcile: run not recorded", { connection: c.connectionId, stream: obj, code: codeOf(err) });
+      }
+    }
+    // Contacts a store customer was linked to within the look-back that the CMA does not hold (addition 0008zn, D2):
+    // what the sweep's second read did not reach (a sweep pause, a store backfill's many links in an hour), newest
+    // links first, in parts of 100, through the sweep's contact read-back and its once-per-ten-minutes key
+    if (adapter.holdsRecords && !object) {
+      try {
+        const { read, paused } = await takeInLinkedContacts({ adapter, connection: c, store, budget, maxAge: `${lookbackMinutes} minutes` });
+        total.linkedContacts += read;
+        if (paused) info("reconcile: linked contacts paused", { connection: c.connectionId, code: "daily_floor", linkedContacts: read });
+      } catch (err) {
+        total.failed += 1;
+        warn("reconcile: linked contacts not read", { connection: c.connectionId, code: codeOf(err) });
       }
     }
     if (adapter.checkSubscriptions && !object) {

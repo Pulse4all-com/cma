@@ -18,7 +18,7 @@
         {
           "name": "crm_contact",
           "what": "Thin contact: country with the slot it came from, language, currency, store, and when it was created in the source (0008u)",
-          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot and created-time slot (the object's createdAt and the configured properties, the earliest kept); re-read every 10 min in its first hour; nightly reconcile"
+          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot and created-time slot (the object's createdAt and the configured properties, the earliest kept); re-read every 10 min in its first hour; nightly reconcile; since 0008zn also a contact a store customer is linked to, taken in by the sweep's second read (the links of the last hour, newest first, within ten minutes of the link), by the nightly reconcile's 26-hour look-back for the links the sweep did not reach and by ingest-backfill --object linked_contact"
         },
         {
           "name": "crm_contact_ref",
@@ -551,6 +551,32 @@
       ]
     },
     {
+      "key": "flash",
+      "label": "Flash snapshots and watch",
+      "tables": [
+        {
+          "name": "flash_snapshot_run",
+          "what": "Per tenant and business date one row per Flash take: when the date was due (due_at), started, finished, status succeeded, failed (with the error's code) or missed (a date that stopped being the latest due one without a succeeded take: no figures), late (the take started more than an hour after it was due), the rows stored per overview and at a month end the ids per kind, the sources' state, the Flash settings followed, the dates missed before it and the watch's error code (watch_error; the snapshot is kept) (0008zn). Written by the take only; the application reads",
+          "how": "Written by the take only (cma.flash_snapshot_take, SECURITY DEFINER; the application reads and holds no insert, update or delete), called by the snapshot job cma-snapshot-flash hourly at minute 20 UTC: a business date D is due at D + 1 at flash.snapshot_local_time in the tenant's zone and each run takes the latest due date unless a succeeded run holds it; a date that stops being the latest due one without a take is recorded as a missed run by the next take (since 0008zn)"
+        },
+        {
+          "name": "flash_snapshot",
+          "what": "The figures of every Flash overview per business date as the live computation gave them at the take: one row per grouping set, dims (codes: market, store, status, pipeline id) and measures (counts, ages, amounts per currency); no id of a record, no @ (0008zn). Insert only",
+          "how": "Written by the take only (cma.flash_snapshot_take, called by cma-snapshot-flash once per tenant and business date) through cma.flash_compute_of as of that date (the live computation, one code path); the application reads; never changed"
+        },
+        {
+          "name": "flash_snapshot_ids",
+          "what": "At each month end the frozen ids of the active customers, the active subscriptions and every device, with connection, market and state (0008zn). Insert only",
+          "how": "Written by the take only (cma.flash_snapshot_ids_write_of, in the take of a month's last business date; the application reads); removed after flash.id_list_retention_months (84) by the take (cma.flash_snapshot_ids_expire_of(tenant): its cutoff from the tenant's today, no caller's date), one audit row per removal; no row-level audit trigger"
+        },
+        {
+          "name": "flash_watch_finding",
+          "what": "The deterministic watch's findings after each snapshot: jump, flow_zero, source_stale, snapshot_missing, dq_rise, with the overview, dims (market, check, source), the value, the one before and the threshold; open or resolved (0008zn)",
+          "how": "Written and resolved by the take only (cma.flash_watch_of, in a subtransaction of its own at the end of each take; the application reads); a finding moves once from open to resolved"
+        }
+      ]
+    },
+    {
       "key": "plumbing",
       "label": "Ingest and audit",
       "tables": [
@@ -797,7 +823,8 @@
       "doms": [
         "time",
         "plumbing",
-        "followup"
+        "followup",
+        "flash"
       ]
     },
     "legacy": {

@@ -11,7 +11,11 @@
  *   task            by hs_createdate, then by hs_timestamp (the due time: a task made before the start and
  *                   due after it; addition 0008n)
  *   contact         the contacts the CMA holds (0006: never the contact base; since 0008m also those an
- *                   email or inbox thread points to), by id, read with every mapped country slot
+ *                   email or inbox thread points to, since 0008zn those a store customer is linked to), by id,
+ *                   read with every mapped country slot
+ *   linked_contact  only the contacts a store customer is linked to (0008h) that the CMA does not hold yet
+ *                   (addition 0008zn, D2: the one-time take-in), by id, through the same contact read-back:
+ *                   one batch read per 100 contacts
  *   form_submission every polled form's submissions, filling the answers of stored ones without them (forms.mjs)
  *   crm_email       email engagements by hs_timestamp, written as the email poll writes them (email.mjs)
  *   inbox_thread    inbox conversations by their latest message, with their messages (conversations.mjs)
@@ -35,7 +39,7 @@ import { backfillThreads } from "./conversations.mjs";
 
 export const BACKFILL_STREAMS = { deal: ["createdate", "closedate"], ticket: ["createdate", "closed_date"], crm_call: ["hs_timestamp"],
   task: ["hs_createdate", "hs_timestamp"] };
-export const BACKFILL_OBJECTS = ["deal", "ticket", "crm_call", "task", "form_submission", "contact", "crm_email", "inbox_thread"];
+export const BACKFILL_OBJECTS = ["deal", "ticket", "crm_call", "task", "form_submission", "contact", "linked_contact", "crm_email", "inbox_thread"];
 const EMAIL_OBJECTS = new Set(["crm_email", "inbox_thread"]);
 
 /** The default start of an object's backfill when --from is not given: the email objects' own; null for the rest (intake.start_date). */
@@ -83,6 +87,22 @@ async function backfillContacts({ store, fromMs, runAt, process }) {
   await store.setCursor(stream, { from: fromMs, after, done: true });
 }
 
+async function backfillLinkedContacts({ store, fromMs, runAt, process }) {
+  const stream = "backfill:linked_contact";
+  const cur = await store.cursor(stream);
+  if (cur?.from === fromMs && cur.done) return;
+  let after = cur?.from === fromMs ? (cur.after ?? null) : null;
+  for (;;) {
+    const ids = await store.linkedContactIds({ after, limit: 500 });
+    if (!ids.length) break;
+    // Read as contacts: the read-back holds them now that a store customer's link points to them
+    await process("contact", ids.map((id) => ({ id, version: `bf${runAt}` })));
+    after = ids[ids.length - 1];
+    await store.setCursor(stream, { from: fromMs, after, done: false });
+  }
+  await store.setCursor(stream, { from: fromMs, after, done: true });
+}
+
 /** The backfill of one object type from fromMs (ms) up to untilMs (the run's start). */
 export async function backfill({ connection, store, budget, object, fromMs, untilMs, process, counts, again = false, runAt = untilMs }) {
   if (object === "form_submission") {
@@ -90,6 +110,7 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
     return;
   }
   if (object === "contact") return backfillContacts({ store, fromMs, runAt: untilMs, process });
+  if (object === "linked_contact") return backfillLinkedContacts({ store, fromMs, runAt: untilMs, process });
   if (object === "crm_email") return backfillEmails({ connection, store, budget, fromMs, untilMs, counts });
   if (object === "inbox_thread") return backfillThreads({ connection, store, budget, fromMs, untilMs, counts });
   const properties = BACKFILL_STREAMS[object];

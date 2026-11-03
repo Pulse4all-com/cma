@@ -26,7 +26,7 @@ Kira steers the call center on six outcomes: **conversion (speed to lead), indir
 | 9 | Live monitoring | Live | Aircall, HubSpot, CMA |
 | 10 | Quality monitoring | Agent, Report | Aircall AI, HubSpot, CMA |
 | 11 | Data first | Data | HubSpot, Aircall, every connected source |
-| 12 | Cohorts | Report | HubSpot, Shopify / Juo, NetSuite, Asset Management Database, CMA |
+| 12 | Cohorts | Report | HubSpot, Shopify / Juo, Asset Management Database, CMA |
 
 ### 1. Conversion and speed to lead
 - Leads per day per country and source, excluding test deals.
@@ -112,7 +112,7 @@ Built 14 October 2026 (brief B16, addition 0008j; not yet in prod): the Connecte
 ### 11. Data first
 These are prerequisites in HubSpot, Aircall and every source that joins later. Without them the metrics above are unreliable, so they run in parallel with the foundation work. For a future customer the same list becomes the onboarding checklist for their CRM, telephony and channels.
 - Every channel event carries the agent's identity in that system and a timestamp, or it cannot be attributed: Aircall user, HubSpot owner, Gmail sender, chat and SMS agent id, Customer App handler. The shared mailbox attribution to individual agents (open decision) is the prerequisite for email productivity.
-- Every customer-facing record carries the customer key the cohorts need: entry date, country, source or campaign, proposition, converting deal and owner; payments in NetSuite and devices in the asset database linked to that customer.
+- Every customer-facing record carries the customer key the cohorts need: entry date, country, source or campaign, proposition, converting deal and owner; orders with their payment status in the store, renewals in the subscription app and devices in the asset database linked to that customer.
 - Outcome mandatory on every call; old values removed from the list (Busy, Connected, retired ids). With the desk, the CMA's result code lands in a HubSpot custom property on every call engagement; until then agents log it in HubSpot.
 - The Subs result-code catalog (semantics, priorities, retry intervals, do-not-call flags) confirmed by Kira before anything is seeded; the Subs codes collide with Invest's on the same numbers.
 - Every call linked to a contact and a deal.
@@ -137,9 +137,9 @@ These are prerequisites in HubSpot, Aircall and every source that joins later. W
 A cohort is a group of customers (or agents) that share an entry point; the report follows the group over time instead of reporting a period. Cohort definitions are tenant configuration in the metric catalog; Kira and Peter confirm Pulse4all's.
 - **Customer cohorts** by entry month, country, source or campaign, proposition (Subs: HS1, FRx, Buurt AED; Invest: 10K, 100K), employer of the converting agent, converting agent or team.
 - **How long they stay:** retention curve per cohort (active after 3, 6, 12, 24, 36 months), churn before and after the minimum term, cancellation reasons per cohort; the cohort view of KPI 4.
-- **How they pay:** days to pay the first and later invoices, share paid on time, late payments and dunning stages, Open Payment call outcomes and collections results, write-offs; from NetSuite joined to the CRM customer.
+- **How they pay:** the store's payment status of their orders and the subscription app's renewals and failed renewals (Flash's Payments), Open Payment call outcomes; invoices, days to pay, dunning and collections stay finance's, in NetSuite, which the CMA does not read (Decision log, 1 November 2026).
 - **How they behave:** reviews per cohort, complaints, Customer App use, service events and replacements from the asset database, upsell and extra devices.
-- **What they cost and bring:** contact attempts and talk time per customer over their lifetime, cost per acquired customer per cohort, revenue per cohort (NetSuite).
+- **What they cost and bring:** contact attempts and talk time per customer over their lifetime, cost per acquired customer per cohort, revenue per cohort (the store's order totals, per currency).
 - **Agent cohorts:** agents by hiring month and employer: ramp-up time to the team median, productivity and conversion over tenure, retention of agents; the human factor applied to the staff itself.
 - **As built (Reports → Lead cohorts, addition 0008zm):** the lead cohorts of KPIs 1: lead deals per ISO week or month of creation, with the share attempted, with a conversation, ordered (lead to order) and lost at the ages of `cohorts.lead_ages_days`, per market and source channel, computed in Postgres and open to BigQuery as `cma_read.lead_cohorts`. Customer cohorts, agent cohorts, retention, payment behaviour and cost are not built: they need NetSuite and the asset register in BigQuery.
 - **Needs:** the customer keys from Data first on every record, payments and subscriptions synced, the asset database connected; cohort reports run from BigQuery on `cma_read` and appear in the Workspace's Report surface.
