@@ -6868,7 +6868,7 @@ const nl: Copy = {
     notRead: "nog niet gelezen",
     notSetUpShort: "niet ingericht",
     notApplicable: "Niet van toepassing",
-    na_with_required_refs: "Er is geen verwijzing van het contact vereist, dus geen is aanwezig of ontbreekt.",
+    na_with_required_refs: "Er is geen verwijzing van het contact vereist, dus deze telling is niet van toepassing.",
     source_commerce: "Webwinkel",
     source_subscriptions: "Abonnementen",
     source_assets: "Assetregister",

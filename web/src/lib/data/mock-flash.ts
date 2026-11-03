@@ -182,14 +182,15 @@ function fixtureOf(me: Principal, today: string): Fixture {
     record_url: object_type === "commerce_customer" ? null : object_type === "contact" ? `${CRM_URL}/contact/${object_id}` : null,
     related_type: related?.type ?? null, related_id: related?.id ?? null, related_url: related?.url ?? null,
   });
-  for (const c of customers) {
+  // the required-reference checks find nothing while their setting is empty, as cma.data_quality_of
+  for (const c of REQUIRED_CONTACT_REFS.length > 0 ? customers : []) {
     if (c.contact_id && !c.contact_held) finding("customer_required_ref_missing", "commerce_customer", c.id, "contact_not_held", c.market, "cma", null,
       { type: "contact", id: String(c.contact_id), url: String(c.contact_url) });
     else if ((c.missing_refs as string[]).length) finding("customer_required_ref_missing", "commerce_customer", c.id, "netsuite", c.market, "crm", "hubspot",
       { type: "contact", id: String(c.contact_id), url: String(c.contact_url) });
   }
   for (const d of devices) {
-    if ((d.missing_refs as string[]).length) finding("device_required_ref_missing", "device", String(d.device_id), "ns_internal_id", d.market, "assets", "airtable");
+    if (REQUIRED_DEVICE_REFS.length > 0 && (d.missing_refs as string[]).length) finding("device_required_ref_missing", "device", String(d.device_id), "ns_internal_id", d.market, "assets", "airtable");
     if (d.link === "not_found") finding("device_subscription_ref_unknown", "device", String(d.device_id), null, d.market, "assets", "airtable",
       { type: "subscription", id: String(d.subscription_id), url: null });
     if (d.link === "linked" && ENDED.includes(String(d.subscription_status))) {
