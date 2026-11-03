@@ -4,8 +4,10 @@
 -- Times the reads Reports → Flash makes, on the data the database holds, as the application (cma_app, row-level
 -- security on), per active tenant: every live overview and the landing, and the first page of every list (500 rows, by
 -- the list's first sort key, descending), each the best of two runs. No addition, no write: the reads run in a read-only
--- transaction (the results go to a temporary table), so it runs in any database at any time, as often as wanted. Run as
--- your own IAM login, in Cloud SQL Studio, after 122_flash.sql and 123_verify_flash.sql.
+-- subtransaction that the script then rolls back (its rows kept in variables, written to a temporary table after it), so
+-- the script runs alike as one transaction (Cloud SQL Studio runs a script so; 3 November 2026: a read-only mode set for
+-- the whole transaction refused the helper's drop at the end) and statement by statement (psql), in any database, at any
+-- time, as often as wanted. Run as your own IAM login, in Cloud SQL Studio, after 122_flash.sql and 123_verify_flash.sql.
 -- Prod is the proof (PROD_RUNBOOK phase 16, after 122 and 123): real data on the dedicated core, the reads under the
 -- budgets below. In dev the timings are for information only: dev is a shared-core db-g1-small
 -- (docs/architecture/infrastructure.md), as for 91's B8, and a dev run over budget is the tier, not Flash. 123's block C
@@ -21,6 +23,7 @@
 -- reads FAIL ("not timed"); a read already running is not cut, so one read longer than a minute would take the whole run
 -- past Studio's limit (at a volume of 100,000 customers the slowest read took 1.6 s locally). A read that raises an
 -- error reads FAIL with its SQLSTATE, and the others still run.
+-- The first row, "read only", shows that a write in the timed part is refused (25006): info, or FAIL when it was not.
 -- One row per read: the tenant's slug and the read, ok or FAIL, the milliseconds against the budget; the last row is the
 -- verdict, "PASS | 124_time_flash: <n> ok, 0 FAIL, <n> skip", because Cloud SQL Studio shows no notices. Ids, codes and
 -- milliseconds only: no record, no name, no figure is shown.
@@ -90,87 +93,108 @@ declare
   v_max_q   numeric := case when current_setting('verify.provoke')::boolean then 0 else current_setting('verify.max_dq_ms')::numeric end;
   v_brief_r numeric := current_setting('verify.brief_rows_ms')::numeric;
   v_stop    timestamptz := clock_timestamp() + make_interval(secs => current_setting('verify.time_budget_s')::numeric);
-  v_ord     integer := 0;
   t record; o record;
-  v_user uuid; v_today date; v_from date; v_to date; v_ms numeric; v_flow boolean;
+  v_user uuid; v_today date; v_from date; v_to date; v_ms numeric; v_flow boolean; v_guard text;
   v_names text[]; v_ms_list numeric[]; v_max_list numeric[]; v_err_list text[]; v_note_list text[]; v_list_list boolean[];
+  -- the result rows, kept in variables: they outlive the read-only subtransaction's rollback
+  r_name text[] := '{}'; r_result text[] := '{}'; r_detail text[] := '{}'; r_ms numeric[] := '{}';
 begin
-  -- nothing the reads do may write: the transaction is read only from here (the temporary table excepted)
-  perform set_config('transaction_read_only', 'on', true);
-  for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
-    perform set_config('app.tenant_id', t.id::text, true);         -- cma.has_permission reads the current tenant's roles
-    v_user := null;
-    select u.id into v_user
-    from cma.app_user u
-    where u.tenant_id = t.id and u.status = 'active' and u.kind = 'person' and cma.has_permission(u.id, 'reports.view')
-    order by u.created_at, u.id
-    limit 1;
-    if v_user is null then
-      perform set_config('app.tenant_id', '', true);
-      v_ord := v_ord + 1;
-      insert into pg_temp.time_0124 values (v_ord, t.slug, 'skip', 'no active person holds reports.view: nothing timed', null);
-      continue;
-    end if;
-    v_today := cma.tenant_today_of(t.id);
-    v_from := (date_trunc('month', v_today) - interval '1 month')::date;
-    v_to := (date_trunc('month', v_today) - interval '1 day')::date;
-    v_names := '{}'; v_ms_list := '{}'; v_max_list := '{}'; v_err_list := '{}'; v_note_list := '{}'; v_list_list := '{}';
-    -- as the application, in the tenant, as that person
-    perform set_config('role', 'cma_app', true);
-    perform set_config('app.user_id', v_user::text, true);
-    for o in select x.key, x.kind from cma.flash_overviews() x order by x.sort_order loop
-      v_flow := o.kind = 'flow';
+  -- the timed part runs in a subtransaction that is read only and then rolled back: its read-only mode, its role and its
+  -- tenant end with it, so the rest of the script runs read-write whether the whole script is one transaction (Cloud SQL
+  -- Studio) or each statement its own (psql)
+  begin
+    perform set_config('transaction_read_only', 'on', true);
+    -- the guard: a write in the timed part is refused (25006), as every read's would be
+    begin
+      update cma.tenant set name = name where false;
+      v_guard := 'not refused';
+    exception when others then
+      v_guard := sqlstate;
+    end;
+    r_name := r_name || 'read only'::text;
+    r_result := r_result || case when v_guard = '25006' then 'info' else 'FAIL' end;
+    r_detail := r_detail || case when v_guard = '25006' then 'a write in the timed part is refused (25006)'
+                                 else 'a write in the timed part was not refused: ' || v_guard end;
+    r_ms := r_ms || null::numeric;
+    for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
+      perform set_config('role', 'cma_owner', true);
+      perform set_config('app.user_id', '', true);
+      perform set_config('app.tenant_id', t.id::text, true);         -- cma.has_permission reads the current tenant's roles
+      v_user := null;
+      select u.id into v_user
+      from cma.app_user u
+      where u.tenant_id = t.id and u.status = 'active' and u.kind = 'person' and cma.has_permission(u.id, 'reports.view')
+      order by u.created_at, u.id
+      limit 1;
+      if v_user is null then
+        r_name := r_name || t.slug::text; r_result := r_result || 'skip'::text;
+        r_detail := r_detail || 'no active person holds reports.view: nothing timed'::text; r_ms := r_ms || null::numeric;
+        continue;
+      end if;
+      v_today := cma.tenant_today_of(t.id);
+      v_from := (date_trunc('month', v_today) - interval '1 month')::date;
+      v_to := (date_trunc('month', v_today) - interval '1 day')::date;
+      v_names := '{}'; v_ms_list := '{}'; v_max_list := '{}'; v_err_list := '{}'; v_note_list := '{}'; v_list_list := '{}';
+      -- as the application, in the tenant, as that person
+      perform set_config('role', 'cma_app', true);
+      perform set_config('app.user_id', v_user::text, true);
+      for o in select x.key, x.kind from cma.flash_overviews() x order by x.sort_order loop
+        v_flow := o.kind = 'flow';
+        v_ms := case when clock_timestamp() > v_stop then null
+                     else pg_temp.t0124_best_ms(format('select cma.flash_overview(%L, null, null, %L, %L)', o.key,
+                                                       case when v_flow then v_from end, case when v_flow then v_to end), 2) end;
+        v_names := v_names || ('overview ' || o.key);
+        v_max_list := v_max_list || case when o.key = 'data_quality' then v_max_q else v_max_o end;
+        v_ms_list := v_ms_list || v_ms;
+        v_err_list := v_err_list || case when v_ms = -1 then current_setting('t0124.error') end;
+        v_note_list := v_note_list || case when v_flow then '; flows ' || v_from || ' to ' || v_to else '' end;
+        v_list_list := v_list_list || false;
+      end loop;
       v_ms := case when clock_timestamp() > v_stop then null
-                   else pg_temp.t0124_best_ms(format('select cma.flash_overview(%L, null, null, %L, %L)', o.key,
-                                                     case when v_flow then v_from end, case when v_flow then v_to end), 2) end;
-      v_names := v_names || ('overview ' || o.key);
-      v_max_list := v_max_list || case when o.key = 'data_quality' then v_max_q else v_max_o end;
+                   else pg_temp.t0124_best_ms(format('select cma.flash_page(null, null, %L, %L)', v_from, v_to), 2) end;
+      v_names := v_names || 'landing'::text;
+      v_max_list := v_max_list || v_max_o;
       v_ms_list := v_ms_list || v_ms;
       v_err_list := v_err_list || case when v_ms = -1 then current_setting('t0124.error') end;
-      v_note_list := v_note_list || case when v_flow then '; flows ' || v_from || ' to ' || v_to else '' end;
+      v_note_list := v_note_list || ('; flows ' || v_from || ' to ' || v_to);
       v_list_list := v_list_list || false;
+      for o in select x.key, x.kind, x.sorts from cma.flash_overviews() x order by x.sort_order loop
+        v_flow := o.kind = 'flow';
+        v_ms := case when clock_timestamp() > v_stop then null
+                     else pg_temp.t0124_best_ms(format('select cma.flash_rows(%L, ''{}'', %L, true, 500, 0, null, %L, %L)', o.key, o.sorts[1],
+                                                       case when v_flow then v_from end, case when v_flow then v_to end), 2) end;
+        v_names := v_names || ('list ' || o.key || ' by ' || o.sorts[1] || ' desc');
+        v_max_list := v_max_list || case when o.key = 'data_quality' then v_max_q else v_max_r end;
+        v_ms_list := v_ms_list || v_ms;
+        v_err_list := v_err_list || case when v_ms = -1 then current_setting('t0124.error') end;
+        v_note_list := v_note_list || case when v_flow then '; flows ' || v_from || ' to ' || v_to else '' end;
+        v_list_list := v_list_list || (o.key <> 'data_quality');
+      end loop;
+      r_name := r_name || (t.slug || ' acting as'); r_result := r_result || 'info'::text;
+      r_detail := r_detail || ('app_user ' || v_user || ': the first active person holding reports.view'); r_ms := r_ms || null::numeric;
+      for i in 1 .. cardinality(v_names) loop
+        v_ms := v_ms_list[i];
+        r_name := r_name || (t.slug || ' ' || v_names[i]);
+        r_result := r_result || case when v_ms is not null and v_ms >= 0 and v_ms < v_max_list[i] then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when v_ms is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
+                                     when v_ms = -1 then 'error ' || v_err_list[i]
+                                     else v_ms || ' ms (best of 2) against ' || v_max_list[i] || ' ms'
+                                          || case when v_list_list[i] and v_ms >= v_brief_r then '; over the brief''s ' || v_brief_r || ' ms' else '' end
+                                          || v_note_list[i] end;
+        r_ms := r_ms || case when v_ms >= 0 then v_ms end;
+      end loop;
     end loop;
-    v_ms := case when clock_timestamp() > v_stop then null
-                 else pg_temp.t0124_best_ms(format('select cma.flash_page(null, null, %L, %L)', v_from, v_to), 2) end;
-    v_names := v_names || 'landing'::text;
-    v_max_list := v_max_list || v_max_o;
-    v_ms_list := v_ms_list || v_ms;
-    v_err_list := v_err_list || case when v_ms = -1 then current_setting('t0124.error') end;
-    v_note_list := v_note_list || ('; flows ' || v_from || ' to ' || v_to);
-    v_list_list := v_list_list || false;
-    for o in select x.key, x.kind, x.sorts from cma.flash_overviews() x order by x.sort_order loop
-      v_flow := o.kind = 'flow';
-      v_ms := case when clock_timestamp() > v_stop then null
-                   else pg_temp.t0124_best_ms(format('select cma.flash_rows(%L, ''{}'', %L, true, 500, 0, null, %L, %L)', o.key, o.sorts[1],
-                                                     case when v_flow then v_from end, case when v_flow then v_to end), 2) end;
-      v_names := v_names || ('list ' || o.key || ' by ' || o.sorts[1] || ' desc');
-      v_max_list := v_max_list || case when o.key = 'data_quality' then v_max_q else v_max_r end;
-      v_ms_list := v_ms_list || v_ms;
-      v_err_list := v_err_list || case when v_ms = -1 then current_setting('t0124.error') end;
-      v_note_list := v_note_list || case when v_flow then '; flows ' || v_from || ' to ' || v_to else '' end;
-      v_list_list := v_list_list || (o.key <> 'data_quality');
-    end loop;
-    -- back to the owner to write the rows (the temporary table is the owner's)
-    perform set_config('role', 'cma_owner', true);
-    perform set_config('app.tenant_id', '', true);
-    perform set_config('app.user_id', '', true);
-    v_ord := v_ord + 1;
-    insert into pg_temp.time_0124 values (v_ord, t.slug || ' acting as', 'info',
-      'app_user ' || v_user || ': the first active person holding reports.view', null);
-    for i in 1 .. cardinality(v_names) loop
-      v_ord := v_ord + 1;
-      v_ms := v_ms_list[i];
-      insert into pg_temp.time_0124 values (v_ord, t.slug || ' ' || v_names[i],
-        case when v_ms is not null and v_ms >= 0 and v_ms < v_max_list[i] then 'ok' else 'FAIL' end,
-        case when v_ms is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
-             when v_ms = -1 then 'error ' || v_err_list[i]
-             else v_ms || ' ms (best of 2) against ' || v_max_list[i] || ' ms'
-                  || case when v_list_list[i] and v_ms >= v_brief_r then '; over the brief''s ' || v_brief_r || ' ms' else '' end
-                  || v_note_list[i]
-        end,
-        case when v_ms >= 0 then v_ms end);
-    end loop;
-  end loop;
+    raise exception using errcode = 'CMAOK', message = 'the timed part ends: rolled back';
+  exception
+    when sqlstate 'CMAOK' then null;
+    when others then
+      -- an unexpected error ends the timed part: the rows so far stay, with a FAIL row that says why
+      r_name := r_name || 'the timed part'::text; r_result := r_result || 'FAIL'::text;
+      r_detail := r_detail || ('ended early: ' || sqlstate || ' ' || sqlerrm); r_ms := r_ms || null::numeric;
+  end;
+  -- read-write again, as the owner: the rows into the temporary table
+  insert into pg_temp.time_0124 (ord, check_name, result, detail, ms)
+  select i, r_name[i], r_result[i], r_detail[i], r_ms[i] from generate_series(1, cardinality(r_name)) i;
 end
 $$;
 
