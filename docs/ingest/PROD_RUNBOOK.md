@@ -2162,8 +2162,9 @@ Written on 1 November 2026 for addition 0008zn and renumbered on 2 November 2026
 
 **Data prerequisites** (each one limits what Flash shows, not whether it runs):
 - Addition 0008zm in the database (lead cohorts, #209; it needs 0008zl, phase 15's (a) and (c)): `122` refuses to run without it (`addition 0008zm (120_lead_cohorts.sql) must run before 0008zn`).
-- The NetSuite Customer ID on the HubSpot contact: the connection maps `contact_netsuite_id` as the contact's `netsuite` reference (7.3), and finance fills it. A store customer with an order whose contact lacks it is a finding of `customer_required_ref_missing` (16.5 checks the mapping, 16.8 counts the gap).
-- The NetSuite Internal ID on the register's record, the device's named id `ns_internal_id` (14.5 maps it). A device without it is a finding of `device_required_ref_missing`.
+- The NetSuite Customer ID on the HubSpot contact: the connection maps `contact_netsuite_id` as the contact's `netsuite` reference (7.3), and finance fills it. Once `commerce.required_contact_refs` names `netsuite`, a store customer with an order whose contact lacks it is a finding of `customer_required_ref_missing` (16.5 checks the mapping, 16.8 counts the gap).
+- The NetSuite Internal ID on the register's record, the device's named id `ns_internal_id` (14.5 maps it). Once `assets.required_refs` names `ns_internal_id`, a device without it is a finding of `device_required_ref_missing`.
+- Both requirements are empty for Pulse4all Subscriptions until NetSuite holds its customers and devices (Decision log, 3 Nov 2026): seed `02` writes them empty, Flash's Active customers shows "With every required reference" as not applicable, and neither check finds anything. On that day they are switched on through Configuration or Studio (`ns_internal_id`, `netsuite`); a rerun of the seed keeps the value set then.
 - The store customers the CMA holds: phase 9's backfill read the customers changed since 1 October 2026, so Active customers and the NetSuite check are incomplete until each store's backfill from its start (Open decisions; 16.8).
 - Juo's subscriptions per store: the GB store first (phase 15). Active subscriptions, Active customers and Churn cover only the stores whose subscriptions the CMA reads (Open decisions; 16.8).
 - Orders from 1 October 2026 only (Open decisions, Order history before 1 October 2026), and test deals counted in Open deals until D25 (Open decisions).
@@ -2218,7 +2219,20 @@ where t.slug = 'pulse4all-subscriptions' and (s.key like 'flash.%' or s.key in (
 order by 1;
 reset role;
 ```
-Expected, nine rows: `assets.required_refs | ns_internal_id`, `commerce.required_contact_refs | netsuite`, `flash.active_subscription_statuses | active`, `flash.ended_subscription_statuses | canceled,expired`, `flash.file_max_rows | 50000`, `flash.id_list_retention_months | 84`, `flash.snapshot_local_time | 00:30`, `flash.watch_jump_min | 10`, `flash.watch_jump_pct | 20`. A value other than these was set earlier and is kept: report it.
+Expected, nine rows: `assets.required_refs | (empty)`, `commerce.required_contact_refs | (empty)`, `flash.active_subscription_statuses | active`, `flash.ended_subscription_statuses | canceled,expired`, `flash.file_max_rows | 50000`, `flash.id_list_retention_months | 84`, `flash.snapshot_local_time | 00:30`, `flash.watch_jump_min | 10`, `flash.watch_jump_pct | 20` (an empty value shows as an empty cell). A value other than these was set earlier and is kept: report it.
+
+Only when the first two rows read `ns_internal_id` and `netsuite` (a run of the seed before 3 November 2026 wrote them): empty them, as the Decision log of 3 Nov 2026 asks until NetSuite holds the customers and devices.
+
+**Studio (cma-dev-pg)**
+```sql
+set role cma_owner;
+update cma.tenant_setting s set value = ''
+from cma.tenant t
+where t.id = s.tenant_id and t.slug = 'pulse4all-subscriptions'
+  and s.key in ('assets.required_refs', 'commerce.required_contact_refs') and s.value <> '';
+reset role;
+```
+Expected: `UPDATE 2`; then the block above again shows both rows empty.
 
 ## 16.2 Dev: the data map on #213's branch
 
@@ -2349,7 +2363,7 @@ where t.slug = 'pulse4all-subscriptions' and (s.key like 'flash.%' or s.key in (
 order by 1;
 reset role;
 ```
-Expected: the nine rows of 16.1. **Records:** the outputs of 16.1 and 16.4 into the report.
+Expected: the nine rows of 16.1, the first two `assets.required_refs | (empty)` and `commerce.required_contact_refs | (empty)` (prod never ran the seed's Flash block before, so it writes them empty). **Records:** the outputs of 16.1 and 16.4 into the report.
 
 ## 16.5 Prod: the merge of #213, the ingest, the HubSpot project, the linked contacts
 
@@ -2394,7 +2408,7 @@ where c.adapter = 'hubspot' and c.status = 'active'
 group by 1, 2, 3 order by 1;
 reset role;
 ```
-Expected: three rows for the live portal's connection (`<hubspot conn>`): `netsuite | contact_netsuite_id`, `shopify | contact_shopify_id_1 | 1` and `shopify | contact_shopify_id_2 | 2` (7.3). No `netsuite` row: stop and report it (without it every store customer with an order is a finding of `customer_required_ref_missing`). Then one row per active HubSpot connection: for `pulse4all-subscriptions`, `linked` (the distinct contacts of 9.8's bridge check, over every store) and `linked_not_held` (`<n>`), the contacts the take-in reads. Note `<n>`.
+Expected: three rows for the live portal's connection (`<hubspot conn>`): `netsuite | contact_netsuite_id`, `shopify | contact_shopify_id_1 | 1` and `shopify | contact_shopify_id_2 | 2` (7.3). No `netsuite` row: report it. It is needed before `commerce.required_contact_refs` is switched on to `netsuite` (Decision log, 3 Nov 2026); while that setting is empty no customer is a finding of `customer_required_ref_missing`. Then one row per active HubSpot connection: for `pulse4all-subscriptions`, `linked` (the distinct contacts of 9.8's bridge check, over every store) and `linked_not_held` (`<n>`), the contacts the take-in reads. Note `<n>`.
 
 **The API calls.** The take-in costs one batch read per 100 contacts: `<n>`/100 rounded up (30,000 linked contacts are 300 requests), paced at half of HubSpot's limits. The portal's daily limit is shared by every app of the portal; on 18 October 2026 the app's 173,444 calls in 24 hours were 17% of it (phase 12), so a few hundred requests do not move it. The backfill still watches the **daily floor** (`docs/ingest/README.md`, API budget): once the remaining daily calls fall below `api_daily_floor_pct` (25% by default) of the limit, it sends no further request, finishes its run as succeeded with error `daily_floor`, logs `backfill paused` and exits 0; the same command later continues from its cursor.
 
@@ -2603,7 +2617,7 @@ where cu.tenant_id = (select id from t) and cu.source_deleted_at is null and cu.
   and coalesce(cu.orders_count, 0) >= 1;
 reset role;
 ```
-Good result (with `commerce.required_contact_refs` `netsuite`, 16.4): on the second row `with_netsuite_ref` close to `records`: finance has filled the NetSuite Customer ID on the HubSpot contact of every customer with an order. `records` less `with_netsuite_ref` is the number of `customer_required_ref_missing` findings Flash's Data quality (Q) shows; its list names the records to fix in HubSpot (Fixed in: Customer records), and those whose value is `contact_not_held` are fixed in the Workspace (16.5's take-in). The first row is wider: contacts held for deals, tickets, emails and threads need no NetSuite ID.
+Good result, once NetSuite holds the customers: on the second row `with_netsuite_ref` close to `records`: finance has filled the NetSuite Customer ID on the HubSpot contact of every customer with an order. Until then `with_netsuite_ref` stays near 0 and `commerce.required_contact_refs` is empty (Decision log, 3 Nov 2026), so Data quality shows no `customer_required_ref_missing`. Once it is switched on to `netsuite`, `records` less `with_netsuite_ref` is the number of `customer_required_ref_missing` findings Flash's Data quality (Q) shows; its list names the records to fix in HubSpot (Fixed in: Customer records), and those whose value is `contact_not_held` are fixed in the Workspace (16.5's take-in). The first row is wider: contacts held for deals, tickets, emails and threads need no NetSuite ID.
 
 **Studio (cma-prod-pg)** (read only: the open deals and tickets, as Flash counts them and as the CMA holds them)
 ```sql
