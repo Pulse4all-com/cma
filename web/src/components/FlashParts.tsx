@@ -15,7 +15,8 @@ import type { Copy } from "@/lib/copy";
 import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesView, FlashWatchItem } from "@/lib/data";
 import {
   amountsOf, averageRating, barShare, cellFilters, changeArrow, changeOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
-  FLASH_FROZEN_COLUMNS, FLASH_OVERVIEWS, FLASH_SOURCES, fixInOf, overviewOf, rowsOfSet, statusTone, type FlashKey, type FlashOverviewDef,
+  FLASH_FROZEN_COLUMNS, FLASH_OVERVIEWS, FLASH_SOURCES, fixInOf, measureNotApplicable, overviewOf, rowsOfSet, statusTone, type FlashKey,
+  type FlashOverviewDef,
 } from "@/lib/flash";
 import { fmtDate, fmtDateTimeShort, fmtTime } from "@/lib/time";
 
@@ -51,6 +52,12 @@ export function MeasureValue({ measure, value, reviews, locale }: { measure: str
     return <span>{avg === null ? "–" : fmtNumber(avg, locale, 2)}</span>;
   }
   return <span>{typeof value === "number" ? fmtNumber(value, locale, measure.endsWith("_age_days") ? 1 : 0) : "–"}</span>;
+}
+
+/** A measure that does not apply (left out by the database): said so, never 0 or all, with the reason as its title */
+export function NotApplicable({ measure, t }: { measure: string; t: T }) {
+  const hint = (t as Record<string, string>)[`na_${measure}`];
+  return <span className="font-normal text-p4a-muted" title={hint} data-testid={`flash-na-${measure}`}>{t.notApplicable}</span>;
 }
 
 /** The status badge of an overview's definition (7.5): Proposed info, Decided success */
@@ -185,7 +192,11 @@ export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc:
       {order.map((m) => (
         <div key={m} className="rounded-card border border-p4a-border bg-white p-5" data-testid={`flash-total-${m}`}>
           <p className="text-caption text-p4a-grey">{t[`m_${m}` as keyof T]}</p>
-          <p className="tabular mt-1 text-title font-bold text-p4a-heading"><MeasureValue measure={m} value={totals[m]} reviews={totals.reviews} locale={locale} /></p>
+          <p className="tabular mt-1 text-title font-bold text-p4a-heading">
+            {measureNotApplicable(def.key, doc.totals, m)
+              ? <NotApplicable measure={m} t={t} />
+              : <MeasureValue measure={m} value={totals[m]} reviews={totals.reviews} locale={locale} />}
+          </p>
         </div>
       ))}
     </div>
@@ -226,7 +237,11 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
             <tr className="border-b border-p4a-border font-semibold">
               <td className="px-3 py-2" colSpan={set.length}>{t.totalRow}</td>
               {measures.map((m) => (
-                <td key={m} className="tabular px-3 py-2 text-right"><MeasureValue measure={m} value={doc.totals?.[m]} reviews={doc.totals?.reviews} locale={locale} /></td>
+                <td key={m} className="tabular px-3 py-2 text-right">
+                  {measureNotApplicable(def.key, doc.totals, m)
+                    ? <NotApplicable measure={m} t={t} />
+                    : <MeasureValue measure={m} value={doc.totals?.[m]} reviews={doc.totals?.reviews} locale={locale} />}
+                </td>
               ))}
               <td />
             </tr>
@@ -242,7 +257,9 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
                 ))}
                 {measures.map((m) => (
                   <td key={m} className="tabular px-3 py-2 text-right">
-                    {def.countMeasures.includes(m) && !set.includes("sku")
+                    {measureNotApplicable(def.key, r.measures, m)
+                      ? <NotApplicable measure={m} t={t} />
+                      : def.countMeasures.includes(m) && !set.includes("sku")
                       ? <Link href={cellLink(r, m)} className="text-p4a-deepblue underline"><MeasureValue measure={m} value={r.measures[m]} locale={locale} /></Link>
                       : <MeasureValue measure={m} value={r.measures[m]} reviews={r.measures.reviews} locale={locale} />}
                   </td>
