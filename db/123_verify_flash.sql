@@ -9,13 +9,17 @@
 -- on today (a device's end of life within three months) are seeded relative to it. Every check writes one row, ok or
 -- FAIL, and the last row is the verdict (0008zn verified), because Cloud SQL Studio shows no notices. Run as your own IAM
 -- login after 122_flash.sql, dev first, then prod.
--- Expected verdict: dev and local databases "0008zn verified | 123_verify_flash: 43 ok, 0 FAIL, 0 skip" (43 checks: A1 to
--- A8, the B rows, C1 to C4); prod "0008zn verified | 123_verify_flash: 39 ok, 0 FAIL, 4 skip" (block C reads skip);
--- provoked "PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 43 FAIL, 0 skip" (39 FAIL and 4 skip in prod).
+-- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
+-- 39 ok, 0 FAIL, 4 skip" (43 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
+-- with verify.volume set to 'true' at the top: "0008zn verified | 123_verify_flash: 43 ok, 0 FAIL, 0 skip"; provoked
+-- "PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 39 FAIL, 4 skip" (0 ok, 43 FAIL, 0 skip with the volume on). Flash's
+-- speed on real data is 124_time_flash.sql's, run in prod after this script (PROD_RUNBOOK phase 16; in dev for
+-- information only). Text is compared in collate "C" (every ordered string_agg), so the verdict is the same whatever the
+-- database's collation (dev's en_US sorts "renewed" before "renew_failed", C the other way).
 -- Reruns after 122 (dev; their objects are made again by 122): 121_verify_lead_cohorts.sql (22 PASS),
 -- 113_verify_assets.sql (25 ok), 95_verify_attempts_for_sales.sql (36 PASS), 41_verify_lead_metrics.sql (every row
 -- PASS), 119_verify_subscriptions.sql (23 PASS), 105_verify_reviews.sql (27 PASS), 81_verify_follow_up_snapshot.sql
--- (19 PASS); in prod 113 only (the others need the dev seed).
+-- (19 PASS); in prod 113 and 41 (the others refuse a database without the dev seed).
 --   A  structure and privileges: the addition row after 0008zm; the four tables' columns; keys and checks (a snapshot
 --      row's allow-lists and no @, one succeeded or missed run per date, one open finding per key, a month end's id list,
 --      the settings' types and defaults, the job flash_snapshot without a connection, a value a snapshot cannot hold
@@ -44,8 +48,9 @@
 --      against its own date (B21); a SKU with an @ (B25); writes only through the take (B22); the expiry without a
 --      caller's date (B26); the ended statuses, a deleted contact, a market without devices, a reference in its market,
 --      an expired list, a file record's filters (B27)
---   C  speed, in dev and local databases only (where the dev seed's agent.two@example.com is active; in prod the four
---      rows read skip): a throwaway tenant with 100,000 customers, 100,000 subscriptions, 50,000 devices and 200,000
+--   C  speed at volume, in local databases only, when verify.volume is set to 'true' at the top (off by default in every
+--      database, so the four rows read skip in dev and prod: dev's shared core cannot carry the volume, its run lost the
+--      connection after an hour on 3 November 2026; prod's speed on real data is 124_time_flash.sql's): a throwaway tenant with 100,000 customers, 100,000 subscriptions, 50,000 devices and 200,000
 --      orders: every live overview but data quality under verify.max_overview_ms (the best of two) and the landing; every
 --      first page of a list by every whitelisted sort key under verify.max_rows_ms (the best of two), as the application
 --      (row-level security on); a full take under half the job's statement timeout (verify.job_statement_timeout_ms, the
@@ -75,8 +80,9 @@ select set_config('verify.max_dq_ms', '2500', false);                -- data qua
 select set_config('verify.brief_rows_ms', '800', false);             -- the brief's budget of a first page, reported in the rows' detail
 select set_config('verify.job_statement_timeout_ms', '240000', false); -- jobs/snapshot-flash.mjs, STATEMENT_TIMEOUT_MS
 select set_config('verify.take_max_ms', (current_setting('verify.job_statement_timeout_ms')::integer / 2)::text, false);
--- block C (speed at volume) runs in dev and local databases only: where the dev seed's agent.two@example.com is active
-select set_config('verify.volume', (select exists (select 1 from cma.app_user u where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false);
+-- block C (speed at volume) is off in every database; 'true' only in a local run (dev's shared core cannot carry its
+-- volume; Flash's speed on real data is 124_time_flash.sql's, in prod)
+select set_config('verify.volume', 'false', false);                  -- 'true' to run block C, local databases only
 
 drop table if exists pg_temp.verify_0008zn;
 create temp table verify_0008zn (ord int, check_name text, result text, detail text);
@@ -123,9 +129,9 @@ returns text
 language sql
 as $$
   select coalesce(string_agg(
-           coalesce(nullif((select string_agg(d.value #>> '{}', '/' order by d.key) from jsonb_each(c.dims) d), ''), '*') || ':'
-           || (select string_agg(m.key || '=' || (m.value #>> '{}'), ',' order by m.key) from jsonb_each(c.measures) m),
-           ' ' order by (select count(*) from jsonb_object_keys(c.dims)), c.dims::text), '-')
+           coalesce(nullif((select string_agg(d.value #>> '{}', '/' order by d.key collate "C") from jsonb_each(c.dims) d), ''), '*') || ':'
+           || (select string_agg(m.key || '=' || (m.value #>> '{}'), ',' order by m.key collate "C") from jsonb_each(c.measures) m),
+           ' ' order by (select count(*) from jsonb_object_keys(c.dims)), c.dims::text collate "C"), '-')
   from cma.flash_compute_of(p_tenant, p_overview, p_from, p_to, p_on) c
 $$;
 
@@ -135,9 +141,9 @@ returns text
 language sql
 as $$
   select coalesce(string_agg(
-           coalesce(nullif((select string_agg(d.value #>> '{}', '/' order by d.key) from jsonb_each(c.dims) d), ''), '*') || ':'
-           || (select string_agg(m.key || '=' || (m.value #>> '{}'), ',' order by m.key) from jsonb_each(c.measures) m),
-           ' ' order by (select count(*) from jsonb_object_keys(c.dims)), c.dims::text), '-')
+           coalesce(nullif((select string_agg(d.value #>> '{}', '/' order by d.key collate "C") from jsonb_each(c.dims) d), ''), '*') || ':'
+           || (select string_agg(m.key || '=' || (m.value #>> '{}'), ',' order by m.key collate "C") from jsonb_each(c.measures) m),
+           ' ' order by (select count(*) from jsonb_object_keys(c.dims)), c.dims::text collate "C"), '-')
   from cma.flash_snapshot_sum_of(p_tenant, p_overview, p_dates) c
 $$;
 
@@ -205,7 +211,7 @@ begin
      or cma.job_permission_of('flash_snapshot') is distinct from 'flash.snapshot' then
     v_bad := v_bad || 'the job; ';
   end if;
-  if (select string_agg(s.key || ':' || s.value_type || ':' || s.default_value, ',' order by s.key) from cma.setting s
+  if (select string_agg(s.key || ':' || s.value_type || ':' || s.default_value, ',' order by s.key collate "C") from cma.setting s
       where s.key like 'flash.%' or s.key in ('assets.required_refs', 'commerce.required_contact_refs'))
      is distinct from 'assets.required_refs:text:,commerce.required_contact_refs:text:,flash.active_subscription_statuses:text:active,'
                       || 'flash.ended_subscription_statuses:text:canceled,expired,'
@@ -643,7 +649,7 @@ begin
 
     -- B4. the six data-quality checks find exactly their seeded rows
     perform set_config('role', 'cma_owner', true);
-    select string_agg(q.check_key || ':' || q.object_id || coalesce(':' || q.value, ''), ' ' order by q.check_key, q.object_id) into v_txt
+    select string_agg(q.check_key || ':' || q.object_id || coalesce(':' || q.value, ''), ' ' order by q.check_key collate "C", q.object_id collate "C") into v_txt
     from cma.data_quality_of(v_t1) q
     where q.check_key in (select c.check_key from cma.data_quality_flash_checks() c);
     v_rows := v_rows || array['17', 'B4 the six checks: required contact references (and a contact not held), required device ids, unmatched customer, active without device, unknown reference, ended subscription',
@@ -658,12 +664,12 @@ begin
     perform set_config('role', 'cma_app', true);
     j := cma.data_quality_rows('customer_required_ref_missing');
     v_txt := (j ->> 'total') || ' ' || (select string_agg(r ->> 'object_id' || '/' || (r ->> 'market') || '/' || (r ->> 'fix_in') || '/' || coalesce(r ->> 'fix_adapter', '-')
-                                                          || '/' || coalesce(r ->> 'related_url', '-'), ' ' order by r ->> 'object_id')
+                                                          || '/' || coalesce(r ->> 'related_url', '-'), ' ' order by (r ->> 'object_id') collate "C")
                                         from jsonb_array_elements(j -> 'rows') r);
     j := cma.data_quality_rows('field_device_on_ended_subscription', 'GB');
     v_txt := v_txt || ' | ' || (j ->> 'total') || ' ' || (j -> 'rows' -> 0 ->> 'fix_in') || '/' || (j -> 'rows' -> 0 ->> 'fix_adapter') || '/'
              || (j -> 'rows' -> 0 ->> 'related_type') || ':' || (j -> 'rows' -> 0 ->> 'related_id')
-             || ' | ' || (select string_agg(d.check_key || '=' || d.total, ' ' order by d.check_key) from cma.data_quality() d
+             || ' | ' || (select string_agg(d.check_key || '=' || d.total, ' ' order by d.check_key collate "C") from cma.data_quality() d
                           where d.check_key in (select c.check_key from cma.data_quality_flash_checks() c))
              || ' | ' || pg_temp.v0008zn_code('select cma.data_quality_rows(''no_such_check'')');
     v_rows := v_rows || array['18', 'B5 the checks'' rows: market, the system where fixed, links; data_quality() lists the six; an unknown check refused',
@@ -716,7 +722,7 @@ begin
     v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || (j ->> 'watch_opened') || ' ' || (j ->> 'watch_resolved')
              || ' | ' || (select string_agg(f.kind || ':' || coalesce(f.overview, '-') || ':' || f.dims::text || ':' || coalesce(f.measure, '-')
                                              || ':' || coalesce(f.value::text, '-') || ':' || coalesce(f.previous::text, '-') || ':' || coalesce(f.threshold::text, '-'),
-                                             ' ' order by f.kind)
+                                             ' ' order by f.kind collate "C")
                           from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.state = 'open');
     v_rows := v_rows || array['22', 'B7 take A: stored; the watch opens jump, flow_zero, dq_rise and source_stale',
       case when v_txt = 'true 2026-10-28 4 0 | dq_rise:data_quality:{"check": "active_subscription_without_device"}:findings:2:0:1.00 '
@@ -733,10 +739,10 @@ begin
     j := cma.flash_snapshot_take_at(v_t1, v_take_b);
     v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || (j ->> 'missed_before') || ' ' || (j ->> 'watch_opened') || ' ' || (j ->> 'watch_resolved')
              || ' ' || (j ->> 'missed_recorded') || ' ' || (j ->> 'late')
-             || ' ' || (select string_agg(r.status, ',') from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = '2026-10-29')
+             || ' ' || (select string_agg(r.status, ',' order by r.started_at, r.status collate "C") from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = '2026-10-29')
              || ' ' || (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-29')
-             || ' | ' || (select string_agg(f.kind || ':' || f.detail::text, ' ') from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.state = 'open')
-             || ' | ' || (select string_agg(f.kind || ':' || f.resolved_on, ' ' order by f.kind) from cma.flash_watch_finding f
+             || ' | ' || (select string_agg(f.kind || ':' || f.detail::text, ' ' order by f.kind collate "C", f.detail::text collate "C") from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.state = 'open')
+             || ' | ' || (select string_agg(f.kind || ':' || f.resolved_on, ' ' order by f.kind collate "C") from cma.flash_watch_finding f
                           where f.tenant_id = v_t1 and f.state = 'resolved');
     v_rows := v_rows || array['23', 'B8 take B after a missed date: the date recorded as missed, missed_before, snapshot_missing opened, the four resolved',
       case when v_txt = 'true 2026-10-30 1 1 4 1 false missed 0 | snapshot_missing:{"days": 1, "missing_to": "2026-10-29", "missing_from": "2026-10-29"} | '
@@ -751,7 +757,7 @@ begin
       end if;
     end loop;
     v_txt := v_txt || (select count(distinct s.overview) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30')::text
-             || ' ' || (select string_agg(distinct s.definition_version, ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30');
+             || ' ' || (select string_agg(distinct s.definition_version collate "C", ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30');
     v_rows := v_rows || array['24', 'B8 the snapshot equals the computation as of its date, all eleven overviews',
       case when v_txt = '11 0008zn' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
@@ -785,7 +791,7 @@ begin
     j := cma.flash_snapshot_take_at(v_t1, v_take_c);
     v_txt := (j ->> 'taken') || ' ' || (j ->> 'ids_customer') || ' ' || (j ->> 'ids_subscription') || ' ' || (j ->> 'ids_device')
              || ' | ' || (select string_agg(x.record_kind || ':' || x.source_id || ':' || x.market || ':' || x.state, ' '
-                                            order by x.record_kind, x.source_id)
+                                            order by x.record_kind collate "C", x.source_id collate "C")
                           from cma.flash_snapshot_ids x where x.tenant_id = v_t1)
              || ' | ' || (select count(*) from cma.audit_log al where al.tenant_id = v_t1 and al.table_name = 'flash_snapshot_ids')
              || ' ' || (select count(*) from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.state = 'open');
@@ -819,7 +825,7 @@ begin
 
     -- B25. a SKU holding an @ is stored as other (a snapshot holds no @), the take succeeds, the list behind the cell
     --      finds the order by it; no id left out of the lists
-    v_txt := v_c || ' ' || (select string_agg(s.dims ->> 'sku' || '=' || (s.measures ->> 'units'), ',' order by s.dims ->> 'sku') from cma.flash_snapshot s
+    v_txt := v_c || ' ' || (select string_agg(s.dims ->> 'sku' || '=' || (s.measures ->> 'units'), ',' order by (s.dims ->> 'sku') collate "C") from cma.flash_snapshot s
                             where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-31' and s.overview = 'orders' and s.dims ? 'sku' and s.dims ->> 'market' = 'GB')
              || ' ' || (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1 and strpos(s.dims::text, '@') > 0)
              || ' ' || (cma.flash_rows_of(v_t1, 'orders', '{"sku": "other"}', 'created_at', false, 10, 0, '2026-10-31', '2026-10-31') -> 'rows' -> 0 ->> 'order_number');
@@ -851,9 +857,9 @@ begin
     j := cma.flash_overview('customers');
     v_txt := v_txt || ' | ' || (j ->> 'set_up') || ' ' || coalesce(j ->> 'totals', 'null') || ' ' || (j -> 'rows')::text;
     j := cma.flash_page();
-    v_txt := v_txt || ' | ' || (select string_agg(c ->> 'key' || ':' || (c ->> 'set_up') || ':' || coalesce(c ->> 'value', 'null'), ' ' order by c ->> 'key')
+    v_txt := v_txt || ' | ' || (select string_agg(c ->> 'key' || ':' || (c ->> 'set_up') || ':' || coalesce(c ->> 'value', 'null'), ' ' order by (c ->> 'key') collate "C")
                                 from jsonb_array_elements(j -> 'overviews') c where c ->> 'key' in ('customers', 'installed_base', 'data_quality'))
-             || ' | ' || (select string_agg(x || ':' || (cma.flash_headline(x) ->> 'set_up') || ':' || coalesce(cma.flash_headline(x) ->> 'value', 'null'), ' ' order by x)
+             || ' | ' || (select string_agg(x || ':' || (cma.flash_headline(x) ->> 'set_up') || ':' || coalesce(cma.flash_headline(x) ->> 'value', 'null'), ' ' order by x collate "C")
                           from unnest(array['customers', 'data_quality', 'orders']) x)
              || ' | ' || (cma.flash_rows('customers') ->> 'set_up') || ' ' || (cma.flash_rows('data_quality') ->> 'set_up')
              || ' ' || ((j ->> 'today')::date = cma.tenant_today_of(v_t2))::text || ' ' || (j ->> 'time_zone');
@@ -961,11 +967,11 @@ begin
     -- the landing: as of 31 October the stored headlines and the snapshot before; now the latest snapshot to compare with,
     --      the live headline per card (cma.flash_headline) equal to the overview's own totals
     j := cma.flash_page(null, '2026-10-31');
-    v_txt := v_txt || ' | ' || (select string_agg(c ->> 'key' || '=' || coalesce(c ->> 'value', '-') || '/' || coalesce(c ->> 'previous', '-'), ' ' order by c ->> 'key')
+    v_txt := v_txt || ' | ' || (select string_agg(c ->> 'key' || '=' || coalesce(c ->> 'value', '-') || '/' || coalesce(c ->> 'previous', '-'), ' ' order by (c ->> 'key') collate "C")
                                 from jsonb_array_elements(j -> 'overviews') c where c ->> 'key' in ('customers', 'orders', 'churn'));
     j := cma.flash_page();
     v_txt := v_txt || ' | ' || (select string_agg(c ->> 'key' || '=' || coalesce(c ->> 'value', '-') || '/' || coalesce(c ->> 'previous', '-')
-                                                  || '@' || coalesce(c ->> 'previous_on', '-'), ' ' order by c ->> 'key')
+                                                  || '@' || coalesce(c ->> 'previous_on', '-'), ' ' order by (c ->> 'key') collate "C")
                                 from jsonb_array_elements(j -> 'overviews') c where c ->> 'key' in ('customers', 'installed_base'))
              || ' ' || (cma.flash_headline('customers') ->> 'value') || ' ' || (cma.flash_headline('orders', null, '2026-10-30', '2026-10-31') ->> 'value')
              || ' ' || (cma.flash_headline('customers', 'NL') ->> 'value') || ' ' || jsonb_array_length(j -> 'watch')
@@ -985,7 +991,7 @@ begin
     --      not; its customer's finding goes; the privacy deletion (the ingest's two calls) clears the link
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_ingest1::text, true);
-    select string_agg(x.source_id || ':' || x.outcome, ' ' order by x.source_id) into v_txt
+    select string_agg(x.source_id || ':' || x.outcome, ' ' order by x.source_id collate "C") into v_txt
     from cma.ingest_upsert_contacts(v_crm, '[{"sourceId": "c-9", "country": "GB", "refs": {"netsuite": "NS-9"}}, {"sourceId": "c-77", "country": "GB"}]') x;
     perform set_config('role', 'cma_owner', true);
     v_txt := v_txt || ' ' || (select count(*) from cma.data_quality_of(v_t1) q where q.check_key = 'customer_required_ref_missing' and q.object_id = 'cu-4');
@@ -1080,7 +1086,7 @@ begin
              || ' | ' || (select string_agg(right(r.snapshot_date::text, 2) || ':' || r.status || case when r.late then ':late' else '' end, ' '
                                             order by r.snapshot_date, r.started_at)
                           from cma.flash_snapshot_run r where r.tenant_id = v_t3)
-             || ' | ' || (select string_agg(distinct right(s.snapshot_date::text, 2), ',') from cma.flash_snapshot s where s.tenant_id = v_t3)
+             || ' | ' || (select string_agg(distinct right(s.snapshot_date::text, 2) collate "C", ',') from cma.flash_snapshot s where s.tenant_id = v_t3)
              || ' | ' || (select count(*) from cma.flash_watch_finding f where f.tenant_id = v_t3 and f.state = 'open' and f.kind = 'snapshot_missing');
     v_rows := v_rows || array['38', 'B20 the snapshot time: each date once from its due time for 00:30, 23:20 and 23:59; a skipped run taken late; a missed date recorded, never taken',
       case when v_txt = 'took:02 taken:02 took:03 taken:03 taken:03 took:04 took:05 taken:05 taken:05 took:06 taken:06 took:07 took:09 missed:08 | '
@@ -1120,7 +1126,7 @@ begin
     from generate_series(timestamptz '2026-10-13 06:00 Europe/Amsterdam', timestamptz '2026-10-13 09:00 Europe/Amsterdam', interval '10 minutes') t;
     j := cma.flash_snapshot_take_at(v_t3, '2026-10-14 00:20 Europe/Amsterdam');
     v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || (j ->> 'watch_opened')
-             || ' ' || (select string_agg(f.dims::text || ':' || f.value || ':' || (f.detail ->> 'connections'), ' ') from cma.flash_watch_finding f
+             || ' ' || (select string_agg(f.dims::text || ':' || f.value || ':' || (f.detail ->> 'connections'), ' ' order by f.dims::text collate "C") from cma.flash_watch_finding f
                         where f.tenant_id = v_t3 and f.kind = 'source_stale' and f.state = 'open');
     j := cma.flash_snapshot_take_at(v_t3, '2026-10-15 00:20 Europe/Amsterdam');
     v_txt := v_txt || ' | ' || (j ->> 'taken') || ' ' || coalesce(j ->> 'watch_error', '-') || ' ' || (j ->> 'watch_opened')
@@ -1193,7 +1199,7 @@ begin
     update cma.crm_contact set source_deleted_at = null where tenant_id = v_t1 and source_id = 'c-2';
     update cma.device set market = 'NL' where tenant_id = v_t1;
     v_txt := v_txt || ' | ' || (select count(*) from cma.data_quality_of(v_t1) q where q.check_key = 'active_subscription_without_device')
-             || ' ' || (select string_agg(d.source_id || ':' || d.link, ',' order by d.source_id) from cma.flash_devices_of(v_t1, v_today) d
+             || ' ' || (select string_agg(d.source_id || ':' || d.link, ',' order by d.source_id collate "C") from cma.flash_devices_of(v_t1, v_today) d
                         where d.subscription_ref is not null);
     update cma.device set market = case when source_id = 'rec-5' then 'NL' else 'GB' end where tenant_id = v_t1;
     delete from cma.flash_snapshot_ids x where x.tenant_id = v_t1 and x.snapshot_date = '2026-10-31' and x.record_kind = 'subscription';
@@ -1228,7 +1234,7 @@ begin
 end
 $$;
 
--- C. Speed at volume (rolled back; dev and local databases only): 100,000 customers, 100,000 subscriptions, 50,000 devices,
+-- C. Speed at volume (rolled back; local databases only, with verify.volume 'true' at the top): 100,000 customers, 100,000 subscriptions, 50,000 devices,
 --    200,000 orders. The volume's audit triggers are disabled inside the block (an exclusive lock on those tables until
 --    the rollback, which also enables them again): the audit image of every generated row (some 1.2 million) would make
 --    the setup itself take half an hour and fill the audit log of a database that keeps it
@@ -1250,10 +1256,10 @@ declare
   j jsonb;
 begin
   if not current_setting('verify.volume')::boolean then
-    insert into verify_0008zn values (61, 'C1 every live overview but data quality, and the landing, under verify.max_overview_ms at volume', 'skip', 'not run: dev and local databases only'),
-                                     (62, 'C2 every first page of a list but data quality''s, by every sort key, under verify.max_rows_ms at volume', 'skip', 'not run: dev and local databases only'),
-                                     (63, 'C3 a full take under half the job''s statement timeout at volume', 'skip', 'not run: dev and local databases only'),
-                                     (64, 'C4 the data-quality overview and its lists under verify.max_dq_ms at volume', 'skip', 'not run: dev and local databases only');
+    insert into verify_0008zn values (61, 'C1 every live overview but data quality, and the landing, under verify.max_overview_ms at volume', 'skip', 'not run: volume off'),
+                                     (62, 'C2 every first page of a list but data quality''s, by every sort key, under verify.max_rows_ms at volume', 'skip', 'not run: volume off'),
+                                     (63, 'C3 a full take under half the job''s statement timeout at volume', 'skip', 'not run: volume off'),
+                                     (64, 'C4 the data-quality overview and its lists under verify.max_dq_ms at volume', 'skip', 'not run: volume off');
     return;
   end if;
   begin
@@ -1468,9 +1474,16 @@ end
 $$;
 
 -- Block C analysed its volume inside its transaction; the rollback took the rows and the statistics' details, but a
--- table's row count is kept outside the transaction: the tables are analysed again, so their statistics are their own
-analyze cma.commerce_customer, cma.crm_contact, cma.crm_contact_ref, cma.subscription, cma.subscription_event, cma.device,
-        cma.device_component, cma.commerce_order, cma.commerce_order_line, cma.crm_record, cma.crm_task, cma.review;
+-- table's row count is kept outside the transaction: after a run with the volume on, the tables are analysed again, so
+-- their statistics are their own (nothing is analysed when block C did not run)
+do $$
+begin
+  if current_setting('verify.volume')::boolean then
+    analyze cma.commerce_customer, cma.crm_contact, cma.crm_contact_ref, cma.subscription, cma.subscription_event, cma.device,
+            cma.device_component, cma.commerce_order, cma.commerce_order_line, cma.crm_record, cma.crm_task, cma.review;
+  end if;
+end
+$$;
 
 -- The helpers are dropped first, so the verdict is the last thing the script prints
 drop function if exists pg_temp.v0008zn_code(text);
@@ -1478,8 +1491,8 @@ drop function if exists pg_temp.v0008zn_best_ms(text, integer);
 drop function if exists pg_temp.v0008zn_figs(uuid, text, date, date, date);
 drop function if exists pg_temp.v0008zn_stored(uuid, text, date[]);
 
--- Verdict: one row per check, then the verdict. 43 checks in dev and local databases; in prod block C's four read skip
--- (its speed is proven in dev) and the 39 others must be ok
+-- Verdict: one row per check, then the verdict. 43 checks: with the volume off (dev, prod) block C's four read skip and
+-- the 39 others must be ok; with the volume on (a local run) all 43
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zn
       union all
