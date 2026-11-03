@@ -1018,8 +1018,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Watch finding (nl: Signaal) |
-| Key | `cma.flash_watch_finding`; kinds `jump`, `flow_zero`, `source_stale`, `snapshot_missing`, `dq_rise`; settings `flash.watch_jump_pct`, `flash.watch_jump_min` |
-| Definition | An unexpected movement the deterministic watch finds after a snapshot (docs/architecture/flash-watch.md): a jump of a stock figure per market, a flow that stopped, a source not read for three cadences, a snapshot missing, a data-quality check that rose. It resolves itself on the first snapshot where its condition no longer holds. |
+| Key | `cma.flash_watch_finding`; kinds `jump`, `flow_zero`, `source_stale`, `snapshot_missing`, `dq_rise`; settings `flash.watch_jump_pct`, `flash.watch_jump_min`, `flash.watch_stale_min_minutes` |
+| Definition | An unexpected movement the deterministic watch finds after a snapshot (docs/architecture/flash-watch.md): a jump of a stock figure per market, a flow that stopped, a source not read for three of its cadences (the cadence of its most frequent job and stream, each measured on its own runs, at least `flash.watch_stale_min_minutes`), a snapshot missing, a data-quality check that rose. It resolves itself on the first snapshot where its condition no longer holds. |
 | Source | `cma.flash_watch_of` at each take, on the stored figures and `sync_run` |
 | Counts / does not count | One open finding per kind, overview, dims and measure (two stale connections of one source, adapter and store are one finding with their count); aggregates and codes only, never a record's id. A watch that fails is recorded on the snapshot's run, never in the snapshot's place |
 | Unit and display | A line in Flash's watch strip naming the overview, the market or check, the value and the one before |
@@ -1028,9 +1028,9 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | "Alert" (an alert is a message, Feature 7); "incident" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "The watch runs in a subtransaction of its own" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "The watch runs in a subtransaction of its own" (addition 0008zn); 3 Nov 2026, "Definitions: a Flash source's cadence is measured per job and stream" (addition 0008zo) |
 | Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch |
-| As built today | `cma.flash_watch_of` (`122`); `123` raises and resolves each kind. Matches the definition |
+| As built today | `cma.flash_watch_of` (`122`; `source_stale`'s cadence per job and stream since `125`); `123` raises and resolves each kind, and B28 the cadence per job and stream. Matches the definition |
 
 ### Flash overview measures
 
