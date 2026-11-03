@@ -562,7 +562,7 @@ Facts about the review platform's own figures, recorded so nobody mistakes them 
 
 ## Asset terms
 
-Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is mandatory and a missing one is a data issue the CMA flags, addition 0008zn; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
 
 ### Device
 
@@ -1057,7 +1057,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `active_customers` | Active customer |
 | | `paused_customers` | Store customers with a paused subscription and none active |
 | | `linked_to_contact` | Store customers linked to a CRM contact (0008h) |
-| | `with_required_refs` | Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs` |
+| | `with_required_refs` | Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs`. Not applicable while that setting is empty (no reference is required, so none is met or missed): left out live and in the snapshot, absent from the JSON, an empty cell in a file, "Not applicable" (nl "Niet van toepassing") on screen, never 0 or all |
 | Active subscriptions (`subscriptions`) | `subscriptions` | Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) |
 | | `active_subscriptions` | Of those, a status in `flash.active_subscription_statuses` |
 | | `paused_subscriptions` | Of those, status paused |
