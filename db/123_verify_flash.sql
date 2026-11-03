@@ -48,16 +48,17 @@
 --      against its own date (B21); a SKU with an @ (B25); writes only through the take (B22); the expiry without a
 --      caller's date (B26); the ended statuses, a deleted contact, a market without devices, a reference in its market,
 --      an expired list, a file record's filters (B27)
---   C  speed at volume, in local databases only, when verify.volume is set to 'true' at the top (off by default in every
---      database, so the four rows read skip in dev and prod: dev's shared core cannot carry the volume, its run lost the
---      connection after an hour on 3 November 2026; prod's speed on real data is 124_time_flash.sql's): a throwaway tenant with 100,000 customers, 100,000 subscriptions, 50,000 devices and 200,000
---      orders: every live overview but data quality under verify.max_overview_ms (the best of two) and the landing; every
---      first page of a list by every whitelisted sort key under verify.max_rows_ms (the best of two), as the application
---      (row-level security on); a full take under half the job's statement timeout (verify.job_statement_timeout_ms, the
---      value jobs/snapshot-flash.mjs sets); the data-quality overview and its lists under verify.max_dq_ms, a budget of
---      their own: they run every check of cma.data_quality_of live, the 24 that came before 0008zn included. The list and
---      data-quality budgets are proposed, looser than the brief's (see the settings below); the timings, and what is over
---      the brief's figures, are in the rows' detail
+--   C  speed at volume, in local databases only, when verify.volume is set to 'true' at the top (off by default in
+--      every database, so the four rows read skip in dev and prod: dev's shared core cannot carry the volume, its run
+--      lost the connection after an hour on 3 November 2026; prod's speed on real data is 124_time_flash.sql's): a
+--      throwaway tenant with 100,000 customers, 100,000 subscriptions, 50,000 devices and 200,000 orders: every live
+--      overview but data quality under verify.max_overview_ms (the best of two) and the landing; every first page of a
+--      list by every whitelisted sort key under verify.max_rows_ms (the best of two), as the application (row-level
+--      security on); a full take under half the job's statement timeout (verify.job_statement_timeout_ms, the value
+--      jobs/snapshot-flash.mjs sets); the data-quality overview and its lists under verify.max_dq_ms, a budget of their
+--      own: they run every check of cma.data_quality_of live, the 24 that came before 0008zn included. The list and
+--      data-quality budgets are proposed, looser than the brief's (see the settings below); the timings, and what is
+--      over the brief's figures, are in the rows' detail
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
