@@ -8,12 +8,13 @@
 -- instants, so the verdict does not depend on the day it runs; stock figures are as of the run, and the few that depend
 -- on today (a device's end of life within three months) are seeded relative to it. Every check writes one row, ok or
 -- FAIL, and the last row is the verdict (0008zn verified), because Cloud SQL Studio shows no notices. Run as your own IAM
--- login after 122_flash.sql, dev first, then prod.
+-- login after 122_flash.sql and 125_flash_watch_cadence.sql (0008zo, whose check is B28: without it B28 reads FAIL), dev
+-- first, then prod.
 -- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
--- 39 ok, 0 FAIL, 4 skip" (43 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
--- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 42 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
+-- 40 ok, 0 FAIL, 4 skip" (44 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
+-- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 43 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
 -- generated volume some first pages of a list are over 800 ms: docs/open-decisions.md, Flash speed at volume); provoked
--- "PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 39 FAIL, 4 skip" (0 ok, 43 FAIL, 0 skip with the volume on). Flash's
+-- "PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 40 FAIL, 4 skip" (0 ok, 44 FAIL, 0 skip with the volume on). Flash's
 -- speed on real data is 124_time_flash.sql's, run in prod after this script (PROD_RUNBOOK phase 16; in dev for
 -- information only). Text is compared in collate "C" (every ordered string_agg), so the verdict is the same whatever the
 -- database's collation (dev's en_US sorts "renewed" before "renew_failed", C the other way).
@@ -49,7 +50,10 @@
 --      against its own date (B21); a SKU with an @ (B25); writes only through the take (B22); the expiry without a
 --      caller's date (B26); the ended statuses, a deleted contact, a market without devices, a reference in its market,
 --      an expired list, a file record's filters; the required references empty: with_required_refs not applicable
---      live, in the snapshot and to the watch, no records, no required-reference finding (B27)
+--      live, in the snapshot and to the watch, no records, no required-reference finding (B27). Tenant four (0008zo): a
+--      source's cadence per job and stream, a CRM's minutely sweep with its nightly reconcile, a store with its reconcile
+--      alone, a poll setting, the floor flash.watch_stale_min_minutes: none stale while fresh, each stale past three of
+--      its own cadences (B28)
 --   C  speed at volume, in local databases only, when verify.volume is set to 'true' at the top (off by default in
 --      every database, so the four rows read skip in dev and prod: dev's shared core cannot carry the volume, its run
 --      lost the connection after an hour on 3 November 2026; prod's speed on real data is 124_time_flash.sql's): a
@@ -217,7 +221,7 @@ begin
      is distinct from 'assets.required_refs:text:,commerce.required_contact_refs:text:,flash.active_subscription_statuses:text:active,'
                       || 'flash.ended_subscription_statuses:text:canceled,expired,'
                       || 'flash.file_max_rows:integer:50000,flash.id_list_retention_months:integer:84,flash.snapshot_local_time:time:00:30,'
-                      || 'flash.watch_jump_min:integer:10,flash.watch_jump_pct:integer:20' then
+                      || 'flash.watch_jump_min:integer:10,flash.watch_jump_pct:integer:20,flash.watch_stale_min_minutes:integer:5' then
     v_bad := v_bad || 'settings; ';
   end if;
   if cma.flash_dim_of('AED@PRO', 'none') <> 'other' or cma.flash_dim_of(repeat('x', 101), 'none') <> 'other' or cma.flash_dim_of('  ', 'none') <> 'none'
@@ -415,7 +419,7 @@ do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_rows    text[] := '{}';
-  v_t1 uuid; v_t2 uuid; v_t3 uuid;
+  v_t1 uuid; v_t2 uuid; v_t3 uuid; v_t4 uuid; v_sched4 uuid; v_crm4 uuid; v_shop4 uuid; v_reg4 uuid; v_at timestamptz;
   v_admin1 uuid; v_analyst1 uuid; v_agent1 uuid; v_sched1 uuid; v_ingest1 uuid; v_admin2 uuid; v_sched2 uuid; v_sched3 uuid;
   v_crm uuid; v_shop_gb uuid; v_shop_nl uuid; v_subs uuid; v_reg uuid; v_rev uuid; v_chan uuid; v_conn uuid;
   v_txt text; v_a text; v_b text; v_c text;
@@ -1244,6 +1248,68 @@ begin
                         || 'CMA02:true CMA04 CMA04 ok | true 0 true 2026-11-01 true 0 CMA04 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
+    -- B28. a source's cadence per job and stream (addition 0008zo, 125_flash_watch_cadence.sql), on tenant four: its CRM
+    --      connection runs a sweep every minute (job link_calls, no stream), a nightly reconcile of three streams within
+    --      seconds and a forms poll every 5 minutes with forms_poll_interval_minutes 5 that runs on after the sweep stops
+    --      (the sweep, measured at 1 minute, still governs: the floor makes both 5, the raw cadence decides); its store has
+    --      only a nightly reconcile of three streams within seconds, and two backfills of
+    --      one stream ten minutes apart; its register polls every 5 minutes with assets_poll_interval_minutes 60. At
+    --      noon none is stale (0008zn's median over all of a connection's runs made the store stale, its cadence a few
+    --      seconds); ten minutes later neither (the floor, flash.watch_stale_min_minutes 5, holds the sweep's 1 minute
+    --      to 5); then each is stale past three of its own cadences: the CRM by its sweep (15 minutes), the register by
+    --      its setting (180), the store by its reconcile (4320, not 4319). The floor setting refuses 0 and 1441
+    perform set_config('role', 'cma_owner', true);
+    v_t4 := cma.create_tenant('verify-0008zn-four', 'Verify 0008zn four', 'Europe/Amsterdam');
+    select u.id into v_sched4 from cma.app_user u where u.tenant_id = v_t4 and u.email = 'scheduler@system.invalid';
+    perform set_config('app.tenant_id', v_t4::text, true);
+    perform set_config('app.user_id', v_sched4::text, true);
+    v_at := '2026-10-20 12:00 Europe/Amsterdam';
+    insert into cma.market (tenant_id, code, name, time_zone, language_code, currency, sort_order)
+    values (v_t4, 'NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR', 10);
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, settings)
+    values (v_t4, 'verifycrm', 'Verify CRM four', 'portal-4', 'crm', '{"forms_poll_interval_minutes": 5}') returning id into v_crm4;
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
+    values (v_t4, 'verifyshop', 'Verify shop four', 'shop-four.shop.example', 'commerce') returning id into v_shop4;
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, settings)
+    values (v_t4, 'verifyregister', 'Verify register four', 'base-4', 'assets', '{"assets_poll_interval_minutes": 60}') returning id into v_reg4;
+    insert into cma.commerce_store (tenant_id, connection_id, handle, name, market, currency, time_zone)
+    values (v_t4, v_shop4, 'shop-four', 'Shop four', 'NL', 'EUR', 'Europe/Amsterdam');
+    insert into cma.sync_run (tenant_id, connection_id, job, stream, started_at, finished_at, status)
+    select v_t4, v_crm4, 'link_calls', null, t - interval '5 seconds', t, 'succeeded'
+    from generate_series(v_at - interval '2 hours', v_at - interval '1 minute', interval '1 minute') t
+    union all
+    select v_t4, x.conn, 'reconcile', x.stream, d + x.off - interval '3 seconds', d + x.off, 'succeeded'
+    from generate_series(timestamptz '2026-10-14 03:30 Europe/Amsterdam', timestamptz '2026-10-20 03:30 Europe/Amsterdam', interval '1 day') d
+    cross join (values (v_crm4, 'contacts', interval '0 seconds'), (v_crm4, 'deals', interval '4 seconds'), (v_crm4, 'tickets', interval '8 seconds'),
+                       (v_shop4, 'customers', interval '0 seconds'), (v_shop4, 'orders', interval '5 seconds'), (v_shop4, 'products', interval '10 seconds')) x(conn, stream, off)
+    union all
+    select v_t4, v_crm4, 'forms_poll', 'forms', t - interval '10 seconds', t, 'succeeded'
+    from generate_series(v_at - interval '2 hours', v_at + interval '3 hours', interval '5 minutes') t
+    union all
+    select v_t4, v_shop4, 'backfill', 'orders', t - interval '1 minute', t, 'succeeded'
+    from (values (timestamptz '2026-10-19 10:00 Europe/Amsterdam'), (timestamptz '2026-10-19 10:10 Europe/Amsterdam')) b(t)
+    union all
+    select v_t4, v_reg4, 'assets_poll', 'devices', t - interval '30 seconds', t, 'succeeded'
+    from generate_series(v_at - interval '1 hour', v_at - interval '5 minutes', interval '5 minutes') t;
+    v_txt := pg_temp.v0008zn_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''flash.watch_stale_min_minutes'', ''0'')', v_t4))
+             || ' ' || pg_temp.v0008zn_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''flash.watch_stale_min_minutes'', ''1441'')', v_t4))
+             || ' ' || coalesce(cma.setting_of(v_t4, 'flash.watch_stale_min_minutes'), '-');
+    foreach v_at in array array[timestamptz '2026-10-20 12:00 Europe/Amsterdam', '2026-10-20 12:10 Europe/Amsterdam', '2026-10-20 12:20 Europe/Amsterdam',
+                                '2026-10-20 15:00 Europe/Amsterdam', '2026-10-23 03:25 Europe/Amsterdam', '2026-10-23 03:35 Europe/Amsterdam'] loop
+      j := cma.flash_watch_of(v_t4, (v_at at time zone 'Europe/Amsterdam')::date - 1, v_at);
+      v_txt := v_txt || ' | ' || (j ->> 'watch_opened') || ' '
+               || (select coalesce(string_agg((f.dims ->> 'adapter') || ':' || f.value || '/' || f.threshold || ':' || (f.detail ->> 'cadence_minutes')
+                                              || ':' || (f.detail ->> 'cadence_basis') || ':' || coalesce(f.detail ->> 'job', '-')
+                                              || coalesce('.' || (f.detail ->> 'stream'), ''), ' ' order by f.dims ->> 'adapter' collate "C"), 'none')
+                   from cma.flash_watch_finding f where f.tenant_id = v_t4 and f.kind = 'source_stale' and f.state = 'open');
+    end loop;
+    v_rows := v_rows || array['45', 'B28 a source''s cadence per job and stream (0008zo): bursts of streams, a sweep, a reconcile and a forms poll on one connection, a store with only its reconcile, a poll setting; none stale while fresh, each stale past three of its own cadences',
+      case when v_txt = 'CMA04 CMA04 5 | 0 none | 0 none | 1 verifycrm:21/15:5.0:runs:link_calls'
+                        || ' | 1 verifycrm:21/15:5.0:runs:link_calls verifyregister:185/180:60.0:setting:assets_poll.devices'
+                        || ' | 0 verifycrm:21/15:5.0:runs:link_calls verifyregister:185/180:60.0:setting:assets_poll.devices'
+                        || ' | 1 verifycrm:21/15:5.0:runs:link_calls verifyregister:185/180:60.0:setting:assets_poll.devices verifyshop:4325/4320:1440.0:runs:reconcile.products'
+                and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -1511,16 +1577,16 @@ drop function if exists pg_temp.v0008zn_best_ms(text, integer);
 drop function if exists pg_temp.v0008zn_figs(uuid, text, date, date, date);
 drop function if exists pg_temp.v0008zn_stored(uuid, text, date[]);
 
--- Verdict: one row per check, then the verdict. 43 checks: with the volume off (dev, prod) block C's four read skip and
--- the 39 others must be ok; with the volume on (a local run) all 43 but C2 until the lists it names are under 800 ms
+-- Verdict: one row per check, then the verdict. 44 checks: with the volume off (dev, prod) block C's four read skip and
+-- the 40 others must be ok; with the volume on (a local run) all 44 but C2 until the lists it names are under 800 ms
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zn
       union all
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from verify_0008zn where result not in ('ok', 'skip')) then 'FAIL'
-                  when current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 43 then '0008zn verified'
-                  when not current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 39
+                  when current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 44 then '0008zn verified'
+                  when not current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 40
                        and (select count(*) from verify_0008zn where result = 'skip') = 4 then '0008zn verified'
                   else 'FAIL' end,
              format('123_verify_flash: %s ok, %s FAIL, %s skip', (select count(*) from verify_0008zn where result = 'ok'),

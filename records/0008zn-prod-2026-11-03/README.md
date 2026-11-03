@@ -99,3 +99,35 @@ The lists closest to their 800 ms budget are open tasks (701.1 ms, 88% of it), o
 subscriptions (562.0 ms). Of these, `123`'s C2 flags open tasks and subscriptions at its generated volume (local; open
 tasks by every sort key, subscriptions by payment state, and 793 ms by subscription id); its open tickets take about
 0.3 s there (docs/open-decisions.md, Flash speed at volume).
+
+## (h) 16.5: the merge of #213, the ingest, the HubSpot project, the linked contacts
+
+From Martin's report of 3 November 2026; the values below are his.
+
+- #213 merged as `ad154ee`; the web build of `ad154ee`: `SUCCESS`, 15:38 UTC.
+- `cma-ingest` on `ad154ee`: revision `cma-ingest-00017-fgj`, health ok through `ingest.pulse4all.app`, `run.app`
+  refused with 404. The jobs on `ad154ee`. The bucket `gs://cma-import-p4a-cma-prod` does not exist; it is not needed.
+- HubSpot, the app CMA ingest prod: the `contact_netsuite_id` property change active; contact subscriptions 13 of 13;
+  build #2 deployed.
+- The contact references the connection maps: `netsuite` from `contact_netsuite_id` (slot 1); `shopify` from
+  `contact_shopify_id_1` (slot 1) and `contact_shopify_id_2` (slot 2).
+- Before the take-in: `linked` 7,884, `linked_not_held` 2,527.
+- The backfill `ingest-backfill-5jm9p` (`linked_contact`): fetched 2,537, upserted 2,336, skipped 201, failed 0;
+  `apiCalls` 26 (`POST /crm/v3/objects/contacts/batch/read` 26); the daily limit 1,000,000, remaining 948,713. Its
+  `sync_run` row succeeded, 15:52:00 to 15:52:16 UTC.
+- After the take-in: `linked_not_held` 192.
+
+## (i) 16.6: the snapshot job and its first run
+
+From Martin's report of 3 November 2026; the values below are his.
+
+- `deploy-flash.sh` in dev and in prod, on `ad154ee`.
+- The first prod run, `cma-snapshot-flash-rk8fh` (the take at 15:59 UTC): both tenants took 2026-11-02, succeeded,
+  late, `missed_before` 0, zone Europe/Amsterdam.
+  - `pulse4all-subscriptions`: 527 rows, 0 ids, `watch_opened` 15, 5,452 ms.
+  - `pulse4all-invest`: 1 row, 188 ms.
+- The 15 open findings are all `source_stale`, and all false: the CRM (HubSpot) at an age of 1 minute and the 14
+  Shopify stores at 805 minutes (since the 03:30 reconcile), every one with `cadence_basis` `runs`, `cadence_minutes`
+  0.0 to 0.1 and the threshold 0. 0008zn measured a connection's cadence as the median gap between all its succeeded
+  runs, and one job execution writes one run per stream within seconds, so every source was stale a minute after its
+  last run. The fix is addition 0008zo (`db/125_flash_watch_cadence.sql`; Decision log, 3 November 2026).
