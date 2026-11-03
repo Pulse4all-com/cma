@@ -92,6 +92,7 @@ Not proven here: PostgreSQL 18 (dev and prod run it; the scripts use nothing ver
 
 - `27_verify_configuration.sql` fails its A4 at 0008zn already ("2 scheduler role(s) with other permissions than workday.close_forgotten"): since 0008s the scheduler role also holds `follow_up.refresh`, and since 0008zn `flash.snapshot`. Before and after `126` alike; the verdict rows still read PASS. `27` has run in prod, so it is not edited; the fix is a later verify that checks the scheduler's set against the permissions its additions granted.
 - `verify:roster` fails one check of 36 in this container on `main` too: the container's ICU formats the range as "12 – 18 October 2026" with spaces. Not this change.
+- The browser verifiers (`theme`, `hints`, `layout`), run here against this branch's mock build and against `main`'s, report the same problems on both (1, 14 and 11), all on report pages this change does not touch (Attempts, Inbound, Calls, Funnel, the Reports accordion).
 - `02_seed_pulse4all.sql`'s Flash block reads `cma.setting` without a `to_regclass` guard, so on a database before 0003b the seed errors at its end; dev and prod are long past that. The new block guards in two steps, as the window block does.
 
 ## Risks
