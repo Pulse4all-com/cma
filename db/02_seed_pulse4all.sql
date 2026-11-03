@@ -536,7 +536,8 @@ begin
     (v_subs, 'flash.watch_jump_min', '10'),
     (v_subs, 'flash.file_max_rows', '50000'),
     -- empty on purpose until NetSuite holds the customers and devices (Martin, 3 November 2026): on that day switch them
-    -- on through Configuration or Studio, assets.required_refs to ns_internal_id (the device's NetSuite Internal ID) and
+    -- on through the Configuration API (PUT /api/v1/configuration/settings, tenant.configure; no Configuration page
+    -- shows them yet) or Studio, assets.required_refs to ns_internal_id (the device's NetSuite Internal ID) and
     -- commerce.required_contact_refs to netsuite (the contact's NetSuite Customer ID, mapped to contact_netsuite_id); a
     -- rerun of this seed keeps the value set then (on conflict do nothing)
     (v_subs, 'assets.required_refs', ''),

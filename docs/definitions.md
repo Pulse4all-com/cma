@@ -1040,16 +1040,16 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Key | `cma.flash_overviews()` (`measures`, `count_measures`, `headline`); a figure's key in the metric catalog is `flash.<overview>.<measure>` |
 | Definition | The figures each Flash overview gives, per grouping set (the totals, per market, the breakdowns), live or as of a snapshot. Every one follows the overview's base set (`cma.flash_<overview>_of`), so a figure and its list hold the same records. See the table below |
 | Source | As each overview's base set (docs/architecture/data-model/0008.md, Data model: Flash) |
-| Counts / does not count | Deleted records and records the latest full read no longer returns never count; a source not set up gives no figure, never a zero |
-| Unit and display | A count, a number of days, or an amount per currency (never summed across currencies) |
+| Counts / does not count | Deleted records and records the latest full read no longer returns never count; a source not set up gives no figure, never a zero; a measure that does not apply (its setting empty: `with_required_refs` while `commerce.required_contact_refs` is empty) is left out, never 0 or all |
+| Unit and display | A count, a number of days, or an amount per currency (never summed across currencies); a measure left out reads "Not applicable" (nl "Niet van toepassing") on screen, an empty cell in a file, and is absent from the JSON |
 | Time rule | Stock overviews as of the instant (live) or measured against the snapshot's date (as of a date); flow overviews over the business dates of a period in the tenant's zone |
 | Scope | The tenant; per market (a catalog market's code, or unknown). A breakdown's value a source writes freely (a SKU, a warehouse, a payment status, a pipeline, a stage, a task's type or status) is `other` when it holds an @ or a control character or runs over 100 characters, in the figures and their lists alike |
 | Equivalent in the source system | None: each figure is the CMA's count over its mirror |
 | Not to use | "Failed payment", "dunning" (Payments: Failed renewal); "connected" for a source (a source is set up or not); "customer" alone (Active customer) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn) |
 | Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`) |
-| As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3). Matches the definition |
+| As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
 
 | Overview | Measure | Meaning |
 |---|---|---|

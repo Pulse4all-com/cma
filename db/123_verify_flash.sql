@@ -1226,7 +1226,8 @@ begin
     perform cma.set_tenant_setting('flash.watch_jump_min', '0');
     perform cma.set_tenant_setting('flash.watch_jump_pct', '1');
     perform set_config('role', 'cma_owner', true);
-    v_txt := v_txt || ' | ' || (strpos(pg_temp.v0008zn_figs(v_t1, 'customers', null, null), 'with_required_refs') = 0)::text
+    v_txt := v_txt || ' | ' || (strpos(pg_temp.v0008zn_figs(v_t1, 'customers', null, null), 'with_required_refs') = 0
+                                and strpos(pg_temp.v0008zn_figs(v_t1, 'customers', null, null), 'linked_to_contact') > 0)::text
              || ' ' || (select count(*) from cma.data_quality_of(v_t1) q
                         where q.check_key in ('customer_required_ref_missing', 'device_required_ref_missing'));
     perform set_config('app.user_id', v_sched1::text, true);
