@@ -61,3 +61,9 @@ seed `02`); the values below are his.
   - HubSpot, the app CMA ingest dev: the `contact_netsuite_id` property change active; contact subscriptions 13 of 13.
   - Linked contacts: `linked` 0, `linked_not_held` 0.
   - The backfill `ingest-backfill-g2t97` completed. Its log line was not captured.
+
+## (g) `124` in Studio, on `6658e5d`, 3 November 2026
+
+From Martin's report of 3 November 2026; the values are his. `124_time_flash.sql` in Cloud SQL Studio on dev's
+PostgreSQL 18, on #213's `6658e5d` (the script that runs its reads in a read-only subtransaction rolled back): `PASS`,
+23 ok, 1 skip; worst 190.4 ms.

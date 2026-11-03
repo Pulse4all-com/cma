@@ -64,3 +64,38 @@ list.
 
 - `02_seed_pulse4all.sql`: exit 0. The nine settings rows as expected; `assets.required_refs` and
   `commerce.required_contact_refs` both empty.
+
+## (g) `123` and `124` again, on `6658e5d`, about 15:23
+
+From Martin's report of 3 November 2026; the values below are his. Both ran in Studio on #213's `6658e5d`, the version
+of `123` and `124` that is merged. `122` is unchanged since its run in (b).
+
+- `123_verify_flash.sql`: `0008zn verified`, 39 ok, 0 FAIL, 4 skip, in 7.0 s.
+- `124_time_flash.sql`: `FAIL`, 22 ok, 1 FAIL, 1 skip, in 25.7 s.
+  - `read only`: info (25006).
+  - `pulse4all-invest`: skip (no active person holds `reports.view`).
+  - `pulse4all-subscriptions acting as`: info.
+  - The FAIL is data quality's overview, 3,122.2 ms against 2,500 ms: the known exception (backlog CMA-087).
+
+`pulse4all-subscriptions`, in milliseconds (best of 2); an overview and the landing against 1,500 ms, a first page of a
+list against 800 ms, data quality's against 2,500 ms:
+
+| Read | Overview | First page of its list |
+|---|---|---|
+| customers | 223.5 | 463.9 |
+| subscriptions | 246.3 | 562.0 |
+| installed_base | 273.5 | 398.1 |
+| churn | 129.6 | 145.2 |
+| orders | 202.0 | 210.2 |
+| payments | 160.8 | 171.8 |
+| open_deals | 164.0 | 205.3 |
+| open_tickets | 579.0 | 640.4 |
+| open_tasks | 670.7 | 701.1 |
+| reviews | 134.3 | 124.6 |
+| data_quality | 3,122.2 (FAIL) | 2,087.3 |
+| landing | 106.2 | — |
+
+The lists closest to their 800 ms budget are open tasks (701.1 ms, 88% of it), open tickets (640.4 ms) and
+subscriptions (562.0 ms). Of these, `123`'s C2 flags open tasks and subscriptions at its generated volume (local; open
+tasks by every sort key, subscriptions by payment state, and 793 ms by subscription id); its open tickets take about
+0.3 s there (docs/open-decisions.md, Flash speed at volume).
