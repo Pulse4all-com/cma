@@ -41,3 +41,23 @@ only, as reported: no key, no secret, no customer data.
 ## (e) The data map
 
 - The schema snapshot from dev after 0008zn, committed by Martin to #213's branch (`c3dfab4`): 102 tables, 158 views.
+
+## (f) The second round, 3 November 2026 (16.1 again and 16.3)
+
+From Martin's report of 3 November 2026, after #213's change of that day (the NetSuite requirements empty for Pulse4all,
+seed `02`); the values below are his.
+
+- `122_flash.sql` again: 6.3 s; the addition's insert 0 rows (0008zn already recorded).
+- `123_verify_flash.sql`: `39 ok, 0 FAIL, 4 skip`. Provoked: `0 ok, 39 FAIL, 4 skip`.
+- `02_seed_pulse4all.sql`: exit 0. The nine settings rows as expected; `assets.required_refs` and
+  `commerce.required_contact_refs` both empty.
+- `124_time_flash.sql`, through psql: `PASS`, 23 ok, 1 skip; worst 225.5 ms (the customers overview).
+- The reruns: `121` 22, `113` 25, `95` 36, `41` PASS for both tenants, `119` 23, `105` 27, `81` 19.
+- 16.3, the ingest:
+  - `cma-ingest` on `dea123f` deployed: revision `cma-ingest-00016-h2q`, health ok.
+  - The jobs on `dea123f`. Four were created in dev for the first time: `ingest-poll-reviews`, `ingest-poll-assets`
+    (paused), `ingest-poll-subscriptions` (paused) and `ingest-import-legacy-calls`. The bucket
+    `gs://cma-import-p4a-cma-dev` does not exist; it is not needed.
+  - HubSpot, the app CMA ingest dev: the `contact_netsuite_id` property change active; contact subscriptions 13 of 13.
+  - Linked contacts: `linked` 0, `linked_not_held` 0.
+  - The backfill `ingest-backfill-g2t97` completed. Its log line was not captured.
