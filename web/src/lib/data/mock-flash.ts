@@ -28,6 +28,10 @@ const CONN = {
 const CRM_URL = "https://crm.example/record";
 /** The ended statuses (flash.ended_subscription_statuses, its default): churn and field_device_on_ended_subscription */
 const ENDED = ["canceled", "expired"];
+// the fixture's required references (set, so the required-reference checks have findings; Pulse4all's own are empty
+// until NetSuite holds its customers and devices, Decision log, 3 Nov 2026)
+const REQUIRED_CONTACT_REFS: readonly string[] = ["netsuite"];
+const REQUIRED_DEVICE_REFS: readonly string[] = ["ns_internal_id"];
 
 type Rec = Record<string, unknown> & { id: string; market: string; since: string };
 
@@ -208,6 +212,21 @@ function fixtureOf(me: Principal, today: string): Fixture {
 
 type Measures = FlashDocRowView["measures"];
 
+/**
+ * The customers' figures as cma.flash_compute_of gives them: with_required_refs left out while no contact reference
+ * is required (a measure that does not apply, never 0 or all)
+ */
+export function mockCustomersFigures(rs: readonly Record<string, unknown>[], contactRefsRequired: boolean): Measures {
+  const n = (f: (r: Record<string, unknown>) => boolean) => rs.filter(f).length;
+  return {
+    customers_held: rs.length, active_customers: n((r) => Number(r.active_subscriptions) > 0),
+    paused_customers: n((r) => Number(r.active_subscriptions) === 0 && Number(r.paused_subscriptions) > 0), linked_to_contact: n((r) => r.contact_id !== null),
+    ...(contactRefsRequired
+      ? { with_required_refs: n((r) => r.contact_id !== null && r.contact_held === true && (r.missing_refs as string[]).length === 0) }
+      : {}),
+  };
+}
+
 function measuresOf(def: FlashOverviewDef, rs: readonly Rec[]): Measures {
   const n = (f: (r: Rec) => boolean) => rs.filter(f).length;
   const per = (field: string, f: (r: Rec) => boolean = () => true) => {
@@ -223,9 +242,7 @@ function measuresOf(def: FlashOverviewDef, rs: readonly Rec[]): Measures {
   const ages = rs.map((r) => Number(r.age_days)).sort((a, b) => a - b);
   const median = ages.length ? (ages.length % 2 ? ages[(ages.length - 1) / 2]! : ((ages[ages.length / 2 - 1]! + ages[ages.length / 2]!) / 2)) : null;
   switch (def.key) {
-    case "customers": return { customers_held: rs.length, active_customers: n((r) => Number(r.active_subscriptions) > 0),
-      paused_customers: n((r) => Number(r.active_subscriptions) === 0 && Number(r.paused_subscriptions) > 0), linked_to_contact: n((r) => r.contact_id !== null),
-      with_required_refs: n((r) => r.contact_id !== null && r.contact_held === true && (r.missing_refs as string[]).length === 0) };
+    case "customers": return mockCustomersFigures(rs, REQUIRED_CONTACT_REFS.length > 0);
     case "subscriptions": return { subscriptions: rs.length, active_subscriptions: n((r) => r.is_active === true), paused_subscriptions: n((r) => r.status === "paused"),
       amount_per_cycle: per("amount_per_cycle", (r) => r.is_active === true) };
     case "installed_base": return { devices: rs.length, in_field: n((r) => r.in_field === true), in_stock: n((r) => r.in_stock === true),
@@ -436,7 +453,7 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
     source: def.source, sources, dims: [...def.dims], sets: def.sets.map((s) => [...s]), measures: [...def.measures], countMeasures: [...def.countMeasures],
     headline: def.headline, sorts: [...def.sorts], totals: market ? own ?? zero(total) : total,
     rows: all.filter((r) => Object.keys(r.dims).length > 0 && (!market || r.dims.market === market)), labels: labelsOf(def),
-    settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: ["ns_internal_id"], requiredContactRefs: ["netsuite"], activeSubscriptionStatuses: ["active"],
+    settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: [...REQUIRED_DEVICE_REFS], requiredContactRefs: [...REQUIRED_CONTACT_REFS], activeSubscriptionStatuses: ["active"],
       endedSubscriptionStatuses: ENDED },
     definitionVersion: "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
   };
@@ -494,6 +511,10 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
     rs = def.key === "orders" && k === "sku" ? rs.filter((r) => (r.skus as string[]).includes(v)) : rs.filter((r) => String(r[k] ?? "none") === v);
   }
   const m = request.filters.measure;
+  // a measure that does not apply has no records (CMA04, as cma.flash_rows answers)
+  if (def.key === "customers" && m === "with_required_refs" && REQUIRED_CONTACT_REFS.length === 0) {
+    throw new CmaDbError("CMA04", "with_required_refs does not apply: commerce.required_contact_refs is empty");
+  }
   const keep: Record<string, (r: Rec) => boolean> = {
     active_customers: (r) => Number(r.active_subscriptions) > 0, paused_customers: (r) => Number(r.active_subscriptions) === 0 && Number(r.paused_subscriptions) > 0,
     linked_to_contact: (r) => r.contact_id !== null, with_required_refs: (r) => r.contact_held === true && (r.missing_refs as string[]).length === 0,

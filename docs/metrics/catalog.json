@@ -84157,7 +84157,7 @@
         "en": "With every required reference",
         "nl": "Met elke vereiste verwijzing"
       },
-      "definition": "Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs` (Active customers; docs/definitions.md, Flash overview measures).",
+      "definition": "Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs`; not applicable while that setting is empty (no reference is required): left out live and in the snapshot, an empty cell in a file, never 0 or all (Active customers; docs/definitions.md, Flash overview measures).",
       "formula": "count(*) where linked, the contact held, and every ref of commerce.required_contact_refs present in a slot (crm_contact_ref). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
       "unit": "count",
       "grain": [

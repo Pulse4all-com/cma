@@ -410,6 +410,21 @@ export function filtersText(market: string | null, from: string | null, to: stri
   return parts.length ? parts.join("; ") : "all";
 }
 
+/**
+ * The measures the database leaves out of every row while their setting is empty, per overview, with that setting
+ * (cma.flash_compute_of; Decision log, 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out,
+ * never 0"): a measure a row leaves out is not applicable, live and in a snapshot taken then. The page shows it as not
+ * applicable without a link to records, a file leaves its cell empty, never 0 or all
+ */
+export const FLASH_CONDITIONAL_MEASURES: Partial<Record<FlashKey, Readonly<Record<string, string>>>> = {
+  customers: { with_required_refs: "commerce.required_contact_refs" },
+};
+
+/** Whether a row's measure is not applicable: a conditional measure the row leaves out (no row: not this question) */
+export function measureNotApplicable(overview: FlashKey, measures: Readonly<Record<string, unknown>> | null | undefined, measure: string): boolean {
+  return measures != null && FLASH_CONDITIONAL_MEASURES[overview]?.[measure] !== undefined && !(measure in measures);
+}
+
 /** A document's row: a grouping set's dims and its measures (a number, or an amount per currency) */
 export interface FlashDocRow {
   dims: Record<string, string>;
@@ -444,6 +459,7 @@ export function breakdownRows(def: FlashOverviewDef, rows: readonly FlashDocRow[
     for (const d of def.dims) line[d] = r.dims[d] ?? null;
     for (const m of def.measures) {
       if (def.amountMeasures.includes(m)) for (const a of amountsOf(r.measures[m])) line[`${m}_${a.currency}`] = a.amount;
+      // a measure the row leaves out (not applicable) is an empty cell, never 0
       else line[m] = typeof r.measures[m] === "number" ? r.measures[m] : null;
     }
     return line;

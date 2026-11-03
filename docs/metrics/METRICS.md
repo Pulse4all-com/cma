@@ -33854,7 +33854,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **With every required reference** on /reports/flash · With every required reference (Met elke vereiste verwijzing)
 
-Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs` (Active customers; docs/definitions.md, Flash overview measures).
+Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs`; not applicable while that setting is empty (no reference is required): left out live and in the snapshot, an empty cell in a file, never 0 or all (Active customers; docs/definitions.md, Flash overview measures).
 
 **Formula as computed**
 

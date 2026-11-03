@@ -11,7 +11,9 @@
  * today and a future date refused); the file names (overview, market or all, the date or the instant in the tenant's
  * zone across the change of summer time); the change arrows; a definition's badge from the catalog's status and every
  * Flash figure in the metric catalog with a status; the sources' line and the states of a source not set up; amounts per
- * currency and sorting within currency; the grouping sets; the average rating. Invented values only.
+ * currency and sorting within currency; the grouping sets; the average rating; a measure that does not apply (left out
+ * by db/122 while its setting is empty: not applicable on screen without a link, an empty cell in a file, its records
+ * refused). Invented values only.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -20,7 +22,7 @@ import {
   parseFilters, asOfStamp, flashFileName, changeOf, changeArrow, definitionStatus, statusTone, metricKey, sourcesLine, showsFigures, amountsOf,
   sortWithinCurrency, rowsOfSet, breakdownSets, barShare, averageRating, isDate, FLASH_LIST_COLUMNS, FLASH_FROZEN_COLUMNS, breakdownColumns,
   breakdownRows, filtersText, FLASH_LINKS_LEFT_OUT, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_FIX_IN, fixInOf, cellFilters, frozenFilters,
-  FLASH_FROZEN_LIST, listUnavailable,
+  FLASH_FROZEN_LIST, listUnavailable, FLASH_CONDITIONAL_MEASURES, measureNotApplicable,
 } from "../src/lib/flash.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -302,6 +304,40 @@ expect("labels: Financial status, Link level (Koppelniveau), Dag, Assetregister,
     Object.values(nl).filter((v) => typeof v === "string" && /factu/i.test(v)).length],
   ["Financial status", "Link level", "Koppelniveau", "Dag", "Assetregister", "Bedrag per cyclus", "Volgende verlenging", 0],
   ["", "", "", "", "", "", "", 1]);
+
+// ---- A measure that does not apply (Decision log, 3 Nov 2026): left out by the database, never 0 or all ---------------
+const leftOut = {};
+for (const m of sql.matchAll(/(v_[a-z_]+) boolean := cardinality\(cma\.flash_list_of\(cma\.setting_of\(p_tenant_id, '([a-z_.]+)'\)\)\) > 0;/g)) {
+  const flag = m[1];
+  const om = sql.match(new RegExp(`when ${flag}\\s+then jsonb_build_object\\('([a-z_]+)'`));
+  const ov = sql.slice(0, sql.indexOf(om?.[0] ?? "\u0000")).match(/p_overview = '([a-z_]+)' then\s*$|elsif p_overview = '([a-z_]+)'|if p_overview = '([a-z_]+)'/g)?.pop()?.match(/'([a-z_]+)'/)?.[1];
+  if (om && ov) (leftOut[ov] ??= {})[om[1]] = m[2];
+}
+const refused = [...sql.matchAll(/p_overview = '([a-z_]+)' and \(v_filters ->> 'measure'\) = '([a-z_]+)'\s+and cardinality\(cma\.flash_list_of\(cma\.setting_of\(v_tenant, '([a-z_.]+)'\)\)\) = 0/g)]
+  .map((m) => `${m[1]}.${m[2]}:${m[3]}`);
+expect("db/122 leaves a measure out while its setting is empty and refuses its records; the page's conditional measures are those",
+  [leftOut, refused, FLASH_CONDITIONAL_MEASURES],
+  [{ customers: { with_required_refs: "commerce.required_contact_refs" } }, ["customers.with_required_refs:commerce.required_contact_refs"],
+    { customers: { with_required_refs: "commerce.required_contact_refs" } }],
+  [{}, [], {}]);
+const flashPartsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
+expect("a measure a row leaves out reads not applicable (Niet van toepassing) in the totals, the total row and every cell, without a link; present, never",
+  [measureNotApplicable("customers", { customers_held: 5, linked_to_contact: 2 }, "with_required_refs"),
+    measureNotApplicable("customers", { with_required_refs: 0 }, "with_required_refs"), measureNotApplicable("customers", {}, "customers_held"),
+    measureNotApplicable("customers", null, "with_required_refs"), measureNotApplicable("orders", {}, "orders"),
+    (flashPartsSrc.match(/measureNotApplicable\(def\.key, /g) ?? []).length,
+    /measureNotApplicable\(def\.key, r\.measures, m\)\s*\?\s*<NotApplicable measure=\{m\} t=\{t\} \/>\s*:\s*def\.countMeasures\.includes\(m\)/.test(flashPartsSrc),
+    en.notApplicable, nl.notApplicable, typeof en.na_with_required_refs === "string" && typeof nl.na_with_required_refs === "string"],
+  [true, false, false, false, false, 3, true, "Not applicable", "Niet van toepassing", true],
+  [false, true, true, true, true, 0, false, "", "", false]);
+const { mockCustomersFigures } = await import("../src/lib/data/mock-flash.ts");
+const someCustomers = [{ contact_id: "c1", contact_held: true, missing_refs: [], active_subscriptions: 1, paused_subscriptions: 0 },
+  { contact_id: null, contact_held: false, missing_refs: [], active_subscriptions: 0, paused_subscriptions: 1 }];
+const customersDef = overviewOf("customers");
+expect("a file leaves a measure that does not apply empty, never 0; the mock leaves it out as the database does, and keeps it when required",
+  [breakdownRows(customersDef, [{ dims: {}, measures: { customers_held: 2, active_customers: 1, paused_customers: 1, linked_to_contact: 1 } }])[0].with_required_refs,
+    "with_required_refs" in mockCustomersFigures(someCustomers, false), mockCustomersFigures(someCustomers, true).with_required_refs],
+  [null, false, 1], [0, true, 2]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
