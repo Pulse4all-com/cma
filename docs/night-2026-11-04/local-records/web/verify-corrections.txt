@@ -38,8 +38,10 @@ PASS  a new row at a clock-out's minute is refused     got {"n13":"atEnd"}
 PASS  an untouched status at the clock-out's minute stays a status got ["noChange"]
 PASS  a clock-in again in the clock-out's minute opens without a problem got [["start","end","start","end"],{},["noChange"]]
 PASS  a moved row keeps the seconds of the rows it does not touch got [{"kind":"end","at":"2026-10-05T18:00:00+02:00","supersedes":"00000000
+PASS  a clock-out moved to the minute before a clock-in at 13:00:30 stays valid got [["start","end","start","end"],{},[{"kind":"end","at":"2026-10-05T13:0
+PASS  a clock-out moved before a status at 10:00:30: that status clocks in again, at its stored instant got [{"kind":"end","at":"2026-10-05T10:00:00+02:00","supersedes":"00000000
 PASS  removing the day's first clock-in: the status after it clocks in, sent first got [{"kind":"start","at":"2026-10-05T09:00:00Z","statusKey":"break","supe
 PASS  Add day with two sessions starts with the first clock-in got ["start 09:00","end 13:00","start 17:00","end 21:00"]
 
-ALL 42 PASS
+ALL 44 PASS
 verify:corrections exit 0

@@ -49,7 +49,7 @@ Expected: in `db/` the new `126_workday_sessions.sql` and `127_verify_workday_se
 ```bash
 cd ~/cma && gh pr checkout <number> && cd web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | tail -2; echo "build exit: ${PIPESTATUS[0]}"; npm run --silent verify:corrections | tail -1; npm run --silent verify:copy; cd ~/cma
 ```
-Expected: `found 0 vulnerabilities` (or the known advisories of README, Open decisions), the build's last lines and `build exit: 0`, `ALL 42 PASS`, `copy: PASS (3181 keys, en and nl)`. **Do not merge yet.**
+Expected: `found 0 vulnerabilities` (or the known advisories of README, Open decisions), the build's last lines and `build exit: 0`, `ALL 44 PASS`, `copy: PASS (3181 keys, en and nl)`. **Do not merge yet.**
 
 **Studio (cma-dev-pg)** and **Studio (cma-prod-pg)** (read only)
 ```sql

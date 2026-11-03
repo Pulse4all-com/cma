@@ -203,6 +203,28 @@ expect("a clock-in again in the clock-out's minute opens without a problem",
 expect("a moved row keeps the seconds of the rows it does not touch",
   check(inMinuteRows, inMinuteRows.map((r) => (r.eventId === SES(24) ? { ...r, time: "18:00" } : r)), "2026-10-05", TZ, LATER).changes,
   [{ kind: "end", at: "2026-10-05T18:00:00+02:00", supersedes: SES(24) }], []);
+// A clock-out retimed into the minute of an untouched row with seconds: the stored order decides
+const split2 = rowsFromEvents([
+  ev(SES(31), "start", "2026-10-05T05:00:00Z", "available"),
+  ev(SES(32), "end", "2026-10-05T10:00:00Z"),
+  ev(SES(33), "start", "2026-10-05T11:00:30Z", "available"),
+  ev(SES(34), "end", "2026-10-05T15:00:00Z"),
+], TZ);
+const endTo1300 = check(split2, split2.map((r) => (r.eventId === SES(32) ? { ...r, time: "13:00" } : r)), "2026-10-05", TZ, LATER);
+expect("a clock-out moved to the minute before a clock-in at 13:00:30 stays valid",
+  [endTo1300.rows.map((r) => r.kind), endTo1300.rowProblems, endTo1300.changes],
+  [["start", "end", "start", "end"], {}, [{ kind: "end", at: "2026-10-05T13:00:00+02:00", supersedes: SES(32) }]],
+  [["start", "status", "end", "end"], {}, []]);
+const withSeconds = rowsFromEvents([
+  ev(SES(41), "start", "2026-10-05T05:00:00Z", "available"),
+  ev(SES(42), "status", "2026-10-05T08:00:30Z", "break"),
+  ev(SES(43), "end", "2026-10-05T15:00:00Z"),
+], TZ);
+expect("a clock-out moved before a status at 10:00:30: that status clocks in again, at its stored instant",
+  check(withSeconds, withSeconds.map((r) => (r.eventId === SES(43) ? { ...r, time: "10:00" } : r)), "2026-10-05", TZ, LATER).changes,
+  [{ kind: "end", at: "2026-10-05T10:00:00+02:00", supersedes: SES(43) },
+   { kind: "start", at: "2026-10-05T08:00:30Z", statusKey: "break", supersedes: SES(42) }],
+  [{ kind: "end", at: "2026-10-05T10:00:00+02:00", supersedes: SES(43) }]);
 expect("removing the day's first clock-in: the status after it clocks in, sent first",
   run(original.filter((r) => r.eventId !== ID(1))).changes,
   [{ kind: "start", at: "2026-10-05T09:00:00Z", statusKey: "break", supersedes: ID(2) }, { kind: "void", supersedes: ID(1) }],

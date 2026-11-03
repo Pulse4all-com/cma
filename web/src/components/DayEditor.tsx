@@ -152,7 +152,9 @@ export function DayEditor({
       // after the latest other row), else at the end, where an open last session goes on
       const ends = rs.map((r, i) => ({ r, i })).filter(({ r }) => r.end);
       const lastEnd = ends.reduce<{ r: EditorRow; i: number } | null>((m, x) => (m === null || x.r.time >= m.r.time ? x : m), null);
-      const endsTheDay = lastEnd !== null && (last === null || lastEnd.r.time >= last);
+      // At one minute the rows' order decides (they open in the database's order, seconds included)
+      const lastLiveAt = rs.reduce((m, r, i) => (!r.end && r.time === last ? i : m), -1);
+      const endsTheDay = lastEnd !== null && (last === null || lastEnd.r.time > last || (lastEnd.r.time === last && lastEnd.i > lastLiveAt));
       return endsTheDay ? [...rs.slice(0, lastEnd.i), row, ...rs.slice(lastEnd.i)] : [...rs, row];
     });
   }
