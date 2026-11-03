@@ -511,10 +511,10 @@ begin
 end
 $$;
 
--- Flash for Pulse4all Subscriptions (after addition 0008zn; Martin, 1 November 2026): the references every store
--- customer's contact and every device must carry (the NetSuite Customer ID, the contact's netsuite ref, mapped to
--- contact_netsuite_id; the device's NetSuite Internal ID, its named id ns_internal_id), and the Flash settings at their
--- decided values (active subscriptions: status active; ended: canceled and expired; a date due at 00:30 the day after
+-- Flash for Pulse4all Subscriptions (after addition 0008zn; Martin, 1 and 3 November 2026): the references every store
+-- customer's contact and every device must carry, empty for now (NetSuite does not hold Pulse4all's customers and
+-- devices yet, so no contact carries a NetSuite Customer ID and no device a NetSuite Internal ID; Decision log, 3 Nov
+-- 2026), and the Flash settings at their decided values (active subscriptions: status active; ended: canceled and expired; a date due at 00:30 the day after
 -- it in the tenant's zone; month-end id lists kept 84 months, for Yordi to confirm; the watch at 20 % and 10; files of at
 -- most 50,000 rows). Pulse4all Invest keeps
 -- the defaults: no shop and no register, so its overviews show the states of a source not set up. Only values the
@@ -535,8 +535,12 @@ begin
     (v_subs, 'flash.watch_jump_pct', '20'),
     (v_subs, 'flash.watch_jump_min', '10'),
     (v_subs, 'flash.file_max_rows', '50000'),
-    (v_subs, 'assets.required_refs', 'ns_internal_id'),
-    (v_subs, 'commerce.required_contact_refs', 'netsuite')
+    -- empty on purpose until NetSuite holds the customers and devices (Martin, 3 November 2026): on that day switch them
+    -- on through Configuration or Studio, assets.required_refs to ns_internal_id (the device's NetSuite Internal ID) and
+    -- commerce.required_contact_refs to netsuite (the contact's NetSuite Customer ID, mapped to contact_netsuite_id); a
+    -- rerun of this seed keeps the value set then (on conflict do nothing)
+    (v_subs, 'assets.required_refs', ''),
+    (v_subs, 'commerce.required_contact_refs', '')
   on conflict (tenant_id, key) do nothing;
 end
 $$;
