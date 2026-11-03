@@ -11,7 +11,8 @@
 -- login after 122_flash.sql, dev first, then prod.
 -- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
 -- 39 ok, 0 FAIL, 4 skip" (43 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
--- with verify.volume set to 'true' at the top: "0008zn verified | 123_verify_flash: 43 ok, 0 FAIL, 0 skip"; provoked
+-- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 42 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
+-- generated volume some first pages of a list are over 800 ms: docs/open-decisions.md, Flash speed at volume); provoked
 -- "PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 39 FAIL, 4 skip" (0 ok, 43 FAIL, 0 skip with the volume on). Flash's
 -- speed on real data is 124_time_flash.sql's, run in prod after this script (PROD_RUNBOOK phase 16; in dev for
 -- information only). Text is compared in collate "C" (every ordered string_agg), so the verdict is the same whatever the
@@ -1511,7 +1512,7 @@ drop function if exists pg_temp.v0008zn_figs(uuid, text, date, date, date);
 drop function if exists pg_temp.v0008zn_stored(uuid, text, date[]);
 
 -- Verdict: one row per check, then the verdict. 43 checks: with the volume off (dev, prod) block C's four read skip and
--- the 39 others must be ok; with the volume on (a local run) all 43
+-- the 39 others must be ok; with the volume on (a local run) all 43 but C2 until the lists it names are under 800 ms
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zn
       union all
