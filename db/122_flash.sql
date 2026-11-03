@@ -1528,7 +1528,9 @@ $$;
 -- tasks due before it, ages as of its end), so a snapshot taken after midnight says what its own date said. Flow
 -- overviews take the business dates p_from to p_to. Amounts are summed per currency (an object of currency codes);
 -- never across currencies. Nothing for an overview whose source the tenant has not set up; the totals row with zeros
--- for a set-up source without records. The snapshot stores exactly these rows (one code path)
+-- for a set-up source without records. A measure that does not apply is left out of every row, never 0: the customers'
+-- with_required_refs while commerce.required_contact_refs is empty (no reference is required, so none is met or
+-- missed; Decision log, 3 Nov 2026). The snapshot stores exactly these rows (one code path)
 create or replace function cma.flash_compute_of(p_tenant_id uuid, p_overview text, p_from date default null, p_to date default null,
                                                 p_on date default null)
 returns table (dims jsonb, measures jsonb)
@@ -1546,6 +1548,8 @@ declare
   v_on    date := coalesce(p_on, v_today);
   v_at    timestamptz := case when p_on is null then now()
                               else ((p_on + 1)::timestamp at time zone (select t.timezone from cma.tenant t where t.id = p_tenant_id)) end;
+  -- with_required_refs applies only while a contact reference is required
+  v_refs_required boolean := cardinality(cma.flash_list_of(cma.setting_of(p_tenant_id, 'commerce.required_contact_refs'))) > 0;
 begin
   perform cma.assert_flash_overview(p_overview);
   if v_src is not null and not coalesce((cma.flash_sources_of(p_tenant_id) -> v_src ->> 'set_up')::boolean, false) then
@@ -1559,9 +1563,11 @@ begin
              jsonb_build_object('customers_held', count(*),
                                 'active_customers', count(*) filter (where b.active_subscriptions > 0),
                                 'paused_customers', count(*) filter (where b.active_subscriptions = 0 and b.paused_subscriptions > 0),
-                                'linked_to_contact', count(*) filter (where b.contact_source_id is not null),
-                                'with_required_refs', count(*) filter (where b.contact_source_id is not null and b.contact_held
-                                                                         and cardinality(b.missing_refs) = 0))
+                                'linked_to_contact', count(*) filter (where b.contact_source_id is not null))
+             || case when v_refs_required
+                     then jsonb_build_object('with_required_refs', count(*) filter (where b.contact_source_id is not null and b.contact_held
+                                                                                     and cardinality(b.missing_refs) = 0))
+                     else '{}'::jsonb end
       from cma.flash_customers_of(p_tenant_id) b
       group by grouping sets ((), (b.market), (b.market, b.store));
   elsif p_overview = 'subscriptions' then
@@ -1986,7 +1992,8 @@ $$;
 -- every open finding whose condition no longer holds resolved on p_date. Answers the counts
 --   jump              a count measure of a stock overview per market (its [market] row) that moved from p_date - 1 to
 --                     p_date by more than flash.watch_jump_min and more than flash.watch_jump_pct percent of the earlier
---                     value (both dates with a succeeded snapshot; a market without a row has 0)
+--                     value (both dates with a succeeded snapshot; a market without a row has 0; a measure left out of
+--                     the totals row on either date, one that does not apply that day, is not compared)
 --   flow_zero         a count measure of a flow overview whose [market] row was above 0 on each of the 7 dates before
 --                     p_date (each with a succeeded snapshot) and is 0 or absent on p_date
 --   source_stale      an active connection of a source Flash reads whose last succeeded run finished more than three
@@ -2029,11 +2036,19 @@ begin
     where s.tenant_id = p_tenant_id and s.snapshot_date in (p_date, p_date - 1) and jsonb_typeof(e.value) = 'number'
       and ((s.overview <> 'data_quality' and s.dims ? 'market' and (select count(*) from jsonb_object_keys(s.dims)) = 1)
            or (s.overview = 'data_quality' and s.dims ? 'check' and (select count(*) from jsonb_object_keys(s.dims)) = 1))
+  ), na as (
+    -- a count measure left out of an overview's totals row on either date does not apply that day (with_required_refs
+    -- while no contact reference is required): it is not compared, so switching a requirement on or off is no jump
+    select distinct s.overview, m.measure
+    from cma.flash_snapshot s
+    join m on m.overview = s.overview and m.kind = 'stock'
+    where s.tenant_id = p_tenant_id and s.snapshot_date in (p_date, p_date - 1) and s.dims = '{}'::jsonb and not (s.measures ? m.measure)
   ), j as (
     select coalesce(t.overview, y.overview) as overview, coalesce(t.dims, y.dims) as dims, coalesce(t.measure, y.measure) as measure,
            coalesce(t.v, 0) as v, coalesce(y.v, 0) as p
     from (select * from day_rows where snapshot_date = p_date) t
     full join (select * from day_rows where snapshot_date = p_date - 1) y on y.overview = t.overview and y.dims = t.dims and y.measure = t.measure
+    where not exists (select 1 from na where na.overview = coalesce(t.overview, y.overview) and na.measure = coalesce(t.measure, y.measure))
   ), prev as (
     -- a flow overview's [market] rows above 0 on each of the 7 dates before p_date
     select s.overview, s.dims, e.key as measure
@@ -2846,6 +2861,11 @@ begin
      or (v_filters ? 'measure' and not ((v_filters ->> 'measure') = any (o.count_measures))) then
     raise exception 'filters are the overview''s dims (%) and measure (one of %), each a text', array_to_string(o.dims, ', '),
       array_to_string(o.count_measures, ', ') using errcode = 'CMA04';
+  end if;
+  -- a measure that does not apply has no records: with_required_refs while no contact reference is required
+  if p_overview = 'customers' and (v_filters ->> 'measure') = 'with_required_refs'
+     and cardinality(cma.flash_list_of(cma.setting_of(v_tenant, 'commerce.required_contact_refs'))) = 0 then
+    raise exception 'with_required_refs does not apply: commerce.required_contact_refs is empty' using errcode = 'CMA04';
   end if;
   perform cma.assert_flash_params(v_filters ->> 'market', null, null, null, v_today);
   if p_limit is null or p_limit not between 1 and cma.setting_of(v_tenant, 'flash.file_max_rows')::integer

@@ -47,7 +47,8 @@
 --      snapshot (B23); two stale connections alike are one finding (B24). Then: a month end taken after midnight measures
 --      against its own date (B21); a SKU with an @ (B25); writes only through the take (B22); the expiry without a
 --      caller's date (B26); the ended statuses, a deleted contact, a market without devices, a reference in its market,
---      an expired list, a file record's filters (B27)
+--      an expired list, a file record's filters; the required references empty: with_required_refs not applicable
+--      live, in the snapshot and to the watch, no records, no required-reference finding (B27)
 --   C  speed at volume, in local databases only, when verify.volume is set to 'true' at the top (off by default in
 --      every database, so the four rows read skip in dev and prod: dev's shared core cannot carry the volume, its run
 --      lost the connection after an hour on 3 November 2026; prod's speed on real data is 124_time_flash.sql's): a
@@ -1186,7 +1187,7 @@ begin
     --      31 October one; the device on a canceled subscription no finding); a contact deleted in the CRM is contact_deleted,
     --      fixed in the CRM; a market the register holds no device of gives no active subscription without a device; a
     --      device's subscription reference is matched in its own market; a frozen list that expired says so (CMA02); a
-    --      file record's filters are the overview's own and its date has ended (CMA04)
+    --      file record's filters are the overview's own and its date has ended (CMA04); the required references empty
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin1::text, true);
     perform set_config('role', 'cma_app', true);
@@ -1215,9 +1216,32 @@ begin
     v_txt := v_txt || ' ' || pg_temp.v0008zn_code('select cma.flash_file_record(''customers'', ''rows'', ''{"email": "x"}'', null, null, null, null, 1)')
              || ' ' || pg_temp.v0008zn_code(format('select cma.flash_file_record(''customers'', ''rows'', ''{}'', null, %L, null, null, 1)', cma.tenant_today_of(v_t1)))
              || ' ' || pg_temp.v0008zn_code('select cma.flash_file_record(''orders'', ''rows'', ''{"sku": "A", "measure": "orders"}'', null, null, null, null, 1)');
-    v_rows := v_rows || array['44', 'B27 statuses and joins from configuration: ended statuses, contact deleted, a market not in the register, a reference in its market; an expired list; a file record''s filters and date',
+    --      The required references empty (Pulse4all's until NetSuite holds its customers and devices; Decision log, 3 Nov
+    --      2026): with_required_refs does not apply, so it is left out of the live figures and of the snapshot of 1 November,
+    --      the watch does not compare it with 31 October's (thresholds at their lowest here), and it has no records (CMA04);
+    --      neither required-reference check finds anything or is listed
+    perform set_config('app.user_id', v_admin1::text, true);
+    perform cma.set_tenant_setting('commerce.required_contact_refs', '');
+    perform cma.set_tenant_setting('assets.required_refs', '');
+    perform cma.set_tenant_setting('flash.watch_jump_min', '0');
+    perform cma.set_tenant_setting('flash.watch_jump_pct', '1');
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || ' | ' || (strpos(pg_temp.v0008zn_figs(v_t1, 'customers', null, null), 'with_required_refs') = 0)::text
+             || ' ' || (select count(*) from cma.data_quality_of(v_t1) q
+                        where q.check_key in ('customer_required_ref_missing', 'device_required_ref_missing'));
+    perform set_config('app.user_id', v_sched1::text, true);
+    j := cma.flash_snapshot_take_at(v_t1, '2026-11-02 01:00:00 Europe/Amsterdam');
+    v_txt := v_txt || ' ' || (j ->> 'taken') || ' ' || (j ->> 'date')
+             || ' ' || (select count(*) > 0 and bool_and(not (s.measures ? 'with_required_refs')) from cma.flash_snapshot s
+                        where s.tenant_id = v_t1 and s.snapshot_date = '2026-11-01' and s.overview = 'customers')::text
+             || ' ' || (select count(*) from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.measure = 'with_required_refs');
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    v_txt := v_txt || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{"measure": "with_required_refs"}'')')
+             || ' ' || (select count(*) from cma.data_quality() d where d.check_key in ('customer_required_ref_missing', 'device_required_ref_missing'));
+    v_rows := v_rows || array['44', 'B27 statuses and joins from configuration: ended statuses, contact deleted, a market not in the register, a reference in its market; an expired list; a file record''s filters and date; the required references empty: with_required_refs not applicable, no required-reference finding',
       case when v_txt = '*:churned=0 *:churned=1 GB:churned=1 GB/none/shop-gb:churned=1 0 | contact_deleted/crm | 0 rec-1:not_found,rec-2:not_found,rec-4:not_found,rec-5:not_found | '
-                        || 'CMA02:true CMA04 CMA04 ok'
+                        || 'CMA02:true CMA04 CMA04 ok | true 0 true 2026-11-01 true 0 CMA04 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
