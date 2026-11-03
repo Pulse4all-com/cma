@@ -300,7 +300,7 @@
       "tables": [
         {
           "name": "workday",
-          "what": "One workday per person and date",
+          "what": "One workday per person and date, in one or more sessions",
           "how": "Clock in and out in the Workspace, immediately; hourly job closes forgotten days"
         },
         {

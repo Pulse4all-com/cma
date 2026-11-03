@@ -80,6 +80,7 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | Data model: Flash (addition 0008zn) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: Flash watch cadence (addition 0008zo) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Flash: the watch and the AI review (design, addition 0008zn) | [docs/architecture/flash-watch.md](docs/architecture/flash-watch.md) |
+| Data model: workday sessions (addition 0008zp) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Device import: a snapshot of the asset register's CSV export (addition 0008zi; the fallback since 0008zj) | [docs/import/devices.md](docs/import/devices.md) |
 | API: the web app's data layer (since 5 October 2026) | [docs/architecture/api.md](docs/architecture/api.md) |
 | **Source of truth** | README.md (this file) |

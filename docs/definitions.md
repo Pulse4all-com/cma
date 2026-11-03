@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026 and the Flash terms of 1 November 2026 (Proposed); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026 the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -1101,6 +1101,67 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `rating_sum` | The sum of their ratings; the average is `rating_sum` / `reviews` |
 | Data quality (`data_quality`) | `findings` | Data-quality findings: the records a check of `cma.data_quality_catalog()` finds, `field_device_on_ended_subscription` flags a device in the field on a subscription in a status of `flash.ended_subscription_statuses`, and `customer_required_ref_missing` says `contact_deleted` for a contact the CRM deleted; per check and market ("data quality" itself stays under Domains still to define) |
 
+## Time terms
+
+Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Hours worked, status, working status and the other time words stay under Domains still to define.
+
+### Workday
+
+| Field | Value |
+|---|---|
+| Term | Workday (nl: Werkdag) |
+| Key | `workday`; SQL `cma.workday`; API `Workday`; status `open` or `ended` (API `working` or `ended`); settings `workday.*` |
+| Definition | One per person and business date in the person's zone, made of one or more sessions. `started_at` is the first session's start and `ended_at` the last session's end (empty while the last session is open). |
+| Source | The CMA: the person's clock-in, status changes and clock-out events (`cma.time_event`, read through `cma.time_event_effective`), corrections included |
+| Counts / does not count | Counts the time of its sessions in working statuses; the time between sessions counts in no figure (Session) |
+| Unit and display | A date with a start and an end time in the person's zone; status open or ended |
+| Time rule | The person's zone; the business date it started on (a shift belongs to the business day it started on) |
+| Scope | One person, one business date, one tenant |
+| Equivalent in the source system | None |
+| Not to use | "Shift" for the clocked time (a shift is the rostered plan, Rostering); "day" alone for this meaning (Day is defined under Call terms) |
+| Status | Decided |
+| Decided | 3 November 2026 (Martin, D1 to D4; the night defaults N1 to N7 and the build choices B1 to B7 stay to confirm); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
+| Used by | `cma.workday`, `cma.open_workday`, `cma.refresh_workday`; Welcome, My day, My hours, Team hours, Live board; API `/api/v1/me/day`, `/api/v1/me/hours`, `/api/v1/team/hours` |
+| As built today | `126`: `started_at` is the first start and `ended_at` the last end when the last effective event is an end, else empty; the events are validated start, status changes, end, start, and so on, in the views' order (CMA04 otherwise). Columns and views are unchanged |
+
+### Session
+
+| Field | Value |
+|---|---|
+| Term | Session (nl: Sessie; copy "{n} sessions" / "{n} sessies") |
+| Key | API `sessions` (the count of clock-ins), `sessionStartedAt` (the latest session's start), `clockInAgain`, `canClockInAgain`; setting `workday.clock_in_again`; SQL `cma.workday_can_clock_in_again` |
+| Definition | One stretch of a workday from a clock-in to the next clock-out; the last one may be open. A new session starts only after the person's own log out. |
+| Source | The CMA: the workday's effective clock-in and clock-out events |
+| Counts / does not count | The time between one session's end and the next session's start counts in no figure: not worked, not paid, not billable, not productive, and not a pause. A new session needs the person's own log out (the last effective end has source `user`), a start strictly after that end, on the day's business date, within the workday window, and the person's time kept; it starts in the tenant's default status. No maximum number per day |
+| Unit and display | A count ("2 sessions") next to the date on My hours and as a neutral chip on Team hours; on an open day "Started at" is the first start and "Back since" the latest |
+| Time rule | The person's zone; the workday window of the business date (`workday.window_start`, `workday.window_end`) |
+| Scope | One workday; allowed per tenant by `workday.clock_in_again` (default false; Pulse4all Subscriptions true). A supervisor's correction may write several sessions in every tenant |
+| Equivalent in the source system | None |
+| Not to use | "Shift" or "split" as the label; "re-open" (the day is not reopened: a new session is a new clock-in) |
+| Status | Decided |
+| Decided | 3 November 2026 (Martin, D1 to D4; night defaults to confirm: N1 the setting and its defaults, N2 no maximum, N3 strictly after the end, N4 the default status, N5 an unchanged answer outside the conditions); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
+| Used by | `workday.clock_in_again`; `cma.workday_can_clock_in_again`; Welcome, My day, My hours, Team hours, Log out and signed-out pages; API `/api/v1/me/day`, `/api/v1/me/day/start`, `/api/v1/me/day/end`, `/api/v1/team/now`, `/api/v1/me/hours`, `/api/v1/team/hours` |
+| As built today | `126` and `127` (31 checks) and the web: the Clock in card shows again on an ended day that can take another session; Clock in answers the day in every case, and an ended day that cannot take one stays unchanged (no new error). The hours export keeps its columns |
+
+### Clocked in
+
+| Field | Value |
+|---|---|
+| Term | Clocked in (nl: Ingeklokt) |
+| Key | SQL `cma.is_clocked_in`; Live board groups |
+| Definition | A person is clocked in while their workday has an open session. Not during the gap between sessions. |
+| Source | The CMA: the workday's last effective event is not an end |
+| Counts / does not count | Counts every Live board group other than "Clocked out" and "Not clocked in"; a person between two sessions is clocked out |
+| Unit and display | Live board groups by status; "Not clocked in" for a person with no workday today |
+| Time rule | Today in the person's own zone |
+| Scope | One person, now |
+| Equivalent in the source system | None |
+| Not to use | "Online" or "logged in" (signing in opens nothing; only Clock in does) |
+| Status | Decided |
+| Decided | 3 November 2026 (Martin, D1 to D4); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
+| Used by | `cma.is_clocked_in`; Live board; the `only clocked in` filter |
+| As built today | Matches the definition; the gap between sessions reads as clocked out |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.
@@ -1131,7 +1192,7 @@ Ticket, complaint, vulnerable case, owner, without owner, overdue, response time
 Email sent, mailbox, inbox, first reply.
 
 ### Time and people
-Workday, clocked in, hours worked, status, working status, business minutes, office hours, market.
+Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp).
 
 ### Periods
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like.
