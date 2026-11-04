@@ -11,7 +11,7 @@ Night of 3 to 4 November 2026, brief N04. Written by Claude Code while Martin wa
 
 ## The number: 0008zp, 126 and 127, not 0008zo, 125 and 126
 
-The brief named addition 0008zo and `db/125`, `db/126`, to be confirmed free on `main`. They are free on `main`, but the open pull request 216 (Flash watch cadence) adds `db/125_flash_watch_cadence.sql` as addition 0008zo. Two additions with one version would collide quietly: the second to run would find the version recorded, its `on conflict do nothing` would write no row of its own, and its verify's "recorded" check would pass on the other's row. So this change takes the next free addition, 0008zp, and the next free scripts, `126` and `127`. It needs nothing of pull request 216 (its prerequisite is 0008zn, `122`) and runs before or after it.
+The brief named addition 0008zo and `db/125`, `db/126`, to be confirmed free on `main`. They were free on `main`, but #216 (Flash watch cadence, merged since and run in prod, #218) adds `db/125_flash_watch_cadence.sql` as addition 0008zo. Two additions with one version would collide quietly: the second to run would find the version recorded, its `on conflict do nothing` would write no row of its own, and its verify's "recorded" check would pass on the other's row. So this change takes the next free addition, 0008zp, and the next free scripts, `126` and `127`. It needs nothing of #216 (its prerequisite is 0008zn, `122`) and runs before or after it.
 
 ## Design
 
@@ -25,9 +25,9 @@ The brief named addition 0008zo and `db/125`, `db/126`, to be confirmed free on 
 
 **The web.** The day read (`readDay`) and the team-now query read, in the same query, the day's effective starts (`sessions`), the latest one (`sessionStartedAt`), the tenant's setting (`clockInAgain`) and the rule at the database's now (`canClockInAgain`), through one lateral join; no view or function column changes, and a person's own entry on the board still equals `GET /api/v1/me/day` field for field. `HoursDay` and `TeamDay` gain `sessions` (Team hours through a subquery around `cma.team_hours`, whose columns stay). Welcome and My day show an ended day that can take another session with the Clock in card below it in its "again" variant (badge "Clocked out", "You can clock in again today until 22:00. Your status will be set to Available.", button "Clock in again", focus and Enter as before, the same route); an open day of more than one session keeps "Started at" (the first start) and adds "Back since" (the latest start); the clock needs no change (closed seconds plus the running stretch). End workday's confirmation, the Log out page and the signed-out page say until when one can clock in again while the setting is on and the window open, else today's text; the Log out warning adds that the time until the next clock-in is not counted. My hours marks "2 sessions" next to the date, Team hours as a neutral chip. The day editor derives each row's kind (the earliest row and a row directly after a clock-out are clock-ins with the Clock-in badge, the others status changes), refuses two clock-outs without a clock-in between them, and treats a row whose kind changed as a changed row.
 
-## Night defaults, to confirm
+## Night defaults (confirmed 4 Nov 2026)
 
-Each is a Decision log row "Night default, to confirm" (3 November 2026).
+Each is a Decision log row of 3 November 2026, "Night default (confirmed 4 Nov 2026)": Martin confirmed N1 to N7 and B1 to B7 as built on 4 November 2026, B4's Dutch words included, after a pre-check found no stored day that B1 refuses (`records/0008zp-precheck-2026-11-04`).
 
 | | Night default | As built |
 |---|---|---|
@@ -39,7 +39,7 @@ Each is a Decision log row "Night default, to confirm" (3 November 2026).
 | N6 | `started_at` the first session's start, `ended_at` the last end when the last effective event is an end | `refresh_workday`; columns and views unchanged |
 | N7 | The hours export keeps its columns; the status-changes export gives each session's stretches | Unchanged functions; `127` A2 reads both exports |
 
-Build choices of the night, also to confirm:
+Build choices of the night (confirmed 4 Nov 2026):
 
 | | Choice | Why |
 |---|---|---|

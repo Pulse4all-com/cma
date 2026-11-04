@@ -1,13 +1,15 @@
 # Morning runbook, N04: split shifts, clock in again (addition 0008zp)
 
-Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux or his Linux machine, in `~/cma` unless stated; a step against prod, `p4a-cma-prod` or `cma-prod-pg`, from the Chromebook only), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Through the Auth Proxy the terminal runs only `db/` scripts, whose output is schema, check rows, counts and ids; every query that reads rows runs in Studio (README, Where a command runs). Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them); `NIGHT_NOTES.md` has the design, the night defaults to confirm and every function checked.
+Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux or his Linux machine, in `~/cma` unless stated; a step against prod, `p4a-cma-prod` or `cma-prod-pg`, from the Chromebook only), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Through the Auth Proxy the terminal runs only `db/` scripts, whose output is schema, check rows, counts and ids; every query that reads rows runs in Studio (README, Where a command runs). Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them); `NIGHT_NOTES.md` has the design, the night defaults (confirmed 4 Nov 2026) and every function checked.
 
 **What changes** (Decision log, 3 November 2026; README, Data model: workday sessions):
 - **0008zp** (`126`, `127`): the setting `workday.clock_in_again` (boolean, default `false`); `cma.workday_can_clock_in_again`, the one rule (the person's own log out, strictly after it, the same business date, within the workday window, time kept); `cma.refresh_workday` for a day of one or more sessions; `cma.open_workday` clocks in again under a lock. No table, view or column changes, so `docs/datamap/schema.json` needs no refresh.
 - `02`: `workday.clock_in_again = true` for Pulse4all Subscriptions; Pulse4all Invest keeps the default (off).
 - Web: on an ended day the person may clock in again on, Welcome and My day show the Clock in card again; "Back since" on a day of several sessions; End workday, Log out and the signed-out page say until when; My hours and Team hours mark "2 sessions"; the day editor knows sessions.
 
-**The number.** The brief named 0008zo, `125` and `126`; the open pull request 216 (Flash watch cadence) holds 0008zo and `125`, so this change is 0008zp, `126` and `127` (`NIGHT_NOTES.md`, The number). It runs before or after 216.
+**The number.** The brief named 0008zo, `125` and `126`; #216, merged (Flash watch cadence, run in dev and prod, #218), holds 0008zo and `125`, so this change is 0008zp, `126` and `127` (`NIGHT_NOTES.md`, The number). It needs nothing of #216. The branch is rebased on `main` (`ca16bba`, 4 November 2026).
+
+**Confirmed (Martin, 4 November 2026):** the night defaults N1 to N7 and the build choices B1 to B7 as built, B4's Dutch words included (Decision log, 4 Nov 2026), after the pre-check of step 0b found no stored day that the new shape refuses.
 
 **Order matters:**
 - The migration runs in dev and prod **before** the merge: the merge builds and deploys prod's web, and its day read calls `cma.workday_can_clock_in_again`. Merged first, My day, Welcome and the Live board answer an error until `126` runs.
@@ -17,7 +19,8 @@ Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux
 
 | Step | What | Elapsed |
 |---|---|---|
-| 0 | Review the pull request, build it | 10 min |
+| 0 | Review the pull request, build it (done 4 Nov 2026); the Studio check of the additions | 10 min |
+| 0b | The pre-check of stored days against 0008zp's shape (done 4 Nov 2026: dev 98 days, prod 1,633, 0 refused) | done |
 | 1 | Dev: `126` twice, `127` normal and provoked, `02`, the earlier verifies | 10 min |
 | 2 | Studio dev: the setting per tenant | 2 min |
 | 5 | Prod, just before the merge: `126` twice, `02`, `127` | 10 min |
@@ -39,11 +42,13 @@ cd ~/cma && node -v && bash -ic 'type -t cma_db run_migration'
 ```
 Expected: `v22.…`, then `function` twice. Anything else: run `docs/RUNBOOK.md`, Setup, step 8 first.
 
-## 0. Review the pull request, build it
+## 0. Review the pull request, build it (review done 4 November 2026)
+
+**Done on 4 November 2026** (Martin's review; the defaults confirmed the same day): the Browser and the first Terminal block below are kept for the record. The Studio check at the end of this step still runs before step 1.
 
 **Browser:** GitHub → Pulse4all-com/cma → Pull requests → "N04: split shifts, clock in again (0008zp)". Read the description and the diff.
 
-Expected: in `db/` the new `126_workday_sessions.sql` and `127_verify_workday_sessions.sql` and one block added at the end of `02_seed_pulse4all.sql`; changes under `web/` (types, the Postgres and mock data layers, Welcome, My day, Log out, My hours, Team hours, the Clock in card, the day editor, copy, three verifiers), `docs/` (decisions, definitions, features, api, data model 0008 and planned, open decisions, the data map's catalog, this folder), `README.md` (the documentation map) and `CHANGELOG.md`; none under `cloudbuild.yaml`, `ingest/`, `hubspot/` or `records/`.
+Expected: in `db/` the new `126_workday_sessions.sql` and `127_verify_workday_sessions.sql` and one block added at the end of `02_seed_pulse4all.sql`; changes under `web/` (types, the Postgres and mock data layers, Welcome, My day, Log out, My hours, Team hours, the Clock in card, the day editor, copy, three verifiers), `docs/` (decisions, definitions, features, api, data model 0008 and planned, open decisions, the data map's catalog, this folder), `README.md` (the documentation map) and `CHANGELOG.md`; in `records/` only the new `0008zp-precheck-2026-11-04/README.md` (step 0b); none under `cloudbuild.yaml`, `ingest/` or `hubspot/`.
 
 **Terminal** (the pull request's number from the page)
 ```bash
@@ -57,7 +62,11 @@ set role cma_owner;
 select version, applied_at from cma.schema_migration where version >= '0008zn' order by 1;
 reset role;
 ```
-Expected on both instances: `0008zn`, and `0008zo` only where pull request 216 has run its `125`. With `0008zp` already there, stop and tell me.
+Expected on both instances: `0008zn` and `0008zo` (#216, merged; its `125` ran in dev and prod, #218). With `0008zp` already there, stop and tell me.
+
+## 0b. The pre-check of stored days (done 4 November 2026)
+
+`126` replaces `cma.refresh_workday`, which every write to a day calls, and does not validate the days already stored: a stored day that broke the new shape (B1 included) would surface only at its next write, as `CMA04`. The read-only query in `records/0008zp-precheck-2026-11-04/README.md` counted such days per tenant before `126` ran: **dev** (`cma-dev-pg`, about 13:10 UTC) Result 1 no rows, Result 2 `pulse4all-subscriptions` 98; **prod** (`cma-prod-pg`, about 13:12 UTC) Result 1 no rows, Result 2 `pulse4all-subscriptions` 1633. No day is refused; nothing to run. To repeat it right before step 5, paste the record's query in Studio (`cma-prod-pg`): expected Result 1 no rows.
 
 ## 1. Dev: the migration, `127`, `02`, the earlier verifies
 

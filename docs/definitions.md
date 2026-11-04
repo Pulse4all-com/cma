@@ -1120,7 +1120,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Shift" for the clocked time (a shift is the rostered plan, Rostering); "day" alone for this meaning (Day is defined under Call terms) |
 | Status | Decided |
-| Decided | 3 November 2026 (Martin, D1 to D4; the night defaults N1 to N7 and the build choices B1 to B7 stay to confirm); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
+| Decided | 3 November 2026 (Martin, D1 to D4; the night defaults N1 to N7 and the build choices B1 to B7 confirmed 4 Nov 2026); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
 | Used by | `cma.workday`, `cma.open_workday`, `cma.refresh_workday`; Welcome, My day, My hours, Team hours, Live board; API `/api/v1/me/day`, `/api/v1/me/hours`, `/api/v1/team/hours` |
 | As built today | `126`: `started_at` is the first start and `ended_at` the last end when the last effective event is an end, else empty; the events are validated start, status changes, end, start, and so on, in the views' order (CMA04 otherwise). Columns and views are unchanged |
 
@@ -1139,7 +1139,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Shift" or "split" as the label; "re-open" (the day is not reopened: a new session is a new clock-in) |
 | Status | Decided |
-| Decided | 3 November 2026 (Martin, D1 to D4; night defaults to confirm: N1 the setting and its defaults, N2 no maximum, N3 strictly after the end, N4 the default status, N5 an unchanged answer outside the conditions); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
+| Decided | 3 November 2026 (Martin, D1 to D4; night defaults confirmed 4 Nov 2026: N1 the setting and its defaults, N2 no maximum, N3 strictly after the end, N4 the default status, N5 an unchanged answer outside the conditions); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
 | Used by | `workday.clock_in_again`; `cma.workday_can_clock_in_again`; Welcome, My day, My hours, Team hours, Log out and signed-out pages; API `/api/v1/me/day`, `/api/v1/me/day/start`, `/api/v1/me/day/end`, `/api/v1/team/now`, `/api/v1/me/hours`, `/api/v1/team/hours` |
 | As built today | `126` and `127` (31 checks) and the web: the Clock in card shows again on an ended day that can take another session; Clock in answers the day in every case, and an ended day that cannot take one stays unchanged (no new error). The hours export keeps its columns |
 

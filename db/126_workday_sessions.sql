@@ -11,7 +11,7 @@
 -- 10, 18, 20, 47, 51 and 111 again (unchanged, still PASS); then prod, 126 before the merge (the web of this change reads
 -- cma.workday_can_clock_in_again), 02, 127. The web of main runs unchanged on it: it calls cma.open_workday() and reads
 -- the summary as before, and with the setting off nothing it sees changes. Numbered 0008zp, 126 and 127, not 0008zo,
--- 125 and 126 as briefed: the open pull request 216 (Flash watch cadence) holds 0008zo and 125. This addition needs
+-- 125 and 126 as briefed: #216, merged (Flash watch cadence), holds 0008zo and 125. This addition needs
 -- nothing of it and runs before or after it.
 --
 -- Why (Decision log, 3 November 2026; Martin): agents work split shifts. A person who logged out or pressed End
