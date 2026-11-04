@@ -6077,7 +6077,7 @@ const nl: Copy = {
     readCounts: "Aantallen",
     readSucceeded: "Geslaagd",
     readFailed: "Mislukt",
-    readRunning: "Bezig",
+    readRunning: "Loopt",
     readErrorTitle: "De leesbeurt eindigde met {code}",
     readSeconds: "{n} s",
     readMinutes: "{n} min",

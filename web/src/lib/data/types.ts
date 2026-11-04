@@ -2507,7 +2507,7 @@ export interface SourceStore {
   timeZone: string;
 }
 
-/** One connection with its catalogs, for its page */
+
 /** One run of a connection as cma.source_reads answers it (addition 0008zq): the connection page's Reads panel */
 export interface SourceRead {
   runId: string;
@@ -2524,6 +2524,7 @@ export interface SourceRead {
   error: string | null;
 }
 
+/** One connection with its catalogs, for its page */
 export interface SourceDetail {
   connection: SourceConnection;
   /** The connection's last 20 runs, newest first (addition 0008zq) */

@@ -414,7 +414,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
             <tbody>
               {detail.reads.map((r) => {
                 const took = readDurationSeconds(r.startedAt, r.finishedAt);
-                const tone = r.status === "succeeded" ? "success" : r.status === "failed" ? "error" : "neutral";
+                const tone = r.status === "succeeded" ? "success" : r.status === "failed" ? "error" : "info";
                 const outcome = r.status === "succeeded" ? t.readSucceeded : r.status === "failed" ? t.readFailed : t.readRunning;
                 return (
                   <tr key={r.runId} className={tr} data-status={r.status}>

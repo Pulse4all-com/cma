@@ -2239,7 +2239,7 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
   };
   // the runs behind the reads (addition 0008zq): a polled source its last polls, one failed; a webhook source its nightly reconciles
   const run = (j: number, job: string, stream: string, startedMs: number, seconds: number | null, status: SourceRead["status"], counts: Record<string, number>, error: string | null = null): SourceRead =>
-    ({ runId: `00000000-0000-7000-8000-0000000a${n}${String(j).padStart(2, "0")}`, job, stream, startedAt: new Date(startedMs).toISOString(),
+    ({ runId: `00000000-0000-7000-8000-00000a${String(n).padStart(2, "0")}${String(j).padStart(4, "0")}`, job, stream, startedAt: new Date(startedMs).toISOString(),
       finishedAt: seconds === null ? null : new Date(startedMs + seconds * 1000).toISOString(), status, counts, error });
   const reads: SourceRead[] = kind === null ? [] : polled
     ? Array.from({ length: 20 }, (_, j) => j === 2
