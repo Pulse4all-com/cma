@@ -147,20 +147,20 @@ const fmtNl = (x) => new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 1 }
 expect("an open period (Today, prod's Orders 40 against 261) says so far, en and nl, never a change",
   [changeLineOf(40, 261, "Tue 3 November", !periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), lineEn, fmtEn),
     changeLineOf(40, 261, "di 3 november", !periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), lineNl, fmtNl)],
-  ["so far; compared once the period is complete", "tot nu toe; vergeleken zodra de periode compleet is"],
+  ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is"],
   ["↓ 221 since Tue 3 November", "↓ 221 sinds di 3 november"]);
 expect("a completed period (Yesterday, every source read after midnight) shows its change, en and nl",
   [changeLineOf(261, 250, "Mon 2 November", !periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), lineEn, fmtEn),
     changeLineOf(261, 250, "ma 2 november", !periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), lineNl, fmtNl),
     changeLineOf(5, 5, "Mon 2 November", false, lineEn, fmtEn), changeLineOf(5, null, null, false, lineEn, fmtEn)],
   ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november", "→ unchanged since Mon 2 November", "Nothing to compare with yet"],
-  ["so far; compared once the period is complete", "tot nu toe; vergeleken zodra de periode compleet is", "", ""]);
+  ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is", "", ""]);
 expect("Yesterday with a source last read before midnight shows the open-period line (case b), en and nl",
   [changeLineOf(261, 250, "Mon 2 November",
     !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineEn, fmtEn),
   changeLineOf(261, 250, "ma 2 november",
     !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineNl, fmtNl)],
-  ["so far; compared once the period is complete", "tot nu toe; vergeleken zodra de periode compleet is"],
+  ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is"],
   ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november"]);
 const periodPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
 const periodControlsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
