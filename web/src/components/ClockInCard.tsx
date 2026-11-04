@@ -10,6 +10,9 @@
  * starts, with the time the database gave, and the button stays. While the clock-in is in flight the
  * button is busy (aria-busy, dimmed), not disabled, so it keeps the focus until the open day replaces
  * the card and the person can press Enter again after a refusal (the IT audit of 17 October 2026).
+ * Clock in again (addition 0008zp): on an ended day the person may clock in again on (the day's
+ * canClockInAgain), the same card shows below the ended day in its "again" variant, with the time
+ * until which it can, and calls the same route; the database opens a new session.
  */
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -17,7 +20,16 @@ import type { Copy } from "@/lib/copy";
 import { workdayStartsAt } from "@/lib/live";
 import { Badge, Card, Keycap, Notice } from "./primitives";
 
-export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: string; copy: Copy }) {
+export function ClockInCard({
+  defaultStatusName,
+  copy,
+  againUntil = null,
+}: {
+  defaultStatusName: string;
+  copy: Copy;
+  /** The "again" variant: the window end on an ended day that may take another session, pre-formatted */
+  againUntil?: string | null;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [failed, setFailed] = useState(false);
@@ -46,8 +58,12 @@ export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: st
 
   return (
     <Card>
-      <Badge tone="neutral">{copy.welcome.notClockedIn}</Badge>
-      <p className="mt-4 text-body">{copy.welcome.clockInBody.replace("{status}", defaultStatusName)}</p>
+      <Badge tone="neutral">{againUntil ? copy.welcome.clockedOut : copy.welcome.notClockedIn}</Badge>
+      <p className="mt-4 text-body">
+        {againUntil
+          ? copy.welcome.clockInAgainBody.replace("{time}", againUntil).replace("{status}", defaultStatusName)
+          : copy.welcome.clockInBody.replace("{status}", defaultStatusName)}
+      </p>
       <button
         type="button"
         autoFocus
@@ -56,7 +72,7 @@ export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: st
         data-testid="clock-in"
         className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-button bg-p4a-deepblue px-6 font-semibold text-white hover:bg-p4a-denim aria-busy:opacity-60"
       >
-        {copy.welcome.clockIn}
+        {againUntil ? copy.welcome.clockInAgain : copy.welcome.clockIn}
         <Keycap>Enter</Keycap>
       </button>
       {startsAt ? (

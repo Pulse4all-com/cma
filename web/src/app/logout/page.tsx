@@ -16,17 +16,22 @@ export default async function LogOutPage() {
   const now = new Date();
   const today = await data().getWorkday(me, dateKeyInZone(now, me.timeZone));
   const dayOpen = today?.status === "working";
+  // While the tenant lets people clock in again and the window is open, the page says until when (0008zp)
+  const again = !!today && dayOpen && today.clockInAgain && now.getTime() < Date.parse(today.dayEndsAt);
+  const until = today ? fmtTime(today.dayEndsAt, me.timeZone, me.locale) : "";
   // The clock's figures at this moment, so the person sees what logging out ends (11 October 2026)
   const workedMinutes = today ? Math.floor(workedSeconds(today.clock, now.getTime(), today.dayEndsAt) / 60) : 0;
   const clockLine = today && dayOpen
-    ? copy.logOut.clockStops.replace("{start}", fmtTime(today.startedAt, me.timeZone, me.locale)).replace("{worked}", fmtMinutes(workedMinutes))
+    // "clocked in at": the current session's start, the day's start on a day of one session (0008zp)
+    ? (again ? copy.logOut.clockStopsAgain : copy.logOut.clockStops)
+        .replace("{start}", fmtTime(today.sessionStartedAt, me.timeZone, me.locale)).replace("{worked}", fmtMinutes(workedMinutes))
     : null;
 
   return (
     <Shell copy={copy} me={me} active="welcome">
       <PageTitle>{copy.logOut.title}</PageTitle>
       <Card>
-        <p className="text-body">{dayOpen ? copy.logOut.body : copy.logOut.bodyDayEnded}</p>
+        <p className="text-body">{dayOpen ? (again ? copy.logOut.bodyAgain.replace("{time}", until) : copy.logOut.body) : copy.logOut.bodyDayEnded}</p>
         {clockLine ? (
           <div className="mt-4" data-testid="logout-clock-warning">
             <Notice tone="warning">{clockLine}</Notice>

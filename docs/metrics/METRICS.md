@@ -17,7 +17,7 @@ Whether the person has a workday today and whether it is still open: the badge o
 **Formula as computed**
 
 ```
-no row in cma.workday for (user, today in the user's zone) => 'Not clocked in' card; workday.status = 'open' => 'Clocked in' badge; status = 'ended' => 'Your workday has ended'. status itself is derived by cma.refresh_workday(): ended iff exactly one effective end event exists.
+no row in cma.workday for (user, today in the user's zone) => 'Not clocked in' card; workday.status = 'open' => 'Clocked in' badge; status = 'ended' => 'Your workday has ended'. status itself is derived by cma.refresh_workday(): ended iff the day's last effective event is an end. A day can hold several sessions (start, end, start, end ...); an ended day that may take another one shows the Clock in card below the ended-day card (canClockInAgain).
 ```
 
 **Unit** text · **Grain** now · **Status** verified
@@ -60,7 +60,7 @@ select w.status, w.started_at, w.ended_at from cma.workday w where w.tenant_id =
 
 **Notes**
 
-A visit opens nothing (decision 7 Oct 2026): rendering reads the day, only POST /api/v1/me/day/start opens one, and only for a person whose time is kept (cma.time_is_kept, 0003d). The refusal before the window start carries the database's own HH:MI (workdayStartsAt in live.ts parses the one passed-through text); no time is typed in code. :user_id in verify_sql: the person's id, since the page always reads the caller's own day.
+A visit opens nothing (decision 7 Oct 2026): rendering reads the day, only POST /api/v1/me/day/start opens one, and only for a person whose time is kept (cma.time_is_kept, 0003d). The refusal before the window start carries the database's own HH:MI (workdayStartsAt in live.ts parses the one passed-through text); no time is typed in code. :user_id in verify_sql: the person's id, since the page always reads the caller's own day. Clocking in again is the normal Clock in after a normal sign-in; a visit opens nothing. An ended day stays ended unless the tenant's workday.clock_in_again lets the person clock in again after their own log out, within the workday window; other resumes stay corrections (Decision log, 3 Nov 2026, #217).
 
 #### `welcome.clock.status`
 
@@ -115,12 +115,12 @@ A status retired while the person is in it shows its stored name without a colou
 
 **Clocked in at** on / · Clocked in at (Ingeklokt om)
 
-The time the person's workday started today.
+The time the person's workday started today: the start of the first session.
 
 **Formula as computed**
 
 ```
-workday.started_at = min(occurred_at) of the day's effective start event (refresh_workday); formatted hh:mm in the viewer's zone (fmtTime(startedAt, me.timeZone)).
+workday.started_at = min(occurred_at) over the day's effective start events (refresh_workday), i.e. the first session's start; a later session's start does not move it (it is the open day's 'Back since', sessionStartedAt). Formatted hh:mm in the viewer's zone (fmtTime(startedAt, me.timeZone)).
 ```
 
 **Unit** time_of_day · **Grain** now · **Status** verified
@@ -163,7 +163,7 @@ Shown on both the open-day and the ended-day card. Same figure as My day's 'Star
 
 **worked so far** on / · Time worked so far (tot nu toe gewerkt)
 
-How long the person has worked today: time in working statuses only, pauses excluded, up to now (or up to the day's window end).
+How long the person has worked today across all sessions: time in working statuses only, pauses excluded, up to now (or up to the day's window end). The time between two sessions is not counted.
 
 **Formula as computed**
 
@@ -218,18 +218,18 @@ from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.stat
 
 **Notes**
 
-The clock counts the same seconds the database counts (verify equality to the minute; the page floors to whole minutes with fmtMinutes). The window end is read live from the tenant's settings, not snapshotted per day — see the window-retroactivity finding. Which hours the agent sees (working vs paid) was decided 7 Oct 2026: working time (open-decisions.md keeps the related money-column wording open).
+The clock counts the same seconds the database counts (verify equality to the minute; the page floors to whole minutes with fmtMinutes). The window end is read live from the tenant's settings, not snapshotted per day — see the window-retroactivity finding. Which hours the agent sees (working vs paid) was decided 7 Oct 2026: working time (open-decisions.md keeps the related money-column wording open). The time between two sessions counts in no figure. Only stretches in working statuses are summed, and an ended session's stretches stand still.
 
 #### `welcome.clock.clocked_out_at`
 
 **Clocked out at** on / · Clocked out at (Uitgeklokt om)
 
-The time the ended day was clocked out, on the ended-day card.
+The time the ended day was clocked out, on the ended-day card: the end of the last session.
 
 **Formula as computed**
 
 ```
-workday.ended_at = max(occurred_at) of the day's effective end event (at most one, refresh_workday); hh:mm in the viewer's zone; empty while null (defensive — the card only shows for status 'ended', where ended_at is not null by check constraint).
+workday.ended_at = max(occurred_at) over the day's effective end events, set only when the day's last effective event is an end (refresh_workday), i.e. the last session's end; hh:mm in the viewer's zone; empty while null (defensive: the card only shows for status 'ended', where ended_at is not null by check constraint).
 ```
 
 **Unit** time_of_day · **Grain** now · **Status** verified
@@ -273,7 +273,7 @@ select max(e.occurred_at) from cma.time_event e join cma.workday w on w.tenant_i
 
 **Notes**
 
-An end entered by the scheduler or a correction is visible as such on Team hours (chips) and in the day's history, not on this card.
+An end entered by the scheduler or a correction is visible as such on Team hours (chips) and in the day's history, not on this card. After a clock-in again the day is open and ended_at is null until the next end.
 
 #### `welcome.needs_attention.days_not_clocked_out`
 
@@ -764,12 +764,12 @@ Edge (finding): the present set comes from ACTIVE statuses only, but a person ca
 
 **Clocked out** on /live/board · Clocked out (Uitgeklokt)
 
-How many people whose time is kept have ended today's workday (hint: "Today's day has ended").
+How many people whose time is kept have ended today's workday (hint: "Today's day has ended"); a person who clocked in again is back in an open group until the next end.
 
 **Formula as computed**
 
 ```
-count of people where day is not null and (day.status = 'ended' or current status is null). cma.team_now() returns day_status 'ended' for a day with ended_at set.
+count of people where day is not null and (day.status = 'ended' (the last effective event is an end) or current status is null). cma.team_now() returns day_status 'ended' for a day with ended_at set; ended_at is null again once the person clocks in again.
 ```
 
 **Unit** count · **Grain** now · **Status** verified
@@ -954,12 +954,12 @@ cma.team_now() deliberately returns the instant, never the elapsed figure, so tw
 
 **Clocked in** on /live/board · Clocked in (Ingeklokt)
 
-When the person clocked in today, as a time of day in the person's own zone; the zone's short name is appended only when the person's clock differs from the viewer's.
+When the person clocked in today (the first session's start), as a time of day in the person's own zone; the zone's short name is appended only when the person's clock differs from the viewer's.
 
 **Formula as computed**
 
 ```
-fmtTime(day.started_at, person zone, viewer locale); zoneLabel = fmtZoneShort(...) only when !sameOffset(started_at, person zone, viewer zone). started_at is the workday's derived start (earliest effective start event).
+fmtTime(day.started_at, person zone, viewer locale); zoneLabel = fmtZoneShort(...) only when !sameOffset(started_at, person zone, viewer zone). started_at is the workday's derived start (the earliest effective start event, i.e. the first session's start).
 ```
 
 **Unit** time_of_day · **Grain** now, per_person · **Status** verified
@@ -1001,7 +1001,7 @@ Identity-leaning display figure, included because the zone handling is computed 
 
 **Clocked out** on /live/board · Clocked out (Uitgeklokt)
 
-When the person ended today's day, in their own zone; empty while the day is open or there is no day.
+When the person ended today's day (the last session's end), in their own zone; empty while the day is open (also after a clock-in again) or there is no day.
 
 **Formula as computed**
 
@@ -1048,7 +1048,7 @@ The column header reuses the same copy key as the Clocked out tile (live.clocked
 
 **Worked so far** on /live/board · Worked so far (Tot nu gewerkt)
 
-The seconds the person has worked today (working statuses only, pauses excluded), ticking on screen like the clock on My day.
+The seconds the person has worked today across all sessions (working statuses only, pauses excluded, the time between sessions not counted), ticking on screen like the clock on My day.
 
 **Formula as computed**
 
@@ -1091,7 +1091,7 @@ with ev as (select e.workday_id, e.user_id, e.kind, e.status_id, e.occurred_at, 
 
 **Notes**
 
-Cross-page nuance (finding): workedSeconds() supports a dayEndsAt cap and My day passes it, but LiveBoard.tsx:93 calls it without one (deliberate per the lib comment: 'the Live board passes none and shows what its read returned'). Between two 10 s polls the board can therefore tick up to ~10 s past the workday window's end and snap back on the next read. The verify_sql reproduces the database's capped count; the on-screen figure adds the client tick since the read.
+Cross-page nuance (finding): workedSeconds() supports a dayEndsAt cap and My day passes it, but LiveBoard.tsx:93 calls it without one (deliberate per the lib comment: 'the Live board passes none and shows what its read returned'). Between two 10 s polls the board can therefore tick up to ~10 s past the workday window's end and snap back on the next read. The verify_sql reproduces the database's capped count; the on-screen figure adds the client tick since the read. The time between two sessions counts in no figure.
 
 #### `live.people.shift_today`
 
@@ -3644,12 +3644,12 @@ Empty string for a person without an organisation.
 
 **Clocked in** on /team/hours · Clocked in (Ingeklokt)
 
-When the person's day started, in the day's own time zone.
+When the person's day started (the first session's start), in the day's own time zone.
 
 **Formula as computed**
 
 ```
-workday.started_at, hh:mm in the day's snapshot zone (fmtTime(startedAt, d.timeZone)); the zone's short name (CEST, BST) appended only when the person's clock differs from the viewer's at that instant (sameOffset).
+workday.started_at (the first session's start), hh:mm in the day's snapshot zone (fmtTime(startedAt, d.timeZone)); the zone's short name (CEST, BST) appended only when the person's clock differs from the viewer's at that instant (sameOffset).
 ```
 
 **Unit** time_of_day · **Grain** per_day, per_person · **Status** verified
@@ -3684,18 +3684,18 @@ select w.business_date, w.user_id, to_char(w.started_at at time zone w.timezone,
 
 **Notes**
 
-decisions.md 7 Oct row 30 said 'Team hours keeps the name rule for now and can adopt this one'; the page has since adopted the sameOffset rule (team/hours/page.tsx:74), matching api.md.
+decisions.md 7 Oct row 30 said 'Team hours keeps the name rule for now and can adopt this one'; the page has since adopted the sameOffset rule (team/hours/page.tsx:74), matching api.md. A day of several sessions shows a neutral chip with the number of sessions (sessions, in the days of GET /api/v1/team/hours); the extra starts are in the day editor's history and in the status-changes export.
 
 #### `team_hours.clocked_out`
 
 **Clocked out** on /team/hours · Clocked out (Uitgeklokt)
 
-When the day ended, in the day's own zone; empty while the day is open.
+When the day ended (the last session's end), in the day's own zone; empty while the day is open.
 
 **Formula as computed**
 
 ```
-workday.ended_at, hh:mm in the day's snapshot zone; empty string when null.
+workday.ended_at (the last end, set when the last effective event is an end), hh:mm in the day's snapshot zone; empty string when null.
 ```
 
 **Unit** time_of_day · **Grain** per_day, per_person · **Status** verified
@@ -3743,7 +3743,7 @@ A system end (the sweep) or a corrected end shows like any other time; the chips
 
 **Worked** on /team/hours · Worked (Gewerkt)
 
-Time that person worked that day: statuses flagged working, pauses excluded, capped at the day's window end.
+Time that person worked that day, summed over all sessions: statuses flagged working, pauses excluded, capped at the day's window end. The time between two sessions counts in no figure.
 
 **Formula as computed**
 
@@ -3799,13 +3799,13 @@ from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.stat
 
 **Notes**
 
-Rounded down so the screen never shows more than was worked. Identical flooring on the Dashboard and in the hours CSV (decision 7 Oct 2026), proven cross-page by the same workday_summary source. A correction (Correct a day / Add day) changes this figure immediately: a replaced or voided event drops out of time_event_effective and the intervals are recomputed; corrections are never a figure of their own, the Corrected afterwards chip marks the row. The window end is read live, not snapshotted (see finding).
+Rounded down so the screen never shows more than was worked. Identical flooring on the Dashboard and in the hours CSV (decision 7 Oct 2026), proven cross-page by the same workday_summary source. A correction (Correct a day / Add day) changes this figure immediately: a replaced or voided event drops out of time_event_effective and the intervals are recomputed; corrections are never a figure of their own, the Corrected afterwards chip marks the row. The window end is read live, not snapshotted (see finding). Stretches only: the blank between one session's end and the next session's start is not a stretch, so it adds nothing.
 
 #### `team_hours.paid_minutes`
 
 **Paid** on /team/hours · Paid (Betaald)
 
-Time that day in statuses flagged paid (can include paid breaks), for payroll.
+Time that day in statuses flagged paid (can include paid breaks), for payroll, summed over all sessions; the time between two sessions is not paid.
 
 **Formula as computed**
 
@@ -3826,7 +3826,7 @@ minutes = floor(workday_summary.paid_seconds / 60) per row; paid_seconds = sum(i
 
 - as team_hours.worked_minutes, with is_paid instead of is_working
 
-**Time** As team_hours.worked_minutes.
+**Time** As team_hours.worked_minutes. The gap between two sessions is not a stretch.
 
 **Settings**
 
@@ -36431,7 +36431,7 @@ Finding: this line and Mark all read operate on the loaded list only. With more 
 
 **Worked today** on /day · Worked today (Vandaag gewerkt)
 
-The running clock: time worked today in working statuses, ticking every second, pausing on non-working statuses and stopping at the day's window end.
+The running clock: time worked today across all sessions in working statuses, ticking every second, pausing on non-working statuses and stopping at the day's window end. The time between sessions is not counted; after a clock-in again the clock continues from the closed total.
 
 **Formula as computed**
 
@@ -36486,18 +36486,18 @@ from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.stat
 
 **Notes**
 
-The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding.
+The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding. The time between two sessions counts in no figure. After an end nothing runs (runningSince null) until the next clock-in.
 
 #### `my_day.started_at`
 
 **Started at** on /day · Started at (Gestart om)
 
-When today's workday started.
+When today's workday started: the first session's start (Start / Clocked in).
 
 **Formula as computed**
 
 ```
-workday.started_at (the effective start event's occurred_at), formatted hh:mm in the viewer's zone on the server (fmtTime).
+workday.started_at (the first effective start event's occurred_at; a later session does not move it), formatted hh:mm in the viewer's zone on the server (fmtTime).
 ```
 
 **Unit** time_of_day · **Grain** now · **Status** verified
@@ -36534,7 +36534,7 @@ select w.started_at from cma.workday w where w.tenant_id = :tenant_id and w.user
 
 **Notes**
 
-Shown on the open day (top right) and on the ended-day card. Same source as Welcome's 'Clocked in at'.
+Shown on the open day (top right) and on the ended-day card. Same source as Welcome's 'Clocked in at'. An open day of several sessions keeps this 'Started at' and adds 'Back since' (sessionStartedAt, the latest session's start); the day's sessions count is in sessions.
 
 #### `my_day.current_status`
 
@@ -36645,12 +36645,12 @@ verify_sql gives the last effective start/status time, which equals status_since
 
 **Ended at** on /day · Ended at (Beëindigd om)
 
-When the ended day was clocked out, on the day-ended card.
+When the ended day was clocked out (the last session's end), on the day-ended card.
 
 **Formula as computed**
 
 ```
-workday.ended_at, formatted hh:mm in the viewer's zone.
+workday.ended_at (the last end, set when the last effective event is an end), formatted hh:mm in the viewer's zone.
 ```
 
 **Unit** time_of_day · **Grain** now · **Status** verified
@@ -36687,7 +36687,7 @@ select w.ended_at from cma.workday w where w.tenant_id = :tenant_id and w.user_i
 
 **Notes**
 
-An ended day stays ended (decision 5 Oct 2026); resuming is a correction.
+An ended day stays ended unless the tenant's workday.clock_in_again lets the person clock in again after their own log out, within the workday window; other resumes stay corrections (Decision log, 3 Nov 2026, #217). The card then shows the Clock in card below it (canClockInAgain).
 
 ### /hours
 
@@ -36743,7 +36743,7 @@ The shift belongs to the business day it started on (features.md §1); no shifts
 
 **Start** on /hours · Start (Start)
 
-When the day started.
+When the day started: the first session's start.
 
 **Formula as computed**
 
@@ -36785,13 +36785,13 @@ select w.business_date, w.started_at from cma.workday w where w.tenant_id = :ten
 
 **Notes**
 
-Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding.
+Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding. A day of several sessions shows '2 sessions' next to the date; the start stays the first session's.
 
 #### `my_hours.end`
 
 **End** on /hours · End (Einde)
 
-When the day was clocked out; 'still working' while it has no end.
+When the day was clocked out (the last session's end); 'still working' while it has no end, also after a clock-in again.
 
 **Formula as computed**
 
@@ -36839,12 +36839,12 @@ A forgotten clock-out of an earlier day also reads 'still working' here (the day
 
 **Pauses** on /hours · Pauses (Pauzes)
 
-Time that day in statuses that stop the clock (break, lunch and other non-working statuses).
+Time that day in statuses that stop the clock (break, lunch and other non-working statuses), summed over all sessions. The time between two sessions is not a pause.
 
 **Formula as computed**
 
 ```
-pause_seconds = sum(cma.time_interval.seconds) of the day's intervals whose status has is_working = false; pauseMinutes = floor(pause_seconds/60); shown as Xh YYm. Interval seconds are capped at the day's window end like all counted time.
+pause_seconds = sum(cma.time_interval.seconds) of the day's intervals whose status has is_working = false; pauseMinutes = floor(pause_seconds/60); shown as Xh YYm; only stretches in non-working statuses count, never the span minus worked. Interval seconds are capped at the day's window end like all counted time.
 ```
 
 **Unit** minutes · **Grain** per_day · **Status** verified
@@ -36893,13 +36893,13 @@ from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.stat
 
 **Notes**
 
-Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked span. 0m shows for a day without pauses (a true zero, correct).
+Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked time. On a day of several sessions the time between sessions is in neither, so pauses + duration is shorter than the span from first start to last end by that gap. 0m shows for a day without pauses (a true zero, correct).
 
 #### `my_hours.duration`
 
 **Duration** on /hours · Duration (Duur)
 
-Time worked that day: working statuses only, the same time the My day clock counts.
+Time worked that day, summed over all sessions: working statuses only, the same time the My day clock counts.
 
 **Formula as computed**
 
@@ -36955,7 +36955,7 @@ from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.stat
 
 **Notes**
 
-Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so).
+Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so). The time between two sessions counts in no figure.
 
 #### `my_hours.total_duration`
 
@@ -41221,7 +41221,7 @@ Zones per day: each row names its own zone, so one file can mix Amsterdam and Ma
 
 **Clocked in** on /api/v1/team/exports/hours · Clocked in (Ingeklokt)
 
-The local time the day started, in the row's time zone.
+The local time the day started (the first session's start), in the row's time zone.
 
 **Formula as computed**
 
@@ -41267,7 +41267,7 @@ Known limit, documented in api.md: on the autumn clock-change night a local time
 
 **Clocked out** on /api/v1/team/exports/hours · Clocked out (Uitgeklokt)
 
-The local time the day ended; empty while it is open.
+The local time the day ended (the last session's end); empty while it is open.
 
 **Formula as computed**
 
@@ -41313,7 +41313,7 @@ Same DST limit as clocked in. The Not clocked out column says why a cell is empt
 
 **Worked** on /api/v1/team/exports/hours · Worked (Gewerkt)
 
-Time worked that day (working statuses), written in the tenant's duration format.
+Time worked that day (working statuses, all sessions), written in the tenant's duration format; the time between sessions is not counted.
 
 **Formula as computed**
 
@@ -41375,7 +41375,7 @@ Identical whole minutes to Team hours' Worked and the Dashboard's Worked (audit 
 
 **Paid** on /api/v1/team/exports/hours · Paid (Betaald)
 
-Time that day in paid statuses, for payroll, in the tenant's duration format.
+Time that day in paid statuses, for payroll, in the tenant's duration format; the time between sessions is not paid.
 
 **Formula as computed**
 
@@ -41434,7 +41434,7 @@ Same whole minutes as Team hours' Paid.
 
 **Billable** on /api/v1/team/exports/hours · Billable (Factureerbaar)
 
-Time that day in billable statuses (hours billed to or by the employer); only in the file, no screen shows it.
+Time that day in billable statuses (hours billed to or by the employer); only in the file, no screen shows it. The time between sessions is not billable.
 
 **Formula as computed**
 
@@ -41646,7 +41646,7 @@ select w.business_date, count(*) as stretches from cma.time_event e join cma.wor
 
 **Notes**
 
-Grain per_record = one row per status stretch of a day. File-wide conventions as the hours file (separator, BOM, CRLF, RFC 4180, formula guard, labels in the caller's language).
+Grain per_record = one row per status stretch of a day. File-wide conventions as the hours file (separator, BOM, CRLF, RFC 4180, formula guard, labels in the caller's language). A day of several sessions gives one row per stretch in every session: each session's start and end are in the file, and the blank between two sessions has no row.
 
 #### `export.status_changes_csv.person`
 
@@ -41923,7 +41923,7 @@ select w.business_date, w.user_id, e.occurred_at as from_at, lead(e.occurred_at)
 
 **Notes**
 
-The query's rows with kind in ('start','status') are the file's rows; drop the end rows after the lead(). An empty To with 'Not clocked out' = Yes marks a capped stretch whose counted Duration stops at the window end.
+The query's rows with kind in ('start','status') are the file's rows; drop the end rows after the lead(). An empty To with 'Not clocked out' = Yes marks a capped stretch whose counted Duration stops at the window end. A stretch ending in a session's end shows that end as its To; the next session's first row starts later, with no row for the gap between them.
 
 #### `export.status_changes_csv.duration`
 
@@ -41982,7 +41982,7 @@ from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_i
 
 **Notes**
 
-Each stretch is floored to whole minutes independently, so adding a day's stretch rows can fall short of the hours file's Worked/Paid (which floor the day's summed seconds once) by up to one minute per stretch. See finding. Keep only rows whose event kind is start/status (the lead() needs the end rows).
+Each stretch is floored to whole minutes independently, so adding a day's stretch rows can fall short of the hours file's Worked/Paid (which floor the day's summed seconds once) by up to one minute per stretch. See finding. Keep only rows whose event kind is start/status (the lead() needs the end rows). Only stretches count: the gap between two sessions has no row and no duration.
 
 #### `export.status_changes_csv.working`
 

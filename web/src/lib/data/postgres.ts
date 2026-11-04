@@ -71,7 +71,29 @@ type DayRow = HeaderRow & {
   closed_seconds: number;
   running_since: Date | null;
   day_ends_at: Date;
+  sessions: number;
+  session_started_at: Date;
+  clock_in_again: boolean;
+  can_clock_in_again: boolean;
 };
+
+/**
+ * A day's sessions (addition 0008zp), for the day `w` stands for: its effective clock-ins, the latest
+ * one's start, the tenant's workday.clock_in_again, and cma.workday_can_clock_in_again at the
+ * database's now (the rule the clock-in checks, so the card and the write never disagree).
+ * `w` is a workday id expression of the enclosing query, never caller text.
+ */
+const SESSIONS = (w: string) => `
+            coalesce(se.sessions, 0)::int            as sessions,
+            se.session_started_at,
+            coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false) as clock_in_again,
+            cma.workday_can_clock_in_again(${w})     as can_clock_in_again`;
+const SESSIONS_JOIN = (w: string) => `
+       left join lateral (
+         select count(*) as sessions, max(e.occurred_at) as session_started_at
+           from cma.time_event_effective e
+          where e.workday_id = ${w} and e.kind = 'start'
+       ) se on true`;
 
 /**
  * One own workday with its current status and the clock's inputs. Worked time counts intervals in
@@ -86,7 +108,7 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
             coalesce(c.closed_seconds, 0)::int       as closed_seconds,
             c.running_since,
             c.status_since,
-            cma.business_day_end(s.business_date, s.timezone) as day_ends_at
+            cma.business_day_end(s.business_date, s.timezone) as day_ends_at,${SESSIONS("s.workday_id")}
        from cma.workday_summary s
        left join cma.work_status ws
               on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
@@ -98,7 +120,7 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
            join cma.work_status iws
              on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id
           where i.workday_id = s.workday_id
-       ) c on true
+       ) c on true${SESSIONS_JOIN("s.workday_id")}
       where s.${OWN} and s.business_date = ${dateSql}`,
     params,
   );
@@ -413,6 +435,10 @@ function toWorkday(r: DayRow): Workday {
       runningSince: !ended && r.running_since ? r.running_since.toISOString() : null,
     },
     dayEndsAt: r.day_ends_at.toISOString(),
+    sessions: r.sessions,
+    sessionStartedAt: r.session_started_at.toISOString(),
+    clockInAgain: r.clock_in_again,
+    canClockInAgain: ended && r.can_clock_in_again,
   };
 }
 
@@ -448,7 +474,20 @@ type TeamRow = {
   is_capped: boolean;
   needs_correction: boolean;
   has_correction: boolean;
+  sessions: number;
 };
+
+/**
+ * cma.team_hours with each day's sessions (addition 0008zp): the effective clock-ins of the person's day
+ * on that date, read in the same query (the function's columns stay as they are), in the function's own
+ * order. `args` are the call's bound parameters, never caller text
+ */
+const TEAM_HOURS = (args: string) => `select t.*,
+         (select count(*) from cma.time_event_effective e
+            join cma.workday w on w.tenant_id = e.tenant_id and w.id = e.workday_id
+           where w.user_id = t.user_id and w.business_date = t.business_date and e.kind = 'start')::int as sessions
+    from cma.team_hours(${args}) t
+   order by t.business_date, t.display_name, t.user_id`;
 
 type EventRow = {
   event_id: string;
@@ -480,6 +519,7 @@ function toTeamDay(r: TeamRow): TeamDay {
     isCapped: r.is_capped,
     needsCorrection: r.needs_correction,
     hasCorrection: r.has_correction,
+    sessions: r.sessions,
   };
 }
 
@@ -501,7 +541,7 @@ function toTimeEvent(r: EventRow): TimeEvent {
 }
 
 async function readTeamDay(q: Querier, userId: string, date: DateKey): Promise<TeamDayDetail> {
-  const day = await q.query<TeamRow>(`select * from cma.team_hours($2::date, $2::date, $1::uuid)`, [userId, date]);
+  const day = await q.query<TeamRow>(TEAM_HOURS("$2::date, $2::date, $1::uuid"), [userId, date]);
   const events = await q.query<EventRow>(`select * from cma.team_day($1::uuid, $2::date)`, [userId, date]);
   return { day: day.rows[0] ? toTeamDay(day.rows[0]) : null, events: events.rows.map(toTimeEvent) };
 }
@@ -620,11 +660,12 @@ type TeamNowDbRow = {
   status_key: string | null; status_name: string | null; status_active: boolean | null;
   is_working: boolean | null; is_productive: boolean | null; is_paid: boolean | null; is_billable: boolean | null;
   status_since: Date | null; closed_seconds: number; running_since: Date | null; day_ends_at: Date;
+  sessions: number; session_started_at: Date | null; clock_in_again: boolean; can_clock_in_again: boolean;
 };
 
 function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
   const day: Workday | null =
-    r.workday_id && r.day_status && r.started_at
+    r.workday_id && r.day_status && r.started_at && r.session_started_at
       ? toWorkday({
           business_date: r.business_date,
           status: r.day_status,
@@ -636,6 +677,10 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           closed_seconds: Number(r.closed_seconds),
           running_since: r.running_since,
           day_ends_at: r.day_ends_at,
+          sessions: Number(r.sessions),
+          session_started_at: r.session_started_at,
+          clock_in_again: r.clock_in_again,
+          can_clock_in_again: r.can_clock_in_again,
         })
       : null;
   const status =
@@ -1496,10 +1541,12 @@ export const postgresData: CmaData = {
   },
 
   async startWorkday(me: Principal): Promise<Workday> {
-    // Clock in: today's day, open or ended, created if needed; an ended day stays ended. The
-    // database creates a day only for someone whose time is kept (0003d, CMA06 otherwise) and not
-    // before the workday window starts (0008b, CMA04 "the workday starts at HH:MI"): that refusal
-    // keeps its own text, so the screen can say when the day starts
+    // Clock in: today's day, open or ended, created if needed. An ended day gets a new session when
+    // cma.workday_can_clock_in_again allows it (0008zp: the setting on, the person's own log out,
+    // within the window); every other ended day stays ended. The database creates a day only for
+    // someone whose time is kept (0003d, CMA06 otherwise) and not before the workday window starts
+    // (0008b, CMA04 "the workday starts at HH:MI"): that refusal keeps its own text, so the screen
+    // can say when the day starts
     try {
       return await withTenant(ctx(me), async (q) => {
         const opened = await q.query<{ business_date: string }>(`select business_date from cma.open_workday()`);
@@ -1569,12 +1616,14 @@ export const postgresData: CmaData = {
     assertDate(range.from, "from");
     assertDate(range.to, "to");
     return withTenant(ctx(me), async (q) => {
-      // Pauses: the day's seconds in non-working statuses, the complement of working time within the day
-      const r = await q.query<SummaryRow & { pause_seconds: number }>(
+      // Pauses: the day's seconds in non-working statuses, summed from the stretches; the time between two
+      // sessions is no stretch, so it is no pause (0008zp). Sessions: the day's effective clock-ins
+      const r = await q.query<SummaryRow & { pause_seconds: number; sessions: number }>(
         `select ${HEADER}, s.working_seconds,
                 coalesce((select sum(i.seconds) from cma.time_interval i
                             join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = i.status_id
-                           where i.workday_id = s.workday_id and not ws.is_working), 0)::bigint as pause_seconds
+                           where i.workday_id = s.workday_id and not ws.is_working), 0)::bigint as pause_seconds,
+                (select count(*) from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start')::int as sessions
            from cma.workday_summary s
           where s.${OWN} and s.business_date between $1::date and $2::date
           order by s.business_date`,
@@ -1586,6 +1635,7 @@ export const postgresData: CmaData = {
         pauseMinutes: Math.floor(Number(row.pause_seconds) / 60),
         startedAt: row.started_at.toISOString(),
         endedAt: row.ended_at ? row.ended_at.toISOString() : null,
+        sessions: row.sessions,
       }));
       return { ...range, days, totalMinutes: days.reduce((sum, d) => sum + d.minutes, 0) };
     });
@@ -1596,7 +1646,7 @@ export const postgresData: CmaData = {
     assertDate(range.to, "to");
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<TeamRow>(
-        `select * from cma.team_hours($1::date, $2::date, $3::uuid)`,
+        TEAM_HOURS("$1::date, $2::date, $3::uuid"),
         [range.from, range.to, userId],
       );
       return { ...range, days: r.rows.map(toTeamDay) };
@@ -1693,7 +1743,11 @@ export const postgresData: CmaData = {
   async getTeamNow(me): Promise<TeamNow> {
     return withTenant(ctx(me), async (q) => {
       // The day's end per person (0008b), so a day on the board carries the same field as the own day
-      const r = await q.query<TeamNowDbRow>(`select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at from cma.team_now() n`);
+      // and the day's sessions (0008zp), read as for the own day in the same query
+      const r = await q.query<TeamNowDbRow>(
+        `select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at,${SESSIONS("n.workday_id")}
+           from cma.team_now() n${SESSIONS_JOIN("n.workday_id")}`,
+      );
       const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean }>(
         `select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key`,
       );

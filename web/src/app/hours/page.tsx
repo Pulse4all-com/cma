@@ -56,7 +56,15 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
             <tbody>
               {hours.days.map((d) => (
                 <tr key={d.date} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
-                  <td className="px-3">{fmtDate(d.date, me.locale)}</td>
+                  <td className="px-3">
+                    {fmtDate(d.date, me.locale)}
+                    {/* A day clocked in again (0008zp): the gap between its sessions counts in no column */}
+                    {d.sessions > 1 ? (
+                      <span className="ml-2 text-small text-p4a-muted" data-testid="sessions-marker">
+                        {copy.myHours.sessions.replace("{n}", String(d.sessions))}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="tabular px-3 text-right">{d.startedAt ? fmtTime(d.startedAt, me.timeZone, me.locale) : ""}</td>
                   <td className="tabular px-3 text-right">
                     {d.endedAt ? fmtTime(d.endedAt, me.timeZone, me.locale) : <span className="text-p4a-muted">{copy.myHours.stillWorking}</span>}

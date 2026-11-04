@@ -51,6 +51,26 @@ export interface Workday {
    * not counted by the database either
    */
   dayEndsAt: Instant;
+  /**
+   * Sessions of the day (addition 0008zp): its effective clock-ins. One for a day that was never
+   * clocked in again; startedAt is the first session's start, endedAt the last session's end
+   */
+  sessions: number;
+  /** Start of the latest session (the latest effective clock-in); startedAt on a one-session day */
+  sessionStartedAt: Instant;
+  /**
+   * Whether the tenant lets a person clock in again on the same day after their own log out,
+   * within the workday window (workday.clock_in_again, addition 0008zp). With dayEndsAt it says
+   * until when; the screens use it to say so before a log out
+   */
+  clockInAgain: boolean;
+  /**
+   * True on an ended day that the person may clock in again on now (cma.workday_can_clock_in_again,
+   * the rule the clock-in itself checks): the setting is on, the person ended the day themselves,
+   * it is still the same date and within the window, and their time is kept. The Clock in card
+   * shows again only then
+   */
+  canClockInAgain: boolean;
 }
 
 /**
@@ -71,10 +91,15 @@ export interface HoursDay {
   date: DateKey;
   /** Minutes of workday time; one row per calendar day */
   minutes: number;
-  /** Minutes in non-working statuses (break, lunch): the Pauses column (Martin, 7 October 2026) */
+  /**
+   * Minutes in non-working statuses (break, lunch): the Pauses column (Martin, 7 October 2026). The
+   * time between two sessions has no status and is no pause (addition 0008zp)
+   */
   pauseMinutes: number;
   startedAt: Instant | null;
   endedAt: Instant | null;
+  /** Sessions of the day (addition 0008zp); more than one shows a marker */
+  sessions: number;
 }
 
 export interface HoursRange {
@@ -110,6 +135,8 @@ export interface TeamDay {
   isCapped: boolean;
   needsCorrection: boolean;
   hasCorrection: boolean;
+  /** Sessions of the day (addition 0008zp): startedAt is the first one's start, endedAt the last one's end */
+  sessions: number;
 }
 
 /** A person whose time is kept, for Add day and the person filter (cma.team_people) */
@@ -3306,9 +3333,11 @@ export interface CmaData {
   findPrincipal(identity: Identity): Promise<Principal | null>;
   /**
    * Clock in (increment e, 7 October 2026): an action, never a visit. Returns today's workday,
-   * opening it if none exists; an existing day is returned unchanged whether it is open or ended
-   * (an ended day stays ended, resuming is a correction). The database creates a day only for
-   * someone whose time is kept (workday.own): CMA06 otherwise.
+   * opening it if none exists. An ended day the person may clock in again on (canClockInAgain,
+   * addition 0008zp) gets a new session and comes back open; every other existing day is returned
+   * unchanged, open or ended (outside that rule an ended day stays ended and resuming is a
+   * correction). The database creates a day only for someone whose time is kept (workday.own):
+   * CMA06 otherwise.
    */
   startWorkday(me: Principal, now: Instant): Promise<Workday>;
   /** Reading never clocks in: null when there is no day on that date */

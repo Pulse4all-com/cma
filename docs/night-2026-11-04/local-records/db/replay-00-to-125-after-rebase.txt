@@ -1,0 +1,7 @@
+verify 04_verify.sql: psql:04_verify.sql:152: ERROR:  new row violates row-level security policy for table "app_user"
+verify 07_verify_time_model.sql: psql:07_verify_time_model.sql:119: ERROR:  workday 01a1a6b4-6f80-74a1-9817-2672359622fd is already ended; resuming is a correction
+verify 12_verify_team_people.sql: psql:12_verify_team_people.sql:77: ERROR:  this needs app.user_id, the acting user
+verify 91_verify_report_speed.sql: psql:91_verify_report_speed.sql:743: ERROR:  function cma.crm_call_conversation_of(uuid, uuid) does not exist
+verify 93_verify_attempts_per_deal.sql: psql:93_verify_attempts_per_deal.sql:116: ERROR:  function cma.attempts_per_deal_of(uuid, timestamp with time zone, timestamp with time zone, timestamp with time zone) does not exist
+verify 95_verify_attempts_for_sales.sql: psql:95_verify_attempts_for_sales.sql:109: ERROR:  column x.conversation_attempts does not exist
+replayed to 125

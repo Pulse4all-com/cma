@@ -1,0 +1,67 @@
+PASS  eleven overviews in db/122_flash.sql, read from cma.flash_overviews()            got 11
+PASS  the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts got true
+PASS  the keys 1 to 9, 0 and Q in the page's order, each once                          got "1234567890Q"
+PASS  a key opens its overview (case-insensitive), another key none                    got ["customers","reviews","data_quality",null,null]
+PASS  every amount measure is a measure; a headline is a measure; Data quality alone without a source got [true,["data_quality"]]
+PASS  the address keys: the overview, market (K), As of, the period, sort, page, measure, check, the filters' prefix got ["market","asOf","o","f_",500,50000]
+PASS  overviewOf: a key, else null                                                     got ["flow",null,null]
+PASS  sort: the whitelist only, the default first with its own direction; asc or desc otherwise got [{"sort":"lifetime_orders","descending":true},{"sort":"lifetime_orders","descending":false
+PASS  filters: the overview's dims (f_<dim>) and a count measure only; anything else dropped got [{"market":"GB","store":"shop-gb","measure":"active_customers"},{"market":"GB"}]
+PASS  market: a two-letter code or unknown                                             got ["GB","unknown",null,null,null]
+PASS  As of: now, a past business date; today, the future and no date read as now with a problem got [{"asOf":null,"problem":false},{"asOf":null,"problem":false},{"asOf":"2026-10-31","problem
+PASS  isDate: a real calendar date only                                                got [true,false,true,false]
+PASS  the stamp: a snapshot's date, or now as YYYY-MM-DDTHHmm in the tenant's zone across the change of summer time got ["2026-10-31","2026-10-25T0230","2026-10-25T0230","2026-10-25T0130"]
+PASS  file names: overview, market or all, the stamp; the breakdown's ends -breakdown; nothing else enters got ["flash-customers-GB-2026-10-31.csv","flash-orders-all-2026-11-01T0930.csv","flash-orders-
+PASS  change: up, down, flat, none without a figure to compare                         got ["up:2","down:-2","flat:0","none:null","none:null"]
+PASS  arrows: ↑ ↓ →, nothing without a change                                          got ["↑","↓","→",""]
+PASS  the sources feeding each flow: churn the subscription app, orders the stores, payments both, reviews the platforms; stocks none got [{"churn":["subscriptions"],"orders":["commerce"],"payments":["commerce","subscriptions"],
+PASS  (a) open: Today, and This week or This month while running (they end today); complete: Yesterday and a custom range that has ended got [false,false,true,true,false]
+PASS  (b) Yesterday with a source last read before midnight (the tenant's zone) is open; read after it, complete got [false,false,true,false,false]
+PASS  (b) every source feeding it: payments waits for the subscription app too; a source not set up feeds nothing; a stock is always compared got [false,true,true,true,true]
+PASS  an open period (Today, prod's Orders 40 against 261) says so far, en and nl, never a change got ["So far; compared once the period is complete","Tot nu toe; vergeleken zodra de periode c
+PASS  a completed period (Yesterday, every source read after midnight) shows its change, en and nl got ["↑ 11 since Mon 2 November","↑ 11 sinds ma 2 november","→ unchanged since Mon 2 November"
+PASS  Yesterday with a source last read before midnight shows the open-period line (case b), en and nl got ["So far; compared once the period is complete","Tot nu toe; vergeleken zodra de periode c
+PASS  the landing reads it: a live card's open flag from the tenant's today, zone and sources; the live and the stored line through changeLineOf got [true,true,true,true]
+PASS  a definition's status and tone: Decided success, Proposed info (also when the catalog says nothing), Pending warning got ["Decided:success","Proposed:info","Proposed:info","Pending:warning"]
+PASS  every Flash measure has a metric catalog entry whose definition status is the one the page shows got [34,[],[],true]
+PASS  the sources' line: the overview's own first (also when not set up), then the set-up others got [["subscriptions:false","commerce:true","assets:true","crm:true"],["commerce","assets","cr
+PASS  last read: today in the tenant's zone shows the time alone                       got ["11:59","00:30"]
+PASS  last read: an earlier day shows the short weekday and date with the time (en)    got ["Mon 2 Nov 11:59","Tue 3 Nov 22:30"]
+PASS  last read: the user's locale (nl)                                                got "ma 2 nov 11:59"
+PASS  not set up: no figures, never zeros; data quality always shows                   got [false,true,true]
+PASS  amounts per currency, sorted by currency; never one sum; nothing but codes and numbers got [{"currency":"EUR","amount":30},{"currency":"GBP","amount":80}]
+PASS  sorting within currency: currency first, then the amount in the direction asked, none last (as the database sorts) got ["cu-5,cu-1,cu-4,cu-2,cu-3","cu-5,cu-2,cu-4,cu-1,cu-3"]
+PASS  grouping sets: the rows of a set by exactly its keys; the breakdowns are the sets beyond the market got [1,1,1,["market+store+kind","market+sku"],["check","check+market"]]
+PASS  bars and the average rating (sum over count, two decimals; none without reviews) got [0.5,0,0,3,3.5,null]
+PASS  every list's columns are the keys cma.flash_rows answers (the connection's id and the links outside the CRM left out; data quality's links added) got [11,[],["source_id","market","state"]]
+PASS  links outside the CRM never shown: the register's and the review platform's left out; a finding's link for a CRM record only got [false,false,null,"https://crm.example/c/1","https://crm.example/c/2"]
+PASS  where a check is fixed: the lists are cma.data_quality_fix_in's (crm, commerce, assets; the Workspace otherwise) got [[],["assets","commerce","crm"],"assets","cma"]
+PASS  the breakdown file: the set, every dim, each measure, an amount one column per currency (never summed) got [["set","market","store","status","payment_state","subscriptions","active_subscriptions","
+PASS  a file's filters column: market, period and the list's filters as key=value, sorted; all without any got ["market=GB; measure=active_customers","from=2026-10-01; to=2026-10-31; sku=AED-1","all"]
+PASS  db/122's frozen list takes market, status (not a customer's) and its own measure (read from cma.flash_id_rows_of) got [["market","status","measure"],"customer",{"customer":"active_customers","subscription":"a
+PASS  a month end: every breakdown cell of customers, subscriptions and the installed base (32) sends only what the frozen list takes got [true,[]]
+PASS  the mock refuses as the database does: never what the page sends, always a filter the list cannot apply (CMA04) got [[],[]]
+PASS  a list's refusal is the page's not-available state (CMA02, CMA04), any other an error got [true,true,false,false]
+PASS  the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same got [true,true,true,true,true,true]
+PASS  a market filter that is no market code is dropped from the address, as the database would refuse it got [{},{"market":"NL"}]
+PASS  the JSON rows routes write the file route's audit record before they answer: /flash/rows, /data-quality/rows got [true,true,true]
+PASS  the record is checked as cma.flash_file_record checks it: data quality's with tenant.configure; no @, no other key, no date not ended got ["ok","CMA06","CMA04","CMA04","CMA04"]
+PASS  market wins over f_market; an unknown part is a 400; a file names its market, says when it is cut, refuses a source not set up got [true,true,true,true,true,true]
+PASS  Dutch: past-due maintenance items are achterstallig, never te laat (a task's overdue alone is Te laat) got [true,false,"Te laat",false]
+PASS  labels: Financial status, Link level (Koppelniveau), Dag, Assetregister, cyclus and Volgende verlenging; no invoice word in Flash's Dutch got ["Financial status","Link level","Koppelniveau","Dag","Assetregister","Bedrag per cyclus",
+PASS  db/122 leaves a measure out while its setting is empty and refuses its records; the page's conditional measures are those got [{"customers":{"with_required_refs":"commerce.required_contact_refs"}},["customers.with_re
+PASS  a measure a row leaves out reads not applicable (Niet van toepassing) in the totals, the total row and every cell, without a link; present, never got [true,false,false,false,false,3,true,"Not applicable","Niet van toepassing",true]
+PASS  a file leaves a measure that does not apply empty, never 0; the mock leaves it out as the database does, and keeps it when required got [null,false,1]
+PASS  db/122's labels: a stage keyed '<pipeline id>:<stage id>', a pipeline and a queue by the pipeline's id; the labelled dims are dims of their overview got [true,true,true,true,["open_deals","open_tickets"]]
+PASS  a stage's label by its row's pipeline and its own id; the same stage id in another pipeline its own; a pipeline's by its id got ["Quote asked","Intake","Appointment made","Sales","Waiting on us","Service"]
+PASS  a stage is never looked up by its id alone (the key of #214's breakdown), nor without its pipeline got [null,null]
+PASS  a missing label shows the id, on screen and in the file's label column; other dims by their own labels as before got ["qualifiedtobuy","default","qualifiedtobuy","United Kingdom","NL"]
+PASS  the records: <dim>_label beside each id, the id kept; empty where a row has none; other overviews' rows unchanged got [{"record_id":"5100001","pipeline":"default","stage":"1000000001","market":"GB","pipeline_
+PASS  the records file: each label column right after its id's; every other overview's columns unchanged got [["record_id","record_url","pipeline","pipeline_label","stage","stage_label","market"],["q
+PASS  the breakdown file: pipeline_label and stage_label beside the ids; the label per line, the id without one, empty on the totals and market lines got [["set","market","pipeline","pipeline_label","stage","stage_label","open_deals"],[["totals
+PASS  the overview's heading names a filter by its label; the file's filters cell keeps the ids got ["measure=open_deals; pipeline=Sales; stage=Quote asked","pipeline=default; stage=10000000
+PASS  the screen and the files use them: breakdown and records (FlashParts), the heading (page), both file parts, the records read (one statement with the list) got [true,true,true,true,true,true,true]
+PASS  the mock answers as the database: labels beside the ids, a stage by its pipeline, a stage without a label as its id got [true,true,true,true]
+
+ALL 64 PASS
+verify:flash exit 0

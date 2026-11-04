@@ -15,7 +15,8 @@
  *
  * Themes: identity and tenant, ?as= in mock mode (a relative 303 with the cookie), Clock in as an
  * action (a visit opens nothing, the database refuses someone whose time is not kept), own data only,
- * corrections (team routes), an ended day stays ended, status changes from the tenant's own list, the
+ * corrections (team routes), an ended day stays ended or, since addition 0008zp, takes another session
+ * where the tenant lets a person clock in again (the branch that ran is printed), status changes from the tenant's own list, the
  * two export files in the tenant's format, time per status for the Dashboard (the same minutes as Team
  * hours), app links per person, the team now for the Live board (a person's own entry equals the
  * own-day read), the Team screen (migration 0004: who is listed and editable, roles, teams, skills,
@@ -419,18 +420,42 @@ if (cappedPast.length) console.log(`      (counted to the window end ${windowEnd
 if (roundedPast.length) console.log(`      (one minute less from per-stretch seconds: ${roundedPast.join(", ")})`);
 expect("correction leaves no past day open or capped", [openPast.length, allExact, past.length > 0], [0, true, true], [1, false, true]);
 
-// ---- an ended day stays ended --------------------------------------------------------------
+// ---- an ended day stays ended, or takes another session (addition 0008zp) -------------------
 expect("end needs the request header", (await end(SUPERVISOR, {})).status, 400, 200);
 expect("cross-site end is refused",
   (await end(SUPERVISOR, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
 
 const ended = await end(SUPERVISOR);
-const E = ended.body?.data?.endedAt ?? null;
+let E = ended.body?.data?.endedAt ?? null;
 expect("end ends the own day", ended.body?.data?.status, "ended", "working");
 
+// The tenant's setting and window come with the day itself (clockInAgain, dayEndsAt). Where the setting is on
+// and the window still open, Clock in again opens the day with its first start kept, and the verifier ends it
+// again, so every check below runs on an ended day; else an ended day stays ended. Two checks either way, and
+// the branch that ran is printed
 await visit(SUPERVISOR, "/");
-const afterStart = (await start(SUPERVISOR)).body?.data;
-expect("start on an ended day changes nothing", [afterStart?.status, afterStart?.endedAt], ["ended", E], ["working", null]);
+const endedDay = (await get(SUPERVISOR, "/api/v1/me/day")).body?.data ?? null;
+const againOn = endedDay?.clockInAgain === true && Date.now() < Date.parse(endedDay?.dayEndsAt ?? "");
+if (againOn) {
+  console.log(`      (branch: clock in again; workday.clock_in_again on, the window open until ${endedDay.dayEndsAt})`);
+  const reopened = (await start(SUPERVISOR)).body?.data ?? null;
+  expect("clocking in again opens the day, its first start kept",
+    [endedDay.canClockInAgain, reopened?.status, reopened?.startedAt === endedDay.startedAt, reopened?.endedAt ?? null,
+     reopened?.sessions === endedDay.sessions + 1, Date.parse(reopened?.sessionStartedAt ?? "") > Date.parse(E ?? ""), reopened?.canClockInAgain],
+    [true, "working", true, null, true, true, false],
+    [true, "ended", true, E, false, false, false]);
+  const reended = (await end(SUPERVISOR)).body?.data ?? null;
+  expect("the second session ends the day again, later",
+    [reended?.status, reended?.startedAt === endedDay.startedAt, Date.parse(reended?.endedAt ?? "") > Date.parse(E ?? "")],
+    ["ended", true, true], ["working", true, false]);
+  E = reended?.endedAt ?? null;
+} else {
+  console.log(`      (branch: an ended day stays ended; workday.clock_in_again ${endedDay?.clockInAgain ? "on, the window closed at " + endedDay.dayEndsAt : "off"})`);
+  expect("an ended day cannot take another session here", endedDay?.canClockInAgain ?? null, false, true);
+  const afterStart = (await start(SUPERVISOR)).body?.data;
+  expect("start on an ended day changes nothing", [afterStart?.status, afterStart?.endedAt, afterStart?.sessions === endedDay?.sessions],
+    ["ended", E, true], ["working", null, true]);
+}
 
 const again = await end(SUPERVISOR);
 expect("a second end changes nothing", again.body?.data?.endedAt === E, true, false);
@@ -579,6 +604,11 @@ expect("the supervisor reads the team now, never cached",
 const ownDay = (await get(AGENT, "/api/v1/me/day")).body?.data ?? null;
 const agentEntry = teamNow.people.find((p) => p.userId === meA.userId) ?? null;
 expect("the agent's own entry equals the own-day read", agentEntry?.day ?? null, ownDay, { ...ownDay, statusSince: null });
+// The day's sessions (addition 0008zp) are part of both reads, field for field
+const SESSION_FIELDS = ["sessions", "sessionStartedAt", "clockInAgain", "canClockInAgain"];
+expect("both reads carry the day's sessions",
+  SESSION_FIELDS.map((k) => [k in (ownDay ?? {}), (ownDay ?? {})[k] === (agentEntry?.day ?? {})[k]]),
+  SESSION_FIELDS.map(() => [true, true]), SESSION_FIELDS.map(() => [false, true]));
 expect("the entry's status carries the day's status key with its flags",
   [agentEntry?.status?.key ?? null, typeof agentEntry?.status?.isWorking, typeof agentEntry?.status?.isPaid],
   [ownDay?.statusKey ?? null, "boolean", "boolean"], [ownDay?.statusKey ?? null, "boolean", "undefined"]);

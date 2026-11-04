@@ -7,9 +7,12 @@
  *    occurs twice (two instants), on the spring change one hour does not exist (none). Intl only,
  *    no time library.
  * 2. Edited rows to corrections. The editor works like the demo: one row per event, a time and a
- *    status or "clocked out". The earliest row is the start. Saving sends the smallest honest
- *    diff for cma.correct_workday: a changed row replaces its event, a removed row voids it, a
- *    new row adds one. The database validates everything again; these checks only explain.
+ *    status or "clocked out". A day is one or more sessions (addition 0008zp): the earliest row is
+ *    the clock-in, a row directly after a clock-out clocks in again, every other row is a status
+ *    change. Saving sends the smallest honest diff for cma.correct_workday: a changed row replaces
+ *    its event (a row whose kind changed, a status that became a clock-in, is a changed row), a
+ *    removed row voids it, a new row adds one. The database validates everything again; these
+ *    checks only explain.
  */
 import type { CorrectionChange, DateKey, TimeEvent, TimeEventKind } from "./data/types";
 
@@ -108,21 +111,43 @@ export interface EditorRow {
   time: string;
   /** The chosen offset; only decides anything when the time occurs twice */
   offset: string | null;
+  /**
+   * The kind of the event this row shows, as stored (start, status or end); absent for a new row. A
+   * row whose derived kind differs from it replaces its event
+   */
+  eventKind?: Exclude<TimeEventKind, "void">;
+  /**
+   * The instant this row's event is stored at, to the second; absent for a new row. While the row keeps
+   * its time, it is ordered and sent by this instant, so seconds the minute field cannot show are kept
+   */
+  eventAt?: string;
 }
 
-/** The editor's starting rows: the day's effective events, in order */
+/** The editor's starting rows: the day's effective events, in the database's order */
 export function rowsFromEvents(events: TimeEvent[], timeZone: string): EditorRow[] {
   return events
     .filter((e) => e.isEffective && e.kind !== "void")
-    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || Date.parse(a.recordedAt) - Date.parse(b.recordedAt) || a.id.localeCompare(b.id))
     .map((e) => {
       const p = localParts(e.at, timeZone);
-      return { id: e.id, eventId: e.id, end: e.kind === "end", statusKey: e.kind === "end" ? null : e.statusKey, time: p.time, offset: p.offset };
+      return {
+        id: e.id, eventId: e.id, end: e.kind === "end", statusKey: e.kind === "end" ? null : e.statusKey, time: p.time, offset: p.offset,
+        eventKind: e.kind as Exclude<TimeEventKind, "void">, eventAt: e.at,
+      };
     });
 }
 
-export type RowProblem = "time" | "gap" | "ambiguous" | "future" | "status" | "inactive";
-export type DayProblem = "empty" | "firstIsEnd" | "twoEnds" | "endNotLast" | "noChange";
+/**
+ * The kind of each row in time order (addition 0008zp): the earliest row is the clock-in (start), a
+ * row directly after a clock-out clocks in again (start), every other row is a status change, and a
+ * clock-out is an end
+ */
+export function deriveKinds<T extends { end: boolean }>(rows: readonly T[]): Exclude<TimeEventKind, "void">[] {
+  return rows.map((r, i) => (r.end ? "end" : i === 0 || rows[i - 1]!.end ? "start" : "status"));
+}
+
+export type RowProblem = "time" | "gap" | "ambiguous" | "future" | "status" | "inactive" | "atEnd";
+export type DayProblem = "empty" | "firstIsEnd" | "endAfterEnd" | "noChange";
 
 export interface ResolvedRow extends EditorRow {
   kind: Exclude<TimeEventKind, "void">;
@@ -156,6 +181,8 @@ export function check(
   const rowProblems: Record<string, RowProblem> = {};
   const ambiguous: Record<string, LocalInstant[]> = {};
   const resolved: Omit<ResolvedRow, "kind">[] = [];
+  const before = byEvent(original);
+  const originals = originalKinds(original);
 
   for (const r of edited) {
     if (!TIME_RE.test(r.time)) { rowProblems[r.id] = "time"; continue; }
@@ -170,31 +197,48 @@ export function check(
     }
     if (pick.ms > nowMs) { rowProblems[r.id] = "future"; continue; }
     if (!r.end && !r.statusKey) { rowProblems[r.id] = "status"; continue; }
-    resolved.push({ ...r, at: pick.at, ms: pick.ms });
+    // A row that keeps its event's time is taken at the stored instant, seconds included
+    const b = r.eventId ? before.get(r.eventId) : undefined;
+    const keepsTime = !!(b && r.eventAt && b.time === r.time && b.offset === r.offset);
+    resolved.push({ ...r, at: keepsTime ? r.eventAt! : pick.at, ms: keepsTime ? Date.parse(r.eventAt!) : pick.ms });
   }
 
-  // The earliest row is the start; a stable order keeps equal times as entered
-  const sorted = resolved
-    .map((r, i) => ({ r, i }))
-    .sort((a, b) => a.r.ms - b.r.ms || a.i - b.i)
-    .map(({ r }, i): ResolvedRow => ({ ...r, kind: r.end ? "end" : i === 0 ? "start" : "status" }));
+  // The database's order: by instant; at one instant the events already stored come first, in their
+  // stored order, and then what this edit writes (it is recorded later), a clock-out after the other rows
+  // (a status there belongs to the session it ends). The kinds follow from that order
+  const startIndex = new Map(original.map((r, i) => [r.eventId ?? r.id, i]));
+  const untouched = (r: Omit<ResolvedRow, "kind">) => {
+    const b = r.eventId ? before.get(r.eventId) : undefined;
+    return !!b && b.time === r.time && b.offset === r.offset && b.end === r.end && (r.end || b.statusKey === r.statusKey);
+  };
+  const ordered = resolved
+    .map((r, i) => ({ r, i, kept: untouched(r) }))
+    .sort((a, b) => a.r.ms - b.r.ms || Number(!a.kept) - Number(!b.kept)
+      || (a.kept && b.kept ? startIndex.get(a.r.eventId!)! - startIndex.get(b.r.eventId!)! : Number(a.r.end) - Number(b.r.end))
+      || a.i - b.i)
+    .map(({ r }) => r);
+  const kinds = deriveKinds(ordered);
+  const sorted = ordered.map((r, i): ResolvedRow => ({ ...r, kind: kinds[i]! }));
 
   if (activeKeys) {
-    const before = byEvent(original);
-    const kinds = originalKinds(original);
     for (const r of sorted) {
       if (r.end || !r.statusKey || activeKeys.has(r.statusKey)) continue;
-      if (!unchanged(before, kinds, r)) rowProblems[r.id] = "inactive";
+      if (!unchanged(before, originals, r)) rowProblems[r.id] = "inactive";
     }
+  }
+  // A new or changed status or clock-in at the instant of a clock-out: the database takes events of one
+  // instant in the order they were written, so it would land after the clock-out (a status there is
+  // refused, a clock-in again must come later); the person chooses another minute
+  const endMs = new Set(sorted.filter((r) => r.end).map((r) => r.ms));
+  for (const r of sorted) {
+    if (!r.end && endMs.has(r.ms) && !unchanged(before, originals, r) && !rowProblems[r.id]) rowProblems[r.id] = "atEnd";
   }
 
   const dayProblems: DayProblem[] = [];
   if (edited.length === 0) dayProblems.push("empty");
-  const ends = sorted.filter((r) => r.kind === "end");
   // One message per mistake: a day that begins with its clock-out says only that
   if (sorted[0]?.end) dayProblems.push("firstIsEnd");
-  else if (ends.length > 1) dayProblems.push("twoEnds");
-  else if (ends.length === 1 && sorted[sorted.length - 1] !== ends[0]) dayProblems.push("endNotLast");
+  else if (sorted.some((r, i) => r.end && sorted[i - 1]?.end)) dayProblems.push("endAfterEnd");
 
   let changes: CorrectionChange[] = [];
   if (Object.keys(rowProblems).length === 0 && dayProblems.length === 0) {
@@ -204,10 +248,11 @@ export function check(
   return { rows: sorted, rowProblems, dayProblems, changes, ambiguous };
 }
 
-/** Original kind of a starting row: the first is the start */
+/** The kind of each starting row's event: as stored when the row carries it, else derived from the starting order */
 function originalKinds(original: EditorRow[]): Map<string, TimeEventKind> {
   const m = new Map<string, TimeEventKind>();
-  original.forEach((r, i) => { if (r.eventId) m.set(r.eventId, r.end ? "end" : i === 0 ? "start" : "status"); });
+  const derived = deriveKinds(original);
+  original.forEach((r, i) => { if (r.eventId) m.set(r.eventId, r.eventKind ?? derived[i]!); });
   return m;
 }
 
@@ -229,8 +274,9 @@ function unchanged(before: Map<string, EditorRow>, kinds: Map<string, TimeEventK
 }
 
 /**
- * The smallest set of changes from `original` to `rows`. The start goes first, so Add day (no
- * starting rows) always begins with its start, as the database requires.
+ * The smallest set of changes from `original` to `rows`. The day's first clock-in goes first, so Add
+ * day (no starting rows) always begins with its start, as the database requires; then the voids, then
+ * the rest in time order (a later session's clock-in among them).
  */
 export function diff(original: EditorRow[], rows: ResolvedRow[]): CorrectionChange[] {
   const before = byEvent(original);
@@ -238,18 +284,20 @@ export function diff(original: EditorRow[], rows: ResolvedRow[]): CorrectionChan
   const kept = new Set<string>();
   const out: CorrectionChange[] = [];
 
-  for (const r of rows) {
-    const change: CorrectionChange = { kind: r.kind, at: r.at, ...(r.kind === "end" ? {} : { statusKey: r.statusKey ?? undefined }) };
+  let first: CorrectionChange | undefined;
+  for (const [i, r] of rows.entries()) {
+    let change: CorrectionChange | undefined = { kind: r.kind, at: r.at, ...(r.kind === "end" ? {} : { statusKey: r.statusKey ?? undefined }) };
     if (r.eventId && before.has(r.eventId)) {
       kept.add(r.eventId);
-      if (!unchanged(before, kinds, r)) out.push({ ...change, supersedes: r.eventId });
-    } else {
-      out.push(change);
+      change = unchanged(before, kinds, r) ? undefined : { ...change, supersedes: r.eventId };
     }
+    if (!change) continue;
+    if (i === 0 && r.kind === "start") first = change;
+    out.push(change);
   }
   for (const id of before.keys()) if (!kept.has(id)) out.push({ kind: "void", supersedes: id });
 
-  // Start first, then voids, then the rest in time order (rows are already in time order)
-  const rank = (c: CorrectionChange) => (c.kind === "start" ? 0 : c.kind === "void" ? 1 : 2);
+  // The first clock-in first, then voids, then the rest in time order (rows are already in time order)
+  const rank = (c: CorrectionChange) => (c === first ? 0 : c.kind === "void" ? 1 : 2);
   return out.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map(({ c }) => c);
 }

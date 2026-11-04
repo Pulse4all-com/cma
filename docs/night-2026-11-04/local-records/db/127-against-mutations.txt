@@ -1,0 +1,11 @@
+Mutations of db/126_workday_sessions.sql, each applied to a copy of the local database at 0008zn, then 127 run on it
+setting-not-read:  verdict | FAIL | 29 PASS, 2 FAIL | first: FAIL A1: with the setting off a Clock in on an ended day gave open (2 starts)
+any-end-source:  verdict | FAIL | 26 PASS, 5 FAIL | first: FAIL A6 (A5): workday_can_clock_in_again said true for the scheduler's end (day ended)
+no-window-end:  verdict | FAIL | 29 PASS, 2 FAIL | first: FAIL A6 (A4): workday_can_clock_in_again said true at 22:00 (the window end)
+end-instant-allowed:  verdict | FAIL | 29 PASS, 2 FAIL | first: FAIL A6 (A4): workday_can_clock_in_again said true at 13:00 (the end's own instant)
+time-kept-not-read:  verdict | FAIL | 26 PASS, 5 FAIL | first: FAIL A6 (A5): workday_can_clock_in_again said true for time no longer kept (day ended)
+status-after-end-allowed:  verdict | FAIL | 25 PASS, 6 FAIL | first: FAIL A7: a status at 15:00 was refused with [workday 01a1a2cb-ed07-76c5-ac23-424b757f1123 has a clock-in while
+start-at-end-allowed:  verdict | FAIL | 27 PASS, 4 FAIL | first: FAIL A7: a start at 13:00 was refused with [workday 01a1a2cb-f29a-76fb-97f0-c37b467185ee has a clock-in while 
+two-ends-allowed:  verdict | FAIL | 27 PASS, 4 FAIL | first: FAIL A7: a end at 14:00 was accepted
+date-check-dropped:  verdict | PASS | 31 PASS, 0 FAIL | first: 
+date-check-dropped is not caught by design: the window lies within the business date (00:00 to 24:00 at most), so an instant within the day's window is on its date; the check stays as the brief names it

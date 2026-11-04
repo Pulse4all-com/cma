@@ -117,6 +117,16 @@ expect("since counts whole seconds from the instant", secondsSince(T1, nowMs), 1
 expect("since is never negative", secondsSince("2026-10-07T10:00:00.000Z", nowMs), 0, -3570);
 expect("worked adds the running stretch to the closed ones", workedSeconds({ closedSeconds: 600, runningSince: T1 }, nowMs), 2430, 600);
 expect("worked stands still while paused or ended", workedSeconds({ closedSeconds: 9000, runningSince: null }, nowMs), 9000, 9030);
+
+// A split shift (addition 0008zp): in the gap between two sessions the person is clocked out and the clock
+// stands still; back for the second session they are in their status again, and worked time is the closed
+// first session plus the running stretch, the gap counting nothing
+const inGap = person("p8", "Eli", "Partner", { ...day("lunch", T1, { closedSeconds: 7200, runningSince: null }, true), sessions: 1, canClockInAgain: true }, null);
+const backAgain = person("p9", "Fay", "Partner", { ...day("lunch", T1, { closedSeconds: 7200, runningSince: T1 }), sessions: 2, sessionStartedAt: T1 }, S.work);
+expect("in the gap between two sessions a person is clocked out", liveGroupOf(inGap), "clockedOut", "productive");
+expect("back for a second session a person is in their status", liveGroupOf(backAgain), "productive", "clockedOut");
+expect("the gap is not worked: the first session plus the running stretch",
+  workedSeconds(backAgain.day.clock, nowMs), 7200 + Math.floor((nowMs - Date.parse(T1)) / 1000), 7200 + Math.floor((nowMs - Date.parse(T0)) / 1000));
 // The workday window (addition 0008b): the running stretch stops at the day's end, as the database counts
 expect("worked stops at the day's end", workedSeconds({ closedSeconds: 600, runningSince: T1 }, nowMs, "2026-10-07T08:45:00.000Z"), 1500, 2430);
 expect("a stretch begun after the day's end counts nothing",

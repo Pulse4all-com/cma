@@ -1,0 +1,24 @@
+# git, after the rebase (4 November 2026)
+
+## merge base with origin/main
+ca16bba2a934ae35e0348d8f2173c5756d87bb27
+ca16bba Flash: "Last read" shows the date when the read is not on the tenant's today (#219)
+
+## the branch's commits on it
+967c3a3 N04: night defaults and build choices confirmed (Martin, 4 Nov 2026); pre-check of stored days recorded; runbook after the rebase on main
+e5292a1 N04: final records (build, typecheck, lint, browser verifiers compared with main)
+f77b084 N04: second-round review items (Add row at equal minutes, two pinned editor cases)
+cdd54cd N04: night notes, morning runbook and local records
+c14dc87 N04: metric catalog for sessions (generated METRICS.md and the web copy)
+487ff96 N04: docs (Decision log, Time terms, features, api, data model 0008zp, open decisions, data map, changelog)
+7ea5d2e N04: morning runbook draft
+a07d9ee N04: fixes from review (editor orders by stored instant, null-safe verify checks, all-tenant corrections named)
+18991b5 N04: night notes draft
+3a555c5 N04 work in progress: split shifts, clock in again (addition 0008zp)
+
+## files under cloudbuild.yaml, ingest/, hubspot/ or records/ in git diff origin/main --stat
+ records/0008zp-precheck-2026-11-04/README.md | 52 ++++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+## git diff origin/main --stat (summary, before the after-rebase records were committed)
+ 109 files changed, 6712 insertions(+), 319 deletions(-)

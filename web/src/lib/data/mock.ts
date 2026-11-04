@@ -1390,6 +1390,8 @@ const MOCK_SETTINGS: TenantSetting[] = [
   // lead cohorts (addition 0008zm): the ages and the days lead to order counts, at their catalog defaults
   { key: "cohorts.lead_ages_days", value: "1,7,30,60,90", isDefault: true },
   { key: "lead_to_order.max_days", value: "90", isDefault: true },
+  // split shifts (addition 0008zp): on, as Pulse4all Subscriptions has it (seed 02); the catalog default is off
+  { key: "workday.clock_in_again", value: "true", isDefault: false },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1428,6 +1430,11 @@ type MockState = {
   invitations?: MockInvitation[];
   /** Identities that accepted an invitation, as `${provider}:${subject}`, with the person they became */
   invitees?: Map<string, Principal>;
+  /**
+   * Seconds in non-working statuses of an own day's closed stretches (the Pauses column), per own day.
+   * The time between two sessions is no stretch, so it never lands here (addition 0008zp)
+   */
+  ownPauses?: Map<Key, number>;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
 const state: MockState = (g.__cmaMock ??= {
@@ -1479,6 +1486,41 @@ function closeStretch(w: Workday, now: Instant): Workday["clock"] {
   return { closedSeconds: workedSeconds(w, now), runningSince: null };
 }
 
+/**
+ * cma.workday_can_clock_in_again in the mock (addition 0008zp): the tenant's setting on, a day whose
+ * last end is the person's own, strictly after that end, still the day's date in its zone and within
+ * the window. The caller checks that the day is ended and the person's time kept.
+ */
+function againAllowed(date: DateKey, timeZone: string, endAt: Instant, endSource: TimeEvent["source"], nowMs: number): boolean {
+  return mockSetting("workday.clock_in_again") === "true" && endSource === "user" && nowMs > Date.parse(endAt)
+    && dateKeyInZone(new Date(nowMs), timeZone) === date
+    && nowMs >= localMs(date, MOCK_WINDOW.start, timeZone) && nowMs < dayEndMs(date, timeZone);
+}
+
+/** An own day as the screens get it: the setting and the rule read now, as the database's day read does */
+function ownDay(me: Principal, w: Workday, now: Instant = new Date().toISOString()): Workday {
+  return {
+    ...w,
+    clockInAgain: mockSetting("workday.clock_in_again") === "true",
+    // An own day in the mock ends only by the person's own Log out or End workday
+    canClockInAgain: w.status === "ended" && !!w.endedAt && me.permissions.includes("workday.own")
+      && againAllowed(w.date, me.timeZone, w.endedAt, "user", Date.parse(now)),
+  };
+}
+
+/** The paused seconds of an own day so far: its closed pauses plus a pause still running */
+function pauseSecondsOf(k: Key, w: Workday, now: Instant): number {
+  const running = w.status === "working" && w.clock.runningSince === null && w.statusSince
+    ? secondsBetween(w.statusSince, new Date(Math.min(Date.parse(now), Date.parse(w.dayEndsAt))).toISOString()) : 0;
+  return (state.ownPauses?.get(k) ?? 0) + running;
+}
+
+/** Closes a running pause of an own day into its closed pauses (a status change, an end) */
+function closePause(k: Key, w: Workday, now: Instant): void {
+  const pauses = (state.ownPauses ??= new Map());
+  pauses.set(k, pauseSecondsOf(k, w, now));
+}
+
 /** A fortnight of fictional history so the hours screen has something to show */
 function seedHistory(me: Principal, today: DateKey) {
   const base = new Date(`${today}T00:00:00Z`);
@@ -1505,6 +1547,10 @@ function seedHistory(me: Principal, today: DateKey) {
       statusSince: null,
       clock: { closedSeconds: (endMin - startMin) * 60, runningSince: null },
       dayEndsAt: new Date(dayEndMs(date, me.timeZone)).toISOString(),
+      sessions: 1,
+      sessionStartedAt: at(startMin),
+      clockInAgain: false,
+      canClockInAgain: false,
     });
   }
 }
@@ -1556,9 +1602,54 @@ function mockEvent(
 
 /** Effective events in time order: not a void, not replaced by a later correction */
 function effective(events: MockEvent[]): MockEvent[] {
+  // The database's order (occurred_at, recorded_at): two events at one instant in the order they were written
   return events
     .filter((e) => e.kind !== "void" && !events.some((x) => x.supersedes === e.id))
-    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || Date.parse(a.recordedAt) - Date.parse(b.recordedAt));
+}
+
+/** One stretch of a day, as cma.time_interval derives it */
+type MockStretch = { e: MockEvent; to: number | null; seconds: number; isCapped: boolean };
+
+/**
+ * The stretches of a day (0002, 0008b, 0008zp): from each effective start or status event to the next
+ * effective event of the day, whatever its kind, so the time between a clock-out and the next clock-in
+ * is no stretch; an open one runs to now; every one stops at the window end.
+ */
+function stretchesOf(date: DateKey, timeZone: string, events: MockEvent[]): MockStretch[] {
+  const live = effective(events);
+  const dayEnd = dayEndMs(date, timeZone);
+  const out: MockStretch[] = [];
+  live.forEach((e, i) => {
+    if (e.kind !== "start" && e.kind !== "status") return;
+    const next = live[i + 1] ? Date.parse(live[i + 1]!.at) : null;
+    const until = Math.min(next ?? Date.now(), dayEnd);
+    out.push({ e, to: next, seconds: Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000)), isCapped: next === null && Date.now() > dayEnd });
+  });
+  return out;
+}
+
+/**
+ * The day's shape as cma.refresh_workday checks it (addition 0008zp): start, statuses, end, start, ...
+ * A later start directly after an end and strictly after it; no status between an end and the next
+ * start; never two ends in a row. null when the day is valid, else the rule it breaks.
+ */
+function shapeProblem(live: MockEvent[]): string | null {
+  let prev: MockEvent | null = null;
+  for (const e of live) {
+    if (!prev) {
+      if (e.kind !== "start") return "a status or end before the start";
+    } else if (e.kind === "start") {
+      if (prev.kind !== "end") return "a clock-in while a session is open";
+      if (Date.parse(e.at) <= Date.parse(prev.at)) return "a clock-in again at or before the clock-out before it";
+    } else if (e.kind === "status") {
+      if (prev.kind === "end") return "a status change between a clock-out and the next clock-in";
+    } else if (prev.kind === "end") {
+      return "two clock-outs without a clock-in between them";
+    }
+    prev = e;
+  }
+  return prev ? null : "no start";
 }
 
 function withEffective(events: MockEvent[]): MockEvent[] {
@@ -1572,21 +1663,19 @@ function withEffective(events: MockEvent[]): MockEvent[] {
 function teamDay(p: TeamPerson, date: DateKey, events: MockEvent[]): TeamDay {
   const live = effective(events);
   const start = live.find((e) => e.kind === "start")!;
-  const end = live.find((e) => e.kind === "end") ?? null;
+  // The day ends with its last session: ended when the last effective event is an end (0008zp)
+  const last = live[live.length - 1];
+  const end = last?.kind === "end" ? last : null;
   // Every stretch stops at the window end; an open day past it is capped (0008b)
-  const dayEnd = dayEndMs(date, p.timeZone);
-  const isCapped = !end && Date.now() > dayEnd;
-  const stop = end ? Date.parse(end.at) : Math.min(Date.now(), dayEnd);
+  const parts = stretchesOf(date, p.timeZone, events);
+  const isCapped = parts.some((x) => x.isCapped);
   let working = 0;
   let paid = 0;
-  const marks = live.filter((e) => e.kind !== "end");
-  marks.forEach((e, i) => {
-    const until = Math.min(stop, dayEnd, i + 1 < marks.length ? Date.parse(marks[i + 1]!.at) : stop);
-    const seconds = Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000));
-    const s = MOCK_STATUSES.find((x) => x.key === e.statusKey);
-    if (s?.isWorking) working += seconds;
-    if (e.statusKey && MOCK_PAID.has(e.statusKey)) paid += seconds;
-  });
+  for (const x of parts) {
+    const s = MOCK_STATUSES.find((m) => m.key === x.e.statusKey);
+    if (s?.isWorking) working += x.seconds;
+    if (x.e.statusKey && MOCK_PAID.has(x.e.statusKey)) paid += x.seconds;
+  }
   return {
     userId: p.userId,
     displayName: p.displayName,
@@ -1600,8 +1689,9 @@ function teamDay(p: TeamPerson, date: DateKey, events: MockEvent[]): TeamDay {
     paidMinutes: Math.floor(paid / 60),
     isCapped,
     // A day the system closed stays on the review list until a correction replaces its end (0005a)
-    needsCorrection: isCapped || end?.source === "system",
+    needsCorrection: isCapped || live.some((e) => e.kind === "end" && e.source === "system"),
     hasCorrection: events.some((e) => e.source === "correction"),
+    sessions: live.filter((e) => e.kind === "start").length,
   };
 }
 
@@ -1613,15 +1703,8 @@ function readTeamDay(userId: string, date: DateKey): TeamDayDetail {
 
 /** One day's status stretches, the way cma.time_interval derives them (billable = paid in the fixture) */
 function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusChangeRow[] {
-  const live = effective(events);
-  const end = live.find((e) => e.kind === "end") ?? null;
-  const dayEnd = dayEndMs(date, p.timeZone);
-  const capped = !end && Date.now() > dayEnd;
-  const stop = end ? Date.parse(end.at) : Math.min(Date.now(), dayEnd);
-  const marks = live.filter((e) => e.kind !== "end");
-  return marks.map((e, i) => {
-    const next = marks[i + 1] ? Date.parse(marks[i + 1]!.at) : end ? Date.parse(end.at) : null;
-    const until = Math.min(stop, dayEnd, next ?? stop);
+  // One row per stretch: the time between two sessions is none (0008zp)
+  return stretchesOf(date, p.timeZone, events).map(({ e, to: next, seconds, isCapped }) => {
     const status = MOCK_STATUSES.find((x) => x.key === e.statusKey);
     const paid = !!e.statusKey && MOCK_PAID.has(e.statusKey);
     return {
@@ -1639,8 +1722,8 @@ function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusCh
       from: e.at,
       to: next === null ? null : new Date(next).toISOString(),
       isOpen: next === null,
-      isCapped: next === null && capped,
-      seconds: Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000)),
+      isCapped,
+      seconds,
       source: e.source,
     };
   });
@@ -1696,7 +1779,11 @@ function seedTeam() {
       if ((weekday + n) % 3 === 0) plan.push(["status", at("15:30"), "meeting"], ["status", at("16:15"), "available"]);
       if (n === 2 && weekday % 4 === 1) plan.push(["status", at("09:30"), "training"], ["status", at("10:30"), "available"]);
       const forgot = n === 3 && weekday === 2;  // Lucas: forgot to clock out
-      if (!forgot) plan.push(["end", at("17:30", j), null]);
+      // Ana: a split shift (0008zp), out at 13:00 and in again from 17:00 to 21:00; the gap counts nothing
+      const split = n === 0 && weekday === 2;
+      if (split) {
+        plan.splice(3, plan.length - 3, ["end", at("13:00"), null], ["start", at("17:00"), "available"], ["end", at("21:00"), null]);
+      } else if (!forgot) plan.push(["end", at("17:30", j), null]);
       plan.sort((a, b) => Date.parse(a[1]) - Date.parse(b[1]));
       const events = plan.filter(([, t]) => Date.parse(t) <= now).map(([k, t, s]) => mockEvent(k, t, s, "user"));
       if (events.length === 0) continue;
@@ -1898,6 +1985,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "attempts.max_bucket": "5", "attempts.since_last_buckets_business_days": "1,2,5", "attempts.source": "telephony",
   "calls.conversation_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
   "cohorts.lead_ages_days": "1,7,30,60,90", "lead_to_order.max_days": "90",
+  "workday.clock_in_again": "false",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -2766,7 +2854,26 @@ export const mockData: CmaData = {
     const date = dateKeyInZone(now, me.timeZone);
     const k = key(me, date);
     const existing = store.get(k);
-    if (existing) return existing;
+    if (existing) {
+      // Clock in again (0008zp): the rule of cma.workday_can_clock_in_again, then a new session in the
+      // default status; startedAt stays the first session's start. Any other day comes back unchanged
+      if (ownDay(me, existing, now).canClockInAgain) {
+        const again: Workday = {
+          ...existing,
+          status: "working",
+          endedAt: null,
+          statusKey: DEFAULT_STATUS.key,
+          statusName: DEFAULT_STATUS.name,
+          statusSince: now,
+          clock: { closedSeconds: existing.clock.closedSeconds, runningSince: DEFAULT_STATUS.isWorking ? now : null },
+          sessions: existing.sessions + 1,
+          sessionStartedAt: now,
+        };
+        store.set(k, again);
+        return ownDay(me, again, now);
+      }
+      return ownDay(me, existing, now);
+    }
     // Same contract as cma.open_workday after 0003d and 0008b: nothing exists yet, so only a person
     // whose time is kept gets a day, and not before the window starts
     assertTimeKept(me);
@@ -2784,15 +2891,20 @@ export const mockData: CmaData = {
       statusSince: now,
       clock: { closedSeconds: 0, runningSince: DEFAULT_STATUS.isWorking ? now : null },
       dayEndsAt: new Date(dayEndMs(date, me.timeZone)).toISOString(),
+      sessions: 1,
+      sessionStartedAt: now,
+      clockInAgain: false,
+      canClockInAgain: false,
     };
     store.set(k, fresh);
-    return fresh;
+    return ownDay(me, fresh, now);
   },
 
   async getWorkday(me, date) {
     // The fictional history exists for anyone whose time is kept, whether or not they clocked in yet
     if (me.permissions.includes("workday.own")) seedHistory(me, dateKeyInZone(new Date(), me.timeZone));
-    return store.get(key(me, date)) ?? null;
+    const w = store.get(key(me, date));
+    return w ? ownDay(me, w) : null;
   },
 
   async endWorkday(me, now) {
@@ -2800,7 +2912,8 @@ export const mockData: CmaData = {
     const current = store.get(key(me, date));
     // Same contract as the Postgres implementation: no day today is CMA02 (not found)
     if (!current) throw new CmaDbError("CMA02", "no workday today");
-    if (current.status === "ended") return current;
+    if (current.status === "ended") return ownDay(me, current, now);
+    closePause(key(me, date), current, now);
     const ended: Workday = {
       ...current,
       status: "ended",
@@ -2811,7 +2924,7 @@ export const mockData: CmaData = {
       clock: closeStretch(current, now),
     };
     store.set(key(me, date), ended);
-    return ended;
+    return ownDay(me, ended, now);
   },
 
   async listStatuses() {
@@ -2826,6 +2939,7 @@ export const mockData: CmaData = {
     if (current.status === "ended") throw new CmaDbError("CMA03", "workday already ended");
     const next = MOCK_STATUSES.find((s) => s.key === statusKey);
     if (!next) throw new CmaDbError("CMA02", "unknown work status");
+    closePause(key(me, date), current, now);
     const closed = closeStretch(current, now);
     const updated: Workday = {
       ...current,
@@ -2835,7 +2949,7 @@ export const mockData: CmaData = {
       clock: { closedSeconds: closed.closedSeconds, runningSince: next.isWorking ? now : null },
     };
     store.set(key(me, date), updated);
-    return updated;
+    return ownDay(me, updated, now);
   },
 
   async getHours(me, range) {
@@ -2845,16 +2959,17 @@ export const mockData: CmaData = {
     const now = new Date().toISOString();
     const days = [...store.entries()]
       .filter(([k]) => k.startsWith(mine))
-      .map(([, w]) => w)
-      .filter((w) => w.date >= range.from && w.date <= range.to)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map((w) => ({
+      .filter(([, w]) => w.date >= range.from && w.date <= range.to)
+      .sort(([, a], [, b]) => a.date.localeCompare(b.date))
+      .map(([k, w]) => ({
         date: w.date,
         startedAt: w.startedAt,
         endedAt: w.endedAt,
         minutes: Math.floor(workedSeconds(w, now) / 60),
-        // Everything between clock in and clock out that was not working time
-        pauseMinutes: Math.max(0, Math.floor(secondsBetween(w.startedAt, w.endedAt ?? now) / 60) - Math.floor(workedSeconds(w, now) / 60)),
+        // The stretches in non-working statuses, as the database sums them: the time between two
+        // sessions has no status and is no pause (0008zp)
+        pauseMinutes: Math.floor(pauseSecondsOf(k as Key, w, now) / 60),
+        sessions: w.sessions,
       }));
     const summary: HoursSummary = {
       ...range,
@@ -2926,15 +3041,9 @@ export const mockData: CmaData = {
       }));
     });
 
-    const live = effective(events);
-    const starts = live.filter((e) => e.kind === "start");
-    const ends = live.filter((e) => e.kind === "end");
-    const startMs = starts[0] ? Date.parse(starts[0].at) : 0;
-    const lastLive = Math.max(...live.filter((e) => e.kind !== "end").map((e) => Date.parse(e.at)));
-    if (starts.length !== 1 || ends.length > 1 || live.some((e) => Date.parse(e.at) < startMs)
-        || (ends[0] && Date.parse(ends[0].at) < lastLive)) {
-      throw new CmaDbError("CMA04", "the day must have one start, at most one end, nothing before the start or after the end");
-    }
+    // The day's shape, as cma.refresh_workday checks it: one or more sessions (0008zp)
+    const problem = shapeProblem(effective(events));
+    if (problem) throw new CmaDbError("CMA04", `the day has ${problem}`);
     days.set(date, events);
     return readTeamDay(userId, date);
   },
@@ -3040,19 +3149,20 @@ export const mockData: CmaData = {
         return { userId: p.userId, displayName: p.displayName, organisationKey: p.organisationName.toLowerCase(),
           organisationName: p.organisationName, timeZone: p.timeZone, date, day: null, status: null };
       }
-      const end = live.find((e) => e.kind === "end") ?? null;
-      const marks = live.filter((e) => e.kind !== "end");
-      const last = marks[marks.length - 1]!;
+      // The day ends with its last session: ended when the last effective event is an end (0008zp)
+      const lastEvent = live[live.length - 1]!;
+      const end = lastEvent.kind === "end" ? lastEvent : null;
+      const parts = stretchesOf(date, p.timeZone, events);
+      const last = parts[parts.length - 1]!.e;
       const current = MOCK_STATUSES.find((x) => x.key === last.statusKey) ?? null;
-      // Closed stretches in working statuses, each stopping at the window end; the last stretch is
-      // open while the day is
+      // Closed stretches in working statuses (a capped one counts as closed), each stopping at the window
+      // end; the last stretch runs while the day is open; the time between two sessions is no stretch
       const dayEnd = dayEndMs(date, p.timeZone);
-      let closed = 0;
-      marks.forEach((e, i) => {
-        const s = MOCK_STATUSES.find((x) => x.key === e.statusKey);
-        const until = i + 1 < marks.length ? Date.parse(marks[i + 1]!.at) : end ? Date.parse(end.at) : null;
-        if (s?.isWorking && until !== null) closed += Math.max(0, Math.floor((Math.min(until, dayEnd) - Date.parse(e.at)) / 1000));
-      });
+      const running = parts.find((x) => x.to === null && !x.isCapped) ?? null;
+      const closed = parts
+        .filter((x) => x !== running && MOCK_STATUSES.find((m) => m.key === x.e.statusKey)?.isWorking)
+        .reduce((n, x) => n + x.seconds, 0);
+      const starts = live.filter((e) => e.kind === "start");
       const day: Workday = {
         date,
         status: end ? "ended" : "working",
@@ -3060,9 +3170,13 @@ export const mockData: CmaData = {
         endedAt: end?.at ?? null,
         statusKey: end ? null : last.statusKey,
         statusName: end ? null : current?.name ?? last.statusKey,
-        statusSince: end ? null : last.at,
-        clock: { closedSeconds: closed, runningSince: !end && current?.isWorking ? last.at : null },
+        statusSince: end ? null : running?.e.at ?? null,
+        clock: { closedSeconds: closed, runningSince: running && current?.isWorking ? running.e.at : null },
         dayEndsAt: new Date(dayEnd).toISOString(),
+        sessions: starts.length,
+        sessionStartedAt: starts[starts.length - 1]!.at,
+        clockInAgain: mockSetting("workday.clock_in_again") === "true",
+        canClockInAgain: !!end && againAllowed(date, p.timeZone, end.at, end.source, Date.now()),
       };
       const status = !end && current
         ? { key: current.key, name: current.name, isActive: true, isWorking: current.isWorking,

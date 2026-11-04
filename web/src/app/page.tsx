@@ -112,7 +112,10 @@ export default async function WelcomePage() {
   );
 }
 
-/** The person's own day: Clock in when there is none, the open day's state, or the ended day */
+/**
+ * The person's own day: Clock in when there is none, the open day's state, or the ended day, with the
+ * Clock in card again below it while the person may clock in again today (addition 0008zp)
+ */
 function DayBlock({
   workday, statuses, timeZone, locale, now, copy,
 }: {
@@ -129,7 +132,7 @@ function DayBlock({
     return <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={copy} />;
   }
   if (workday.status === "ended") {
-    return (
+    const ended = (
       <Card>
         <Badge tone="neutral">{t.dayEnded}</Badge>
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-small">
@@ -139,6 +142,14 @@ function DayBlock({
           <dd className="tabular">{workday.endedAt ? fmtTime(workday.endedAt, timeZone, locale) : ""}</dd>
         </dl>
       </Card>
+    );
+    if (!workday.canClockInAgain) return ended;
+    const defaultStatus = statuses.find((s) => s.isDefault);
+    return (
+      <div className="flex flex-col gap-6">
+        {ended}
+        <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={copy} againUntil={fmtTime(workday.dayEndsAt, timeZone, locale)} />
+      </div>
     );
   }
   const current = statuses.find((s) => s.key === workday.statusKey);
@@ -163,6 +174,11 @@ function DayBlock({
         {" · "}
         <span className="tabular text-p4a-body">{fmtMinutes(workedMinutes)}</span> {t.workedSoFar}
       </p>
+      {workday.sessions > 1 ? (
+        <p className="mt-1 text-small text-p4a-muted" data-testid="back-since">
+          {copy.myDay.backSince} <span className="tabular text-p4a-body">{fmtTime(workday.sessionStartedAt, timeZone, locale)}</span>
+        </p>
+      ) : null}
       <Link href="/day" className="mt-4 inline-block font-semibold text-p4a-deepblue hover:underline">
         {t.openMyDay}
       </Link>

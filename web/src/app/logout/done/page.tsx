@@ -14,10 +14,13 @@ export default async function LoggedOutPage() {
   const copy = t(access?.kind === "granted" ? access.principal.locale : config.defaultLocale);
 
   let endedAt: string | null = null;
+  // The window end while the person may clock in again today (addition 0008zp)
+  let againUntil: string | null = null;
   if (access?.kind === "granted") {
     const me = access.principal;
     const today = await data().getWorkday(me, dateKeyInZone(new Date(), me.timeZone));
     if (today?.endedAt) endedAt = fmtTime(today.endedAt, me.timeZone, me.locale);
+    if (today?.canClockInAgain) againUntil = fmtTime(today.dayEndsAt, me.timeZone, me.locale);
   }
 
   return (
@@ -25,7 +28,9 @@ export default async function LoggedOutPage() {
       <div className="max-w-md">
         <h1 className="text-title font-bold text-p4a-heading">{copy.logOut.doneTitle}</h1>
         <p className="mt-3 text-body">
-          {endedAt ? `${copy.myDay.endedAt} ${endedAt}. ${copy.logOut.doneBodyToday}` : copy.logOut.doneBody}
+          {endedAt
+            ? `${copy.myDay.endedAt} ${endedAt}. ${againUntil ? copy.logOut.doneBodyAgain.replace("{time}", againUntil) : copy.logOut.doneBodyToday}`
+            : copy.logOut.doneBody}
         </p>
       </div>
     </div>

@@ -56,6 +56,8 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
     if (d.isCapped) out.push({ tone: "warning", label: t.notClockedOut });
     else if (d.needsCorrection) out.push({ tone: "warning", label: t.needsCorrection });
     if (d.hasCorrection) out.push({ tone: "neutral", label: t.corrected });
+    // A day clocked in again (0008zp): first clock-in, last clock-out, the gap counted nowhere
+    if (d.sessions > 1) out.push({ tone: "neutral", label: t.sessions.replace("{n}", String(d.sessions)) });
     return out;
   };
 
