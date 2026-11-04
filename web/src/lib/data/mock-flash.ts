@@ -9,7 +9,7 @@
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { FLASH_FROZEN_LIST, FLASH_OVERVIEWS, frozenFilters, overviewOf, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
+import { FLASH_FROZEN_LIST, FLASH_OVERVIEWS, frozenFilters, overviewOf, withLabels, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
   DataQualityRowsView, FlashCardView, FlashDocRowView, FlashDocumentView, FlashFileRead, FlashHeadlineView, FlashPageView, FlashRowsRequest,
@@ -344,7 +344,12 @@ function watchOf(me: Principal, today: string): FlashWatchItem[] {
 function labelsOf(def: FlashOverviewDef): Record<string, Record<string, string>> {
   const all: Record<string, Record<string, string>> = {
     market: { GB: "United Kingdom", NL: "Netherlands" }, store: { "p4a-gb": "Shop GB", "p4a-nl": "Shop NL" },
-    pipeline: { "pl-sales": "Sales", "pl-invest": "Invest" }, stage: { "st-new": "New", "st-quote": "Quote sent", "st-negotiation": "Negotiation", "ts-new": "New", "ts-waiting": "Waiting" },
+    pipeline: { "pl-sales": "Sales", "pl-invest": "Invest" },
+    // a stage keyed '<pipeline id>:<stage id>', as cma.flash_labels_of keys it; the Invest pipeline's negotiation stage
+    // has no label, so the page and the files show its id (Decision log, 4 Nov 2026)
+    stage: def.key === "open_tickets"
+      ? { "tp-service:ts-new": "New", "tp-service:ts-waiting": "Waiting on us", "tp-support:ts-new": "New", "tp-support:ts-waiting": "Waiting on contact" }
+      : { "pl-sales:st-new": "New", "pl-sales:st-quote": "Quote sent", "pl-sales:st-negotiation": "Negotiation", "pl-invest:st-new": "New", "pl-invest:st-quote": "Quote sent" },
     queue: { "tp-service": "Service", "tp-support": "Support" }, model: { aed_plus: "AED Plus", aed_3: "AED 3" },
     status: { installed: "Installed", in_stock: "In stock", NOT_STARTED: "Not started", WAITING: "Waiting" }, type: { CALL: "Call", EMAIL: "Email" },
     warehouse: { "wh-utrecht": "Utrecht" },
@@ -538,7 +543,8 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
     if (v !== 0) return a[field] === null || a[field] === undefined || b[field] === null || b[field] === undefined ? v : request.descending ? -v : v;
     return compare(a.id, b.id);
   });
-  const rows = rs.slice(request.offset, request.offset + request.limit).map(publicOf);
+  // a pipeline's and a stage's label beside its id, as the data layer adds it to the database's rows
+  const rows = withLabels(def.key, rs.slice(request.offset, request.offset + request.limit).map(publicOf), labelsOf(def));
   return { ...base, mode: "live", asOf: new Date().toISOString(), sort, total: rs.length, rows };
 }
 

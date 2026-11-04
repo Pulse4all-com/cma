@@ -10,7 +10,7 @@ This file defines every term, data point and metric word the CMA uses, so the UI
 2. **The owning system's word and definition.** Where an external system owns a measure, the CMA uses that system's word and that system's definition. For calls the telephony system is the truth: for the same scope, period and time zone, the Workspace shows the same figure as Aircall Analytics. A difference is a bug, never a choice.
 3. **Each term has these fields:**
    - **Term**: the English label, plus the Dutch label from `web/src/lib/copy.ts` where one exists.
-   - **Key**: snake_case for settings and catalog keys, camelCase for API fields. One exception: the JSON rows of `/api/v1/reports/flash/rows` and `/api/v1/reports/data-quality/rows` keep the database's snake_case field names, as the file headers do, so one field has one name in the API and the file (docs/decisions.md, 2 Nov 2026, "Definitions: Flash's rows answer in snake_case").
+   - **Key**: snake_case for settings and catalog keys, camelCase for API fields. Two exceptions. The JSON rows of `/api/v1/reports/flash/rows` and `/api/v1/reports/data-quality/rows` keep the database's snake_case field names, as the file headers do, so one field has one name in the API and the file (docs/decisions.md, 2 Nov 2026, "Definitions: Flash's rows answer in snake_case"). The label fields `pipeline_label`, `queue_label` and `stage_label` are added by the application, not the database, and keep their snake_case names in the API and the file (docs/decisions.md, 4 Nov 2026, "Definitions: Flash shows a stage's and a pipeline's label").
    - **Definition**: one or two sentences.
    - **Source**: the system and its fields.
    - **Counts / does not count**.
@@ -904,38 +904,38 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Open deal (nl: Open deal) |
-| Key | `open_deals`, `median_age_days`, `oldest_age_days` |
+| Key | `open_deals`, `median_age_days`, `oldest_age_days`; `pipeline_label`, `stage_label` (Flash's rows and files, beside the ids `pipeline` and `stage`) |
 | Definition | A deal of a counted pipeline, not deleted, whose stage is not closed, created on or after `intake.start_date` (the mirror's start), with its age in whole days since its creation. |
 | Source | `cma.crm_record` (record type deal) through 0008y's `cma.counted_deals_of`: its pipeline's `is_counted`, its stage's closed flag, its market (the deal's own, else its contact's country, else unknown) |
 | Counts / does not count | Counts every open deal of a counted pipeline, lead and order pipelines alike (the breakdown is per pipeline). Test deals cannot be left out: deals carry no test flag (Gaps, D25) |
-| Unit and display | A count, a median and an oldest age in days |
+| Unit and display | A count, a median and an oldest age in days. A pipeline and a stage are shown by their label, the id where the CMA holds no label; a stage's label comes from `cma.connection_stage`, keyed by its pipeline and its stage. `pipeline_label` and `stage_label` hold the label, else the id (Flash's own fallback) |
 | Time rule | As of the instant; ages in whole days (in a snapshot, at the end of the snapshot's date) |
 | Scope | The tenant's CRM connections; per market, pipeline and stage |
 | Equivalent in the source system | HubSpot's deals whose stage is not closed won or closed lost |
 | Not to use | "Lead" for it (Lead is still to define) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
-| Used by | `cma.flash_deals_of`, the overview `open_deals`; `flash.open_deals.open_deals`, `flash.open_deals.median_age_days`, `flash.open_deals.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open deals) and its files |
-| As built today | `cma.flash_deals_of` (`122`) over `cma.counted_deals_of` (`92`). Matches the definition but for test deals (D25) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn); 4 Nov 2026, "Definitions: Flash shows a stage's and a pipeline's label" (#221) |
+| Used by | `cma.flash_deals_of`, `cma.flash_labels_of`, the overview `open_deals`; `flash.open_deals.open_deals`, `flash.open_deals.median_age_days`, `flash.open_deals.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open deals) and its files |
+| As built today | `cma.flash_deals_of` (`122`) over `cma.counted_deals_of` (`92`); the labels from `cma.flash_labels_of` (`122`) in the statement of `cma.flash_rows`. Matches the definition but for test deals (D25) and one gap: the list's Pipeline and Stage columns sort by id (`cma.flash_order_by`) while they show labels |
 
 ### Open ticket
 
 | Field | Value |
 |---|---|
 | Term | Open ticket (nl: Open ticket) |
-| Key | `open_tickets`, `median_age_days`, `oldest_age_days` |
+| Key | `open_tickets`, `median_age_days`, `oldest_age_days`; `queue_label`, `stage_label` (Flash's rows and files, beside the ids `queue` and `stage`) |
 | Definition | A ticket of a counted pipeline, not deleted, whose stage is not closed, with its queue (Ticket queue) and its age in whole days since its creation. |
 | Source | `cma.crm_record` (record type ticket) through 0008o's `cma.open_tickets_of` |
 | Counts / does not count | Counts every open ticket of a counted pipeline; a ticket's market is its own, else its contact's country, else unknown |
-| Unit and display | A count, a median and an oldest age in days |
+| Unit and display | A count, a median and an oldest age in days. A queue and a stage are shown by their label, the id where the CMA holds no label; a stage's label comes from `cma.connection_stage`, keyed by its pipeline and its stage. `queue_label` and `stage_label` hold the label, else the id (Flash's own fallback) |
 | Time rule | As of the instant; ages in whole days (in a snapshot, at the end of the snapshot's date) |
 | Scope | The tenant's CRM connections; per market, queue and stage |
 | Equivalent in the source system | HubSpot's tickets whose stage is not closed |
 | Not to use | "Case" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
-| Used by | `cma.flash_tickets_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`); `flash.open_tickets.open_tickets`, `flash.open_tickets.median_age_days`, `flash.open_tickets.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open tickets) and its files |
-| As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn); 4 Nov 2026, "Definitions: Flash shows a stage's and a pipeline's label" (#221) |
+| Used by | `cma.flash_tickets_of`, `cma.flash_labels_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`); `flash.open_tickets.open_tickets`, `flash.open_tickets.median_age_days`, `flash.open_tickets.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open tickets) and its files |
+| As built today | `cma.flash_tickets_of` (`122`); the labels from `cma.flash_labels_of` (`122`) in the statement of `cma.flash_rows`. Matches the definition but for one gap: the list's Ticket queue and Stage columns sort by id (`cma.flash_order_by`) while they show labels |
 
 ### Open task
 
@@ -961,19 +961,19 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Ticket queue (nl: Ticketwachtrij) |
-| Key | `queue` (a dim of `open_tickets`) |
+| Key | `queue` (a dim of `open_tickets`); `queue_label` (Flash's rows and files, beside `queue`) |
 | Definition | A ticket's queue is its pipeline in the CRM. Inbox queues come later. |
-| Source | `cma.crm_record.pipeline_id` of a ticket; its label from `cma.connection_pipeline` |
+| Source | `cma.crm_record.pipeline_id` of a ticket; its label from `cma.connection_pipeline` (`cma.flash_labels_of`) |
 | Counts / does not count | Every open ticket has one queue |
-| Unit and display | The pipeline's label |
+| Unit and display | The pipeline's label, the id where the CMA holds no label; `queue_label` holds the label, else the id (Flash's own fallback) |
 | Time rule | As of the instant |
 | Scope | As Open ticket |
 | Equivalent in the source system | HubSpot's ticket pipeline |
 | Not to use | "Queue" alone, which names the CMA's work queue (Feature 8, the queue engine); "inbox" for it |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Queue for tickets is the ticket's pipeline (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
-| Used by | the overview `open_tickets` (dim `queue`); Reports → Flash (`/reports/flash`) (Open tickets, its breakdown by queue) and its files |
-| As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Queue for tickets is the ticket's pipeline (build choice)" and "Definitions: Flash, …" (addition 0008zn); 4 Nov 2026, "Definitions: Flash shows a stage's and a pipeline's label" (#221) |
+| Used by | the overview `open_tickets` (dim `queue`), `cma.flash_labels_of`; Reports → Flash (`/reports/flash`) (Open tickets, its breakdown by queue) and its files |
+| As built today | `cma.flash_tickets_of` (`122`), its label from `cma.flash_labels_of` (`122`). Matches the definition but for one gap: the list's Ticket queue column sorts by id (`cma.flash_order_by`) while it shows labels |
 
 ### Churn (subscription)
 

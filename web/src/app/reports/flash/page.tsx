@@ -12,7 +12,7 @@ import { Shell } from "@/components/Shell";
 import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import { CmaDbError, data, dataIsMock, type FlashDocumentView, type FlashPageView, type FlashRowsView } from "@/lib/data";
 import {
-  breakdownSets, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, filtersText, frozenFilters, listUnavailable, metricKey, overviewOf, parseAsOf,
+  breakdownSets, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, filtersShown, filtersText, frozenFilters, listUnavailable, metricKey, overviewOf, parseAsOf,
   parseFilters, parseMarket, parseSort, type FlashOverviewDef,
 } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
@@ -311,7 +311,8 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
           </div>
 
           <section id="records" aria-label={t.rows}>
-            <Card title={hasFilters ? t.rowsFor.replace("{filter}", filtersText(null, null, null, Object.fromEntries(Object.entries(rowFilters).filter(([k]) => k !== "market")))) : t.rows}>
+            <Card title={hasFilters ? t.rowsFor.replace("{filter}", filtersText(null, null, null,
+              filtersShown(def.key, Object.fromEntries(Object.entries(rowFilters).filter(([k]) => k !== "market")), doc.labels))) : t.rows}>
               {!withRows ? (
                 <Notice tone="info">{t.listsAtMonthEnd}</Notice>
               ) : rowsUnavailable ? (
