@@ -1,0 +1,42 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:<scratch>/scripts/129-provoke.sql:45: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:<scratch>/scripts/129-provoke.sql:163: ERROR:  FAIL S1: addition 0008zq not recorded after 0008zp
+CONTEXT:  PL/pgSQL function inline_code_block line 9 at RAISE
+psql:<scratch>/scripts/129-provoke.sql:192: ERROR:  FAIL S2: cma.source_reads(uuid) does not answer its eight columns (run_id:uuid,job:text,stream:text,started_at:timestamp with time zone,finished_at:timestamp with time zone,status:text,counts:jsonb,error:text)
+CONTEXT:  PL/pgSQL function inline_code_block line 14 at RAISE
+psql:<scratch>/scripts/129-provoke.sql:278: ERROR:  FAIL A1: a connection with events and no runs reads {"key": "1693670ef2b74326ab87f0ae467850a7", "kind": null, "name": "Verify hook", "tags": 0, "forms": 0, "lines": 0, "fields": 0, "status": "active", "adapter": "verifyhook", "settings": {}, "pipelines": 0, "reads_24h": 0, "events_24h": 3, "held_kinds": [], "last_read_at": null, "store_handle": null, "call_outcomes": 0, "connection_id": "01a1a861-4668-7208-aa94-5b1253f1a978", "last_event_at": "2026-11-04T20:05:09.710573+00:00", "last_read_job": null, "events_waiting": 1, "last_read_error": null, "reads_failed_24h": 0, "token_secret_name": null, "events_needs_review": 0, "external_account_id": "verify-verify-hook", "signing_secret_name": null}
+CONTEXT:  PL/pgSQL function inline_code_block line 41 at RAISE
+psql:<scratch>/scripts/129-provoke.sql:318: ERROR:  FAIL A5: tenant one sees 1 rows and its connection reads {"key": "37aa1b9e771842ddba47ba18ff90c36b", "kind": null, "name": "Verify one", "tags": 0, "forms": 0, "lines": 0, "fields": 0, "status": "active", "adapter": "verifypoll", "settings": {}, "pipelines": 0, "reads_24h": 1, "events_24h": 0, "held_kinds": [], "last_read_at": "2026-11-04T15:06:09.756927+00:00", "store_handle": null, "call_outcomes": 0, "connection_id": "01a1a861-4689-760e-aa76-a5ffd86355e8", "last_event_at": null, "last_read_job": "reviews_poll", "events_waiting": 0, "last_read_error": null, "reads_failed_24h": 0, "token_secret_name": "verify-one-key", "events_needs_review": 0, "external_account_id": "verify-verify-one", "signing_secret_name": null}
+CONTEXT:  PL/pgSQL function inline_code_block line 28 at RAISE
+psql:<scratch>/scripts/129-provoke.sql:352: ERROR:  FAIL A6: a manager without tenant.configure was not refused with CMA06
+CONTEXT:  PL/pgSQL function inline_code_block line 18 at RAISE
+psql:<scratch>/scripts/129-provoke.sql:420: ERROR:  FAIL A7: source_reads answers 20 rows, [running:-:reconcile succeeded:-:subscriptions_poll failed:rate_limited:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:reconcile succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:reconcile succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:reconcile succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll succeeded:-:subscriptions_poll]
+CONTEXT:  PL/pgSQL function inline_code_block line 38 at RAISE
+ check_name |        result        |     detail      
+------------+----------------------+-----------------
+ verdict    | PROVOKED, NOT A PASS | 0 PASS, 14 FAIL
+(1 row)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET
+exit 0

@@ -18,7 +18,7 @@ The Workspace shows no customer data. You see ids, statuses, amounts and links t
 
 Where the figures come from, and how fresh they are:
 - HubSpot, Aircall and the Shopify stores: at once, as events happen.
-- Juo subscriptions: every 5 minutes, every store.
+- Juo subscriptions: every 5 minutes, every store that runs Juo (Norway joins once Juo is installed there).
 - Trusted Shops reviews: every hour.
 - The asset register: every 15 minutes.
 - A full read of every source each night.

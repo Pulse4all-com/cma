@@ -2224,6 +2224,8 @@ type MockIntakeConfig = {
 
 function mockSource(tenantId: string, n: number, adapter: string, name: string, accountId: string, kind: SourceKind | null, o: Partial<SourceDetail> = {}, settings: SourceConnection["settings"] = {}): MockSource {
   const polled = kind === "reviews" || kind === "assets" || kind === "subscriptions";
+  // the poll's job and stream as the ingest writes them (poll-reviews, poll-assets, poll-subscriptions)
+  const [pollJob, pollStream] = kind === "assets" ? ["assets_poll", "devices"] : kind === "subscriptions" ? ["subscriptions_poll", "subscriptions"] : ["reviews_poll", "reviews"];
   const lastNight = new Date().setUTCHours(2, 30, 0, 0) - (new Date().getUTCHours() < 3 ? 86_400_000 : 0);
   const connection: SourceConnection = {
     id: `00000000-0000-7000-8000-00000000c00${n}`, key: `k${n}${"0".repeat(20)}test`, adapter, name, accountId, kind, heldKinds: [], isActive: true,
@@ -2234,7 +2236,7 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
     pipelines: 0, forms: 0, callOutcomes: 0, fields: 0, lines: 0, tags: 0, storeHandle: null,
     // the reads (addition 0008zq): a polled source has runs and no events; the others their nightly reconcile; an automation none
     lastReadAt: kind === null ? null : new Date(polled ? Date.now() - 40 * 60_000 : lastNight).toISOString(),
-    lastReadJob: kind === null ? null : polled ? "reviews_poll" : "reconcile",
+    lastReadJob: kind === null ? null : polled ? pollJob : "reconcile",
     reads24h: kind === null ? 0 : polled ? 24 : 3, readsFailed24h: polled ? 1 : 0, lastReadError: polled ? "rate_limited" : null,
   };
   // the runs behind the reads (addition 0008zq): a polled source its last polls, one failed; a webhook source its nightly reconciles
@@ -2243,8 +2245,8 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
       finishedAt: seconds === null ? null : new Date(startedMs + seconds * 1000).toISOString(), status, counts, error });
   const reads: SourceRead[] = kind === null ? [] : polled
     ? Array.from({ length: 20 }, (_, j) => j === 2
-      ? run(j, "reviews_poll", "reviews", Date.now() - (40 + j * 60) * 60_000, 4, "failed", { fetched: 0 }, "rate_limited")
-      : run(j, "reviews_poll", "reviews", Date.now() - (40 + j * 60) * 60_000, 6 + j, "succeeded", { fetched: 3 + j, upserted: j % 2 }))
+      ? run(j, pollJob, pollStream, Date.now() - (40 + j * 60) * 60_000, 4, "failed", { fetched: 0 }, "rate_limited")
+      : run(j, pollJob, pollStream, Date.now() - (40 + j * 60) * 60_000, 6 + j, "succeeded", { fetched: 3 + j, upserted: j % 2 }))
     : [run(0, "reconcile", "deal", lastNight, 95, "succeeded", { fetched: 120 + n, upserted: 8 }), run(1, "reconcile", "contact", lastNight - 86_400_000, 88, "succeeded", { fetched: 110, upserted: 3 })];
   return {
     tenantId, connection, reads, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
