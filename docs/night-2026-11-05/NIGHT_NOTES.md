@@ -60,7 +60,7 @@ Build choices of the night (to confirm):
 | `cma.sources()` | recreated; the 22 columns of 52 unchanged in their order, five appended | `129` S1 (the column list by name and type), A1 to A6; `53` B2 still PASS (16); `79` 13 PASS |
 | `cma.system_health_runs()` (78) | unchanged | `79`; the page's code untouched |
 | `cma.flash_sources_of` (122), `cma.flash_page`, `cma.flash_document_of` | unchanged; a market without subscriptions answers zeros | the local two-store test; `123` 32 ok (its block B fails locally on `uuidv7()` in its own `execute`, the shim's schema; `main` alike) |
-| `cma.subscription_store_connection_of` (118) | unchanged; resolves each of the 12 handles when the store rows exist | 15.10 (c)'s read-back, executed locally for two fake handles |
+| `cma.subscription_store_connection_of` (118) | unchanged; resolves each of the 11 handles of 15.10 (c), and GB's, when the store rows exist | 15.10 (c)'s read-back, executed locally for two fake handles |
 | `web/src/lib/data/postgres.ts` `toSource` | the five columns mapped | typecheck; `verify/api.mjs` in api mode (324 PASS: the sources checks read the five fields) |
 | `web/src/lib/data/mock.ts` `mockSource` | the five fields with polled and webhook shapes | `verify/api.mjs --sources` in mock mode (33), the screenshot |
 | `SourcesList.tsx` | the column, the hints, the badge, the dash rule | the screenshot (`local-records/web/screenshots`), `verify/theme.mjs` (1 problem, Attempts by pipeline, as on `main`) and `verify/layout.mjs` (10 problems, all Funnel, as on `main`; the Sources page passes) |
@@ -78,6 +78,7 @@ Not proven here: PostgreSQL 18 (dev and prod run it; the scripts use nothing ver
 
 ## Found on the way (not caused by this change)
 
+- `web/verify/reports-fixture.sql`'s guard (local fixture only, `cma.local_fixture`) raises inside its first `do` block, but its header's command line has no `-v ON_ERROR_STOP=1`, so psql goes on to `set role cma_owner` and writes the fixture although the guard refused (seen locally on the follow-up's second pass, `local-records/README.md`, the `-c` section). For Martin: run it only with `-v ON_ERROR_STOP=1`, and decide whether the header and the script should say so (a change under `web/` of its own).
 - `verify/api.mjs`'s Sources check listed four source kinds of seven, so it failed in mock mode on `main` for the fixture's reviews connection (B4, fixed here).
 - PROD_RUNBOOK 15.8's email pattern reads `\.` already (B3); nothing to fix.
 - `123_verify_flash.sql`'s block B fails locally with `function uuidv7() does not exist`: its dynamic SQL runs in a search path without the shim's schema. PostgreSQL 16 only; dev and prod (18) are not affected. `105` and `119` need the login to hold `cma_readonly` (they `set role` to it), as Martin's does.

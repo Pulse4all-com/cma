@@ -167,9 +167,9 @@ Expected: the new revision serving 100 percent of traffic; the health answer wit
 
 ## 5. PROD_RUNBOOK 15.10 to 15.12, as written
 
-**File:** `docs/ingest/PROD_RUNBOOK.md`, sections 15.10 (a) to (h), 15.11 and 15.12. Every command is prefilled with the eleven handles (AT, BE, DE, DK, ES, FI, FR, IE, IT, NL, SE; NO has no Juo yet and CH is not live, both join later with one handle); only `<tenant_id>`, `<user_id>` and the connection ids from the Studio output are placeholders. In short:
-1. 15.10 (a): the check that the twelve secrets exist, the eleven stores' and CH's, with one enabled version each and no accessor yet (stored on the evening of 4 November 2026): the secrets list (thirteen names with GB's, none for NO) and the versions list (twelve lines); the `put_secret` block stays for a store that joins later.
-2. 15.10 (b): the service deploy with eleven `--secret` flags and the jobs deploy; the accessor loop, one line per secret.
+**File:** `docs/ingest/PROD_RUNBOOK.md`, sections 15.10 (a) to (h), 15.11 and 15.12. Every command is prefilled with the eleven handles (AT, BE, DE, DK, ES, FI, FR, IE, IT, NL, SE; NO has no Juo yet and CH is not live, both join later with one handle), and (a)'s versions list with CH's too; only `<tenant_id>`, `<user_id>` and the connection ids from the Studio output are placeholders. In short:
+1. 15.10 (a), done in step 4a: the check that the twelve secrets exist, the eleven stores' and CH's, with one enabled version each and no accessor yet (stored on the evening of 4 November 2026): the secrets list (thirteen names with GB's, none for NO) and the versions list (twelve lines); the `put_secret` block stays for a store that joins later.
+2. 15.10 (b), done in step 4a: the service deploy with eleven `--secret` flags and the jobs deploy; the accessor loop, one line per secret. Do not run them again here; go on with (c).
 3. 15.10 (c): one Studio Run: eleven connections `Juo AT` to `Juo SE`, kind, settings, the read-back with `ok` true and the store resolved.
 4. 15.10 (d): pause `ingest-poll-subscriptions`.
 5. 15.10 (e): the dry run over every store, twelve `backfill dry run` lines (GB included) and the finished line's results.
