@@ -9,7 +9,7 @@
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { changeArrow, changeOf } from "@/lib/flash";
+import { changeLineOf } from "@/lib/flash";
 import { Keycap } from "./primitives";
 
 function go(router: ReturnType<typeof useRouter>, query: Record<string, string>, change: Record<string, string | null>) {
@@ -75,16 +75,18 @@ export function FlashMarket({ market, markets, query, labels }: {
 /**
  * A landing card's live figure: its overview's headline read once after the page painted. While it reads, a calm line;
  * a failed read shows the dash, never an error code. The change against the figure to compare with is written here too,
- * since it needs the live value
+ * since it needs the live value; a flow whose period is open (open: lib/flash periodComplete) says "so far" instead
  */
-export function FlashLiveFigure({ overview, market, from, to, previous, locale, labels }: {
+export function FlashLiveFigure({ overview, market, from, to, previous, open, locale, labels }: {
   overview: string;
   market: string | null;
   from: string | null;
   to: string | null;
   previous: number | null;
+  /** The period is open (a flow's Today, a running week or month, or a source not read since its end): no change shown */
+  open: boolean;
   locale: string;
-  labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; previousOnText: string | null };
+  labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; openPeriod: string; previousOnText: string | null };
 }) {
   const [value, setValue] = useState<number | null | "loading" | "failed">("loading");
   useEffect(() => {
@@ -99,13 +101,8 @@ export function FlashLiveFigure({ overview, market, from, to, previous, locale, 
   const n = (x: number) => new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", { maximumFractionDigits: 1 }).format(x);
   if (value === "loading") return <p className="text-small text-p4a-muted" data-testid={`flash-live-${overview}`}>{labels.loading}</p>;
   const shown = typeof value === "number" ? value : null;
-  // the change as the stored cards write it (lib/flash's changeOf and changeArrow, which verify:flash tests)
-  let change = labels.noCompare;
-  const c = changeOf(shown, previous);
-  if (c.direction !== "none" && labels.previousOnText) {
-    change = c.direction === "flat" ? labels.changeFlat.replace("{date}", labels.previousOnText)
-      : labels.changeSince.replace("{arrow}", changeArrow(c.direction)).replace("{delta}", n(Math.abs(c.delta ?? 0))).replace("{date}", labels.previousOnText);
-  }
+  // the change as the stored cards write it (lib/flash's changeLineOf, which verify:flash tests)
+  const change = changeLineOf(shown, previous, labels.previousOnText, open, labels, n);
   return (
     <>
       <p className="tabular text-title font-bold text-p4a-heading" data-testid={`flash-live-${overview}`}>{shown === null ? "–" : n(shown)}</p>

@@ -14,7 +14,7 @@ import { Badge, Keycap } from "@/components/primitives";
 import type { Copy } from "@/lib/copy";
 import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesView, FlashWatchItem } from "@/lib/data";
 import {
-  amountsOf, averageRating, barShare, cellFilters, changeArrow, changeOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
+  amountsOf, averageRating, barShare, cellFilters, changeLineOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
   FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf, measureNotApplicable, overviewOf, rowsOfSet, statusTone, type FlashKey,
   type FlashOverviewDef,
 } from "@/lib/flash";
@@ -173,14 +173,12 @@ export function FlashCard({ def, setUp, sourceLabel, figure, change, query, t }:
   );
 }
 
-/** A stored figure's line against the one to compare with */
+/**
+ * A stored figure's line against the one to compare with (lib/flash changeLineOf). The landing writes it As of a date,
+ * where a snapshot's figures are each taken once after their date ended and compared as stored, so never "so far"
+ */
 export function changeText(value: number | null, previous: number | null, previousOn: string | null, locale: "en" | "nl", t: T): string {
-  if (previousOn === null) return t.noCompare;
-  const c = changeOf(value, previous);
-  if (c.direction === "none") return t.noCompare;
-  const date = fmtDate(previousOn, locale);
-  if (c.direction === "flat") return t.changeFlat.replace("{date}", date);
-  return t.changeSince.replace("{arrow}", changeArrow(c.direction)).replace("{delta}", fmtNumber(Math.abs(c.delta ?? 0), locale, 1)).replace("{date}", date);
+  return changeLineOf(value, previous, previousOn === null ? null : fmtDate(previousOn, locale), false, t, (x) => fmtNumber(x, locale, 1));
 }
 
 /** The totals: one tile per measure, the headline first */

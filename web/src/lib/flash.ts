@@ -7,6 +7,8 @@
  * definition's badge and the states of a source not set up. Pure: no database, no React.
  */
 
+import { dateKeyInZone } from "@/lib/time";
+
 export type FlashKey =
   | "customers" | "subscriptions" | "installed_base" | "churn" | "orders" | "payments"
   | "open_deals" | "open_tickets" | "open_tasks" | "reviews" | "data_quality";
@@ -229,6 +231,58 @@ export function changeOf(value: number | null | undefined, previous: number | nu
 /** The arrow a change shows (Muted text: never a colour that judges a move as good or bad) */
 export function changeArrow(direction: "up" | "down" | "flat" | "none"): string {
   return direction === "up" ? "↑" : direction === "down" ? "↓" : direction === "flat" ? "→" : "";
+}
+
+/**
+ * The sources a flow overview's figures are read from: churn the subscription app's events, orders the stores' orders,
+ * payments both (the stores' orders and the subscription app's renewals, cma.flash_payments_of), reviews the review
+ * platforms
+ */
+export const FLASH_FLOW_SOURCES: Readonly<Partial<Record<FlashKey, readonly FlashSource[]>>> = {
+  churn: ["subscriptions"], orders: ["commerce"], payments: ["commerce", "subscriptions"], reviews: ["reviews"],
+};
+
+/** A source's state as the page holds it: set up or not, its last successful read */
+export type FlashSourceRead = { setUp: boolean; lastReadAt: string | null };
+
+/**
+ * Whether a flow overview's period is complete, so its change line compares it (Decision log, 4 Nov 2026): (a) its end
+ * has passed in the tenant's time zone (its last business date is before the tenant's today) and (b) every set-up source
+ * feeding the overview was last read after that end (the read's business date in the tenant's zone is a later one). A
+ * period that fails either is open: the line says "so far". A stock overview has no period and is always compared
+ */
+export function periodComplete(overview: FlashKey, to: string | null, today: string, timeZone: string,
+  sources: Readonly<Partial<Record<FlashSource, FlashSourceRead>>> | null | undefined): boolean {
+  const feeding = FLASH_FLOW_SOURCES[overview];
+  if (!feeding) return true;
+  if (!to || !isDate(to) || !isDate(today) || to >= today) return false;
+  return feeding.every((s) => {
+    const st = sources?.[s];
+    if (!st?.setUp) return true;
+    return typeof st.lastReadAt === "string" && dateKeyInZone(st.lastReadAt, timeZone) > to;
+  });
+}
+
+/** The words of a change line (the copy's, en or nl) */
+export interface ChangeLineWords {
+  changeSince: string;
+  changeFlat: string;
+  noCompare: string;
+  openPeriod: string;
+}
+
+/**
+ * A card's change line: an open period's "so far" line in place of a change (periodComplete), else the change against
+ * the figure to compare with (its arrow, its size and that figure's date), else nothing to compare with yet. The stored
+ * cards and the live ones write it alike
+ */
+export function changeLineOf(value: number | null | undefined, previous: number | null | undefined, previousOnText: string | null, open: boolean,
+  words: ChangeLineWords, fmt: (n: number) => string): string {
+  if (open) return words.openPeriod;
+  const c = changeOf(value, previous);
+  if (previousOnText === null || c.direction === "none") return words.noCompare;
+  if (c.direction === "flat") return words.changeFlat.replace("{date}", previousOnText);
+  return words.changeSince.replace("{arrow}", changeArrow(c.direction)).replace("{delta}", fmt(Math.abs(c.delta ?? 0))).replace("{date}", previousOnText);
 }
 
 export type DefinitionStatus = "Decided" | "Proposed" | "Pending" | "Retired";
