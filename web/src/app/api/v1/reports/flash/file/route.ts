@@ -4,6 +4,7 @@ import { exportSettingsFrom, flashCsv, type FlashFileColumn } from "@/lib/csv";
 import { data } from "@/lib/data";
 import {
   asOfStamp, breakdownColumns, breakdownRows, dataQualityRowShown, FLASH_FROZEN_COLUMNS, FLASH_LIST_COLUMNS, filtersText, flashFileName, overviewOf,
+  withLabelColumns,
 } from "@/lib/flash";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
 
@@ -17,7 +18,9 @@ export const dynamic = "force-dynamic";
  * the filters. Every file read is recorded in the audit log (cma.flash_file_record: who, which overview, which filters,
  * how many rows; never a row). Needs reports.view or performance.team, here and again in the database. No name, email,
  * phone or address exists to write. A source not set up gives no file (409 not_set_up); a file cut at the row limit says
- * "rows <n> of <total>" in its filters cell; its instants and its name follow the tenant's time zone.
+ * "rows <n> of <total>" in its filters cell; its instants and its name follow the tenant's time zone. On open deals and
+ * open tickets a pipeline's (queue's) and a stage's label is a column beside its id, in both parts (pipeline_label,
+ * queue_label, stage_label; the id where the CMA holds no label; Decision log, 4 Nov 2026).
  */
 export async function GET(request: Request) {
   return forPrincipal(async (me) => {
@@ -48,7 +51,8 @@ export async function GET(request: Request) {
       // the totals first (the document holds them apart: the market's own when one is chosen), then every set's rows
       const all = doc.totals ? [{ dims: {}, measures: doc.totals }, ...doc.rows] : doc.rows;
       const columns: FlashFileColumn[] = breakdownColumns(def, all);
-      const lines = breakdownRows(def, all);
+      // a pipeline's and a stage's label beside its id, from the document's labels (the id where the CMA holds none)
+      const lines = breakdownRows(def, all, doc.labels);
       asOf = doc.mode === "snapshot" && doc.asOfDate ? doc.asOfDate : doc.asOf;
       text = flashCsv(asOf, filters, columns, lines, settings, zone);
       rows = lines.length;
@@ -59,7 +63,8 @@ export async function GET(request: Request) {
       zone = list.timeZone || me.timeZone;
       // a file cut at the row limit says so in its filters cell: the rows written of the records there are
       if (list.total > list.rows.length) filters = `${filters}; rows ${list.rows.length} of ${list.total}`;
-      const columns = list.mode === "snapshot" ? FLASH_FROZEN_COLUMNS : FLASH_LIST_COLUMNS[def.key];
+      // a pipeline's and a stage's label column beside its id (the rows carry <dim>_label from the data layer)
+      const columns = list.mode === "snapshot" ? FLASH_FROZEN_COLUMNS : withLabelColumns(def.key, FLASH_LIST_COLUMNS[def.key]);
       asOf = list.mode === "snapshot" && q.asOf ? q.asOf : list.asOf;
       // the links outside the CRM are never written (FLASH_LINKS_LEFT_OUT are no columns; a finding's link for a CRM record only)
       const shown = def.key === "data_quality" && list.mode === "live" ? list.rows.map(dataQualityRowShown) : list.rows;

@@ -7,6 +7,8 @@
  * definition's badge and the states of a source not set up. Pure: no database, no React.
  */
 
+import { dateKeyInZone } from "@/lib/time";
+
 export type FlashKey =
   | "customers" | "subscriptions" | "installed_base" | "churn" | "orders" | "payments"
   | "open_deals" | "open_tickets" | "open_tasks" | "reviews" | "data_quality";
@@ -231,6 +233,58 @@ export function changeArrow(direction: "up" | "down" | "flat" | "none"): string 
   return direction === "up" ? "↑" : direction === "down" ? "↓" : direction === "flat" ? "→" : "";
 }
 
+/**
+ * The sources a flow overview's figures are read from: churn the subscription app's events, orders the stores' orders,
+ * payments both (the stores' orders and the subscription app's renewals, cma.flash_payments_of), reviews the review
+ * platforms
+ */
+export const FLASH_FLOW_SOURCES: Readonly<Partial<Record<FlashKey, readonly FlashSource[]>>> = {
+  churn: ["subscriptions"], orders: ["commerce"], payments: ["commerce", "subscriptions"], reviews: ["reviews"],
+};
+
+/** A source's state as the page holds it: set up or not, its last successful read */
+export type FlashSourceRead = { setUp: boolean; lastReadAt: string | null };
+
+/**
+ * Whether a flow overview's period is complete, so its change line compares it (Decision log, 4 Nov 2026): (a) its end
+ * has passed in the tenant's time zone (its last business date is before the tenant's today) and (b) every set-up source
+ * feeding the overview was last read after that end (the read's business date in the tenant's zone is a later one). A
+ * period that fails either is open: the line says "so far". A stock overview has no period and is always compared
+ */
+export function periodComplete(overview: FlashKey, to: string | null, today: string, timeZone: string,
+  sources: Readonly<Partial<Record<FlashSource, FlashSourceRead>>> | null | undefined): boolean {
+  const feeding = FLASH_FLOW_SOURCES[overview];
+  if (!feeding) return true;
+  if (!to || !isDate(to) || !isDate(today) || to >= today) return false;
+  return feeding.every((s) => {
+    const st = sources?.[s];
+    if (!st?.setUp) return true;
+    return typeof st.lastReadAt === "string" && dateKeyInZone(st.lastReadAt, timeZone) > to;
+  });
+}
+
+/** The words of a change line (the copy's, en or nl) */
+export interface ChangeLineWords {
+  changeSince: string;
+  changeFlat: string;
+  noCompare: string;
+  openPeriod: string;
+}
+
+/**
+ * A card's change line: an open period's "so far" line in place of a change (periodComplete), else the change against
+ * the figure to compare with (its arrow, its size and that figure's date), else nothing to compare with yet. The stored
+ * cards and the live ones write it alike
+ */
+export function changeLineOf(value: number | null | undefined, previous: number | null | undefined, previousOnText: string | null, open: boolean,
+  words: ChangeLineWords, fmt: (n: number) => string): string {
+  if (open) return words.openPeriod;
+  const c = changeOf(value, previous);
+  if (previousOnText === null || c.direction === "none") return words.noCompare;
+  if (c.direction === "flat") return words.changeFlat.replace("{date}", previousOnText);
+  return words.changeSince.replace("{arrow}", changeArrow(c.direction)).replace("{delta}", fmt(Math.abs(c.delta ?? 0))).replace("{date}", previousOnText);
+}
+
 export type DefinitionStatus = "Decided" | "Proposed" | "Pending" | "Retired";
 
 /** A figure's definition status from the metric catalog (its first word), Proposed when the catalog does not say */
@@ -400,6 +454,69 @@ export const FLASH_FROZEN_COLUMNS: readonly { key: string; kind: FlashColumnKind
   { key: "source_id", kind: "text" }, { key: "market", kind: "text" }, { key: "state", kind: "text" },
 ];
 
+/** The labels of an overview's dims as cma.flash_labels_of answers them (dim → label key → label) */
+export type FlashLabels = Readonly<Record<string, Readonly<Record<string, string>>>>;
+
+/**
+ * The dims whose value is a CRM pipeline's or stage's id, per overview, with the values that make up its label key in
+ * cma.flash_labels_of (Decision log, 4 Nov 2026): a pipeline (a ticket's queue) by its own id, a stage by
+ * '<pipeline id>:<stage id>', the row's own pipeline and its stage, since a stage id is the source's within its pipeline.
+ * HubSpot's default pipeline's stage ids (appointmentscheduled, qualifiedtobuy) are ids like any other
+ */
+export const FLASH_LABELLED_DIMS: Partial<Record<FlashKey, Readonly<Record<string, readonly string[]>>>> = {
+  open_deals: { pipeline: ["pipeline"], stage: ["pipeline", "stage"] },
+  open_tickets: { queue: ["queue"], stage: ["queue", "stage"] },
+};
+
+/** The column (and the API's field) that carries a labelled dim's label, next to its id */
+export function labelColumnOf(dim: string): string {
+  return `${dim}_label`;
+}
+
+/**
+ * A dim's label for a row (a breakdown row's dims, or a record): a labelled dim by its key (FLASH_LABELLED_DIMS), any
+ * other dim by its own value; null when the CMA holds no label for it (the screen and the file then show the id)
+ */
+export function dimLabelOf(overview: FlashKey, labels: FlashLabels | null | undefined, dim: string, row: Readonly<Record<string, unknown>>): string | null {
+  const own = row[dim];
+  if (typeof own !== "string" || own === "") return null;
+  const parts = FLASH_LABELLED_DIMS[overview]?.[dim] ?? [dim];
+  const values = parts.map((p) => row[p]);
+  if (!values.every((v) => typeof v === "string" && v !== "")) return null;
+  return labels?.[dim]?.[values.join(":")] ?? null;
+}
+
+/** What the screen shows for a dim's value: its label, else the value itself (a missing label shows the id) */
+export function dimText(overview: FlashKey, labels: FlashLabels | null | undefined, dim: string, row: Readonly<Record<string, unknown>>): string {
+  return dimLabelOf(overview, labels, dim, row) ?? String(row[dim] ?? "");
+}
+
+/**
+ * Rows (records or a breakdown's lines) with each labelled dim's label beside its id, as <dim>_label: the label the CMA
+ * holds, else the id; empty where the row has no such dim (a breakdown's totals or market row). The id itself stays
+ */
+export function withLabels<R extends Readonly<Record<string, unknown>>>(overview: FlashKey, rows: readonly R[], labels: FlashLabels | null | undefined): (R & Record<string, unknown>)[] {
+  const dims = Object.keys(FLASH_LABELLED_DIMS[overview] ?? {});
+  if (dims.length === 0) return [...rows];
+  return rows.map((r) => {
+    const out: Record<string, unknown> = { ...r };
+    for (const d of dims) out[labelColumnOf(d)] = typeof r[d] === "string" && r[d] !== "" ? dimText(overview, labels, d, r) : null;
+    return out as R & Record<string, unknown>;
+  });
+}
+
+/** A file's columns with each labelled dim's label column right after its id's (the records and the breakdown alike) */
+export function withLabelColumns<C extends { key: string; kind: FlashColumnKind }>(overview: FlashKey, columns: readonly C[]): { key: string; kind: FlashColumnKind }[] {
+  const dims = FLASH_LABELLED_DIMS[overview] ?? {};
+  return columns.flatMap((c) => (dims[c.key] ? [c, { key: labelColumnOf(c.key), kind: "text" as const }] : [c]));
+}
+
+/** The list's filters as the screen names them: a labelled dim's value by its label (the file's filters cell keeps the ids) */
+export function filtersShown(overview: FlashKey, filters: Readonly<Record<string, string>>, labels: FlashLabels | null | undefined): Record<string, string> {
+  const dims = FLASH_LABELLED_DIMS[overview] ?? {};
+  return Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, dims[k] ? dimText(overview, labels, k, filters) : v]));
+}
+
 /** A file's filters column: the market, the period and the list's filters as key=value, "all" without any */
 export function filtersText(market: string | null, from: string | null, to: string | null, filters: Record<string, string>): string {
   const parts: string[] = [];
@@ -439,11 +556,13 @@ export function currenciesOf(rows: readonly FlashDocRow[], measure: string): str
 }
 
 /**
- * The breakdown file's columns: the set (totals, market or the breakdown's keys), every dim, then each measure; an amount
- * one column per currency (<measure>_<CUR>), never one sum across currencies
+ * The breakdown file's columns: the set (totals, market or the breakdown's keys), every dim (a pipeline's or a stage's
+ * label beside its id), then each measure; an amount one column per currency (<measure>_<CUR>), never one sum across
+ * currencies
  */
 export function breakdownColumns(def: FlashOverviewDef, rows: readonly FlashDocRow[]): { key: string; kind: FlashColumnKind }[] {
-  const out: { key: string; kind: FlashColumnKind }[] = [{ key: "set", kind: "text" }, ...def.dims.map((d) => ({ key: d, kind: "text" as const }))];
+  const out: { key: string; kind: FlashColumnKind }[] = [{ key: "set", kind: "text" },
+    ...withLabelColumns(def.key, def.dims.map((d) => ({ key: d, kind: "text" as const })))];
   for (const m of def.measures) {
     if (def.amountMeasures.includes(m)) for (const c of currenciesOf(rows, m)) out.push({ key: `${m}_${c}`, kind: "number" });
     else out.push({ key: m, kind: "number" });
@@ -451,9 +570,12 @@ export function breakdownColumns(def: FlashOverviewDef, rows: readonly FlashDocR
   return out;
 }
 
-/** The breakdown file's lines: one per row of the document, its set named by its keys ("totals" for none) */
-export function breakdownRows(def: FlashOverviewDef, rows: readonly FlashDocRow[]): Record<string, unknown>[] {
-  return rows.map((r) => {
+/**
+ * The breakdown file's lines: one per row of the document, its set named by its keys ("totals" for none), a labelled
+ * dim's label beside its id (the document's labels; the id where the CMA holds none)
+ */
+export function breakdownRows(def: FlashOverviewDef, rows: readonly FlashDocRow[], labels: FlashLabels | null = null): Record<string, unknown>[] {
+  return withLabels(def.key, rows.map((r) => {
     const keys = Object.keys(r.dims);
     const line: Record<string, unknown> = { set: keys.length === 0 ? "totals" : def.dims.filter((d) => keys.includes(d)).join("+") };
     for (const d of def.dims) line[d] = r.dims[d] ?? null;
@@ -463,7 +585,7 @@ export function breakdownRows(def: FlashOverviewDef, rows: readonly FlashDocRow[
       else line[m] = typeof r.measures[m] === "number" ? r.measures[m] : null;
     }
     return line;
-  });
+  }), labels);
 }
 
 /** The links cma.flash_rows answers that the screen and the file leave out: the register's and the review platform's */

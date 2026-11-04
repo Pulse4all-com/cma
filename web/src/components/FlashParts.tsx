@@ -14,8 +14,8 @@ import { Badge, Keycap } from "@/components/primitives";
 import type { Copy } from "@/lib/copy";
 import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesView, FlashWatchItem } from "@/lib/data";
 import {
-  amountsOf, averageRating, barShare, cellFilters, changeArrow, changeOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
-  FLASH_FROZEN_COLUMNS, FLASH_OVERVIEWS, FLASH_SOURCES, fixInOf, measureNotApplicable, overviewOf, rowsOfSet, statusTone, type FlashKey,
+  amountsOf, averageRating, barShare, cellFilters, changeLineOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
+  FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf, measureNotApplicable, overviewOf, rowsOfSet, statusTone, type FlashKey,
   type FlashOverviewDef,
 } from "@/lib/flash";
 import { fmtDate, fmtDateTimeShort, fmtLastRead } from "@/lib/time";
@@ -173,14 +173,12 @@ export function FlashCard({ def, setUp, sourceLabel, figure, change, query, t }:
   );
 }
 
-/** A stored figure's line against the one to compare with */
+/**
+ * A stored figure's line against the one to compare with (lib/flash changeLineOf). The landing writes it As of a date,
+ * where a snapshot's figures are each taken once after their date ended and compared as stored, so never "so far"
+ */
 export function changeText(value: number | null, previous: number | null, previousOn: string | null, locale: "en" | "nl", t: T): string {
-  if (previousOn === null) return t.noCompare;
-  const c = changeOf(value, previous);
-  if (c.direction === "none") return t.noCompare;
-  const date = fmtDate(previousOn, locale);
-  if (c.direction === "flat") return t.changeFlat.replace("{date}", date);
-  return t.changeSince.replace("{arrow}", changeArrow(c.direction)).replace("{delta}", fmtNumber(Math.abs(c.delta ?? 0), locale, 1)).replace("{date}", date);
+  return changeLineOf(value, previous, previousOn === null ? null : fmtDate(previousOn, locale), false, t, (x) => fmtNumber(x, locale, 1));
 }
 
 /** The totals: one tile per measure, the headline first */
@@ -203,9 +201,13 @@ export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc:
   );
 }
 
-function dimLabel(doc: FlashDocumentView, dim: string, value: string, t: T): string {
-  if (value === "unknown" && dim === "market") return t.unknownMarket;
-  return doc.labels[dim]?.[value] ?? value;
+/**
+ * A dim's value as the breakdown shows it: the market's name, a store's, a pipeline's or a stage's label (a stage by its
+ * row's pipeline and its own id: lib/flash dimText), else the value itself
+ */
+function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, dims: Record<string, string>, t: T): string {
+  if (dims[dim] === "unknown" && dim === "market") return t.unknownMarket;
+  return dimText(def.key, doc.labels, dim, dims);
 }
 
 /**
@@ -252,7 +254,8 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
               <tr key={i} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
                 {set.map((d) => (
                   <td key={d} className="px-3 py-2">
-                    <Link href={cellLink(r, null)} className="text-p4a-deepblue underline">{dimLabel(doc, d, r.dims[d] ?? "", t)}</Link>
+                    <Link href={cellLink(r, null)} className="text-p4a-deepblue underline"
+                      title={FLASH_LABELLED_DIMS[def.key]?.[d] && dimLabel(def, doc, d, r.dims, t) !== r.dims[d] ? r.dims[d] : undefined}>{dimLabel(def, doc, d, r.dims, t)}</Link>
                   </td>
                 ))}
                 {measures.map((m) => (
@@ -288,7 +291,7 @@ export function MarketBars({ def, doc, locale, t }: { def: FlashOverviewDef; doc
         const v = typeof r.measures[measure] === "number" ? (r.measures[measure] as number) : 0;
         return (
           <li key={r.dims.market} className="grid grid-cols-[10rem_1fr_6rem] items-center gap-3 text-small">
-            <span>{dimLabel(doc, "market", r.dims.market ?? "", t)}</span>
+            <span>{dimLabel(def, doc, "market", r.dims, t)}</span>
             <span className="h-3 rounded-button bg-p4a-bgblue">
               <span className="block h-3 rounded-button bg-p4a-deepblue" style={{ width: `${Math.round(barShare(v, max) * 100)}%` }} />
             </span>
@@ -303,8 +306,14 @@ export function MarketBars({ def, doc, locale, t }: { def: FlashOverviewDef; doc
 /** The links a column of a list carries (the CRM's only) */
 const LINK_OF: Record<string, string> = { contact_id: "contact_url", record_id: "record_url", task_id: "task_url", object_id: "record_url", related_id: "related_url" };
 
-function cellOf(key: string, kind: string, value: unknown, row: Record<string, unknown>, locale: "en" | "nl", timeZone: string, t: T): ReactNode {
+function cellOf(key: string, kind: string, value: unknown, row: Record<string, unknown>, locale: "en" | "nl", timeZone: string, t: T,
+  labelled = false): ReactNode {
   if (value === null || value === undefined || value === "") return <span className="text-p4a-muted">–</span>;
+  // a pipeline's or a stage's id shows its label (the data layer's <dim>_label: the id where the CMA holds none), the id on hover
+  if (labelled) {
+    const label = row[labelColumnOf(key)];
+    return typeof label === "string" && label !== "" && label !== value ? <span title={String(value)}>{label}</span> : String(value);
+  }
   const linkKey = LINK_OF[key];
   const url = linkKey && typeof row[linkKey] === "string" ? (row[linkKey] as string) : null;
   let text: string;
@@ -364,7 +373,9 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
           {shown.map((r, i) => (
             <tr key={i} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
               {columns.map((c) => (
-                <td key={c.key} className={`px-3 py-2 ${c.kind === "number" ? "tabular text-right" : ""}`}>{cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t)}</td>
+                <td key={c.key} className={`px-3 py-2 ${c.kind === "number" ? "tabular text-right" : ""}`}>
+                  {cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t, !frozen && FLASH_LABELLED_DIMS[def.key]?.[c.key] !== undefined)}
+                </td>
               ))}
             </tr>
           ))}

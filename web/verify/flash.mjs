@@ -13,7 +13,8 @@
  * Flash figure in the metric catalog with a status; the sources' line and the states of a source not set up; amounts per
  * currency and sorting within currency; the grouping sets; the average rating; a measure that does not apply (left out
  * by db/122 while its setting is empty: not applicable on screen without a link, an empty cell in a file, its records
- * refused). Invented values only.
+ * refused); a flow card's change line, which compares a complete period only (its end passed in the tenant's zone and
+ * every set-up source feeding it read after that end; else "so far", en and nl). Invented values only.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -107,6 +108,69 @@ expect("change: up, down, flat, none without a figure to compare",
   [changeOf(12, 10), changeOf(8, 10), changeOf(10, 10), changeOf(10, null), changeOf(null, 3)].map((c) => `${c.direction}:${c.delta}`),
   ["up:2", "down:-2", "flat:0", "none:null", "none:null"], ["", "", "", "", ""]);
 expect("arrows: ↑ ↓ →, nothing without a change", ["up", "down", "flat", "none"].map(changeArrow), ["↑", "↓", "→", ""], ["", "", "", "x"]);
+
+// ---- A flow's change line compares completed periods only (Decision log, 4 Nov 2026) ------------------------------------
+// Complete: (a) the period's end has passed in the tenant's zone and (b) every set-up source feeding the overview was last
+// read after that end. Prod, 4 November 2026: Orders 40 "↓ 221 since Tue 3 November", six hours against a whole day
+const { periodComplete, changeLineOf, FLASH_FLOW_SOURCES } = await import("../src/lib/flash.ts");
+const { copy: periodCopy } = await import("../src/lib/copy.ts");
+const zone = "Europe/Amsterdam";
+const tenantToday = "2026-11-04";
+const readAllAt = (at) => ({ commerce: { setUp: true, lastReadAt: at }, subscriptions: { setUp: true, lastReadAt: at }, reviews: { setUp: true, lastReadAt: at },
+  assets: { setUp: true, lastReadAt: at }, crm: { setUp: true, lastReadAt: at } });
+const readAfterMidnight = readAllAt("2026-11-04T05:10:00Z");
+expect("the sources feeding each flow: churn the subscription app, orders the stores, payments both, reviews the platforms; stocks none",
+  [FLASH_FLOW_SOURCES, FLASH_OVERVIEWS.filter((o) => o.kind === "flow").map((o) => o.key).sort()],
+  [{ churn: ["subscriptions"], orders: ["commerce"], payments: ["commerce", "subscriptions"], reviews: ["reviews"] }, ["churn", "orders", "payments", "reviews"]],
+  [{}, []]);
+expect("(a) open: Today, and This week or This month while running (they end today); complete: Yesterday and a custom range that has ended",
+  [periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), periodComplete("payments", tenantToday, tenantToday, zone, readAfterMidnight),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), periodComplete("churn", "2026-10-31", tenantToday, zone, readAfterMidnight),
+    periodComplete("reviews", "2026-11-05", tenantToday, zone, readAfterMidnight)],
+  [false, false, true, true, false], [true, true, false, false, true]);
+expect("(b) Yesterday with a source last read before midnight (the tenant's zone) is open; read after it, complete",
+  [periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T02:30:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:59:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T23:00:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, "Europe/London", { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T23:30:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: null } })],
+  [false, false, true, false, false], [true, true, false, true, true]);
+expect("(b) every source feeding it: payments waits for the subscription app too; a source not set up feeds nothing; a stock is always compared",
+  [periodComplete("payments", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, subscriptions: { setUp: true, lastReadAt: "2026-11-03T20:00:00Z" } }),
+    periodComplete("payments", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, subscriptions: { setUp: false, lastReadAt: null } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, subscriptions: { setUp: true, lastReadAt: "2026-11-03T20:00:00Z" } }),
+    periodComplete("installed_base", null, tenantToday, zone, readAllAt(null)), periodComplete("open_deals", tenantToday, tenantToday, zone, readAllAt(null))],
+  [false, true, true, true, true], [true, false, false, false, false]);
+const lineEn = periodCopy.en.flash;
+const lineNl = periodCopy.nl.flash;
+const fmtEn = (x) => new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(x);
+const fmtNl = (x) => new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 1 }).format(x);
+expect("an open period (Today, prod's Orders 40 against 261) says so far, en and nl, never a change",
+  [changeLineOf(40, 261, "Tue 3 November", !periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), lineEn, fmtEn),
+    changeLineOf(40, 261, "di 3 november", !periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), lineNl, fmtNl)],
+  ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is"],
+  ["↓ 221 since Tue 3 November", "↓ 221 sinds di 3 november"]);
+expect("a completed period (Yesterday, every source read after midnight) shows its change, en and nl",
+  [changeLineOf(261, 250, "Mon 2 November", !periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), lineEn, fmtEn),
+    changeLineOf(261, 250, "ma 2 november", !periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), lineNl, fmtNl),
+    changeLineOf(5, 5, "Mon 2 November", false, lineEn, fmtEn), changeLineOf(5, null, null, false, lineEn, fmtEn)],
+  ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november", "→ unchanged since Mon 2 November", "Nothing to compare with yet"],
+  ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is", "", ""]);
+expect("Yesterday with a source last read before midnight shows the open-period line (case b), en and nl",
+  [changeLineOf(261, 250, "Mon 2 November",
+    !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineEn, fmtEn),
+  changeLineOf(261, 250, "ma 2 november",
+    !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineNl, fmtNl)],
+  ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is"],
+  ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november"]);
+const periodPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const periodControlsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
+const periodPartsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
+expect("the landing reads it: a live card's open flag from the tenant's today, zone and sources; the live and the stored line through changeLineOf",
+  [/const open = asOf === null && !periodComplete\(o\.key, o\.kind === "flow" \? to : null, page\.today \|\| today, page\.timeZone \|\| me\.timeZone, page\.sources\);/.test(periodPageSrc),
+    /open=\{open\}/.test(periodPageSrc) && /openPeriod: t\.openPeriod/.test(periodPageSrc),
+    /changeLineOf\(shown, previous, labels\.previousOnText, open, labels, n\)/.test(periodControlsSrc), /return changeLineOf\(/.test(periodPartsSrc)],
+  [true, true, true, true], [false, false, false, false]);
 expect("a definition's status and tone: Decided success, Proposed info (also when the catalog says nothing), Pending warning",
   [definitionStatus("Decided"), definitionStatus("Proposed (for Kira to confirm)"), definitionStatus(undefined), definitionStatus("Pending: x")]
     .map((s) => `${s}:${statusTone(s)}`),
@@ -349,6 +413,85 @@ expect("a file leaves a measure that does not apply empty, never 0; the mock lea
   [breakdownRows(customersDef, [{ dims: {}, measures: { customers_held: 2, active_customers: 1, paused_customers: 1, linked_to_contact: 1 } }])[0].with_required_refs,
     "with_required_refs" in mockCustomersFigures(someCustomers, false), mockCustomersFigures(someCustomers, true).with_required_refs],
   [null, false, 1], [0, true, 2]);
+
+// ---- A pipeline's and a stage's label (Decision log, 4 Nov 2026): on screen and in the files, the id kept ---------------
+// cma.flash_labels_of keys a stage '<pipeline id>:<stage id>' and a pipeline (a ticket's queue) by its own id; the screen
+// and the files look a stage up with its row's own pipeline. HubSpot's default pipeline's stage ids are ids like any other
+const {
+  FLASH_LABELLED_DIMS, dimLabelOf, dimText, withLabels, withLabelColumns, filtersShown, labelColumnOf,
+} = await import("../src/lib/flash.ts");
+const labelsSql = sql.slice(sql.indexOf("create or replace function cma.flash_labels_of"), sql.indexOf("$$;", sql.indexOf("create or replace function cma.flash_labels_of") + 80));
+expect("db/122's labels: a stage keyed '<pipeline id>:<stage id>', a pipeline and a queue by the pipeline's id; the labelled dims are dims of their overview",
+  [/'stage', case when p_overview in \('open_deals', 'open_tickets'\)\s+then \(select jsonb_object_agg\(cs\.source_pipeline_id \|\| ':' \|\| cs\.source_stage_id, cs\.label\)/.test(labelsSql),
+    /'pipeline', case when p_overview = 'open_deals'\s+then \(select jsonb_object_agg\(p\.source_pipeline_id, p\.label\)/.test(labelsSql),
+    /'queue', case when p_overview = 'open_tickets'\s+then \(select jsonb_object_agg\(p\.source_pipeline_id, p\.label\)/.test(labelsSql),
+    Object.entries(FLASH_LABELLED_DIMS).every(([o, dims]) => Object.entries(dims).every(([d, parts]) => overviewOf(o).dims.includes(d) && parts.every((x) => overviewOf(o).dims.includes(x)))),
+    Object.keys(FLASH_LABELLED_DIMS).sort()],
+  [true, true, true, true, ["open_deals", "open_tickets"]], [false, false, false, false, []]);
+const crmLabels = {
+  pipeline: { default: "Sales", "7000000001": "Invest" }, queue: { "7000000002": "Service" },
+  stage: { "default:appointmentscheduled": "Appointment made", "default:1000000001": "Quote asked", "7000000001:1000000001": "Intake",
+    "7000000002:2000000001": "Waiting on us" },
+};
+const deal = { record_id: "5100001", pipeline: "default", stage: "1000000001", market: "GB" };
+expect("a stage's label by its row's pipeline and its own id; the same stage id in another pipeline its own; a pipeline's by its id",
+  [dimLabelOf("open_deals", crmLabels, "stage", deal), dimLabelOf("open_deals", crmLabels, "stage", { ...deal, pipeline: "7000000001" }),
+    dimLabelOf("open_deals", crmLabels, "stage", { pipeline: "default", stage: "appointmentscheduled" }), dimLabelOf("open_deals", crmLabels, "pipeline", deal),
+    dimLabelOf("open_tickets", crmLabels, "stage", { queue: "7000000002", stage: "2000000001" }), dimLabelOf("open_tickets", crmLabels, "queue", { queue: "7000000002" })],
+  ["Quote asked", "Intake", "Appointment made", "Sales", "Waiting on us", "Service"], [null, null, null, null, null, null]);
+expect("a stage is never looked up by its id alone (the key of #214's breakdown), nor without its pipeline",
+  [dimLabelOf("open_deals", { stage: { "1000000001": "By id alone" } }, "stage", deal), dimLabelOf("open_deals", crmLabels, "stage", { stage: "1000000001" })],
+  [null, null], ["By id alone", "Quote asked"]);
+expect("a missing label shows the id, on screen and in the file's label column; other dims by their own labels as before",
+  [dimText("open_deals", crmLabels, "stage", { pipeline: "default", stage: "qualifiedtobuy" }), dimText("open_deals", null, "pipeline", deal),
+    withLabels("open_deals", [{ pipeline: "default", stage: "qualifiedtobuy" }], crmLabels)[0].stage_label,
+    dimText("customers", { market: { GB: "United Kingdom" } }, "market", { market: "GB" }), dimText("open_deals", crmLabels, "market", { market: "NL" })],
+  ["qualifiedtobuy", "default", "qualifiedtobuy", "United Kingdom", "NL"], ["", "", null, "GB", ""]);
+expect("the records: <dim>_label beside each id, the id kept; empty where a row has none; other overviews' rows unchanged",
+  [withLabels("open_deals", [deal], crmLabels)[0], withLabels("open_tickets", [{ queue: "7000000002", stage: "2000000001" }], crmLabels)[0],
+    withLabels("open_deals", [{ pipeline: null, stage: "" }], crmLabels)[0], withLabels("orders", [{ store: "s" }], crmLabels)[0]],
+  [{ ...deal, pipeline_label: "Sales", stage_label: "Quote asked" }, { queue: "7000000002", stage: "2000000001", queue_label: "Service", stage_label: "Waiting on us" },
+    { pipeline: null, stage: "", pipeline_label: null, stage_label: null }, { store: "s" }],
+  [deal, {}, {}, { store: "s", store_label: "s" }]);
+expect("the records file: each label column right after its id's; every other overview's columns unchanged",
+  [withLabelColumns("open_deals", FLASH_LIST_COLUMNS.open_deals).map((c) => c.key).slice(0, 7),
+    withLabelColumns("open_tickets", FLASH_LIST_COLUMNS.open_tickets).map((c) => c.key).slice(2, 6),
+    FLASH_OVERVIEWS.filter((o) => !FLASH_LABELLED_DIMS[o.key]).every((o) => JSON.stringify(withLabelColumns(o.key, FLASH_LIST_COLUMNS[o.key])) === JSON.stringify(FLASH_LIST_COLUMNS[o.key])),
+    labelColumnOf("stage")],
+  [["record_id", "record_url", "pipeline", "pipeline_label", "stage", "stage_label", "market"], ["queue", "queue_label", "stage", "stage_label"], true, "stage_label"],
+  [["record_id", "record_url", "pipeline", "stage", "market"], ["queue", "stage"], false, "stage"]);
+const dealsDef = overviewOf("open_deals");
+const dealDoc = [{ dims: {}, measures: { open_deals: 3, median_age_days: 4, oldest_age_days: 9 } },
+  { dims: { market: "GB" }, measures: { open_deals: 3, median_age_days: 4, oldest_age_days: 9 } },
+  { dims: { market: "GB", pipeline: "default", stage: "1000000001" }, measures: { open_deals: 2, median_age_days: 4, oldest_age_days: 9 } },
+  { dims: { market: "GB", pipeline: "default", stage: "qualifiedtobuy" }, measures: { open_deals: 1, median_age_days: 2, oldest_age_days: 2 } }];
+expect("the breakdown file: pipeline_label and stage_label beside the ids; the label per line, the id without one, empty on the totals and market lines",
+  [breakdownColumns(dealsDef, dealDoc).map((c) => c.key).slice(0, 7),
+    breakdownRows(dealsDef, dealDoc, crmLabels).map((r) => [r.set, r.pipeline, r.pipeline_label, r.stage, r.stage_label])],
+  [["set", "market", "pipeline", "pipeline_label", "stage", "stage_label", "open_deals"],
+    [["totals", null, null, null, null], ["market", null, null, null, null], ["market+pipeline+stage", "default", "Sales", "1000000001", "Quote asked"],
+      ["market+pipeline+stage", "default", "Sales", "qualifiedtobuy", "qualifiedtobuy"]]],
+  [["set", "market", "pipeline", "stage", "open_deals"], []]);
+expect("the overview's heading names a filter by its label; the file's filters cell keeps the ids",
+  [filtersText(null, null, null, filtersShown("open_deals", { pipeline: "default", stage: "1000000001", measure: "open_deals" }, crmLabels)),
+    filtersText(null, null, null, { pipeline: "default", stage: "1000000001" })],
+  ["measure=open_deals; pipeline=Sales; stage=Quote asked", "pipeline=default; stage=1000000001"],
+  ["measure=open_deals; pipeline=default; stage=1000000001", ""]);
+const pgSrc = readFileSync(path.join(here, "..", "src", "lib", "data", "postgres.ts"), "utf8");
+expect("the screen and the files use them: breakdown and records (FlashParts), the heading (page), both file parts, the records read (one statement with the list)",
+  [/dimText\(def\.key, doc\.labels, dim, dims\)/.test(flashPartsSrc), /row\[labelColumnOf\(key\)\]/.test(flashPartsSrc),
+    /filtersShown\(def\.key, /.test(pageSrc), /breakdownRows\(def, all, doc\.labels\)/.test(fileSrc), /withLabelColumns\(def\.key, FLASH_LIST_COLUMNS\[def\.key\]\)/.test(fileSrc),
+    /cma\.flash_rows\(\$1[^`]*as j,\s*case when \$10 then cma\.flash_labels_of\(cma\.current_tenant_id\(\), \$1\) end as l`/.test(pgSrc),
+    /toFlashRows\(r\.r, r\.d\.labels\)/.test(pgSrc)],
+  [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
+const mockDeals = mockFlashRows(reader, { overview: "open_deals", filters: {}, asOf: null, from: null, to: null, sort: null, descending: true, limit: 500, offset: 0 });
+const mockTickets = mockFlashRows(reader, { overview: "open_tickets", filters: {}, asOf: null, from: null, to: null, sort: null, descending: true, limit: 500, offset: 0 });
+expect("the mock answers as the database: labels beside the ids, a stage by its pipeline, a stage without a label as its id",
+  [mockDeals.rows.length > 0 && mockDeals.rows.every((r) => typeof r.pipeline_label === "string" && typeof r.stage_label === "string"),
+    mockDeals.rows.some((r) => r.pipeline === "pl-invest" && r.stage === "st-negotiation" && r.stage_label === "st-negotiation"),
+    mockDeals.rows.some((r) => r.pipeline === "pl-sales" && r.stage === "st-quote" && r.stage_label === "Quote sent"),
+    mockTickets.rows.some((r) => r.queue === "tp-support" && r.stage === "ts-waiting" && r.stage_label === "Waiting on contact" && r.queue_label === "Support")],
+  [true, true, true, true], [false, false, false, false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
