@@ -63,7 +63,7 @@ Build choices of the night (to confirm):
 | `cma.subscription_store_connection_of` (118) | unchanged; resolves each of the 12 handles when the store rows exist | 15.10 (c)'s read-back, executed locally for two fake handles |
 | `web/src/lib/data/postgres.ts` `toSource` | the five columns mapped | typecheck; `verify/api.mjs` in api mode (324 PASS: the sources checks read the five fields) |
 | `web/src/lib/data/mock.ts` `mockSource` | the five fields with polled and webhook shapes | `verify/api.mjs --sources` in mock mode (33), the screenshot |
-| `SourcesList.tsx` | the column, the hints, the badge, the dash rule | the screenshot (`local-records/web/screenshots`), `verify/theme.mjs` and `verify/layout.mjs` (see local-records README for their result) |
+| `SourcesList.tsx` | the column, the hints, the badge, the dash rule | the screenshot (`local-records/web/screenshots`), `verify/theme.mjs` (1 problem, Attempts by pipeline, as on `main`) and `verify/layout.mjs` (10 problems, all Funnel, as on `main`; the Sources page passes) |
 | `src/lib/sources.ts` helpers | pure | `verify/configuration.mjs` 119 PASS, provoked |
 | `src/lib/health.ts` `connectionState` | unchanged (System health keeps its own rule on events and runs) | `verify/health.mjs` 39 |
 | `ingest/src/jobs/backfill.mjs` | `--connection` exactly as before (the same function body, now `backfillConnection`); `--adapter` new | `jobs-flow.mjs` 99 PASS and provoked (the HubSpot backfill's resume, `--again`, the lists); `juo-flow.mjs` 35 PASS and provoked; `assets-flow.mjs` 39 PASS and provoked |
