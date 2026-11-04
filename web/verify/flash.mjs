@@ -25,6 +25,7 @@ import {
   breakdownRows, filtersText, FLASH_LINKS_LEFT_OUT, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_FIX_IN, fixInOf, cellFilters, frozenFilters,
   FLASH_FROZEN_LIST, listUnavailable, FLASH_CONDITIONAL_MEASURES, measureNotApplicable,
 } from "../src/lib/flash.ts";
+import { fmtLastRead } from "../src/lib/time.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const here = path.dirname(new URL(import.meta.url).pathname);
@@ -194,6 +195,16 @@ const sources = { commerce: { set_up: true, adapters: ["shopx"], last_read_at: "
 expect("the sources' line: the overview's own first (also when not set up), then the set-up others",
   [sourcesLine(sources, "subscriptions").map((s) => `${s.source}:${s.setUp}`), sourcesLine(sources, null).map((s) => s.source)],
   [["subscriptions:false", "commerce:true", "assets:true", "crm:true"], ["commerce", "assets", "crm"]], [[], []]);
+// The "Last read" stamp: time alone on the tenant's today, else weekday, date and time (4 November 2026, 14:00 UTC = 15:00 Amsterdam)
+const readNow = "2026-11-04T14:00:00Z";
+expect("last read: today in the tenant's zone shows the time alone",
+  [fmtLastRead("2026-11-04T10:59:00Z", readNow, "Europe/Amsterdam", "en"), fmtLastRead("2026-11-03T23:30:00Z", readNow, "Europe/Amsterdam", "en")],
+  ["11:59", "00:30"], ["Wed 4 Nov 11:59", "Tue 3 Nov 00:30"]);
+expect("last read: an earlier day shows the short weekday and date with the time (en)",
+  [fmtLastRead("2026-11-02T10:59:00Z", readNow, "Europe/Amsterdam", "en"), fmtLastRead("2026-11-03T22:30:00Z", readNow, "Europe/London", "en")],
+  ["Mon 2 Nov 11:59", "Tue 3 Nov 22:30"], ["11:59", "22:30"]);
+expect("last read: the user's locale (nl)",
+  fmtLastRead("2026-11-02T10:59:00Z", readNow, "Europe/Amsterdam", "nl"), "ma 2 nov 11:59", "11:59");
 expect("not set up: no figures, never zeros; data quality always shows",
   [showsFigures(overviewOf("subscriptions"), false), showsFigures(overviewOf("subscriptions"), true), showsFigures(overviewOf("data_quality"), false)],
   [false, true, true], [true, false, false]);

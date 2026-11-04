@@ -18,7 +18,7 @@ import {
   FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf, measureNotApplicable, overviewOf, rowsOfSet, statusTone, type FlashKey,
   type FlashOverviewDef,
 } from "@/lib/flash";
-import { fmtDate, fmtDateTimeShort, fmtTime } from "@/lib/time";
+import { fmtDate, fmtDateTimeShort, fmtLastRead } from "@/lib/time";
 
 type T = Copy["flash"];
 type Query = Record<string, string>;
@@ -86,7 +86,7 @@ export function FlashStrip({ active, query, t }: { active: FlashKey | null; quer
 export function SourcesLine({ sources, timeZone, locale, t }: { sources: FlashSourcesView; timeZone: string; locale: "en" | "nl"; t: T }) {
   const parts = FLASH_SOURCES.filter((s) => sources[s]).map((s) => {
     const st = sources[s]!;
-    const when = !st.setUp ? t.notSetUpShort : st.lastReadAt ? fmtTime(st.lastReadAt, timeZone, locale) : t.notRead;
+    const when = !st.setUp ? t.notSetUpShort : st.lastReadAt ? fmtLastRead(st.lastReadAt, new Date(), timeZone, locale) : t.notRead;
     return <span key={s} title={st.adapters.join(", ") || undefined} data-testid={`flash-source-${s}`}>{t[`source_${s}` as keyof T]} {when}</span>;
   });
   if (parts.length === 0) return null;

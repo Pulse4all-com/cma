@@ -100,6 +100,16 @@ export function fmtDateTimeShort(instant: Instant, timeZone: string, locale: Loc
 }
 
 /**
+ * A last-read stamp: the time alone (11:59) when the instant falls on the tenant's today, otherwise the short weekday and
+ * date with the time (Mon 2 Nov 11:59), so a read on an earlier day never reads as today
+ */
+export function fmtLastRead(instant: Instant, now: Instant | Date, timeZone: string, locale: Locale): string {
+  const day = dateKeyInZone(instant, timeZone);
+  if (day === dateKeyInZone(now, timeZone)) return fmtTime(instant, timeZone, locale);
+  return `${fmtDate(day, locale, "compact")} ${fmtTime(instant, timeZone, locale)}`;
+}
+
+/**
  * One range in the locale's own shape (16 October 2026, backlog CMA-061): 12–18 October 2026,
  * 28 September – 4 October 2026 across months, 28 December 2026 – 3 January 2027 across years
  */
