@@ -2,12 +2,14 @@
 # The ingest service (cma-ingest) and its jobs on the same image (Cloud Run jobs: node jobs/<name>.mjs).
 # Two stages: production dependencies, then the runtime as a non-root user.
 
-FROM node:22-alpine AS deps
+FROM node:22.23.4-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-FROM node:22-alpine AS run
+FROM node:22.23.4-alpine AS run
+# The runtime version in the build log (CVE-2026-111497, 4 November 2026): the base image pins the Node.js patch version
+RUN node --version
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=8080

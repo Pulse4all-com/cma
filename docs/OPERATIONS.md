@@ -567,6 +567,8 @@ log-based distribution metric on it; until that metric exists the backend latenc
    `eslint-config-next` (a devDependency; README Open decisions) and show only without `--omit=dev`. Never
    `npm audit fix --force`. Since #158 Dependabot opens one grouped minor-and-patch pull request
    per project per month (the first, #164 for `web/`, on 18 October 2026); a major stays by hand.
+   The docker entries propose a bump of the Dockerfiles' pinned `node:22.x.y-alpine`; a Node.js security
+   release reaches the running services only through that merged pull request.
 6. **Browser:** until each is settled: Admin console → Security → 2-Step Verification, the agents' unit
    (README Open decisions; READINESS, gates); GitHub → the repository's ruleset on `main` still requires a
    pull request.

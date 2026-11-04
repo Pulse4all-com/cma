@@ -93,9 +93,12 @@ expect("the autumn change: a 02:30 start on 25 October is the earlier of the two
   plannedInstant("2026-10-25", "02:30", Z), at("2026-10-25T00:30:00Z"), at("2026-10-25T01:30:00Z"));
 
 // ---- the week's label and the absences a cell takes (16 October 2026, backlog CMA-061) -----------------
-// ICU writes the range's dash with thin spaces (U+2009) when the two sides differ in more than the day
+// ICU writes the range's dash with thin spaces (U+2009) when the two sides differ in more than the day;
+// since ICU 78 (CLDR 48; Node.js 22.23.4, the pinned image since 4 November 2026) English writes them within one
+// month too (12 – 18 October 2026), Dutch does not (12–18 oktober 2026): the locale's own shape, not the CMA's
 const dash = "\u2009\u2013\u2009";
-expect("a week inside one month is one range", fmtDateRange("2026-10-12", "2026-10-18", "en"), "12\u201318 October 2026", "12 - 18 October 2026");
+const sameMonthDashEn = Number(process.versions.icu.split(".")[0]) >= 78 ? dash : "\u2013";
+expect("a week inside one month is one range", fmtDateRange("2026-10-12", "2026-10-18", "en"), `12${sameMonthDashEn}18 October 2026`, "12 - 18 October 2026");
 expect("a week across two months names both", fmtDateRange("2026-09-28", "2026-10-04", "en"), `28 September${dash}4 October 2026`, `28 September${dash}4 October`);
 expect("a week across the year end names both years", fmtDateRange("2026-12-28", "2027-01-03", "en"), `28 December 2026${dash}3 January 2027`, `28 December${dash}3 January 2027`);
 expect("the same in Dutch", [fmtDateRange("2026-10-12", "2026-10-18", "nl"), fmtDateRange("2026-09-28", "2026-10-04", "nl")],
