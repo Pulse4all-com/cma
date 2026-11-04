@@ -14,7 +14,7 @@ What you will see:
 - Reports → Flash: active customers, active subscriptions, churn, orders, payments, open deals, tickets and tasks, per market, as of today or any past date.
 - Reports → Data quality: the records that need a fix, and where.
 
-The Workspace shows no customer data. You see ids, statuses, amounts and links to HubSpot or Juo, never a name, address or phone number.
+The Workspace shows no customer data. You see ids, statuses, amounts and links to the source systems, never a name, address or phone number.
 
 Where the figures come from, and how fresh they are:
 - HubSpot, Aircall and the Shopify stores: at once, as events happen.

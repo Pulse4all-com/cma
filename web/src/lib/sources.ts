@@ -406,7 +406,7 @@ export function readState(s: { lastReadAt: string | null; readsFailed24h: number
 }
 
 /** A run's job as its label on screen (System health's job labels), the job's own word when the copy has none */
-export function jobLabel(job: string | null, labels: Record<string, string>): string | null {
+export function jobLabel(job: string | null, labels: Partial<Record<string, string>>): string | null {
   if (!job) return null;
   return labels[`job_${job}`] ?? job;
 }

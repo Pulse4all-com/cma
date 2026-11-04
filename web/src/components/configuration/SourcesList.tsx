@@ -29,7 +29,7 @@ export function fmtWhen(instant: string, locale: Locale, timeZone: string): stri
 
 export function SourcesList({ sources, copy, locale, timeZone }: { sources: SourceConnection[]; copy: Copy; locale: Locale; timeZone: string }) {
   const t = copy.configSources;
-  const jobs = copy.configHealth as unknown as Record<string, string>;
+  const jobs: Partial<Record<string, string>> = copy.configHealth;
   const hint = (label: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
   if (sources.length === 0) return <p className="text-body text-p4a-muted">{t.empty}</p>;
   return (
@@ -61,7 +61,7 @@ export function SourcesList({ sources, copy, locale, timeZone }: { sources: Sour
                 <span className="block text-caption text-p4a-muted">{s.eventsWaiting} {t.waiting.toLowerCase()} · {s.eventsParked > 0 ? <Badge tone="warning">{s.eventsParked}</Badge> : 0} {t.parked.toLowerCase()}</span>
               </td>
               {/* a source read on a schedule has no events: its cell stays a dash, never "Never" beside a read */}
-              <td className={`${td} text-small`}>{s.lastEventAt ? fmtWhen(s.lastEventAt, locale, timeZone) : s.lastReadAt ? "–" : t.never}</td>
+              <td className={`${td} text-small`}>{s.lastEventAt ? fmtWhen(s.lastEventAt, locale, timeZone) : s.lastReadAt || s.reads24h > 0 ? "–" : t.never}</td>
               <td className={`${td} text-small`}>
                 {s.lastReadAt ? (
                   <>
