@@ -44,3 +44,21 @@ The browser verifiers and the screenshot needed the container's pre-installed Ch
 | `assets-flow.txt`, `assets-flow-provoked.txt` | `verify/assets-flow.mjs`: `ALL 39 PASS`, unchanged; provoked all 39 failed. |
 
 Not recorded as a file: the grep of the change for a store handle, a secret name or an id outside runbooks and docs (none: the verifiers' handles are their own `juo-<run>-…` fixtures; `db/129`'s connections are `verify-…`).
+
+## The follow-up of 4 November 2026, the evening (`*-b.txt`)
+
+The same container and database after the follow-up (NO taken out of the runbook, 15.10 (a) a check, `cma.source_reads` and the Reads panel; `../NIGHT_NOTES.md`, the follow-up section). The `0008zq` row was removed from `cma.schema_migration` locally before `128` ran again, so its first run shows `INSERT 0 1` as in dev and prod; the function definitions are replaced either way.
+
+| File | What |
+|---|---|
+| `db/128_sources_last_read-first-run-b.txt`, `-rerun-b.txt` | `INSERT 0 1 COMMIT RESET`, then `INSERT 0 0 COMMIT RESET`; `cma.source_reads(uuid)` created. |
+| `db/129_verify_sources_last_read-b.txt` | 14 checks (S1, S2, A1 to A7), `PASS | 14 PASS, 0 FAIL`. |
+| `db/129_verify_sources_last_read-provoked-b.txt` | Provoked: six blocks raise `FAIL`, `PROVOKED, NOT A PASS | 0 PASS, 14 FAIL`. |
+| `db/79_verify_system_health-after-128-b.txt` | 13 PASS, unchanged. |
+| `db/53_verify_sources_configuration-after-128-b.txt` | `15 PASS, 1 FAIL`: its A4 ("8 connection(s) without the kind their rows imply") reads every connection of the database, and the local one now holds the Juo flow verifier's throwaway connections and the reports fixture's; it passed 16 PASS right after `128` on the clean replay (`53_verify_sources_configuration-after-128.txt`), so it is the local fixtures, not the migration. Dev and prod hold connections with their kinds. |
+| `web/typecheck-b.txt`, `lint-b.txt`, `build-b.txt` | Exit 0; lint's two warnings as before. |
+| `web/verify-<name>-b.txt` | The pure verifiers again: copy 3419 keys (15 new, the Reads panel's), configuration 121 (two helper checks more), the rest as before. |
+| `web/verify-api-local-b.txt`, `-provoked-b.txt` | `verify/api.mjs` in api mode on the local database: `ALL 325 PASS` (the connection's reads: at most 20, newest first, each row's keys, a status of the three, counts as numbers, a code never a value); provoked all 325 failed. |
+| `web/verify-api-mock-sources-b.txt`, `-provoked-b.txt` | `--sources` against the mock build: 34 PASS; provoked all failed. |
+| `web/verify-theme-b.txt`, `verify-layout-b.txt` | THEME_LAYOUT_B |
+| `web/screenshots/source-reads-mock-1280.png` | The reviews connection's page in mock mode: the Reads panel with twenty `Reviews poll` runs, newest first, the duration, a `Failed` badge with `rate_limited` beside it, the counts; the automation connection's page says "No read yet". |

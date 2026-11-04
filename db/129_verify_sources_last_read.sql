@@ -3,11 +3,11 @@
 -- =============================================================================================
 -- Universal: no seed is assumed. Block S checks the addition, the columns and the grants; blocks A1 to A6 each work on
 -- throwaway tenants inside a subtransaction that is always rolled back, so nothing stays and the script runs in dev and
--- in prod. The connections are invented (adapters verifypoll, verifyhook; account ids verify-…; secret names verify-…),
+-- in prod; A7 does the same for cma.source_reads (the connection page's Reads panel). The connections are invented (adapters verifypoll, verifyhook; account ids verify-…; secret names verify-…),
 -- the events and runs are written straight into cma.ingest_event and cma.sync_run as the owner with chosen instants, so
 -- the verdict never depends on the time it runs. Cloud SQL Studio shows no notices: a check that fails raises "FAIL …"
--- and stops its block; every check that passed writes one row, and the last row is the verdict: "PASS | 9 PASS, 0 FAIL"
--- (provoked: "PROVOKED, NOT A PASS | 0 PASS, 9 FAIL"). A block that stopped counts its checks as FAIL; the verdict is
+-- and stops its block; every check that passed writes one row, and the last row is the verdict: "PASS | 14 PASS, 0 FAIL"
+-- (provoked: "PROVOKED, NOT A PASS | 0 PASS, 14 FAIL"). A block that stopped counts its checks as FAIL; the verdict is
 -- reached only when the client goes on after an error (psql -v ON_ERROR_STOP=0, as the provoked run does; with
 -- ON_ERROR_STOP=1 the run ends at the first FAIL, which names the check). Run as your own IAM login after
 -- 128_sources_last_read.sql, dev first, then prod; then 53 (its B2) and 79 again (unchanged, still PASS).
@@ -25,6 +25,10 @@
 --   A5  another tenant's runs and events are invisible: tenant two's connection has runs and events, tenant one's rows
 --       keep their counts and tenant one's list has no row of it
 --   A6  the permission: a manager (no tenant.configure) is refused with CMA06; the admin reads the list
+--   S2  cma.source_reads(uuid) is a stable function executable by cma_app only, owned by cma_owner, with its eight columns
+--   A7  cma.source_reads: a connection with 25 runs answers its newest 20, newest first (started_at, then id), each row
+--       with its job, stream, finish, status, the counts it recorded and its error code; a running run among them; an
+--       unknown or another tenant's connection id answers no rows; a manager is refused with CMA06
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
@@ -90,14 +94,15 @@ as $$
 $$;
 
 -- A run of a connection: started at p_started, finished p_minutes later with p_status (running when p_minutes is null)
-create or replace function pg_temp.v0008zq_run(x jsonb, p_conn uuid, p_job text, p_started timestamptz, p_minutes integer, p_status text, p_error text default null)
+create or replace function pg_temp.v0008zq_run(x jsonb, p_conn uuid, p_job text, p_started timestamptz, p_minutes integer, p_status text, p_error text default null,
+                                                p_counts jsonb default '{}'::jsonb)
 returns void
 language sql
 as $$
   insert into cma.sync_run (tenant_id, connection_id, job, stream, started_at, finished_at, status, counts, error)
   values ((x ->> 't')::uuid, p_conn, p_job, 'verify', p_started,
           case when p_minutes is null then null else p_started + make_interval(mins => p_minutes) end,
-          case when p_minutes is null then 'running' else p_status end, '{}'::jsonb, p_error);
+          case when p_minutes is null then 'running' else p_status end, p_counts, p_error);
 $$;
 
 -- The acting context inside a block: the application, the tenant, a person
@@ -154,6 +159,35 @@ begin
   end if;
   insert into verify_0008zq values (1, 'S1 addition, columns, function and grants', 'PASS',
     '27 columns, the five of 0008zq last; stable, invoker, cma_owner''s, cma_app only; reads cma.sync_run');
+end
+$$;
+
+-- S2. cma.source_reads: its columns, volatility and grants (universal)
+do $$
+declare
+  v_provoke boolean := current_setting('verify.provoke')::boolean;
+  v_fn      text := 'cma.source_reads(uuid)';
+  v_cols    text;
+begin
+  select string_agg(a.attname || ':' || format_type(a.atttypid, null), ',' order by a.ord)
+  into v_cols
+  from pg_proc p
+  cross join lateral unnest(p.proallargtypes, p.proargmodes, p.proargnames) with ordinality as a(atttypid, mode, attname, ord)
+  where p.oid = to_regprocedure(v_fn) and a.mode = 't';
+  if v_cols is distinct from 'run_id:uuid,job:text,stream:text,started_at:timestamp with time zone,finished_at:timestamp with time zone,status:text,counts:jsonb,error:text'
+     or v_provoke then
+    raise exception 'FAIL S2: cma.source_reads(uuid) does not answer its eight columns (%)', v_cols;
+  end if;
+  if to_regprocedure(v_fn) is null
+     or (select p.prosecdef or p.provolatile <> 's' or p.proowner <> 'cma_owner'::regrole from pg_proc p where p.oid = to_regprocedure(v_fn))
+     or not has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
+     or exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                where p.oid = to_regprocedure(v_fn) and a.grantee = 0)
+     or pg_get_functiondef(to_regprocedure(v_fn)) not like '%assert_permission(''tenant.configure'')%limit 20%' then
+    raise exception 'FAIL S2: % is not a stable invoker function owned by cma_owner for cma_app only, checking tenant.configure, limited to 20', v_fn;
+  end if;
+  insert into verify_0008zq values (2, 'S2 cma.source_reads: columns, function and grants', 'PASS',
+    'eight columns; stable, invoker, cma_owner''s, cma_app only; tenant.configure; limit 20');
 end
 $$;
 
@@ -317,20 +351,88 @@ begin
 end
 $$;
 
--- Verdict: one row per check that passed, then the verdict (9 checks; a block that stopped counts its checks as FAIL)
+-- A7. cma.source_reads: the newest 20 of 25 runs, newest first, with their counts and codes; another tenant; the permission
+do $$
+declare
+  v_provoke boolean := current_setting('verify.provoke')::boolean;
+  v_rows    text[] := '{}';
+  x1        jsonb;
+  x2        jsonb;
+  c1        uuid;
+  c2        uuid;
+  v_t0      timestamptz := now();
+  v_txt     text;
+  v_n       integer;
+  v_ok      boolean := false;
+  k         integer;
+begin
+  begin
+    x1 := pg_temp.v0008zq_tenant('verify-0008zq-a7-one');
+    x2 := pg_temp.v0008zq_tenant('verify-0008zq-a7-two');
+    c1 := pg_temp.v0008zq_connection(x1, 'verifypoll', 'Verify reads', 'verify-reads-key');
+    c2 := pg_temp.v0008zq_connection(x2, 'verifypoll', 'Verify reads two', 'verify-reads-two-key');
+    -- 25 runs an hour apart, the oldest first; the 3rd newest failed, the newest still running (a run's counts are set
+    -- when it finishes, so they are written with the row: a finished run is never updated, 32's trigger)
+    for k in 1..25 loop
+      perform pg_temp.v0008zq_run(x1, c1, case when k % 5 = 0 then 'reconcile' else 'subscriptions_poll' end,
+                                  v_t0 - make_interval(hours => 26 - k), case when k = 25 then null else 1 end,
+                                  case when k = 23 then 'failed' else 'succeeded' end, case when k = 23 then 'rate_limited' else null end,
+                                  case when k = 24 then '{"fetched": 7, "events_new": 2}'::jsonb else '{}'::jsonb end);
+    end loop;
+    perform pg_temp.v0008zq_run(x2, c2, 'reviews_poll', v_t0 - interval '1 hour', 1, 'succeeded');
+
+    perform pg_temp.v0008zq_as(x1, 'admin');
+    select count(*), string_agg(r.status || ':' || coalesce(r.error, '-') || ':' || r.job, ' ' order by r.started_at desc)
+    into v_n, v_txt from cma.source_reads(c1) r;
+    if v_n <> 20 or v_txt not like 'running:-:reconcile succeeded:-:subscriptions_poll failed:rate_limited:subscriptions_poll %'
+       or (select min(r.started_at) from cma.source_reads(c1) r) <> v_t0 - make_interval(hours => 26 - 6)
+       or (select bool_and(a.started_at >= b.started_at) from (select r.started_at, row_number() over () as n from cma.source_reads(c1) r) a
+           join (select r.started_at, row_number() over () as n from cma.source_reads(c1) r) b on b.n = a.n + 1) is distinct from true
+       or v_provoke then
+      raise exception 'FAIL A7: source_reads answers % rows, [%]', v_n, v_txt;
+    end if;
+    v_rows := v_rows || array['70', 'A7 the newest 20 of 25 runs, newest first', 'PASS', 'the running one first, then a succeeded and the failed one; the five oldest left out'];
+    if (select r.counts from cma.source_reads(c1) r offset 1 limit 1) <> '{"fetched": 7, "events_new": 2}'::jsonb
+       or (select r.stream || ':' || coalesce(r.finished_at::text, 'null') from cma.source_reads(c1) r limit 1) <> 'verify:null'
+       or (select r.error from cma.source_reads(c1) r offset 2 limit 1) <> 'rate_limited' then
+      raise exception 'FAIL A7: a run''s counts, stream, finish or error are not carried';
+    end if;
+    v_rows := v_rows || array['71', 'A7 each row carries its stream, finish, counts and error code', 'PASS', 'counts {fetched 7, events_new 2}; the running run without a finish; rate_limited'];
+    if (select count(*) from cma.source_reads(c2)) <> 0 or (select count(*) from cma.source_reads('00000000-0000-7000-8000-00000000dead'::uuid)) <> 0 then
+      raise exception 'FAIL A7: another tenant''s connection or an unknown id answers rows';
+    end if;
+    v_rows := v_rows || array['72', 'A7 another tenant''s connection and an unknown id answer no rows', 'PASS', '0 and 0'];
+    perform pg_temp.v0008zq_as(x1, 'mgr');
+    begin
+      perform cma.source_reads(c1);
+    exception when sqlstate 'CMA06' then v_ok := true;
+    end;
+    if not v_ok then
+      raise exception 'FAIL A7: a manager without tenant.configure was not refused with CMA06';
+    end if;
+    v_rows := v_rows || array['73', 'A7 without tenant.configure the reads are refused (CMA06)', 'PASS', 'a manager'];
+    raise exception using errcode = 'CMAOK', message = 'rollback';
+  exception when sqlstate 'CMAOK' then null;
+  end;
+  insert into verify_0008zq select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
+  from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
+end
+$$;
+
+-- Verdict: one row per check that passed, then the verdict (14 checks; a block that stopped counts its checks as FAIL)
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zq
       union all
       select 999, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zq where result = 'PASS') = 9 then 'PASS'
+                  when (select count(*) from verify_0008zq where result = 'PASS') = 14 then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008zq where result = 'PASS'),
-                                        9 - (select count(*) from verify_0008zq where result = 'PASS'))) x
+                                        14 - (select count(*) from verify_0008zq where result = 'PASS'))) x
 order by ord;
 drop function if exists pg_temp.v0008zq_row(uuid);
 drop function if exists pg_temp.v0008zq_as(jsonb, text);
-drop function if exists pg_temp.v0008zq_run(jsonb, uuid, text, timestamptz, integer, text, text);
+drop function if exists pg_temp.v0008zq_run(jsonb, uuid, text, timestamptz, integer, text, text, jsonb);
 drop function if exists pg_temp.v0008zq_event(jsonb, uuid, text, timestamptz, text);
 drop function if exists pg_temp.v0008zq_connection(jsonb, text, text, text);
 drop function if exists pg_temp.v0008zq_tenant(text);

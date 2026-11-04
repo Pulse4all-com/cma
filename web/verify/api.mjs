@@ -1120,6 +1120,14 @@ async function sourceChecks() {
     expect("sources: the admin opens one connection with its catalogs",
       [one.status, d?.connection?.id, ["pipelines", "forms", "callOutcomes", "lines", "tags", "fields", "writeback"].every((k) => Array.isArray(d?.[k]))],
       [200, src.id, true], [404, null, true]);
+    // the connection's reads (addition 0008zq): at most 20, newest first, codes and counts only
+    const READ_KEYS = ["runId", "job", "stream", "startedAt", "finishedAt", "status", "counts", "error"].sort();
+    const reads = Array.isArray(d?.reads) ? d.reads : null;
+    expect("sources: the connection carries its reads: at most 20 runs, newest first, each with its keys, a status of the three, counts as numbers and no value",
+      [reads !== null, (reads ?? []).length <= 20,
+        (reads ?? []).every((r, i, a) => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(READ_KEYS) && ["running", "succeeded", "failed"].includes(r.status)
+          && Object.values(r.counts ?? {}).every((v) => Number.isInteger(v)) && (r.error === null || /^[a-z0-9_]+$/.test(r.error)) && (i === 0 || a[i - 1].startedAt >= r.startedAt))],
+      [true, true, true], [false, false, false]);
     const settingsBefore = d?.connection?.settings ?? {};
     expect("sources: a settings write needs the request header", (await sj(ADMIN, "PUT", `${base}/settings`, { settings: settingsBefore }, {})).status, 400, 200);
     expect("sources: a cross-site settings write is refused",

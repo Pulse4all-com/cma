@@ -416,3 +416,18 @@ export function readsCaption(n: number, one: string, many: string): string | nul
   if (n <= 0) return null;
   return n === 1 ? one : many.replace("{n}", String(n));
 }
+
+/** A run's duration in whole seconds, null while it runs or when its instants cannot be read */
+export function readDurationSeconds(startedAt: string, finishedAt: string | null): number | null {
+  if (!finishedAt) return null;
+  const a = Date.parse(startedAt);
+  const b = Date.parse(finishedAt);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 1000));
+}
+
+/** A run's counts as System health writes them: the keys above 0, "fetched 7, events_new 2"; null when none */
+export function readCountsText(counts: Record<string, number>): string | null {
+  const parts = Object.entries(counts).filter(([, v]) => typeof v === "number" && v > 0).map(([k, v]) => `${k} ${v}`);
+  return parts.length ? parts.join(", ") : null;
+}

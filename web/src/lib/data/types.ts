@@ -2508,8 +2508,26 @@ export interface SourceStore {
 }
 
 /** One connection with its catalogs, for its page */
+/** One run of a connection as cma.source_reads answers it (addition 0008zq): the connection page's Reads panel */
+export interface SourceRead {
+  runId: string;
+  /** The job in cma.sync_run's own vocabulary (subscriptions_poll, reconcile, backfill, ...) */
+  job: string;
+  stream: string | null;
+  startedAt: Instant;
+  /** null while the run is still going */
+  finishedAt: Instant | null;
+  status: "running" | "succeeded" | "failed";
+  /** The counts the run recorded (whole numbers per key) */
+  counts: Record<string, number>;
+  /** A code the ingest writes, never a value */
+  error: string | null;
+}
+
 export interface SourceDetail {
   connection: SourceConnection;
+  /** The connection's last 20 runs, newest first (addition 0008zq) */
+  reads: SourceRead[];
   pipelines: SourcePipeline[];
   forms: SourceForm[];
   callOutcomes: SourceCallOutcome[];

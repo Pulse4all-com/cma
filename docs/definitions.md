@@ -1067,8 +1067,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Last sync", "last poll", "last run" as labels; "Never" for a connection that was read (Never stays for a connection with neither an event nor a read) |
 | Status | Proposed (night default N8, to confirm by Martin on 5 November 2026) |
 | Decided | 4 Nov 2026, "Definitions: \"Last read\" gets its per-connection meaning next to Flash's per-kind one" (addition 0008zq); 4 Nov 2026, "Reports → Flash shows a source's \"Last read\" as the time alone only when the read is on the tenant's today" (#219) |
-| Used by | Configuration → Sources (`/configuration/sources`, `SourcesList`), `GET /api/v1/configuration/sources`; Reports → Flash's sources line and its Change line's rule (b) |
-| As built today | Matches the definition. `128` derives the five columns from `cma.sync_run` per connection; `129` proves them (events without runs, runs without events, a failed read, a run older than 24 hours, another tenant invisible, the permission). Flash's per-kind read is unchanged (0008zn): one store read after midnight completes a period for every store, the known limit of the Change line |
+| Used by | Configuration → Sources (`/configuration/sources`, `SourcesList`), `GET /api/v1/configuration/sources`; a connection's page, whose Reads panel lists the last 20 runs behind the last read (`cma.source_reads`, `GET /api/v1/configuration/sources/{id}` `reads`); Reports → Flash's sources line and its Change line's rule (b) |
+| As built today | Matches the definition. `128` derives the five columns from `cma.sync_run` per connection and `cma.source_reads` lists the runs; `129` proves them (events without runs, runs without events, a failed read, a run older than 24 hours, another tenant invisible, the permission). Flash's per-kind read is unchanged (0008zn): one store read after midnight completes a period for every store, the known limit of the Change line |
 
 ### Flash overview measures
 

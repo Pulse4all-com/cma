@@ -5,8 +5,8 @@
 -- adapter and whatever the job. Runs unchanged in every database, after 126_workday_sessions.sql (0008zp). Rerunnable,
 -- forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 129_verify_sources_last_read.sql (dev and prod), then 53 (its B2 reads cma.sources() by column name) and 79 again
--- (unchanged, still PASS); then prod, 128 before the merge (the web of this change reads the five columns below), then
--- 129. The web of main runs unchanged on it: web/src/lib/data/postgres.ts reads `select * from cma.sources()` and maps the
+-- (unchanged, still PASS); then prod, 128 before the merge (the web of this change reads the five columns below and
+-- cma.source_reads), then 129. The web of main runs unchanged on it: web/src/lib/data/postgres.ts reads `select * from cma.sources()` and maps the
 -- columns it knows by name, so five more columns at the end change nothing it shows. No table, view or column changes,
 -- so docs/datamap/schema.json needs no refresh and docs/datamap/catalog.json is unchanged.
 --
@@ -31,6 +31,11 @@
 --                      Owner cma_owner, execute for cma_app only, as 52 set them. The index sync_run_started_idx
 --                      (tenant_id, connection_id, started_at) of 32 serves the 24-hour counts; the latest succeeded run is
 --                      read over the connection's runs (a polled connection writes under 300 a day).
+--   cma.source_reads(connection_id)   new (the connection's page, Reads panel): the connection's last 20 cma.sync_run rows,
+--                      newest first (started_at desc, id desc): run_id, job, stream, started_at, finished_at, status, the
+--                      counts the run recorded and its error (a code the ingest writes, never a value). tenant.configure;
+--                      the tenant's own connection only (another tenant's id answers no rows). Owner cma_owner, execute for
+--                      cma_app only, as cma.sources()
 -- What it does not change
 --   cma.system_health_runs() (78) and cma.flash_sources_of (122): System health keeps its own per-job rows and Flash its
 --   per-kind last read; both read cma.sync_run as before. No row is changed.
@@ -131,16 +136,48 @@ $$;
 comment on function cma.sources() is 'Every connection of the tenant (tenant.configure): kind, held kinds, secret names, settings, its events of cma.ingest_event (24 hours, waiting, for review, the last) and, since 0008zq, its reads of cma.sync_run (the latest succeeded run''s finish and job, the runs and failed runs of the last 24 hours, the latest failure''s code), and its catalog sizes';
 
 -- ---------------------------------------------------------------------------------------------
--- 2. Privileges: the application only, as 52 set them (a dropped function loses its grants)
+-- 2. cma.source_reads(): one connection's last 20 runs, newest first (the connection page's Reads panel)
+-- ---------------------------------------------------------------------------------------------
+create or replace function cma.source_reads(p_connection_id uuid)
+returns table (
+  run_id       uuid,
+  job          text,
+  stream       text,
+  started_at   timestamptz,
+  finished_at  timestamptz,
+  status       text,
+  counts       jsonb,
+  error        text
+)
+language plpgsql stable
+as $$
+#variable_conflict use_column
+begin
+  perform cma.assert_permission('tenant.configure');
+  return query
+    select r.id, r.job::text, r.stream::text, r.started_at, r.finished_at, r.status::text, r.counts, r.error::text
+    from cma.sync_run r
+    where r.tenant_id = cma.current_tenant_id() and r.connection_id = p_connection_id
+    order by r.started_at desc, r.id desc
+    limit 20;
+end
+$$;
+
+comment on function cma.source_reads(uuid) is 'One connection''s last 20 runs of cma.sync_run, newest first (tenant.configure; the tenant''s own connection only): job, stream, started and finished, status, the counts the run recorded, its error code';
+
+-- ---------------------------------------------------------------------------------------------
+-- 3. Privileges: the application only, as 52 set them (a dropped function loses its grants)
 -- ---------------------------------------------------------------------------------------------
 revoke execute on function cma.sources() from public;
 grant execute on function cma.sources() to cma_app;
+revoke execute on function cma.source_reads(uuid) from public;
+grant execute on function cma.source_reads(uuid) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
--- 3. Record the addition
+-- 4. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zq', 'Sources last read: cma.sources() (0008e) recreated with five columns after the catalog sizes, last_read_at, last_read_job, reads_24h, reads_failed_24h and last_read_error, read from the connection''s own cma.sync_run rows, so a polled connection (reviews, subscriptions, assets) that writes runs and never an ingest event shows its last read on Configuration → Sources instead of Never; same permission, same columns before them, same grants')
+values ('0008zq', 'Sources last read: cma.sources() (0008e) recreated with five columns after the catalog sizes, last_read_at, last_read_job, reads_24h, reads_failed_24h and last_read_error, read from the connection''s own cma.sync_run rows, so a polled connection (reviews, subscriptions, assets) that writes runs and never an ingest event shows its last read on Configuration → Sources instead of Never; same permission, same columns before them, same grants; cma.source_reads(connection_id), the connection''s last 20 runs newest first for the connection page''s Reads panel')
 on conflict (version) do nothing;
 
 commit;

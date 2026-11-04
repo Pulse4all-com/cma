@@ -23,7 +23,7 @@ import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
   formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
   formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
-  TAG_MEANINGS, tagsWithoutNotReached, readState, jobLabel, readsCaption,
+  TAG_MEANINGS, tagsWithoutNotReached, readState, jobLabel, readsCaption, readDurationSeconds, readCountsText,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -233,6 +233,12 @@ expect("reads: the job's label from the copy, the job's own word without one, no
   ["Subscriptions poll", "new_job", null], ["subscriptions_poll", null, "new_job"]);
 expect("reads: the caption for 0, 1 and n reads", [readsCaption(0, "1 read", "{n} reads"), readsCaption(1, "1 read", "{n} reads"), readsCaption(24, "1 read", "{n} reads")],
   [null, "1 read", "24 reads"], ["0 reads", "{n} reads", "1 read"]);
+expect("reads: a run's duration in seconds, null while it runs or unreadable",
+  [readDurationSeconds("2026-11-04T03:30:00Z", "2026-11-04T03:31:35Z"), readDurationSeconds("2026-11-04T03:30:00Z", null), readDurationSeconds("x", "2026-11-04T03:31:35Z"),
+    readDurationSeconds("2026-11-04T03:30:00.900Z", "2026-11-04T03:30:00.100Z")],
+  [95, null, null, 0], [94, 0, 0, 1]);
+expect("reads: the counts text names the keys above 0, nothing for none",
+  [readCountsText({ fetched: 7, events_new: 2, failed: 0 }), readCountsText({}), readCountsText({ skipped: 0 })], ["fetched 7, events_new 2", null, null], ["fetched 7", "", ""]);
 expect("polling: a value out of range gives the default and is named", pollCadenceOf({ forms_poll_interval_minutes: 0, api_daily_floor_pct: 95, email_open_check_minutes: "soon" }),
   { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: ["formsIntervalMinutes", "openCheckMinutes", "floorPct"] },
   { formsIntervalMinutes: 0, openCheckMinutes: 15, floorPct: 95, probe: false, outOfRange: [] });

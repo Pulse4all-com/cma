@@ -3,15 +3,15 @@
 Written in the night of 4 to 5 November 2026 by Claude Code. Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux or his Linux machine, in `~/cma` unless stated; a step against prod, `p4a-cma-prod` or `cma-prod-pg`, from the Chromebook only), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Through the Auth Proxy the terminal runs only `db/` scripts, whose output is schema, check rows, counts and ids; every query that reads rows runs in Studio (README, Where a command runs). Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them); `NIGHT_NOTES.md` has the design, the night defaults (to confirm) and every function and verifier checked; `TEAM_NOTE.md` is the paste-ready note of step 8.
 
 **What changes** (Decision log, 4 November 2026; README, Data model: sources last read):
-- **0008zq** (`128`, `129`): `cma.sources()` recreated with five columns after the catalog sizes: `last_read_at`, `last_read_job`, `reads_24h`, `reads_failed_24h`, `last_read_error`, read from the connection's own `cma.sync_run` rows. No table, view or column changes, so `docs/datamap/schema.json` needs no refresh and `docs/datamap/catalog.json` is unchanged.
-- Web: Configuration → Sources shows a **Last read** column after Last event: the latest successful read with the job's name and the reads of 24 hours under it, a warning badge with the failed reads and the latest code in its title; a connection read on a schedule shows a dash under Last event, never "Never".
+- **0008zq** (`128`, `129`): `cma.sources()` recreated with five columns after the catalog sizes: `last_read_at`, `last_read_job`, `reads_24h`, `reads_failed_24h`, `last_read_error`, read from the connection's own `cma.sync_run` rows; `cma.source_reads(connection_id)`, the connection's last 20 runs newest first (the follow-up of 4 November, evening). No table, view or column changes, so `docs/datamap/schema.json` needs no refresh and `docs/datamap/catalog.json` is unchanged.
+- Web: Configuration → Sources shows a **Last read** column after Last event: the latest successful read with the job's name and the reads of 24 hours under it, a warning badge with the failed reads and the latest code in its title; a connection read on a schedule shows a dash under Last event, never "Never". A connection's page shows a **Reads** panel: its last 20 runs with job, started, duration, outcome, counts and the code of a failure.
 - Ingest: `ingest-backfill --adapter <name>` walks every served connection of an adapter in one execution (in place of `--connection`, never both); a skipped or failed store is counted and the others still run; exit 1 when any failed.
-- Runbook: `docs/ingest/PROD_RUNBOOK.md` 15.10 (the 12 live stores' Juo in one sitting), 15.11 (every store's customers from the store's start), 15.12 (Flash per market); the 13.9 line on the review channels' markets.
+- Runbook: `docs/ingest/PROD_RUNBOOK.md` 15.10 (the 11 live stores with Juo in one sitting; NO has no Juo yet, CH is not live, both join later with one handle), 15.11 (every store's customers from the store's start), 15.12 (Flash per market); the 13.9 line on the review channels' markets.
 
 **The number.** 0008zq, `128` and `129`, as briefed: free on `main` at `cf35a8a` (`NIGHT_NOTES.md`, The number). The branch is on `main` at `cf35a8a`.
 
 **Order matters:**
-- The migration runs in dev and prod **before** the merge: the merge builds and deploys prod's web, and its Sources read maps the five new columns. Merged first, Configuration → Sources would show every connection without a last read (the fields undefined, the page still renders) until `128` runs; nothing else breaks.
+- The migration runs in dev and prod **before** the merge: the merge builds and deploys prod's web, and its Sources read maps the five new columns and its connection page calls `cma.source_reads`. Merged first, Configuration → Sources would show every connection without a last read and a connection's page would answer an error until `128` runs.
 - The web of `main` runs unchanged on the migrated database: it reads `select * from cma.sources()` and maps the columns it knows by name; the five new ones come last. Locally, `main`'s build is not needed to prove it: the Postgres mapper of `main` and of this branch name their columns (`local-records/README.md`).
 - The ingest deploy comes **after** the merge (15.10 (b)): `deploy.sh` tags the image with the last commit under `ingest/`, which is this pull request's squash commit, and `--adapter` is in that image only. Nothing in prod's ingest changes before step 4.
 - Dev runs the web images prod's build makes (`docs/RUNBOOK.md` section 4), so this branch's web reaches dev only after the merge: `verify:api` against dev is step 4b.
@@ -24,7 +24,7 @@ Written in the night of 4 to 5 November 2026 by Claude Code. Labels: **Browser**
 | 2 | Dev: `128` twice, `129` normal and provoked, `53` and `79` again | 8 min |
 | 3 | Prod, just before the merge: point-in-time recovery, `128` twice, `129` | 8 min |
 | 4 | Merge; watch the prod build; the ingest from `main` (15.10 (b)); `verify:api` against dev | 25 min |
-| 5 | 15.10 (a) to (h), 15.11, 15.12 as written | 60 min hands-on, 2 to 5 h unattended |
+| 5 | 15.10 (a) to (h), 15.11, 15.12 as written | 40 min hands-on, 2 to 5 h unattended |
 | 6 | Browser: Sources with every last read; Flash, All markets | 5 min |
 | 7 | The Gemini audit (does not block the run) | 10 min |
 | 8 | Team onboarding: four invitations and the note | 15 min |
@@ -70,13 +70,13 @@ Expected: **Trusted Shops Subscriptions** `reviews_poll` with `last_succeeded` w
 
 **Browser:** GitHub → Pulse4all-com/cma → Pull requests → "N05: every source live on Sources, Juo for every store (addition 0008zq)". Read the description and the diff.
 
-Expected: in `db/` the new `128_sources_last_read.sql` and `129_verify_sources_last_read.sql`, nothing else; under `web/` the Sources list, its type and the two data layers, the copy, `sources.ts`, `verify/configuration.mjs` and `verify/api.mjs`; under `ingest/` `jobs/backfill.mjs`, `src/jobs/backfill.mjs`, `verify/juo-flow.mjs` and `verify/juo-fake.mjs`; `docs/` (decisions, definitions, features, api, data model 0008, open decisions, OPERATIONS, the ingest README and PROD_RUNBOOK, this folder), `README.md` (Architecture, the documentation map) and `CHANGELOG.md`; none under `cloudbuild.yaml`, `hubspot/`, `records/` or `docs/datamap/`.
+Expected: in `db/` the new `128_sources_last_read.sql` and `129_verify_sources_last_read.sql`, nothing else; under `web/` the Sources list and the connection page (`SourceConfig.tsx`, its Reads panel), their types and the two data layers, the copy, `sources.ts`, `verify/configuration.mjs` and `verify/api.mjs`; under `ingest/` `jobs/backfill.mjs`, `src/jobs/backfill.mjs`, `verify/juo-flow.mjs` and `verify/juo-fake.mjs`; `docs/` (decisions, definitions, features, api, data model 0008, open decisions, OPERATIONS, the ingest README and PROD_RUNBOOK, this folder), `README.md` (Architecture, the documentation map) and `CHANGELOG.md`; none under `cloudbuild.yaml`, `hubspot/`, `records/` or `docs/datamap/`.
 
 **Terminal** (the pull request's number from the page)
 ```bash
 cd ~/cma && gh pr checkout <number> && cd web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | tail -2; echo "build exit: ${PIPESTATUS[0]}"; npm run --silent verify:configuration | tail -1; npm run --silent verify:copy; cd ../ingest && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm test 2>&1 | grep -c "^ALL"; cd ~/cma
 ```
-Expected: `found 0 vulnerabilities` (or the known advisories of README, Open decisions), the build's last lines and `build exit: 0`, `ALL 119 PASS`, `copy: PASS (3405 keys, en and nl)`; then the ingest's install and `20` (every pure verifier of `npm test` printed its `ALL n PASS`). **Do not merge yet.**
+Expected: `found 0 vulnerabilities` (or the known advisories of README, Open decisions), the build's last lines and `build exit: 0`, `ALL 121 PASS`, `copy: PASS (3419 keys, en and nl)`; then the ingest's install and `20` (every pure verifier of `npm test` printed its `ALL n PASS`). **Do not merge yet.**
 
 **Studio (cma-dev-pg)** and **Studio (cma-prod-pg)** (read only)
 ```sql
@@ -102,7 +102,7 @@ cd ~/cma && psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/129_verify_sources_last_read
 sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" db/129_verify_sources_last_read.sql > /tmp/provoke.sql
 psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "$rec/129-provoked.txt" 2>&1; echo "provoked: $(grep -c 'ERROR:  FAIL' "$rec/129-provoked.txt") blocks failed, $(grep -E ' verdict' "$rec/129-provoked.txt" | tr -s ' ')"
 ```
-Expected: `129:  verdict | PASS | 9 PASS, 0 FAIL`; `provoked: 4 blocks failed,  verdict | PROVOKED, NOT A PASS | 0 PASS, 9 FAIL`. Any other `129` line: send me `grep -E 'FAIL|ERROR' "$rec/129.txt"`.
+Expected: `129:  verdict | PASS | 14 PASS, 0 FAIL`; `provoked: 6 blocks failed,  verdict | PROVOKED, NOT A PASS | 0 PASS, 14 FAIL`. Any other `129` line: send me `grep -E 'FAIL|ERROR' "$rec/129.txt"`.
 
 **Terminal** (dev): the earlier verifies of what `128` touches (unchanged, still passing)
 ```bash
@@ -119,9 +119,10 @@ select set_config('app.tenant_id', '<dev tenant_id>', false),
        set_config('app.user_id', '<dev user_id>', false),
        set_config('app.actor_label', 'studio:martin', false);
 select name, kind, events_24h, last_event_at, last_read_at, last_read_job, reads_24h, reads_failed_24h, last_read_error from cma.sources() order by name;
+select job, stream, started_at, finished_at, status, counts, error from cma.source_reads((select connection_id from cma.sources() order by reads_24h desc limit 1));
 reset role;
 ```
-Expected: one row per dev connection; the polled ones (reviews, assets, subscriptions, where dev has them) with `events_24h` 0 and a `last_read_at`; the HubSpot connection with events and its nightly `reconcile` as `last_read_job`. (The context block's first part gives the two ids, as PROD_RUNBOOK's Studio context block does for prod.)
+Expected: one row per dev connection; the polled ones (reviews, assets, subscriptions, where dev has them) with `events_24h` 0 and a `last_read_at`; the HubSpot connection with events and its nightly `reconcile` as `last_read_job`; then at most 20 runs of the most-read connection, newest first, codes and counts only. (The context block's first part gives the two ids, as PROD_RUNBOOK's Studio context block does for prod.)
 
 ## 3. Prod, just before the merge: point-in-time recovery, `128` twice, `129`
 
@@ -138,7 +139,7 @@ psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/128_sources_last_read.sql > "$rec/128.tx
 psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/128_sources_last_read.sql > "$rec/128-rerun.txt" 2>&1; echo "128 again: $(tail -3 "$rec/128-rerun.txt" | tr '\n' ' ')"
 psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/129_verify_sources_last_read.sql > "$rec/129.txt" 2>&1; echo "129: $(grep -E ' verdict' "$rec/129.txt" | tr -s ' ')"
 ```
-Expected: `connected to cma as martin@pulse4all.com`; `128: INSERT 0 1 COMMIT RESET`; `128 again: INSERT 0 0 COMMIT RESET`; `129:  verdict | PASS | 9 PASS, 0 FAIL`. `main`'s web keeps running on it (Order matters). **Browser:** Configuration → Sources in prod once: the page as before (no Last read column yet; the new columns are ignored by `main`'s web).
+Expected: `connected to cma as martin@pulse4all.com`; `128: INSERT 0 1 COMMIT RESET`; `128 again: INSERT 0 0 COMMIT RESET`; `129:  verdict | PASS | 14 PASS, 0 FAIL`. `main`'s web keeps running on it (Order matters). **Browser:** Configuration → Sources in prod once: the page as before (no Last read column yet; the new columns are ignored by `main`'s web).
 
 ## 4. Merge, watch the prod build, the ingest from `main`, `verify:api` against dev
 
@@ -149,7 +150,7 @@ gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --form
 ```
 Expected: the merge commit; then a build for its short SHA, `QUEUED` or `WORKING`, then `SUCCESS` (`docs/RUNBOOK.md` section 3; the build appears 2 to 4 minutes after the merge). No build 4 minutes after the merge: `gcloud builds triggers run cma-web-main --project=p4a-cma-prod --region=europe-west4 --sha=$(git rev-parse HEAD)`.
 
-**4a. The ingest from `main`.** This is PROD_RUNBOOK 15.10 (b), run here once the twelve secrets of 15.10 (a) exist. If you prefer to make the twelve keys first (step 5), do (a) now and (b) right after; the order below assumes (a) then (b) then the rest of 15.10.
+**4a. The ingest from `main`.** This is PROD_RUNBOOK 15.10 (b): the eleven secrets exist since the evening of 4 November 2026 (15.10 (a) checks them), so (a) and (b) run right after the merge, then the rest of 15.10.
 
 **4b. `verify:api` against dev on the merge's image** (`docs/RUNBOOK.md` section 4; inside 07:00 to 22:00 Amsterdam)
 ```bash
@@ -166,15 +167,15 @@ Expected: the new revision serving 100 percent of traffic; the health answer wit
 
 ## 5. PROD_RUNBOOK 15.10 to 15.12, as written
 
-**File:** `docs/ingest/PROD_RUNBOOK.md`, sections 15.10 (a) to (h), 15.11 and 15.12. Every command is prefilled with the twelve handles; only `<tenant_id>`, `<user_id>` and the connection ids from the Studio output are placeholders. In short:
-1. 15.10 (a): twelve keys, one hidden prompt each (Browser per store, then the Terminal loop).
-2. 15.10 (b): the service deploy with twelve `--secret` flags and the jobs deploy; the accessor loop, one line per secret.
-3. 15.10 (c): one Studio Run: twelve connections `Juo AT` to `Juo SE`, kind, settings, the read-back with `ok` true and the store resolved.
+**File:** `docs/ingest/PROD_RUNBOOK.md`, sections 15.10 (a) to (h), 15.11 and 15.12. Every command is prefilled with the eleven handles (AT, BE, DE, DK, ES, FI, FR, IE, IT, NL, SE; NO has no Juo yet and CH is not live, both join later with one handle); only `<tenant_id>`, `<user_id>` and the connection ids from the Studio output are placeholders. In short:
+1. 15.10 (a): the check that the eleven secrets exist with one enabled version each (stored on the evening of 4 November 2026); the `put_secret` block stays for a store that joins later.
+2. 15.10 (b): the service deploy with eleven `--secret` flags and the jobs deploy; the accessor loop, one line per secret.
+3. 15.10 (c): one Studio Run: eleven connections `Juo AT` to `Juo SE`, kind, settings, the read-back with `ok` true and the store resolved.
 4. 15.10 (d): pause `ingest-poll-subscriptions`.
-5. 15.10 (e): the dry run over every store, thirteen `backfill dry run` lines and the finished line's results.
+5. 15.10 (e): the dry run over every store, twelve `backfill dry run` lines (GB included) and the finished line's results.
 6. 15.10 (f): the events backfill (unattended, 30 to 90 minutes), then the subscriptions (5 to 15 minutes).
 7. 15.10 (g): the checks grouped by store, the two email counts 0.
-8. 15.10 (h): resume the schedule; thirteen `subscriptions_poll` rows; System health; Sources with every Juo row's last read.
+8. 15.10 (h): resume the schedule; twelve `subscriptions_poll` rows; System health; Sources with every Juo row's last read; Juo NL's Reads panel.
 9. 15.11: the customers per store before; one `--adapter shopify --object commerce_customer --from 2000-01-01` (unattended, 1 to 4 hours); the customers after; the `linked_contact` backfill; the subscriptions block again.
 10. 15.12: the coverage queries; Reports → Flash with All markets and per market.
 
@@ -183,7 +184,7 @@ Expected: as each block says. Do (c) to (f) before 03:30 or after the reconcile 
 ## 6. Browser: Sources with every last read; Flash, All markets
 
 **Browser** (prod, https://workspace.pulse4all.app, as yourself)
-1. Configuration → Sources. Expected: every active connection with a Last read: HubSpot and Aircall their `Nightly reconcile` of 03:30 (and HubSpot's `Backfill` or `Link calls (sweep)` where that ran later), the twelve live Shopify stores their `Nightly reconcile`, Shopify CH its reconcile too (an empty store is still read), Trusted Shops Subscriptions `Reviews poll` within the hour, the asset register `Asset register poll` within 15 minutes, every Juo row `Subscriptions poll` within 5 minutes; a caption `n reads in 24 hours` under each; no warning badge, or a badge whose title names a `rate_limited` of the night (hover it). Last event: HubSpot, Aircall and the twelve stores with today's events; the polled rows a dash; Shopify CH `Never` (no events ever, no read: correct until it sells; after the first reconcile a read with a dash under Last event).
+1. Configuration → Sources. Expected: every active connection with a Last read: HubSpot and Aircall their `Nightly reconcile` of 03:30 (and HubSpot's `Backfill` or `Link calls (sweep)` where that ran later), the twelve live Shopify stores their `Nightly reconcile`, Shopify CH its reconcile too (an empty store is still read), Trusted Shops Subscriptions `Reviews poll` within the hour, the asset register `Asset register poll` within 15 minutes, every Juo row (twelve) `Subscriptions poll` within 5 minutes; a caption `n reads in 24 hours` under each; no warning badge, or a badge whose title names a `rate_limited` of the night (hover it). Last event: HubSpot, Aircall and the twelve stores with today's events; the polled rows a dash; Shopify CH `Never` (no events ever, no read: correct until it sells; after the first reconcile a read with a dash under Last event). Open Juo NL: the Reads panel with the poll's runs, the two backfills and the reconcile, newest first, counts and codes only; open Shopify CH: "No read yet" until its first reconcile.
 2. Configuration → System health. Expected: unchanged: every source Working, the job rows without Failed.
 3. Reports → Flash, All markets. Expected: 15.12's on-screen check; the sources line with Subscriptions read a few minutes ago.
 
@@ -192,7 +193,7 @@ Expected: as each block says. Do (c) to (f) before 03:30 or after the reconcile 
 **Browser:** the Gemini chat of the audits (the pattern of 28 and 29 October 2026). Paste:
 
 ```
-Audit p4a-cma-prod on 5 November 2026 against the previous audits of 28 and 29 October 2026 (FIND-01 and FIND-02 of 29 October: one accessor binding per Juo secret, the ingest-backfill job unchanged). Since then: twelve new secrets ingest-juo-pulse4all-at-key, ingest-juo-pulse4all-be-key, ingest-juo-pulse4all-de-key, ingest-juo-pulse4all-dk-key, ingest-juo-pulse4all-esp-key, ingest-juo-pulse4all-fi-key, ingest-juo-pulse4all-fr-key, ingest-juo-pulse4all-ie-key, ingest-juo-pulse4all-ita-key, ingest-juo-pulse4all-nl-key, ingest-juo-pulse4all-no-key, ingest-juo-pulse4all-se-key, each with exactly one IAM binding, roles/secretmanager.secretAccessor for serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com, no other member, no expiry on the secrets or their versions; nothing else changed in IAM; the ingest-backfill job redeployed from the same image as the other nine jobs with the same service account, pool and schedule (none) as before; four more pulse4all.com accounts gain access to the Workspace behind IAP the same morning, two with the analytics role and two with the admin or analytics role, through the Workspace's own invitation (cma.invitation), not through an IAM change. Check: (1) every ingest-juo-* secret has exactly that one binding and no other principal can read it; (2) no new key, role or binding exists on cma-ingest, cma-web, cma-ingest-scheduler or the IAP client; (3) the IAP policy of the Workspace still grants the Google Workspace domain only; (4) Secret Manager data access logging still on; (5) anything else that changed in IAM, Cloud Run or Secret Manager in p4a-cma-prod since 29 October 2026. Report findings as FIND-nn with severity, evidence (the gcloud command and its output), and the fix; do not run any fix.
+Audit p4a-cma-prod on 5 November 2026 against the previous audits of 28 and 29 October 2026 (FIND-01 and FIND-02 of 29 October: one accessor binding per Juo secret, the ingest-backfill job unchanged). Since then: eleven new secrets ingest-juo-pulse4all-at-key, ingest-juo-pulse4all-be-key, ingest-juo-pulse4all-de-key, ingest-juo-pulse4all-dk-key, ingest-juo-pulse4all-esp-key, ingest-juo-pulse4all-fi-key, ingest-juo-pulse4all-fr-key, ingest-juo-pulse4all-ie-key, ingest-juo-pulse4all-ita-key, ingest-juo-pulse4all-nl-key, ingest-juo-pulse4all-se-key (stored on the evening of 4 November 2026, one enabled version each, the earlier version of nine of them disabled), each with exactly one IAM binding, roles/secretmanager.secretAccessor for serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com, no other member, no expiry on the secrets or their versions; a twelfth secret ingest-juo-pulse4all-ch-key stored the same evening with no binding at all (the CH store is not live); no secret for the NO store (it has no Juo yet); nothing else changed in IAM; the ingest-backfill job redeployed from the same image as the other nine jobs with the same service account, pool and schedule (none) as before; four more pulse4all.com accounts gain access to the Workspace behind IAP the same morning, two with the analytics role and two with the admin or analytics role, through the Workspace's own invitation (cma.invitation), not through an IAM change. Check: (1) every ingest-juo-* secret but the CH one has exactly that one binding, the CH one none, and no other principal can read any of them; (2) no new key, role or binding exists on cma-ingest, cma-web, cma-ingest-scheduler or the IAP client; (3) the IAP policy of the Workspace still grants the Google Workspace domain only; (4) Secret Manager data access logging still on; (5) anything else that changed in IAM, Cloud Run or Secret Manager in p4a-cma-prod since 29 October 2026. Report findings as FIND-nn with severity, evidence (the gcloud command and its output), and the fix; do not run any fix.
 ```
 
 Expected: a report with findings or none; every finding checked as README, How we work, says, and the result in the record. The audit does not block steps 5, 6 or 8.
@@ -222,7 +223,7 @@ Expected: four rows, `active`, with the roles above. (Names only, as People show
 
 ## Rollback
 
-- **The migration** (OPERATIONS 3.5): forward-only; `cma.sources()` of 0008zq is a superset of 52's and `main`'s web reads it unchanged, so there is nothing to roll back in the database. The web itself rolls back as `docs/RUNBOOK.md` section 10 says; it runs on 0008zq either way.
+- **The migration** (OPERATIONS 3.5): forward-only; `cma.sources()` of 0008zq is a superset of 52's and `cma.source_reads` a new read, so `main`'s web reads the database unchanged and there is nothing to roll back in it. The web itself rolls back as `docs/RUNBOOK.md` section 10 says; it runs on 0008zq either way.
 - **The connections** (OPERATIONS 6): a store whose reads must stop is switched off on Configuration → Sources (`cma.set_connection_status(id, 'inactive')`); the jobs skip it, its rows stay, switching on resumes from its cursors.
 - **The schedule** (OPERATIONS 5): `gcloud scheduler jobs pause ingest-poll-subscriptions --location=europe-west4 --project=p4a-cma-prod` stops every store's poll; the nightly reconcile still reads the stores. A key that must stop working: revoke it in Juo's admin of that store and disable the secret's version (OPERATIONS 7); the store's reads fail `key_rejected` until a new key is stored.
 - **The ingest image** (OPERATIONS 3.3): the previous image for the ten jobs; `--adapter` is then gone, `--connection` works as before.

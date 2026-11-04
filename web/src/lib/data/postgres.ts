@@ -8,7 +8,7 @@ import type {
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
-  AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
+  AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, InboundService, MissedReason,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
@@ -2199,8 +2199,13 @@ export const postgresData: CmaData = {
       const sla = await q.query<{ record_type: string; source_pipeline_id: string; sla_minutes: number | null }>(
         `select record_type, source_pipeline_id, sla_minutes from cma.connection_pipeline where connection_id = $1::uuid`, [id]);
       const slaOf = new Map(sla.rows.map((x) => [`${x.record_type}:${x.source_pipeline_id}`, x.sla_minutes]));
+      // the connection's last 20 runs, newest first (addition 0008zq)
+      const reads = await q.query<{ run_id: string; job: string; stream: string | null; started_at: Date; finished_at: Date | null; status: SourceRead["status"];
+        counts: Record<string, number> | null; error: string | null }>(`select * from cma.source_reads($1::uuid)`, [id]);
       return {
         connection,
+        reads: reads.rows.map((r) => ({ runId: r.run_id, job: r.job, stream: r.stream, startedAt: r.started_at.toISOString(),
+          finishedAt: r.finished_at ? r.finished_at.toISOString() : null, status: r.status, counts: r.counts ?? {}, error: r.error })),
         pipelines: config.pipelines.map((p) => toPipeline(p, slaOf.get(`${p.recordType}:${p.pipelineId}`) ?? null)),
         forms: cat.forms.map((f) => ({
           formId: f.formId, name: f.name, isCounted: f.isCounted, isPolled: f.isPolled, category: f.category, leadSource: f.leadSource, market: f.market,

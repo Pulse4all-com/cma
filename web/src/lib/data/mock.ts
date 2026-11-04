@@ -12,7 +12,7 @@ import type {
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
-  AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceForm, SourceKind,
+  AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
@@ -2237,8 +2237,17 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
     lastReadJob: kind === null ? null : polled ? "reviews_poll" : "reconcile",
     reads24h: kind === null ? 0 : polled ? 24 : 3, readsFailed24h: polled ? 1 : 0, lastReadError: polled ? "rate_limited" : null,
   };
+  // the runs behind the reads (addition 0008zq): a polled source its last polls, one failed; a webhook source its nightly reconciles
+  const run = (j: number, job: string, stream: string, startedMs: number, seconds: number | null, status: SourceRead["status"], counts: Record<string, number>, error: string | null = null): SourceRead =>
+    ({ runId: `00000000-0000-7000-8000-0000000a${n}${String(j).padStart(2, "0")}`, job, stream, startedAt: new Date(startedMs).toISOString(),
+      finishedAt: seconds === null ? null : new Date(startedMs + seconds * 1000).toISOString(), status, counts, error });
+  const reads: SourceRead[] = kind === null ? [] : polled
+    ? Array.from({ length: 20 }, (_, j) => j === 2
+      ? run(j, "reviews_poll", "reviews", Date.now() - (40 + j * 60) * 60_000, 4, "failed", { fetched: 0 }, "rate_limited")
+      : run(j, "reviews_poll", "reviews", Date.now() - (40 + j * 60) * 60_000, 6 + j, "succeeded", { fetched: 3 + j, upserted: j % 2 }))
+    : [run(0, "reconcile", "deal", lastNight, 95, "succeeded", { fetched: 120 + n, upserted: 8 }), run(1, "reconcile", "contact", lastNight - 86_400_000, 88, "succeeded", { fetched: 110, upserted: 3 })];
   return {
-    tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
+    tenantId, connection, reads, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
     missedReasons: [], taskStatuses: [], taskTypes: [], inboxes: [], mailboxes: [], inboxChannels: [], reasons: [], reviewChannels: [], ...o,
   };
 }
