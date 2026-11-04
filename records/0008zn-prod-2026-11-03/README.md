@@ -159,3 +159,8 @@ From Martin's report of 4 November 2026; the values below are his.
 - **Prod, the downloads:** `flash-open_deals-all-2026-11-04T0618.csv` (687 rows) and its breakdown (33 rows); neither
   holds a name, email, phone or address. Both are in `cma.audit_log` (`table_name` `flash_file`), at 05:18:49 and
   05:19:17. The stamp in a file's name is the tenant's time (Europe/Amsterdam).
+- **Found later the same day (Studio, cma-prod-pg, 06:36 UTC):** the asset register's Last read (shown as 13:55,
+  time only) is its one run, the CSV import (`assets_import`) of 27 October 2026 12:55 UTC; no `assets_poll` or
+  `reconcile` run exists, because PROD_RUNBOOK phase 14 (the Airtable API read, 0008zj) has not been run in prod. Flash's
+  Installed base and Maintenance figures are as of that import, and the jump of `items_due_3m` (144 to 173) is the
+  rolling window moving over unchanged devices. The date in Last read comes with #219.
