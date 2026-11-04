@@ -111,7 +111,9 @@ export function fmtLastRead(instant: Instant, now: Instant | Date, timeZone: str
 
 /**
  * One range in the locale's own shape (16 October 2026, backlog CMA-061): 12–18 October 2026,
- * 28 September – 4 October 2026 across months, 28 December 2026 – 3 January 2027 across years
+ * 28 September – 4 October 2026 across months, 28 December 2026 – 3 January 2027 across years.
+ * The shape is ICU's, so it moves with the Node.js version: since ICU 78 (Node.js 22.23.4, the pinned
+ * image since 4 November 2026) English writes 12 – 18 October 2026, Dutch still 12–18 oktober 2026
  */
 export function fmtDateRange(from: DateKey, to: DateKey, locale: Locale): string {
   return new Intl.DateTimeFormat(intlLocale[locale], { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" })

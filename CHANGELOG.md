@@ -2,6 +2,8 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 4 November 2026: web and ingest images pinned to node:22.23.4-alpine (CVE-2026-111497); Dependabot proposes base image bumps.
+- 4 November 2026: Roster's English week label takes ICU 78's shape on Node.js 22.23.4 ("12 – 18 October 2026" within one month, thin spaces around the dash, as across months already; Dutch unchanged); `verify:roster` expects the shape of the ICU it runs on: `web/verify/roster.mjs`, `web/src/lib/time.ts` (comment).
 - 4 November 2026: 0008zp run in dev and prod; #217 merged as 15afa36 and live; hand checks passed in dev and on Martin's prod day; follow-ups F1 to F3 recorded.
 - 4 November 2026: #217 rebased on main; split shifts' night defaults and build choices confirmed (Martin); pre-check of stored days against 0008zp's shape recorded (dev 98, prod 1,633, 0 refused).
 - 4 November 2026: Reports → Flash, the "Last read" line shows the time alone only when the read is on the tenant's today (tenant time zone); a read on an earlier day shows the short weekday and date with the time ("Mon 2 Nov 11:59", "ma 2 nov 11:59"), so a paused source no longer reads as read today; `fmtLastRead` in `time.ts`, three cases in `verify:flash` (no new term, #219): `web/src/lib/time.ts`, `web/src/components/FlashParts.tsx`, `web/verify/flash.mjs`.

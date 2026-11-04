@@ -2,12 +2,12 @@
 # Three stages: install, build, run. The runtime image holds only the
 # standalone server, static files and public assets, as a non-root user.
 
-FROM node:22-alpine AS deps
+FROM node:22.23.4-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -16,7 +16,9 @@ ARG CMA_VERSION=dev
 ENV CMA_VERSION=$CMA_VERSION
 RUN npm run build
 
-FROM node:22-alpine AS run
+FROM node:22.23.4-alpine AS run
+# The runtime version in the build log (CVE-2026-111497, 4 November 2026): the base image pins the Node.js patch version
+RUN node --version
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
