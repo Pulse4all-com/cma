@@ -3231,7 +3231,10 @@ export interface FlashRowsView {
   setUp: boolean;
   /** The tenant's time zone: a file's instants and its name follow it */
   timeZone: string;
-  /** Each record as the API answers it: ids, statuses, codes, amounts with their currency, links */
+  /**
+   * Each record as the API answers it: ids, statuses, codes, amounts with their currency, links; a live list of open
+   * deals or open tickets with each pipeline's (queue's) and stage's label beside its id (<dim>_label, lib/flash withLabels)
+   */
   rows: Record<string, unknown>[];
 }
 

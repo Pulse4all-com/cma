@@ -29,6 +29,7 @@ import type {
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
+import { FLASH_LABELLED_DIMS, overviewOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
 
 /**
@@ -1406,9 +1407,13 @@ function toFlashDocument(j: FlashDocumentDb): FlashDocumentView {
   };
 }
 
-function toFlashRows(j: FlashRowsDb): FlashRowsView {
+/** A list as the screens' type: each labelled dim's label beside its id (lib/flash withLabels; the id where the CMA holds none) */
+function toFlashRows(j: FlashRowsDb, labels: FlashLabels | null): FlashRowsView {
+  const def = overviewOf(j.overview);
+  const rows = j.rows ?? [];
   return { overview: j.overview, mode: j.mode, asOf: j.as_of, from: j.from, to: j.to, sort: j.sort, descending: Boolean(j.descending), limit: j.limit,
-    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "", rows: j.rows ?? [] };
+    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "",
+    rows: def && j.mode === "live" ? withLabels(def.key, rows, labels) : rows };
 }
 
 export const postgresData: CmaData = {
@@ -3168,16 +3173,21 @@ export const postgresData: CmaData = {
                 case when $11 then cma.flash_rows($1, $6::jsonb, $7, $8, $9, $10, $12::date, $4::date, $5::date) end as r`,
         [query.overview, query.market, query.asOf, query.from, query.to, JSON.stringify(query.filters), query.sort, query.descending, query.limit,
           query.offset, query.withRows, query.rowsAsOf])).rows, "flash_overview");
-      return { document: toFlashDocument(r.d), rows: r.r ? toFlashRows(r.r) : null };
+      return { document: toFlashDocument(r.d), rows: r.r ? toFlashRows(r.r, r.d.labels) : null };
     });
   },
 
   async getFlashRows(me, query): Promise<FlashRowsView> {
+    // the labels of a pipeline's and a stage's id in the same statement as the list, so the list's permission check
+    // (cma.flash_rows: reports.view or performance.team, CMA06) answers for both; only for an overview with such dims
+    const labelled = FLASH_LABELLED_DIMS[query.overview as FlashKey] !== undefined;
     return withTenant(ctx(me), async (q) => {
-      const j = one((await q.query<{ j: FlashRowsDb }>(`select cma.flash_rows($1, $2::jsonb, $3, $4, $5, $6, $7::date, $8::date, $9::date) as j`,
-        [query.overview, JSON.stringify(query.filters), query.sort, query.descending, query.limit, query.offset, query.asOf, query.from, query.to])).rows,
-        "flash_rows").j;
-      return toFlashRows(j);
+      const r = one((await q.query<{ j: FlashRowsDb; l: FlashLabels | null }>(
+        `select cma.flash_rows($1, $2::jsonb, $3, $4, $5, $6, $7::date, $8::date, $9::date) as j,
+                case when $10 then cma.flash_labels_of(cma.current_tenant_id(), $1) end as l`,
+        [query.overview, JSON.stringify(query.filters), query.sort, query.descending, query.limit, query.offset, query.asOf, query.from, query.to, labelled])).rows,
+        "flash_rows");
+      return toFlashRows(r.j, r.l);
     });
   },
 
