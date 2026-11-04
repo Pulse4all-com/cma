@@ -13,7 +13,7 @@ import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import { CmaDbError, data, dataIsMock, type FlashDocumentView, type FlashPageView, type FlashRowsView } from "@/lib/data";
 import {
   breakdownSets, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, filtersShown, filtersText, frozenFilters, listUnavailable, metricKey, overviewOf, parseAsOf,
-  parseFilters, parseMarket, parseSort, type FlashOverviewDef,
+  parseFilters, parseMarket, parseSort, periodComplete, type FlashOverviewDef,
 } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
@@ -153,14 +153,17 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
               const card = page.overviews.find((c) => c.key === o.key);
               const setUp = card?.setUp ?? false;
               const previousOnText = card?.previousOn ? fmtDate(card.previousOn, locale) : null;
+              // a flow read now compares only a complete period: its end passed in the tenant's zone and every source feeding
+              // it read after that end (Decision log, 4 Nov 2026); As of a date, the snapshots' stored figures are compared as stored
+              const open = asOf === null && !periodComplete(o.key, o.kind === "flow" ? to : null, page.today || today, page.timeZone || me.timeZone, page.sources);
               const figure = asOf ? (
                 <span className="tabular text-title font-bold text-p4a-heading" data-testid={`flash-value-${o.key}`}>
                   {card?.value === null || card?.value === undefined ? "–" : fmtNumber(card.value, locale, 1)}
                 </span>
               ) : (
                 <FlashLiveFigure overview={o.key} market={market} from={o.kind === "flow" ? from : null} to={o.kind === "flow" ? to : null}
-                  previous={card?.previous ?? null} locale={locale}
-                  labels={{ loading: t.loading, changeSince: t.changeSince, changeFlat: t.changeFlat, noCompare: t.noCompare, previousOnText }} />
+                  previous={card?.previous ?? null} open={open} locale={locale}
+                  labels={{ loading: t.loading, changeSince: t.changeSince, changeFlat: t.changeFlat, noCompare: t.noCompare, openPeriod: t.openPeriod, previousOnText }} />
               );
               return (
                 <FlashCard key={o.key} def={o} setUp={setUp} sourceLabel={sourceLabel(o.source)} figure={figure} query={base} t={t}

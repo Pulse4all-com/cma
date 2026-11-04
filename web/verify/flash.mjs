@@ -13,7 +13,8 @@
  * Flash figure in the metric catalog with a status; the sources' line and the states of a source not set up; amounts per
  * currency and sorting within currency; the grouping sets; the average rating; a measure that does not apply (left out
  * by db/122 while its setting is empty: not applicable on screen without a link, an empty cell in a file, its records
- * refused). Invented values only.
+ * refused); a flow card's change line, which compares a complete period only (its end passed in the tenant's zone and
+ * every set-up source feeding it read after that end; else "so far", en and nl). Invented values only.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -106,6 +107,69 @@ expect("change: up, down, flat, none without a figure to compare",
   [changeOf(12, 10), changeOf(8, 10), changeOf(10, 10), changeOf(10, null), changeOf(null, 3)].map((c) => `${c.direction}:${c.delta}`),
   ["up:2", "down:-2", "flat:0", "none:null", "none:null"], ["", "", "", "", ""]);
 expect("arrows: ↑ ↓ →, nothing without a change", ["up", "down", "flat", "none"].map(changeArrow), ["↑", "↓", "→", ""], ["", "", "", "x"]);
+
+// ---- A flow's change line compares completed periods only (Decision log, 4 Nov 2026) ------------------------------------
+// Complete: (a) the period's end has passed in the tenant's zone and (b) every set-up source feeding the overview was last
+// read after that end. Prod, 4 November 2026: Orders 40 "↓ 221 since Tue 3 November", six hours against a whole day
+const { periodComplete, changeLineOf, FLASH_FLOW_SOURCES } = await import("../src/lib/flash.ts");
+const { copy: periodCopy } = await import("../src/lib/copy.ts");
+const zone = "Europe/Amsterdam";
+const tenantToday = "2026-11-04";
+const readAllAt = (at) => ({ commerce: { setUp: true, lastReadAt: at }, subscriptions: { setUp: true, lastReadAt: at }, reviews: { setUp: true, lastReadAt: at },
+  assets: { setUp: true, lastReadAt: at }, crm: { setUp: true, lastReadAt: at } });
+const readAfterMidnight = readAllAt("2026-11-04T05:10:00Z");
+expect("the sources feeding each flow: churn the subscription app, orders the stores, payments both, reviews the platforms; stocks none",
+  [FLASH_FLOW_SOURCES, FLASH_OVERVIEWS.filter((o) => o.kind === "flow").map((o) => o.key).sort()],
+  [{ churn: ["subscriptions"], orders: ["commerce"], payments: ["commerce", "subscriptions"], reviews: ["reviews"] }, ["churn", "orders", "payments", "reviews"]],
+  [{}, []]);
+expect("(a) open: Today, and This week or This month while running (they end today); complete: Yesterday and a custom range that has ended",
+  [periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), periodComplete("payments", tenantToday, tenantToday, zone, readAfterMidnight),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), periodComplete("churn", "2026-10-31", tenantToday, zone, readAfterMidnight),
+    periodComplete("reviews", "2026-11-05", tenantToday, zone, readAfterMidnight)],
+  [false, false, true, true, false], [true, true, false, false, true]);
+expect("(b) Yesterday with a source last read before midnight (the tenant's zone) is open; read after it, complete",
+  [periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T02:30:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:59:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T23:00:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, "Europe/London", { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T23:30:00Z" } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: null } })],
+  [false, false, true, false, false], [true, true, false, true, true]);
+expect("(b) every source feeding it: payments waits for the subscription app too; a source not set up feeds nothing; a stock is always compared",
+  [periodComplete("payments", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, subscriptions: { setUp: true, lastReadAt: "2026-11-03T20:00:00Z" } }),
+    periodComplete("payments", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, subscriptions: { setUp: false, lastReadAt: null } }),
+    periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, subscriptions: { setUp: true, lastReadAt: "2026-11-03T20:00:00Z" } }),
+    periodComplete("installed_base", null, tenantToday, zone, readAllAt(null)), periodComplete("open_deals", tenantToday, tenantToday, zone, readAllAt(null))],
+  [false, true, true, true, true], [true, false, false, false, false]);
+const lineEn = periodCopy.en.flash;
+const lineNl = periodCopy.nl.flash;
+const fmtEn = (x) => new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 }).format(x);
+const fmtNl = (x) => new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 1 }).format(x);
+expect("an open period (Today, prod's Orders 40 against 261) says so far, en and nl, never a change",
+  [changeLineOf(40, 261, "Tue 3 November", !periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), lineEn, fmtEn),
+    changeLineOf(40, 261, "di 3 november", !periodComplete("orders", tenantToday, tenantToday, zone, readAfterMidnight), lineNl, fmtNl)],
+  ["so far; compared once the period is complete", "tot nu toe; vergeleken zodra de periode compleet is"],
+  ["↓ 221 since Tue 3 November", "↓ 221 sinds di 3 november"]);
+expect("a completed period (Yesterday, every source read after midnight) shows its change, en and nl",
+  [changeLineOf(261, 250, "Mon 2 November", !periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), lineEn, fmtEn),
+    changeLineOf(261, 250, "ma 2 november", !periodComplete("orders", "2026-11-03", tenantToday, zone, readAfterMidnight), lineNl, fmtNl),
+    changeLineOf(5, 5, "Mon 2 November", false, lineEn, fmtEn), changeLineOf(5, null, null, false, lineEn, fmtEn)],
+  ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november", "→ unchanged since Mon 2 November", "Nothing to compare with yet"],
+  ["so far; compared once the period is complete", "tot nu toe; vergeleken zodra de periode compleet is", "", ""]);
+expect("Yesterday with a source last read before midnight shows the open-period line (case b), en and nl",
+  [changeLineOf(261, 250, "Mon 2 November",
+    !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineEn, fmtEn),
+  changeLineOf(261, 250, "ma 2 november",
+    !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineNl, fmtNl)],
+  ["so far; compared once the period is complete", "tot nu toe; vergeleken zodra de periode compleet is"],
+  ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november"]);
+const periodPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const periodControlsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
+const periodPartsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
+expect("the landing reads it: a live card's open flag from the tenant's today, zone and sources; the live and the stored line through changeLineOf",
+  [/const open = asOf === null && !periodComplete\(o\.key, o\.kind === "flow" \? to : null, page\.today \|\| today, page\.timeZone \|\| me\.timeZone, page\.sources\);/.test(periodPageSrc),
+    /open=\{open\}/.test(periodPageSrc) && /openPeriod: t\.openPeriod/.test(periodPageSrc),
+    /changeLineOf\(shown, previous, labels\.previousOnText, open, labels, n\)/.test(periodControlsSrc), /return changeLineOf\(/.test(periodPartsSrc)],
+  [true, true, true, true], [false, false, false, false]);
 expect("a definition's status and tone: Decided success, Proposed info (also when the catalog says nothing), Pending warning",
   [definitionStatus("Decided"), definitionStatus("Proposed (for Kira to confirm)"), definitionStatus(undefined), definitionStatus("Pending: x")]
     .map((s) => `${s}:${statusTone(s)}`),

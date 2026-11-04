@@ -870,13 +870,13 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Definition | The report of eleven overviews (customers, subscriptions, installed base, churn, orders, payments, open deals, open tickets, open tasks, reviews, data quality), each one click, live or as of a snapshot's business date, per market, on screen and as a file. |
 | Source | The CMA's mirrors (commerce, subscriptions, the asset register, the CRM, reviews) and its own data-quality checks; never a source system directly. The page names a source by its kind, never a vendor: Shop, Subscriptions, Asset register (nl: Assetregister), Customer records and Reviews |
 | Counts / does not count | An overview whose source the tenant has not set up shows that and no figures, never zeros |
-| Unit and display | Per overview: a headline figure, its change against the previous snapshot, its definition's status (Proposed or Decided) |
+| Unit and display | Per overview: a headline figure, its change line (Change line below), its definition's status (Proposed or Decided) |
 | Time rule | Live: as of the instant; a snapshot: its business date in the tenant's zone. Flow overviews take a period of business dates (Flash snapshot) |
 | Scope | The tenant; a market filter (a catalog market's code, or unknown) |
 | Equivalent in the source system | None |
 | Not to use | "Dashboard" (the Dashboard is a surface of the Workspace); "flash report" for one overview |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn); 1 November 2026 (#214), "Flash is first in the Reports group of the rail" and "A figure's definition status badge"; 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn); 1 November 2026 (#214), "Flash is first in the Reports group of the rail" and "A figure's definition status badge"; 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 4 Nov 2026, "Definitions: a Flash change line compares a complete period only: ..." and "Flash's change line, build choices:" (#222) |
 | Used by | `cma.flash_overviews`, `cma.flash_compute_of`, `cma.flash_overview`, `cma.flash_rows`, `cma.flash_page`; Reports → Flash (`/reports/flash`, B21b) and its files (`flash-<overview>-<market|all>-<stamp>[-breakdown].csv`); the metric catalog's `flash.<overview>.<measure>` entries |
 | As built today | `122`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. B21b adds `/reports/flash`, its API routes (`/api/v1/reports/flash`, `/rows`, `/file`, `/snapshots`) and its files; the JSON rows of Flash and of Data quality keep the database's snake_case field names. Matches the definition |
 
@@ -1031,6 +1031,25 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "The watch runs in a subtransaction of its own" (addition 0008zn); 3 Nov 2026, "Definitions: a Flash source's cadence is measured per job and stream" (addition 0008zo) |
 | Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch; Reports → Flash (`/reports/flash`): the watch strip, and `GET /api/v1/reports/flash/snapshots` |
 | As built today | `cma.flash_watch_of` (`122`; `source_stale`'s cadence per job and stream since `125`); `123` raises and resolves each kind, and B28 the cadence per job and stream. Matches the definition |
+
+### Change line
+
+| Field | Value |
+|---|---|
+| Term | Change line (nl: none of its own; the line's texts are the copy's) |
+| Key | Copy keys `flash.changeSince`, `flash.changeFlat`, `flash.noCompare`, `flash.openPeriod`; code `periodComplete`, `changeLineOf`, `FLASH_FLOW_SOURCES` (`web/src/lib/flash.ts`) |
+| Definition | A landing card's line under its figure: the change against the figure to compare with (the previous snapshot for a stock; the period of equal length just before for a flow). A flow is compared only when its period is complete: (a) its end has passed in the tenant's time zone and (b) every source feeding the overview was last read after that end; otherwise the card shows the open-period line. |
+| Source | `cma.flash_page` (`previous`, `previous_on`, `sources`, `today`, `time_zone`); the sources feeding a flow: Churn, Subscriptions; Orders, Shop; Payments, Shop and Subscriptions (`cma.flash_payments_of` reads the stores' orders and the subscription app's renewals); Reviews, Reviews |
+| Counts / does not count | A stock is always compared. A source not set up is ignored; a set-up source never read keeps the period open. As of a date, the stored figures are compared as stored, without (b) |
+| Unit and display | The arrow, the size and the date ("↓ 221 since Tue 3 November"), "→ unchanged since ...", "Nothing to compare with yet", or the open-period line "so far; compared once the period is complete" (nl "tot nu toe; vergeleken zodra de periode compleet is"). Muted text, never a colour that judges |
+| Time rule | (a) The period's last business date is before the tenant's today. (b) A read counts as after the end when its business date in the tenant's zone is later than the period's last date |
+| Scope | The landing's cards, live (Now) and As of |
+| Equivalent in the source system | None |
+| Not to use | "Open period" as a UI label (Open means not closed in Open deal, Open ticket and Open task) |
+| Status | Decided (Martin, 4 November 2026) |
+| Decided | 4 Nov 2026, "Definitions: a Flash change line compares a complete period only: ..." and "Flash's change line, build choices:" (#222) |
+| Used by | Reports → Flash (`/reports/flash`), the landing's cards |
+| As built today | Matches the definition. "Last read" is the source kind's latest succeeded run of any job and any active connection, so one store read after midnight completes the period for every store (coarser than per connection; a finer read needs the database). The stores' last read is the nightly reconcile (03:30 Amsterdam time, `ingest-reconcile`; webhooks write no `sync_run`), so Yesterday's Orders and Payments compare from about 03:30; a commerce connection without a scheduled read would never compare (data prerequisite: each feeding source needs a scheduled succeeded read after the period's end). The presets This week and This month always contain today on the live landing, so a whole week or month compares only as a custom range that has ended (or As of) |
 
 ### Flash overview measures
 
