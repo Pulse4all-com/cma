@@ -24,6 +24,7 @@ import type {
   CohortAge, LeadCohortRow, LeadCohortsReport,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
+  DataQualityRowsView, FlashDocumentView, FlashHeadlineView, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -1318,6 +1319,96 @@ function toRule(r: RuleDbRow): AlertRule {
 
 async function readRules(q: Querier): Promise<AlertRule[]> {
   return (await q.query<RuleDbRow>(`select * from cma.message_rules()`)).rows.map(toRule);
+}
+
+
+// ---- Reports → Flash (addition 0008zn): the database's JSON as the screens' types --------------------------------
+
+type FlashSourcesDb = Record<string, { set_up: boolean; adapters: string[] | null; last_read_at: string | null }>;
+interface FlashWatchDb {
+  kind: FlashWatchItem["kind"]; overview: string | null; dims: Record<string, string>; measure: string | null; value: number | string | null;
+  previous: number | string | null; threshold: number | string | null; detail: Record<string, unknown>; snapshot_date: string;
+}
+interface FlashPageDb {
+  mode: "live" | "snapshot"; as_of: string; market: string | null; from?: string | null; to?: string | null; snapshot_missing: boolean;
+  nearest_before?: string | null; nearest_after?: string | null; sources?: FlashSourcesDb;
+  overviews: { key: string; kind: "stock" | "flow"; source: FlashPageView["overviews"][number]["source"]; set_up: boolean; headline: string;
+    value: number | string | null; previous: number | string | null; previous_on: string | null; definition_version: string }[];
+  markets: { code: string; name: string }[]; watch: FlashWatchDb[]; first_snapshot_date?: string | null; last_snapshot_date?: string | null;
+  today: string; time_zone: string;
+}
+interface FlashDocumentDb {
+  overview: string; kind: "stock" | "flow"; mode: "live" | "snapshot"; as_of: string; market: string | null; from: string | null; to: string | null;
+  set_up: boolean; source: FlashDocumentView["source"]; sources: FlashSourcesDb; dims: string[]; sets: string[][]; measures: string[];
+  count_measures: string[]; headline: string; sorts: string[]; totals: FlashDocumentView["totals"]; rows: FlashDocumentView["rows"];
+  labels: Record<string, Record<string, string>> | null;
+  settings: { file_max_rows: number; negative_max_rating: number | null; required_device_refs: string[] | null; required_contact_refs: string[] | null;
+    active_subscription_statuses: string[] | null; ended_subscription_statuses?: string[] | null };
+  definition_version: string; first_snapshot_date: string | null; today: string; time_zone: string; days?: { covered: number; missing: string[] }; active_at_end?: number | string | null;
+  history?: { date: string; check: string; findings: number | string }[];
+}
+interface FlashRowsDb {
+  overview: string; mode: "live" | "snapshot"; as_of: string; from: string | null; to: string | null; sort: string | null; descending: boolean;
+  limit: number; offset: number; filters: Record<string, string>; total: number | string; rows: Record<string, unknown>[];
+  set_up?: boolean; time_zone?: string;
+}
+interface FlashHeadlineDb {
+  overview: string; headline: string; market: string | null; as_of: string; from: string | null; to: string | null; set_up: boolean; value: number | string | null;
+}
+interface FlashSnapshotsDb {
+  from: string; to: string; dates: { date: string; status: "succeeded" | "failed" | "missed"; missed_before: number | null; finished_at: string; error: string | null }[];
+  first_snapshot_date: string | null; last_snapshot_date: string | null; watch: FlashWatchDb[];
+}
+interface DataQualityRowsDb {
+  check: string; description: string | null; market: string | null; limit: number; offset: number; total: number | string; rows: Record<string, unknown>[];
+}
+
+function flashNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toFlashSources(s: FlashSourcesDb | null | undefined): FlashSourcesView {
+  const out: FlashSourcesView = {};
+  for (const [k, v] of Object.entries(s ?? {})) {
+    (out as Record<string, unknown>)[k] = { setUp: Boolean(v.set_up), adapters: v.adapters ?? [], lastReadAt: v.last_read_at ?? null };
+  }
+  return out;
+}
+
+function toFlashWatch(w: FlashWatchDb): FlashWatchItem {
+  return { kind: w.kind, overview: w.overview, dims: w.dims ?? {}, measure: w.measure, value: flashNumber(w.value), previous: flashNumber(w.previous),
+    threshold: flashNumber(w.threshold), detail: w.detail ?? {}, snapshotDate: w.snapshot_date };
+}
+
+function toFlashPage(j: FlashPageDb): FlashPageView {
+  return {
+    mode: j.mode, asOf: j.as_of, market: j.market, from: j.from ?? null, to: j.to ?? null, snapshotMissing: Boolean(j.snapshot_missing),
+    nearestBefore: j.nearest_before ?? null, nearestAfter: j.nearest_after ?? null, sources: toFlashSources(j.sources),
+    overviews: j.overviews.map((o) => ({ key: o.key, kind: o.kind, source: o.source, setUp: o.set_up, headline: o.headline, value: flashNumber(o.value),
+      previous: flashNumber(o.previous), previousOn: o.previous_on, definitionVersion: o.definition_version })),
+    markets: j.markets ?? [], watch: (j.watch ?? []).map(toFlashWatch), firstSnapshotDate: j.first_snapshot_date ?? null, lastSnapshotDate: j.last_snapshot_date ?? null,
+    today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "",
+  };
+}
+
+function toFlashDocument(j: FlashDocumentDb): FlashDocumentView {
+  return {
+    overview: j.overview, kind: j.kind, mode: j.mode, asOf: j.as_of, asOfDate: j.mode === "snapshot" ? String(j.as_of).slice(0, 10) : null,
+    market: j.market, from: j.from, to: j.to, setUp: j.set_up, source: j.source, sources: toFlashSources(j.sources), dims: j.dims, sets: j.sets,
+    measures: j.measures, countMeasures: j.count_measures, headline: j.headline, sorts: j.sorts, totals: j.totals, rows: j.rows ?? [], labels: j.labels ?? {},
+    settings: { fileMaxRows: j.settings?.file_max_rows ?? 50000, negativeMaxRating: j.settings?.negative_max_rating ?? null,
+      requiredDeviceRefs: j.settings?.required_device_refs ?? [], requiredContactRefs: j.settings?.required_contact_refs ?? [],
+      activeSubscriptionStatuses: j.settings?.active_subscription_statuses ?? [], endedSubscriptionStatuses: j.settings?.ended_subscription_statuses ?? [] },
+    definitionVersion: j.definition_version, firstSnapshotDate: j.first_snapshot_date, today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "", days: j.days ?? null, activeAtEnd: flashNumber(j.active_at_end),
+    history: (j.history ?? []).map((h) => ({ date: h.date, check: h.check, findings: flashNumber(h.findings) ?? 0 })),
+  };
+}
+
+function toFlashRows(j: FlashRowsDb): FlashRowsView {
+  return { overview: j.overview, mode: j.mode, asOf: j.as_of, from: j.from, to: j.to, sort: j.sort, descending: Boolean(j.descending), limit: j.limit,
+    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "", rows: j.rows ?? [] };
 }
 
 export const postgresData: CmaData = {
@@ -3048,5 +3139,78 @@ export const postgresData: CmaData = {
       console.error(`[cma-data] probe failed: ${e instanceof CmaDbError ? e.sqlState : "error"}`);
       return { roundTripMs: null };
     }
+  },
+
+  // ---- Reports → Flash (addition 0008zn): every function checks reports.view or performance.team itself (data
+  // quality's rows reports.view or tenant.configure), the forms and the dates (CMA04), a date without a snapshot (CMA02)
+
+  async getFlashPage(me, market, asOf, from, to): Promise<FlashPageView> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: FlashPageDb }>(`select cma.flash_page($1, $2::date, $3::date, $4::date) as j`,
+        [market, asOf, from, to])).rows, "flash_page").j;
+      return toFlashPage(j);
+    });
+  },
+
+  async getFlashOverview(me, overview, market, asOf, from, to): Promise<FlashDocumentView> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: FlashDocumentDb }>(`select cma.flash_overview($1, $2, $3::date, $4::date, $5::date) as j`,
+        [overview, market, asOf, from, to])).rows, "flash_overview").j;
+      return toFlashDocument(j);
+    });
+  },
+
+  async getFlashView(me, query): Promise<{ document: FlashDocumentView; rows: FlashRowsView | null }> {
+    // One transaction for the overview's page: the document and the first page of its list, so the view is one data call
+    return withTenant(ctx(me), async (q) => {
+      const r = one((await q.query<{ d: FlashDocumentDb; r: FlashRowsDb | null }>(
+        `select cma.flash_overview($1, $2, $3::date, $4::date, $5::date) as d,
+                case when $11 then cma.flash_rows($1, $6::jsonb, $7, $8, $9, $10, $12::date, $4::date, $5::date) end as r`,
+        [query.overview, query.market, query.asOf, query.from, query.to, JSON.stringify(query.filters), query.sort, query.descending, query.limit,
+          query.offset, query.withRows, query.rowsAsOf])).rows, "flash_overview");
+      return { document: toFlashDocument(r.d), rows: r.r ? toFlashRows(r.r) : null };
+    });
+  },
+
+  async getFlashRows(me, query): Promise<FlashRowsView> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: FlashRowsDb }>(`select cma.flash_rows($1, $2::jsonb, $3, $4, $5, $6, $7::date, $8::date, $9::date) as j`,
+        [query.overview, JSON.stringify(query.filters), query.sort, query.descending, query.limit, query.offset, query.asOf, query.from, query.to])).rows,
+        "flash_rows").j;
+      return toFlashRows(j);
+    });
+  },
+
+  async getFlashHeadline(me, overview, market, from, to): Promise<FlashHeadlineView> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: FlashHeadlineDb }>(`select cma.flash_headline($1, $2, $3::date, $4::date) as j`,
+        [overview, market, from, to])).rows, "flash_headline").j;
+      return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value) };
+    });
+  },
+
+  async getFlashSnapshots(me, from, to): Promise<FlashSnapshotsView> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: FlashSnapshotsDb }>(`select cma.flash_snapshots($1::date, $2::date) as j`, [from, to])).rows, "flash_snapshots").j;
+      return {
+        from: j.from, to: j.to, firstSnapshotDate: j.first_snapshot_date, lastSnapshotDate: j.last_snapshot_date, watch: j.watch.map(toFlashWatch),
+        dates: j.dates.map((d) => ({ date: d.date, status: d.status, missedBefore: d.missed_before ?? 0, finishedAt: d.finished_at, error: d.error })),
+      };
+    });
+  },
+
+  async getDataQualityRows(me, query): Promise<DataQualityRowsView> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: DataQualityRowsDb }>(`select cma.data_quality_rows($1, $2, $3, $4) as j`,
+        [query.check, query.market, query.limit, query.offset])).rows, "data_quality_rows").j;
+      return { check: j.check, description: j.description, market: j.market, limit: j.limit, offset: j.offset, total: Number(j.total), rows: j.rows };
+    });
+  },
+
+  async recordFlashFile(me, read): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.flash_file_record($1, $2, $3::jsonb, $4, $5::date, $6::date, $7::date, $8)`,
+        [read.overview, read.part, JSON.stringify(read.filters), read.market, read.asOf, read.from, read.to, read.rows]);
+    });
   },
 };

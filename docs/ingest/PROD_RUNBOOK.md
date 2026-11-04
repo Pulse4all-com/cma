@@ -1,6 +1,6 @@
 # Prod runbook: HubSpot, Aircall and Shopify into cma-ingest in prod
 
-The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026), the Trusted Shops reviews (phase 13, brief B18, 25 October 2026) and the asset register's API sync (phase 14, addition 0008zj, 27 October 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
+The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026), the Trusted Shops reviews (phase 13, brief B18, 25 October 2026), the asset register's API sync (phase 14, addition 0008zj, 27 October 2026), Juo subscriptions (phase 15, addition 0008zl, 28 October 2026) and Flash (phase 16, addition 0008zm, 1 November 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
@@ -2155,3 +2155,504 @@ Expected: one `subscriptions_poll | subscriptions | succeeded` row with the even
 Expected: the row **Subscriptions poll** with its last run succeeded, and the connection **Juo GB** OK. After 03:30 the next day: a **Nightly reconcile** run of the connection, stream `subscription`, succeeded, `missing_now` the subscriptions Juo no longer returns (usually 0). System health's counts column shows only counts above 0.
 
 Day one: **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select job, status, error, count(*) from cma.sync_run where connection_id = '<juo conn>' and started_at > now() - interval '1 day' group by 1, 2, 3 order by 1, 2;`. Expected: about 288 `subscriptions_poll` `succeeded` and one `reconcile` `succeeded`; a `failed` with `rate_limited` makes the execution exit 1, so the alert `Cloud Run job failed (any job)` fires (OPERATIONS 9); one now and then needs no action (the next run carries on); several a day: report them (Open decisions: Juo's rate limit). `key_rejected` means the key was revoked or replaced: 15.1 and 15.2 again. `empty_snapshot` on the reconcile means Juo answered no subscription: nothing was marked missing; report it. A failed poll does not move its cadence, so a lasting failure writes one `failed` row every 5 minutes until it is fixed: fix it the same day. **Records:** the outputs of (a), (c) and 15.2 to 15.9 into `records/0008zl-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
+
+# Phase 16. Flash in prod (addition 0008zn)
+
+Written on 1 November 2026 for addition 0008zn and renumbered on 2 November 2026, after #209 took 0008zm (lead cohorts), before anything of Flash ran in dev or prod; changed on 3 November 2026 after the first dev run (`122` ran in dev on 2 November 2026; `123`'s block C could not finish on dev's shared core and its B3 failed on dev's collation alone, so block C now runs in local databases only and the speed is `124`'s, in prod). Two stacked pull requests carry it: #213 (brief B21a: `db/122_flash.sql`, `db/123_verify_flash.sql` and the read-only timing `db/124_time_flash.sql`, the snapshot job `cma-snapshot-flash`, the contact hold D2 in the ingest; branch `claude/sharp-newton-pxdg9t`) and #214 (brief B21b: Reports → Flash, its API and files; branch `claude/sharp-newton-pxdg9t-b21b`, stacked on #213, no migration). Flash reads the mirrors the CMA already holds (the stores, Juo, the asset register, HubSpot, the reviews) and stores one snapshot per tenant and business date from the first night on (`docs/architecture/data-model/0008.md`, Data model: Flash (addition 0008zn); `docs/architecture/flash-watch.md`). Read only towards every source: nothing is written to HubSpot, Shopify, Juo, Airtable or Trusted Shops. Order: dev on #213's branch (16.1 to 16.3); prod's migration before #213 is merged (16.4); the merge, the ingest and the take-in of linked contacts (16.5); the snapshot job (16.6); the gate and #214's merge with the on-screen checks (16.7); the coverage checks before the demo (16.8). 16.4 comes before the merge because the snapshot job and the ingest's contact hold need `122`, while `main`'s web and ingest read nothing it adds (122's header). 0008zm (lead cohorts, #209, `db/120_lead_cohorts.sql`) runs before 0008zn in each database: it ran in dev on 2 November 2026 (its verify `121_verify_lead_cohorts.sql` 22 PASS, then `113`, `95` and `41` again); 16.4 runs it in prod first when prod does not hold it yet. Every Studio block here is read only under `cma_owner` or a whole script run as your own login, so none needs the context block. The Terminal blocks run on your own terminal in `~/cma`.
+
+**Data prerequisites** (each one limits what Flash shows, not whether it runs):
+- Addition 0008zm in the database (lead cohorts, #209; it needs 0008zl, phase 15's (a) and (c)): `122` refuses to run without it (`addition 0008zm (120_lead_cohorts.sql) must run before 0008zn`).
+- The NetSuite Customer ID on the HubSpot contact: the connection maps `contact_netsuite_id` as the contact's `netsuite` reference (7.3), and finance fills it. Once `commerce.required_contact_refs` names `netsuite`, a store customer with an order whose contact lacks it is a finding of `customer_required_ref_missing` (16.5 checks the mapping, 16.8 counts the gap).
+- The NetSuite Internal ID on the register's record, the device's named id `ns_internal_id` (14.5 maps it). Once `assets.required_refs` names `ns_internal_id`, a device without it is a finding of `device_required_ref_missing`.
+- Both requirements are empty for Pulse4all Subscriptions until NetSuite holds its customers and devices (Decision log, 3 Nov 2026): seed `02` writes them empty, Flash's Active customers shows "With every required reference" as not applicable, and neither check finds anything. On that day they are switched on through the Configuration API (`PUT /api/v1/configuration/settings`, `tenant.configure`; no Configuration page shows them yet) or Studio (`ns_internal_id`, `netsuite`); a rerun of the seed keeps the value set then. Expect the watch to open one `dq_rise` per check that day (a true rise: the records the checks now find).
+- The store customers the CMA holds: phase 9's backfill read the customers changed since 1 October 2026, so Active customers and the NetSuite check are incomplete until each store's backfill from its start (Open decisions; 16.8).
+- Juo's subscriptions per store: the GB store first (phase 15). Active subscriptions, Active customers and Churn cover only the stores whose subscriptions the CMA reads (Open decisions; 16.8).
+- Orders from 1 October 2026 only (Open decisions, Order history before 1 October 2026), and test deals counted in Open deals until D25 (Open decisions).
+
+## 16.1 Dev: the migration, its verify and the reruns
+
+**Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zk' order by 1;
+reset role;
+```
+Expected: `0008zk`, `0008zl` and `0008zm` (0008zm ran in dev on 2 November 2026). Without `0008zm`: `db/120_lead_cohorts.sql`, then `db/121_verify_lead_cohorts.sql` (`verdict | OK | 121_verify_lead_cohorts: 22 PASS, 0 FAIL`), then `113`, `95` and `41` again, as its header says, before going on. With `0008zn` already there (dev since 2 November 2026, about 18:18 UTC), run `122` again all the same: it changed on 3 November 2026 (a measure that does not apply is left out, never 0; Decision log, 3 Nov 2026), and it is rerunnable. `123`'s B27 needs the changed functions.
+
+**File:** `db/122_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+
+Expected: no error. A second run ends the same and changes nothing.
+
+**Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zm' order by 1;
+reset role;
+```
+Expected: `0008zm` and `0008zn`.
+
+**File:** `db/123_verify_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab. Open the results dropdown at the verdict table.
+
+Expected, in about ten seconds: rows `A1` to `A8` and the `B` rows (`B1` to `B27`) `ok`, `C1` to `C4` `skip` with `not run: volume off` (block C, the speed at a generated volume, runs in local databases only: dev's shared core cannot carry it), 43 rows, and `verdict | 0008zn verified | 123_verify_flash: 39 ok, 0 FAIL, 4 skip`. A `FAIL` row: report it with its detail rather than run it again.
+
+**Studio (cma-dev-pg):** `123` again in the same tab, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
+
+Expected: every `A` and `B` row `FAIL`, `C1` to `C4` `skip`, `verdict | PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 39 FAIL, 4 skip`.
+
+**File:** `db/124_time_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab, unchanged. Read only (no addition, no write): per active tenant, as the application, it times every live overview and the landing and the first page of every list, the best of two. Whose user: the script picks it, the tenant's first active person holding `reports.view`, and its row `<tenant> acting as` names that user's id (never an email).
+
+Expected, in under a minute: a first row `read only | info | a write in the timed part is refused (25006)`, then one row per read, `<tenant> overview <key>`, `<tenant> landing` and `<tenant> list <key> by <sort>` (23 per tenant whose people hold `reports.view`, after its `acting as` row; a tenant without one reads one `skip` row), each with its milliseconds against its budget, and a last row `verdict | PASS | 124_time_flash: <n> ok, 0 FAIL, <n> skip; worst <ms> ms (<read>)`. In dev this is for information only: dev is a shared core (as `91`'s B8), so a `FAIL` here is the tier, not Flash; prod decides (16.4). Copy the verdict row into the report.
+
+**Studio (cma-dev-pg):** the earlier verifies of what `122` makes again (the settings trigger as 0008zm's with Flash's settings, the data-quality redefinition, the contact upsert, the scheduler's role), each pasted whole and Run, unchanged: `121_verify_lead_cohorts.sql`, `113_verify_assets.sql`, `95_verify_attempts_for_sales.sql`, `41_verify_lead_metrics.sql`, `119_verify_subscriptions.sql`, `105_verify_reviews.sql` and `81_verify_follow_up_snapshot.sql`.
+
+Expected, each as it passed before this change: `verdict | OK | 121_verify_lead_cohorts: 22 PASS, 0 FAIL`, `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`, `verdict | PASS | 36 PASS, 0 FAIL` (95), one row per tenant ending `PASS` (41), `verdict | PASS | 119_verify_subscriptions: 23 PASS, 0 FAIL`, `verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL` and `verdict | PASS | 19 PASS, 0 FAIL` (81). Any `FAIL`: report the row and its detail.
+
+**File:** `db/02_seed_pulse4all.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+
+Expected: no error. It adds Pulse4all Subscriptions' Flash settings where the tenant has none yet, so a value changed on Configuration survives.
+
+**Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select s.key, s.value from cma.tenant_setting s join cma.tenant t on t.id = s.tenant_id
+where t.slug = 'pulse4all-subscriptions' and (s.key like 'flash.%' or s.key in ('assets.required_refs', 'commerce.required_contact_refs'))
+order by 1;
+reset role;
+```
+Expected, nine rows: `assets.required_refs | (empty)`, `commerce.required_contact_refs | (empty)`, `flash.active_subscription_statuses | active`, `flash.ended_subscription_statuses | canceled,expired`, `flash.file_max_rows | 50000`, `flash.id_list_retention_months | 84`, `flash.snapshot_local_time | 00:30`, `flash.watch_jump_min | 10`, `flash.watch_jump_pct | 20` (an empty value shows as an empty cell). A value other than these was set earlier and is kept: report it.
+
+Only when the first two rows read `ns_internal_id` and `netsuite` (a run of the seed before 3 November 2026 wrote them): empty them, as the Decision log of 3 Nov 2026 asks until NetSuite holds the customers and devices.
+
+**Studio (cma-dev-pg)**
+```sql
+set role cma_owner;
+update cma.tenant_setting s set value = ''
+from cma.tenant t
+where t.id = s.tenant_id and t.slug = 'pulse4all-subscriptions'
+  and s.key in ('assets.required_refs', 'commerce.required_contact_refs') and s.value <> '';
+reset role;
+```
+Expected: `UPDATE 2`; then the block above again shows both rows empty.
+
+## 16.2 Dev: the data map on #213's branch
+
+Four tables (`cma.flash_snapshot_run`, `cma.flash_snapshot`, `cma.flash_snapshot_ids`, `cma.flash_watch_finding`) and ten reader views (the four tables' and six `dq_` views) are new; `docs/datamap/catalog.json` describes them on #213's branch. Until the snapshot is refreshed from dev, `verify:datamap` fails there, which is expected.
+
+**Terminal** (in `~/cma`, after 16.1)
+```bash
+cd ~/cma && git fetch -q origin && git switch -q claude/sharp-newton-pxdg9t && git pull -q --ff-only && cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json && grep -o '"latest_migration" : "[^"]*"' docs/datamap/schema.json
+```
+Expected: `connected to cma as <your account>`, then `"latest_migration" : "0008zn"`.
+
+**Terminal** (`~/cma`)
+```bash
+node tools/datamap/build.mjs && cd web && npm run verify:datamap; cd ~/cma
+```
+Expected: `datamap: wrote docs/datamap/index.html (102 tables, 158 views)`, then npm's two header lines and `datamap: PASS (102 tables, 158 views, all described; index.html current)` (four tables and ten views more than the 98 tables and 148 views after 0008zm).
+
+**Terminal** (`~/cma`)
+```bash
+git add docs/datamap/schema.json docs/datamap/index.html && git commit -q -m "Data map: schema snapshot from dev after 0008zn" && git push -q origin HEAD:claude/sharp-newton-pxdg9t && git log -1 --format='%h %s'
+```
+Expected: `<short sha> Data map: schema snapshot from dev after 0008zn`; #213 now passes `verify:datamap`.
+
+## 16.3 Dev: the ingest of #213, the HubSpot project, the linked contacts
+
+The ingest of #213 reads a contact a store customer is linked to as a held contact (D2): the HubSpot read-back keeps its references fresh, the sweep's second read takes in the last hour's new links (newest first), the nightly reconcile those of its 26-hour look-back the sweep did not reach, and `ingest-backfill --object linked_contact` takes in once every contact linked before (`docs/ingest/README.md`, section Shopify, The linked contact is held).
+
+**Terminal** (in `~/cma`, on #213's branch: dev only, with the branch warning)
+```bash
+cd ~/cma && git switch -q claude/sharp-newton-pxdg9t && git pull -q --ff-only && bash docs/ingest/deploy.sh dev --allow-branch
+```
+Expected: `WARNING: deploying dev from branch claude/sharp-newton-pxdg9t, not main (--allow-branch): image tag dea123f is a branch commit no review merged`, `== cma-ingest dea123f → p4a-cma-dev`, `image tag dea123f: the last commit under ingest/; HEAD is <16.2's sha>`, the image built once, a new revision and `health: {"ok":true,"version":"dea123f"}`. The line `note: no --tenant given` is harmless while dev's pepper secret exists. A later ingest commit on the branch changes the tag: the tag is the branch's last commit under `ingest/`.
+
+**Terminal** (`~/cma`, the same branch)
+```bash
+bash docs/ingest/deploy.sh dev --jobs --allow-branch
+```
+Expected: the same warning, `== ingest jobs dea123f → p4a-cma-dev`, `image … exists (…); no build`, the job deploys and their schedules as before (#213 adds no ingest job).
+
+**The HubSpot project: nothing to upload.** #213 changes nothing under `hubspot/`: `contact_netsuite_id` is among the contact properties the project subscribes to since its first version (11 October 2026; `VENDOR_SETUP.md` §1.3), and the D2 change is on the ingest's side only (its read-back now counts a linked contact as held, so the property's changes are read). An upload would go through CMA-067's workflow, which is not built (`hubspot/README.md`, Render, upload, install). The check:
+
+**Browser:** live portal → Development → Projects → **CMA ingest dev** → the app → the webhooks tab.
+
+Expected: among the contact subscriptions, `contact_netsuite_id` (property change), active. Missing: stop and report it (an app version would wait for CMA-067).
+
+**Studio (cma-dev-pg)** (read only; counts only: the connection, how many contacts the store customers are linked to, and how many of them the CMA does not hold yet)
+```sql
+set role cma_owner;
+select t.slug, c.id as hubspot_conn, c.name,
+       count(distinct cu.crm_contact_source_id) as linked,
+       count(distinct cu.crm_contact_source_id) filter (where k.id is null) as linked_not_held
+from cma.integration_connection c
+join cma.tenant t on t.id = c.tenant_id
+left join cma.commerce_customer cu on cu.tenant_id = c.tenant_id and cu.crm_connection_id = c.id
+     and cu.crm_contact_source_id is not null and cu.source_deleted_at is null
+left join cma.crm_contact k on k.tenant_id = cu.tenant_id and k.connection_id = cu.crm_connection_id and k.source_id = cu.crm_contact_source_id
+where c.adapter = 'hubspot' and c.status = 'active'
+group by 1, 2, 3 order by 1;
+reset role;
+```
+Expected: one row per active HubSpot connection in dev (the test portal's: `<hubspot conn>`), with `linked` and `linked_not_held` (small, or 0 where dev holds no linked store customers). Note `linked_not_held` (`<n>`).
+
+**Terminal** (`<hubspot conn>` from the row above)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args=--connection,<hubspot conn>,--object,linked_contact
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+**Terminal** (the run's log line; counts and endpoint templates only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.object="linked_contact" AND (jsonPayload.message="backfill" OR jsonPayload.message="backfill paused")' --project=p4a-cma-dev --freshness=1h --limit=1 --format='value(jsonPayload.message,jsonPayload.fetched,jsonPayload.upserted,jsonPayload.skipped,jsonPayload.failed,jsonPayload.apiCalls,jsonPayload.api,jsonPayload.daily)'
+```
+Expected: one line (the job's own `backfill` line; the runner's later `backfill finished` line carries no `apiCalls`, `api` or `daily`, so the filter leaves it out): `backfill`, `fetched` `<n>`, `upserted` `<n>` less the contacts HubSpot no longer has (`skipped`), `failed` 0 (the run did not fail), `apiCalls` `<n>`/100 rounded up, `api` with `POST /crm/v3/objects/contacts/batch/read` (one batch read per 100 contacts), and `daily` (`{limit, remaining}`, or `not_received`). With `<n>` 0: `fetched` 0 and the last three fields empty. The same command again reads nothing (its cursor is done; `--again` walks it again). The Studio block above again: `linked_not_held` 0, or the `skipped` contacts.
+
+## 16.4 Prod: the migration, its verify, the rerun and the seed (before #213 is merged)
+
+0008zm (lead cohorts) runs in prod before 0008zn, then `122` runs in prod before #213's merge: `main`'s web and ingest run unchanged on it, and the merge's snapshot job and ingest need it. Of the reruns, `113` and `41` run in prod: `121`, `95`, `119`, `105` and `81` refuse a database without the dev seed (dev only; 16.1 ran them).
+
+**Terminal** (point-in-time recovery on, as before every prod migration)
+```bash
+gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
+```
+Expected: `True	7`.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zk' order by 1;
+reset role;
+```
+Expected: `0008zk`, `0008zl` and, when lead cohorts already ran in prod, `0008zm`. With `0008zn` already there, stop and report it. Without `0008zl`: phase 15's (c) first.
+
+**0008zm first, when the row above lacks it.** **Studio (cma-prod-pg):** `db/120_lead_cohorts.sql` as one script, as your own login. Expected: no error. Its verify `121_verify_lead_cohorts.sql` and the rerun `95` are dev only (22 PASS and 36 PASS in dev on 2 November 2026); in prod `113` and `41` follow it, as below for `122`. Then the same block again: `0008zk`, `0008zl` and `0008zm`. Without `0008zm`, `122` stops with `addition 0008zm (120_lead_cohorts.sql) must run before 0008zn`.
+
+**Studio (cma-prod-pg):** `db/122_flash.sql` as one script, as your own login.
+
+Expected: no error. A second run ends the same.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zm' order by 1;
+reset role;
+```
+Expected: `0008zm` and `0008zn`.
+
+**Studio (cma-prod-pg):** `db/123_verify_flash.sql`, pasted whole and Run, unchanged (block B works on throwaway tenants inside subtransactions that roll back, so nothing stays; block C is off). Here the snapshot job does not exist yet. When `123` runs again in prod after 16.6, start it away from minute 20 of the hour, so that it does not overlap the job's hourly take.
+
+Expected: rows `A1` to `A8` and the `B` rows (`B1` to `B27`) `ok`, `C1` to `C4` `skip` with `not run: volume off` (the speed on prod's own data is `124`'s, next), and `verdict | 0008zn verified | 123_verify_flash: 39 ok, 0 FAIL, 4 skip`.
+
+**Studio (cma-prod-pg):** `db/124_time_flash.sql`, pasted whole and Run, unchanged: the speed proof on real data and the dedicated core. Read only (no addition, no write), so it can run again at any time, away from minute 20 once the job exists (16.6). Per active tenant it acts as the application and as the tenant's first active person holding `reports.view`; the row `<tenant> acting as` names that user's id (never an email). It stops starting reads at 240 seconds; a read already running is not cut, and a read that fails reads `FAIL` with its SQLSTATE while the others run. Studio runs it as one transaction: the reads run in a read-only part that the script rolls back, so nothing they do stays and the script ends read-write (`read only` row `FAIL`: a write was not refused; `the timed part` row `FAIL`: it ended early, the rows before it kept).
+
+Expected, in under a minute: a first row `read only | info | a write in the timed part is refused (25006)`, then per tenant whose people hold `reports.view` an `acting as` row (`info`, the user's id) and 23 rows `ok` (11 overviews, the landing, 11 lists; the flows over the previous calendar month), each `<ms> ms (best of 2) against <budget> ms`, and `verdict | PASS | 124_time_flash: <n> ok, 0 FAIL, <n> skip; worst <ms> ms (<read>)`. The budgets (Decision log, 3 November 2026): 1,500 ms for an overview and the landing, 800 ms for a first page of a list, 2,500 ms for data quality's overview and list. **A `FAIL` on data quality alone** (its overview, its list or both) is a known exception until its figures are stored (backlog CMA-087): its live read runs every check and can exceed 2,500 ms under load. Record it with its milliseconds and do not rerun; the verdict then reads `FAIL | 124_time_flash: <n> ok, 1 FAIL, <n> skip` (or 2 FAIL), and the prod record names the exception. Any other `FAIL` names a read over its budget: report it with its milliseconds rather than run it again. **Records:** every row of `124` into the report.
+
+**Studio (cma-prod-pg):** `db/113_verify_assets.sql`, then `db/41_verify_lead_metrics.sql`, each pasted whole and Run, unchanged.
+
+Expected: `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`, and for `41` one row per tenant ending `PASS`. Copy `113`'s C1 detail (the page's and the list's milliseconds) into the report.
+
+**Studio (cma-prod-pg):** `db/02_seed_pulse4all.sql` as one script, as your own login.
+
+Expected: no error.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select s.key, s.value from cma.tenant_setting s join cma.tenant t on t.id = s.tenant_id
+where t.slug = 'pulse4all-subscriptions' and (s.key like 'flash.%' or s.key in ('assets.required_refs', 'commerce.required_contact_refs'))
+order by 1;
+reset role;
+```
+Expected: the nine rows of 16.1, the first two `assets.required_refs | (empty)` and `commerce.required_contact_refs | (empty)` (prod never ran the seed's Flash block before, so it writes them empty). **Records:** the outputs of 16.1 and 16.4 into the report.
+
+## 16.5 Prod: the merge of #213, the ingest, the HubSpot project, the linked contacts
+
+**Browser:** Martin reviews and squash-merges #213 on GitHub (16.1 to 16.4 done, every verify green). The merge touches `web/` (the snapshot job, the job's label on System health), so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
+
+**Terminal** (`docs/RUNBOOK.md` 3; about four minutes after the merge)
+```bash
+gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=3 --format="table(status,substitutions.SHORT_SHA,createTime.date('%H:%M'))"
+```
+Expected: `SUCCESS` with the merge's short sha on top. Note it: `<merge sha>` (16.6).
+
+**Terminal** (in `~/cma`, on `main` after the merge; `--front` with the service, never with `--jobs`)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`), the schedules unchanged.
+
+**The HubSpot project: nothing to upload** (as 16.3: no change under `hubspot/`; an upload would go through CMA-067).
+
+**Browser:** live portal → Development → Projects → **CMA ingest prod** → the app → the webhooks tab.
+
+Expected: among the contact subscriptions, `contact_netsuite_id` (property change), active. Missing: stop and report it.
+
+**Studio (cma-prod-pg)** (read only; the contact references the connection maps, then the linked contacts, counts only)
+```sql
+set role cma_owner;
+select c.id as hubspot_conn, f.ref_system, f.source_property, f.slot
+from cma.integration_connection c
+join cma.tenant t on t.id = c.tenant_id
+join cma.connection_field f on f.tenant_id = c.tenant_id and f.connection_id = c.id and f.entity = 'contact' and f.field = 'ref'
+where t.slug = 'pulse4all-subscriptions' and c.adapter = 'hubspot' and c.status = 'active'
+order by 2, 4;
+select t.slug, c.id as hubspot_conn, c.name,
+       count(distinct cu.crm_contact_source_id) as linked,
+       count(distinct cu.crm_contact_source_id) filter (where k.id is null) as linked_not_held
+from cma.integration_connection c
+join cma.tenant t on t.id = c.tenant_id
+left join cma.commerce_customer cu on cu.tenant_id = c.tenant_id and cu.crm_connection_id = c.id
+     and cu.crm_contact_source_id is not null and cu.source_deleted_at is null
+left join cma.crm_contact k on k.tenant_id = cu.tenant_id and k.connection_id = cu.crm_connection_id and k.source_id = cu.crm_contact_source_id
+where c.adapter = 'hubspot' and c.status = 'active'
+group by 1, 2, 3 order by 1;
+reset role;
+```
+Expected: three rows for the live portal's connection (`<hubspot conn>`): `netsuite | contact_netsuite_id`, `shopify | contact_shopify_id_1 | 1` and `shopify | contact_shopify_id_2 | 2` (7.3). No `netsuite` row: report it. It is needed before `commerce.required_contact_refs` is switched on to `netsuite` (Decision log, 3 Nov 2026); while that setting is empty no customer is a finding of `customer_required_ref_missing`. Then one row per active HubSpot connection: for `pulse4all-subscriptions`, `linked` (the distinct contacts of 9.8's bridge check, over every store) and `linked_not_held` (`<n>`), the contacts the take-in reads. Note `<n>`.
+
+**The API calls.** The take-in costs one batch read per 100 contacts: `<n>`/100 rounded up (30,000 linked contacts are 300 requests), paced at half of HubSpot's limits. The portal's daily limit is shared by every app of the portal; on 18 October 2026 the app's 173,444 calls in 24 hours were 17% of it (phase 12), so a few hundred requests do not move it. The backfill still watches the **daily floor** (`docs/ingest/README.md`, API budget): once the remaining daily calls fall below `api_daily_floor_pct` (25% by default) of the limit, it sends no further request, finishes its run as succeeded with error `daily_floor`, logs `backfill paused` and exits 0; the same command later continues from its cursor.
+
+**Terminal** (`<hubspot conn>` from the row above)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<hubspot conn>,--object,linked_contact
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+**Terminal** (the run's log line: its calls and the daily limit HubSpot stated; counts and endpoint templates only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.object="linked_contact" AND (jsonPayload.message="backfill" OR jsonPayload.message="backfill paused")' --project=p4a-cma-prod --freshness=1h --limit=1 --format='value(jsonPayload.message,jsonPayload.fetched,jsonPayload.upserted,jsonPayload.skipped,jsonPayload.failed,jsonPayload.apiCalls,jsonPayload.api,jsonPayload.daily)'
+```
+Expected: one line (the job's own `backfill` line; the runner's later `backfill finished` line carries no `apiCalls`, `api` or `daily`, so the filter leaves it out): `backfill`, `fetched` `<n>`, `upserted` `<n>` less the contacts HubSpot no longer has (`skipped`), `failed` 0, `apiCalls` `<n>`/100 rounded up, `api` with `POST /crm/v3/objects/contacts/batch/read` and that count, and `daily` with `limit` and `remaining`, `remaining` above a quarter of `limit`. Copy `apiCalls` and `daily` into the report. `backfill paused` instead of `backfill`: the floor was reached; run the execution again the next day (it continues where it paused). `daily` `not_received`: HubSpot sent no daily headers and the floor cannot pause (12.2); the next day's count below shows the cost instead.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select job, stream, status, error, counts, started_at, finished_at from cma.sync_run
+where connection_id = '<hubspot conn>' and job = 'backfill' and stream = 'linked_contact' order by started_at desc limit 3;
+reset role;
+```
+Expected: one row `backfill | linked_contact | succeeded` with no error (`daily_floor`: paused, as above) and `fetched` and `upserted` as the log line. The previous Studio block again: `linked_not_held` 0, or the `skipped` contacts. From now on the sweep's second read takes in each new link within the hour.
+
+**Browser** (the next day): live portal → Development → Monitoring → the app **CMA ingest prod** → API calls, the last 24 hours.
+
+Expected: the app's usual daily count (12.3) plus the take-in's `apiCalls`. Write both into the report.
+
+## 16.6 Prod: the snapshot job, its first run and System health
+
+The job `cma-snapshot-flash` runs on the web image, so it is deployed once the image of #213's merge exists (16.5's build `SUCCESS`): `docs/scheduler/deploy-flash.sh` creates or updates the job (pool of 1, `CMA_DB_POOL_MAX=1`, no task retries) and the Cloud Scheduler job `cma-snapshot-flash-hourly` (`20 * * * *`, UTC). Each run visits every tenant; the database takes a tenant's latest due date (a date is due the day after it at `flash.snapshot_local_time`, 00:30) once, and answers `taken` for a date it holds. The first run takes yesterday at once, marked `late` when it runs more than an hour after yesterday's due time (today 00:30), with the mirrors as they are at that run and its stock figures measured against yesterday; from the next night on the take runs at 01:20 Amsterdam time, on time. A date the job never reaches while it is the latest due one is recorded as `missed` by the next take and never taken. Dev first, then prod.
+
+**Terminal** (in `~/cma`, on `main`; `<merge sha>` from 16.5)
+```bash
+git switch -q main && git pull -q --ff-only && bash docs/scheduler/deploy-flash.sh dev <merge sha>
+```
+Expected: gcloud's confirmations of the job, the invoker binding and the schedule, then `job cma-snapshot-flash on europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<merge sha>, schedule cma-snapshot-flash-hourly hourly at minute 20 (UTC) in p4a-cma-dev` and the lines `run it now:`, `its log:` and `pause it:`. Dev takes its first date at the next minute 20.
+
+**Terminal**
+```bash
+bash docs/scheduler/deploy-flash.sh prod <merge sha>
+```
+Expected: the same for `p4a-cma-prod`.
+
+**Terminal** (the first run now, rather than at the next minute 20)
+```bash
+gcloud run jobs execute cma-snapshot-flash --project=p4a-cma-prod --region=europe-west4 --wait
+```
+Expected: `Execution [cma-snapshot-flash-…] has successfully completed.` A failed execution means a tenant failed: the next block names it.
+
+**Terminal** (its log: one line per tenant, ids, dates and counts only)
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-snapshot-flash AND jsonPayload.message="snapshot-flash"' --project=p4a-cma-prod --freshness=1h --limit=10 --format='value(jsonPayload.tenant_id,jsonPayload.date,jsonPayload.taken,jsonPayload.reason,jsonPayload.rows,jsonPayload.ids,jsonPayload.watch_opened,jsonPayload.duration_ms,jsonPayload.error)'
+```
+Expected: one line per tenant with a scheduler user: its id, yesterday's date, `True`, no reason, `rows` above 0 for Pulse4all Subscriptions, `ids` above 0 only when yesterday was a month's last day, `watch_opened` usually 0, `duration_ms` (well under the job's 240,000 ms statement timeout), no error. An `ERROR` line names its code: report it.
+
+**Studio (cma-prod-pg)** (read only; counts, codes and dates only)
+```sql
+set role cma_owner;
+select t.slug, r.snapshot_date, r.status, r.due_at, r.late, r.error, r.watch_error, r.missed_before, r.finished_at - r.started_at as took, r.counts,
+       (select string_agg(k || '=' || (r.sources -> k ->> 'set_up'), ' ' order by k) from jsonb_object_keys(r.sources) k) as set_up,
+       r.settings ->> 'timezone' as zone
+from cma.flash_snapshot_run r join cma.tenant t on t.id = r.tenant_id
+order by r.started_at desc limit 4;
+select t.slug, j.status, j.error, j.counts ->> 'taken' as taken, j.counts ->> 'rows' as rows, j.started_at
+from cma.sync_run j join cma.tenant t on t.id = j.tenant_id
+where j.job = 'flash_snapshot' order by j.started_at desc limit 4;
+select t.slug, f.kind, f.overview, f.dims, f.measure, f.value, f.threshold
+from cma.flash_watch_finding f join cma.tenant t on t.id = f.tenant_id
+where f.state = 'open' order by 1, 2;
+reset role;
+```
+Expected:
+- the runs: per tenant one row with `snapshot_date` yesterday, `status` `succeeded`, `due_at` today 00:30 Amsterdam time (23:30 UTC the day before, in winter), `late` true when the run came after 01:30 and false for a scheduled 01:20 run, no error and no `watch_error`, `missed_before` 0 (the first take has no earlier one), `took` under a minute, `counts` with the eleven overviews (`churn`, `customers`, `data_quality`, `installed_base`, `open_deals`, `open_tasks`, `open_tickets`, `orders`, `payments`, `reviews`, `subscriptions`; the rows stored for each) and `ids_expired` 0, plus `ids_customer`, `ids_subscription` and `ids_device` when the date is a month's last day; for `pulse4all-subscriptions`, `set_up` `assets=true commerce=true crm=true reviews=true subscriptions=true` (`subscriptions=false` until phase 15's connection exists), every overview of a set-up source at least 1 (its totals row) and `zone` `Europe/Amsterdam`; for a tenant without a source, that source's overviews 0 (a source not set up gives no figures, never zeros);
+- the job's rows: per tenant `succeeded`, no error, `taken` 1 and `rows` as the run's counts summed;
+- the watch: no row, or a `source_stale` row for a source whose last successful read is older than three of its cadences (report it with its `dims`); `jump`, `flow_zero`, `snapshot_missing` and `dq_rise` need an earlier snapshot and cannot appear on the first take.
+
+**Browser:** Workspace → Configuration → System health.
+
+Expected: the row **Flash snapshot** with its last run succeeded (its counts `taken 1` and the rows, `late 1` for a first run after 01:30); a later hourly run that found its date held shows `already 1`, succeeded. System health's counts column shows only counts above 0. **Records:** the outputs of 16.5 and 16.6 into the report.
+
+## 16.7 Gate, the merge of #214 and the on-screen checks
+
+**Gate** (Martin confirms, before the merge): Yordi has had the heads-up on Flash downloads (Decision log and Open decisions, 1 November 2026): who may download (the page's permission, `reports.view` or `performance.team`), what a file holds (ids, statuses, amounts, codes and the CRM's links; never a name, email, phone or address), at most 50,000 records per file (`flash.file_max_rows`), and every download recorded in the audit log (who, which overview, which filters, how many rows; never a row). Write the date of the heads-up into the report. Not given: stop here. Merging #214 deploys the page to prod at once.
+
+**Browser:** #214 on GitHub: its base is `main` (GitHub retargets it when #213's branch is deleted after the merge; otherwise Edit → base `main`). Martin reviews and squash-merges it. Its diff may list #213's files again; `main` already holds them, so the squash brings only what #214 adds.
+
+Expected: merged; Cloud Build trigger `cma-web-main` starts (the merge touches `web/`).
+
+**Terminal** (`docs/RUNBOOK.md` 3)
+```bash
+gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=3 --format="table(status,substitutions.SHORT_SHA,createTime.date('%H:%M'))"
+```
+Expected: `SUCCESS` with #214's merge sha on top (`<web sha>`).
+
+**Terminal** (dev on the merge's image; `docs/RUNBOOK.md` 4)
+```bash
+sha=<web sha> && gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:$sha 2>&1 | tail -1
+```
+Expected: `Service URL: …`, dev's address.
+
+**Terminal** (the proxy and the health check; `docs/RUNBOOK.md` 4)
+```bash
+pkill -f "run services proxy"; gcloud run services proxy cma-web --project=p4a-cma-dev --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6; curl -s localhost:8080/api/health; echo
+```
+Expected: the health answer with `version` `<web sha>`, `auth` mock and `data` api.
+
+**Browser** (dev): `http://localhost:8080/reports/flash?as=analyst`.
+
+Expected:
+- **The landing:** Flash first under Reports; the top line with **As of** (Now; key A), **Market** (All markets; key K) and **Last read** per source (Shop, Subscriptions, Asset register, Customer records, Reviews: a time, `not read yet` or `not set up`); the **Watch** strip only while a finding is open; eleven cards, keys 1 to 9, 0 and Q (Active customers, Active subscriptions, Installed base, Churn, Orders, Payments, Open deals, Open tickets, Open tasks, Reviews, Data quality), each with its headline, the badge **Proposed** and its change line (`Nothing to compare with yet` until a second snapshot).
+- **Every overview** (each key in turn, back with **All overviews**): the **Totals**, **Per market** bars, each **Breakdown** with its **Total** row; **Records** below, 500 a page; a count cell opens its records (`Records for …`, **Show all records**); the period bar on Churn, Orders, Payments and Reviews only; X (**Download records**) gives `flash-<overview>-all-<YYYY-MM-DDTHHmm>.csv` with `as_of` and `filters` as its first two columns; **Download breakdown** gives the breakdown. A source dev has not set up says `<source> is not set up for this business line, so there are no figures here.` in place of figures, never zeros.
+- **Data quality** (Q): every check with **Findings**, **Fixed in** and **Trend**; a check opens its records, with a link for a CRM record only.
+- **As of:** dev's snapshot date (16.6) shows that day's figures; a date before it says `No snapshot for this date` or `Snapshots start on <date>`; a past date that is not a month end shows `Records of a past date are kept for month ends only. Choose Now or a month end to see them.`
+- Nowhere a name, email, phone or address.
+
+**Browser** (prod): `https://workspace.pulse4all.app/reports/flash`, signed in as yourself (`?as=` is dev only; IAP ignores it).
+
+Expected: the same pages with prod's figures; As of offers 16.6's date; every set-up source shows its last read. Download one overview's records and one breakdown.
+
+**Studio (cma-prod-pg)** (read only: the downloads just made, in the audit log)
+```sql
+set role cma_owner;
+select changed_at, new_row ->> 'overview' as overview, new_row ->> 'part' as part, new_row ->> 'market' as market, new_row ->> 'rows' as rows
+from cma.audit_log where table_name = 'flash_file' order by changed_at desc limit 3;
+reset role;
+```
+Expected: one row per download you made, newest first, with its overview, part (`rows` or `breakdown`), market (empty for all markets) and the number of rows the file held.
+
+## 16.8 Before the demo: the coverage checks
+
+Flash shows what the mirrors hold. These counts say how much of each source that is; none returns a customer row. Run them in prod after 16.6 and compare with the owning systems' own counts.
+
+**Studio (cma-prod-pg)** (read only: the store customers held per store)
+```sql
+set role cma_owner;
+select s.handle, s.market, count(cu.id) as customers_held,
+       count(cu.id) filter (where cu.orders_count >= 1) as with_an_order,
+       count(cu.id) filter (where cu.crm_contact_source_id is not null) as linked_to_a_contact,
+       min(cu.source_created_at)::date as oldest_created
+from cma.commerce_store s
+join cma.tenant t on t.id = s.tenant_id and t.slug = 'pulse4all-subscriptions'
+left join cma.commerce_customer cu on cu.tenant_id = s.tenant_id and cu.connection_id = s.connection_id and cu.source_deleted_at is null
+group by s.handle, s.market order by s.handle;
+reset role;
+```
+Good result: one row per store (14), each `customers_held` close to the customer count in that store's Shopify admin (Customers) and `oldest_created` near the store's first sales day, years back. A store far below Shopify's count, or with `oldest_created` near October 2026, holds only the customers changed since 1 October (9.8's window): it needs the backfill from its start (the end of this section).
+
+**Studio (cma-prod-pg)** (read only: Juo's subscriptions per store and status, then the stores without a Juo connection)
+```sql
+set role cma_owner;
+select coalesce(s.handle, split_part(c.external_account_id, '.', 1)) as store, sb.status, count(*) as subscriptions,
+       count(cu.id) as customer_held, min(sb.source_created_at)::date as oldest_created
+from cma.subscription sb
+join cma.tenant t on t.id = sb.tenant_id and t.slug = 'pulse4all-subscriptions'
+join cma.integration_connection c on c.tenant_id = sb.tenant_id and c.id = sb.connection_id
+left join cma.commerce_store s on s.tenant_id = sb.tenant_id and s.handle = split_part(c.external_account_id, '.', 1)
+left join cma.commerce_customer cu on cu.tenant_id = sb.tenant_id and cu.connection_id = s.connection_id
+     and cu.source_id = sb.customer_source_id and cu.source_deleted_at is null
+where sb.source_deleted_at is null
+group by 1, 2 order by 1, 2;
+select s.handle from cma.commerce_store s
+join cma.tenant t on t.id = s.tenant_id and t.slug = 'pulse4all-subscriptions'
+where not exists (select 1 from cma.integration_connection c
+                  where c.tenant_id = s.tenant_id and c.adapter = 'juo' and c.status = 'active'
+                    and split_part(c.external_account_id, '.', 1) = s.handle)
+order by 1;
+reset role;
+```
+Good result: per store whose Juo connection exists (`pulse4all`, the GB store, after phase 15), one row per status with the counts Juo's admin shows, `customer_held` close to `subscriptions` (the gap is `subscription_customer_unmatched` on Data quality, high until that store's customers are held from its start) and `oldest_created` near the store's move to Juo. The second result lists the stores without a Juo connection (13 after the GB pilot): each is phase 15 for that store (below).
+
+**Studio (cma-prod-pg)** (read only: the devices in the field per market, and whether their subscription and customer references join)
+```sql
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+sub as (select distinct sb.source_id from cma.subscription sb where sb.tenant_id = (select id from t) and sb.source_deleted_at is null),
+cust as (select distinct cu.source_id from cma.commerce_customer cu where cu.tenant_id = (select id from t) and cu.source_deleted_at is null)
+select coalesce(d.market, 'unknown') as market, count(*) as field_devices,
+       count(d.subscription_ref) as with_subscription_ref, count(sub.source_id) as subscription_joins,
+       count(d.customer_ref) as with_customer_ref, count(cust.source_id) as customer_joins,
+       count(*) filter (where sub.source_id is not null and cust.source_id is not null) as both_join
+from cma.device d
+join cma.device_status st on st.tenant_id = d.tenant_id and st.key = d.device_status_key and st.is_in_field
+left join sub on sub.source_id = d.subscription_ref
+left join cust on cust.source_id = d.customer_ref
+where d.tenant_id = (select id from t) and d.source_deleted_at is null
+group by 1 order by 1;
+reset role;
+```
+Good result: per market, `with_subscription_ref` close to `field_devices` (the rest is `field_device_without_subscription_ref`, fixed in the register); for GB, `subscription_joins` close to `with_subscription_ref` (the gap is `device_subscription_ref_unknown`), and 0 for a market whose store's subscriptions are not read yet (phase 15 per store); `customer_joins` close to `with_customer_ref` once the store's customers are held from its start; `both_join` the devices whose chain from device to subscription to customer Flash can follow.
+
+**Studio (cma-prod-pg)** (read only: the contacts held and the store customers with an order, with the NetSuite Customer ID)
+```sql
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+ns as (select distinct r.contact_id from cma.crm_contact_ref r where r.tenant_id = (select id from t) and r.system = 'netsuite'),
+held as (select k.id, k.connection_id, k.source_id from cma.crm_contact k where k.tenant_id = (select id from t) and k.source_deleted_at is null)
+select 'contacts held' as scope, count(*) as records, count(ns.contact_id) as with_netsuite_ref
+from held left join ns on ns.contact_id = held.id
+union all
+select 'store customers with an order, linked to a contact', count(*), count(ns.contact_id)
+from cma.commerce_customer cu
+left join held on held.connection_id = cu.crm_connection_id and held.source_id = cu.crm_contact_source_id
+left join ns on ns.contact_id = held.id
+where cu.tenant_id = (select id from t) and cu.source_deleted_at is null and cu.crm_contact_source_id is not null
+  and coalesce(cu.orders_count, 0) >= 1;
+reset role;
+```
+Good result, once NetSuite holds the customers: on the second row `with_netsuite_ref` close to `records`: finance has filled the NetSuite Customer ID on the HubSpot contact of every customer with an order. Until then `with_netsuite_ref` stays near 0 and `commerce.required_contact_refs` is empty (Decision log, 3 Nov 2026), so Data quality shows no `customer_required_ref_missing`. Once it is switched on to `netsuite`, `records` less `with_netsuite_ref` is the number of `customer_required_ref_missing` findings Flash's Data quality (Q) shows; its list names the records to fix in HubSpot (Fixed in: Customer records), and those whose value is `contact_not_held` are fixed in the Workspace (16.5's take-in). The first row is wider: contacts held for deals, tickets, emails and threads need no NetSuite ID.
+
+**Studio (cma-prod-pg)** (read only: the open deals and tickets, as Flash counts them and as the CMA holds them)
+```sql
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select 'open deals in Flash' as scope, count(*) as records, min(d.created_at)::date as oldest_open
+from cma.counted_deals_of((select id from t), null, null) d where not d.is_closed
+union all
+select 'open tickets in Flash', count(*), min(k.created_at)::date from cma.open_tickets_of((select id from t)) k
+union all
+select 'open ' || r.record_type || 's held', count(*), min(r.source_created_at)::date
+from cma.crm_record r
+where r.tenant_id = (select id from t) and r.record_type in ('deal', 'ticket') and not r.is_closed and r.source_deleted_at is null
+group by r.record_type;
+select cma.setting_of(id, 'intake.start_date') as intake_start_date from cma.tenant where slug = 'pulse4all-subscriptions';
+reset role;
+```
+Good result: Flash's open deals at most the open deals held, with `oldest_open` on or after `intake_start_date` (Open deal counts the deals of counted pipelines created from that date, by definition), and close to HubSpot's own count of open deals in those pipelines created since that date. Flash's open tickets close to the open tickets held, `oldest_open` the oldest open ticket of the counted pipelines. HubSpot showing older open tickets than that: they were not changed since 7.8's backfill start, and 7.8's `ticket` backfill with an earlier `--from` takes them in.
+
+**Per store, Juo** (a store in the second result of the subscriptions check, or a market with `subscription_joins` 0): phase 15 for that store, with its own key `ingest-juo-<handle>-key` and its own connection, the store's handle in place of `pulse4all` (Open decisions, Rolling out the other 13 stores). One sitting per store, 15.4 to 15.7, before 03:30.
+
+**Per store, the customers from the store's start** (a store whose customers check falls short): 9.8's customer backfill with an earlier `--from`, the store's first sales day (the start date is an Open decision: A backfill of `commerce_customer` from each store's start). `<shop conn>` is the store's connection (9.6's `line`, or `connection_id` of `cma.commerce_store` for its handle).
+
+**Terminal** (one store at a time)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<shop conn>,--object,commerce_customer,--from,<YYYY-MM-DD>
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` A failed execution is run again with the same arguments: it continues from its cursor. Each customer not linked yet costs one HubSpot search, one per 400 ms (about seven minutes per thousand customers; 9.8), so run the stores one after the other and read the next day's HubSpot count (16.5's last block). Then the customers check again: that store's `customers_held` near Shopify's count and `oldest_created` near its start.
+
+After the stores' backfills, the contacts the new links point to that the sweep's hourly window did not take in:
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<hubspot conn>,--object,linked_contact,--again
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`; 16.5's log line with `fetched` the linked contacts not held yet and `apiCalls` that number/100 rounded up. Then the NetSuite check again.
+
+**Records:** the outputs of 16.1 to 16.8 into `records/0008zn-dev-<date>/` and `records/0008zn-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).

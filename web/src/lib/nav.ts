@@ -58,6 +58,8 @@ export type ShellPage =
   | "reviews"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
+  /** Flash (addition 0008zn, brief B21): ten overviews and Data quality, one click each, now or as of a snapshot's date */
+  | "flash"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
   | "campaigns"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
@@ -74,7 +76,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/campaigns"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
 
@@ -175,6 +177,9 @@ export function navEntries(copy: Copy): NavEntry[] {
       label: copy.nav.reports,
       icon: "chart",
       items: [
+        // Flash (addition 0008zn, brief B21, 1 November 2026): first in Reports, the ten overviews and Data quality in one
+        // click each for an auditor, the CFO or the COO; reports.view or performance.team, as every report's team figures
+        { page: "flash", href: "/reports/flash", label: copy.nav.flash, permission: ["reports.view", "performance.team"] },
         { page: "dashboard", href: "/reports/dashboard", label: copy.nav.dashboard, permission: "performance.team" },
         // The order since addition 0008z (Martin, README Decision log, 20 October 2026): the reports a team lead reads first,
         // then the follow-up and the attempts behind them, then intake, inbound and orders, Data quality last. Each report

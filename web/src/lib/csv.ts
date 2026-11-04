@@ -359,3 +359,63 @@ export function maintenanceCsv(rows: MaintenanceRow[], s: ExportSettings, l: Mai
     s,
   );
 }
+
+// ---- Flash (addition 0008zn) ----------------------------------------------------------------
+
+/**
+ * A Flash file's column: its key (the API's field name, the header as written), and how a value is written. text as it
+ * is (a formula guarded); number with the tenant's decimal mark; date in the tenant's date format; instant as the date
+ * and 24-hour time in the tenant's zone; flag true or false; list its items joined by " + "; refs its name=value pairs
+ * joined by "; "
+ */
+export interface FlashFileColumn {
+  key: string;
+  kind: "text" | "number" | "date" | "instant" | "flag" | "list" | "refs";
+}
+
+function flashCell(value: unknown, kind: FlashFileColumn["kind"], s: ExportSettings, timeZone: string): string {
+  if (value === null || value === undefined) return "";
+  switch (kind) {
+    case "number": {
+      const n = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(n)) return "";
+      const text = String(n);
+      return s.decimalMark === "comma" ? text.replace(".", ",") : text;
+    }
+    case "date":
+      return typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? formatDate(value.slice(0, 10), s.dateFormat) : "";
+    case "instant": {
+      if (typeof value !== "string" || Number.isNaN(Date.parse(value))) return "";
+      const day = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+      return `${formatDate(day, s.dateFormat)} ${formatTime(value, timeZone)}`;
+    }
+    case "flag":
+      return value === true ? "true" : value === false ? "false" : "";
+    case "list":
+      return Array.isArray(value) ? safeText(value.map((x) => String(x)).join(" + ")) : "";
+    case "refs":
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? safeText(Object.entries(value as Record<string, unknown>).map(([k, v]) => `${k}=${String(v)}`).join("; "))
+        : "";
+    default:
+      return safeText(String(value));
+  }
+}
+
+/**
+ * A Flash list or breakdown as a file (addition 0008zn; decision 7, the Maintenance precedent): the tenant's export
+ * format; the first column as_of (a snapshot's business date, or the instant read in the tenant's zone), the second
+ * filters (the market, the period and the list's filters as key=value; "all" without any), then the columns in their
+ * order. Headers are the API's field names, the same in every language, so a file reads the same for an auditor
+ * whatever the downloader's language. Ids, codes, statuses, amounts and links only: no name, email, phone or address
+ * exists to write
+ */
+export function flashCsv(asOf: string, filters: string, columns: FlashFileColumn[], rows: readonly Record<string, unknown>[], s: ExportSettings,
+  timeZone: string): string {
+  const asOfCell = /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? formatDate(asOf, s.dateFormat) : flashCell(asOf, "instant", s, timeZone);
+  return toCsv(
+    ["as_of", "filters", ...columns.map((c) => c.key)],
+    rows.map((r) => [asOfCell, safeText(filters), ...columns.map((c) => flashCell(r[c.key], c.kind, s, timeZone))]),
+    s,
+  );
+}

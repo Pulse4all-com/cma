@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-552 figures. Statuses: verified 448 · discrepancy 18 · ambiguous 35 · prerequisite_missing 66 · cadence_unconfirmed 68.
+586 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 93 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -33595,6 +33595,1910 @@ select e.business_date, count(*) from cma.roster_entry e join cma.roster_week w 
 **Notes**
 
 Same computation and same empty states as the planner footer; no coverage table on paper.
+
+### /reports/flash
+
+#### `flash.customers.customers_held`
+
+**Store customers** on /reports/flash · Store customers (Webwinkelklanten)
+
+Store customers the CMA holds (Active customers; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_customers_of(tenant): store customers not deleted, per store and market (the store's). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+| `commerce.required_contact_refs` |  | netsuite |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The store customers held from each store's start (the commerce customer backfill) (data quality check `commerce_unmatched`)
+- The NetSuite Customer ID on the HubSpot contact (the netsuite ref) (data quality check `customer_required_ref_missing`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.customers.active_customers`
+
+**Active customers** on /reports/flash · Active customers (Actieve klanten)
+
+Active customers: store customers with at least one subscription of their store whose status is in flash.active_subscription_statuses (Active customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) where active_subscriptions > 0: at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.active_subscription_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+| `commerce.required_contact_refs` |  | netsuite |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The store customers held from each store's start (the commerce customer backfill) (data quality check `commerce_unmatched`)
+- The NetSuite Customer ID on the HubSpot contact (the netsuite ref) (data quality check `customer_required_ref_missing`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.customers.paused_customers`
+
+**Paused customers** on /reports/flash · Paused customers (Gepauzeerde klanten)
+
+Store customers with a paused subscription and none active (Active customers; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+| `commerce.required_contact_refs` |  | netsuite |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The store customers held from each store's start (the commerce customer backfill) (data quality check `commerce_unmatched`)
+- The NetSuite Customer ID on the HubSpot contact (the netsuite ref) (data quality check `customer_required_ref_missing`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.customers.linked_to_contact`
+
+**Linked to a contact** on /reports/flash · Linked to a contact (Gekoppeld aan een contact)
+
+Store customers linked to a CRM contact (0008h) (Active customers; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where the customer is linked to a CRM contact (commerce_customer.crm_contact_source_id, 0008h). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+| `commerce.required_contact_refs` |  | netsuite |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The store customers held from each store's start (the commerce customer backfill) (data quality check `commerce_unmatched`)
+- The NetSuite Customer ID on the HubSpot contact (the netsuite ref) (data quality check `customer_required_ref_missing`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.customers.with_required_refs`
+
+**With every required reference** on /reports/flash · With every required reference (Met elke vereiste verwijzing)
+
+Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs`; not applicable while that setting is empty (no reference is required): left out live and in the snapshot, an empty cell in a file, never 0 or all (Active customers; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where linked, the contact held, and every ref of commerce.required_contact_refs present in a slot (crm_contact_ref). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+| `commerce.required_contact_refs` |  | netsuite |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The store customers held from each store's start (the commerce customer backfill) (data quality check `commerce_unmatched`)
+- The NetSuite Customer ID on the HubSpot contact (the netsuite ref) (data quality check `customer_required_ref_missing`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.subscriptions.subscriptions`
+
+**Subscriptions** on /reports/flash · Subscriptions (Abonnementen)
+
+Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full read returns, per store, status and payment state. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.subscriptions.active_subscriptions`
+
+**Active subscriptions** on /reports/flash · Active subscriptions (Actieve abonnementen)
+
+Of those, a status in `flash.active_subscription_statuses` (Active subscriptions; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) where status = any(flash.active_subscription_statuses). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.subscriptions.paused_subscriptions`
+
+**Paused subscriptions** on /reports/flash · Paused subscriptions (Gepauzeerde abonnementen)
+
+Of those, status paused (Active subscriptions; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where status = 'paused'. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.subscriptions.amount_per_cycle`
+
+**Amount per cycle** on /reports/flash · Amount per cycle (Bedrag per periode)
+
+The sum of their amounts per billing cycle, per currency (Active subscriptions; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(amount_per_cycle) per currency (an object of currency codes; never summed across currencies). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** currency · **Grain** now, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.installed_base.devices`
+
+**Devices** on /reports/flash · Devices (Apparaten)
+
+Devices the asset register holds, in any status (the installed base) (Installed base; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_devices_of(tenant, today): devices not deleted, any status. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.required_refs` |  | ns_internal_id |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The asset register set up with ns_internal_id mapped (data quality check `device_required_ref_missing`)
+- A subscription reference on each device in the field (data quality check `device_subscription_ref_unknown`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.installed_base.in_field`
+
+**In the field** on /reports/flash · In the field (In het veld)
+
+Of the devices, those in a device status flagged as in the field (Device status: is_in_field) (Installed base; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) where the device status's is_in_field. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.required_refs` |  | ns_internal_id |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The asset register set up with ns_internal_id mapped (data quality check `device_required_ref_missing`)
+- A subscription reference on each device in the field (data quality check `device_subscription_ref_unknown`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.installed_base.in_stock`
+
+**In stock** on /reports/flash · In stock (Op voorraad)
+
+Of the devices, those in a device status flagged as in stock (Device status: is_in_stock) (Installed base; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where the device status's is_in_stock. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.required_refs` |  | ns_internal_id |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The asset register set up with ns_internal_id mapped (data quality check `device_required_ref_missing`)
+- A subscription reference on each device in the field (data quality check `device_subscription_ref_unknown`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.installed_base.components_past_due`
+
+**Items past due** on /reports/flash · Items past due (Items achterstallig)
+
+The maintenance items past due of those in a tracked status (Past due, Asset terms) (Installed base; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(past_due_items): per device the maintenance items of 0008zk's forecast (cma.maintenance_items_of) whose action date is before the current month. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.required_refs` |  | ns_internal_id |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The asset register set up with ns_internal_id mapped (data quality check `device_required_ref_missing`)
+- A subscription reference on each device in the field (data quality check `device_subscription_ref_unknown`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.installed_base.items_due_3m`
+
+**Items due within 3 months** on /reports/flash · Items due within 3 months (Items binnen 3 maanden)
+
+Their items not past due whose due date falls within three months of today (Installed base; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(items_due_3m): items not past due whose due date falls within three months of today. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.required_refs` |  | ns_internal_id |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The asset register set up with ns_internal_id mapped (data quality check `device_required_ref_missing`)
+- A subscription reference on each device in the field (data quality check `device_subscription_ref_unknown`)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.churn.churned`
+
+**Churned** on /reports/flash · Churned (Uitgevallen)
+
+Subscriptions that moved to canceled or expired on the period's business dates, once per subscription and date, per market and reason code (Churn (subscription)); not the cancellation requests (Churn; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_churn_of(tenant, from, to): per business date a subscription with an event canceled, or status_changed to canceled or expired, counted once per date. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_reason · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_churn_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_churn_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.orders.orders`
+
+**Orders** on /reports/flash · Orders (Bestellingen)
+
+Store orders created in the period, test and deleted orders left out (Orders; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the period's business dates, is_test and deleted orders out (on Payments: kind order). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.commerce_order_line` | order_source_id, sku, quantity | Shopify | with its order | seconds (webhooks) |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Order history before 1 October 2026 is not held (read_all_orders or a one-time import, Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.orders.units`
+
+**Units** on /reports/flash · Units (Stuks)
+
+The quantities of their lines (Orders; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(quantity) of the orders' lines (commerce_order_line), per set; the SKU rows count the lines per product code. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.commerce_order_line` | order_source_id, sku, quantity | Shopify | with its order | seconds (webhooks) |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Order history before 1 October 2026 is not held (read_all_orders or a one-time import, Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.orders.amount`
+
+**Amount** on /reports/flash · Amount (Bedrag)
+
+Their totals less refunded, per currency (Orders; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind order only). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** currency · **Grain** period, per_day, per_market, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.commerce_order_line` | order_source_id, sku, quantity | Shopify | with its order | seconds (webhooks) |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Order history before 1 October 2026 is not held (read_all_orders or a one-time import, Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.payments.orders`
+
+**Orders** on /reports/flash · Orders (Bestellingen)
+
+Kind order: those store orders, each with its financial status as the store states it (Payments; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the period's business dates, is_test and deleted orders out (on Payments: kind order). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.payments.amount`
+
+**Amount** on /reports/flash · Amount (Bedrag)
+
+Kind order: their totals less refunded, per currency (Payments; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind order only). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** currency · **Grain** period, per_day, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.payments.renewals`
+
+**Renewals** on /reports/flash · Renewals (Verlengingen)
+
+Kind renewal: renewals (renewed) of the subscription app in the period (Payments; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) of subscription events renewed in the period (kind renewal). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.payments.failed_renewals`
+
+**Failed renewals** on /reports/flash · Failed renewals (Mislukte verlengingen)
+
+Failed renewals of the subscription app in the period (Failed renewal); never called a failed payment (Payments; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of subscription events renew_failed in the period (kind renewal); never called failed payment. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_deals.open_deals`
+
+**Open deals** on /reports/flash · Open deals (Open deals)
+
+Deals of counted pipelines that are not closed or deleted (Open deal) (Open deals; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_deals_of(tenant): 0008y's counted deals, not deleted, is_closed false. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_pipeline, per_stage · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Test deals carry no flag, so they are not excluded (Gaps D25)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_deals.median_age_days`
+
+**Median age (days)** on /reports/flash · Median age (days) (Mediane leeftijd (dagen))
+
+The median age of the open deals, in whole days since their creation (Open deals; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** days · **Grain** now, per_market, per_pipeline, per_stage · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Test deals carry no flag, so they are not excluded (Gaps D25)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_deals.oldest_age_days`
+
+**Oldest (days)** on /reports/flash · Oldest (days) (Oudste (dagen))
+
+The age of the oldest open deal, in whole days since its creation (Open deals; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+max(whole days since creation). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** days · **Grain** now, per_market, per_pipeline, per_stage · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- Test deals carry no flag, so they are not excluded (Gaps D25)
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_tickets.open_tickets`
+
+**Open tickets** on /reports/flash · Open tickets (Open tickets)
+
+Tickets of counted pipelines that are not closed or deleted, per ticket queue and stage (Open ticket) (Open tickets; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_tickets_of(tenant): 0008o's open tickets of counted pipelines. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_stage · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_tickets.median_age_days`
+
+**Median age (days)** on /reports/flash · Median age (days) (Mediane leeftijd (dagen))
+
+The median age of the open tickets, in whole days since their creation (Open tickets; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** days · **Grain** now, per_market, per_stage · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_tickets.oldest_age_days`
+
+**Oldest (days)** on /reports/flash · Oldest (days) (Oudste (dagen))
+
+The age of the oldest open ticket, in whole days since its creation (Open tickets; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+max(whole days since creation). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** days · **Grain** now, per_market, per_stage · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_tasks.open_tasks`
+
+**Open tasks** on /reports/flash · Open tasks (Open taken)
+
+Tasks not deleted whose status is none of their connection's done statuses (Open task) (Open tasks; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_tasks_of(tenant): 0008o's open tasks (status not done in the task status catalog). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_task` | source_id, status_ref, type_ref, due_at, owner_ref, deal_source_id, ticket_source_id, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_tasks (0008n) | seconds (webhooks) |
+| `cma.connection_task_status` | status_ref, is_done | CMA | filled from the tasks, done per Configuration → Sources | on change |
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tasks_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The task status catalog's done statuses set on Configuration → Sources
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tasks_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.open_tasks.overdue`
+
+**Overdue** on /reports/flash · Overdue (Te laat)
+
+Of the open tasks, those due on an earlier business date than today in the tenant's zone (Open task, its overdue) (Open tasks; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where the due date in the tenant's zone is before today. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_task` | source_id, status_ref, type_ref, due_at, owner_ref, deal_source_id, ticket_source_id, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_tasks (0008n) | seconds (webhooks) |
+| `cma.connection_task_status` | status_ref, is_done | CMA | filled from the tasks, done per Configuration → Sources | on change |
+| `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tasks_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Data prerequisites**
+
+- The task status catalog's done statuses set on Configuration → Sources
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tasks_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.reviews.reviews`
+
+**Reviews** on /reports/flash · Reviews (Reviews)
+
+Published reviews of counted channels submitted in the period (0008ze) (Reviews; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_reviews_of(tenant, from, to): 0008ze's published reviews of counted channels submitted on the period's business dates. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_rating · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | source_id, rating, submitted_at, state, is_published, review_channel_id | Trusted Shops | eTrusted API → ingest-poll-reviews → cma.ingest_upsert_reviews (0008ze) | hourly at minute 7 |
+| `cma.review_channel` | source_id, market, is_counted | CMA | filled from the reviews, counted per Configuration → Sources | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.reviews.rating_sum`
+
+**Average rating** on /reports/flash · Average rating (Gemiddelde score)
+
+The average rating of the period's reviews, shown as the stored sum of their ratings (`rating_sum`) divided by their count (`reviews`); the snapshot keeps the sum so dates add up (Reviews; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+sum(rating); the page shows rating_sum / reviews as the average rating (two decimals). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** average · **Grain** period, per_day, per_market, per_rating · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | source_id, rating, submitted_at, state, is_published, review_channel_id | Trusted Shops | eTrusted API → ingest-poll-reviews → cma.ingest_upsert_reviews (0008ze) | hourly at minute 7 |
+| `cma.review_channel` | source_id, market, is_counted | CMA | filled from the reviews, counted per Configuration → Sources | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.reviews.negative`
+
+**Negative** on /reports/flash · Negative (Negatief)
+
+Of those, negative (`reviews.negative_max_rating`) (Reviews; docs/definitions.md, Flash overview measures).
+
+**Formula as computed**
+
+```
+count(*) where the whole star is at most reviews.negative_max_rating. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** period, per_day, per_market, per_rating · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | source_id, rating, submitted_at, state, is_published, review_channel_id | Trusted Shops | eTrusted API → ingest-poll-reviews → cma.ingest_upsert_reviews (0008ze) | hourly at minute 7 |
+| `cma.review_channel` | source_id, market, is_counted | CMA | filled from the reviews, counted per Configuration → Sources | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Flow: over the business dates of the period in the tenant's zone (from 00:00 of from to 24:00 of to); as of a date, the sum of the period's snapshot dates, the dates without one listed.
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.data_quality.findings`
+
+**Findings** on /reports/flash · Findings (Bevindingen)
+
+Data-quality findings: the records a check of `cma.data_quality_catalog()` finds, per check and market ("data quality" itself stays under Domains still to define) (Data quality; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+
+**Formula as computed**
+
+```
+count(*) of cma.flash_findings_of(tenant): every finding of cma.data_quality_of with its market, per check and market. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- the checks of sources set up, or that find something
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `commerce.required_contact_refs` |  | netsuite |
+| `assets.required_refs` |  | ns_internal_id |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_findings_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
+
+**Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_findings_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 ## Configuration
 

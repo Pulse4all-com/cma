@@ -66,6 +66,7 @@ import {
 import { reviewMarketStates, reviewRecords, reviewsReport, type ReviewSource } from "@/lib/reviews";
 import { COHORT_PERIODS, COHORT_SPLITS, LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, leadAgesOf, leadCohortsReport, parseLeadAges, type LeadCohortDeal } from "@/lib/cohorts";
 import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
+import { mockDataQualityRows, mockFlashHeadline, mockFlashOverview, mockFlashPage, mockFlashRows, mockFlashSnapshots, mockRecordFlashFile } from "./mock-flash";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -4413,6 +4414,40 @@ export const mockData: CmaData = {
     assertMaintenance(me, filter);
     const { devices, catalog } = mockMaintenance(me);
     return maintenanceReport(devices, catalog, filter, mockToday(me), me.tenantId !== MOCK_TENANT_2);
+  },
+
+  // ---- Reports → Flash (addition 0008zn): the invented fixture of ./mock-flash, computed as the database computes it
+  async getFlashPage(me, market, asOf, from, to) {
+    return mockFlashPage(me, market, asOf, from, to);
+  },
+
+  async getFlashOverview(me, overview, market, asOf, from, to) {
+    return mockFlashOverview(me, overview, market, asOf, from, to);
+  },
+
+  async getFlashView(me, request) {
+    const document = mockFlashOverview(me, request.overview, request.market, request.asOf, request.from, request.to);
+    return { document, rows: request.withRows ? mockFlashRows(me, { ...request, asOf: request.rowsAsOf }) : null };
+  },
+
+  async getFlashRows(me, request) {
+    return mockFlashRows(me, request);
+  },
+
+  async getFlashHeadline(me, overview, market, from, to) {
+    return mockFlashHeadline(me, overview, market, from, to);
+  },
+
+  async getFlashSnapshots(me, from, to) {
+    return mockFlashSnapshots(me, from, to);
+  },
+
+  async getDataQualityRows(me, request) {
+    return mockDataQualityRows(me, request);
+  },
+
+  async recordFlashFile(me, read) {
+    mockRecordFlashFile(me, read);
   },
 
   async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {

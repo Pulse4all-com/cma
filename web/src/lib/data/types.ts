@@ -3103,6 +3103,198 @@ export interface Journey {
   prerequisites: string[];
 }
 
+// ---- Reports → Flash (addition 0008zn) --------------------------------------------------------
+
+/** A source's state: set up or not (never "connected"), its active connections' adapters, its last successful read */
+export interface FlashSourceView {
+  setUp: boolean;
+  adapters: string[];
+  lastReadAt: string | null;
+}
+
+export type FlashSourceKey = "commerce" | "subscriptions" | "assets" | "crm" | "reviews";
+export type FlashSourcesView = Partial<Record<FlashSourceKey, FlashSourceView>>;
+
+/** An open finding of the deterministic watch: aggregates and codes only, never a record's id */
+export interface FlashWatchItem {
+  kind: "jump" | "flow_zero" | "source_stale" | "snapshot_missing" | "dq_rise";
+  overview: string | null;
+  dims: Record<string, string>;
+  measure: string | null;
+  value: number | null;
+  previous: number | null;
+  threshold: number | null;
+  detail: Record<string, unknown>;
+  snapshotDate: string;
+}
+
+/** A landing card: the overview's headline as stored for As of (null for now: the card reads it live), the figure to compare with */
+export interface FlashCardView {
+  key: string;
+  kind: "stock" | "flow";
+  source: FlashSourceKey | null;
+  setUp: boolean;
+  headline: string;
+  value: number | null;
+  previous: number | null;
+  previousOn: string | null;
+  definitionVersion: string;
+}
+
+/** The landing (cma.flash_page) */
+export interface FlashPageView {
+  mode: "live" | "snapshot";
+  /** The instant read (now) or the snapshot's business date */
+  asOf: string;
+  market: string | null;
+  from: string | null;
+  to: string | null;
+  snapshotMissing: boolean;
+  nearestBefore: string | null;
+  nearestAfter: string | null;
+  sources: FlashSourcesView;
+  overviews: FlashCardView[];
+  markets: { code: string; name: string }[];
+  watch: FlashWatchItem[];
+  firstSnapshotDate: string | null;
+  lastSnapshotDate: string | null;
+  /** The tenant's business date today and its time zone: As of is a date before it, whatever the reader's zone */
+  today: string;
+  timeZone: string;
+}
+
+/** A grouping set's row: its dims ({} for the totals) and measures (a number, or an amount as currency codes to sums) */
+export interface FlashDocRowView {
+  dims: Record<string, string>;
+  measures: Record<string, number | Record<string, number> | null>;
+}
+
+/** An overview's document (cma.flash_overview) */
+export interface FlashDocumentView {
+  overview: string;
+  kind: "stock" | "flow";
+  mode: "live" | "snapshot";
+  /** The instant read (now) or the snapshot's business date */
+  asOf: string;
+  /** The snapshot's business date, null for now */
+  asOfDate: string | null;
+  market: string | null;
+  from: string | null;
+  to: string | null;
+  setUp: boolean;
+  source: FlashSourceKey | null;
+  sources: FlashSourcesView;
+  dims: string[];
+  sets: string[][];
+  measures: string[];
+  countMeasures: string[];
+  headline: string;
+  sorts: string[];
+  totals: Record<string, number | Record<string, number> | null> | null;
+  rows: FlashDocRowView[];
+  labels: Record<string, Record<string, string>>;
+  settings: {
+    fileMaxRows: number;
+    negativeMaxRating: number | null;
+    requiredDeviceRefs: string[];
+    requiredContactRefs: string[];
+    activeSubscriptionStatuses: string[];
+    endedSubscriptionStatuses: string[];
+  };
+  definitionVersion: string;
+  firstSnapshotDate: string | null;
+  /** The tenant's business date today and its time zone */
+  today: string;
+  timeZone: string;
+  /** A flow read from snapshots: the dates covered and those without a snapshot */
+  days: { covered: number; missing: string[] } | null;
+  /** Churn: the active subscriptions at the period's end, null when unknown */
+  activeAtEnd: number | null;
+  /** Data quality: each check's findings per snapshot date (30 dates) */
+  history: { date: string; check: string; findings: number }[];
+}
+
+/** The records behind a figure (cma.flash_rows), live or a past month end's frozen list */
+export interface FlashRowsView {
+  overview: string;
+  mode: "live" | "snapshot";
+  asOf: string;
+  from: string | null;
+  to: string | null;
+  sort: string | null;
+  descending: boolean;
+  limit: number;
+  offset: number;
+  filters: Record<string, string>;
+  total: number;
+  /** Whether the overview's source is set up: an empty list of a source not set up is no zero */
+  setUp: boolean;
+  /** The tenant's time zone: a file's instants and its name follow it */
+  timeZone: string;
+  /** Each record as the API answers it: ids, statuses, codes, amounts with their currency, links */
+  rows: Record<string, unknown>[];
+}
+
+/** One overview's live headline (cma.flash_headline), as a landing card reads it */
+export interface FlashHeadlineView {
+  overview: string;
+  headline: string;
+  market: string | null;
+  asOf: string;
+  from: string | null;
+  to: string | null;
+  setUp: boolean;
+  value: number | null;
+}
+
+/** The snapshot dates of a period (cma.flash_snapshots) */
+export interface FlashSnapshotsView {
+  from: string;
+  to: string;
+  /** Every run of the period: succeeded, failed (its error code), or missed (a date never taken; no figures) */
+  dates: { date: string; status: "succeeded" | "failed" | "missed"; missedBefore: number; finishedAt: string; error: string | null }[];
+  firstSnapshotDate: string | null;
+  lastSnapshotDate: string | null;
+  watch: FlashWatchItem[];
+}
+
+/** A data-quality check's findings (cma.data_quality_rows) */
+export interface DataQualityRowsView {
+  check: string;
+  description: string | null;
+  market: string | null;
+  limit: number;
+  offset: number;
+  total: number;
+  rows: Record<string, unknown>[];
+}
+
+/** A Flash file read, as the audit log records it (never a row of the file) */
+export interface FlashFileRead {
+  overview: string;
+  part: "rows" | "breakdown";
+  filters: Record<string, string>;
+  market: string | null;
+  asOf: string | null;
+  from: string | null;
+  to: string | null;
+  rows: number;
+}
+
+/** The query of a Flash list (lib/api/flash, flashRowsParams) */
+export interface FlashRowsRequest {
+  overview: string;
+  market: string | null;
+  asOf: string | null;
+  from: string | null;
+  to: string | null;
+  filters: Record<string, string>;
+  sort: string | null;
+  descending: boolean;
+  limit: number;
+  offset: number;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -3475,4 +3667,23 @@ export interface CmaData {
   getOutboxStatus(me: Principal): Promise<OutboxStatusRow[]>;
   /** One trivial query under the tenant context, timed, so a slow database shows at a glance */
   probeDatabase(me: Principal): Promise<DatabaseProbe>;
+
+  // ---- Reports → Flash (addition 0008zn): every read checks reports.view or performance.team in the database (CMA06);
+  // a date without a snapshot is CMA02, a form or date out of range CMA04
+  /** The landing in one read of stored figures (cma.flash_page); a live card's headline is getFlashHeadline */
+  getFlashPage(me: Principal, market: string | null, asOf: string | null, from: string | null, to: string | null): Promise<FlashPageView>;
+  /** An overview's document (cma.flash_overview): live, or a stock as stored for asOf, or a flow over from to to */
+  getFlashOverview(me: Principal, overview: string, market: string | null, asOf: string | null, from: string | null, to: string | null): Promise<FlashDocumentView>;
+  /** An overview's page in one transaction: its document and, when asked, the first page of its list */
+  getFlashView(me: Principal, request: FlashRowsRequest & { withRows: boolean; rowsAsOf: string | null }): Promise<{ document: FlashDocumentView; rows: FlashRowsView | null }>;
+  /** The records behind a figure (cma.flash_rows), live or a past month end's frozen list */
+  getFlashRows(me: Principal, request: FlashRowsRequest): Promise<FlashRowsView>;
+  /** One overview's live headline (cma.flash_headline), as a landing card reads it */
+  getFlashHeadline(me: Principal, overview: string, market: string | null, from: string | null, to: string | null): Promise<FlashHeadlineView>;
+  /** The snapshot dates of a period and the open watch findings (cma.flash_snapshots) */
+  getFlashSnapshots(me: Principal, from: string | null, to: string | null): Promise<FlashSnapshotsView>;
+  /** A data-quality check's findings (cma.data_quality_rows): reports.view or tenant.configure */
+  getDataQualityRows(me: Principal, request: { check: string; market: string | null; limit: number; offset: number }): Promise<DataQualityRowsView>;
+  /** A Flash file read in the audit log (cma.flash_file_record): who, which overview, which filters, how many rows */
+  recordFlashFile(me: Principal, read: FlashFileRead): Promise<void>;
 }
