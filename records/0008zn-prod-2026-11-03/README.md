@@ -131,3 +131,31 @@ From Martin's report of 3 November 2026; the values below are his.
   0.0 to 0.1 and the threshold 0. 0008zn measured a connection's cadence as the median gap between all its succeeded
   runs, and one job execution writes one run per stream within seconds, so every source was stale a minute after its
   last run. The fix is addition 0008zo (`db/125_flash_watch_cadence.sql`; Decision log, 3 November 2026).
+
+## (j) 4 November 2026: 16.5's API calls, 16.6's System health and the take of 3 November
+
+From Martin's report of 4 November 2026; the values below are his.
+
+- 16.5, the day after the take-in: HubSpot's API Call Usage shows the app CMA ingest prod at 14,252 of 14,808 calls in
+  the first 6 hours of 4 November, about 57,000 a day: 6% of the daily limit of 1,000,000. The take-in's own
+  `apiCalls` (26) are in (h).
+- 16.6: Workspace → Configuration → System health, the row **Flash snapshot**: succeeded; its latest run at 04:20,
+  `already 1` (an hourly run that found its date held).
+- The take of business date 2026-11-03: succeeded, `late` false; the 15 false `source_stale` findings of (i)
+  resolved. The same take is in `records/0008zo-2026-11-03`, (d) (#218).
+
+## (k) 16.7: the gate, the merge of #214 and the on-screen checks
+
+From Martin's report of 4 November 2026; the values below are his.
+
+- **Gate:** Yordi had the heads-up on Flash downloads on 4 November 2026 (who may download, what a file holds, at most
+  50,000 rows per file, every download in the audit log) and is fine with it.
+- #214 merged as `e2666fc`; the web build of `e2666fc`: `SUCCESS`, 05:06.
+- **Dev:** `cma-web` on `e2666fc`; the health check ok (`version` `e2666fc`, `auth` mock, `data` api). Reports → Flash
+  checked: the landing; Installed base, whose figures per market add up to In the field (22); and the change lines.
+- **Prod, Reports → Flash's landing:** eleven cards; the **Watch** strip with its one finding, the jump of
+  `installed_base`, GB, `items_due_3m` from 144 to 173 (`records/0008zo-2026-11-03`, (d)); **Last read** for all five
+  sources.
+- **Prod, the downloads:** `flash-open_deals-all-2026-11-04T0618.csv` (687 rows) and its breakdown (33 rows); neither
+  holds a name, email, phone or address. Both are in `cma.audit_log` (`table_name` `flash_file`), at 05:18:49 and
+  05:19:17. The stamp in a file's name is the tenant's time (Europe/Amsterdam).
