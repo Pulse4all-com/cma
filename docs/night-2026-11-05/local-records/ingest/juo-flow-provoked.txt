@@ -1,0 +1,41 @@
+verify/juo-flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  A1 no route for the polling-only adapter: its own key and an unknown key → 404 got [404,404], wanted [200,200]
+FAIL  B1 the dry run of subscription: fetched, mapped, the statuses, the instrument types known, customers without a match; no --from got [230,230,0,{"active":224,"failed":1,"paused":1,"canceled":1,"expired":, wanted [0,0,1,{},0,0,1]
+FAIL  B2 the dry run of subscription_event from a date: the event types seen and kept, the free-text reason dropped, customers without a match got [213,210,3,0,201,2,{"canceled":1,"paused":2,"reactivated":1,"renew_fai, wanted [0,0,0,1,0,0,{},0,0,false]
+FAIL  B3 …and both wrote nothing: no run, no subscription, no event, no cursor got [0,0,0,null], wanted [1,230,1,{}]
+FAIL  C1 the backfill of the events: stream subscription_event, the kept ones stored, the other types skipped, the free-text reason dropped and counted got [0,"subscription_event","succeeded",213,210,3,1,210], wanted [1,null,"failed",0,0,0,0,0]
+FAIL  C2 …its cursor done; the poll's cursor at the backfill's start   got [true,true], wanted [false,false]
+FAIL  C3 the backfill of the subscriptions: stream subscription, 230 inserted, 30 customers without a match among the store's, nothing missing got [0,"subscription","succeeded",230,230,230,30,0,true], wanted [1,null,"failed",0,0,0,0,1,false]
+FAIL  C4 the payment state of each case: in_retry, paid after a renewal of the failed cycle, failed, paused, canceled (canceled and expired); merged and never-subscribed left out got ["in_retry","paid","failed","paused","canceled","canceled",null,null,", wanted ["paid","in_retry","paid","paid","paid","paid","paid","paid","in_retry
+FAIL  C5 a paused subscription's pause from its event; its instrument's type, amount per cycle, interval and currency got ["2026-10-31T16:35:33.404Z","paused","paypal","24.95","month","GBP"], wanted [null,"active",null,null,null,null]
+FAIL  D1 the poll: one run (subscriptions_poll, stream subscriptions) succeeded; the new failed renewal stored, its subscription read again by id and updated got [0,"subscriptions","succeeded",1,1,0,true,"in_retry"], wanted [1,null,"failed",0,0,1,false,"paid"]
+FAIL  D2 …it asked for the events after its cursor less five minutes (category subscription, oldest first); the cursor moved to the run's start got ["occurredAt:asc,id:asc",true,true,true], wanted [null,false,false,false]
+FAIL  D3 overlap idempotency: a second poll reads the same failed renewal again (five minutes' overlap), stores nothing twice and changes nothing got [0,true,0,0,0,1,[230,211]], wanted [1,false,1,1,1,0,[0,0]]
+FAIL  D4 a poll not due (60 minutes): no request, no run               got [1,0,2], wanted [0,2,3]
+FAIL  D5 the poll under its lock keeps to the jobs' pool of 2: at most 2 connections at once, its work on one, no wait on its own pool (peak 2, work 1) got [true,0,3,"succeeded",true,"poll-subscriptions",true,true,0], wanted [false,1,2,"failed",false,"poll-subscriptions",false,false,1]
+FAIL  E1 reconcile marks missing: the subscription Juo no longer returns gets source_deleted_at in the final step; the rest unchanged got [0,"subscription","succeeded",229,1,229,true,1], wanted [1,null,"failed",230,0,0,false,0]
+FAIL  E2 empty_snapshot: a full read that returns no subscription fails, nothing marked missing got [1,"failed","empty_snapshot",1,"empty_snapshot"], wanted [0,"succeeded",null,230,null]
+FAIL  E3 the next full read brings the missing subscription back       got [0,1,0,0], wanted [1,0,1,1]
+FAIL  F1 store_not_configured: a connection whose handle has no store fails before any request, logged got [1,"failed","store_not_configured",0,0,"store_not_configured"], wanted [0,"succeeded",null,1,1,null]
+FAIL  F2 a connection without a token secret name: the poll and the reconcile skip it (key_not_set, one line each), no run; the backfill refuses got [1,1,2,0,"usage"], wanted [0,0,0,1,"ran"]
+FAIL  F3 401 wrong tenant: tenant two's connection with the other store's key fails key_rejected; nothing written got [1,"failed","key_rejected",0], wanted [0,"succeeded",null,1]
+FAIL  F4 429 paced: the request held for its Retry-After (3 s × the pace factor) and sent again; the run succeeds, the hold logged got [0,"succeeded",true,true,true,true], wanted [1,"failed",false,false,false,false]
+FAIL  G1 tenant two's store loads into tenant two only; tenant one's subscriptions as they were got [0,230,230,230,0], wanted [1,0,0,0,1]
+FAIL  G2 no name, address, email, phone, payment detail, message or free-text reason in any row of the run's tenants (audit log included) got [], wanted ["Invented","example.invalid","<street>","Testtown","FX1 1XX","+
+FAIL  G3 the logs hold no key and no value: connection ids, counts, codes and Juo's type names got [], wanted ["x"]
+FAIL  G4 every request carried its store's id and a key, in headers; none for the store-less handle got [true,0], wanted [false,1]
+FAIL  G5 nothing written to another tenant by this run's logins        got [], wanted ["x"]
+FAIL  H1 the dry run with --adapter juo: one `backfill dry run` line per store with its counts, in id order, nothing written got [["01a1a76a-72b4-7d64-9596-76259a1e6da8","01a1a76a-72be-7479-9bf4-e33a, wanted [[],[],[],3,2]
+FAIL  H2 the store without a key is skipped (key_not_set, one log line) and counted, never a usage error; the store-less handle fails store_not_configured got [{"connection":"01a1a76a-72cb-7cd7-b72a-03463b6ce5f0","skipped":"key_n, wanted [null,null,0,0,false,false]
+FAIL  H3 one store answering 503 while the other completes: store one's run succeeded with its counts, store two's failed http_503, both in the walk's results in id order got ["subscription","succeeded",230,"subscription","failed","http_503",[[", wanted [null,"failed",0,null,"succeeded",null,[]]
+FAIL  H4 the walk's totals: the connections of the adapter, the served ones, the skipped and the failed (store two and the store-less handle) got ["juo",true,true,true,true,true], wanted ["x",false,false,false,false,false]
+FAIL  H5 the refusals before any walk: an unknown adapter, --dry-run with two objects, an object the adapter has not got ["usage","usage","usage","usage"], wanted ["ran","ran","ran","ran"]
+FAIL  H6 the job process: exit 1 when a connection of the walk failed (the store-less handle), its finished line with the per-connection results got [1,true,true,true], wanted [0,false,false,false]
+FAIL  H7 the job process: --connection with --adapter is a usage error (exit 2, nothing run) got [2,true,true], wanted [0,false,false]
+FAIL  H8 the logs of the walk hold no key and no value                 got [], wanted ["x"]
+pool: backfill 12 runs, peak 1, work 1; poll-subscriptions 8 runs, peak 2, work 1; reconcile 4 runs, peak 1, work 1
+FAIL  P1 every job's run kept to the jobs' pool of 2: its work on one connection at a time (the lock the other), no wait on its own pool got [true,[]], wanted [false,["provoked"]]
+
+ALL 35 PROVOKED CHECKS FAILED, as they must
+exit 0

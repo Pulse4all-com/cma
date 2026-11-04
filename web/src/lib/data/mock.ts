@@ -2223,12 +2223,19 @@ type MockIntakeConfig = {
 };
 
 function mockSource(tenantId: string, n: number, adapter: string, name: string, accountId: string, kind: SourceKind | null, o: Partial<SourceDetail> = {}, settings: SourceConnection["settings"] = {}): MockSource {
+  const polled = kind === "reviews" || kind === "assets" || kind === "subscriptions";
+  const lastNight = new Date().setUTCHours(2, 30, 0, 0) - (new Date().getUTCHours() < 3 ? 86_400_000 : 0);
   const connection: SourceConnection = {
     id: `00000000-0000-7000-8000-00000000c00${n}`, key: `k${n}${"0".repeat(20)}test`, adapter, name, accountId, kind, heldKinds: [], isActive: true,
     signingSecretName: `ingest-${adapter}-signing`,
     tokenSecretName: kind === "crm" || kind === "telephony" || kind === "reviews" ? `ingest-${adapter}-token` : null,
-    settings, events24h: 40 + n * 7, eventsWaiting: n === 1 ? 2 : 0, eventsParked: 0, lastEventAt: new Date(Date.now() - n * 60_000).toISOString(),
+    settings, events24h: polled ? 0 : 40 + n * 7, eventsWaiting: n === 1 ? 2 : 0, eventsParked: 0,
+    lastEventAt: polled ? null : new Date(Date.now() - n * 60_000).toISOString(),
     pipelines: 0, forms: 0, callOutcomes: 0, fields: 0, lines: 0, tags: 0, storeHandle: null,
+    // the reads (addition 0008zq): a polled source has runs and no events; the others their nightly reconcile; an automation none
+    lastReadAt: kind === null ? null : new Date(polled ? Date.now() - 40 * 60_000 : lastNight).toISOString(),
+    lastReadJob: kind === null ? null : polled ? "reviews_poll" : "reconcile",
+    reads24h: kind === null ? 0 : polled ? 24 : 3, readsFailed24h: polled ? 1 : 0, lastReadError: polled ? "rate_limited" : null,
   };
   return {
     tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},

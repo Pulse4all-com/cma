@@ -23,7 +23,7 @@ import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
   formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
   formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
-  TAG_MEANINGS, tagsWithoutNotReached,
+  TAG_MEANINGS, tagsWithoutNotReached, readState, jobLabel, readsCaption,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -223,6 +223,16 @@ expect("polling: the defaults without settings (5, 15, 25, probe off)", pollCade
 expect("polling: stored values in range taken, as numbers or digits",
   pollCadenceOf({ forms_poll_interval_minutes: 10, email_open_check_minutes: "30", api_daily_floor_pct: 90, forms_poll_probe: true }),
   { formsIntervalMinutes: 10, openCheckMinutes: 30, floorPct: 90, probe: true, outOfRange: [] }, { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: [] });
+// A connection's reads on the Sources list (addition 0008zq)
+expect("reads: no read yet, read, a failure in 24 hours",
+  [readState({ lastReadAt: null, readsFailed24h: 0 }), readState({ lastReadAt: "2026-11-04T03:31:00Z", readsFailed24h: 0 }),
+    readState({ lastReadAt: "2026-11-04T03:31:00Z", readsFailed24h: 2 }), readState({ lastReadAt: null, readsFailed24h: 1 })],
+  ["none", "ok", "attention", "attention"], ["ok", "none", "ok", "ok"]);
+expect("reads: the job's label from the copy, the job's own word without one, nothing without a job",
+  [jobLabel("subscriptions_poll", { job_subscriptions_poll: "Subscriptions poll" }), jobLabel("new_job", { job_subscriptions_poll: "Subscriptions poll" }), jobLabel(null, {})],
+  ["Subscriptions poll", "new_job", null], ["subscriptions_poll", null, "new_job"]);
+expect("reads: the caption for 0, 1 and n reads", [readsCaption(0, "1 read", "{n} reads"), readsCaption(1, "1 read", "{n} reads"), readsCaption(24, "1 read", "{n} reads")],
+  [null, "1 read", "24 reads"], ["0 reads", "{n} reads", "1 read"]);
 expect("polling: a value out of range gives the default and is named", pollCadenceOf({ forms_poll_interval_minutes: 0, api_daily_floor_pct: 95, email_open_check_minutes: "soon" }),
   { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: ["formsIntervalMinutes", "openCheckMinutes", "floorPct"] },
   { formsIntervalMinutes: 0, openCheckMinutes: 15, floorPct: 95, probe: false, outOfRange: [] });

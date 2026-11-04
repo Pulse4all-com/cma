@@ -829,6 +829,7 @@ type SourceDbRow = {
   held_kinds: SourceKind[]; status: string; signing_secret_name: string | null; token_secret_name: string | null; settings: SourceSettings | null;
   events_24h: number; events_waiting: number; events_needs_review: number; last_event_at: Date | null;
   pipelines: number; forms: number; call_outcomes: number; fields: number; lines: number; tags: number; store_handle: string | null;
+  last_read_at: Date | null; last_read_job: string | null; reads_24h: number; reads_failed_24h: number; last_read_error: string | null;
 };
 
 function toSource(r: SourceDbRow): SourceConnection {
@@ -838,6 +839,8 @@ function toSource(r: SourceDbRow): SourceConnection {
     settings: r.settings ?? {}, events24h: r.events_24h, eventsWaiting: r.events_waiting, eventsParked: r.events_needs_review,
     lastEventAt: r.last_event_at ? r.last_event_at.toISOString() : null, pipelines: r.pipelines, forms: r.forms, callOutcomes: r.call_outcomes,
     fields: r.fields, lines: r.lines, tags: r.tags, storeHandle: r.store_handle,
+    lastReadAt: r.last_read_at ? r.last_read_at.toISOString() : null, lastReadJob: r.last_read_job, reads24h: r.reads_24h,
+    readsFailed24h: r.reads_failed_24h, lastReadError: r.last_read_error,
   };
 }
 

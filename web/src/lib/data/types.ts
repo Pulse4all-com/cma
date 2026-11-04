@@ -2309,6 +2309,17 @@ export interface SourceConnection {
   lines: number;
   tags: number;
   storeHandle: string | null;
+  /** The connection's reads (addition 0008zq): a polled source writes runs, never an event */
+  /** The finish of the latest succeeded run of any job, null while none succeeded */
+  lastReadAt: Instant | null;
+  /** That run's job, in the run vocabulary (reviews_poll, subscriptions_poll, assets_poll, reconcile, backfill, ...) */
+  lastReadJob: string | null;
+  /** Runs started in the last 24 hours, running ones included */
+  reads24h: number;
+  /** Of those, the failed ones */
+  readsFailed24h: number;
+  /** The latest failed run's code of the last 24 hours (a code, never a value), null without one */
+  lastReadError: string | null;
 }
 
 export interface SourcePipeline {

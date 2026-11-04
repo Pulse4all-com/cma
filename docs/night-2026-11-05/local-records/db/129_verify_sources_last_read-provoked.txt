@@ -1,0 +1,37 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke129.sql:41: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:/tmp/provoke129.sql:158: ERROR:  FAIL S1: addition 0008zq not recorded after 0008zp
+CONTEXT:  PL/pgSQL function inline_code_block line 9 at RAISE
+psql:/tmp/provoke129.sql:244: ERROR:  FAIL A1: a connection with events and no runs reads {"key": "594b9e53c6144b74825ad77aa5038fd9", "kind": null, "name": "Verify hook", "tags": 0, "forms": 0, "lines": 0, "fields": 0, "status": "active", "adapter": "verifyhook", "settings": {}, "pipelines": 0, "reads_24h": 0, "events_24h": 3, "held_kinds": [], "last_read_at": null, "store_handle": null, "call_outcomes": 0, "connection_id": "01a1a763-1d91-7f2e-bcc8-f1d587873cbc", "last_event_at": "2026-11-04T15:27:33.110781+00:00", "last_read_job": null, "events_waiting": 1, "last_read_error": null, "reads_failed_24h": 0, "token_secret_name": null, "events_needs_review": 0, "external_account_id": "verify-verify-hook", "signing_secret_name": null}
+CONTEXT:  PL/pgSQL function inline_code_block line 41 at RAISE
+psql:/tmp/provoke129.sql:284: ERROR:  FAIL A5: tenant one sees 1 rows and its connection reads {"key": "514557fb096b4335a389a4420400da16", "kind": null, "name": "Verify one", "tags": 0, "forms": 0, "lines": 0, "fields": 0, "status": "active", "adapter": "verifypoll", "settings": {}, "pipelines": 0, "reads_24h": 1, "events_24h": 0, "held_kinds": [], "last_read_at": "2026-11-04T10:28:33.161531+00:00", "store_handle": null, "call_outcomes": 0, "connection_id": "01a1a763-1dc2-7827-9b74-f4951190c057", "last_event_at": null, "last_read_job": "reviews_poll", "events_waiting": 0, "last_read_error": null, "reads_failed_24h": 0, "token_secret_name": "verify-one-key", "events_needs_review": 0, "external_account_id": "verify-verify-one", "signing_secret_name": null}
+CONTEXT:  PL/pgSQL function inline_code_block line 28 at RAISE
+psql:/tmp/provoke129.sql:318: ERROR:  FAIL A6: a manager without tenant.configure was not refused with CMA06
+CONTEXT:  PL/pgSQL function inline_code_block line 18 at RAISE
+ check_name |        result        |     detail     
+------------+----------------------+----------------
+ verdict    | PROVOKED, NOT A PASS | 0 PASS, 9 FAIL
+(1 row)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET

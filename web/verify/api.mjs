@@ -1094,14 +1094,15 @@ async function sourceChecks() {
     call(s, path, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
   const cfgS = "/api/v1/configuration";
   const KNOWN = ["id", "key", "adapter", "name", "accountId", "kind", "heldKinds", "isActive", "signingSecretName", "tokenSecretName", "settings",
-    "events24h", "eventsWaiting", "eventsParked", "lastEventAt", "pipelines", "forms", "callOutcomes", "fields", "lines", "tags", "storeHandle"].sort();
+    "events24h", "eventsWaiting", "eventsParked", "lastEventAt", "pipelines", "forms", "callOutcomes", "fields", "lines", "tags", "storeHandle",
+    "lastReadAt", "lastReadJob", "reads24h", "readsFailed24h", "lastReadError"].sort();
 
   expect("sources: an agent cannot read the connections", (await get(AGENT, `${cfgS}/sources`)).status, 403, 200);
   expect("sources: the manager cannot read them either", (await get(MANAGER, `${cfgS}/sources`)).status, 403, 200);
   const list = await get(ADMIN, `${cfgS}/sources`);
   const sources = list.body?.data ?? [];
   expect("sources: the admin reads every connection with its kind",
-    [list.status, Array.isArray(list.body?.data), sources.every((c) => [null, "crm", "telephony", "commerce", "automation"].includes(c.kind) && Array.isArray(c.heldKinds))],
+    [list.status, Array.isArray(list.body?.data), sources.every((c) => [null, "crm", "telephony", "commerce", "automation", "reviews", "assets", "subscriptions"].includes(c.kind) && Array.isArray(c.heldKinds))],
     [200, true, true], [403, false, true]);
   expect("sources: no secret value, only names and non-secret settings",
     sources.every((c) => JSON.stringify(Object.keys(c).sort()) === JSON.stringify(KNOWN) && Object.keys(c.settings ?? {}).every((k) => !/(secret|token|password|key)/i.test(k))),

@@ -15,7 +15,8 @@
  *
  * Every call needs X-Juo-Admin-Api-Key and X-Tenant-ID: a key answers for its own store only (401 for another store's id,
  * as the GB key does for the NL store). Switches on state: fail429 (the next n calls answer 429 with Retry-After:
- * retryAfter seconds, as text), failAfter (after n more pages, every call answers 503 until cleared). state.requests
+ * retryAfter seconds, as text), failAfter (after n more pages, every call answers 503 until cleared), failTenant (one
+ * store's domain: every call for that store answers 503 while the others answer as before). state.requests
  * records { path, params, tenant, authorized, at } per call (never the key).
  */
 import http from "node:http";
@@ -106,7 +107,7 @@ const EVENTS = new RegExp(`^category:subscription AND occurredAt:(>=|>)${QUOTED}
 
 /** Starts the fake for some stores (juoStore); answers { url, state, close }. */
 export async function startFakeJuo({ stores }) {
-  const state = { requests: [], fail429: 0, retryAfter: "1", failAfter: null, pagesAnswered: 0, stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
+  const state = { requests: [], fail429: 0, retryAfter: "1", failAfter: null, failTenant: null, pagesAnswered: 0, stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
   const json = (res, status, body, headers = {}) => {
     res.writeHead(status, { "content-type": "application/json", ...headers });
     res.end(JSON.stringify(body));
@@ -135,6 +136,7 @@ export async function startFakeJuo({ stores }) {
       return json(res, 429, { error: "too_many_requests" }, state.retryAfter === null ? {} : { "retry-after": state.retryAfter });
     }
     if (state.failAfter !== null && state.pagesAnswered >= state.failAfter) return json(res, 503, { error: "unavailable" });
+    if (state.failTenant !== null && tenant === state.failTenant) return json(res, 503, { error: "unavailable" });
     const params = url.searchParams;
     if (url.pathname === "/admin/v1/event-types") return json(res, 200, { resource: "list", data: FIXTURE_EVENT_TYPES });
     if (url.pathname === "/admin/v1/subscriptions") {
