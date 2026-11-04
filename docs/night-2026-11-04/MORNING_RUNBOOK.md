@@ -1,5 +1,7 @@
 # Morning runbook, N04: split shifts, clock in again (addition 0008zp)
 
+**Done 4 November 2026.** Martin ran this runbook in dev and prod on 4 November 2026 and #217 merged as `15afa36`: `records/0008zp-dev-2026-11-04` and `records/0008zp-prod-2026-11-04` (the pre-check in `records/0008zp-precheck-2026-11-04`). The follow-ups it found are F1 to F3 in `docs/open-decisions.md`.
+
 Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux or his Linux machine, in `~/cma` unless stated; a step against prod, `p4a-cma-prod` or `cma-prod-pg`, from the Chromebook only), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Through the Auth Proxy the terminal runs only `db/` scripts, whose output is schema, check rows, counts and ids; every query that reads rows runs in Studio (README, Where a command runs). Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them); `NIGHT_NOTES.md` has the design, the night defaults (confirmed 4 Nov 2026) and every function checked.
 
 **What changes** (Decision log, 3 November 2026; README, Data model: workday sessions):
