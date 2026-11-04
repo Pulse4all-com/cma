@@ -1,0 +1,9 @@
+verify:metrics
+  schema valid, 586 entries, 586 unique keys
+  pages: 482 registered keys, 0 missing in catalog, 0 orphan entries
+  sql objects: 216 referenced, 0 unknown
+  settings: 47 referenced, 0 unknown
+  METRICS.md: up to date
+  page /configuration/metrics: admin 200, manager refused, analyst refused, agent refused, reader refused
+ok
+verify:metrics exit 0

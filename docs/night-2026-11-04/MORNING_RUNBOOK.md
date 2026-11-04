@@ -54,7 +54,7 @@ Expected: in `db/` the new `126_workday_sessions.sql` and `127_verify_workday_se
 ```bash
 cd ~/cma && gh pr checkout <number> && cd web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | tail -2; echo "build exit: ${PIPESTATUS[0]}"; npm run --silent verify:corrections | tail -1; npm run --silent verify:copy; cd ~/cma
 ```
-Expected: `found 0 vulnerabilities` (or the known advisories of README, Open decisions), the build's last lines and `build exit: 0`, `ALL 44 PASS`, `copy: PASS (3181 keys, en and nl)`. **Do not merge yet.**
+Expected: `found 0 vulnerabilities` (or the known advisories of README, Open decisions), the build's last lines and `build exit: 0`, `ALL 44 PASS`, `copy: PASS (3397 keys, en and nl)` (after the rebase on `ca16bba`; 3181 before Flash's copy came in). **Do not merge yet.**
 
 **Studio (cma-dev-pg)** and **Studio (cma-prod-pg)** (read only)
 ```sql
@@ -163,7 +163,7 @@ Expected: the new revision serving 100 percent of traffic; then the health answe
 cd ~/cma/web && node verify/api.mjs | tee ../records/0008zp-dev-2026-11-04/verify-api.txt | grep -E "branch|FAIL|ALL|FAILED"; echo "exit ${PIPESTATUS[0]}"
 node verify/api.mjs --provoke | tail -1; echo "exit ${PIPESTATUS[0]}"
 ```
-Expected: `(branch: clock in again; workday.clock_in_again on, the window open until …Z)` (the test supervisor's day ends, clocks in again with its first start kept and ends again, two checks), then `ALL n PASS` with n two more than the last dev run's (local: 281), `exit 0`; provoked `ALL n PROVOKED CHECKS FAILED, as they must`, `exit 0`. Run it inside 07:00 to 22:00 Amsterdam (the workday window it needs). The other branch, `(branch: an ended day stays ended; …)`, runs where the setting is off; it passed locally with the same count. Each run adds a session to the test supervisor's dev day (no limit, N2): dev data.
+Expected: `(branch: clock in again; workday.clock_in_again on, the window open until …Z)` (the test supervisor's day ends, clocks in again with its first start kept and ends again, two checks), then `ALL n PASS` with n two more than the last dev run's on `main`'s image (locally, after the rebase on `ca16bba` and with `web/verify/reports-fixture.sql` loaded: 324), `exit 0`; provoked `ALL n PROVOKED CHECKS FAILED, as they must`, `exit 0`. Run it inside 07:00 to 22:00 Amsterdam (the workday window it needs). The other branch, `(branch: an ended day stays ended; …)`, runs where the setting is off; it passed locally with the same count. Each run adds a session to the test supervisor's dev day (no limit, N2): dev data.
 
 ## 8. Browser, dev hand check
 

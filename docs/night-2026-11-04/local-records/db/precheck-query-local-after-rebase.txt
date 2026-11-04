@@ -1,0 +1,11 @@
+SET
+ slug | days_refused_by_0008zp | first_day | last_day 
+------+------------------------+-----------+----------
+(0 rows)
+
+          slug           | days_with_events 
+-------------------------+------------------
+ pulse4all-subscriptions |                5
+(1 row)
+
+RESET

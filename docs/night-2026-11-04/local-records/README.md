@@ -33,3 +33,27 @@ The final build of this branch (`build.txt`, exit 0), then every check on it:
 | `handrun.txt`, `screenshots/` | A hand run of the flow in mock mode (Playwright, 1280 px): Clock in on Welcome; End workday's confirmation ("You can clock in again today until 22:00"); My day ended with the Clock in card below it; Welcome's ended day with "Clock in again"; clocked in again with "Back since"; My day with "Started at" and "Back since"; the Log out page; My hours today with "2 sessions"; Team hours as the supervisor with the fixture's split shift ("2 sessions"). |
 
 Not recorded as a file: the browser verifiers, which CLAUDE.md leaves to Martin, ran here against this branch's build and against `main`'s, both in mock mode, and report the same problems on both, all on pages this change does not touch: `theme` 1 (Attempts by pipeline with an outcome filter has no table), `hints` 14 (header counts on Inbound, Calls, Attempts and Funnel), `layout` 11 (Funnel's tables without a scroll container, the Reports accordion). Pre-existing, not this change.
+
+## After the rebase on `main` at `ca16bba` (4 November 2026)
+
+The same checks on the rebased branch, on a fresh database: `db/00` to `125` replayed in number order with the seeds rerun after every migration (the same six known errors of earlier verifies as on the night run), then `126` and `127` run by hand so that `126`'s first run shows `INSERT 0 1`.
+
+| File | What |
+|---|---|
+| `../../../records/0008zp-precheck-2026-11-04/README.md` | Martin's pre-check in dev and prod (his values): no stored day refused, dev 98 days, prod 1,633. |
+| `db/replay-00-to-125-after-rebase.txt` | The replay's log: `replayed to 125`; the known errors of `04`, `07`, `12` (their expected-error blocks) and of `91`, `93`, `95` (earlier verifies against later functions), as before. |
+| `db/precheck-query-local-after-rebase.txt` | The record's query on this database before `126`: Result 1 no rows, Result 2 `pulse4all-subscriptions` 5 (the dev seed's days). |
+| `db/126_workday_sessions-first-run-after-rebase.txt`, `-rerun-after-rebase.txt` | `INSERT 0 1 COMMIT RESET`, then `INSERT 0 0 COMMIT RESET`. |
+| `db/02_seed_pulse4all-after-126-after-rebase.txt` | No error, no notice. |
+| `db/127_verify_workday_sessions-after-rebase.txt` | `PASS | 31 PASS, 0 FAIL`. |
+| `db/127_verify_workday_sessions-provoked-after-rebase.txt` | Nine blocks failed, `PROVOKED, NOT A PASS | 0 PASS, 31 FAIL`. |
+| `db/07_verify_time_model-after-rebase.txt` | Block C still `ended ended`. |
+| `db/settings-and-additions-after-rebase.txt` | `pulse4all-subscriptions true`, `pulse4all-invest false`; 0008zn, 0008zo, 0008zp recorded. |
+| `web/npm-ci-after-rebase.txt`, `build-after-rebase.txt`, `typecheck-after-rebase.txt`, `lint-after-rebase.txt` | `npm ci` exit 0; build exit 0; typecheck exit 0, 0 errors; lint exit 0, 0 errors (`main`'s two warnings). |
+| `web/verify-<name>-after-rebase.txt` | Every pure verifier: copy 3397 keys (en and nl), corrections 44, csv 22, dashboard 17, live 43, team 26, configuration 116, messages 24, import 29, devices-import 13, datamap PASS, signed-out 20, invitations 27, preview 18, follow-up 34, reports 215, flash 64, period 16, health 39, boundaries 345 files, jobs 28, metrics ok; roster 1 of 36, the same date-range failure as `main` (its code is identical to `main`'s). |
+| `web/reports-fixture-load-after-rebase.txt` | `web/verify/reports-fixture.sql` loaded into the local database (local only; a CRM, a telephony and a shop connection with invented data), as the API verifier's note asks. |
+| `web/verify-api-setting-on-after-rebase.txt` | `ALL 324 PASS`, branch "clock in again". Before the fixture, four of `main`'s Flash checks answered 409 `not_set_up` (no shop or CRM set up in the tenant); dev has both. |
+| `web/verify-api-setting-off-after-rebase.txt` | `workday.clock_in_again` false: `ALL 324 PASS`, branch "an ended day stays ended". |
+| `web/verify-api-provoked-after-rebase.txt` | `ALL 324 PROVOKED CHECKS FAILED, as they must`. |
+| `git-after-rebase.txt` | The merge base `ca16bba`, the branch's commits on it, and the one file under `cloudbuild.yaml`, `ingest/`, `hubspot/` or `records/`: the new pre-check record. |
+

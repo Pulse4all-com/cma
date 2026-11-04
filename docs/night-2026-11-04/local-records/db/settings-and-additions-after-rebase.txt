@@ -1,0 +1,6 @@
+SET
+pulse4all-invest false
+pulse4all-subscriptions true
+0008zn
+0008zo
+0008zp
