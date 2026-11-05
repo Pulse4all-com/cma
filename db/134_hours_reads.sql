@@ -40,7 +40,6 @@
 --   cma_read.time_interval, cma_read.workday_summary  the readers' views, same columns, created again as a scan of the
 --                         workdays through two wrappers with the owner's rights (a function inside a view runs with
 --                         the caller's rights, and a reader holds none on the tables), the readers' alone
---   workday_summary       the face recreated so it carries the new column
 --   team_hours            the same rows and order with sessions as its last column (the function is dropped and created:
 --                         a returned column cannot be added in place); the web and the time script read it instead of
 --                         counting per row. The My hours read takes s.sessions the same way
@@ -51,9 +50,9 @@
 -- paid LLVM's load (700 ms) and every call a compile (the time script read 103 ms for 31 days); with the estimates
 -- right the cost stays below jit_above_cost, and team_hours and team_now carry jit = off besides, as 0008zr's set
 -- functions do.
--- Measured after, same fixture: Team hours 7 days 388 ms → 16 ms (6 ms on the generic plan), 31 days 423 ms → 22 ms,
--- My hours 7 days 400 ms → 4 ms, the Live board's team read (cma.team_now, which joins the summary on the person and
--- the day) 1.6 s → 6 ms. A lesson for the time scripts: a plpgsql function's query turns to the generic plan after
+-- Measured after, same fixture (docs/night-2026-11-06/local-records/n06d/db, hours-after.txt and 131_time_all-a-after.txt):
+-- Team hours 7 days 388 ms → 9 ms, 31 days 423 → 23 ms, My hours 7 days 400 → 2 ms, the Live board's team-now poll
+-- (cma.team_now, which joins the summary on the person and the day) 1,159 → 23 ms, custom and generic plans alike. A lesson for the time scripts: a plpgsql function's query turns to the generic plan after
 -- five calls on a connection, and the web's pool keeps its connections, so prod runs the generic plan; 131 measures the
 -- first calls of a fresh session. Here both plans were measured (the seventh call of a session, after another tenant).
 -- No index: time_event_workday_idx and workday_user_date_idx already serve every lookup.

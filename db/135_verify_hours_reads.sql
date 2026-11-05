@@ -370,7 +370,7 @@ set role cma_owner;
 do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
-  v_mine uuid; v_other uuid; v_day uuid; v_end timestamptz; v_n1 bigint; v_n2 bigint; v_n3 bigint; v_n4 bigint; v_ok boolean;
+  v_mine uuid; v_other uuid; v_day uuid; v_end timestamptz; v_n1 bigint; v_n2 bigint; v_n3 bigint; v_n4 bigint; v_n5 bigint; v_ok boolean;
 begin
   -- the first active tenant with a day and another tenant's id, looked up as the owner; the calls as the application
   select t.id into v_mine from cma.tenant t where t.status = 'active' and exists (select 1 from cma.workday w where w.tenant_id = t.id) order by t.slug limit 1;
@@ -387,11 +387,13 @@ begin
   perform set_config('app.tenant_id', '', true);
   select count(*) into v_n3 from cma.workday_stretches_of(v_mine, v_day, v_end);                -- no tenant set: nothing
   select count(*) into v_n4 from cma.workday_summary_of(v_mine, v_day, v_end) x where x.sessions > 0;
+  perform set_config('app.tenant_id', v_other::text, true);                                   -- the other tenant set, asking the own tenant's day: nothing (row-level security)
+  select count(*) + (select count(*) from cma.workday_summary_of(v_mine, v_day, v_end) x where x.sessions > 0) into v_n5 from cma.workday_stretches_of(v_mine, v_day, v_end);
   set local role cma_owner;
   perform set_config('app.tenant_id', '', true);
-  v_ok := v_n1 > 0 and v_n2 = 0 and v_n3 = 0 and v_n4 = 0;
-  insert into verify_0008zs values (301, 'A1 as the application the day functions answer the own tenant''s day only: another tenant''s id or no tenant set gives nothing (row-level security)',
-    case when v_ok and not v_provoke then 'ok' else 'FAIL' end, format('%s stretches of the own day, %s with the other tenant''s id, %s and %s without a tenant', v_n1, v_n2, v_n3, v_n4));
+  v_ok := v_n1 > 0 and v_n2 = 0 and v_n3 = 0 and v_n4 = 0 and v_n5 = 0;
+  insert into verify_0008zs values (301, 'A1 as the application the day functions answer the own tenant''s day only: another tenant''s id, no tenant set, or another tenant set gives nothing (row-level security)',
+    case when v_ok and not v_provoke then 'ok' else 'FAIL' end, format('%s stretches of the own day, %s with the other tenant''s id, %s and %s without a tenant, %s with the other tenant set', v_n1, v_n2, v_n3, v_n4, v_n5));
 exception when others then
   set local role cma_owner;
   insert into verify_0008zs values (301, 'A1 the day functions fail closed', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 160));
