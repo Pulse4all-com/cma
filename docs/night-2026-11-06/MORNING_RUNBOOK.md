@@ -49,7 +49,7 @@ cd ~/cma && git fetch -q origin claude/youthful-meitner-ve6gtm && git checkout -
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-web" AND jsonPayload.message="request"' --project=p4a-cma-prod --freshness=7d --limit=200000 --format=json > /tmp/requests-before.json
 node tools/perf/request-percentiles.mjs --pages --api < /tmp/requests-before.json | tee records/n06-prod-2026-11-06/percentiles-before.txt
 ```
-Expected: one line per route with `n`, p50, p75, p95, p99, max in ms, the share over 800 ms and the 5xx count, sorted by p95; `/live/board`, `/api/v1/telephony/inbound-now`, `/configuration/sources`, `/reports/flash?o=data_quality` and `/reports/data-quality` near the top. The read takes 1 to 3 minutes for 7 days. Keep the file: step 5 compares against it. Then `git checkout main -q`.
+Expected: one line per route with `n`, p50, p75, p95, p99, max in ms, the share over 800 ms and the 5xx count, the busiest route first; `/live/board`, `/api/v1/telephony/inbound-now`, `/configuration/sources`, `/reports/flash?o=data_quality` and `/reports/data-quality` near the top. The read takes 1 to 3 minutes for 7 days. Keep the file: step 5 compares against it. Then `git checkout main -q`.
 
 **0b. The census** (read only; counts, sizes and index names, never a row)
 
@@ -71,7 +71,7 @@ for part in a b c; do sed "s/select set_config('verify.part', 'all', false);/sel
 psql "$PGCONN" -v ON_ERROR_STOP=0 -f db/124_time_flash.sql > "$rec/124_time_flash-before.txt" 2>&1; echo "124: $(grep -E ' verdict' "$rec/124_time_flash-before.txt" | tr -s ' ')"
 grep -E "rolled back" "$rec/131_time_all-a-before.txt" | tr -s ' '
 ```
-Expected: three `131` verdict lines `131_time_all (part a|b|c): <ok> ok, <fail> FAIL, <skip> skip; worst <ms> ms (<tenant> <page>: <read>)`, one `124` line, and the `rolled back | ok | the timed part is rolled back: <n> audit rows before it, <n> after it` proof. The FAILs are the reads over budget before the change: expected on Sources, the connection page, System health, the three missed-callback polls, the data quality reads, Intake, Calls, Attempts, Funnel, Speed to lead and Lead cohorts (NIGHT_NOTES, Before and after). A `131` run that is refused with `25006` or a lock error: send me the first `ERROR` line of the file.
+Expected: three `131` verdict lines `131_time_all (part a|b|c): <ok> ok, <fail> FAIL, <skip> skip; worst <ms> ms (<tenant> <page>: <read>)`, one `124` line, and the `rolled back | info | … 0 audit row(s) of its writes remain` proof. The FAILs are the reads over budget before the change: expected on Sources, the connection page, System health, the three missed-callback polls, the data quality reads, Intake, Calls, Attempts, Funnel, Speed to lead and Lead cohorts (NIGHT_NOTES, Before and after). A `131` run that is refused with `25006` or a lock error: send me the first `ERROR` line of the file.
 
 **0d. `pg_stat_statements` and Query Insights: a question, not a change.** The census's top-statements block needs `pg_stat_statements`, which on Cloud SQL is the flag `shared_preload_libraries=pg_stat_statements` (a restart, a failover on HA) plus `create extension`. Query Insights needs no flag and no restart. Neither is enabled tonight; the Gemini prompt of step 6 asks for the exact flag names, the restart, the cost and whether the standard Query Insights is included in Enterprise's price, with the gcloud commands for you to run, before you decide.
 
@@ -98,7 +98,7 @@ psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/133_verify_perf.sql > "$rec/133.txt" 2>&
 sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" db/133_verify_perf.sql > /tmp/provoke.sql
 psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "$rec/133-provoked.txt" 2>&1; echo "provoked: $(grep -E ' verdict' "$rec/133-provoked.txt" | tr -s ' ')"
 ```
-Expected: `connected to cma as martin@pulse4all.com`; `132: INSERT 0 1 COMMIT RESET` (the first run also computes every active tenant's first data-quality result: 5 to 30 s); `132 again: INSERT 0 0 COMMIT RESET`; `133:  verdict | 0008zr verified | 133_verify_perf: 20 ok, 0 FAIL, 1 skip` (the skip is a tenant without telephony; `0 skip` when dev has it); `provoked:  verdict | PROVOKED, NOT A PASS | 133_verify_perf: 0 ok, 20 FAIL, 1 skip`. Any other `133` line: send me `grep -E 'FAIL|ERROR' "$rec/133.txt"`. About 3 minutes.
+Expected: `connected to cma as martin@pulse4all.com`; `132: INSERT 0 1 COMMIT RESET` (the first run also computes every active tenant's first data-quality result: 5 to 30 s); `132 again: INSERT 0 0 COMMIT RESET`; `133:  verdict | 0008zr verified | 133_verify_perf: 20 ok, 0 FAIL, 1 skip` (the skip is a tenant where no active person holds `tenant.configure`, the invest tenant locally; `0 skip` when every tenant has one); `provoked:  verdict | PROVOKED, NOT A PASS | 133_verify_perf: 0 ok, 20 FAIL, 1 skip`. Any other `133` line: send me `grep -E 'FAIL|ERROR' "$rec/133.txt"`. About 3 minutes.
 
 **Terminal** (dev: the earlier verifies of every function `132` touches, unchanged and still passing)
 ```bash
@@ -142,7 +142,7 @@ for f in 41_verify_lead_metrics 53_verify_sources_configuration 61_verify_inboun
   psql "$PGCONN" -v ON_ERROR_STOP=0 -f "db/$f.sql" > "$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -E ' verdict' "$rec/${f%%_*}-rerun.txt" | tail -1 | tr -s ' ')"
 done
 ```
-Expected: as in dev: `INSERT 0 1 COMMIT RESET` (the first result for the two tenants: the data-quality computation took 2.1 to 3.5 s in prod on 3 November 2026, so under a minute), `INSERT 0 0 COMMIT RESET`, `133 … 20 ok, 0 FAIL, 0 skip` (prod has telephony), the earlier verifies as above. `main`'s web keeps running on it (Order matters). About 5 minutes.
+Expected: as in dev: `INSERT 0 1 COMMIT RESET` (the first result for the two tenants: the data-quality computation took 2.1 to 3.5 s in prod on 3 November 2026, so under a minute), `INSERT 0 0 COMMIT RESET`, `133 … 20 ok, 0 FAIL, 0 skip` (every prod tenant has a `tenant.configure` holder; `1 skip` otherwise), the earlier verifies as above. `main`'s web keeps running on it (Order matters). About 5 minutes.
 
 **Terminal** (prod: the time scripts after `132`; the gate)
 ```bash
@@ -207,9 +207,9 @@ Expected: the job `cma-refresh-data-quality` created and the schedule `cma-refre
 
 **Terminal** (prod; OPERATIONS 8)
 ```bash
-gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-data-quality AND jsonPayload.message="refresh-data-quality"' --project=p4a-cma-prod --freshness=10m --limit=6 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.skipped)'
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-data-quality AND jsonPayload.message="refresh-data-quality"' --project=p4a-cma-prod --freshness=10m --limit=6 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.refreshed, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms)'
 ```
-Expected: one line per tenant per run: `INFO` with `reason fresh` and `skipped true` while the result is younger than 5 minutes, then every fifth minute `rows <n>` and `duration_ms` (2,000 to 4,000 at prod's size). An `ERROR` line: OPERATIONS 4 and 5 (pause it; the pages keep the last result).
+Expected: one line per tenant per run: `INFO` with `refreshed False` and `reason fresh` while the result is younger than 5 minutes, then every fifth minute `refreshed True` with `rows <n>` and `duration_ms` (2,000 to 4,000 at prod's size); the run row's counts carry `skipped` 1 or 0. An `ERROR` line: OPERATIONS 4 and 5 (pause it; the pages keep the last result).
 
 **4b. `verify:api` against dev on N06b's image** (`docs/RUNBOOK.md` section 4; inside 07:00 to 22:00 Amsterdam)
 ```bash

@@ -439,9 +439,14 @@ Expected: one short line per hourly run, most of them closing nothing.
 **Terminal** (the Flash snapshot, since 0008zn; `docs/scheduler/deploy-flash.sh` prints this form)
 ```bash
 gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-snapshot-flash AND jsonPayload.message="snapshot-flash"' --project=p4a-cma-prod --freshness=2h --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.date, jsonPayload.taken, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.retry, jsonPayload.watch_error)'
-gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-data-quality AND jsonPayload.message="refresh-data-quality"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.refreshed, jsonPayload.reason)'
 ```
 Expected: one line per tenant per hourly run, INFO: `taken` True on the run that takes a date, `reason` `taken` on the runs after it, `reason` `missed` when the date was recorded missed earlier. `retry` is a note only when a retried tenant found its first attempt's take or finish done. A WARNING with `watch_error` is a watch that failed after the figures were stored (the snapshot is kept; the next take runs the watch again), an ERROR a failed take. Configuration → System health shows the job as "Flash snapshot", its counts carrying `taken`, `already`, `missed`, `late` and `watch_failed` (`not_due` no longer occurs).
+
+**Terminal** (the data-quality refresh, since addition 0008zr; `docs/scheduler/deploy-data-quality.sh` prints this form)
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-data-quality AND jsonPayload.message="refresh-data-quality"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.refreshed, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms)'
+```
+Expected: one line per tenant per minute, INFO: `refreshed` True with `rows` and `duration_ms` on the run that computed (every `data_quality.refresh_minutes`, 5 by default), `reason` `fresh` on the runs between; `reason` `running` as a WARNING when a run found the tenant's lock taken; an ERROR line names the SQLSTATE (section 4, then 5 to pause it: the pages keep the last result).
 
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
 ```bash

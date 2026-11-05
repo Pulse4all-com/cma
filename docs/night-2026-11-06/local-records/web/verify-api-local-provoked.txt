@@ -13,7 +13,7 @@ FAIL  preview: a manager's preview cookie is ignored got 200, wanted 403
 FAIL  preview: Exit while previewing clears the cookie with a 204 got [204,true,true], wanted [204,true,false]
 FAIL  follow-up: an agent is refused the lists and the summary got [403,403,403,403,403], wanted [200,403,403,403,403]
 FAIL  follow-up: the supervisor (monitoring.live) reads the summary's eight counts and computedAt got [200,true,true,true], wanted [403,true,true,true]
-note  no reader identity in this tenant: the reader's check is left out
+FAIL  follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures got [200,403,403], wanted [200,200,403]
 FAIL  follow-up: the manager reads the three lists, every row in shape, no customer data got [200,200,200,true,true,true,true], wanted [200,200,403,true,true,true,true]
 FAIL  follow-up: each list says when its snapshot was computed (computedAt) got [true,true,true], wanted [true,true,false]
 FAIL  follow-up: tickets come with the least time left first, no business hours last got true, wanted false
@@ -68,7 +68,7 @@ FAIL  end needs the request header                 got 400, wanted 200
 FAIL  cross-site end is refused                    got 403, wanted 200
 FAIL  end ends the own day                         got ended, wanted working
       (branch: clock in again; workday.clock_in_again on, the window open until 2026-11-05T21:00:00.000Z)
-FAIL  clocking in again opens the day, its first start kept got [true,"working",true,null,true,true,false], wanted [true,"ended",true,"2026-11-05T06:31:24.246Z",false,false,fa
+FAIL  clocking in again opens the day, its first start kept got [true,"working",true,null,true,true,false], wanted [true,"ended",true,"2026-11-05T06:49:58.611Z",false,false,fa
 FAIL  the second session ends the day again, later got ["ended",true,true], wanted ["working",true,false]
 FAIL  a second end changes nothing                 got true, wanted false
 FAIL  log out on an ended day changes nothing      got [303,true], wanted [303,false]
@@ -257,11 +257,11 @@ FAIL  reports: each group answers as itself, none means day got ["day","market",
 FAIL  reports: no field named email, phone, name or firstname in the rows got [], wanted ["name"]
 FAIL  reports: statuses are called, not called open or closed got true, wanted false
 FAIL  reports: every record link is https or empty got true, wanted false
-FAIL  reports: the summary by day adds up to the rows got [4158,1360,1264], wanted [4159,-1,-1]
-FAIL  reports: agents not mapped are one group without a label, never an owner id got [true,1293,true], wanted [false,-1,false]
+FAIL  reports: the summary by day adds up to the rows got [4165,1365,1265], wanted [4166,-1,-1]
+FAIL  reports: agents not mapped are one group without a label, never an owner id got [true,1297,true], wanted [false,-1,false]
 FAIL  reports: intake figures follow the tenant's connections got true, wanted false
 FAIL  reports: data quality lists each check once with a count got [true,true,true], wanted [false,true,true]
-note  invest-analyst has no access here: the check of a tenant without sources is left out
+FAIL  reports: without telephony and a shop those figures are null, never 0 got [{"telephony":false,"commerce":false},true,false], wanted [{"telephony":true,"commerce":true},true,false]
 FAIL  flash: an agent is refused on every route    got [403,403,403,403,403,403], wanted [200,200,200,200,200,200]
 FAIL  flash: the analyst reads every route         got [200,200,200,200,200,200], wanted [200,200,200,200,200,403]
 FAIL  flash: the supervisor (performance.team) reads Flash, not data quality's rows (reports.view or tenant.configure) got [200,200,200,200,200,403], wanted [200,200,200,200,200,200]
@@ -271,7 +271,7 @@ FAIL  flash: a card's live headline: the overview's headline measure, a number w
 FAIL  flash: amounts sorted within currency (currency first), the total before the limit got [true,true], wanted [false,false]
 FAIL  flash: the file: its name (overview, market, as of), its first columns as_of and filters, no @ anywhere got [200,true,true,false], wanted [200,false,false,true]
 FAIL  flash: the snapshots of a period and the open watch findings, no id of a record got [true,true,false], wanted [false,false,true]
-FAIL  flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop) got [null,null,-1], wanted [true,{},1]
+FAIL  flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop) got [false,null,0], wanted [true,{},1]
 FAIL  inbound: an agent is refused on the report and the board got [403,403], wanted [200,200]
 FAIL  inbound: the supervisor and the analyst read both got [200,200,200,200], wanted [200,403,200,403]
 FAIL  inbound: more than 92 days and a group outside the four are a 400 got [400,400,400,400], wanted [200,200,200,200]
@@ -283,11 +283,11 @@ FAIL  inbound: the hour groups are 00 to 23 and the service level's seconds come
 FAIL  inbound: the board's today is coherent and its missed calls run oldest first got [true,true,true], wanted [false,true,true]
 FAIL  inbound: the board's lookback and anonymous count are whole numbers got [true,true], wanted [false,true]
 FAIL  reasons: the request header is required, the manager is refused got [400,403], wanted [200,200]
-FAIL  reasons: the admin saves a label and a switch, read back with the connection got ["API verifier reason",false,true], wanted ["abandoned",true,false]
-FAIL  reasons: the report labels the code from the catalog got API verifier reason, wanted abandoned
+FAIL  reasons: the admin saves a label and a switch, read back with the connection got ["API verifier reason",false,true], wanted ["Unknown",true,false]
+FAIL  reasons: the report labels the code from the catalog got API verifier reason, wanted Unknown
 FAIL  reasons: an empty label and a customer-records connection are a 400 got [400,400], wanted [200,200]
-FAIL  reasons: put back as it was                  got ["abandoned",true], wanted ["API verifier reason",false]
-note  invest-analyst has no access here: the check of a tenant without telephony is left out
+FAIL  reasons: put back as it was                  got ["Unknown",true], wanted ["API verifier reason",false]
+FAIL  inbound: without telephony the report and the board say so, never 0 got [false,0,false,null,0], wanted [true,0,true,null,0]
 FAIL  calls: an agent is refused on all four routes got [403,403,403,403], wanted [200,200,200,200]
 FAIL  calls: the supervisor and the analyst read all four got [200,200,200,200,200,200,200,200], wanted [200,200,403,403,200,200,403,403]
 FAIL  calls: more than 92 days, a group outside the four, a bad market or line are a 400 got [400,400,400,400,400,400], wanted [200,200,200,200,200,200]
@@ -305,8 +305,8 @@ FAIL  calls: a market and a line narrow all four answers alike got [true,true], 
 FAIL  calls per agent: people by name, never ranked; the not-linked row last; the total agrees with the overview got [true,true,true,true], wanted [false,true,true,true]
 FAIL  calls per agent: tags per person are counted tags only, no untagged row; the untagged calls per person add up to the total got [true,true], wanted [false,true]
 FAIL  calls: the whole period's tag use equals its groups', tag by tag got true, wanted false
-note  reader has no access here: the check of reports.view without performance.team is left out
-note  invest-analyst has no access here: the check of a tenant without telephony is left out
+FAIL  calls: reports.view alone reads Calls, not Calls per agent got [200,200,403,403], wanted [200,200,200,200]
+FAIL  calls: without telephony both pages say so, never 0 got [false,0,0,false,0], wanted [true,0,0,true,0]
 FAIL  attempts: an agent is refused on both routes got [403,403], wanted [200,200]
 FAIL  attempts: the supervisor and the analyst read both got [200,200,200,200], wanted [200,403,200,403]
 FAIL  attempts: more than 92 days, a group, a market, a pipeline, attempted or an outcome outside the catalog, and any scope, are a 400 got [400,400,400,400,400,400,400,400,400], wanted [200,200,200,200,200,200,200,200,200]
@@ -323,10 +323,10 @@ FAIL  attempts: the previous period is as long as the period and ends the day be
 FAIL  attempts: a market and a pipeline narrow the figures as their group; the filter lists stay the period's got [true,true,true,true], wanted [false,true,true,true]
 FAIL  attempts per agent: people by name, never ranked; the not-linked row last; the total equals Attempts per deal's got [true,true,true,true], wanted [false,true,true,true]
 FAIL  attempts: the history start one date or none, the settings whole numbers and the bucket edges got [true,true,true], wanted [false,true,true]
-note  reader has no access here: the check of reports.view without performance.team is left out
-note  invest-analyst has no access here: the check of the per-person switch is left out
+FAIL  attempts: reports.view alone reads Attempts per deal, not Attempts per agent got [200,403], wanted [200,200]
+FAIL  attempts per agent: not there (404) while reports.per_person does not hold attempts; Attempts per deal is got [200,404], wanted [200,200]
 FAIL  stored calls: the admin reads a line's count and first start; the manager and an agent are refused got [200,true,true,"firstStartedAt,storedCalls",403,403], wanted [403,true,true,"firstStartedAt,storedCalls",403,403]
 FAIL  stored calls: no line is a 400, an unknown line a 404, an unknown connection a 404 got [400,404,404], wanted [200,200,200]
 
-ALL 318 PROVOKED CHECKS FAILED, as they must
+ALL 325 PROVOKED CHECKS FAILED, as they must
 exit 0
