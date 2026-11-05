@@ -13,10 +13,10 @@
  * order with Reports, Sales and Customers split (Funnel before Attempts per deal; an agent sees none of the three), the
  * digit keys 1 to 9 without gaps for the agent, supervisor and admin mocks, one Live board per contact center labelled
  * with its name (none: no Live group, and the keys close up), and the breadcrumbs of a contact center's board and of a
- * moved report.
+ * moved report; the bare rail pages whose links, in the rail and in the breadcrumbs, close the open group.
  */
 import { applyPreview, isRoleKey, mayPreview, narrowPermissions, PREVIEW_COOKIE, PREVIEW_MAX_AGE_S } from "../src/lib/auth/preview.ts";
-import { breadcrumbs, firstPage, isCurrent, visibleNav, visiblePages } from "../src/lib/nav.ts";
+import { bareHrefsOf, breadcrumbs, firstPage, isCurrent, visibleNav, visiblePages } from "../src/lib/nav.ts";
 import { t } from "../src/lib/copy.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -150,6 +150,10 @@ expect("a contact center's board is current by its href, not by its page alone",
 expect("the board's breadcrumbs: Welcome › Live › the organisation's name",
   breadcrumbs(two, copy, "live-board", [], "/live/newco"), [{ label: "Welcome", href: "/" }, { label: "Live", href: "/live/atlas" }, { label: "Newco" }],
   [{ label: "Welcome", href: "/" }, { label: "Live", href: "/live/atlas" }, { label: "Atlas" }]);
+expect("the bare rail pages, whose links and crumbs close the open group: Welcome and Messages",
+  [bareHrefsOf(visibleNav(AGENT, copy)), bareHrefsOf(visibleNav(ADMIN_MOCK, copy)),
+    breadcrumbs(SUPERVISOR, copy, "messages-send").filter((c) => c.href && bareHrefsOf(visibleNav(SUPERVISOR, copy)).includes(c.href)).map((c) => c.href)],
+  [["/", "/messages"], ["/", "/messages"], ["/", "/messages"]], [["/"], ["/", "/messages", "/live/newco"], ["/"]]);
 expect("a moved report's breadcrumbs: Welcome › Sales › Funnel, the group to its first page",
   breadcrumbs(SUPERVISOR, copy, "funnel"), [{ label: "Welcome", href: "/" }, { label: "Sales", href: "/reports/speed-to-lead" }, { label: "Funnel" }],
   [{ label: "Welcome", href: "/" }, { label: "Reports", href: "/reports/flash" }, { label: "Funnel" }]);

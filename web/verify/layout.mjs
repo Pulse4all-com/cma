@@ -998,15 +998,17 @@ async function expectForms() {
 // says so in words; an agent gets the no-permission card and no inbound figures
 async function expectLiveBoard() {
   // Since addition 0008zv one board per contact center: /live/board opens the first one's (Newco's, /live/newco), every
-  // part of the board as before; the invest analyst's tenant has no contact center, so no Live group and /live/board is a
-  // 404 (a tenant without telephony still says so on Reports → Inbound, expectReports)
+  // part of the board as before; the invest analyst's tenant has no contact center, so no Live group and /live/board shows
+  // the not-found page (a soft 404 behind the board's loading boundary, Martin, 5 November 2026; a tenant without
+  // telephony still says so on Reports → Inbound, expectReports)
   for (const [subject, telephony] of [["supervisor", true], ["manager", true], ["admin", true], ["analyst", true], ["invest-analyst", "none"], ["agent-one", null]]) {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
-    const opened = await p.goto(BASE + "/live/board");
+    await p.goto(BASE + "/live/board");
     if (telephony === "none") {
+      const shown = await p.locator('[data-testid="not-found-page"]').waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false);
       const live = await p.locator('nav[data-rail-nav] button[aria-controls="nav-group-live"]').count();
-      if (opened?.status() !== 404 || live > 0) problems.push(`${subject} /live/board: answers ${opened?.status()} with ${live} Live group, expected 404 and none in a tenant without a contact center`);
+      if (!shown || live > 0) problems.push(`${subject} /live/board: ${shown ? "the not-found page" : "no not-found page"} with ${live} Live group, expected the not-found page and none in a tenant without a contact center`);
       await ctx.close();
       continue;
     }
@@ -1031,8 +1033,8 @@ async function expectLiveBoard() {
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
-        // the call parts stay tenant-wide on a contact center's board and say so (addition 0008zv)
-        scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="missed-scope"]')].map((el) => el.textContent ?? ""),
+        // the call parts and the follow-up strip stay tenant-wide on a contact center's board and say so (addition 0008zv)
+        scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="missed-scope"], [data-testid="follow-up-scope"]')].map((el) => el.textContent ?? ""),
         unnamedLabels: [...document.querySelectorAll("main div[aria-label], main span[aria-label]")].filter((el) => !el.getAttribute("role")).length,
         // Missed, not called back is the board's last section since 0008z: the last heading in main is its own
         lastHeading: [...document.querySelectorAll("main h2")].at(-1)?.closest('[data-testid="missed-live"]') !== null,
@@ -1043,7 +1045,7 @@ async function expectLiveBoard() {
     if (m.mainX > 0) problems.push(`${subject} /live/board: the main area scrolls sideways by ${m.mainX}px at 1280`);
     if (telephony && (m.tiles !== 7 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 7 and a table`);
     if (telephony && !m.lastHeading) problems.push(`${subject} /live/board: Missed, not called back is not the board's last section`);
-    if (telephony && (m.scopes.length !== 2 || !m.scopes.every((x) => x.includes("Newco")))) problems.push(`${subject} /live/board: ${m.scopes.length} captions on the call parts naming Newco, expected 2`);
+    if (telephony && (m.scopes.length !== 3 || !m.scopes.every((x) => x.includes("Newco")))) problems.push(`${subject} /live/board: ${m.scopes.length} captions on the call parts and the follow-up strip naming Newco, expected 3`);
     if (telephony) {
       const mark = p.locator('[data-testid="inbound-longestWaiting"] button[data-header-hint]');
       await mark.focus();
@@ -1799,7 +1801,7 @@ async function expectFrame() {
 // with the focus on its first page, a click in the folded rail unfolding it with only that group open, the retired
 // per-group cookies ignored and expired on the first toggle; aria-expanded and aria-controls agree with what shows, a
 // closed group holding the current page keeps its white pill and the digit keys work with every group closed; a bare rail
-// page (Welcome, Messages, the top bar's inbox) closes the open group (addition 0008zv). Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
+// page (Welcome, Messages, the top bar's inbox, a crumb to Welcome or Messages) closes the open group (addition 0008zv). Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
 // 7 October 2026 (Time still open after Reports opens)
 async function expectAccordion() {
   const host = new URL(BASE).hostname;
@@ -1903,21 +1905,25 @@ async function expectAccordion() {
   }
 
   // 2b. A bare rail page closes the open group (addition 0008zv, Martin, 5 November 2026): with Time open on My day, a click
-  // on Welcome, the key 2 (Messages) and a click on the top bar's inbox each close it; the cookie is then empty and a
-  // reload opens none. --provoke expects Time still open
+  // on Welcome, the key 2 (Messages), a click on the top bar's inbox and a click on the Welcome crumb each close it, and so
+  // does the Messages crumb on Send a message; the cookie is then empty and a reload opens none. --provoke expects Time
+  // still open
   {
     const ctx = await contextOf("manager", {});
     const p = await ctx.newPage();
-    for (const [how, act, path] of [
-      ["a click on Welcome", () => p.locator('nav[data-rail-nav] a[href="/"]').click(), "/"],
-      ["the key 2", async () => { await p.locator("main h1").click(); await p.keyboard.press("2"); }, "/messages"],
-      ["a click on the inbox", () => p.locator('[data-testid="inbox-link"]').click(), "/messages"],
+    const crumb = (href) => p.locator(`[data-testid="breadcrumbs"] a[href="${href}"]`).click();
+    for (const [how, act, path, from] of [
+      ["a click on Welcome", () => p.locator('nav[data-rail-nav] a[href="/"]').click(), "/", "/day"],
+      ["the key 2", async () => { await p.locator("main h1").click(); await p.keyboard.press("2"); }, "/messages", "/day"],
+      ["a click on the inbox", () => p.locator('[data-testid="inbox-link"]').click(), "/messages", "/day"],
+      ["a click on the Welcome crumb", () => crumb("/"), "/", "/day"],
+      ["a click on the Messages crumb", () => crumb("/messages"), "/messages", "/messages/send"],
     ]) {
-      await p.goto(BASE + "/day");
+      await p.goto(BASE + from);
       await settle(p);
       await p.waitForLoadState("networkidle");
       if (!openOf(await groupsOf(p)).includes("time")) await click(p, "time");
-      expectOpen(`on My day before ${how}`, await groupsOf(p), ["time"]);
+      expectOpen(`on ${from} before ${how}`, await groupsOf(p), ["time"]);
       await act();
       await p.waitForURL((u) => new URL(u).pathname === path).catch(() => undefined);
       await settle(p);

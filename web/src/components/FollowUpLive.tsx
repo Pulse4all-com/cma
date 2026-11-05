@@ -3,7 +3,8 @@
  * cma.follow_up_summary: leads not called and past the target, tickets at risk and over their response
  * time, tasks overdue and due today. Counts only; the Follow-up report has the rows. Tiles as InboundLive's
  * (docs/style/Pulse4all-Style.md 7.3), each with its hint, no figure a filled red tile. A server component:
- * the page's poll (LiveRefresh) reads it again every 10 seconds.
+ * the page's poll (LiveRefresh) reads it again every 10 seconds. On a contact center's board (addition 0008zv) a caption
+ * under the title says the counts cover the whole business line (Martin, 5 November 2026).
  */
 import Link from "next/link";
 import type { Copy, Locale } from "@/lib/copy";
@@ -12,10 +13,12 @@ import { FOLLOW_UP_TILES, type FollowUpTileKey } from "@/lib/follow-up";
 import { fillHint, fmtCount } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
 
-export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct, moreOf }: {
+export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct, moreOf, scope }: {
   summary: FollowUpSummary; copy: Pick<Copy, "followUp" | "hints" | "live">; locale: Locale; targetMinutes: number | null; warningPct: number | null;
   /** "How this is computed" per tile, to the figure's catalog entry; given only for tenant.configure */
   moreOf?: (key: FollowUpTileKey) => { href: string; label: string } | undefined;
+  /** A caption under the title on what the counts cover (a contact center's board: the whole business line) */
+  scope?: string;
 }) {
   const t = copy.followUp;
   const h = copy.hints;
@@ -30,7 +33,10 @@ export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct,
   return (
     <section aria-labelledby="follow-up-now" className="flex flex-col gap-4" data-testid="follow-up-live">
       <div className="flex items-baseline justify-between gap-4">
-        <h2 id="follow-up-now" className="text-panel font-semibold text-p4a-heading">{copy.live.followUpTitle}</h2>
+        <div>
+          <h2 id="follow-up-now" className="text-panel font-semibold text-p4a-heading">{copy.live.followUpTitle}</h2>
+          {scope ? <p className="mt-1 text-small text-p4a-muted" data-testid="follow-up-scope">{scope}</p> : null}
+        </div>
         {/* no prefetch: this card sits on a polled page and would fetch the route again on every refresh (Shell) */}
         <Link href="/reports/follow-up" prefetch={false} className="text-small font-semibold text-p4a-deepblue hover:underline">{copy.live.openFollowUp}</Link>
       </div>

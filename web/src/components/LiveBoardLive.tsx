@@ -8,7 +8,7 @@
  * used for the first render), so a poll costs one transaction instead of the page's render (eight transactions and 26
  * statements before). The filters the board holds survive every poll: they are the board's own state. Since addition
  * 0008zv the board is one contact center's: the poll asks for its organisation (?organisation=<key>), and the inbound
- * and missed-call parts, which stay tenant-wide, say they cover all lines.
+ * and missed-call parts, which stay tenant-wide, say they cover all lines, and the follow-up strip the whole business line.
  */
 import { useCallback, useEffect, useState } from "react";
 import { FollowUpLive } from "./FollowUpLive";
@@ -49,6 +49,8 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
   const organisationKey = organisation.key;
   // The call parts count every line of the tenant, not only this contact center's (addition 0008zv)
   const allLines = t.callsAllLines.replace("{organisation}", organisation.name);
+  // and the follow-up counts the whole business line's leads, tickets and tasks (Martin, 5 November 2026)
+  const wholeBusinessLine = t.followUpWholeBusinessLine.replace("{organisation}", organisation.name);
 
   const poll = useCallback(async (): Promise<boolean> => {
     try {
@@ -105,7 +107,7 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
 
       <div className="mb-8">
         <FollowUpLive summary={data.followUp} copy={copy} locale={viewer.locale}
-          targetMinutes={data.settings.targetMinutes} warningPct={data.settings.warningPct} moreOf={moreOf} />
+          targetMinutes={data.settings.targetMinutes} warningPct={data.settings.warningPct} moreOf={moreOf} scope={wholeBusinessLine} />
       </div>
 
       <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>

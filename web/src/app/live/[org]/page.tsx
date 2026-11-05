@@ -25,11 +25,13 @@ const FORMER_ADDRESS = "board";
  * Since addition 0008zv (Martin, 5 November 2026) one board per contact-center organisation, at /live/<key>: the
  * people, groups and statuses only of that organisation's people (lib/live boardOfOrganisation, here and in every
  * poll's ?organisation=<key>), the rail's item and the last breadcrumb its name; the inbound and missed-call parts and
- * the follow-up strip stay tenant-wide, the call parts captioned as covering all lines. Without monitoring.live any
- * address shows the no-permission card (the permission first, as the API). A key that is no contact center
- * of the person's tenant (an unknown organisation or one not flagged) is a 404; /live/board, the former address, opens
- * the first contact center's board (unless an organisation is keyed board, whose board it then is). No loading
- * boundary: it would send 200 before the page decides on the 404 (RouteSkeleton).
+ * the follow-up strip stay tenant-wide, the call parts captioned as covering all lines and the strip as covering the
+ * whole business line. Without monitoring.live any address shows the no-permission card (the permission first, as the
+ * API). A key that is no contact center of the person's tenant (an unknown organisation or one not flagged) renders the
+ * not-found page; /live/board, the former address, opens the first contact center's board (unless an organisation is
+ * keyed board, whose board it then is). The route keeps its loading boundary, so a click shows the skeleton at once;
+ * the boundary sends 200 before the page decides, so the not-found page and the redirect are streamed with status 200
+ * (a soft 404, accepted on Live to keep the skeleton: Martin, 5 November 2026).
  */
 export default async function LiveBoardPage({ params }: { params: Promise<{ org: string }> }) {
   const r = await resolve();

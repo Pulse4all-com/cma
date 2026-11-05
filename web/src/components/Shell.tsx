@@ -14,8 +14,8 @@
  *
  * The rail's links prefetch their destination's loading boundary (the default of Next's Link for a dynamic route) since
  * night N06, 5 November 2026: every route has a loading.tsx (the page's frame with placeholder blocks), so a click
- * shows the frame at once and the page's data follows in the same request; except a route that may answer 404 (a
- * contact center's Live board since addition 0008zv, /live/[org]), where a loading boundary would send 200 first. Before (Decision log 18 October 2026) the
+ * shows the frame at once and the page's data follows in the same request (a contact center's Live board too, whose
+ * unknown key is then a soft 404 with status 200: Decision log, 5 November 2026). Before (Decision log 18 October 2026) the
  * links never prefetched: no loading boundary existed, and the Live board's router.refresh() every 10 seconds
  * invalidated the client cache, so each poll fetched every visible link again; the board now polls an API route
  * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page, and so does
@@ -34,7 +34,7 @@ import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { requestDbTrace } from "@/lib/data";
 import { Keycap, Notice } from "./primitives";
-import { breadcrumbs, HINTS_COOKIE, isCurrent, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type NavHref, type ShellPage } from "@/lib/nav";
+import { bareHrefsOf, breadcrumbs, HINTS_COOKIE, isCurrent, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type NavHref, type ShellPage } from "@/lib/nav";
 import { NavAccordion, NavBareLink, NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 import { MessageCenter } from "./MessageCenter";
@@ -246,7 +246,7 @@ export async function Shell({
             </Notice>
           </div>
         ) : null}
-        {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} /> : null}
+        {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} bare={bareHrefsOf(nav)} /> : null}
         <div className={wide ? "max-w-screen-2xl" : "max-w-4xl"}>{children}</div>
       </main>
       </NavAccordion>
@@ -256,9 +256,11 @@ export async function Shell({
 
 /**
  * Where the person is (16 October 2026): caption size in Footnote Grey, a 16 px chevron between the
- * crumbs, the last crumb Inkt semi-bold with aria-current and never a link. Welcome shows none.
+ * crumbs, the last crumb Inkt semi-bold with aria-current and never a link. Welcome shows none. A crumb to a bare rail
+ * page (Welcome; Messages on Send a message) closes the open group, as the rail's own link does (NavBareLink; Martin,
+ * 5 November 2026).
  */
-function Breadcrumbs({ crumbs, label }: { crumbs: Crumb[]; label: string }) {
+function Breadcrumbs({ crumbs, label, bare }: { crumbs: Crumb[]; label: string; bare: readonly string[] }) {
   return (
     <nav aria-label={label} data-testid="breadcrumbs" className="mb-4">
       <ol className="flex flex-wrap items-center gap-1 text-caption text-p4a-grey">
@@ -273,6 +275,8 @@ function Breadcrumbs({ crumbs, label }: { crumbs: Crumb[]; label: string }) {
               ) : null}
               {last ? (
                 <span aria-current="page" className="font-semibold text-p4a-inkt">{c.label}</span>
+              ) : c.href && bare.includes(c.href) ? (
+                <NavBareLink href={c.href} prefetch={false} className="hover:text-p4a-deepblue hover:underline">{c.label}</NavBareLink>
               ) : c.href ? (
                 <Link href={c.href} prefetch={false} className="hover:text-p4a-deepblue hover:underline">{c.label}</Link>
               ) : (

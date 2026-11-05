@@ -5,8 +5,7 @@
  *   1. Server time to first byte and time to last byte per route and subject: 30 requests after a warm-up of 3,
  *      sequential, p50 and p95 in milliseconds, each route in its class (poll, agent, report) with the class's budget.
  *      Every page route has a loading boundary since night N06, so its first byte is the skeleton and arrives in a few
- *      milliseconds whatever the reads cost (except a route that may answer 404, a contact center's Live board since
- *      addition 0008zv, whose first byte waits for its reads); the last byte is when the streamed page is complete, and both are held to
+ *      milliseconds whatever the reads cost; the last byte is when the streamed page is complete, and both are held to
  *      the class's budget (the first byte is the click's feedback, the last byte the page). The budgets are the targets
  *      of the Decision log of 5 November 2026 scaled by perf.json's container_factor: the container's database is on
  *      loopback and its CPU is not Cloud Run's, so a route that misses here is slow for sure, and one that passes is not

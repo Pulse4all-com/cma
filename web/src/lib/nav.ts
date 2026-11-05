@@ -352,6 +352,14 @@ export function visibleNav(me: Principal, copy: Copy): VisibleEntry[] {
   return out;
 }
 
+/**
+ * The hrefs of the bare rail pages a person sees (Welcome, Messages): a link to one, in the rail or in the breadcrumbs,
+ * closes the open group (addition 0008zv; the crumbs since Martin's decision of 5 November 2026)
+ */
+export function bareHrefsOf(nav: readonly VisibleEntry[]): string[] {
+  return nav.flatMap((e) => (e.kind === "page" ? [e.item.href] : []));
+}
+
 /** Every visible page in order, for numbering checks and the first page */
 export function visiblePages(me: Principal, copy: Copy): VisibleItem[] {
   return visibleNav(me, copy).flatMap((e) => (e.kind === "page" ? [e.item] : e.items));
