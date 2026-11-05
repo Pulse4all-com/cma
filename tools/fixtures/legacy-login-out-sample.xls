@@ -1,0 +1,30 @@
+<html xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body>
+<!-- Synthetic fixture for tools/legacy-export-html-to-csv.test.mjs, in the shape of Steam Connect's
+     "LogIn/Out" export: an HTML table in a file named .xls. No real names or ids. -->
+<table border="1">
+<thead>
+<tr><th>PersoneelsPID</th><th>Personeel</th><th>Ingelogd</th><th>Uitgelogd</th><th>Ingelogde tijd</th><th>Sessie-ID</th><th>Functie</th></tr>
+</thead>
+<tbody>
+<tr><td>1001</td><td>Test Account A</td><td>26-10-2026 08:59:12</td><td>26-10-2026 12:30:00</td><td>3:30:48</td><td>90001</td><td>Agent</td></tr>
+<tr><td> 1002 </td><td>Account, B &amp; Co</td><td>26-10-2026 7:45:00</td><td>26-10-2026 16:00:00</td><td>8:15:00</td><td>90002</td><td>Teamleider</td></tr>
+<tr>
+  <td>1001</td>
+  <td><span>Test Account A</span></td>
+  <td>30-10-2026 09:00:00</td>
+  <td>&nbsp;</td>
+  <td>&nbsp;</td>
+  <td>90003</td>
+  <td>Agent</td>
+</tr>
+<tr><td>1003</td><td>Test Account &Eacute;</td><td>2-11-2026 09:00:00</td><td>2-11-2026 17:00:00</td><td>8:00:00</td><td>90004</td><td>Agent</td></tr>
+<tr><td>1005</td><td>Test Account &quot;E&quot;</td><td>3-11-2026 09:00:00</td><td>3-11-2026 12:00:00</td><td>3:00:00</td><td>90005</td><td>Directie</td></tr>
+<tr><td colspan="7"># Records: 5</td></tr>
+</tbody>
+</table>
+</body>
+</html>

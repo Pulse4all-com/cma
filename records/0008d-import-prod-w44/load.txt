@@ -1,0 +1,25 @@
+Legacy time import in prod, the week of 26 to 30 October 2026 (addition 0008d, docs/import/README.md)
+
+Written down by Claude Code at Martin's request from his report of the run; the numbers below are his.
+No name, email address or Steam id appears here.
+
+Batch             steam-2026-w44, source steam_connect, file steam-export-w44.csv, into the work status
+                  legacy_session with the gap status break, loaded on 5 November 2026 at 04:34 UTC by
+                  Martin from the Terminal (actor terminal:martin)
+
+Period            2026-10-26 to 2026-10-30, zone Europe/Amsterdam
+
+Staging tool      tools/legacy-sessions-to-staging.mjs: rows_read 96, sessions_written 91, sessions_open 1,
+                  sessions_dropped 5, accounts_in_export 13, accounts_written 11,
+                  accounts_absent_from_map 2 (two management accounts, Functie Directie),
+                  map_rows_without_sessions 2, sessions_deduplicated 0, sessions_duration_differs 0
+Map               13 accounts from the database
+Person map        11 rows, 0 without a person
+Before the load   0 accounts without a person, 1 person-day the CMA already had (2026-10-26)
+
+Load counts       sessions_in 91, sessions_merged 34, days_written 51, events_written 110,
+                  days_closed_by_rule 1, days_clipped 5, days_dropped 0, days_skipped_existing 1,
+                  sessions_open_dropped 0, sessions_outside_window 0, accounts_skipped 0,
+                  sessions_unmapped 0
+
+Result            11 people, 51 days, 410.2 hours, 6 days to review (5 clipped, 1 closed by the rule)

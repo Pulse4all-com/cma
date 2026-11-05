@@ -8,4 +8,6 @@ hubspot/build/
 
 # Legacy time import (docs/import/README.md): exports, maps and staging files never enter the repository
 docs/import/*.csv
+docs/import/*.xls
 tools/*.csv
+tools/*.xls
