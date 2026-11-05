@@ -1313,7 +1313,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 
 ## Rail terms
 
-Decided by Martin on 5 November 2026 (addition 0008zu, #PR): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
+Decided by Martin on 5 November 2026 (addition 0008zu, #235): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
 
 ### Contact-center organisation
 
@@ -1330,7 +1330,7 @@ Decided by Martin on 5 November 2026 (addition 0008zu, #PR): the left rail's gro
 | Equivalent in the source system | None |
 | Not to use | "Call center" alone for the organisation (the Live board's people are the organisation's users, its lines are not tied to it yet); "department" |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #PR) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #235) |
 | Used by | The Live group and the Live board; `live.people.*`, `live.tiles.*` (the people of one organisation); `GET /api/v1/live/board?organisation=<key>`; Welcome's Needs attention (the missed callers line shows only where a contact center exists) |
 | As built today | The identity read returns the tenant's active flagged organisations by name (`findPrincipal`, one statement); `/live/<key>` of an unknown or unflagged key is a 404. The filter is a view, not an access boundary: every `monitoring.live` holder may read the whole tenant |
 
@@ -1349,7 +1349,7 @@ Decided by Martin on 5 November 2026 (addition 0008zu, #PR): the left rail's gro
 | Equivalent in the source system | None; the call figures follow Aircall's definitions (Inbound call, Missed inbound call) |
 | Not to use | "Team board" (a team is a group of people inside an organisation, a different term) |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zu, #PR) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zu, #235) |
 | Used by | `live.*`; the Live group; `GET /api/v1/live/board` |
 | As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption is "All lines, not only {organisation}'s: a line is not tied to a contact center yet." (nl: "Alle lijnen, niet alleen die van {organisation}: een lijn hoort nog niet bij een contactcenter."). The mapping of lines to an organisation is an Open decision |
 
@@ -1368,7 +1368,7 @@ Decided by Martin on 5 November 2026 (addition 0008zu, #PR): the left rail's gro
 | Equivalent in the source system | None |
 | Not to use | "Sales" for a figure or for the HubSpot sales pipeline |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #PR) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #235) |
 | Used by | `speed_to_lead.*`, `follow_up.*`, `funnel.*`, `attempts.*`, `attempts_per_agent.*`, `cohorts.*`, `first_orders.*`, `orders_per_person.*`; Sales → the eight pages above |
 | As built today | Matches the definition; the first page of the group a person may see is the target of its breadcrumb |
 
@@ -1387,7 +1387,7 @@ Decided by Martin on 5 November 2026 (addition 0008zu, #PR): the left rail's gro
 | Equivalent in the source system | None |
 | Not to use | "Customers" or "Klanten" for a count of people or as the term "customer" (see Active customer: Store customer, Webwinkelklant) |
 | Status | Decided (the label only; the term "customer" stays pending) |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #PR) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #235) |
 | Used by | `cancellations.*`, `reviews.*`, `maintenance.*`; Customers → Cancellations, Reviews, Maintenance |
 | As built today | Matches the definition |
 
