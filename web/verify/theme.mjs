@@ -44,6 +44,11 @@
 import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 
+/** Since night N06 every page route streams its skeleton first (loading.tsx): wait until the page has replaced it */
+async function settle(page) {
+  await page.waitForSelector("[data-route-skeleton]", { state: "detached", timeout: 30000 }).catch(() => {});
+}
+
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const provoke = process.argv.includes("--provoke");
 
@@ -236,6 +241,7 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
   await ctx.addCookies(Object.entries({ "cma-session": "1", ...cookies }).map(([name, value]) => ({ name, value, domain: new URL(BASE).hostname, path: "/" })));
   const p = await ctx.newPage();
   await p.goto(BASE + path);
+  await settle(p);
   await p.waitForLoadState("networkidle");
   // Calls per agent: open the first person's row and the not-linked row, so their splits are checked too
   if (expand) {

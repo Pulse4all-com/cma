@@ -6,6 +6,7 @@ import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import type { Copy } from "@/lib/copy";
 import { data, dataIsMock, type DataQualityCheck } from "@/lib/data";
+import { fmtDateTime } from "@/lib/time";
 import { holdsAny } from "@/lib/nav";
 import { DATA_QUALITY_PERMISSIONS, fmtCount, isMuted, orderChecks } from "@/lib/reports";
 import { resolve } from "../../access";
@@ -39,7 +40,9 @@ export default async function DataQualityPage() {
     );
   }
 
-  const checks = orderChecks(await data().getDataQuality(me));
+  // The stored result (addition 0008zr): the checks and when they were computed (Refreshed at)
+  const report = await data().getDataQualityReport(me);
+  const checks = orderChecks(report.checks);
   // The checks a person fixes by linking ids on People (addition 0008e), shown as a link to whoever may open People
   const linksToPeople = new Set(["owner_without_person", "telephony_user_without_person"]);
   const mayOpenPeople = holdsAny(me, ["users.manage_agents", "users.manage_all"]);
@@ -51,7 +54,12 @@ export default async function DataQualityPage() {
   return (
     <Shell copy={copy} me={me} active="data-quality" wide>
       <PageTitle>{t.title}</PageTitle>
-      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
+      <p className="-mt-2 mb-2 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
+      {report.computedAt ? (
+        <p className="mb-6 text-caption text-p4a-grey" data-testid="dq-refreshed-at" title={t.refreshedHint}>
+          {t.refreshedAt.replace("{time}", fmtDateTime(report.computedAt, me.timeZone, me.locale))}
+        </p>
+      ) : <div className="mb-6" />}
 
       <Card>
         <table className="w-full border-collapse text-body" data-testid="data-quality">

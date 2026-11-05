@@ -120,6 +120,8 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | **Decision log** | [docs/decisions.md](docs/decisions.md) |
 | **Open decisions** | [docs/open-decisions.md](docs/open-decisions.md) |
 
+- `docs/night-2026-11-06/`: night N06, the fastest Workspace (5 November 2026): `NIGHT_NOTES.md` (the measurements before and after, the design, the night defaults, the ranked remainder, the proposals with their costs), `MORNING_RUNBOOK.md` (Martin's steps: the prod baseline from the logs and the census, dev and prod for `132` and `133`, the merges, the new job, the Gemini prompt, rollback) and `local-records/`.
+
 ---
 
 ## How we work

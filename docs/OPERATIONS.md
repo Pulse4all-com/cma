@@ -35,7 +35,8 @@ record or a runbook. Where a pull request of the audit changes a step, the step 
 | `cma-close-forgotten-workdays` | Cloud Run job | `bash docs/scheduler/deploy.sh prod <short sha>` after a web deploy that changes the job | the web image |
 | `cma-refresh-follow-up` (since addition 0008s, Pulse4all-com/cma#166, 18 October 2026) | Cloud Run job | `bash docs/scheduler/deploy-follow-up.sh prod <short sha>` right after the web deploy of a merge that changes the job (RUNBOOK 7a) | the web image |
 | `cma-snapshot-flash` (since addition 0008zn, #213, 1 November 2026) | Cloud Run job | `bash docs/scheduler/deploy-flash.sh prod <short sha>` after the web deploy of a merge that changes the job; the web image must hold `web/jobs/snapshot-flash.mjs` and `122` must have run in that database | the web image |
-| Cloud Scheduler: the three per-minute ingest jobs, `ingest-reconcile` (03:30 Europe/Amsterdam, `deploy.sh`'s default since #158; that prod's schedule says so is Martin's to confirm, section 5), `cma-close-forgotten-workdays-hourly` (`0 * * * *`, UTC), `cma-refresh-follow-up-minutely` (`* * * * *`, UTC, since 0008s), `cma-snapshot-flash-hourly` (`20 * * * *`, UTC, since 0008zn); `ingest-outbox` has no schedule or a paused one | `europe-west4` | the four deploy scripts | |
+| `cma-refresh-data-quality` (since addition 0008zr, night N06, 5 November 2026) | Cloud Run job | `bash docs/scheduler/deploy-data-quality.sh prod <short sha>` after the web deploy of the merge that brings `web/jobs/refresh-data-quality.mjs`; `132` must have run in that database (the morning runbook of `docs/night-2026-11-06`) | the web image |
+| Cloud Scheduler: the three per-minute ingest jobs, `ingest-reconcile` (03:30 Europe/Amsterdam, `deploy.sh`'s default since #158; that prod's schedule says so is Martin's to confirm, section 5), `cma-close-forgotten-workdays-hourly` (`0 * * * *`, UTC), `cma-refresh-follow-up-minutely` (`* * * * *`, UTC, since 0008s), `cma-snapshot-flash-hourly` (`20 * * * *`, UTC, since 0008zn), `cma-refresh-data-quality-minutely` (`* * * * *`, UTC, since 0008zr; the tenant's `data_quality.refresh_minutes` decides when a result is due) | `europe-west4` | the five deploy scripts | |
 | `cma-nocodb` (read-only table browser, behind IAP) | Cloud Run service | `docs/nocodb/deploy.sh prod` (`--dry-run` first) | the pinned image of `docs/nocodb/service.template.yaml` |
 | Load balancer `cma-web-urlmap`; backends `cma-web-backend` (IAP), `cma-ingest-backend` (Cloud Armor `cma-ingest-armor`), `cma-signed-out-backend` (a bucket) | global | `docs/ingest/front.sh` (`--dry-run`), `docs/signed-out/deploy.sh` (a dry run without `--apply`) | |
 | `cma-prod-pg` (PostgreSQL 18, regional high availability, daily backups with point-in-time recovery) | Cloud SQL, `europe-west4` | migrations by hand in Studio, dev first (README, Release flow; RUNBOOK 7) | |
@@ -245,7 +246,7 @@ Expected: `link_calls`, `forms_poll` and `email_poll` rows every minute, `succee
 ## 5. Pause and resume a Cloud Scheduler job
 
 Names: `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-reconcile`, `ingest-outbox` (paused
-where it exists), `cma-close-forgotten-workdays-hourly`, `cma-refresh-follow-up-minutely`, `cma-snapshot-flash-hourly`. All in location
+where it exists), `cma-close-forgotten-workdays-hourly`, `cma-refresh-follow-up-minutely`, `cma-snapshot-flash-hourly`, `cma-refresh-data-quality-minutely`. All in location
 `europe-west4`.
 
 **Terminal** (what runs today)
@@ -289,6 +290,7 @@ What stops while each is paused, and how it catches up (`docs/ingest/README.md`,
 | `cma-close-forgotten-workdays-hourly` | the hourly close of days left open | idempotent: the next run or a manual execution closes everything overdue |
 | `cma-refresh-follow-up-minutely` | the follow-up snapshot: Reports → Follow-up, the Live board's Follow-up now and Welcome's Waiting for you keep the last one, and "Updated …" turns muted after three minutes | the next run, or `gcloud run jobs execute cma-refresh-follow-up`, refreshes every tenant |
 | `cma-snapshot-flash-hourly` | the Flash snapshot (addition 0008zn): the day's figures of every Flash overview, the month-end id lists and the watch; a business date D is due at D + 1 at `flash.snapshot_local_time` in the tenant's zone (00:00 to 23:59) and each hourly run takes the latest due date unless a succeeded run holds it, so every allowed time gives one snapshot per date; a take that starts more than an hour after the due time is marked late; a date that stops being the latest due one without a succeeded take is recorded as missed by the next take (one run row of status `missed`, no figures), never taken afterwards (the next take's watch raises `snapshot_missing`) | the next hourly run takes the tenant's latest due date, which stays the latest for a whole local day, so a stop shorter than that loses nothing and a longer one leaves each date missed, never invented; `gcloud run jobs execute cma-snapshot-flash` runs every tenant now |
+| `cma-refresh-data-quality-minutely` | the stored data-quality result (addition 0008zr): Reports → Data quality, Flash's data-quality overview and list, the snapshot take and the watch keep reading the last result, and its "Refreshed at" stops moving; a tenant whose result is older than `data_quality.refresh_minutes` is refreshed by the next run, so a stop shorter than that changes nothing | the next run, or `gcloud run jobs execute cma-refresh-data-quality`, refreshes every tenant whose result is due; nothing is lost, the result is a computation over the mirrors |
 
 When to pause:
 
@@ -440,6 +442,12 @@ gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cm
 ```
 Expected: one line per tenant per hourly run, INFO: `taken` True on the run that takes a date, `reason` `taken` on the runs after it, `reason` `missed` when the date was recorded missed earlier. `retry` is a note only when a retried tenant found its first attempt's take or finish done. A WARNING with `watch_error` is a watch that failed after the figures were stored (the snapshot is kept; the next take runs the watch again), an ERROR a failed take. Configuration → System health shows the job as "Flash snapshot", its counts carrying `taken`, `already`, `missed`, `late` and `watch_failed` (`not_due` no longer occurs).
 
+**Terminal** (the data-quality refresh, since addition 0008zr; `docs/scheduler/deploy-data-quality.sh` prints this form)
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-data-quality AND jsonPayload.message="refresh-data-quality"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.refreshed, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms)'
+```
+Expected: one line per tenant per minute, INFO: `refreshed` True with `rows` and `duration_ms` on the run that computed (every `data_quality.refresh_minutes`, 5 by default), `reason` `fresh` on the runs between; `reason` `running` as a WARNING when a run found the tenant's lock taken; an ERROR line names the SQLSTATE (section 4, then 5 to pause it: the pages keep the last result).
+
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
 ```bash
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-ingest" AND httpRequest.status>0' --project=p4a-cma-prod --freshness=1d --format='value(httpRequest.status)' | sort | uniq -c
@@ -541,8 +549,8 @@ log-based distribution metric on it; until that metric exists the backend latenc
    select coalesce(usename, '(background)') as login, coalesce(datname, '') as database, count(*) as connections
    from pg_stat_activity group by 1, 2 order by 3 desc;
    ```
-   Expected: `cma-web@…` at most 25 (the service's 20 and the three scheduler jobs on the web image, which log in
-   as `cma-web@` too: `cma-close-forgotten-workdays` 2, `cma-refresh-follow-up` 2, `cma-snapshot-flash` 1) and
+   Expected: `cma-web@…` at most 26 (the service's 20 and the four scheduler jobs on the web image, which log in
+   as `cma-web@` too: `cma-close-forgotten-workdays` 2, `cma-refresh-follow-up` 2, `cma-snapshot-flash` 1, `cma-refresh-data-quality` 1; 26 since addition 0008zr) and
    `cma-ingest@…` at most 25 (and only while busy), `cma-nocodb@…` at most 6, `cloudsqladmin` a few, your own login, the background processes. A login far above its ceiling is a
    leak.
 3. **Terminal:** backups and the instance (**untested here; dry-run first**: the field names are gcloud's

@@ -93,3 +93,16 @@ Risk of the change: the statement ceiling cancels any statement over 15 s. No pa
 3. Suspense per card on Welcome and the Live board, as the System health page does (5.6-05).
 4. One `calls_overview()` call on the Calls report (5.6-07) and per-page copy slices (5.6-08).
 5. A statement ceiling on the scheduler job's pool (`web/jobs/close-forgotten-workdays.mjs`) to complete INFRA-03.
+
+## 9. v2 done (night N06, 5 November 2026)
+
+Two pull requests, stacked: N06a (the database, addition 0008zr: `db/130` to `db/133`, `web/verify/perf-volume-fixture.sql`, `web/verify/perf.mjs`, `tools/perf/request-percentiles.mjs`, the job `cma-refresh-data-quality`) and N06b (the web). Measured first, at three times prod's volume, on a local fixture (`docs/night-2026-11-06/local-records/before` and `after`); the design, the night defaults and the ranked remainder are in `docs/night-2026-11-06/NIGHT_NOTES.md`.
+
+| Item of section 8 | Done | Where |
+|---|---|---|
+| 1. The Live board's composite read and `GET /api/v1/live/board`, the poll on the client | yes | N06b: `data().getLiveBoard()`, `web/src/components/LiveBoardLive.tsx`, `web/src/lib/live-board.ts`; the inbound part in one statement (`cma.inbound_now()`, N06a) |
+| 2. The follow-up lookback (5.6-02) | measured and not added | Decision log, 5 Nov 2026, N06-1: the pages read the snapshot; the refresh's cost is the tickets' and tasks' business hours per row |
+| 3. Suspense per card (5.6-05) | Welcome per card; every route with a loading boundary (the frame with placeholder blocks) | N06b: `web/src/app/page.tsx`, `RouteSkeleton`, 46 `loading.tsx` |
+| 4. One `calls_overview()` call (5.6-07) and per-page copy slices (5.6-08) | the slices on Welcome, My day and the Live board (the HTML from 58 kB to under 10 kB gzip); the Calls page's three calls stay (the core itself went from 9.5 s to 1.1 s per call at volume; one call per page is the remainder's first item) | N06b; `NIGHT_NOTES.md`, the remainder |
+| 5. The statement ceiling on the scheduler job's pool | not this night | the remainder |
+| Beyond section 8 | Sources (CMA-098) from 2.3 s to 78 ms, System health from 1.3 s to 281 ms, data quality on stored results (CMA-087), Intake from 6.5 s to 0.8 s, the message centre's poll only while visible, the route skeletons and prefetch, the tenant-keyed cache with its verifier, the font subset, CLAUDE.md's Performance section | N06a and N06b |

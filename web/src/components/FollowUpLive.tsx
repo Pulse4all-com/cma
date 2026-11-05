@@ -13,7 +13,7 @@ import { fillHint, fmtCount } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
 
 export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct, moreOf }: {
-  summary: FollowUpSummary; copy: Copy; locale: Locale; targetMinutes: number | null; warningPct: number | null;
+  summary: FollowUpSummary; copy: Pick<Copy, "followUp" | "hints" | "live">; locale: Locale; targetMinutes: number | null; warningPct: number | null;
   /** "How this is computed" per tile, to the figure's catalog entry; given only for tenant.configure */
   moreOf?: (key: FollowUpTileKey) => { href: string; label: string } | undefined;
 }) {

@@ -2,7 +2,7 @@
 
 Addition 0008zp (`db/126_workday_sessions.sql`, `db/127_verify_workday_sessions.sql`, `Pulse4all-com/cma#217`, merged
 as `15afa36`), run by Martin in p4a-cma-dev (`cma-dev-pg`) on 4 November 2026 by `docs/night-2026-11-04/MORNING_RUNBOOK.md`,
-as `martin@pulse4all.com`, from #217's branch head `909e7ec` unless stated. Written down by Claude Code at Martin's
+as `<operator>`, from #217's branch head `909e7ec` unless stated. Written down by Claude Code at Martin's
 request from his report of the runs (4 November 2026); the values below are his. Times Europe/Amsterdam unless marked
 UTC or Z. Counts, times and verdicts only, as reported: no key, no secret, no customer data.
 
@@ -30,7 +30,7 @@ UTC or Z. Counts, times and verdicts only, as reported: no key, no secret, no cu
 
 - `workday.clock_in_again`, the value and whether the seed set it: `pulse4all-invest` false / false,
   `pulse4all-subscriptions` true / true.
-- `0008zp` recorded, `applied_by` `martin@pulse4all.com`.
+- `0008zp` recorded, `applied_by` `<operator>`.
 
 ## (f) The web on dev
 

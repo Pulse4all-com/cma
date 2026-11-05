@@ -2,6 +2,7 @@ import "server-only";
 import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
+import { tenantCache } from "@/lib/cache";
 import type {
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
@@ -9,7 +10,7 @@ import type {
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
-  InboundFigures, InboundNow, InboundService, MissedReason,
+  InboundFigures, InboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
@@ -1410,6 +1411,8 @@ interface FlashSnapshotsDb {
 }
 interface DataQualityRowsDb {
   check: string; description: string | null; market: string | null; limit: number; offset: number; total: number | string; rows: Record<string, unknown>[];
+  /** When the stored result was computed (addition 0008zr; Refreshed at) */
+  computed_at?: string | null;
 }
 
 function flashNumber(v: unknown): number | null {
@@ -1462,6 +1465,77 @@ function toFlashRows(j: FlashRowsDb, labels: FlashLabels | null): FlashRowsView 
   return { overview: j.overview, mode: j.mode, asOf: j.as_of, from: j.from, to: j.to, sort: j.sort, descending: Boolean(j.descending), limit: j.limit,
     offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "",
     rows: def && j.mode === "live" ? withLabels(def.key, rows, labels) : rows };
+}
+
+
+// ---- The Live board's readers (addition 0008zr's web): each in the caller's transaction, used alone by the API's routes
+// and together by getLiveBoard
+
+async function readTeamNow(q: Querier): Promise<TeamNow> {
+  // The day's end per person (0008b), so a day on the board carries the same field as the own day
+  // and the day's sessions (0008zp), read as for the own day in the same query
+  const r = await q.query<TeamNowDbRow>(
+    `select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at,${SESSIONS("n.workday_id")}
+       from cma.team_now() n${SESSIONS_JOIN("n.workday_id")}`,
+  );
+  // team_now() checked monitoring.live (CMA06), so the plain read of the status flags runs only after that check passed
+  const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean }>(
+    `select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key`,
+  );
+  return {
+    people: r.rows.map(toTeamNowPerson),
+    statusFlags: flags.rows.map((f) => ({ isWorking: f.is_working, isProductive: f.is_productive, isPaid: f.is_paid })),
+  };
+}
+
+async function readTeamMembersNow(q: Querier): Promise<TeamMembership[]> {
+  const r = await q.query<{ user_id: string; team_key: string; team_name: string }>(`select * from cma.team_members_now()`);
+  return r.rows.map((m) => ({ userId: m.user_id, teamKey: m.team_key, teamName: m.team_name }));
+}
+
+async function readRosterToday(q: Querier): Promise<TodayShift[]> {
+  const r = await q.query<{
+    user_id: string; business_date: string; is_published: boolean; kind: "shift" | "absence" | null;
+    start_time: string | null; end_time: string | null; absence_name: string | null;
+  }>(`select * from cma.roster_today()`);
+  return r.rows.map((d) => ({
+    userId: d.user_id, date: d.business_date, isPublished: d.is_published, kind: d.kind, start: d.start_time, end: d.end_time, absenceName: d.absence_name,
+  }));
+}
+
+async function readFollowUpSummary(q: Querier): Promise<FollowUpSummaryAt> {
+  const s = one((await q.query<SummaryDb & { computed_at: Date }>(`select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
+  return { ...toSummary(s), computedAt: s.computed_at.toISOString() };
+}
+
+/** cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives them */
+type InboundNowDb = {
+  today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; waiting_now: number; longest_waiting_seconds: number | null;
+    service_level_seconds: number; waiting_max_minutes: number }) | null;
+  callbacks: (Omit<CallbackDbRow, "started_at"> & { started_at: string })[];
+  summary: { listed: number; anonymous_count: number; lookback_days: number };
+};
+
+async function readInboundNow(q: Querier): Promise<InboundNow> {
+  // One statement (addition 0008zr): today's figures, the missed callers (each with its record link from the connection's
+  // record_url_call template; null without one) and the summary, the list computed once in the database
+  const j = one((await q.query<{ j: InboundNowDb }>(`select cma.inbound_now() as j`)).rows, "inbound_now").j;
+  const connections = await readConnections(q);
+  const t = j.today;
+  return {
+    telephony: connections.telephony,
+    today: connections.telephony && t ? {
+      ...toFigures(t), date: t.business_date, waitingNow: t.waiting_now, longestWaitingSeconds: t.longest_waiting_seconds,
+      serviceLevelSeconds: t.service_level_seconds, waitingMaxMinutes: t.waiting_max_minutes,
+    } : null,
+    callbacks: connections.telephony ? j.callbacks.map((x) => ({
+      callId: x.call_id, connectionId: x.connection_id, sourceId: x.source_id, lineRef: x.line_ref, lineName: x.line_name, market: x.market,
+      reasonCode: x.reason_code, reasonLabel: x.reason_label, startedAt: isoAny(x.started_at)!, missedCount: x.missed_count,
+      waitingSeconds: x.waiting_seconds, waitingBusinessSeconds: x.waiting_business_seconds, recordUrl: x.record_url,
+    })) : [],
+    anonymousCount: connections.telephony ? j.summary.anonymous_count : 0,
+    lookbackDays: j.summary.lookback_days,
+  };
 }
 
 export const postgresData: CmaData = {
@@ -1691,7 +1765,9 @@ export const postgresData: CmaData = {
   },
 
   async listSettings(me) {
-    return withTenant(ctx(me), (q) => readSettings(q));
+    // The tenant's settings from the per-instance cache (lib/cache; CMA_CACHE_TTL_MS, 30 s by default): keys and
+    // values only, keyed by the tenant, dropped by setTenantSetting; the database still answers the first read
+    return tenantCache.get(me.tenantId, "settings", () => withTenant(ctx(me), (q) => readSettings(q)));
   },
 
   async exportHours(me, range, userId) {
@@ -1744,21 +1820,7 @@ export const postgresData: CmaData = {
   // Addition 0003e: team_now() checks monitoring.live and raises CMA06 otherwise, so the plain read
   // of the status flags that follows runs only in a transaction where the check already passed
   async getTeamNow(me): Promise<TeamNow> {
-    return withTenant(ctx(me), async (q) => {
-      // The day's end per person (0008b), so a day on the board carries the same field as the own day
-      // and the day's sessions (0008zp), read as for the own day in the same query
-      const r = await q.query<TeamNowDbRow>(
-        `select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at,${SESSIONS("n.workday_id")}
-           from cma.team_now() n${SESSIONS_JOIN("n.workday_id")}`,
-      );
-      const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean }>(
-        `select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key`,
-      );
-      return {
-        people: r.rows.map(toTeamNowPerson),
-        statusFlags: flags.rows.map((f) => ({ isWorking: f.is_working, isProductive: f.is_productive, isPaid: f.is_paid })),
-      };
-    });
+    return withTenant(ctx(me), (q) => readTeamNow(q));
   },
 
   // Addition 0003d: the function filters on the acting user's permissions, so a link that needs
@@ -1771,9 +1833,28 @@ export const postgresData: CmaData = {
   },
 
   async listTeamMembersNow(me): Promise<TeamMembership[]> {
+    return withTenant(ctx(me), (q) => readTeamMembersNow(q));
+  },
+
+  // The Live board in one transaction (addition 0008zr's web, night N06; the IT audit's 5.6-01): the six reads the page
+  // made in parallel transactions, one after the other on one connection, each function checking its own permission
+  // (monitoring.live first: cma.team_now refuses before anything else is read)
+  async getLiveBoard(me): Promise<LiveBoardData> {
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ user_id: string; team_key: string; team_name: string }>(`select * from cma.team_members_now()`);
-      return r.rows.map((m) => ({ userId: m.user_id, teamKey: m.team_key, teamName: m.team_name }));
+      const now = await readTeamNow(q);
+      const memberships = await readTeamMembersNow(q);
+      const shifts = await readRosterToday(q);
+      const settings = await readSettings(q);
+      const inbound = await readInboundNow(q);
+      const followUp = await readFollowUpSummary(q);
+      const numberSetting = (key: string): number | null => {
+        const v = settings.find((x) => x.key === key)?.value;
+        return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
+      };
+      return {
+        now, memberships, shifts, inbound, followUp, readAt: new Date().toISOString(),
+        settings: { adherenceToleranceMinutes: numberSetting("roster.adherence_tolerance_minutes") ?? 5, targetMinutes: numberSetting("speed_to_lead.target_minutes"), warningPct: numberSetting("tickets.sla_warning_pct") },
+      };
     });
   },
 
@@ -1997,6 +2078,8 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<{ key: string; value: string; is_default: boolean }>(`select * from cma.set_tenant_setting($1, $2)`, [key, value]);
       const x = one(r.rows, "set_tenant_setting");
+      // the cached settings of this tenant are stale now (lib/cache)
+      tenantCache.invalidate(me.tenantId, "settings");
       return { key: x.key, value: x.value, isDefault: x.is_default };
     });
   },
@@ -2098,15 +2181,7 @@ export const postgresData: CmaData = {
   },
 
   async getRosterToday(me): Promise<TodayShift[]> {
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{
-        user_id: string; business_date: string; is_published: boolean; kind: "shift" | "absence" | null;
-        start_time: string | null; end_time: string | null; absence_name: string | null;
-      }>(`select * from cma.roster_today()`);
-      return r.rows.map((d) => ({
-        userId: d.user_id, date: d.business_date, isPublished: d.is_published, kind: d.kind, start: d.start_time, end: d.end_time, absenceName: d.absence_name,
-      }));
-    });
+    return withTenant(ctx(me), (q) => readRosterToday(q));
   },
 
   async getMyProfile(me): Promise<MyProfile> {
@@ -2895,6 +2970,25 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), (q) => readIntake(q, range));
   },
 
+  async getDataQualityReport(me): Promise<DataQualityReport> {
+    // The checks and the stored result's Refreshed at in one statement (addition 0008zr); the outbox guard as below
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ check_key: string; description: string; total: number | null; computed_at: Date | null }>(
+        `select d.*, cma.data_quality_computed_at() as computed_at from cma.data_quality() d`);
+      const o = await q.query<{ n: number }>(
+        `select count(*)::integer as n
+           from cma.outbox_action o
+           join cma.integration_connection c on c.tenant_id = o.tenant_id and c.id = o.connection_id and c.status = 'active'
+          where o.tenant_id = cma.current_tenant_id()
+            and o.status in ('pending', 'failed', 'in_flight') and o.next_attempt_at < now() - make_interval(mins => $1)`,
+        [OUTBOX_LATE_MINUTES]);
+      return {
+        checks: withOutboxPending(r.rows.map((x) => ({ key: x.check_key, description: x.description, total: x.total })), o.rows[0]?.n ?? 0),
+        computedAt: isoAny(r.rows[0]?.computed_at ?? null),
+      };
+    });
+  },
+
   async getDataQuality(me): Promise<DataQualityCheck[]> {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<{ check_key: string; description: string; total: number | null }>(`select * from cma.data_quality()`);
@@ -2933,29 +3027,7 @@ export const postgresData: CmaData = {
   },
 
   async getInboundNow(me): Promise<InboundNow> {
-    return withTenant(ctx(me), async (q) => {
-      const t = (await q.query<InboundDbRow & { business_date: string; waiting_now: number; longest_waiting_seconds: number | null;
-        service_level_seconds: number; waiting_max_minutes: number }>(`select * from cma.inbound_today()`)).rows[0]!;
-      // cma.record_url (migration 0008) builds the call's link from the connection's record_url_call template; null without one
-      const cb = await q.query<CallbackDbRow>(
-        `select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m`);
-      const sum = (await q.query<{ anonymous_count: number; lookback_days: number }>(`select * from cma.missed_callbacks_summary()`)).rows[0]!;
-      const connections = await readConnections(q);
-      return {
-        telephony: connections.telephony,
-        today: connections.telephony ? {
-          ...toFigures(t), date: t.business_date, waitingNow: t.waiting_now, longestWaitingSeconds: t.longest_waiting_seconds,
-          serviceLevelSeconds: t.service_level_seconds, waitingMaxMinutes: t.waiting_max_minutes,
-        } : null,
-        callbacks: connections.telephony ? cb.rows.map((x) => ({
-          callId: x.call_id, connectionId: x.connection_id, sourceId: x.source_id, lineRef: x.line_ref, lineName: x.line_name, market: x.market,
-          reasonCode: x.reason_code, reasonLabel: x.reason_label, startedAt: x.started_at.toISOString(), missedCount: x.missed_count,
-          waitingSeconds: x.waiting_seconds, waitingBusinessSeconds: x.waiting_business_seconds, recordUrl: x.record_url,
-        })) : [],
-        anonymousCount: connections.telephony ? sum.anonymous_count : 0,
-        lookbackDays: sum.lookback_days,
-      };
-    });
+    return withTenant(ctx(me), (q) => readInboundNow(q));
   },
 
   async getCallsOverview(me, range, group, filter): Promise<CallsOverview> {
@@ -3134,10 +3206,7 @@ export const postgresData: CmaData = {
   },
 
   async getFollowUpSummary(me): Promise<FollowUpSummaryAt> {
-    return withTenant(ctx(me), async (q) => {
-      const s = one((await q.query<SummaryDb & { computed_at: Date }>(`select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
-      return { ...toSummary(s), computedAt: s.computed_at.toISOString() };
-    });
+    return withTenant(ctx(me), (q) => readFollowUpSummary(q));
   },
 
   async getFollowUpByOwner(me): Promise<FollowUpRowsAt<FollowUpOwner>> {
@@ -3230,12 +3299,14 @@ export const postgresData: CmaData = {
   async getFlashView(me, query): Promise<{ document: FlashDocumentView; rows: FlashRowsView | null }> {
     // One transaction for the overview's page: the document and the first page of its list, so the view is one data call
     return withTenant(ctx(me), async (q) => {
-      const r = one((await q.query<{ d: FlashDocumentDb; r: FlashRowsDb | null }>(
+      // data quality's Refreshed at (addition 0008zr) rides in the same statement; null for the other overviews
+      const r = one((await q.query<{ d: FlashDocumentDb; r: FlashRowsDb | null; dq_at: Date | null }>(
         `select cma.flash_overview($1, $2, $3::date, $4::date, $5::date) as d,
-                case when $11 then cma.flash_rows($1, $6::jsonb, $7, $8, $9, $10, $12::date, $4::date, $5::date) end as r`,
+                case when $11 then cma.flash_rows($1, $6::jsonb, $7, $8, $9, $10, $12::date, $4::date, $5::date) end as r,
+                case when $1 = 'data_quality' then cma.data_quality_computed_at() end as dq_at`,
         [query.overview, query.market, query.asOf, query.from, query.to, JSON.stringify(query.filters), query.sort, query.descending, query.limit,
           query.offset, query.withRows, query.rowsAsOf])).rows, "flash_overview");
-      return { document: toFlashDocument(r.d), rows: r.r ? toFlashRows(r.r, r.d.labels) : null };
+      return { document: { ...toFlashDocument(r.d), refreshedAt: isoAny(r.dq_at) }, rows: r.r ? toFlashRows(r.r, r.d.labels) : null };
     });
   },
 
@@ -3275,7 +3346,8 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), async (q) => {
       const j = one((await q.query<{ j: DataQualityRowsDb }>(`select cma.data_quality_rows($1, $2, $3, $4) as j`,
         [query.check, query.market, query.limit, query.offset])).rows, "data_quality_rows").j;
-      return { check: j.check, description: j.description, market: j.market, limit: j.limit, offset: j.offset, total: Number(j.total), rows: j.rows };
+      return { check: j.check, description: j.description, market: j.market, limit: j.limit, offset: j.offset, total: Number(j.total), rows: j.rows,
+        computedAt: isoAny(j.computed_at ?? null) };
     });
   },
 

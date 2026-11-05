@@ -1,51 +1,21 @@
-import { FollowUpLive } from "@/components/FollowUpLive";
-import { InboundLive, MissedCallbacks } from "@/components/InboundLive";
-import { LiveBoard, type BoardRow } from "@/components/LiveBoard";
-import { LiveRefresh } from "@/components/LiveRefresh";
+import { LiveBoardLive } from "@/components/LiveBoardLive";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
-import { data, dataIsMock, type TeamNowPerson, type TodayShift } from "@/lib/data";
-import { employersOf, liveRows, teamKeysByUser, teamsOf, tiles } from "@/lib/live";
-import { type FollowUpTileKey } from "@/lib/follow-up";
-import { metricsMore } from "@/lib/metrics";
-import { adherence, cellLabel } from "@/lib/roster";
-import { dateKeyInZone, fmtDate, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
+import { data, dataIsMock } from "@/lib/data";
+import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
-
-/** The Follow-up now strip's entries in the metric catalog, per tile */
-const STRIP_METRIC: Record<FollowUpTileKey, string> = {
-  leadsOpenNotCalled: "leads_open_not_called",
-  leadsPastTarget: "leads_past_target",
-  ticketsAtRisk: "tickets_at_risk",
-  ticketsBreached: "tickets_breached",
-  tasksOverdue: "tasks_overdue",
-  tasksDueToday: "tasks_due_today",
-};
-
-/** The planned shift and the flag next to it, from today's published entry and the day's clock */
-function shiftLine(
-  shift: TodayShift | undefined, person: TeamNowPerson, nowMs: number, tolerance: number,
-): BoardRow["shift"] {
-  if (!shift || !shift.isPublished) return { label: null, published: false, flag: null };
-  const planned = shift.kind ? { kind: shift.kind, start: shift.start, end: shift.end } : null;
-  const flag = adherence(planned, { startedAt: person.day?.startedAt ?? null, endedAt: person.day?.endedAt ?? null }, shift.date, person.timeZone, nowMs, tolerance);
-  return {
-    label: planned ? cellLabel({ kind: planned.kind, start: planned.start, end: planned.end, absenceName: shift.absenceName }) : null,
-    published: true,
-    flag,
-  };
-}
 
 /**
  * Live board (Live, first page of the Live group): who is on the clock right now, in which status
  * and since when, with a tile per group. Shown to people holding monitoring.live (supervisor,
  * manager and analytics in the default ladder); the database checks that permission again on
- * every read (CMA06). Today only, Postgres only (the realtime service comes later): the page
- * reads once and the client re-reads it every 10 seconds while the tab is visible. Staff data,
- * never customer data, and no ranking. Since addition 0008i it opens with today's inbound tiles
- * (InboundLive); the missed calls not called back (MissedCallbacks) close the board since addition
- * 0008z (Martin, 20 October 2026): line names, codes and counts, never a number, a name or the
- * caller's hash.
+ * every read (CMA06). Today only, Postgres only (the realtime service comes later). Since night N06
+ * (addition 0008zr's web) the page reads everything once, in one transaction (data().getLiveBoard), and
+ * the client (LiveBoardLive) polls GET /api/v1/live/board every 10 seconds while the tab is visible and
+ * updates the board from the answer: no page render per poll. Staff data, never customer data, and no
+ * ranking. Since addition 0008i it opens with today's inbound tiles (InboundLive); the missed calls not
+ * called back (MissedCallbacks) close the board since addition 0008z (Martin, 20 October 2026): line
+ * names, codes and counts, never a number, a name or the caller's hash.
  */
 export default async function LiveBoardPage() {
   const r = await resolve();
@@ -65,44 +35,10 @@ export default async function LiveBoardPage() {
     );
   }
 
-  // Four reads: the team now, the current team memberships (0004), today's published shifts and the
-  // adherence tolerance (0005); the flags are derived here from the plan and the clock
-  const [now, memberships, shifts, settings, inbound, followUp] = await Promise.all([
-    data().getTeamNow(me), data().listTeamMembersNow(me), data().getRosterToday(me), data().listSettings(me), data().getInboundNow(me),
-    // the follow-up counts (addition 0008o): leads not called, tickets against their response time, tasks
-    data().getFollowUpSummary(me),
-  ]);
-  const tolerance = Number(settings.find((x) => x.key === "roster.adherence_tolerance_minutes")?.value ?? 5);
-  const numberSetting = (key: string): number | null => {
-    const v = settings.find((x) => x.key === key)?.value;
-    return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
-  };
-  const shiftOf = new Map(shifts.map((x) => [x.userId, x]));
-  const nowMs = new Date().getTime();
-  const rows = liveRows(now.people);
-  const teamKeys = teamKeysByUser(memberships);
-  const teamName = new Map(memberships.map((m) => [m.teamKey, m.teamName]));
-  const viewerZone = me.timeZone;
-  const board: BoardRow[] = rows.map(({ person, group }) => ({
-    userId: person.userId,
-    displayName: person.displayName,
-    organisationKey: person.organisationKey ?? "",
-    organisationName: person.organisationName,
-    group,
-    statusName: person.status?.name ?? null,
-    statusActive: person.status?.isActive ?? true,
-    statusSince: person.day?.statusSince ?? null,
-    // The clock's inputs; an ended day has nothing running, so its figure stands still
-    clock: person.day?.clock ?? null,
-    // Times in the person's own zone, as Team hours shows them, with the zone's short name when
-    // its clock differs from the viewer's (Madrid and Amsterdam share one, London does not)
-    inLabel: person.day ? fmtTime(person.day.startedAt, person.timeZone, me.locale) : null,
-    outLabel: person.day?.endedAt ? fmtTime(person.day.endedAt, person.timeZone, me.locale) : null,
-    zoneLabel: person.day && !sameOffset(person.day.startedAt, person.timeZone, viewerZone)
-      ? fmtZoneShort(person.day.startedAt, person.timeZone, me.locale) : null,
-    teams: (teamKeys.get(person.userId) ?? []).map((key) => ({ key, name: teamName.get(key) ?? key })),
-    shift: shiftLine(shiftOf.get(person.userId), person, nowMs, tolerance),
-  }));
+  // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound and follow-up
+  const board = await data().getLiveBoard(me);
+  // The board's words only (a slice of the copy object; the whole one weighed about 90 kB in every poll's page before)
+  const liveCopy = { live: copy.live, hints: copy.hints, inbound: copy.inbound, reports: copy.reports, followUp: copy.followUp, dashboard: copy.dashboard };
 
   return (
     <Shell copy={copy} me={me} active="live-board" wide>
@@ -111,36 +47,9 @@ export default async function LiveBoardPage() {
         <span className="ml-3 text-small font-normal text-p4a-muted">{fmtDate(dateKeyInZone(new Date(), me.timeZone), me.locale)}</span>
       </PageTitle>
       <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
-      <LiveRefresh />
 
-      <div className="mb-8">
-        <InboundLive inbound={inbound} copy={copy} locale={me.locale} canOpenMetrics={me.permissions.includes("tenant.configure")} />
-      </div>
-
-      <div className="mb-8">
-        <FollowUpLive summary={followUp} copy={copy} locale={me.locale}
-          targetMinutes={numberSetting("speed_to_lead.target_minutes")} warningPct={numberSetting("tickets.sla_warning_pct")}
-          moreOf={(key) => metricsMore(me.permissions, `live.follow_up_now.${STRIP_METRIC[key]}`, copy.hints.howComputed)} />
-      </div>
-
-      <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>
-      {rows.length === 0 ? (
-        <Card>
-          <p className="text-body text-p4a-muted">{t.noPeople}</p>
-        </Card>
-      ) : (
-        <LiveBoard
-          rows={board}
-          tiles={tiles(rows, now.statusFlags)}
-          employers={employersOf(rows)}
-          teams={teamsOf(rows, memberships)}
-          copy={copy}
-        />
-      )}
-
-      <div className="mt-8">
-        <MissedCallbacks inbound={inbound} copy={copy} locale={me.locale} timeZone={me.timeZone} />
-      </div>
+      <LiveBoardLive initial={board} viewer={{ locale: me.locale, timeZone: me.timeZone }} copy={liveCopy}
+        canOpenMetrics={me.permissions.includes("tenant.configure")} />
 
       {dataIsMock ? (
         <div className="mt-6">

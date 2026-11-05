@@ -182,8 +182,8 @@
   {
     "path": "/api/v1/reports/flash/rows?overview=orders",
     "subject": "manager",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 13
   },
   {
     "path": "/reports/funnel",
@@ -243,7 +243,13 @@
     "path": "/api/v1/telephony/inbound-now",
     "subject": "manager",
     "tx": 2,
-    "rt": 12
+    "rt": 10
+  },
+  {
+    "path": "/api/v1/live/board",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 16
   },
   {
     "path": "/api/v1/team/shifts-today",
@@ -346,6 +352,9 @@
     "subject": "admin",
     "tx": 1,
     "rt": 5,
-    "status": [200, 404]
+    "status": [
+      200,
+      404
+    ]
   }
 ]

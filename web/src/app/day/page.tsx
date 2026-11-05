@@ -45,17 +45,17 @@ export default async function MyDayPage() {
             endedLabel={workday.endedAt ? fmtTime(workday.endedAt, me.timeZone, me.locale) : null}
             sessionStartedLabel={workday.sessions > 1 ? fmtTime(workday.sessionStartedAt, me.timeZone, me.locale) : null}
             dayEndsLabel={fmtTime(workday.dayEndsAt, me.timeZone, me.locale)}
-            copy={copy}
+            copy={{ myDay: copy.myDay }}
           />
           {workday.status === "ended" && workday.canClockInAgain ? (
             <div className="mt-6 max-w-md">
-              <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={copy} againUntil={fmtTime(workday.dayEndsAt, me.timeZone, me.locale)} />
+              <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={{ welcome: copy.welcome }} againUntil={fmtTime(workday.dayEndsAt, me.timeZone, me.locale)} />
             </div>
           ) : null}
         </>
       ) : (
         <div className="max-w-md">
-          <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={copy} />
+          <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={{ welcome: copy.welcome }} />
         </div>
       )}
       {dataIsMock ? (
