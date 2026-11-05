@@ -312,9 +312,11 @@ begin
      || 'subscriptions|holding_subscriptions|[[], ["market"], ["market", "status"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]]|subscriptions,active_subscriptions,paused_subscriptions,amount_per_cycle,holding_subscriptions,devices_on_holding,devices_per_holding_subscription|subscriptions,active_subscriptions,paused_subscriptions,holding_subscriptions,devices_on_holding' then
     v_bad := v_bad || 'the catalog; ';
   end if;
+  -- since addition 0008zw (142) the orders' headline is split by order kind too; its definition stays 0008zn
   if (select string_agg(o.key || ':' || cma.flash_definition_version(o.key) || ':' || coalesce(cma.flash_split_dim_of(o.key), '-'), ',' order by o.sort_order)
       from cma.flash_overviews() o)
-     is distinct from 'customers:0008zu:-,subscriptions:0008zu:status,installed_base:0008zt:-,churn:0008zn:-,orders:0008zn:-,payments:0008zn:-,'
+     is distinct from 'customers:0008zu:-,subscriptions:0008zu:status,installed_base:0008zt:-,churn:0008zn:-,orders:0008zn:'
+                      || (case when exists (select 1 from cma.schema_migration where version = '0008zw') then 'kind' else '-' end) || ',payments:0008zn:-,'
                       || 'open_deals:0008zn:-,open_tickets:0008zn:-,open_tasks:0008zn:-,reviews:0008zn:-,data_quality:0008zn:-' then
     v_bad := v_bad || 'versions or split; ';
   end if;

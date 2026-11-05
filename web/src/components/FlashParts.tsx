@@ -16,18 +16,16 @@ import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesVie
 import {
   amountsOf, averageRating, bandRows, barShare, cardStatusHint, cellFilters, changeLineOf, dataQualityRowShown, FLASH_BAND_DIMS, FLASH_DEFINITION_STATUS,
   FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS, FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_RATIOS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf,
-  measureHint, measureNotApplicable, moreThanRows, overviewOf, rowsOfSet, setMeasures, splitLine, splitOf, statusTone, type FlashKey, type FlashOverviewDef,
-  type FlashStatusSettings,
+  measureHint, measureNotApplicable, moreThanRows, overviewOf, rowsOfSet, setMeasures, splitKeyLabel, splitLine, splitOf, splitOrderOf, statusTone, flashHref,
+  type FlashKey, type FlashOverviewDef, type FlashPath, type FlashStatusSettings,
 } from "@/lib/flash";
 import { fmtDate, fmtDateTimeShort, fmtLastRead } from "@/lib/time";
 
 type T = Copy["flash"];
 type Query = Record<string, string>;
 
-const href = (query: Query) => {
-  const qs = new URLSearchParams(query).toString();
-  return `/reports/flash${qs ? `?${qs}` : ""}` as Route;
-};
+/** A link on a Flash page (lib/flash flashHref): Reports → Flash unless the overview is rendered on another page (0008zw) */
+const href = (query: Query, path: FlashPath = "/reports/flash") => flashHref(path, query) as Route;
 
 export function fmtNumber(n: number, locale: string, digits = 0): string {
   return new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(n);
@@ -205,10 +203,11 @@ export function changeText(value: number | null, previous: number | null, previo
 export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc: FlashDocumentView; locale: "en" | "nl"; t: T }) {
   const totals = doc.totals ?? {};
   const order = [def.headline, ...def.measures.filter((m) => m !== def.headline)];
-  // the headline's split per device-holding status, each in the subscription app's word (addition 0008zu): the document's
-  // rows are the market's when one is chosen; none for a snapshot taken before the split was stored
-  const split = splitLine(splitOf(def, doc.rows, null, doc.statusSettings?.deviceHoldingStatuses ?? []),
-    (x) => fmtNumber(x, locale, 0));
+  // the headline's split: Total subscriptions per device-holding status, each in the subscription app's word (addition
+  // 0008zu); the orders per order kind in the reader's language, Unknown only above 0 (addition 0008zw). The document's
+  // rows are the market's when one is chosen; none for a snapshot taken before the split's rows were stored
+  const split = splitLine(splitOf(def, doc.rows, null, splitOrderOf(def, doc.statusSettings)),
+    (x) => fmtNumber(x, locale, 0), (k) => splitKeyLabel(def.key, k, t));
   return (
     <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5" data-testid="flash-totals">
       {order.map((m) => (
@@ -246,8 +245,10 @@ function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, di
  * A breakdown set as a table (7.6): its dims, then each measure, a total row first; the headline (or the first count
  * measure) with an inline bar. A count cell opens its records (the row's dims and the measure as the list's filters)
  */
-export function BreakdownTable({ def, doc, set, query, locale, t }: {
+export function BreakdownTable({ def, doc, set, query, locale, t, path }: {
   def: FlashOverviewDef; doc: FlashDocumentView; set: readonly string[]; query: Query; locale: "en" | "nl"; t: T;
+  /** The page the overview is rendered on, whose address a cell's link keeps (0008zw); Reports → Flash when left out */
+  path?: FlashPath;
 }) {
   const rows = rowsOfSet(doc.rows, set);
   const barMeasure = def.countMeasures.includes(def.headline) ? def.headline : def.countMeasures[0] ?? def.headline;
@@ -256,7 +257,7 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
   const max = Math.max(0, ...rows.map((r) => (typeof r.measures[barMeasure] === "number" ? (r.measures[barMeasure] as number) : 0)));
   const cellLink = (r: FlashDocRowView, m: string | null) => href({
     ...query, ...Object.fromEntries(Object.entries(cellFilters(r.dims, m)).map(([k, v]) => [k === "measure" ? k : `f_${k}`, v])), page: "1",
-  });
+  }, path);
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-body leading-table" data-testid={`flash-breakdown-${set.join("-")}`}>
@@ -326,8 +327,10 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
  * opens its records (the band and the measure as the list's filters). An age band table ends with the cumulative "More
  * than N months" lines, worked out from its rows
  */
-export function BandTable({ def, doc, set, query, locale, t }: {
+export function BandTable({ def, doc, set, query, locale, t, path }: {
   def: FlashOverviewDef; doc: FlashDocumentView; set: readonly string[]; query: Query; locale: "en" | "nl"; t: T;
+  /** The page the overview is rendered on (0008zw); Reports → Flash when left out */
+  path?: FlashPath;
 }) {
   const dim = set[1] ?? "";
   const measures = setMeasures(def, set);
@@ -335,7 +338,7 @@ export function BandTable({ def, doc, set, query, locale, t }: {
   const cumulative = FLASH_BAND_DIMS[def.key]?.[dim]?.cumulative ?? false;
   const cumulativeMeasure = measures[0] ?? "";
   const label = (band: string) => (band === "unknown" ? t.unknownValue : band);
-  const cellLink = (band: string, m: string | null) => href({ ...query, [`f_${dim}`]: band, ...(m ? { measure: m } : {}), page: "1" });
+  const cellLink = (band: string, m: string | null) => href({ ...query, [`f_${dim}`]: band, ...(m ? { measure: m } : {}), page: "1" }, path);
   if (rows.length === 0) return <p className="text-body text-p4a-muted">{t.empty}</p>;
   return (
     <div className="overflow-x-auto">
@@ -443,8 +446,10 @@ function cellOf(key: string, kind: string, value: unknown, row: Record<string, u
 }
 
 /** The records: the overview's columns (the links on the ids), sortable on the whitelist, 500 a page */
-export function RowsTable({ def, rows, sort, descending, query, locale, timeZone, t }: {
+export function RowsTable({ def, rows, sort, descending, query, locale, timeZone, t, path }: {
   def: FlashOverviewDef; rows: FlashRowsView; sort: string | null; descending: boolean; query: Query; locale: "en" | "nl"; timeZone: string; t: T;
+  /** The page the overview is rendered on (0008zw); Reports → Flash when left out */
+  path?: FlashPath;
 }) {
   const frozen = rows.mode === "snapshot";
   const columns = (frozen ? FLASH_FROZEN_COLUMNS : FLASH_LIST_COLUMNS[def.key])
@@ -471,7 +476,7 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
               const dir = active && !descending ? "desc" : "asc";
               return (
                 <th key={c.key} scope="col" className={`px-3 py-2 font-semibold ${right ? "text-right" : "text-left"}`} aria-sort={active ? (descending ? "descending" : "ascending") : undefined}>
-                  <Link href={href({ ...query, sort: key, dir, page: "1" })} className="text-p4a-heading underline">{label}{active ? (descending ? " ↓" : " ↑") : ""}</Link>
+                  <Link href={href({ ...query, sort: key, dir, page: "1" }, path)} className="text-p4a-heading underline">{label}{active ? (descending ? " ↓" : " ↑") : ""}</Link>
                 </th>
               );
             })}

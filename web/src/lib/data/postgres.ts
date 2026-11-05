@@ -1041,7 +1041,9 @@ function toMaintenanceRow(x: MaintenanceRowDb): MaintenanceRow {
   };
 }
 type ReviewsPageDb = {
-  figures: ReviewFiguresDb; previous: ReviewFiguresDb; previous_from: string; previous_to: string; previous_partial: boolean;
+  /** The period shown, and whether it is All (addition 0008zw); absent before 0008zw */
+  from?: string; to?: string; all?: boolean;
+  figures: ReviewFiguresDb; previous: ReviewFiguresDb; previous_from: string | null; previous_to: string | null; previous_partial: boolean;
   distribution: { stars: number; reviews: number; previous: number }[];
   groups: (ReviewFiguresDb & { key: string })[];
   markets: { market: string; name: string | null; current: ReviewFiguresDb; previous: ReviewFiguresDb }[];
@@ -2568,13 +2570,16 @@ export const postgresData: CmaData = {
   },
 
   async getReviews(me, range, group, market): Promise<ReviewsReport> {
-    assertReportRange(range);
+    // a period keeps the 92 days; All (from null, addition 0008zw) runs from the tenant's first counted review to its end
+    if (range.from === null) assertDate(range.to, "to");
+    else assertReportRange({ from: range.from, to: range.to });
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the 92 days, the market and the group first (addition 0008ze)
+      // the function checks the permission, the 92 days of a period, the market and the group first (addition 0008ze; All, 0008zw)
       const j = one((await q.query<{ j: ReviewsPageDb }>(`select cma.reviews_page($1::date, $2::date, $3, $4) as j`,
         [range.from, range.to, market, group])).rows, "reviews_page").j;
       return {
-        ...range, group, market, current: toReviewFigures(j.figures), previous: toReviewFigures(j.previous),
+        from: j.from ?? range.from ?? range.to, to: j.to ?? range.to, all: j.all ?? range.from === null,
+        group, market, current: toReviewFigures(j.figures), previous: toReviewFigures(j.previous),
         previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial,
         distribution: j.distribution, byPeriod: j.groups.map((g) => ({ key: g.key, ...toReviewFigures(g) })),
         byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, current: toReviewFigures(m.current), previous: toReviewFigures(m.previous) })),

@@ -38,7 +38,7 @@ export function openGroupOf(value: string | undefined, groupIds: readonly string
   return value && groupIds.includes(value) ? value : null;
 }
 
-export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "trend" | "person" | "flag" | "gear";
+export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "trend" | "person" | "box" | "flag" | "gear";
 export type ShellPage =
   | "welcome"
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
@@ -61,6 +61,8 @@ export type ShellPage =
   | "reviews"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
+  /** Installed base (addition 0008zw): Flash's Installed base overview as a page of the Assets group, the same read and files */
+  | "installed-base"
   /** Flash (addition 0008zn, brief B21): ten overviews and Data quality, one click each, now or as of a snapshot's date */
   | "flash"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
@@ -79,7 +81,8 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | `/live/${string}` | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance"
+  | "/reports/installed-base" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
 
@@ -154,18 +157,7 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       items: contactCenters.map((c): NavItem => ({ page: "live-board", href: `/live/${c.key}`, label: c.name, permission: "monitoring.live" })),
     },
     {
-      // Team (night build, 7 October 2026): the people and, with 0005, the roster. After Live and before
-      // Time, so an agent's keys (Welcome, My day, My hours) do not move: agents hold none of these.
-      kind: "group",
-      id: "team",
-      label: copy.nav.team,
-      icon: "people",
-      items: [
-        { page: "people", href: "/team/people", label: copy.nav.people, permission: ["users.manage_agents", "users.manage_all"] },
-        { page: "roster", href: "/roster/planner", label: copy.nav.roster, permission: "roster.manage" },
-      ],
-    },
-    {
+      // Time: a person's own day, hours and schedule, and the team's hours; after Live since addition 0008zw (Team follows it)
       kind: "group",
       id: "time",
       label: copy.nav.time,
@@ -175,6 +167,19 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         { page: "my-hours", href: "/hours", label: copy.nav.myHours, permission: "workday.own" },
         { page: "my-schedule", href: "/schedule", label: copy.nav.mySchedule, permission: "roster.view" },
         { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
+      ],
+    },
+    {
+      // Team (night build, 7 October 2026): the people and, with 0005, the roster. After Time since addition 0008zw
+      // (Martin, 5 November 2026; after Live and before Time before), so the keys of Time's pages come first for a
+      // manager and an admin; an agent's keys (Welcome, Messages, My day, My hours) do not move: agents hold none of these.
+      kind: "group",
+      id: "team",
+      label: copy.nav.team,
+      icon: "people",
+      items: [
+        { page: "people", href: "/team/people", label: copy.nav.people, permission: ["users.manage_agents", "users.manage_all"] },
+        { page: "roster", href: "/roster/planner", label: copy.nav.roster, permission: "roster.manage" },
       ],
     },
     {
@@ -243,7 +248,8 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       ],
     },
     {
-      // Customers (addition 0008zv): what happens after the order; team figures only, as every report
+      // Customers (addition 0008zv): what happens after the order; team figures only, as every report. Since addition
+      // 0008zw (Martin, 5 November 2026) Maintenance is Assets'
       kind: "group",
       id: "customers",
       label: copy.nav.customers,
@@ -255,15 +261,28 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
         // average rating, the negative reviews and how they link to an order or a contact
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
-        // Maintenance (addition 0008zi): the asset register's devices' due components and end of life per month, market and
-        // model, bundled into planned exchanges, with the device list of a cell
+      ],
+    },
+    {
+      // Assets (addition 0008zw, Martin, 5 November 2026): the devices the asset register holds, after Customers. Team
+      // figures only, for the report permissions, as Flash
+      kind: "group",
+      id: "assets",
+      label: copy.nav.assets,
+      icon: "box",
+      items: [
+        // Installed base: Flash's Installed base overview (cma.flash_overview and its first page of records, the same
+        // filters, As of and files) as a page of its own; Flash keeps its own overview
+        { page: "installed-base", href: "/reports/installed-base", label: copy.nav.installedBase, permission: ["reports.view", "performance.team"] },
+        // Maintenance (addition 0008zi; in Customers from 0008zv to 0008zw): the asset register's devices' due components
+        // and end of life per month, market and model, bundled into planned exchanges, with the device list of a cell
         { page: "maintenance", href: "/reports/maintenance", label: copy.nav.maintenance, permission: ["reports.view", "performance.team"] },
       ],
     },
     {
       // Campaigns (addition 0008v, brief N19-A part 3): Campaign monitoring, the journeys as placeholders for the
       // compliance and campaign monitors, for the report permissions; after Customers since addition 0008zv (after
-      // Reports before), so no key above it moves
+      // Reports before) and after Assets since 0008zw, so no key above it moves
       kind: "group",
       id: "campaigns",
       label: copy.nav.campaigns,

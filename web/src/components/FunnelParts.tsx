@@ -34,12 +34,25 @@ function hintOf(copy: Copy): Hint {
 }
 
 /** Week or day as links; G moves to the next */
-export function FunnelGroupSwitch({ pathname, group, query, copy }: {
+export function FunnelGroupSwitch({ pathname, group, query, copy, fixed }: {
   pathname: "/reports/funnel" | "/reports/cancellations" | "/reports/reviews"; group: FunnelGroup; query: Record<string, string>; copy: Copy;
+  /** A grouping the period fixes (Reviews' All by month, addition 0008zw): shown as the one choice, without G */
+  fixed?: string;
 }) {
   const t = copy.funnel;
   const labels: Record<FunnelGroup, string> = { week: t.week, day: t.day };
   const next = nextFunnelGroup(group);
+  if (fixed !== undefined) {
+    return (
+      <div className="flex flex-col gap-2 text-small font-semibold">
+        <span>{t.groupBy}</span>
+        <nav aria-label={t.groupBy} className="flex flex-wrap gap-2">
+          <span aria-current="page" data-testid="group-fixed"
+            className="inline-flex h-10 items-center rounded-button border border-p4a-deepblue bg-p4a-deepblue px-4 text-body font-semibold text-white">{fixed}</span>
+        </nav>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-2 text-small font-semibold">
       <span className="flex items-center gap-2">
