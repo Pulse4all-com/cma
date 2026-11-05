@@ -10,7 +10,11 @@
 -- FAIL, and the last row is the verdict (0008zn verified), because Cloud SQL Studio shows no notices. Run as your own IAM
 -- login after 122_flash.sql and 125_flash_watch_cadence.sql (0008zo, whose check is B28: without it B28 reads FAIL), dev
 -- first, then prod. Since 136_flash_insights.sql (0008zt) A3, B2 and B8 expect its settings, figures and definition
--- versions (without it they read FAIL); 137_verify_flash_insights.sql is 0008zt's own check.
+-- versions (without it they read FAIL); 137_verify_flash_insights.sql is 0008zt's own check. Since 138_flash_totals.sql
+-- (0008zu) B2 expects the subscriptions' split row (GB/active: the holding statuses are active alone here, so every other
+-- figure stays as it was), B8 the version 0008zu, and the history before the first take is stored under each overview's
+-- own definition version (the watch compares no overview across a change of its definition); 139_verify_flash_totals.sql
+-- is 0008zu's own check.
 -- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
 -- 40 ok, 0 FAIL, 4 skip" (44 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
 -- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 43 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
@@ -621,6 +625,8 @@ begin
                         || '0/GB:devices_on_holding=0,devices_per_holding_subscription=0.00,holding_subscriptions=2 '
                         || '1/GB:devices_on_holding=1,devices_per_holding_subscription=1.00,holding_subscriptions=1 '
                         || '2/GB:devices_on_holding=0,holding_subscriptions=0 3+/GB:devices_on_holding=0,holding_subscriptions=0 '
+                        -- since 0008zu (138): Total subscriptions' split, one row per holding status and market
+                        || 'GB/active:holding_subscriptions=3 '
                         || 'GB/in_retry/active/shop-gb:active_subscriptions=1,amount_per_cycle={"GBP": 20.00},devices_on_holding=1,devices_per_holding_subscription=1.00,holding_subscriptions=1,paused_subscriptions=0,subscriptions=1 '
                         || 'GB/paid/active/shop-gb:active_subscriptions=2,amount_per_cycle={"EUR": 30.00, "GBP": 15.00},devices_on_holding=0,devices_per_holding_subscription=0.00,holding_subscriptions=2,paused_subscriptions=0,subscriptions=2 '
                         || 'GB/canceled/canceled/shop-gb:active_subscriptions=0,amount_per_cycle={},devices_on_holding=0,holding_subscriptions=0,paused_subscriptions=0,subscriptions=1 '
@@ -707,18 +713,19 @@ begin
 
     perform set_config('role', 'cma_owner', true);
     -- the history before the first take: 21 to 27 October as succeeded runs (as the owner), the live figures as of each
-    -- date stored for each, the GB store's orders 5 a day, and on 27 October 100 active customers in GB and no row for the check
+    -- date stored for each under its overview's definition version (since 0008zu, as a take stores them), the GB store's
+    -- orders 5 a day, and on 27 October 100 active customers in GB and no row for the check
     -- active_subscription_without_device; the register's runs every 5 minutes until 20:00 on 28 October
     for v_n in 0 .. 6 loop
       insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, due_at, started_at, finished_at, status)
       values (uuidv7(), v_t1, date '2026-10-21' + v_n, cma.flash_due_at_of('Europe/Amsterdam', '00:30', date '2026-10-21' + v_n), now(), now(), 'succeeded');
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
-      select v_t1, date '2026-10-21' + v_n, x.key, c.dims, c.measures, '0008zn', now(),
+      select v_t1, date '2026-10-21' + v_n, x.key, c.dims, c.measures, cma.flash_definition_version(x.key), now(),
              (select r.id from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = date '2026-10-21' + v_n)
       from cma.flash_overviews() x
       cross join lateral cma.flash_compute_of(v_t1, x.key, date '2026-10-21' + v_n, date '2026-10-21' + v_n, date '2026-10-21' + v_n) c;
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
-      values (v_t1, date '2026-10-21' + v_n, 'orders', '{"market": "GB"}', '{"orders": 5, "units": 5, "amount": {"GBP": 50}}', '0008zn', now(),
+      values (v_t1, date '2026-10-21' + v_n, 'orders', '{"market": "GB"}', '{"orders": 5, "units": 5, "amount": {"GBP": 50}}', cma.flash_definition_version('orders'), now(),
               (select r.id from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = date '2026-10-21' + v_n));
     end loop;
     update cma.flash_snapshot s set measures = s.measures || '{"active_customers": 100}'
@@ -785,8 +792,9 @@ begin
     v_txt := v_txt || (select count(distinct s.overview) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30')::text
              || ' ' || (select string_agg(distinct s.definition_version collate "C", ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30');
     v_rows := v_rows || array['24', 'B8 the snapshot equals the computation as of its date, all eleven overviews',
-      -- the definitions' versions: 0008zn, and 0008zt for customers, subscriptions and installed_base since 136
-      case when v_txt = '11 0008zn,0008zt' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+      -- the definitions' versions: 0008zn, 0008zt for installed_base since 136 and 0008zu for customers and subscriptions
+      -- since 138
+      case when v_txt = '11 0008zn,0008zt,0008zu' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B9. a second take of the same date writes nothing; no id list on a date that is no month end
     v_n := (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1);

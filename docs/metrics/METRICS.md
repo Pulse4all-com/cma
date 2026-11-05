@@ -33665,12 +33665,12 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Active customers** on /reports/flash · Active customers (Actieve klanten)
 
-Active customers: store customers with at least one subscription of their store whose status is in flash.active_subscription_statuses (Active customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+Active customers: store customers with at least one subscription of their store whose status is in flash.device_holding_statuses (Active customer; since addition 0008zu: a customer whose only subscription failed is a customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card, with no split; the segment rows add up to it.
 
 **Formula as computed**
 
 ```
-count(*) where active_subscriptions > 0: at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.active_subscription_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu): at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.device_holding_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of). Snapshots before 0008zu (definition 0008zt and earlier) counted flash.active_subscription_statuses; the landing marks a comparison across the change.
 ```
 
 **Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
@@ -33694,20 +33694,20 @@ count(*) where active_subscriptions > 0: at least one subscription of the custom
 
 **Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
 
-**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot. A comparison with a snapshot computed by an earlier definition (before 0008zu: the active statuses) is marked on the landing; the watch compares no overview across a change of its definition.
 
 **Settings**
 
 | Setting | Default | Pulse4all |
 |---|---|---|
-| `flash.active_subscription_statuses` | active | active |
+| `flash.device_holding_statuses` | active | active,failed |
 | `commerce.required_contact_refs` |  | netsuite |
 
 **Who may see it** `reports.view` or `performance.team`
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -33722,18 +33722,18 @@ count(*) where active_subscriptions > 0: at least one subscription of the custom
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customer_figures_of (0008zu) is the one query behind the figure and its list, and 123 and 139 recompute it from fixtures; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.paused_customers`
 
 **Paused customers** on /reports/flash · Paused customers (Gepauzeerde klanten)
 
-Store customers with a paused subscription and none active (Active customers; docs/definitions.md, Flash overview measures).
+Store customers with a paused subscription and none in a device-holding status (since addition 0008zu; Active customers; docs/definitions.md, Flash overview measures).
 
 **Formula as computed**
 
 ```
-count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; before: active_subscriptions = 0). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
 ```
 
 **Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
@@ -33763,14 +33763,14 @@ count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping s
 
 | Setting | Default | Pulse4all |
 |---|---|---|
-| `flash.active_subscription_statuses` | active | active |
+| `flash.device_holding_statuses` | active | active,failed |
 | `commerce.required_contact_refs` |  | netsuite |
 
 **Who may see it** `reports.view` or `performance.team`
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -33785,7 +33785,7 @@ count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping s
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customer_figures_of (0008zu) is the one query behind the figure and its list, and 123 and 139 recompute it from fixtures; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.linked_to_contact`
 
@@ -33915,9 +33915,9 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 #### `flash.subscriptions.subscriptions`
 
-**Subscriptions** on /reports/flash · Subscriptions (Abonnementen)
+**All statuses** on /reports/flash · All statuses (Alle statussen)
 
-Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures).
+All statuses: the subscriptions the latest full read returns in every status, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures). Labelled "All statuses" since addition 0008zu (was "Subscriptions"), so it never reads as larger than the headline, Total subscriptions.
 
 **Formula as computed**
 
@@ -33975,7 +33975,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Active subscriptions** on /reports/flash · Active subscriptions (Actieve abonnementen)
 
-Of those, a status in `flash.active_subscription_statuses` (Active subscriptions; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+Of those, a status in `flash.active_subscription_statuses`: the paying ones (Active subscriptions; docs/definitions.md, Flash overview measures). Since addition 0008zu the active part of Total subscriptions, no longer the overview's headline.
 
 **Formula as computed**
 
@@ -34013,7 +34013,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -34147,14 +34147,14 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 #### `flash.subscriptions.holding_subscriptions`
 
-**Holding subscriptions** on /reports/flash · Holding subscriptions (Apparaathoudende abonnementen)
+**Total subscriptions** on /reports/flash · Total subscriptions (Totaal abonnementen)
 
-Subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Active subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Not active_subscriptions, which counts the paying ones.
+Total subscriptions: the subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Total subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Since addition 0008zu the Subscriptions overview's headline on its card, split per holding status (the subscription app's word for each). Not active_subscriptions, which counts the paying ones and is the active part of the total.
 
 **Formula as computed**
 
 ```
-count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, [market, status] (its split: every holding status per market with a holding subscription, zeros included, adding up to the market's figure; 0008zu), the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).
 ```
 
 **Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
@@ -34174,7 +34174,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
 
-**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot. Since 0008zu its card compares Total subscriptions; a comparison with a snapshot computed by an earlier definition is marked; the watch compares no overview across a change of its definition.
 
 **Settings**
 
@@ -34187,7 +34187,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `cma.flash_headline` (0008zu); `cma.flash_split_of` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -34201,7 +34201,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
+Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 and 139 recompute it from fixtures. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
 
 #### `flash.subscriptions.devices_on_holding`
 

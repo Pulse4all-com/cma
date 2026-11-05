@@ -1383,12 +1383,13 @@ async function flashChecks() {
   expect("flash: every form out of range is a 400 (overview, sort, measure, filter, limit, market, a future As of, part, check)",
     await Promise.all(bad.map(async (r) => (await call(ANALYST, r)).status)), bad.map(() => 400), bad.map(() => 200));
   const landing = (await call(ANALYST, "/api/v1/reports/flash")).body?.data;
-  // since addition 0008zt the customers', subscriptions' and installed base's definitions are 0008zt's; the landing gives the
-  // statuses its figures count and the tenant's meanings of them (the hints), as lists and an object
+  // since addition 0008zt the installed base's definition is 0008zt's, since 0008zu the customers' and subscriptions' 0008zu's;
+  // each card names the definition of the figure it is compared with (none without one) and, live, no stored split; the
+  // landing gives the statuses its figures count and the tenant's meanings of them (the hints), as lists and an object
   expect("flash: the landing has the eleven overviews in their order, each with its definition version and set_up; the hints' statuses",
     [landing?.overviews?.map((o) => o.key),
-      landing?.overviews?.every((o) => o.definitionVersion === (["customers", "subscriptions", "installed_base"].includes(o.key) ? "0008zt" : "0008zn")
-        && typeof o.setUp === "boolean"),
+      landing?.overviews?.every((o) => o.definitionVersion === (["customers", "subscriptions"].includes(o.key) ? "0008zu" : o.key === "installed_base" ? "0008zt" : "0008zn")
+        && typeof o.setUp === "boolean" && (o.previousDefinitionVersion === null || typeof o.previousDefinitionVersion === "string") && o.split === null),
       Array.isArray(landing?.statusSettings?.deviceHoldingStatuses) && Array.isArray(landing?.statusSettings?.activeSubscriptionStatuses)
         && typeof landing?.statusSettings?.statusMeanings === "object"],
     [["customers", "subscriptions", "installed_base", "churn", "orders", "payments", "open_deals", "open_tickets", "open_tasks", "reviews", "data_quality"], true, true],
@@ -1396,6 +1397,13 @@ async function flashChecks() {
   const head = (await call(ANALYST, "/api/v1/reports/flash?overview=orders&part=headline")).body?.data;
   expect("flash: a card's live headline: the overview's headline measure, a number when set up",
     [head?.headline, head?.setUp === false || typeof head?.value === "number"], ["orders", true], ["", false]);
+  // since addition 0008zu: the subscriptions' headline is Total subscriptions, split per device-holding status in the
+  // tenant's order (zeros included), the split adding up to it; no split for another overview
+  const total = (await call(ANALYST, "/api/v1/reports/flash?overview=subscriptions&part=headline")).body?.data;
+  expect("flash: Total subscriptions' live headline with its split per holding status, adding up; its definition; no split elsewhere",
+    [total?.headline, total?.setUp === false || (Array.isArray(total?.split) && total.split.reduce((n, x) => n + x.value, 0) === total.value),
+      total?.definitionVersion, head?.split],
+    ["holding_subscriptions", true, "0008zu", null], ["", false, "", []]);
   const rows = (await call(ANALYST, "/api/v1/reports/flash/rows?overview=subscriptions&sort=amount_per_cycle&dir=desc&limit=50")).body?.data;
   const cur = (rows?.rows ?? []).map((r) => r.currency);
   expect("flash: amounts sorted within currency (currency first), the total before the limit",
