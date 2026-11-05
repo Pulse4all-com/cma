@@ -8,7 +8,7 @@ import { ErrorCopyProvider } from "@/components/ErrorCopy";
 
 // Montserrat is the only typeface (style guide 3.1). The variable font ships with the app, so no request leaves the
 // browser for fonts. Since night N06 (5 November 2026) it is a woff2 subset of the Latin ranges the Workspace's
-// languages and markets use (106 kB in place of the 745 kB TTF; the weight axis 100 to 900 kept; made with
+// languages and markets use (108 kB in place of the 745 kB TTF; the weight axis 100 to 900 kept; made with
 // pyftsubset, docs/night-2026-11-06/NIGHT_NOTES.md), preloaded by next/font with font-display swap.
 const montserrat = localFont({
   src: "../fonts/Montserrat-VF.woff2",

@@ -17,7 +17,10 @@
  * shows the frame at once and the page's data follows in the same request. Before (Decision log 18 October 2026) the
  * links never prefetched: no loading boundary existed, and the Live board's router.refresh() every 10 seconds
  * invalidated the client cache, so each poll fetched every visible link again; the board now polls an API route
- * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page.
+ * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page, and so does
+ * every rail link while Reports → Follow-up is the active page: that page still polls with router.refresh()
+ * (LiveRefresh), which invalidates the client cache and would fetch every visible link again on each poll (the
+ * measurement of 18 October 2026: five requests per poll per tab); its own API poll is the remainder (NIGHT_NOTES).
  *
  * Since 23 October 2026 the frame is exactly the viewport: main and the rail are the only scroll containers.
  */
@@ -154,6 +157,7 @@ export async function Shell({
                 <li key={entry.item.page}>
                   <Link
                     href={entry.item.href}
+                    prefetch={active === "follow-up" ? false : undefined}
                     aria-current={current ? "page" : undefined}
                     data-shortcut={entry.item.key ?? undefined}
                     aria-keyshortcuts={entry.item.key ?? undefined}
@@ -186,6 +190,7 @@ export async function Shell({
                     <li key={item.page}>
                       <Link
                         href={item.href}
+                        prefetch={active === "follow-up" ? false : undefined}
                         aria-current={current ? "page" : undefined}
                         data-shortcut={item.key ?? undefined}
                         aria-keyshortcuts={item.key ?? undefined}

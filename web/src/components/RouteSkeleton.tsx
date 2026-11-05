@@ -1,16 +1,21 @@
+import { cookies } from "next/headers";
+import { RAIL_COOKIE } from "@/lib/nav";
+
 /**
  * The route skeleton (night N06, 5 November 2026): what a click shows within 100 ms, before the destination's data
  * is there. The page's frame as Shell draws it (the white top bar, the rail on Background Blue, the Sand content area)
  * with placeholder blocks where the title and the cards go, in the style guide's colours and radii (7.1, 7.3); no
  * spinner. Every route segment's loading.tsx renders it, and the rail's links prefetch it, so the frame is on screen
- * while the page's reads run. Static: it reads no cookie and no data, so the rail shows expanded; the page then
- * replaces it with the frame in the person's state.
+ * while the page's reads run. It reads the rail's cookie, as the Shell does, so the frame comes up folded or expanded
+ * in the person's state and nothing jumps when the page replaces it; no data.
  */
-export function RouteSkeleton() {
+export async function RouteSkeleton() {
+  const collapsed = (await cookies()).get(RAIL_COOKIE)?.value === "collapsed";
   const bar = (w: string, h = "h-4") => <div className={`${h} ${w} animate-pulse rounded-input bg-p4a-border`} aria-hidden="true" />;
   return (
     <div
       data-route-skeleton
+      data-rail={collapsed ? "collapsed" : "expanded"}
       className="cma-frame grid h-full grid-cols-[var(--rail-width)_1fr] grid-rows-[var(--spacing-topbar)_minmax(0,1fr)] overflow-hidden"
       aria-busy="true"
     >

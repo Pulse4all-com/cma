@@ -58,19 +58,24 @@ export function LiveBoardLive({ initial, viewer, copy, canOpenMetrics }: {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
     let failures = 0;
-    const tick = async () => {
-      if (document.hidden) { timer = null; return; }
+    // One loop at a time: a poll still in flight when the tab is hidden and shown again must not schedule a second
+    // loop next to the one the visibility change starts, so each loop carries its generation and a stale one stops
+    let generation = 0;
+    const tick = async (gen: number) => {
+      if (document.hidden || gen !== generation) { if (gen === generation) timer = null; return; }
       const ok = await poll();
+      if (gen !== generation) return;
       failures = ok ? 0 : failures + 1;
       if (stopped || document.hidden) { timer = null; return; }
-      timer = setTimeout(tick, nextPollMs(failures));
+      timer = setTimeout(() => void tick(gen), nextPollMs(failures));
     };
     const onVisibility = () => {
       if (timer) clearTimeout(timer);
       timer = null;
-      if (document.visibilityState === "visible") void tick();
+      generation += 1;
+      if (document.visibilityState === "visible") void tick(generation);
     };
-    if (document.visibilityState === "visible") timer = setTimeout(tick, nextPollMs(0));
+    if (document.visibilityState === "visible") { const gen = generation; timer = setTimeout(() => void tick(gen), nextPollMs(0)); }
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       stopped = true;
