@@ -4,7 +4,10 @@
  * every figure (cma.flash_compute_of, one code path live and in the snapshot); this module holds what the page and the
  * routes decide on their own: the overviews' order and keys, the address keys, the sort whitelist (cma.flash_overviews,
  * which verify:flash compares with db/122_flash.sql), the As of parameter, the file names, the change arrows, a
- * definition's badge and the states of a source not set up. Pure: no database, no React.
+ * definition's badge and the states of a source not set up. Since addition 0008zt (brief B29 and its amendment): the
+ * measures' kinds (a ratio is neither a count nor an amount), the measures of each breakdown set, the bands (their order,
+ * their rows over the markets, the cumulative "More than N months") and the hints that name the statuses a figure counts
+ * with the tenant's own meanings. Pure: no database, no React.
  */
 
 import { dateKeyInZone } from "@/lib/time";
@@ -31,6 +34,11 @@ export interface FlashOverviewDef {
   countMeasures: readonly string[];
   /** The measures that are amounts per currency (an object of currency codes), never summed across currencies */
   amountMeasures: readonly string[];
+  /**
+   * The measures that are a ratio of two counts (two decimals; none where the denominator is 0): neither a count nor an
+   * amount, so a list is never narrowed to one and the watch's jump never compares one (addition 0008zt)
+   */
+  ratioMeasures: readonly string[];
   headline: string;
   /** The list's sort keys, the first the default */
   sorts: readonly string[];
@@ -40,49 +48,52 @@ export interface FlashOverviewDef {
 
 /** The eleven overviews in the page's order, as cma.flash_overviews() holds them (verify:flash compares the two) */
 export const FLASH_OVERVIEWS: readonly FlashOverviewDef[] = [
-  { key: "customers", shortcut: "1", kind: "stock", source: "commerce", dims: ["market", "store"], sets: [[], ["market"], ["market", "store"]],
+  { key: "customers", shortcut: "1", kind: "stock", source: "commerce", dims: ["market", "store", "segment"],
+    sets: [[], ["market"], ["market", "store"], ["market", "segment"]],
     measures: ["customers_held", "active_customers", "paused_customers", "linked_to_contact", "with_required_refs"],
-    countMeasures: ["customers_held", "active_customers", "paused_customers", "linked_to_contact", "with_required_refs"], amountMeasures: [],
+    countMeasures: ["customers_held", "active_customers", "paused_customers", "linked_to_contact", "with_required_refs"], amountMeasures: [], ratioMeasures: [],
     headline: "active_customers", sorts: ["lifetime_orders", "total_spent", "customer_id", "store", "market", "active_subscriptions", "devices"],
     defaultDescending: true },
-  { key: "subscriptions", shortcut: "2", kind: "stock", source: "subscriptions", dims: ["market", "store", "status", "payment_state"],
-    sets: [[], ["market"], ["market", "store", "status", "payment_state"]],
-    measures: ["subscriptions", "active_subscriptions", "paused_subscriptions", "amount_per_cycle"],
-    countMeasures: ["subscriptions", "active_subscriptions", "paused_subscriptions"], amountMeasures: ["amount_per_cycle"],
+  { key: "subscriptions", shortcut: "2", kind: "stock", source: "subscriptions", dims: ["market", "store", "status", "payment_state", "device_band", "age_band"],
+    sets: [[], ["market"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]],
+    measures: ["subscriptions", "active_subscriptions", "paused_subscriptions", "amount_per_cycle", "holding_subscriptions", "devices_on_holding",
+      "devices_per_holding_subscription"],
+    countMeasures: ["subscriptions", "active_subscriptions", "paused_subscriptions", "holding_subscriptions", "devices_on_holding"],
+    amountMeasures: ["amount_per_cycle"], ratioMeasures: ["devices_per_holding_subscription"],
     headline: "active_subscriptions",
     sorts: ["subscription_id", "store", "market", "status", "payment_state", "amount_per_cycle", "next_billing_at", "retry_since", "devices"],
     defaultDescending: false },
-  { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link"],
-    sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"]],
-    measures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m"],
-    countMeasures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m"], amountMeasures: [],
+  { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link", "subscription_status"],
+    sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "subscription_status"]],
+    measures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding"],
+    countMeasures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding"], amountMeasures: [], ratioMeasures: [],
     headline: "in_field", sorts: ["serial", "model", "market", "status", "warehouse", "past_due_items", "next_due_on"], defaultDescending: false },
   { key: "churn", shortcut: "4", kind: "flow", source: "subscriptions", dims: ["market", "store", "reason"],
-    sets: [[], ["market"], ["market", "store", "reason"]], measures: ["churned"], countMeasures: ["churned"], amountMeasures: [],
+    sets: [[], ["market"], ["market", "store", "reason"]], measures: ["churned"], countMeasures: ["churned"], amountMeasures: [], ratioMeasures: [],
     headline: "churned", sorts: ["churned_at", "subscription_id", "store", "market", "reason", "cycles"], defaultDescending: true },
   { key: "orders", shortcut: "5", kind: "flow", source: "commerce", dims: ["market", "store", "kind", "sku"],
     sets: [[], ["market"], ["market", "store", "kind"], ["market", "sku"]], measures: ["orders", "units", "amount"], countMeasures: ["orders"],
-    amountMeasures: ["amount"], headline: "orders", sorts: ["created_at", "order_number", "store", "market", "kind", "total"], defaultDescending: true },
+    amountMeasures: ["amount"], ratioMeasures: [], headline: "orders", sorts: ["created_at", "order_number", "store", "market", "kind", "total"], defaultDescending: true },
   { key: "payments", shortcut: "6", kind: "flow", source: "commerce", dims: ["market", "store", "kind", "status"],
     sets: [[], ["market"], ["market", "store", "kind", "status"]], measures: ["orders", "amount", "renewals", "failed_renewals"],
-    countMeasures: ["orders", "renewals", "failed_renewals"], amountMeasures: ["amount"], headline: "failed_renewals",
+    countMeasures: ["orders", "renewals", "failed_renewals"], amountMeasures: ["amount"], ratioMeasures: [], headline: "failed_renewals",
     sorts: ["at", "kind", "status", "amount", "store", "market"], defaultDescending: true },
   { key: "open_deals", shortcut: "7", kind: "stock", source: "crm", dims: ["market", "pipeline", "stage"],
     sets: [[], ["market"], ["market", "pipeline", "stage"]], measures: ["open_deals", "median_age_days", "oldest_age_days"],
-    countMeasures: ["open_deals"], amountMeasures: [], headline: "open_deals",
+    countMeasures: ["open_deals"], amountMeasures: [], ratioMeasures: [], headline: "open_deals",
     sorts: ["age_days", "created_at", "record_id", "pipeline", "stage", "market"], defaultDescending: true },
   { key: "open_tickets", shortcut: "8", kind: "stock", source: "crm", dims: ["market", "queue", "stage"],
     sets: [[], ["market"], ["market", "queue", "stage"]], measures: ["open_tickets", "median_age_days", "oldest_age_days"],
-    countMeasures: ["open_tickets"], amountMeasures: [], headline: "open_tickets",
+    countMeasures: ["open_tickets"], amountMeasures: [], ratioMeasures: [], headline: "open_tickets",
     sorts: ["age_days", "created_at", "record_id", "queue", "stage", "market"], defaultDescending: true },
   { key: "open_tasks", shortcut: "9", kind: "stock", source: "crm", dims: ["market", "type", "status"],
     sets: [[], ["market"], ["market", "type", "status"]], measures: ["open_tasks", "overdue"], countMeasures: ["open_tasks", "overdue"],
-    amountMeasures: [], headline: "open_tasks", sorts: ["due_at", "task_id", "type", "status", "market"], defaultDescending: false },
+    amountMeasures: [], ratioMeasures: [], headline: "open_tasks", sorts: ["due_at", "task_id", "type", "status", "market"], defaultDescending: false },
   { key: "reviews", shortcut: "0", kind: "flow", source: "reviews", dims: ["market", "rating"], sets: [[], ["market"], ["market", "rating"]],
-    measures: ["reviews", "rating_sum", "negative"], countMeasures: ["reviews", "negative"], amountMeasures: [], headline: "reviews",
+    measures: ["reviews", "rating_sum", "negative"], countMeasures: ["reviews", "negative"], amountMeasures: [], ratioMeasures: [], headline: "reviews",
     sorts: ["submitted_at", "rating", "market", "review_id"], defaultDescending: true },
   { key: "data_quality", shortcut: "Q", kind: "stock", source: null, dims: ["check", "market"],
-    sets: [[], ["market"], ["check"], ["check", "market"]], measures: ["findings"], countMeasures: ["findings"], amountMeasures: [],
+    sets: [[], ["market"], ["check"], ["check", "market"]], measures: ["findings"], countMeasures: ["findings"], amountMeasures: [], ratioMeasures: [],
     headline: "findings", sorts: ["object_id", "check", "market"], defaultDescending: false },
 ];
 
@@ -398,7 +409,7 @@ export const FLASH_LIST_COLUMNS: Record<FlashKey, readonly { key: string; kind: 
     { key: "contact_id", kind: "text" }, { key: "contact_url", kind: "text" }, { key: "status", kind: "text" }, { key: "payment_state", kind: "text" },
     { key: "amount_per_cycle", kind: "number" }, { key: "currency", kind: "text" }, { key: "billing_interval", kind: "text" },
     { key: "billing_interval_count", kind: "number" }, { key: "next_billing_at", kind: "instant" }, { key: "retry_since", kind: "instant" },
-    { key: "last_attempt", kind: "number" }, { key: "devices", kind: "number" },
+    { key: "last_attempt", kind: "number" }, { key: "devices", kind: "number" }, { key: "devices_in_field", kind: "number" },
   ],
   installed_base: [
     { key: "serial", kind: "text" }, { key: "device_id", kind: "text" }, { key: "model", kind: "text" }, { key: "market", kind: "text" },
@@ -627,11 +638,228 @@ export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma" | "subscrip
   commerce: ["customer_in_two_stores", "subscription_customer_unmatched"],
   assets: ["device_serial_missing", "device_serial_duplicate", "device_model_unmapped", "device_status_unmapped", "device_market_unmapped",
     "device_customer_ref_invalid", "component_due_unknown", "field_device_without_subscription_ref", "device_required_ref_missing",
-    "active_subscription_without_device", "device_subscription_ref_unknown", "field_device_on_ended_subscription"],
+    "active_subscription_without_device", "device_subscription_ref_unknown", "field_device_on_ended_subscription", "field_device_on_non_holding_subscription"],
 };
 
 /** Where a check's findings are fixed; the Workspace for every other check */
 export function fixInOf(check: string): FlashFixIn {
   for (const [k, list] of Object.entries(FLASH_FIX_IN) as [FlashFixIn, readonly string[]][]) if (list.includes(check)) return k;
   return "cma";
+}
+
+// ---- Since addition 0008zt (brief B29 and its amendment) -----------------------------------------------------------
+
+/** How a measure's value is kept: a count of records, an amount per currency, a ratio of two counts, another number (days, a sum) */
+export type FlashMeasureKind = "count" | "amount" | "ratio" | "number";
+
+export function measureKind(def: FlashOverviewDef, measure: string): FlashMeasureKind {
+  if (def.ratioMeasures.includes(measure)) return "ratio";
+  if (def.amountMeasures.includes(measure)) return "amount";
+  return def.countMeasures.includes(measure) ? "count" : "number";
+}
+
+/**
+ * The measures the watch's jump compares (cma.flash_watch_of reads count_measures): the counts, never a ratio, an amount
+ * or another number, so devices per holding subscription moving is never a finding of its own
+ */
+export function watchedMeasures(def: FlashOverviewDef): string[] {
+  return def.countMeasures.filter((m) => measureKind(def, m) === "count");
+}
+
+/** Each ratio measure and the two counts it divides (cma.flash_compute_of's, to two decimals) */
+export const FLASH_RATIOS: Readonly<Record<string, readonly [string, string]>> = {
+  devices_per_holding_subscription: ["devices_on_holding", "holding_subscriptions"],
+};
+
+/** A ratio of two counts to two decimals, none (null) when the denominator is 0, as cma.flash_ratio_of */
+export function ratioOf(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) / 100 : null;
+}
+
+/**
+ * The measures a breakdown set's rows hold when they are not every measure of the overview (the database's rows hold
+ * exactly these): a SKU's orders and units; a device band's holding subscriptions, their devices and the ratio; an age
+ * band's active subscriptions
+ */
+export const FLASH_SET_MEASURES: Partial<Record<FlashKey, Readonly<Record<string, readonly string[]>>>> = {
+  orders: { "market+sku": ["orders", "units"] },
+  subscriptions: {
+    "market+device_band": ["holding_subscriptions", "devices_on_holding", "devices_per_holding_subscription"],
+    "market+age_band": ["active_subscriptions"],
+  },
+};
+
+export function setMeasures(def: FlashOverviewDef, set: readonly string[]): readonly string[] {
+  return FLASH_SET_MEASURES[def.key]?.[set.join("+")] ?? def.measures;
+}
+
+/**
+ * The band dims (a set [market, <dim>] the page shows summed over the markets, in band order): a device band counts the
+ * holding subscriptions; an age band the active ones, with the cumulative "More than N months" lines
+ */
+export const FLASH_BAND_DIMS: Partial<Record<FlashKey, Readonly<Record<string, { cumulative: boolean }>>>> = {
+  subscriptions: { device_band: { cumulative: false }, age_band: { cumulative: true } },
+};
+
+/** The band dim of a breakdown set, or null when the set is no band set */
+export function bandDimOf(def: FlashOverviewDef, set: readonly string[]): string | null {
+  const dims = FLASH_BAND_DIMS[def.key] ?? {};
+  return set.length === 2 && set[0] === "market" && set[1] !== undefined && dims[set[1]] ? set[1] : null;
+}
+
+/** A band's lower bound (0 for 0, 12 for 12-24 and 12+): null for a band below the first bound (<12) and for unknown */
+export function bandLowerBound(band: string): number | null {
+  const m = /^(\d+)(?:-\d+|\+)?$/.exec(band);
+  return m ? Number(m[1]) : null;
+}
+
+/** A band's place in its list: below the first bound first, then by lower bound, unknown last */
+export function bandOrder(band: string): number {
+  if (/^<\d+$/.test(band)) return -1;
+  const lower = bandLowerBound(band);
+  return lower === null ? Number.MAX_SAFE_INTEGER : lower;
+}
+
+/**
+ * A band set's rows, one per band in band order, of one market or summed over every market: counts added, a ratio worked
+ * out again from its two counts (never added), so the totals of all markets are the database's own sums
+ */
+export function bandRows(rows: readonly FlashDocRow[], dim: string, market: string | null, measures: readonly string[]): FlashDocRow[] {
+  const byBand = new Map<string, Record<string, number>>();
+  for (const r of rows) {
+    const keys = Object.keys(r.dims);
+    if (keys.length !== 2 || !(dim in r.dims) || !("market" in r.dims) || (market !== null && r.dims.market !== market)) continue;
+    const band = r.dims[dim]!;
+    const acc = byBand.get(band) ?? {};
+    for (const m of measures) if (!FLASH_RATIOS[m] && typeof r.measures[m] === "number") acc[m] = (acc[m] ?? 0) + (r.measures[m] as number);
+    byBand.set(band, acc);
+  }
+  return [...byBand].sort(([a], [b]) => bandOrder(a) - bandOrder(b) || a.localeCompare(b)).map(([band, acc]) => {
+    const out: Record<string, unknown> = {};
+    for (const m of measures) {
+      const ratio = FLASH_RATIOS[m];
+      if (ratio) {
+        const v = ratioOf(acc[ratio[0]] ?? 0, acc[ratio[1]] ?? 0);
+        if (v !== null) out[m] = v;
+      } else out[m] = acc[m] ?? 0;
+    }
+    return { dims: { [dim]: band }, measures: out };
+  });
+}
+
+/**
+ * The cumulative lines under an age band table, "More than N months" for each band's lower bound N above 0: the sum of
+ * every band from N up (a band holds whole months from its lower bound, so a subscription of exactly N months is in it)
+ */
+export function moreThanRows(rows: readonly FlashDocRow[], dim: string, measure: string): { months: number; value: number }[] {
+  const lowers = [...new Set(rows.map((r) => bandLowerBound(r.dims[dim] ?? "")).filter((b): b is number => b !== null && b > 0))].sort((a, b) => a - b);
+  return lowers.map((months) => ({
+    months,
+    value: rows.filter((r) => (bandLowerBound(r.dims[dim] ?? "") ?? -1) >= months).reduce((sum, r) => sum + (Number(r.measures[measure]) || 0), 0),
+  }));
+}
+
+/**
+ * The statuses a Flash figure counts and what each means for the business line, as the database answers them
+ * (cma.flash_status_settings_of: flash.active_subscription_statuses, flash.device_holding_statuses,
+ * flash.ended_subscription_statuses, subscription.status_meanings). Configuration, never code: a tenant without meanings
+ * has none
+ */
+export interface FlashStatusSettings {
+  activeSubscriptionStatuses: readonly string[];
+  deviceHoldingStatuses: readonly string[];
+  endedSubscriptionStatuses: readonly string[];
+  statusMeanings: Readonly<Record<string, Readonly<Partial<Record<"en" | "nl", string>>>>>;
+}
+
+/** Which statuses a figure's hint names: the active ones, the device-holding ones, paused, the ended ones */
+export type FlashStatusKind = "active" | "holding" | "paused" | "ended";
+
+/** The measures (and the device band) whose hint ends with the statuses they count (Martin, 5 Nov 2026) */
+export const FLASH_STATUS_HINTS: Readonly<Record<string, FlashStatusKind>> = {
+  active_customers: "active", active_subscriptions: "active", paused_customers: "paused", paused_subscriptions: "paused",
+  holding_subscriptions: "holding", in_field_on_holding: "holding", devices_on_holding: "holding", devices_per_holding_subscription: "holding",
+  device_band: "holding", churned: "ended",
+};
+
+/** The overview cards whose hint ends with the statuses their figures count */
+export const FLASH_CARD_STATUS_HINTS: Partial<Record<FlashKey, readonly FlashStatusKind[]>> = {
+  customers: ["active"], subscriptions: ["active", "holding"], installed_base: ["holding"],
+};
+
+/** The words before a hint's statuses (the copy's, en or nl) */
+export interface StatusHintWords {
+  hintCounts: string;
+  hintHolds: string;
+  hintEnded: string;
+}
+
+export function statusesOf(kind: FlashStatusKind, settings: FlashStatusSettings): readonly string[] {
+  switch (kind) {
+    case "active": return settings.activeSubscriptionStatuses;
+    case "holding": return settings.deviceHoldingStatuses;
+    case "ended": return settings.endedSubscriptionStatuses;
+    default: return ["paused"];
+  }
+}
+
+const withStop = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
+
+/**
+ * A hint's generated part: its words ("Counts:", "Holds devices:", "Ended:") and each status the tenant's settings name
+ * for it, in the subscription app's word, with the tenant's meaning in the reader's language ("active: One or more ...")
+ * or the word alone without one; one status on the line of the words, several on a line each. Nothing when no status
+ */
+export function statusHintPart(kind: FlashStatusKind, settings: FlashStatusSettings | null | undefined, locale: "en" | "nl",
+  words: StatusHintWords): string | null {
+  if (!settings) return null;
+  const statuses = statusesOf(kind, settings);
+  if (statuses.length === 0) return null;
+  const prefix = kind === "holding" ? words.hintHolds : kind === "ended" ? words.hintEnded : words.hintCounts;
+  const items = statuses.map((st) => {
+    const meaning = settings.statusMeanings[st]?.[locale];
+    return typeof meaning === "string" && meaning.trim() ? `${st}: ${meaning.trim()}` : st;
+  });
+  if (items.length === 1) return `${prefix} ${withStop(items[0]!)}`;
+  if (items.every((x, i) => x === statuses[i])) return `${prefix} ${statuses.join(", ")}.`;
+  return `${prefix}\n${items.map(withStop).join("\n")}`;
+}
+
+/** A measure's hint (the copy's mh_<measure>), with the statuses it counts when it counts by status */
+export function measureHint(measure: string, base: string | undefined, settings: FlashStatusSettings | null | undefined, locale: "en" | "nl",
+  words: StatusHintWords): string {
+  const kind = FLASH_STATUS_HINTS[measure];
+  const part = kind ? statusHintPart(kind, settings, locale, words) : null;
+  return [base ?? "", part ?? ""].filter(Boolean).join("\n");
+}
+
+/** An overview card's hint (the copy's h_<overview>), with the statuses its figures count */
+export function cardStatusHint(overview: FlashKey, base: string, settings: FlashStatusSettings | null | undefined, locale: "en" | "nl",
+  words: StatusHintWords): string {
+  const parts = (FLASH_CARD_STATUS_HINTS[overview] ?? []).map((k) => statusHintPart(k, settings, locale, words)).filter((x): x is string => Boolean(x));
+  return [base, ...parts].join("\n");
+}
+
+/**
+ * The statuses' settings as the database's JSON gives them (snake_case), kept to texts: a status's meaning only as a
+ * string per language (anything else left out); none at all gives an empty object
+ */
+export function statusSettingsOf(j: Record<string, unknown> | null | undefined): FlashStatusSettings {
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  const meanings: Record<string, Partial<Record<"en" | "nl", string>>> = {};
+  const raw = j?.status_meanings;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [status, texts] of Object.entries(raw as Record<string, unknown>)) {
+      if (!texts || typeof texts !== "object" || Array.isArray(texts)) continue;
+      const t = texts as Record<string, unknown>;
+      const out: Partial<Record<"en" | "nl", string>> = {};
+      if (typeof t.en === "string") out.en = t.en;
+      if (typeof t.nl === "string") out.nl = t.nl;
+      meanings[status] = out;
+    }
+  }
+  return {
+    activeSubscriptionStatuses: list(j?.active_subscription_statuses), deviceHoldingStatuses: list(j?.device_holding_statuses),
+    endedSubscriptionStatuses: list(j?.ended_subscription_statuses), statusMeanings: meanings,
+  };
 }

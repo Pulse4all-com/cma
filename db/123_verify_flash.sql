@@ -9,7 +9,8 @@
 -- on today (a device's end of life within three months) are seeded relative to it. Every check writes one row, ok or
 -- FAIL, and the last row is the verdict (0008zn verified), because Cloud SQL Studio shows no notices. Run as your own IAM
 -- login after 122_flash.sql and 125_flash_watch_cadence.sql (0008zo, whose check is B28: without it B28 reads FAIL), dev
--- first, then prod.
+-- first, then prod. Since 136_flash_insights.sql (0008zt) A3, B2 and B8 expect its settings, figures and definition
+-- versions (without it they read FAIL); 137_verify_flash_insights.sql is 0008zt's own check.
 -- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
 -- 40 ok, 0 FAIL, 4 skip" (44 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
 -- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 43 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
@@ -219,8 +220,9 @@ begin
   if (select string_agg(s.key || ':' || s.value_type || ':' || s.default_value, ',' order by s.key collate "C") from cma.setting s
       where s.key like 'flash.%' or s.key in ('assets.required_refs', 'commerce.required_contact_refs'))
      is distinct from 'assets.required_refs:text:,commerce.required_contact_refs:text:,flash.active_subscription_statuses:text:active,'
-                      || 'flash.ended_subscription_statuses:text:canceled,expired,'
+                      || 'flash.device_bands:text:1,2,3,flash.device_holding_statuses:text:active,flash.ended_subscription_statuses:text:canceled,expired,'
                       || 'flash.file_max_rows:integer:50000,flash.id_list_retention_months:integer:84,flash.snapshot_local_time:time:00:30,'
+                      || 'flash.subscription_age_months:text:12,24,36,48,60,'
                       || 'flash.watch_jump_min:integer:10,flash.watch_jump_pct:integer:20,flash.watch_stale_min_minutes:integer:5' then
     v_bad := v_bad || 'settings; ';
   end if;
@@ -380,7 +382,9 @@ begin
   v_bad := '';
   if (select string_agg(check_key || ':' || sort_order, ',' order by sort_order) from cma.data_quality_flash_checks())
      is distinct from 'customer_required_ref_missing:310,device_required_ref_missing:320,subscription_customer_unmatched:330,'
-                      || 'active_subscription_without_device:340,device_subscription_ref_unknown:350,field_device_on_ended_subscription:360'
+                      || 'active_subscription_without_device:340,device_subscription_ref_unknown:350,field_device_on_ended_subscription:360,'
+                      -- since 0008zt (136): the seventh, a device in the field on a subscription that holds none
+                      || 'field_device_on_non_holding_subscription:370'
      or (select count(*) from cma.data_quality_catalog()) <> (select count(distinct check_key) from cma.data_quality_catalog())
      or (select count(*) from cma.schema_migration where version = '0008zn') <> 1 then
     v_bad := v_bad || 'the catalog or something twice; ';
@@ -409,7 +413,7 @@ begin
      or (select prosrc from pg_proc where oid = 'cma.ingest_contact_forget(uuid,text)'::regprocedure) ~ 'commerce_customer' then
     v_bad := v_bad || 'contacts held and forgotten; ';
   end if;
-  insert into verify_0008zn values (8, 'A8 the six checks in their order, nothing twice; the redefinitions carry what came before',
+  insert into verify_0008zn values (8, 'A8 the Flash checks (seven since 0008zt) in their order, nothing twice; the redefinitions carry what came before',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 end
 $$;
@@ -600,28 +604,44 @@ begin
       case when v_txt = '*:active_customers=2,customers_held=6,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
                         || 'GB:active_customers=2,customers_held=5,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
                         || 'NL:active_customers=0,customers_held=1,linked_to_contact=0,paused_customers=0,with_required_refs=0 '
+                        || 'GB/unknown:active_customers=2,customers_held=5,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
+                        || 'NL/unknown:active_customers=0,customers_held=1,linked_to_contact=0,paused_customers=0,with_required_refs=0 '
                         || 'GB/shop-gb:active_customers=2,customers_held=5,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
                         || 'NL/shop-nl:active_customers=0,customers_held=1,linked_to_contact=0,paused_customers=0,with_required_refs=0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := pg_temp.v0008zn_figs(v_t1, 'subscriptions', null, null);
     v_rows := v_rows || array['13', 'B2 subscriptions: per market, store, status and payment state; the active subscriptions'' amounts per currency',
-      case when v_txt = '*:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 35.00},paused_subscriptions=2,subscriptions=7 '
-                        || 'GB:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 35.00},paused_subscriptions=2,subscriptions=7 '
-                        || 'GB/in_retry/active/shop-gb:active_subscriptions=1,amount_per_cycle={"GBP": 20.00},paused_subscriptions=0,subscriptions=1 '
-                        || 'GB/paid/active/shop-gb:active_subscriptions=2,amount_per_cycle={"EUR": 30.00, "GBP": 15.00},paused_subscriptions=0,subscriptions=2 '
-                        || 'GB/canceled/canceled/shop-gb:active_subscriptions=0,amount_per_cycle={},paused_subscriptions=0,subscriptions=1 '
-                        || 'GB/canceled/expired/shop-gb:active_subscriptions=0,amount_per_cycle={},paused_subscriptions=0,subscriptions=1 '
-                        || 'GB/paused/paused/shop-gb:active_subscriptions=0,amount_per_cycle={},paused_subscriptions=2,subscriptions=2'
+      -- since 0008zt (136): the device-holding subscriptions (flash.device_holding_statuses, active here), their devices in
+      -- the field and their ratio (none without a holding subscription), the device bands (the holding subscriptions') and
+      -- the age bands (the active ones'), every band with its row (no subscription here has a creation time: unknown)
+      case when v_txt = '*:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 35.00},devices_on_holding=1,devices_per_holding_subscription=0.33,holding_subscriptions=3,paused_subscriptions=2,subscriptions=7 '
+                        || 'GB:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 35.00},devices_on_holding=1,devices_per_holding_subscription=0.33,holding_subscriptions=3,paused_subscriptions=2,subscriptions=7 '
+                        || '12-24/GB:active_subscriptions=0 24-36/GB:active_subscriptions=0 36-48/GB:active_subscriptions=0 48-60/GB:active_subscriptions=0 '
+                        || '60+/GB:active_subscriptions=0 <12/GB:active_subscriptions=0 unknown/GB:active_subscriptions=3 '
+                        || '0/GB:devices_on_holding=0,devices_per_holding_subscription=0.00,holding_subscriptions=2 '
+                        || '1/GB:devices_on_holding=1,devices_per_holding_subscription=1.00,holding_subscriptions=1 '
+                        || '2/GB:devices_on_holding=0,holding_subscriptions=0 3+/GB:devices_on_holding=0,holding_subscriptions=0 '
+                        || 'GB/in_retry/active/shop-gb:active_subscriptions=1,amount_per_cycle={"GBP": 20.00},devices_on_holding=1,devices_per_holding_subscription=1.00,holding_subscriptions=1,paused_subscriptions=0,subscriptions=1 '
+                        || 'GB/paid/active/shop-gb:active_subscriptions=2,amount_per_cycle={"EUR": 30.00, "GBP": 15.00},devices_on_holding=0,devices_per_holding_subscription=0.00,holding_subscriptions=2,paused_subscriptions=0,subscriptions=2 '
+                        || 'GB/canceled/canceled/shop-gb:active_subscriptions=0,amount_per_cycle={},devices_on_holding=0,holding_subscriptions=0,paused_subscriptions=0,subscriptions=1 '
+                        || 'GB/canceled/expired/shop-gb:active_subscriptions=0,amount_per_cycle={},devices_on_holding=0,holding_subscriptions=0,paused_subscriptions=0,subscriptions=1 '
+                        || 'GB/paused/paused/shop-gb:active_subscriptions=0,amount_per_cycle={},devices_on_holding=0,holding_subscriptions=0,paused_subscriptions=2,subscriptions=2'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := pg_temp.v0008zn_figs(v_t1, 'installed_base', null, null);
     v_rows := v_rows || array['14', 'B2 installed base: devices, in the field, in stock, past due, due within three months; the subscription link',
-      case when v_txt = '*:components_past_due=1,devices=5,in_field=4,in_stock=1,items_due_3m=1 '
-                        || 'GB:components_past_due=1,devices=4,in_field=3,in_stock=1,items_due_3m=1 '
-                        || 'NL:components_past_due=0,devices=1,in_field=1,in_stock=0,items_due_3m=0 '
-                        || 'linked/GB/m1/field/none:components_past_due=0,devices=2,in_field=2,in_stock=0,items_due_3m=0 '
-                        || 'none/GB/m1/stock/WH-A:components_past_due=1,devices=1,in_field=0,in_stock=1,items_due_3m=0 '
-                        || 'not_found/GB/m1/field/none:components_past_due=0,devices=1,in_field=1,in_stock=0,items_due_3m=1 '
-                        || 'not_found/NL/m1/field/none:components_past_due=0,devices=1,in_field=1,in_stock=0,items_due_3m=0'
+      -- since 0008zt (136): in_field_on_holding (active is the only holding status here) and each device's linked subscription's status
+      case when v_txt = '*:components_past_due=1,devices=5,in_field=4,in_field_on_holding=1,in_stock=1,items_due_3m=1 '
+                        || 'GB:components_past_due=1,devices=4,in_field=3,in_field_on_holding=1,in_stock=1,items_due_3m=1 '
+                        || 'NL:components_past_due=0,devices=1,in_field=1,in_field_on_holding=0,in_stock=0,items_due_3m=0 '
+                        || 'GB/active:components_past_due=0,devices=1,in_field=1,in_field_on_holding=1,in_stock=0,items_due_3m=0 '
+                        || 'GB/canceled:components_past_due=0,devices=1,in_field=1,in_field_on_holding=0,in_stock=0,items_due_3m=0 '
+                        || 'GB/none:components_past_due=1,devices=1,in_field=0,in_field_on_holding=0,in_stock=1,items_due_3m=0 '
+                        || 'GB/not_found:components_past_due=0,devices=1,in_field=1,in_field_on_holding=0,in_stock=0,items_due_3m=1 '
+                        || 'NL/not_found:components_past_due=0,devices=1,in_field=1,in_field_on_holding=0,in_stock=0,items_due_3m=0 '
+                        || 'linked/GB/m1/field/none:components_past_due=0,devices=2,in_field=2,in_field_on_holding=1,in_stock=0,items_due_3m=0 '
+                        || 'none/GB/m1/stock/WH-A:components_past_due=1,devices=1,in_field=0,in_field_on_holding=0,in_stock=1,items_due_3m=0 '
+                        || 'not_found/GB/m1/field/none:components_past_due=0,devices=1,in_field=1,in_field_on_holding=0,in_stock=0,items_due_3m=1 '
+                        || 'not_found/NL/m1/field/none:components_past_due=0,devices=1,in_field=1,in_field_on_holding=0,in_stock=0,items_due_3m=0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := pg_temp.v0008zn_figs(v_t1, 'open_deals', null, null) || ' | ' || pg_temp.v0008zn_figs(v_t1, 'open_tickets', null, null)
              || ' | ' || pg_temp.v0008zn_figs(v_t1, 'open_tasks', null, null);
@@ -677,11 +697,12 @@ begin
              || ' | ' || (select string_agg(d.check_key || '=' || d.total, ' ' order by d.check_key collate "C") from cma.data_quality() d
                           where d.check_key in (select c.check_key from cma.data_quality_flash_checks() c))
              || ' | ' || pg_temp.v0008zn_code('select cma.data_quality_rows(''no_such_check'')');
-    v_rows := v_rows || array['18', 'B5 the checks'' rows: market, the system where fixed, links; data_quality() lists the six; an unknown check refused',
+    v_rows := v_rows || array['18', 'B5 the checks'' rows: market, the system where fixed, links; data_quality() lists the Flash checks; an unknown check refused',
       case when v_txt = '2 cu-2/GB/crm/verifycrm/https://crm.example/portal-1/contact/c-2 cu-4/GB/cma/-/https://crm.example/portal-1/contact/c-9 | '
                         || '1 assets/verifyregister/subscription:s-3 | active_subscription_without_device=2 customer_required_ref_missing=2 '
                         || 'device_required_ref_missing=1 device_subscription_ref_unknown=1 field_device_on_ended_subscription=1 '
-                        || 'subscription_customer_unmatched=1 | CMA04'
+                        -- since 0008zt (136): the seventh check, listed with the subscriptions and the register set up (none here)
+                        || 'field_device_on_non_holding_subscription=0 subscription_customer_unmatched=1 | CMA04'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     perform set_config('role', 'cma_owner', true);
@@ -764,7 +785,8 @@ begin
     v_txt := v_txt || (select count(distinct s.overview) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30')::text
              || ' ' || (select string_agg(distinct s.definition_version collate "C", ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30');
     v_rows := v_rows || array['24', 'B8 the snapshot equals the computation as of its date, all eleven overviews',
-      case when v_txt = '11 0008zn' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+      -- the definitions' versions: 0008zn, and 0008zt for customers, subscriptions and installed_base since 136
+      case when v_txt = '11 0008zn,0008zt' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B9. a second take of the same date writes nothing; no id list on a date that is no month end
     v_n := (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1);

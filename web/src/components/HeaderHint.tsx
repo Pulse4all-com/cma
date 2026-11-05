@@ -141,7 +141,7 @@ export function HeaderHint({ label, text, more }: {
         hidden={!open}
         data-hint-panel=""
         style={{ top: 0, left: 0, visibility: "hidden" }}
-        className="fixed z-50 block w-max max-w-80 whitespace-normal rounded-button border border-p4a-border bg-white px-3 py-2 text-left text-small font-normal normal-case text-p4a-body"
+        className="fixed z-50 block w-max max-w-80 whitespace-pre-line rounded-button border border-p4a-border bg-white px-3 py-2 text-left text-small font-normal normal-case text-p4a-body"
       >
         {text}
         {more ? (

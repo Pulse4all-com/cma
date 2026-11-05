@@ -5,8 +5,8 @@
  *   node --experimental-strip-types verify/flash.mjs --provoke   every check must FAIL
  *
  * Covers: the eleven overviews in their order with the keys 1 to 9, 0 and Q, each as cma.flash_overviews() holds it in
- * db/122_flash.sql (kind, source, dims, grouping sets, measures, count measures, headline, sort whitelist: read from the
- * script, so the page and the database cannot drift); the address keys (market among them); the sort whitelist and its
+ * its latest definition in db/ (136_flash_insights.sql since addition 0008zt: kind, source, dims, grouping sets, measures,
+ * count measures, headline, sort whitelist: read from the script, so the page and the database cannot drift); the address keys (market among them); the sort whitelist and its
  * default direction; the list's filters (the overview's dims and a count measure only); As of (now, a past business date,
  * today and a future date refused); the file names (overview, market or all, the date or the instant in the tenant's
  * zone across the change of summer time); the change arrows; a definition's badge from the catalog's status and every
@@ -16,14 +16,16 @@
  * refused); a flow card's change line, which compares a complete period only (its end passed in the tenant's zone and
  * every set-up source feeding it read after that end; else "so far", en and nl). Invented values only.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   FLASH_OVERVIEWS, FLASH_ADDRESS, FLASH_PAGE_ROWS, FLASH_FILE_MAX_ROWS, overviewOf, overviewOfShortcut, parseAsOf, parseMarket, parseSort,
   parseFilters, asOfStamp, flashFileName, changeOf, changeArrow, definitionStatus, statusTone, metricKey, sourcesLine, showsFigures, amountsOf,
   sortWithinCurrency, rowsOfSet, breakdownSets, barShare, averageRating, isDate, FLASH_LIST_COLUMNS, FLASH_FROZEN_COLUMNS, breakdownColumns,
   breakdownRows, filtersText, FLASH_LINKS_LEFT_OUT, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_FIX_IN, fixInOf, cellFilters, frozenFilters,
-  FLASH_FROZEN_LIST, listUnavailable, FLASH_CONDITIONAL_MEASURES, measureNotApplicable,
+  FLASH_FROZEN_LIST, listUnavailable, FLASH_CONDITIONAL_MEASURES, measureNotApplicable, measureKind, watchedMeasures, FLASH_RATIOS, ratioOf, setMeasures,
+  FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
+  statusHintPart, measureHint, cardStatusHint, statusSettingsOf,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -37,9 +39,21 @@ function expect(name, actual, expected, provoked) {
   console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(80)} got ${JSON.stringify(actual).slice(0, 90)}${pass ? "" : `, wanted ${JSON.stringify(want).slice(0, 90)}`}`);
 }
 
-// ---- The overviews, against db/122_flash.sql's cma.flash_overviews() --------------------------------------------------
-const sql = readFileSync(path.join(here, "..", "..", "db", "122_flash.sql"), "utf8");
-const body = sql.slice(sql.indexOf("create or replace function cma.flash_overviews()"));
+// ---- The overviews, against their latest definition in db/ (122_flash.sql's, 136_flash_insights.sql's since 0008zt) ---
+// A function's latest definition: the db/ script with the highest number that creates it (a later addition makes a
+// function again; the page follows the one the database runs)
+const dbDir = path.join(here, "..", "..", "db");
+const dbFiles = readdirSync(dbDir).filter((f) => /^\d+_.*\.sql$/.test(f) && !f.includes("verify")).sort((a, b) => parseInt(b, 10) - parseInt(a, 10));
+function defOf(fn) {
+  for (const f of dbFiles) {
+    const text = readFileSync(path.join(dbDir, f), "utf8");
+    const at = text.indexOf(`create or replace function cma.${fn}(`);
+    if (at >= 0) return { file: f, text: text.slice(at) };
+  }
+  throw new Error(`no definition of cma.${fn} in db/`);
+}
+const overviewsDef = defOf("flash_overviews");
+const body = overviewsDef.text;
 const values = body.slice(body.indexOf("values") + 6, body.indexOf("$$;"));
 const arr = (s) => (s.trim() === "array[]::text[]" ? [] : [...s.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]));
 // one tuple per overview: ('key', order, 'kind', 'source'|null, array[...], '<sets json>'::jsonb, array[...], array[...], 'headline', array[...])
@@ -48,7 +62,7 @@ const fromSql = tuples.map((t) => ({ key: t[1], kind: t[3], source: t[5] ?? null
   countMeasures: arr(t[9]), headline: t[10], sorts: arr(t[11]) }));
 const fromTs = FLASH_OVERVIEWS.map((o) => ({ key: o.key, kind: o.kind, source: o.source, dims: [...o.dims], sets: o.sets.map((s) => [...s]),
   measures: [...o.measures], countMeasures: [...o.countMeasures], headline: o.headline, sorts: [...o.sorts] }));
-expect("eleven overviews in db/122_flash.sql, read from cma.flash_overviews()", fromSql.length, 11, 0);
+expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "136_flash_insights.sql"], [0, ""]);
 expect("the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts",
   JSON.stringify(fromTs) === JSON.stringify(fromSql), true, false);
 expect("the keys 1 to 9, 0 and Q in the page's order, each once",
@@ -186,7 +200,7 @@ const noStatus = wanted.filter((k) => {
   return byKey.has(k) && (!m || m[1] !== FLASH_DEFINITION_STATUS[k.split(".")[1]]);
 });
 expect("every Flash measure has a metric catalog entry whose definition status is the one the page shows",
-  [wanted.length, missing, noStatus, wanted.every((k) => byKey.get(k)?.page === "/reports/flash")], [34, [], [], true], [0, ["x"], ["x"], false]);
+  [wanted.length, missing, noStatus, wanted.every((k) => byKey.get(k)?.page === "/reports/flash")], [38, [], [], true], [0, ["x"], ["x"], false]);
 
 // ---- Sources, not set up -------------------------------------------------------------------------------------------------
 const sources = { commerce: { set_up: true, adapters: ["shopx"], last_read_at: "2026-11-01T13:02:00Z" },
@@ -227,8 +241,9 @@ expect("bars and the average rating (sum over count, two decimals; none without 
   [barShare(5, 10), barShare(0, 10), barShare(3, 0), averageRating(6, 2), averageRating(10.5, 3), averageRating(0, 0)],
   [0.5, 0, 0, 3, 3.5, null], [1, 1, 1, 0, 0, 0]);
 
-// ---- The lists' columns, against db/122_flash.sql's cma.flash_rows_of (and data quality's links) ------------------------
-const rowsBody = sql.slice(sql.indexOf("create or replace function cma.flash_rows_of"), sql.indexOf("end case;", sql.indexOf("create or replace function cma.flash_rows_of")));
+// ---- The lists' columns, against cma.flash_rows_of's latest definition (and data quality's links) ----------------------
+const rowsDef = defOf("flash_rows_of").text;
+const rowsBody = rowsDef.slice(0, rowsDef.indexOf("end case;"));
 const listKeys = {};
 for (const part of rowsBody.split(/\n    when '/).slice(1)) {
   const key = part.slice(0, part.indexOf("'"));
@@ -255,8 +270,9 @@ expect("links outside the CRM never shown: the register's and the review platfor
     dataQualityRowShown({ object_type: "commerce_customer", record_url: null, related_type: "contact", related_url: "https://crm.example/c/2" }).related_url],
   [false, false, null, "https://crm.example/c/1", "https://crm.example/c/2"], [true, true, "https://register.example/r/1", null, null]);
 
-// ---- Where a check is fixed, against db/122_flash.sql's cma.data_quality_fix_in ------------------------------------------
-const fixBody = sql.slice(sql.indexOf("create or replace function cma.data_quality_fix_in"), sql.indexOf("$$;", sql.indexOf("create or replace function cma.data_quality_fix_in") + 80));
+// ---- Where a check is fixed, against cma.data_quality_fix_in's latest definition -----------------------------------------
+const fixDef = defOf("data_quality_fix_in").text;
+const fixBody = fixDef.slice(0, fixDef.indexOf("$$;", 80));
 const fixSql = {};
 for (const m of fixBody.matchAll(/when p_check_key (?:= '([a-z_]+)'|in \(([^)]*)\)) then (?:case when [^']*'[^']*' then '([a-z]+)' else '([a-z]+)' end|'([a-z]+)')/g)) {
   const keys = m[1] ? [m[1]] : [...m[2].matchAll(/'([a-z_]+)'/g)].map((x) => x[1]);
@@ -274,18 +290,20 @@ const docRows = [{ dims: {}, measures: { subscriptions: 7, active_subscriptions:
   { dims: { market: "GB" }, measures: { subscriptions: 7, active_subscriptions: 3, paused_subscriptions: 2, amount_per_cycle: { GBP: 80 } } }];
 expect("the breakdown file: the set, every dim, each measure, an amount one column per currency (never summed)",
   [breakdownColumns(subs, docRows).map((c) => c.key), breakdownRows(subs, docRows).map((r) => [r.set, r.market, r.amount_per_cycle_EUR ?? null, r.amount_per_cycle_GBP])],
-  [["set", "market", "store", "status", "payment_state", "subscriptions", "active_subscriptions", "paused_subscriptions", "amount_per_cycle_EUR", "amount_per_cycle_GBP"],
+  [["set", "market", "store", "status", "payment_state", "device_band", "age_band", "subscriptions", "active_subscriptions", "paused_subscriptions",
+    "amount_per_cycle_EUR", "amount_per_cycle_GBP", "holding_subscriptions", "devices_on_holding", "devices_per_holding_subscription"],
     [["totals", null, 30, 80], ["market", "GB", null, 80]]], [[], []]);
 expect("a file's filters column: market, period and the list's filters as key=value, sorted; all without any",
   [filtersText("GB", null, null, { market: "GB", measure: "active_customers" }), filtersText(null, "2026-10-01", "2026-10-31", { sku: "AED-1" }), filtersText(null, null, null, {})],
   ["market=GB; measure=active_customers", "from=2026-10-01; to=2026-10-31; sku=AED-1", "all"], ["", "", ""]);
 
 // ---- A month end's breakdown cells, every one clicked (review of #214, Major 1) ---------------------------------------
-// The frozen list's own rule, read from db/122_flash.sql's cma.flash_id_rows_of: the keys it takes, the kind without a
+// The frozen list's own rule, read from cma.flash_id_rows_of's latest definition: the keys it takes, the kind without a
 // status, the one measure per kind. Every cell of every breakdown set of the three overviews that keep a list is opened
 // as the page opens it (its link's address, parsed as the page parses it, the page's market, frozenFilters): what the
 // page sends must be what the database takes, and the mock (which refuses as the database does) must answer it
-const idBody = sql.slice(sql.indexOf("create or replace function cma.flash_id_rows_of"), sql.indexOf("$$;", sql.indexOf("create or replace function cma.flash_id_rows_of") + 80));
+const idDef = defOf("flash_id_rows_of").text;
+const idBody = idDef.slice(0, idDef.indexOf("$$;", 80));
 const sqlKeys = [...(idBody.match(/where k not in \(([^)]*)\)/)?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 const noStatusKind = idBody.match(/k = 'status' and v_kind = '([a-z]+)'/)?.[1] ?? null;
 const mc = idBody.match(/case v_kind when 'customer' then '([a-z_]+)'\s*when 'subscription' then '([a-z_]+)' else '([a-z_]+)' end/);
@@ -382,13 +400,15 @@ expect("labels: Financial status, Link level (Koppelniveau), Dag, Assetregister,
 
 // ---- A measure that does not apply (Decision log, 3 Nov 2026): left out by the database, never 0 or all ---------------
 const leftOut = {};
-for (const m of sql.matchAll(/(v_[a-z_]+) boolean := cardinality\(cma\.flash_list_of\(cma\.setting_of\(p_tenant_id, '([a-z_.]+)'\)\)\) > 0;/g)) {
+// the computation's and the list read's latest definitions (cma.flash_compute_of since 0008zt is 136's)
+const computeSql = defOf("flash_compute_of").text.slice(0, defOf("flash_compute_of").text.indexOf("\n$$;")) + "\n" + defOf("flash_rows").text;
+for (const m of computeSql.matchAll(/(v_[a-z_]+) boolean := cardinality\(cma\.flash_list_of\(cma\.setting_of\(p_tenant_id, '([a-z_.]+)'\)\)\) > 0;/g)) {
   const flag = m[1];
-  const om = sql.match(new RegExp(`when ${flag}\\s+then jsonb_build_object\\('([a-z_]+)'`));
-  const ov = sql.slice(0, sql.indexOf(om?.[0] ?? "\u0000")).match(/p_overview = '([a-z_]+)' then\s*$|elsif p_overview = '([a-z_]+)'|if p_overview = '([a-z_]+)'/g)?.pop()?.match(/'([a-z_]+)'/)?.[1];
+  const om = computeSql.match(new RegExp(`when ${flag}\\s+then jsonb_build_object\\('([a-z_]+)'`));
+  const ov = computeSql.slice(0, computeSql.indexOf(om?.[0] ?? "\u0000")).match(/p_overview = '([a-z_]+)' then\s*$|elsif p_overview = '([a-z_]+)'|if p_overview = '([a-z_]+)'/g)?.pop()?.match(/'([a-z_]+)'/)?.[1];
   if (om && ov) (leftOut[ov] ??= {})[om[1]] = m[2];
 }
-const refused = [...sql.matchAll(/p_overview = '([a-z_]+)' and \(v_filters ->> 'measure'\) = '([a-z_]+)'\s+and cardinality\(cma\.flash_list_of\(cma\.setting_of\(v_tenant, '([a-z_.]+)'\)\)\) = 0/g)]
+const refused = [...computeSql.matchAll(/p_overview = '([a-z_]+)' and \(v_filters ->> 'measure'\) = '([a-z_]+)'\s+and cardinality\(cma\.flash_list_of\(cma\.setting_of\(v_tenant, '([a-z_.]+)'\)\)\) = 0/g)]
   .map((m) => `${m[1]}.${m[2]}:${m[3]}`);
 expect("db/122 leaves a measure out while its setting is empty and refuses its records; the page's conditional measures are those",
   [leftOut, refused, FLASH_CONDITIONAL_MEASURES],
@@ -420,7 +440,8 @@ expect("a file leaves a measure that does not apply empty, never 0; the mock lea
 const {
   FLASH_LABELLED_DIMS, dimLabelOf, dimText, withLabels, withLabelColumns, filtersShown, labelColumnOf,
 } = await import("../src/lib/flash.ts");
-const labelsSql = sql.slice(sql.indexOf("create or replace function cma.flash_labels_of"), sql.indexOf("$$;", sql.indexOf("create or replace function cma.flash_labels_of") + 80));
+const labelsDef = defOf("flash_labels_of").text;
+const labelsSql = labelsDef.slice(0, labelsDef.indexOf("$$;", 80));
 expect("db/122's labels: a stage keyed '<pipeline id>:<stage id>', a pipeline and a queue by the pipeline's id; the labelled dims are dims of their overview",
   [/'stage', case when p_overview in \('open_deals', 'open_tickets'\)\s+then \(select jsonb_object_agg\(cs\.source_pipeline_id \|\| ':' \|\| cs\.source_stage_id, cs\.label\)/.test(labelsSql),
     /'pipeline', case when p_overview = 'open_deals'\s+then \(select jsonb_object_agg\(p\.source_pipeline_id, p\.label\)/.test(labelsSql),
@@ -492,6 +513,129 @@ expect("the mock answers as the database: labels beside the ids, a stage by its 
     mockDeals.rows.some((r) => r.pipeline === "pl-sales" && r.stage === "st-quote" && r.stage_label === "Quote sent"),
     mockTickets.rows.some((r) => r.queue === "tp-support" && r.stage === "ts-waiting" && r.stage_label === "Waiting on contact" && r.queue_label === "Support")],
   [true, true, true, true], [false, false, false, false]);
+
+// ---- Addition 0008zt (brief B29 and its amendment): the ratio kind, the bands, the status hints ------------------------
+const subsDef = overviewOf("subscriptions");
+const baseDef = overviewOf("installed_base");
+const sqlCounts = Object.fromEntries(fromSql.map((o) => [o.key, o.countMeasures]));
+expect("a ratio is its own kind: devices per holding subscription neither a count nor an amount; the watch compares counts only, never it",
+  [measureKind(subsDef, "devices_per_holding_subscription"), measureKind(subsDef, "holding_subscriptions"), measureKind(subsDef, "amount_per_cycle"),
+    measureKind(overviewOf("open_deals"), "median_age_days"), watchedMeasures(subsDef).includes("devices_per_holding_subscription"),
+    sqlCounts.subscriptions.includes("devices_per_holding_subscription"), FLASH_OVERVIEWS.every((o) => o.ratioMeasures.every((m) => o.measures.includes(m) && !o.countMeasures.includes(m)))],
+  ["ratio", "count", "amount", "number", false, false, true], ["count", "ratio", "count", "count", true, true, false]);
+expect("each ratio divides two count measures of its overview; to two decimals, none without a denominator",
+  [Object.entries(FLASH_RATIOS).every(([m, [a, b]]) => FLASH_OVERVIEWS.some((o) => o.ratioMeasures.includes(m) && o.countMeasures.includes(a) && o.countMeasures.includes(b))),
+    ratioOf(8, 6), ratioOf(1, 3), ratioOf(4, 0), ratioOf(0, 4)],
+  [true, 1.33, 0.33, null, 0], [false, 1.3, 0.3, 0, null]);
+expect("the device-holding figures: holding_subscriptions and devices_on_holding counts, in_field_on_holding the installed base's; the old active names gone",
+  [subsDef.countMeasures.filter((m) => m.includes("holding")), baseDef.countMeasures.includes("in_field_on_holding"),
+    FLASH_OVERVIEWS.some((o) => o.measures.some((m) => /on_active|per_active/.test(m)))],
+  [["holding_subscriptions", "devices_on_holding"], true, false], [[], false, true]);
+expect("each set's measures: a SKU's orders and units, a device band's holding figures, an age band's active subscriptions; every other set every measure",
+  [setMeasures(subsDef, ["market", "device_band"]), setMeasures(subsDef, ["market", "age_band"]), setMeasures(overviewOf("orders"), ["market", "sku"]),
+    setMeasures(subsDef, ["market"]).length === subsDef.measures.length,
+    Object.entries(FLASH_SET_MEASURES).every(([k, sets]) => Object.entries(sets).every(([set, ms]) => overviewOf(k).sets.some((x) => x.join("+") === set)
+      && ms.every((m) => overviewOf(k).measures.includes(m))))],
+  [["holding_subscriptions", "devices_on_holding", "devices_per_holding_subscription"], ["active_subscriptions"], ["orders", "units"], true, true],
+  [[], [], [], false, false]);
+expect("the band sets: [market, device_band] and [market, age_band] of the subscriptions only; the bands are dims and sets of their overview",
+  [bandDimOf(subsDef, ["market", "device_band"]), bandDimOf(subsDef, ["market", "age_band"]), bandDimOf(subsDef, ["market", "store", "status", "payment_state"]),
+    bandDimOf(baseDef, ["market", "subscription_status"]),
+    Object.entries(FLASH_BAND_DIMS).every(([k, dims]) => Object.keys(dims).every((d) => overviewOf(k).dims.includes(d) && overviewOf(k).sets.some((x) => x.join("+") === `market+${d}`)))],
+  ["device_band", "age_band", null, null, true], [null, null, "x", "x", false]);
+expect("band order: below the first bound, then by lower bound, the open-ended after its bound, unknown last",
+  [["unknown", "60+", "<12", "12-24", "48-60", "24-36"].sort((a, b) => bandOrder(a) - bandOrder(b)), ["3+", "0", "2", "1-2", "1"].sort((a, b) => bandOrder(a) - bandOrder(b) || a.localeCompare(b)),
+    [bandLowerBound("12-24"), bandLowerBound("60+"), bandLowerBound("<12"), bandLowerBound("unknown"), bandLowerBound("0")]],
+  [["<12", "12-24", "24-36", "48-60", "60+", "unknown"], ["0", "1", "1-2", "2", "3+"], [12, 60, null, null, 0]],
+  [[], [], [null, null, 12, 0, null]]);
+const bandDoc = [
+  { dims: { market: "GB", device_band: "0" }, measures: { holding_subscriptions: 1, devices_on_holding: 0, devices_per_holding_subscription: 0 } },
+  { dims: { market: "GB", device_band: "1" }, measures: { holding_subscriptions: 2, devices_on_holding: 2, devices_per_holding_subscription: 1 } },
+  { dims: { market: "GB", device_band: "3+" }, measures: { holding_subscriptions: 1, devices_on_holding: 3, devices_per_holding_subscription: 3 } },
+  { dims: { market: "NL", device_band: "1" }, measures: { holding_subscriptions: 1, devices_on_holding: 1, devices_per_holding_subscription: 1 } },
+  { dims: { market: "NL", device_band: "3+" }, measures: { holding_subscriptions: 0, devices_on_holding: 0 } },
+  { dims: { market: "GB", age_band: "<12" }, measures: { active_subscriptions: 1 } }, { dims: { market: "GB", age_band: "12-24" }, measures: { active_subscriptions: 1 } },
+  { dims: { market: "GB", age_band: "60+" }, measures: { active_subscriptions: 1 } }, { dims: { market: "GB", age_band: "24-36" }, measures: { active_subscriptions: 0 } },
+  { dims: { market: "GB", age_band: "unknown" }, measures: { active_subscriptions: 1 } }, { dims: { market: "NL", age_band: "24-36" }, measures: { active_subscriptions: 2 } },
+  { dims: { market: "GB" }, measures: { holding_subscriptions: 4 } },
+];
+const devBands = bandRows(bandDoc, "device_band", null, setMeasures(subsDef, ["market", "device_band"]));
+const ageBands = bandRows(bandDoc, "age_band", null, ["active_subscriptions"]);
+expect("a band table over every market: counts added per band, the ratio worked out again (never added), a band without holders no ratio; one market its own",
+  [devBands.map((r) => `${r.dims.device_band}:${r.measures.holding_subscriptions}/${r.measures.devices_on_holding}/${r.measures.devices_per_holding_subscription ?? "-"}`),
+    bandRows(bandDoc, "device_band", "NL", setMeasures(subsDef, ["market", "device_band"])).map((r) => `${r.dims.device_band}:${r.measures.holding_subscriptions}/${r.measures.devices_per_holding_subscription ?? "-"}`)],
+  [["0:1/0/0", "1:3/3/1", "3+:1/3/3"], ["1:1/1", "3+:0/-"]], [[], []]);
+expect("the age bands over every market, in order, and More than N months for each bound above 0: the sum of every band from N up (12 months exactly in 12-24)",
+  [ageBands.map((r) => `${r.dims.age_band}:${r.measures.active_subscriptions}`), moreThanRows(ageBands, "age_band", "active_subscriptions")],
+  [["<12:1", "12-24:1", "24-36:2", "60+:1", "unknown:1"], [{ months: 12, value: 4 }, { months: 24, value: 3 }, { months: 60, value: 1 }]],
+  [[], []]);
+
+// The status hints: the statuses of the tenant's settings, each with the tenant's meaning in the reader's language, or the
+// word alone; another tenant's settings give its own words only; nothing of a tenant is written in the code or the copy
+const words = { en: { hintCounts: "Counts:", hintHolds: "Holds devices:", hintEnded: "Ended:" } };
+const { copy: hintCopy } = await import("../src/lib/copy.ts");
+const tenantA = statusSettingsOf({ active_subscription_statuses: ["active"], device_holding_statuses: ["active", "failed"], ended_subscription_statuses: ["canceled", "expired"],
+  status_meanings: { active: { en: "Devices at the customer.", nl: "Apparaten bij de klant." }, failed: { en: "Unpaid; devices stay." }, canceled: { en: "Back in the warehouse." } } });
+const tenantB = statusSettingsOf({ active_subscription_statuses: ["active"], device_holding_statuses: ["active"], ended_subscription_statuses: ["canceled"], status_meanings: {} });
+expect("a hint lists exactly the statuses of the tenant's settings, each with its meaning in the reader's language, the word alone without one",
+  [statusHintPart("active", tenantA, "en", hintCopy.en.flash), statusHintPart("holding", tenantA, "en", hintCopy.en.flash), statusHintPart("holding", tenantA, "nl", hintCopy.nl.flash),
+    statusHintPart("ended", tenantA, "en", hintCopy.en.flash), statusHintPart("paused", tenantA, "en", hintCopy.en.flash)],
+  ["Counts: active: Devices at the customer.", "Holds devices:\nactive: Devices at the customer.\nfailed: Unpaid; devices stay.",
+    "Houdt apparaten:\nactive: Apparaten bij de klant.\nfailed.", "Ended:\ncanceled: Back in the warehouse.\nexpired.", "Counts: paused."],
+  ["", "", "", "", ""]);
+expect("a tenant without meanings: the statuses alone; another tenant's words never; no settings, no generated part",
+  [statusHintPart("holding", tenantB, "en", hintCopy.en.flash), statusHintPart("ended", tenantB, "nl", hintCopy.nl.flash),
+    [statusHintPart("active", tenantB, "en", words.en), statusHintPart("holding", tenantB, "en", words.en)].some((x) => /customer|warehouse|Unpaid/.test(x ?? "")),
+    statusHintPart("active", null, "en", words.en)],
+  ["Holds devices: active.", "Beëindigd: canceled.", false, null], ["", "", true, "x"]);
+expect("the settings as the database answers them: a meaning only as a text per language; anything else (a number, a list, another language) left out",
+  [statusSettingsOf({ status_meanings: { active: { en: 5, nl: "Ja, bij de klant." }, paused: "x", failed: ["x"], expired: { de: "x" } } }).statusMeanings,
+    statusSettingsOf(null).deviceHoldingStatuses, statusSettingsOf({ device_holding_statuses: ["active", 3] }).deviceHoldingStatuses],
+  [{ active: { nl: "Ja, bij de klant." }, expired: {} }, [], ["active"]], [{}, ["x"], []]);
+const allHinted = [...new Set(FLASH_OVERVIEWS.flatMap((o) => o.measures)), ...Object.values(FLASH_BAND_DIMS).flatMap((d) => Object.keys(d)), "segment"];
+expect("every Flash measure, band and the segment has its hint in en and nl; the statuses' measures and cards are the brief's; each a measure or a dim",
+  [allHinted.filter((m) => typeof hintCopy.en.flash[`mh_${m}`] !== "string" || typeof hintCopy.nl.flash[`mh_${m}`] !== "string"),
+    Object.keys(FLASH_STATUS_HINTS).sort(), FLASH_CARD_STATUS_HINTS,
+    Object.keys(FLASH_STATUS_HINTS).every((m) => FLASH_OVERVIEWS.some((o) => o.measures.includes(m) || o.dims.includes(m)))],
+  [[], ["active_customers", "active_subscriptions", "churned", "device_band", "devices_on_holding", "devices_per_holding_subscription", "holding_subscriptions",
+    "in_field_on_holding", "paused_customers", "paused_subscriptions"], { customers: ["active"], subscriptions: ["active", "holding"], installed_base: ["holding"] }, true],
+  [["x"], [], {}, false]);
+expect("devices per holding subscription's hint: its own words, the exchange's note (en, nl), then the holding statuses; a card's hint its parts",
+  [measureHint("devices_per_holding_subscription", hintCopy.en.flash.mh_devices_per_holding_subscription, tenantB, "en", hintCopy.en.flash),
+    /exchange/i.test(hintCopy.en.flash.mh_devices_per_holding_subscription) && /wissel/i.test(hintCopy.nl.flash.mh_devices_per_holding_subscription),
+    cardStatusHint("subscriptions", "Base.", tenantB, "en", hintCopy.en.flash), cardStatusHint("orders", "Base.", tenantA, "en", hintCopy.en.flash),
+    measureHint("orders", "Orders.", tenantA, "en", hintCopy.en.flash)],
+  [`${hintCopy.en.flash.mh_devices_per_holding_subscription}\nHolds devices: active.`, true, "Base.\nCounts: active.\nHolds devices: active.", "Base.", "Orders."],
+  ["", false, "Base.", "x", ""]);
+// no tenant's meaning is written anywhere in the web's code or copy: seed 02's texts are configuration only
+const seed = readFileSync(path.join(dbDir, "02_seed_pulse4all.sql"), "utf8");
+const seedMeanings = [...(seed.slice(seed.indexOf("'subscription.status_meanings'")).slice(0, 1500).matchAll(/"(?:en|nl)": "([^"]{8,})"/g))].map((m) => m[1].replace(/''/g, "'"));
+const srcDir = path.join(here, "..", "src");
+const srcTexts = [];
+const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/\.(ts|tsx)$/.test(e.name)) srcTexts.push(readFileSync(f, "utf8")); } };
+walk(srcDir);
+expect("no tenant's meaning in the web's code or copy: seed 02's ten texts appear in no file of src/",
+  [seedMeanings.length, seedMeanings.filter((m) => srcTexts.some((t) => t.includes(m)))], [10, []], [0, ["x"]]);
+const partsSrc0008zt = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
+const pageSrc0008zt = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const hintSrc = readFileSync(path.join(here, "..", "src", "components", "HeaderHint.tsx"), "utf8");
+expect("the page uses them: the tiles' and the headers' hints (MeasureLabel), the cards' and the heading's (cardStatusHint), the band tables, the hint on its lines",
+  [(partsSrc0008zt.match(/<MeasureLabel measure=/g) ?? []).length >= 5, /title=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt), /text=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt),
+    /statusSettings=\{page\.statusSettings\}/.test(pageSrc0008zt), /statusSettings=\{doc\.statusSettings\}/.test(pageSrc0008zt), /<BandTable def=\{def\}/.test(pageSrc0008zt),
+    /moreThanRows\(rows, dim, cumulativeMeasure\)/.test(partsSrc0008zt), /whitespace-pre-line/.test(hintSrc), /FLASH_RATIOS\[measure\] \? 2/.test(partsSrc0008zt)],
+  [true, true, true, true, true, true, true, true, true], [false, false, false, false, false, false, false, false, false]);
+const { mockFlashOverview, mockFlashPage } = await import("../src/lib/data/mock-flash.ts");
+const mockSubs = mockFlashOverview(reader, "subscriptions", null, null, null, null);
+const mockBase = mockFlashOverview(reader, "installed_base", null, null, null, null);
+const mockGbBands = mockSubs.rows.filter((r) => r.dims.market === "GB" && "device_band" in r.dims).map((r) => r.dims.device_band);
+const sumOf = (rows, measure) => rows.reduce((n, r) => n + Number(r.measures[measure] ?? 0), 0);
+expect("the mock answers as the database: every device band's row per market, the holding sums, the ratio, the base's statuses; the hints' settings",
+  [mockGbBands, sumOf(mockSubs.rows.filter((r) => "device_band" in r.dims), "holding_subscriptions") === mockSubs.totals.holding_subscriptions,
+    sumOf(mockSubs.rows.filter((r) => "age_band" in r.dims), "active_subscriptions") === mockSubs.totals.active_subscriptions,
+    mockSubs.totals.devices_per_holding_subscription === ratioOf(mockSubs.totals.devices_on_holding, mockSubs.totals.holding_subscriptions),
+    sumOf(mockBase.rows.filter((r) => "subscription_status" in r.dims), "in_field") === mockBase.totals.in_field,
+    mockFlashPage(reader, null, null, null, null).statusSettings.deviceHoldingStatuses, mockSubs.statusSettings.deviceHoldingStatuses],
+  [["0", "1", "2", "3+"], true, true, true, true, ["active", "failed"], ["active", "failed"]], [[], false, false, false, false, [], []]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

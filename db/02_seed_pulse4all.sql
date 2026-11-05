@@ -5,8 +5,9 @@
 -- reasons and telephony settings, (after 0008j) the connected-call threshold, (after 0008l) the
 -- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows,
 -- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
--- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings and (after 0008zp) whether its people may clock in
--- again on the same day.
+-- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings, (after 0008zp) whether its people may clock in
+-- again on the same day and (after 0008zt) its customer segments and the contact property they come from, the statuses
+-- whose subscriptions hold devices and what each status means.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -524,7 +525,7 @@ do $$
 declare
   v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
 begin
-  if not exists (select 1 from cma.setting where key = 'flash.snapshot_local_time') then
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'flash.snapshot_local_time') then
     raise notice 'Flash does not exist yet (addition 0008zn): rerun this seed after 122_flash.sql';
     return;
   end if;
@@ -568,5 +569,50 @@ begin
   insert into cma.tenant_setting (tenant_id, key, value)
   values (v_subs, 'workday.clock_in_again', 'true')
   on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- Flash insights for Pulse4all Subscriptions (after addition 0008zt; brief B29, Martin, 5 November 2026): a store
+-- customer's segment comes from its HubSpot contact's property customer_type, mapped as the contact's segment on the
+-- tenant's active HubSpot connection, and B2B and B2C count as segments (any other value, an empty one or no linked
+-- contact shows as unknown on Reports → Flash, never inferred). Active and failed subscriptions hold devices (an active
+-- one pays, a failed one has a failed payment while its AEDs stay), and Flash's hints say what each status means, in
+-- English and Dutch (Bas, 5 November 2026). The bands keep their defaults (flash.device_bands 1,2,3;
+-- flash.subscription_age_months 12,24,36,48,60). No HubSpot scope or webhook subscription changes: a linked contact's
+-- value is read by the sweep's second read and the nightly reconcile (docs/ingest/README.md); the contacts held before
+-- this ran take it with their next read, or at once with ingest-backfill --object contact. Pulse4all Invest keeps the
+-- default, no segments. Only rows the tenant does not have yet are added, so a change through the Configuration API or
+-- in Studio survives a rerun. A database without the HubSpot connection yet (a fresh one) says so; rerun this seed once
+-- it is created.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'crm.customer_segments') then
+    raise notice 'Flash insights do not exist yet (addition 0008zt): rerun this seed after 136_flash_insights.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'crm.customer_segments', 'B2B,B2C'),
+    -- the device-holding statuses and what each status means for Pulse4all (Bas, 5 November 2026; Decision log): an
+    -- active or a failed subscription holds one or more AEDs at the customer, a paused one none, a canceled one's AEDs
+    -- are back in the warehouse with their receipt confirmed by it, an expired one was never used
+    (v_subs, 'flash.device_holding_statuses', 'active,failed'),
+    (v_subs, 'subscription.status_meanings',
+     '{"active": {"en": "One or more AEDs at the customer.", "nl": "Eén of meer AED''s bij de klant."}, '
+     || '"failed": {"en": "Payment failed; one or more AEDs still at the customer.", "nl": "Betaling mislukt; één of meer AED''s nog bij de klant."}, '
+     || '"paused": {"en": "No AEDs at the customer.", "nl": "Geen AED''s bij de klant."}, '
+     || '"canceled": {"en": "Ended; the AEDs are back in the warehouse, receipt confirmed by the warehouse.", "nl": "Opgezegd; de AED''s zijn terug in het magazijn, ontvangst bevestigd door het magazijn."}, '
+     || '"expired": {"en": "Not used.", "nl": "Niet in gebruik."}}')
+  on conflict (tenant_id, key) do nothing;
+  if not exists (select 1 from cma.integration_connection c where c.tenant_id = v_subs and c.adapter = 'hubspot' and c.status = 'active') then
+    raise notice 'Pulse4all Subscriptions has no active HubSpot connection yet: rerun this seed after it is created, to map the contact segment';
+    return;
+  end if;
+  insert into cma.connection_field (tenant_id, connection_id, entity, field, ref_system, slot, source_property)
+  select c.tenant_id, c.id, 'contact', 'segment', '', 1, 'customer_type'
+  from cma.integration_connection c
+  where c.tenant_id = v_subs and c.adapter = 'hubspot' and c.status = 'active'
+  on conflict (tenant_id, connection_id, entity, field, ref_system, slot) do nothing;
 end
 $$;

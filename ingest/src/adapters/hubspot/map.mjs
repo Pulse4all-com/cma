@@ -24,6 +24,11 @@
  * Since addition 0008zb: a deal's or ticket's reason, from its mapped reason property, only once that property is known
  * to be an enumeration (the option's internal value, at most 100 characters); reasonItemOf turns the property's
  * definition into the catalog the database keeps.
+ *
+ * Since addition 0008zt (brief B29): a contact's segment, from its mapped segment property (Pulse4all: customer_type), its
+ * value as given, trimmed, an empty one none; the database keeps none for a value over 100 characters or with an @
+ * (cma.ingest_upsert_contacts). Read wherever a contact is read: the read-back, the sweep's second read, the reconcile and
+ * the backfill, through contactFromObject.
  */
 import { hashNumber } from "../../core/hash.mjs";
 
@@ -175,7 +180,7 @@ export const TASK_PROPERTIES = ["hs_timestamp", "hs_task_status", "hs_task_type"
 
 const RECORD_KEYS = { market: "market", language: "language", currency: "currency", amount: "amount", source_channel: "sourceChannel", category: "category",
   reason: "reason" };
-const CONTACT_KEYS = { country: "country", language: "language", currency: "currency", store: "store" };
+const CONTACT_KEYS = { country: "country", language: "language", currency: "currency", store: "store", segment: "segment" };
 
 /**
  * The configured fields of one entity (deal, ticket, contact) from cma.connection_config. A reason field counts only once
@@ -295,7 +300,8 @@ function slotOf(f) {
  * first that names a catalog market (cma.contact_country_pick). The creation time (addition 0008u):
  * slot 1 is the object's own createdAt; with created_at properties mapped to slots 2 to 9 the item
  * carries `createdAts` (element n - 1 is slot n, null when empty) and the database keeps the earliest,
- * else `createdAt`; neither when no time is known, so the stored one stays.
+ * else `createdAt`; neither when no time is known, so the stored one stays. The segment (addition 0008zt), when the
+ * connection maps one, is the property's value trimmed, null when empty (the database clears the stored one then).
  */
 export function contactFromObject(obj, config) {
   const p = obj?.properties ?? {};

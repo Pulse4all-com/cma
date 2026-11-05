@@ -10,6 +10,7 @@
  */
 import type { Identity, Principal } from "@/lib/auth/identity";
 import type { HealthRun } from "@/lib/health";
+import type { FlashStatusSettings } from "@/lib/flash";
 
 /** ISO 8601 instant, always UTC on the wire; screens format in the user's zone */
 export type Instant = string;
@@ -3240,6 +3241,8 @@ export interface FlashPageView {
   /** The tenant's business date today and its time zone: As of is a date before it, whatever the reader's zone */
   today: string;
   timeZone: string;
+  /** The statuses the cards' figures count and the tenant's meanings of them, for the hints (addition 0008zt) */
+  statusSettings: FlashStatusSettings;
 }
 
 /** A grouping set's row: its dims ({} for the totals) and measures (a number, or an amount as currency codes to sums) */
@@ -3281,7 +3284,13 @@ export interface FlashDocumentView {
     requiredContactRefs: string[];
     activeSubscriptionStatuses: string[];
     endedSubscriptionStatuses: string[];
+    /** The bands the figures follow (addition 0008zt): now's, or the snapshot's own; null for a snapshot taken before them */
+    deviceBands: number[] | null;
+    subscriptionAgeMonths: number[] | null;
+    customerSegments: string[] | null;
   };
+  /** The statuses the figures count and the tenant's meanings of them, for the hints (addition 0008zt) */
+  statusSettings: FlashStatusSettings;
   definitionVersion: string;
   firstSnapshotDate: string | null;
   /** The tenant's business date today and its time zone */

@@ -14,9 +14,9 @@ import { Badge, Keycap } from "@/components/primitives";
 import type { Copy } from "@/lib/copy";
 import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesView, FlashWatchItem } from "@/lib/data";
 import {
-  amountsOf, averageRating, barShare, cellFilters, changeLineOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
-  FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf, measureNotApplicable, overviewOf, rowsOfSet, statusTone, type FlashKey,
-  type FlashOverviewDef,
+  amountsOf, averageRating, bandRows, barShare, cardStatusHint, cellFilters, changeLineOf, dataQualityRowShown, FLASH_BAND_DIMS, FLASH_DEFINITION_STATUS,
+  FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS, FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_RATIOS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf,
+  measureHint, measureNotApplicable, moreThanRows, overviewOf, rowsOfSet, setMeasures, statusTone, type FlashKey, type FlashOverviewDef, type FlashStatusSettings,
 } from "@/lib/flash";
 import { fmtDate, fmtDateTimeShort, fmtLastRead } from "@/lib/time";
 
@@ -51,7 +51,20 @@ export function MeasureValue({ measure, value, reviews, locale }: { measure: str
     const avg = averageRating(typeof value === "number" ? value : null, typeof reviews === "number" ? reviews : null);
     return <span>{avg === null ? "–" : fmtNumber(avg, locale, 2)}</span>;
   }
-  return <span>{typeof value === "number" ? fmtNumber(value, locale, measure.endsWith("_age_days") ? 1 : 0) : "–"}</span>;
+  // a ratio (devices per holding subscription) to two decimals, as the database rounds it; none shows a dash
+  return <span>{typeof value === "number" ? fmtNumber(value, locale, FLASH_RATIOS[measure] ? 2 : measure.endsWith("_age_days") ? 1 : 0) : "–"}</span>;
+}
+
+/**
+ * A measure's (or a band dim's) label with its hint (addition 0008zt): the copy's mh_<key>, and for a figure that counts
+ * by status the statuses of the tenant's settings with the tenant's meanings in the reader's language
+ */
+export function MeasureLabel({ measure, label, settings, locale, t }: {
+  measure: string; label: string; settings: FlashStatusSettings | null | undefined; locale: "en" | "nl"; t: T;
+}) {
+  const text = measureHint(measure, (t as Record<string, string>)[`mh_${measure}`], settings, locale, t);
+  if (!text) return <>{label}</>;
+  return <HintLabel label={label}><HeaderHint label={label} text={text} /></HintLabel>;
 }
 
 /** A measure that does not apply (left out by the database): said so, never 0 or all, with the reason as its title */
@@ -148,12 +161,15 @@ export function WatchStrip({ items, query, t, copy, locale }: {
 }
 
 /** A landing card: the overview's name and key, its headline figure, the change, the definition's status */
-export function FlashCard({ def, setUp, sourceLabel, figure, change, query, t }: {
+export function FlashCard({ def, setUp, sourceLabel, figure, change, query, t, statusSettings, locale }: {
   def: FlashOverviewDef; setUp: boolean; sourceLabel: string; figure: ReactNode; change: string | null; query: Query; t: T;
+  /** The statuses the card's figures count and the tenant's meanings (addition 0008zt), for its hint */
+  statusSettings?: FlashStatusSettings | null; locale?: "en" | "nl";
 }) {
   return (
     <Link href={href({ ...query, o: def.key })} data-shortcut={def.shortcut.toLowerCase()} data-testid={`flash-card-${def.key}`}
-      title={`${String(t[`h_${def.key}` as keyof T])} ${t.statusHint.replace("{status}", String(t[`status_${FLASH_DEFINITION_STATUS[def.key]}` as keyof T]))}`}
+      title={cardStatusHint(def.key, `${String(t[`h_${def.key}` as keyof T])} ${t.statusHint.replace("{status}", String(t[`status_${FLASH_DEFINITION_STATUS[def.key]}` as keyof T]))}`,
+        statusSettings, locale ?? "en", t)}
       className="flex min-h-36 flex-col gap-2 rounded-card border border-p4a-border bg-white p-5 no-underline hover:bg-p4a-bgblue/50">
       <span className="flex items-center justify-between gap-2">
         <span className="text-body font-semibold text-p4a-heading">{t[`o_${def.key}` as keyof T]}</span>
@@ -182,14 +198,16 @@ export function changeText(value: number | null, previous: number | null, previo
 }
 
 /** The totals: one tile per measure, the headline first */
-export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc: FlashDocumentView; locale: string; t: T }) {
+export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc: FlashDocumentView; locale: "en" | "nl"; t: T }) {
   const totals = doc.totals ?? {};
   const order = [def.headline, ...def.measures.filter((m) => m !== def.headline)];
   return (
     <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5" data-testid="flash-totals">
       {order.map((m) => (
-        <div key={m} className="rounded-card border border-p4a-border bg-white p-5" data-testid={`flash-total-${m}`}>
-          <p className="text-caption text-p4a-grey">{t[`m_${m}` as keyof T]}</p>
+        <div key={m} className="rounded-card border border-p4a-border bg-white p-5" data-testid={`flash-total-${m}`} data-hint-anchor="">
+          <p className="text-caption text-p4a-grey">
+            <MeasureLabel measure={m} label={String(t[`m_${m}` as keyof T])} settings={doc.statusSettings} locale={locale} t={t} />
+          </p>
           <p className="tabular mt-1 text-title font-bold text-p4a-heading">
             {measureNotApplicable(def.key, doc.totals, m)
               ? <NotApplicable measure={m} t={t} />
@@ -207,6 +225,11 @@ export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc:
  */
 function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, dims: Record<string, string>, t: T): string {
   if (dims[dim] === "unknown" && dim === "market") return t.unknownMarket;
+  // a segment, an age band without a creation date (addition 0008zt)
+  if (dims[dim] === "unknown" && (dim === "segment" || dim === "age_band")) return t.unknownValue;
+  // a device's subscription status: the subscription app's word, else no subscription found, else no reference
+  if (dim === "subscription_status" && dims[dim] === "not_found") return t.notFound;
+  if (dim === "subscription_status" && dims[dim] === "none") return t.noLink;
   return dimText(def.key, doc.labels, dim, dims);
 }
 
@@ -215,11 +238,12 @@ function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, di
  * measure) with an inline bar. A count cell opens its records (the row's dims and the measure as the list's filters)
  */
 export function BreakdownTable({ def, doc, set, query, locale, t }: {
-  def: FlashOverviewDef; doc: FlashDocumentView; set: readonly string[]; query: Query; locale: string; t: T;
+  def: FlashOverviewDef; doc: FlashDocumentView; set: readonly string[]; query: Query; locale: "en" | "nl"; t: T;
 }) {
   const rows = rowsOfSet(doc.rows, set);
   const barMeasure = def.countMeasures.includes(def.headline) ? def.headline : def.countMeasures[0] ?? def.headline;
-  const measures = set.includes("sku") ? ["orders", "units"] : def.measures;
+  // the measures the set's rows hold (lib/flash setMeasures: a SKU's orders and units, else every measure)
+  const measures = setMeasures(def, set);
   const max = Math.max(0, ...rows.map((r) => (typeof r.measures[barMeasure] === "number" ? (r.measures[barMeasure] as number) : 0)));
   const cellLink = (r: FlashDocRowView, m: string | null) => href({
     ...query, ...Object.fromEntries(Object.entries(cellFilters(r.dims, m)).map(([k, v]) => [k === "measure" ? k : `f_${k}`, v])), page: "1",
@@ -229,8 +253,16 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
       <table className="w-full border-collapse text-body leading-table" data-testid={`flash-breakdown-${set.join("-")}`}>
         <thead>
           <tr className="bg-p4a-bgblue text-small font-semibold text-p4a-heading">
-            {set.map((d) => <th key={d} scope="col" className="px-3 py-2 text-left font-semibold">{t[`d_${d}` as keyof T] ?? d}</th>)}
-            {measures.map((m) => <th key={m} scope="col" className="px-3 py-2 text-right font-semibold">{t[`m_${m}` as keyof T]}</th>)}
+            {set.map((d) => (
+              <th key={d} scope="col" className="px-3 py-2 text-left font-semibold">
+                <MeasureLabel measure={d} label={String(t[`d_${d}` as keyof T] ?? d)} settings={doc.statusSettings} locale={locale} t={t} />
+              </th>
+            ))}
+            {measures.map((m) => (
+              <th key={m} scope="col" className="px-3 py-2 text-right font-semibold">
+                <MeasureLabel measure={m} label={String(t[`m_${m}` as keyof T])} settings={doc.statusSettings} locale={locale} t={t} />
+              </th>
+            ))}
             <th scope="col" className="w-40 px-3 py-2 font-semibold"><span className="sr-only">{t[`m_${barMeasure}` as keyof T]}</span></th>
           </tr>
         </thead>
@@ -273,6 +305,73 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
               </tr>
             );
           })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * A band set (addition 0008zt) as a table (7.6): one row per band in band order, of the chosen market or summed over every
+ * market (counts added, the ratio worked out again: lib/flash bandRows), the set's measures, the total row; a count cell
+ * opens its records (the band and the measure as the list's filters). An age band table ends with the cumulative "More
+ * than N months" lines, worked out from its rows
+ */
+export function BandTable({ def, doc, set, query, locale, t }: {
+  def: FlashOverviewDef; doc: FlashDocumentView; set: readonly string[]; query: Query; locale: "en" | "nl"; t: T;
+}) {
+  const dim = set[1] ?? "";
+  const measures = setMeasures(def, set);
+  const rows = bandRows(doc.rows, dim, doc.market, measures);
+  const cumulative = FLASH_BAND_DIMS[def.key]?.[dim]?.cumulative ?? false;
+  const cumulativeMeasure = measures[0] ?? "";
+  const label = (band: string) => (band === "unknown" ? t.unknownValue : band);
+  const cellLink = (band: string, m: string | null) => href({ ...query, [`f_${dim}`]: band, ...(m ? { measure: m } : {}), page: "1" });
+  if (rows.length === 0) return <p className="text-body text-p4a-muted">{t.empty}</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-body leading-table" data-testid={`flash-bands-${dim}`}>
+        <thead>
+          <tr className="bg-p4a-bgblue text-small font-semibold text-p4a-heading">
+            <th scope="col" className="px-3 py-2 text-left font-semibold">
+              <MeasureLabel measure={dim} label={String(t[`d_${dim}` as keyof T] ?? dim)} settings={doc.statusSettings} locale={locale} t={t} />
+            </th>
+            {measures.map((m) => (
+              <th key={m} scope="col" className="px-3 py-2 text-right font-semibold">
+                <MeasureLabel measure={m} label={String(t[`m_${m}` as keyof T])} settings={doc.statusSettings} locale={locale} t={t} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="border-b border-p4a-border font-semibold">
+            <td className="px-3 py-2">{t.totalRow}</td>
+            {measures.map((m) => (
+              <td key={m} className="tabular px-3 py-2 text-right"><MeasureValue measure={m} value={doc.totals?.[m]} locale={locale} /></td>
+            ))}
+          </tr>
+          {rows.map((r) => {
+            const band = r.dims[dim] ?? "";
+            return (
+              <tr key={band} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50" data-testid={`flash-band-${band}`}>
+                <td className="px-3 py-2"><Link href={cellLink(band, null)} className="text-p4a-deepblue underline">{label(band)}</Link></td>
+                {measures.map((m) => (
+                  <td key={m} className="tabular px-3 py-2 text-right">
+                    {def.countMeasures.includes(m)
+                      ? <Link href={cellLink(band, m)} className="text-p4a-deepblue underline"><MeasureValue measure={m} value={r.measures[m]} locale={locale} /></Link>
+                      : <MeasureValue measure={m} value={r.measures[m]} locale={locale} />}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+          {cumulative ? moreThanRows(rows, dim, cumulativeMeasure).map((c) => (
+            <tr key={`more-${c.months}`} className="h-10 border-b border-p4a-border text-p4a-muted" data-testid={`flash-more-than-${c.months}`}>
+              <td className="px-3 py-2">{t.moreThan.replace("{n}", fmtNumber(c.months, locale))}</td>
+              <td className="tabular px-3 py-2 text-right">{fmtNumber(c.value, locale)}</td>
+              {measures.slice(1).map((m) => <td key={m} />)}
+            </tr>
+          )) : null}
         </tbody>
       </table>
     </div>
@@ -437,13 +536,18 @@ export function DataQualityTable({ doc, query, locale, t }: { doc: FlashDocument
 }
 
 /** An overview's title with the definition's hint (its status named) and, for those who may open it, How this is computed */
-export function OverviewHeading({ def, t, more }: { def: FlashOverviewDef; t: T; more?: { href: string; label: string } }) {
+export function OverviewHeading({ def, t, more, statusSettings, locale }: {
+  def: FlashOverviewDef; t: T; more?: { href: string; label: string };
+  /** The statuses the overview's figures count and the tenant's meanings (addition 0008zt), for its hint */
+  statusSettings?: FlashStatusSettings | null; locale?: "en" | "nl";
+}) {
   const status = String(t[`status_${FLASH_DEFINITION_STATUS[def.key]}` as keyof T]);
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3" data-hint-anchor="">
       <h2 className="text-panel font-semibold text-p4a-heading">
         <HintLabel label={String(t[`o_${def.key}` as keyof T])}>
-          <HeaderHint label={String(t[`o_${def.key}` as keyof T])} text={`${String(t[`h_${def.key}` as keyof T])} ${t.statusHint.replace("{status}", status)}`} more={more} />
+          <HeaderHint label={String(t[`o_${def.key}` as keyof T])}
+            text={cardStatusHint(def.key, `${String(t[`h_${def.key}` as keyof T])} ${t.statusHint.replace("{status}", status)}`, statusSettings, locale ?? "en", t)} more={more} />
         </HintLabel>
       </h2>
       <DefinitionBadge overview={def.key} t={t} />
