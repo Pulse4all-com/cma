@@ -1,0 +1,2 @@
+datamap: PASS (102 tables, 158 views, all described; index.html current)
+exit 0

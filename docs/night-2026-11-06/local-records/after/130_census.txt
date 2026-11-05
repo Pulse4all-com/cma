@@ -1,0 +1,117 @@
+ false
+                                   check_name                                   | result |                                                                                  detail                                                                                   
+ read only                                                                      | info   | a write in the census is refused (25006)
+ statistics reset                                                               | info   | statistics never reset (since the database was created)
+ volume ingest_event                                                            | info   | rows ~1,080,000; table 206 MB, indexes 340 MB, total 546 MB
+ health ingest_event                                                            | info   | seq scans 7, index scans 3951; dead 31 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume sync_run                                                                | info   | rows ~360,000; table 72 MB, indexes 71 MB, total 143 MB
+ health sync_run                                                                | info   | seq scans 408, index scans 14179; dead 154 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume subscription_event                                                      | info   | rows ~300,000; table 46 MB, indexes 206 MB, total 252 MB
+ health subscription_event                                                      | info   | seq scans 406, index scans 244291; dead 12 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume data_quality_finding                                                    | info   | rows ~246,764; table 68 MB, indexes 26 MB, total 94 MB
+ health data_quality_finding                                                    | info   | seq scans 8, index scans 108; dead 0 (0.0% of live); last autovacuum 2026-11-05 05:53, last autoanalyze 2026-11-05 05:43
+ volume telephony_call                                                          | info   | rows ~198,000; table 50 MB, indexes 98 MB, total 148 MB
+ health telephony_call                                                          | info   | seq scans 12649, index scans 1153474; dead 185 (0.1% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume crm_association                                                         | info   | rows ~162,599; table 19 MB, indexes 64 MB, total 83 MB
+ health crm_association                                                         | info   | seq scans 7196, index scans 1840470; dead 66 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume crm_call                                                                | info   | rows ~150,000; table 36 MB, indexes 75 MB, total 111 MB
+ health crm_call                                                                | info   | seq scans 2799, index scans 1226636; dead 61 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume commerce_customer                                                       | info   | rows ~120,000; table 20 MB, indexes 103 MB, total 122 MB
+ health commerce_customer                                                       | info   | seq scans 2549, index scans 119263; dead 35 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume call_link                                                               | info   | rows ~100,000; table 12 MB, indexes 31 MB, total 43 MB
+ health call_link                                                               | info   | seq scans 1524, index scans 1326667; dead 11 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume commerce_order_line                                                     | info   | rows ~89,933; table 11 MB, indexes 37 MB, total 48 MB
+ health commerce_order_line                                                     | info   | seq scans 13, index scans 109; dead 14 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume commerce_order                                                          | info   | rows ~60,000; table 12 MB, indexes 72 MB, total 84 MB
+ health commerce_order                                                          | info   | seq scans 778, index scans 664441; dead 34 (0.1% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume crm_contact                                                             | info   | rows ~60,000; table 8328 kB, indexes 35 MB, total 43 MB
+ health crm_contact                                                             | info   | seq scans 7467, index scans 1717865; dead 57 (0.1% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume device_component                                                        | info   | rows ~40,800; table 4576 kB, indexes 29 MB, total 33 MB
+ health device_component                                                        | info   | seq scans 174, index scans 498652; dead 0 (0.0% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume crm_task                                                                | info   | rows ~22,500; table 4256 kB, indexes 14 MB, total 19 MB
+ health crm_task                                                                | info   | seq scans 932, index scans 1262; dead 44 (0.2% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume subscription                                                            | info   | rows ~22,140; table 4168 kB, indexes 32 MB, total 36 MB
+ health subscription                                                            | info   | seq scans 785, index scans 15761; dead 14 (0.1% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume crm_record                                                              | info   | rows ~21,300; table 3904 kB, indexes 13 MB, total 17 MB
+ health crm_record                                                              | info   | seq scans 5774, index scans 964520; dead 157 (0.7% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume device                                                                  | info   | rows ~20,400; table 4704 kB, indexes 34 MB, total 38 MB
+ health device                                                                  | info   | seq scans 3990, index scans 1008713; dead 16 (0.1% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume telephony_call_tag                                                      | info   | rows ~19,800; table 1784 kB, indexes 13 MB, total 14 MB
+ health telephony_call_tag                                                      | info   | seq scans 415, index scans 11139142; dead 34 (0.2% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume crm_contact_ref                                                         | info   | rows ~15,000; table 1528 kB, indexes 6096 kB, total 7624 kB
+ health crm_contact_ref                                                         | info   | seq scans 941, index scans 626492; dead 30 (0.2% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09
+ volume review                                                                  | info   | rows ~15,000; table 2712 kB, indexes 12 MB, total 14 MB
+ health review                                                                  | info   | seq scans 811, index scans 413; dead 12 (0.1% of live); last autovacuum 2026-11-05 05:09, last autoanalyze 2026-11-05 05:09; more sequential than index scans
+ unused index email_message_account_idx                                         | info   | on cma.email_message, 16 kB, no scan since the statistics reset; listed, not dropped
+ unused index follow_up_item_market_idx                                         | info   | on cma.follow_up_item, 16 kB, no scan since the statistics reset; listed, not dropped
+ unused index review_order_idx                                                  | info   | on cma.review, 16 kB, no scan since the statistics reset; listed, not dropped
+ unused index time_event_import_batch_idx                                       | info   | on cma.time_event, 16 kB, no scan since the statistics reset; listed, not dropped
+ unused indexes                                                                 | info   | 4 index(es) of cma tables without a scan since the statistics reset (primary keys and unique indexes left out)
+ invalid indexes                                                                | info   | 0 invalid index(es)
+ fk without index app_link_permission_key_fkey                                  | info   | cma.app_link (permission_key)
+ fk without index call_link_tenant_id_linked_by_fkey                            | info   | cma.call_link (tenant_id, linked_by)
+ fk without index call_link_tenant_id_unlinked_by_fkey                          | info   | cma.call_link (tenant_id, unlinked_by)
+ fk without index connection_form_category_fkey                                 | info   | cma.connection_form (tenant_id, category)
+ fk without index connection_inbox_tenant_id_channel_id_fkey                    | info   | cma.connection_inbox (tenant_id, channel_id)
+ fk without index connection_inbox_tenant_id_market_fkey                        | info   | cma.connection_inbox (tenant_id, market)
+ fk without index connection_inbox_tenant_id_work_type_skill_id_fkey            | info   | cma.connection_inbox (tenant_id, work_type_skill_id)
+ fk without index connection_inbox_account_tenant_id_market_fkey                | info   | cma.connection_inbox_account (tenant_id, market)
+ fk without index connection_inbox_channel_tenant_id_channel_id_fkey            | info   | cma.connection_inbox_channel (tenant_id, channel_id)
+ fk without index connection_pipeline_tenant_id_work_type_skill_id_fkey         | info   | cma.connection_pipeline (tenant_id, work_type_skill_id)
+ fk without index connection_record_kind_tenant_id_kind_key_fkey                | info   | cma.connection_record_kind (tenant_id, kind_key)
+ fk without index coverage_target_tenant_id_skill_id_fkey                       | info   | cma.coverage_target (tenant_id, skill_id)
+ fk without index coverage_target_tenant_id_updated_by_fkey                     | info   | cma.coverage_target (tenant_id, updated_by)
+ fk without index device_tenant_id_device_status_key_fkey                       | info   | cma.device (tenant_id, device_status_key)
+ fk without index device_tenant_id_market_fkey                                  | info   | cma.device (tenant_id, market)
+ fk without index device_tenant_id_model_key_fkey                               | info   | cma.device (tenant_id, model_key)
+ fk without index device_component_tenant_id_component_key_fkey                 | info   | cma.device_component (tenant_id, component_key)
+ fk without index flash_snapshot_tenant_id_run_id_fkey                          | info   | cma.flash_snapshot (tenant_id, run_id)
+ fk without index flash_snapshot_ids_tenant_id_connection_id_fkey               | info   | cma.flash_snapshot_ids (tenant_id, connection_id)
+ fk without index flash_snapshot_ids_tenant_id_run_id_fkey                      | info   | cma.flash_snapshot_ids (tenant_id, run_id)
+ fk without index follow_up_item_tenant_id_owner_user_id_fkey                   | info   | cma.follow_up_item (tenant_id, owner_user_id)
+ fk without index form_submission_tenant_id_connection_id_source_form_id_fkey   | info   | cma.form_submission (tenant_id, connection_id, source_form_id)
+ fk without index import_batch_tenant_id_created_by_fkey                        | info   | cma.import_batch (tenant_id, created_by)
+ fk without index import_batch_tenant_id_loaded_by_fkey                         | info   | cma.import_batch (tenant_id, loaded_by)
+ fk without index import_batch_tenant_id_voided_by_fkey                         | info   | cma.import_batch (tenant_id, voided_by)
+ fk without index import_day_tenant_id_end_event_id_fkey                        | info   | cma.import_day (tenant_id, end_event_id)
+ fk without index import_day_tenant_id_workday_id_user_id_fkey                  | info   | cma.import_day (tenant_id, workday_id, user_id)
+ fk without index import_person_map_tenant_id_user_id_fkey                      | info   | cma.import_person_map (tenant_id, user_id)
+ fk without index invitation_tenant_id_accepted_user_id_fkey                    | info   | cma.invitation (tenant_id, accepted_user_id)
+ fk without index invitation_tenant_id_created_by_fkey                          | info   | cma.invitation (tenant_id, created_by)
+ fk without index invitation_tenant_id_organisation_id_fkey                     | info   | cma.invitation (tenant_id, organisation_id)
+ fk without index invitation_tenant_id_renewed_by_fkey                          | info   | cma.invitation (tenant_id, renewed_by)
+ fk without index invitation_tenant_id_revoked_by_fkey                          | info   | cma.invitation (tenant_id, revoked_by)
+ fk without index invitation_tenant_id_role_id_fkey                             | info   | cma.invitation (tenant_id, role_id)
+ fk without index journey_tenant_id_market_fkey                                 | info   | cma.journey (tenant_id, market)
+ fk without index legacy_call_batch_tenant_id_crm_connection_id_fkey            | info   | cma.legacy_call_batch (tenant_id, crm_connection_id)
+ fk without index legacy_call_batch_tenant_id_withdrawn_by_fkey                 | info   | cma.legacy_call_batch (tenant_id, withdrawn_by)
+ fk without index legacy_call_outcome_tenant_id_batch_id_crm_connection_id_fkey | info   | cma.legacy_call_outcome (tenant_id, batch_id, crm_connection_id)
+ fk without index maintenance_rule_tenant_id_component_key_fkey                 | info   | cma.maintenance_rule (tenant_id, component_key)
+ fk without index market_alias_tenant_id_code_fkey                              | info   | cma.market_alias (tenant_id, code)
+ fk without index message_tenant_id_sender_user_id_fkey                         | info   | cma.message (tenant_id, sender_user_id)
+ fk without index message_withdrawn_by_fkey                                     | info   | cma.message (tenant_id, withdrawn_by)
+ fk without index message_rule_audience_permission_fkey                         | info   | cma.message_rule (audience_permission)
+ fk without index message_rule_fallback_permission_fkey                         | info   | cma.message_rule (fallback_permission)
+ fk without index outbox_action_tenant_id_created_by_fkey                       | info   | cma.outbox_action (tenant_id, created_by)
+ fk without index outbox_action_tenant_id_resolved_by_fkey                      | info   | cma.outbox_action (tenant_id, resolved_by)
+ fk without index review_channel_tenant_id_market_fkey                          | info   | cma.review_channel (tenant_id, market)
+ fk without index role_permission_permission_key_fkey                           | info   | cma.role_permission (permission_key)
+ fk without index roster_entry_tenant_id_absence_type_id_fkey                   | info   | cma.roster_entry (tenant_id, absence_type_id)
+ fk without index roster_entry_tenant_id_recorded_by_fkey                       | info   | cma.roster_entry (tenant_id, recorded_by)
+ fk without index roster_entry_tenant_id_superseded_by_fkey                     | info   | cma.roster_entry (tenant_id, superseded_by)
+ fk without index roster_publication_tenant_id_published_by_fkey                | info   | cma.roster_publication (tenant_id, published_by)
+ fk without index roster_week_tenant_id_created_by_fkey                         | info   | cma.roster_week (tenant_id, created_by)
+ fk without index roster_week_tenant_id_published_by_fkey                       | info   | cma.roster_week (tenant_id, published_by)
+ fk without index sync_run_tenant_id_started_by_fkey                            | info   | cma.sync_run (tenant_id, started_by)
+ fk without index team_member_tenant_id_created_by_fkey                         | info   | cma.team_member (tenant_id, created_by)
+ fk without index tenant_setting_key_fkey                                       | info   | cma.tenant_setting (key)
+ fk without index tenant_setting_tenant_id_updated_by_fkey                      | info   | cma.tenant_setting (tenant_id, updated_by)
+ fk without index time_event_tenant_id_approved_by_fkey                         | info   | cma.time_event (tenant_id, approved_by)
+ fk without index time_event_tenant_id_status_id_fkey                           | info   | cma.time_event (tenant_id, status_id)
+ fk without index time_event_tenant_id_workday_id_user_id_fkey                  | info   | cma.time_event (tenant_id, workday_id, user_id)
+ fk without index user_role_tenant_id_granted_by_fkey                           | info   | cma.user_role (tenant_id, granted_by)
+ fk without index user_skill_tenant_id_created_by_fkey                          | info   | cma.user_skill (tenant_id, created_by)
+ fks without index                                                              | info   | 63 foreign key(s) of cma tables without an index starting with their columns (DB-11 counted 46 on 17 October 2026)
+ statements                                                                     | info   | pg_stat_statements is not installed (pg_extension): the top statements are not listed; MORNING_RUNBOOK step 0d says how to enable it (a database flag, Martin's decision)
+ verdict                                                                        | PASS   | 130_census: 113 rows, 0 FAIL; 20 table(s) of 10000 rows or more, 4 unused index(es), 63 fk(s) without index
+(114 rows)

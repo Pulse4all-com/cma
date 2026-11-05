@@ -1,0 +1,19 @@
+node:internal/deps/undici/undici:15456
+      Error.captureStackTrace(err);
+            ^
+
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:15456:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async file:///tmp/claude-0/-home-user-cma/78c06493-d127-5e24-bef7-e26126b940a1/scratchpad/main-tree/web/verify/round-trips.mjs:40:15 {
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:8082
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1638:16) {
+    errno: -111,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 8082
+  }
+}
+
+Node.js v22.23.4

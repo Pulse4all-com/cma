@@ -53,7 +53,8 @@
 --                         is younger than data_quality.refresh_minutes (reason fresh); the current tenant only
 --   cma.refresh_data_quality()  the job's entry (data_quality.refresh): refreshes the current tenant
 --   reads                 cma.data_quality() and cma.data_quality_rows() read the store (and compute it once on demand
---                         when there is none: a new tenant, a missed job); cma.flash_findings_of(tenant) reads the store,
+--                         when there is none: a new tenant, a missed job; and again when the store was computed earlier in
+--                         the same transaction, so a verify that writes and reads sees its writes); cma.flash_findings_of(tenant) reads the store,
 --                         so Flash's data-quality overview, its list, the snapshot take and the watch read it too;
 --                         cma.data_quality_computed_at() says when it was computed, for "Refreshed at"
 -- The two tables are derived and rewritten by every refresh: row-level security and the grants of
@@ -883,8 +884,12 @@ begin
 end
 $$;
 
--- The tenant's result computed once on demand when there is none yet (a new tenant, a missed job): the snapshot row
-create or replace function cma.data_quality_snapshot_of(p_tenant_id uuid)
+-- The tenant's result computed once on demand when there is none yet (a new tenant, a missed job): the snapshot row.
+-- A result computed earlier in the same transaction (computed_at is the transaction's now()) is computed again when
+-- p_recompute is true, so a transaction that writes and then reads (the verify scripts 41, 73 and 75) sees its own
+-- writes; the web never writes and reads in one transaction, and the job reads nothing after its refresh
+drop function if exists cma.data_quality_snapshot_of(uuid);   -- an earlier form of this script's development, never in dev or prod
+create or replace function cma.data_quality_snapshot_of(p_tenant_id uuid, p_recompute boolean default true)
 returns cma.data_quality_snapshot
 language plpgsql
 as $$
@@ -892,7 +897,11 @@ declare
   s cma.data_quality_snapshot;
 begin
   select * into s from cma.data_quality_snapshot x where x.tenant_id = p_tenant_id;
-  if not found then
+  if found and p_recompute and s.computed_at = now() then
+    delete from cma.data_quality_snapshot x where x.tenant_id = p_tenant_id;
+    s := null;
+  end if;
+  if s.tenant_id is null then
     perform cma.refresh_data_quality_of(p_tenant_id, true);
     select * into s from cma.data_quality_snapshot x where x.tenant_id = p_tenant_id;
   end if;
@@ -907,7 +916,7 @@ language plpgsql
 as $$
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team', 'tenant.configure']);
-  return (cma.data_quality_snapshot_of(cma.current_tenant_id())).computed_at;
+  return (cma.data_quality_snapshot_of(cma.current_tenant_id(), false)).computed_at;
 end
 $$;
 
@@ -1026,7 +1035,7 @@ begin
     'cma.calls_of(uuid,timestamptz,timestamptz,text,text)', 'cma.market_codes_of(uuid)', 'cma.intake_per_day_of(uuid,timestamptz,timestamptz)',
     'cma.open_tickets_of(uuid)', 'cma.open_tasks_of(uuid)',
     'cma.flash_findings_compute_of(uuid)', 'cma.flash_findings_of(uuid)', 'cma.data_quality_lock_key(uuid)',
-    'cma.refresh_data_quality_of(uuid,boolean)', 'cma.refresh_data_quality()', 'cma.data_quality_snapshot_of(uuid)',
+    'cma.refresh_data_quality_of(uuid,boolean)', 'cma.refresh_data_quality()', 'cma.data_quality_snapshot_of(uuid,boolean)',
     'cma.data_quality_computed_at()', 'cma.data_quality()', 'cma.data_quality_rows(text,text,integer,integer)'
   ] loop
     execute format('revoke execute on function %s from public', f);

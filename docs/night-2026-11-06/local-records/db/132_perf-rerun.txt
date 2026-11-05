@@ -1,0 +1,78 @@
+DO
+BEGIN
+SET
+SET
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+CREATE FUNCTION
+DROP TRIGGER
+CREATE TRIGGER
+INSERT 0 1
+CREATE FUNCTION
+REVOKE
+DO
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+psql:db/132_perf.sql:729: NOTICE:  relation "data_quality_snapshot" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:db/132_perf.sql:744: NOTICE:  relation "data_quality_finding" already exists, skipping
+CREATE TABLE
+psql:db/132_perf.sql:745: NOTICE:  relation "data_quality_finding_check_idx" already exists, skipping
+CREATE INDEX
+COMMENT
+psql:db/132_perf.sql:748: NOTICE:  policy "tenant_readonly" for relation "data_quality_snapshot" does not exist, skipping
+psql:db/132_perf.sql:748: NOTICE:  trigger "audit" for relation "data_quality_snapshot" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/132_perf.sql:749: NOTICE:  policy "tenant_readonly" for relation "data_quality_finding" does not exist, skipping
+psql:db/132_perf.sql:749: NOTICE:  trigger "audit" for relation "data_quality_finding" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+DROP TRIGGER
+DROP TRIGGER
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+DO
+REVOKE
+DO
+INSERT 0 0
+COMMIT
+RESET

@@ -1,38 +1,160 @@
 {
   "container_factor": 0.5,
   "classes": {
-    "poll": { "p50": 40, "p95": 80 },
-    "agent": { "p50": 150, "p95": 400 },
-    "report": { "p50": 400, "p95": 1000 }
+    "poll": {
+      "p50": 40,
+      "p95": 80
+    },
+    "agent": {
+      "p50": 150,
+      "p95": 400
+    },
+    "report": {
+      "p50": 400,
+      "p95": 1000
+    }
   },
   "requests": [
-    { "path": "/", "subject": "agent-two", "class": "agent" },
-    { "path": "/day", "subject": "agent-two", "class": "agent" },
-    { "path": "/hours", "subject": "agent-two", "class": "agent" },
-    { "path": "/messages", "subject": "agent-two", "class": "agent" },
-    { "path": "/schedule", "subject": "agent-two", "class": "agent" },
-    { "path": "/me/follow-up", "subject": "agent-two", "class": "agent" },
-    { "path": "/", "subject": "manager", "class": "agent" },
-    { "path": "/", "subject": "admin", "class": "agent" },
-    { "path": "/live/board", "subject": "manager", "class": "agent" },
-    { "path": "/team/people", "subject": "manager", "class": "agent" },
-    { "path": "/team/hours", "subject": "manager", "class": "agent" },
-    { "path": "/roster/planner", "subject": "manager", "class": "agent" },
-    { "path": "/reports/dashboard", "subject": "manager", "class": "report" },
-    { "path": "/reports/speed-to-lead", "subject": "manager", "class": "report" },
-    { "path": "/reports/calls", "subject": "manager", "class": "report" },
-    { "path": "/reports/follow-up", "subject": "manager", "class": "report" },
-    { "path": "/reports/funnel", "subject": "manager", "class": "report" },
-    { "path": "/reports/flash", "subject": "manager", "class": "report" },
-    { "path": "/reports/flash?o=customers", "subject": "manager", "class": "report" },
-    { "path": "/reports/data-quality", "subject": "manager", "class": "report" },
-    { "path": "/configuration/sources", "subject": "admin", "class": "report" },
-    { "path": "/configuration/health", "subject": "admin", "class": "report" },
-    { "path": "/api/v1/me", "subject": "agent-two", "class": "poll" },
-    { "path": "/api/v1/me/messages?unread=1", "subject": "agent-two", "class": "poll" },
-    { "path": "/api/v1/team/now", "subject": "manager", "class": "poll" },
-    { "path": "/api/v1/telephony/inbound-now", "subject": "manager", "class": "poll" },
-    { "path": "/api/v1/team/shifts-today", "subject": "manager", "class": "poll" }
+    {
+      "path": "/",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/day",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/hours",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/messages",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/schedule",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/me/follow-up",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/",
+      "subject": "admin",
+      "class": "agent"
+    },
+    {
+      "path": "/live/board",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/team/people",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/team/hours",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/roster/planner",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/reports/dashboard",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/speed-to-lead",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/calls",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/follow-up",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/funnel",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/flash",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/flash?o=customers",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/data-quality",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/configuration/sources",
+      "subject": "admin",
+      "class": "report"
+    },
+    {
+      "path": "/configuration/health",
+      "subject": "admin",
+      "class": "report"
+    },
+    {
+      "path": "/api/v1/me",
+      "subject": "agent-two",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/me/messages?unread=1",
+      "subject": "agent-two",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/team/now",
+      "subject": "manager",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/telephony/inbound-now",
+      "subject": "manager",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/team/shifts-today",
+      "subject": "manager",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/live/board",
+      "subject": "manager",
+      "class": "poll"
+    }
   ],
   "html_kb": {},
   "js_kb": {}

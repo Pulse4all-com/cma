@@ -1,0 +1,33 @@
+ false
+                             check_name                             | result |                                                 detail                                                 
+ read only                                                          | info   | a write in the timed part is refused (25006)
+ pulse4all-invest                                                   | skip   | no active person holds reports.view: nothing timed
+ pulse4all-subscriptions acting as                                  | info   | app_user 01a1aa08-1e97-7010-9007-3cea5ca1d11d: the first active person holding reports.view
+ pulse4all-subscriptions overview customers                         | ok     | 875.0 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview subscriptions                     | FAIL   | 1742.6 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview installed_base                    | ok     | 621.8 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview churn                             | ok     | 422.3 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview orders                            | ok     | 859.9 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview payments                          | ok     | 664.3 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview open_deals                        | ok     | 530.1 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview open_tickets                      | FAIL   | 1723.7 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview open_tasks                        | FAIL   | 3824.0 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview reviews                           | ok     | 400.0 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview data_quality                      | FAIL   | 4110.2 ms (best of 2) against 2500 ms
+ pulse4all-subscriptions landing                                    | ok     | 190.7 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list customers by lifetime_orders desc     | FAIL   | 843.8 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list subscriptions by subscription_id desc | FAIL   | 1791.2 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list installed_base by serial desc         | ok     | 654.5 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list churn by churned_at desc              | ok     | 430.9 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list orders by created_at desc             | ok     | 690.8 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list payments by at desc                   | ok     | 549.5 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list open_deals by age_days desc           | ok     | 440.7 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list open_tickets by age_days desc         | FAIL   | 1756.7 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list open_tasks by due_at desc             | FAIL   | 3897.9 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list reviews by submitted_at desc          | ok     | 400.0 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list data_quality by object_id desc        | FAIL   | 3855.7 ms (best of 2) against 2500 ms
+ verdict                                                            | FAIL   | 124_time_flash: 14 ok, 9 FAIL, 1 skip; worst 4110.2 ms (pulse4all-subscriptions overview data_quality)
+(27 rows)
+real	1m3.956s
+user	0m0.037s
+sys	0m0.006s

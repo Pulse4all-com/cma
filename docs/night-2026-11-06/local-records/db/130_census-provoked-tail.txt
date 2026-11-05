@@ -1,0 +1,3 @@
+ statements                                                                     | FAIL                 | pg_stat_statements is not installed (pg_extension): the top statements are not listed; MORNING_RUNBOOK step 0d says how to enable it (a database flag, Martin's decision)
+ verdict                                                                        | PROVOKED, NOT A PASS | 130_census: 113 rows, 113 FAIL; 20 table(s) of 10000 rows or more, 4 unused index(es), 63 fk(s) without index
+(114 rows)

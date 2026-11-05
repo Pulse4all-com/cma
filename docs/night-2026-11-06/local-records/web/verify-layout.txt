@@ -1,0 +1,16 @@
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+page.evaluate: TypeError: Cannot read properties of null (reading 'querySelectorAll')
+    at eval (eval at evaluate (:370:30), <anonymous>:4:27)
+    at UtilityScript.evaluate (<anonymous>:372:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+    at railOf (/home/user/cma/web/verify/layout.mjs:1484:27)
+    at expectFrame (/home/user/cma/web/verify/layout.mjs:1537:24)
+    at async file:///home/user/cma/web/verify/layout.mjs:2130:1 {
+  log: []
+}
+
+Node.js v22.23.4
+exit 1
