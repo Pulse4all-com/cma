@@ -906,7 +906,7 @@ export const FLASH_SPLITS: Partial<Record<FlashKey, { set: readonly string[]; di
 };
 
 /**
- * The order kinds the Orders headline's split always shows, in order (cma.flash_split_order_of; the store's order_kind,
+ * The order kinds the Orders headline's split always shows, in order (cma.flash_split_order_of; a store order's order_kind as the CMA classifies it,
  * addition 0008zw); the fourth kind, unknown, follows them only where an order has it
  */
 export const FLASH_ORDER_KINDS: readonly string[] = ["first", "renewal", "repeat"];

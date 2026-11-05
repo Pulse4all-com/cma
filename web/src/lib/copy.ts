@@ -3524,7 +3524,7 @@ const en = {
     d_link: "Subscription link",
     d_reason: "Reason",
     d_kind: "Kind",
-    // the order kinds of the Orders headline's split (addition 0008zw): the store's order_kind, Unknown only above 0
+    // the order kinds of the Orders headline's split (addition 0008zw): a store order's order_kind as the CMA classifies it, Unknown only above 0
     kind_first: "First",
     kind_renewal: "Renewal",
     kind_repeat: "Repeat",
