@@ -641,7 +641,7 @@
     },
     {
       "name": "workday_summary",
-      "what": "Per workday: working, productive, paid and billable seconds"
+      "what": "Per workday: working, productive, paid and billable seconds, and the day's sessions (addition 0008zs)"
     },
     {
       "name": "time_interval",

@@ -1,0 +1,34 @@
+PASS  connection errors: socket codes, class 08, 57P01, pg's own message       got [true,true,true,true,true]
+PASS  never a connection error: a statement timeout, a refusal, a constraint, nothing got [false,false,false,false,false]
+PASS  the code in a log line or run row                                        got ["ECONNRESET","connection","57014","error"]
+PASS  retryOnce: a lost connection tried again, anything else not              got ["done",2,"57014",1]
+PASS  idle reset: unheard it throws (the 16:04 crash), heard it is one warning line got [true,false,["WARNING:idle connection lost:ECONNRESET"]]
+PASS  refresh: both tenants refreshed, one run row each, finished succeeded, every client released got [{"tenants":2,"failed":0},["t1:succeeded:3","t2:succeeded:3"],1,1,true
+PASS  refresh, a reset in tenant 1's refresh: retried on a fresh connection, the broken one dropped got [0,2,1,["t1:succeeded:3","t2:succeeded:3"]]
+PASS  …its run row kept: one start for the tenant, not two; one warning line naming it got [1,["true:connection lost, retried once:ECONNRESET"]]
+PASS  refresh, a reset twice: tenant 1 fails, its run row failed with the code; tenant 2 still served got [{"tenants":2,"failed":1},["t1:failed:ECONNRESET","t2:succeeded:3"],["
+PASS  refresh, a statement timeout: never retried, the tenant failed with 57014, the client kept got [1,1,"t1:failed:57014",0]
+PASS  refresh, a reset reading the tenants: retried, both served               got [{"tenants":2,"failed":0},2]
+PASS  refresh, a reset on connect: retried, both served                        got [{"tenants":2,"failed":0},true]
+PASS  refresh, the server ends a client's session while it is out: that work's failure, retried, dropped got [0,1,1,["57P01"]]
+PASS  data quality: tenant 1 refreshed, tenant 2 fresh (skipped 1, reason fresh as INFO), one run row each, every client released got [{"tenants":2,"failed":0},["t1:succeeded:3","t2:succeeded:0"],["INFO:t
+PASS  data quality, a reset in tenant 1's refresh: retried on a fresh connection, its run row kept, the broken one dropped got [0,2,1,1,"t1:succeeded:3"]
+PASS  data quality, a statement timeout: never retried, the tenant failed with 57014, tenant 2 still served got [{"tenants":2,"failed":1},["t1:failed:57014","t2:succeeded:0"]]
+PASS  close: both tenants closed, one run row each, finished succeeded with the count got [{"tenants":2,"failed":0},["t1:succeeded:1","t2:succeeded:1"],1,1,true
+PASS  close, a reset in tenant 1's close: retried, its run row kept, finished succeeded got [0,2,1,"t1:succeeded:1",1]
+PASS  close, a reset twice: tenant 1 fails, its run row failed with the code; tenant 2 still served got [{"tenants":2,"failed":1},["t1:failed:ECONNRESET","t2:succeeded:1"],1]
+PASS  close, a reset finishing the run row: the finish retried on its own, the close never repeated got [0,1,2,"t1:succeeded:1"]
+PASS  close, a refusal of the database: never retried, the tenant failed with its code got [1,1,"t1:failed:CMA06"]
+PASS  snapshot: the run row's counts from a take's answer (whole numbers only); already, missed, failed; not_due always 0 got [{"taken":1,"not_due":0,"already":0,"missed":0,"failed":0,"late":1,"ro
+PASS  snapshot: a pool of 1 by default, at most 2 (the connection budget); the statement timeout of 123's speed check got [1,1,2,1,240000]
+PASS  snapshot: both tenants taken, one run row each, finished succeeded with the rows stored got [{"tenants":2,"failed":0},["t1:succeeded:9","t2:succeeded:9"],1,1,true
+PASS  snapshot: a date recorded as missed is a success with nothing stored; a failed take finishes its row failed with the code got [{"tenants":2,"failed":1},["t1:succeeded:0","t2:failed:23514"],1,["INF
+PASS  snapshot, a reset in tenant 1's take: retried once on a fresh connection, its run row kept, finished succeeded got [0,2,1,"t1:succeeded:9",1]
+PASS  snapshot, a refusal of the database: never retried, the tenant failed with its code, tenant 2 still taken got [{"tenants":2,"failed":1},1,["t1:failed:CMA06","t2:succeeded:9"]]
+PASS  snapshot, the take answered then a reset at the finish: the first answer kept, the take not sent again got [{"tenants":2,"failed":0},1,["t1:succeeded:9","t2:succeeded:9"],["1/0/
+PASS  snapshot, a take's answer lost: taken by this run (stored counts) when started after its run row, else already got [{"tenants":2,"failed":0},2,["t1:succeeded:9","t2:succeeded:0"],["1/0/
+PASS  snapshot, a finish's answer lost: CMA03 on the retry is done, the first counts kept, the tenant not failed got [{"tenants":2,"failed":0},1,2,["t1:succeeded:9","t2:succeeded:9"],["1/
+PASS  snapshot, a finish's answer lost and the retry lost too: still done, one line, no error got [{"tenants":2,"failed":0},3,["t1:succeeded:9","t2:succeeded:9"],["WARN
+
+ALL 31 PASS
+exit 0

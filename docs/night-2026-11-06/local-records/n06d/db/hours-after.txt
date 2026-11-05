@@ -1,0 +1,184 @@
+SET
+<tenant id>|<user id>
+Timing is on.
+30
+Time: 22.499 ms
+Sort  (cost=60.09..62.59 rows=1000 width=187) (actual time=12.136..12.138 rows=30 loops=1)
+  Sort Key: business_date, display_name, user_id
+  Sort Method: quicksort  Memory: 28kB
+  Buffers: shared hit=2387
+  ->  Function Scan on team_hours t  (cost=0.26..10.26 rows=1000 width=187) (actual time=12.112..12.115 rows=30 loops=1)
+        Buffers: shared hit=2387
+Planning Time: 0.047 ms
+Execution Time: 12.165 ms
+Time: 12.825 ms
+Sort  (cost=60.09..62.59 rows=1000 width=187) (actual time=36.231..36.237 rows=156 loops=1)
+  Sort Key: business_date, display_name, user_id
+  Sort Method: quicksort  Memory: 45kB
+  Buffers: shared hit=9535
+  ->  Function Scan on team_hours t  (cost=0.26..10.26 rows=1000 width=187) (actual time=36.199..36.207 rows=156 loops=1)
+        Buffers: shared hit=9535
+Planning Time: 0.048 ms
+Execution Time: 36.275 ms
+Time: 36.887 ms
+Sort  (cost=959.24..959.25 rows=5 width=45) (actual time=0.990..0.996 rows=4 loops=1)
+  Sort Key: workday_summary_all.business_date
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=305
+  ->  Subquery Scan on workday_summary_all  (cost=537.04..959.18 rows=5 width=45) (actual time=0.779..0.992 rows=4 loops=1)
+        Buffers: shared hit=305
+        ->  GroupAggregate  (cost=537.04..680.32 rows=5 width=144) (actual time=0.699..0.758 rows=4 loops=1)
+              Group Key: w.id
+              Buffers: shared hit=233
+              ->  Sort  (cost=537.04..537.18 rows=55 width=98) (actual time=0.665..0.670 rows=44 loops=1)
+                    Sort Key: w.id
+                    Sort Method: quicksort  Memory: 30kB
+                    Buffers: shared hit=203
+                    ->  Nested Loop Left Join  (cost=36.61..535.45 rows=55 width=98) (actual time=0.184..0.650 rows=44 loops=1)
+                          Buffers: shared hit=203
+                          ->  Nested Loop Semi Join  (cost=0.89..150.92 rows=5 width=89) (actual time=0.069..0.086 rows=4 loops=1)
+                                Buffers: shared hit=23
+                                ->  Index Scan using workday_user_date_idx on workday w  (cost=0.31..15.43 rows=5 width=89) (actual time=0.045..0.047 rows=4 loops=1)
+                                      Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (user_id = (NULLIF(current_setting('app.user_id'::text, true), ''::text))::uuid) AND (business_date >= (CURRENT_DATE - 6)) AND (business_date <= CURRENT_DATE))
+                                      Buffers: shared hit=3
+                                ->  Nested Loop Anti Join  (cost=0.58..27.13 rows=1 width=32) (actual time=0.009..0.009 rows=1 loops=4)
+                                      Buffers: shared hit=20
+                                      ->  Index Scan using time_event_workday_idx on time_event e  (cost=0.42..26.94 rows=1 width=48) (actual time=0.005..0.005 rows=1 loops=4)
+                                            Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (workday_id = w.id))
+                                            Filter: ((kind = 'start'::text) AND (kind = ANY ('{start,status,end}'::text[])))
+                                            Buffers: shared hit=16
+                                      ->  Index Only Scan using time_event_supersedes_idx on time_event c  (cost=0.15..0.18 rows=1 width=32) (actual time=0.002..0.002 rows=0 loops=4)
+                                            Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (supersedes_event_id = e.id))
+                                            Heap Fetches: 0
+                                            Buffers: shared hit=4
+                          ->  Hash Left Join  (cost=35.73..105.38 rows=11 width=41) (actual time=0.054..0.139 rows=11 loops=4)
+                                Hash Cond: (x.status_id = s.id)
+                                Buffers: shared hit=180
+                                ->  Nested Loop  (cost=29.26..98.87 rows=11 width=56) (actual time=0.048..0.129 rows=11 loops=4)
+                                      Buffers: shared hit=174
+                                      ->  Index Scan using workday_pkey on workday w_1  (cost=0.28..8.31 rows=1 width=52) (actual time=0.003..0.003 rows=1 loops=4)
+                                            Index Cond: (id = w.id)
+                                            Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+                                            Buffers: shared hit=12
+                                      ->  Subquery Scan on x  (cost=28.98..29.40 rows=11 width=32) (actual time=0.032..0.039 rows=11 loops=4)
+                                            Filter: (x.kind = ANY ('{start,status}'::text[]))
+                                            Rows Removed by Filter: 1
+                                            Buffers: shared hit=30
+                                            ->  WindowAgg  (cost=28.98..29.25 rows=12 width=62) (actual time=0.031..0.037 rows=12 loops=4)
+                                                  Buffers: shared hit=30
+                                                  ->  Sort  (cost=28.98..29.01 rows=12 width=54) (actual time=0.029..0.029 rows=12 loops=4)
+                                                        Sort Key: e_1.occurred_at, e_1.recorded_at, e_1.id
+                                                        Sort Method: quicksort  Memory: 25kB
+                                                        Buffers: shared hit=30
+                                                        ->  Merge Anti Join  (cost=28.31..28.77 rows=12 width=54) (actual time=0.022..0.024 rows=12 loops=4)
+                                                              Merge Cond: (e_1.id = c_1.supersedes_event_id)
+                                                              Buffers: shared hit=30
+                                                              ->  Sort  (cost=28.16..28.19 rows=12 width=70) (actual time=0.010..0.011 rows=12 loops=4)
+                                                                    Sort Key: e_1.id
+                                                                    Sort Method: quicksort  Memory: 26kB
+                                                                    Buffers: shared hit=17
+                                                                    ->  Index Scan using time_event_workday_idx on time_event e_1  (cost=0.41..27.95 rows=12 width=70) (actual time=0.002..0.006 rows=12 loops=4)
+                                                                          Index Cond: ((tenant_id = w_1.tenant_id) AND (workday_id = w_1.id))
+                                                                          Filter: (kind = ANY ('{start,status,end}'::text[]))
+                                                                          Buffers: shared hit=17
+                                                              ->  Index Only Scan using time_event_supersedes_idx on time_event c_1  (cost=0.14..14.46 rows=30322 width=32) (actual time=0.005..0.008 rows=53 loops=4)
+                                                                    Index Cond: (tenant_id = w_1.tenant_id)
+                                                                    Heap Fetches: 32
+                                                                    Buffers: shared hit=13
+                                      SubPlan 3
+                                        ->  Nested Loop Left Join  (cost=0.00..5.53 rows=1 width=8) (actual time=0.004..0.007 rows=1 loops=44)
+                                              Buffers: shared hit=132
+                                              ->  Seq Scan on setting st_1  (cost=0.00..2.84 rows=1 width=32) (actual time=0.002..0.004 rows=1 loops=44)
+                                                    Filter: (key = 'workday.window_end'::text)
+                                                    Rows Removed by Filter: 67
+                                                    Buffers: shared hit=88
+                                              ->  Seq Scan on tenant_setting ts_1  (cost=0.00..2.67 rows=1 width=32) (actual time=0.002..0.002 rows=1 loops=44)
+                                                    Filter: ((tenant_id = w_1.tenant_id) AND (key = 'workday.window_end'::text))
+                                                    Rows Removed by Filter: 20
+                                                    Buffers: shared hit=44
+                                ->  Hash  (cost=6.34..6.34 rows=10 width=33) (actual time=0.018..0.018 rows=10 loops=1)
+                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                      Buffers: shared hit=6
+                                      ->  Seq Scan on work_status s  (cost=0.00..6.34 rows=10 width=33) (actual time=0.004..0.015 rows=10 loops=1)
+                                            Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+                                            Rows Removed by Filter: 5
+                                            Buffers: shared hit=6
+              SubPlan 4
+                ->  Aggregate  (cost=28.54..28.55 rows=1 width=8) (actual time=0.017..0.017 rows=1 loops=4)
+                      Buffers: shared hit=30
+                      ->  Merge Anti Join  (cost=28.13..28.54 rows=1 width=0) (actual time=0.016..0.016 rows=1 loops=4)
+                            Merge Cond: (e_3.id = c_3.supersedes_event_id)
+                            Buffers: shared hit=30
+                            ->  Sort  (cost=27.99..27.99 rows=1 width=32) (actual time=0.005..0.005 rows=1 loops=4)
+                                  Sort Key: e_3.id
+                                  Sort Method: quicksort  Memory: 25kB
+                                  Buffers: shared hit=17
+                                  ->  Index Scan using time_event_workday_idx on time_event e_3  (cost=0.41..27.98 rows=1 width=32) (actual time=0.002..0.004 rows=1 loops=4)
+                                        Index Cond: ((tenant_id = w.tenant_id) AND (workday_id = w.id))
+                                        Filter: ((kind = 'start'::text) AND (kind = ANY ('{start,status,end}'::text[])))
+                                        Rows Removed by Filter: 11
+                                        Buffers: shared hit=17
+                            ->  Index Only Scan using time_event_supersedes_idx on time_event c_3  (cost=0.14..14.46 rows=30322 width=32) (actual time=0.004..0.008 rows=53 loops=4)
+                                  Index Cond: (tenant_id = w.tenant_id)
+                                  Heap Fetches: 32
+                                  Buffers: shared hit=13
+        SubPlan 2
+          ->  Aggregate  (cost=55.75..55.76 rows=1 width=32) (actual time=0.057..0.057 rows=1 loops=4)
+                Buffers: shared hit=72
+                ->  Nested Loop  (cost=29.26..44.64 rows=2 width=52) (actual time=0.033..0.040 rows=2 loops=4)
+                      Join Filter: (x_1.status_id = ws.id)
+                      Rows Removed by Join Filter: 18
+                      Buffers: shared hit=48
+                      ->  Nested Loop  (cost=29.26..37.82 rows=11 width=68) (actual time=0.028..0.035 rows=11 loops=4)
+                            Buffers: shared hit=42
+                            ->  Index Scan using workday_pkey on workday w_2  (cost=0.28..8.31 rows=1 width=52) (actual time=0.002..0.002 rows=1 loops=4)
+                                  Index Cond: (id = workday_summary_all.workday_id)
+                                  Filter: (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid)
+                                  Buffers: shared hit=12
+                            ->  Subquery Scan on x_1  (cost=28.98..29.40 rows=11 width=32) (actual time=0.025..0.031 rows=11 loops=4)
+                                  Filter: (x_1.kind = ANY ('{start,status}'::text[]))
+                                  Rows Removed by Filter: 1
+                                  Buffers: shared hit=30
+                                  ->  WindowAgg  (cost=28.98..29.25 rows=12 width=62) (actual time=0.025..0.029 rows=12 loops=4)
+                                        Buffers: shared hit=30
+                                        ->  Sort  (cost=28.98..29.01 rows=12 width=54) (actual time=0.023..0.024 rows=12 loops=4)
+                                              Sort Key: e_2.occurred_at, e_2.recorded_at, e_2.id
+                                              Sort Method: quicksort  Memory: 25kB
+                                              Buffers: shared hit=30
+                                              ->  Merge Anti Join  (cost=28.31..28.77 rows=12 width=54) (actual time=0.019..0.021 rows=12 loops=4)
+                                                    Merge Cond: (e_2.id = c_2.supersedes_event_id)
+                                                    Buffers: shared hit=30
+                                                    ->  Sort  (cost=28.16..28.19 rows=12 width=70) (actual time=0.007..0.008 rows=12 loops=4)
+                                                          Sort Key: e_2.id
+                                                          Sort Method: quicksort  Memory: 26kB
+                                                          Buffers: shared hit=17
+                                                          ->  Index Scan using time_event_workday_idx on time_event e_2  (cost=0.41..27.95 rows=12 width=70) (actual time=0.002..0.005 rows=12 loops=4)
+                                                                Index Cond: ((tenant_id = w_2.tenant_id) AND (workday_id = w_2.id))
+                                                                Filter: (kind = ANY ('{start,status,end}'::text[]))
+                                                                Buffers: shared hit=17
+                                                    ->  Index Only Scan using time_event_supersedes_idx on time_event c_2  (cost=0.14..14.46 rows=30322 width=32) (actual time=0.005..0.008 rows=53 loops=4)
+                                                          Index Cond: (tenant_id = w_2.tenant_id)
+                                                          Heap Fetches: 32
+                                                          Buffers: shared hit=13
+                      ->  Materialize  (cost=0.00..6.35 rows=3 width=16) (actual time=0.000..0.000 rows=2 loops=44)
+                            Buffers: shared hit=6
+                            ->  Seq Scan on work_status ws  (cost=0.00..6.34 rows=3 width=16) (actual time=0.003..0.006 rows=2 loops=1)
+                                  Filter: ((NOT is_working) AND (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))
+                                  Rows Removed by Filter: 13
+                                  Buffers: shared hit=6
+                SubPlan 1
+                  ->  Nested Loop Left Join  (cost=0.00..5.53 rows=1 width=8) (actual time=0.004..0.007 rows=1 loops=8)
+                        Buffers: shared hit=24
+                        ->  Seq Scan on setting st  (cost=0.00..2.84 rows=1 width=32) (actual time=0.001..0.004 rows=1 loops=8)
+                              Filter: (key = 'workday.window_end'::text)
+                              Rows Removed by Filter: 67
+                              Buffers: shared hit=16
+                        ->  Seq Scan on tenant_setting ts  (cost=0.00..2.67 rows=1 width=32) (actual time=0.002..0.002 rows=1 loops=8)
+                              Filter: ((tenant_id = w_2.tenant_id) AND (key = 'workday.window_end'::text))
+                              Rows Removed by Filter: 20
+                              Buffers: shared hit=8
+Planning:
+  Buffers: shared hit=58
+Planning Time: 2.142 ms
+Execution Time: 1.232 ms
+Time: 4.527 ms
