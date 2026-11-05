@@ -11,7 +11,10 @@
 -- instants; the live age checks are seeded relative to the tenant's today, so the verdict does not depend on the day it
 -- runs. Every check writes one row, ok, FAIL or skip, and the last row is the verdict, because Cloud SQL Studio shows no
 -- notices. Run as your own IAM login after 136_flash_insights.sql and 02_seed_pulse4all.sql (rerun after 136: its block
--- for 0008zt), dev first, then prod.
+-- for 0008zt), dev first, then prod. Since 138_flash_totals.sql (0008zu) A4 expects the subscriptions' split set
+-- [market, status] and the version 0008zu of customers and subscriptions, B4's ratio check reads the rows that carry
+-- the ratio's two counts (the split rows carry holding_subscriptions alone) and B7 the stored version 0008zu (without
+-- 138 they read FAIL); 139_verify_flash_totals.sql is 0008zu's own check.
 -- Expected verdict in dev and in prod (block C off, the default): "0008zt verified | 137_verify_flash_insights: 24 ok,
 -- 0 FAIL, 1 skip" (25 checks: A1 to A7, B1 to B13, S1, D1 to D3 ok; C1 skip, volume off). A database without Pulse4all's CRM connection (a local one) reads S1 skip as
 -- well, and one whose tenants have no set-up source reads D1 to D3 skip: still "0008zt verified" with those skips. A
@@ -139,7 +142,8 @@ language sql
 as $$
   select coalesce(string_agg((x -> 'dims')::text || ' ' || coalesce(x -> 'measures' ->> 'devices_per_holding_subscription', 'none'), '; '), '')
   from jsonb_array_elements(p_rows) x
-  where x -> 'measures' ? 'holding_subscriptions'
+  -- the rows that carry the ratio's two counts (since 0008zu the split rows [market, status] carry holding_subscriptions alone)
+  where x -> 'measures' ? 'holding_subscriptions' and x -> 'measures' ? 'devices_on_holding'
     and case when (x -> 'measures' ->> 'holding_subscriptions')::numeric > 0
              then (x -> 'measures' ->> 'devices_per_holding_subscription') is null
                   or (x -> 'measures' ->> 'devices_per_holding_subscription')::numeric
@@ -239,7 +243,8 @@ begin
       from cma.flash_overviews() o where o.key in ('customers', 'subscriptions', 'installed_base'))
      is distinct from
      'customers|market,store,segment|[[], ["market"], ["market", "store"], ["market", "segment"]]|customers_held,active_customers,paused_customers,linked_to_contact,with_required_refs|customers_held,active_customers,paused_customers,linked_to_contact,with_required_refs '
-     || 'subscriptions|market,store,status,payment_state,device_band,age_band|[[], ["market"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]]|subscriptions,active_subscriptions,paused_subscriptions,amount_per_cycle,holding_subscriptions,devices_on_holding,devices_per_holding_subscription|subscriptions,active_subscriptions,paused_subscriptions,holding_subscriptions,devices_on_holding '
+     -- since 0008zu (138): the subscriptions' split set [market, status]
+     || 'subscriptions|market,store,status,payment_state,device_band,age_band|[[], ["market"], ["market", "status"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]]|subscriptions,active_subscriptions,paused_subscriptions,amount_per_cycle,holding_subscriptions,devices_on_holding,devices_per_holding_subscription|subscriptions,active_subscriptions,paused_subscriptions,holding_subscriptions,devices_on_holding '
      || 'installed_base|market,status,model,warehouse,link,subscription_status|[[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "subscription_status"]]|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding' then
     v_bad := v_bad || 'the catalog; ';
   end if;
@@ -248,7 +253,8 @@ begin
     v_bad := v_bad || 'the ratio among the watched; ';
   end if;
   if (select string_agg(o.key || ':' || cma.flash_definition_version(o.key), ',' order by o.sort_order) from cma.flash_overviews() o)
-     is distinct from 'customers:0008zt,subscriptions:0008zt,installed_base:0008zt,churn:0008zn,orders:0008zn,payments:0008zn,open_deals:0008zn,'
+     -- since 0008zu (138): customers and subscriptions 0008zu
+     is distinct from 'customers:0008zu,subscriptions:0008zu,installed_base:0008zt,churn:0008zn,orders:0008zn,payments:0008zn,open_deals:0008zn,'
                       || 'open_tickets:0008zn,open_tasks:0008zn,reviews:0008zn,data_quality:0008zn' then
     v_bad := v_bad || 'versions; ';
   end if;
@@ -620,7 +626,8 @@ begin
              || ' ' || (cma.flash_overview('subscriptions', 'FR', v_d) -> 'totals' ->> 'active_subscriptions');
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['17', 'B7 the snapshot equals the computation as of its date (0008zt), the document as of it; devices_on_holding = in_field_on_holding; the run''s settings; no jump on the ratio',
-      case when v_txt = 'true 2026-10-29 true 2026-10-30 | customers:true:0008zt subscriptions:true:0008zt installed_base:true:0008zt | GB:4,5,7,1.40 NL:1,1,2,2.00 true '
+      -- since 0008zu (138): customers and subscriptions stored under 0008zu
+      case when v_txt = 'true 2026-10-29 true 2026-10-30 | customers:true:0008zu subscriptions:true:0008zu installed_base:true:0008zt | GB:4,5,7,1.40 NL:1,1,2,2.00 true '
                         || '| 1,2,3 12,24,36,48,60 B2B,B2C active,failed | installed_base/devices/NL installed_base/in_field/NL installed_base/in_field_on_holding/NL '
                         || 'subscriptions/devices_on_holding/NL | snapshot 1.50 [1, 2, 3] [12, 24, 36, 48, 60] ["B2B", "B2C"] 13 none 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
