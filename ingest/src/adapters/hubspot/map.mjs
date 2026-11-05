@@ -306,7 +306,11 @@ function slotOf(f) {
 export function contactFromObject(obj, config) {
   const p = obj?.properties ?? {};
   const fields = fieldsOf(config, "contact");
-  const c = { sourceId: String(obj.id), updatedAt: iso(obj.updatedAt) ?? iso(p.lastmodifieddate), raw: pick(p, propertiesFor("contact", config)) };
+  // the segment's property is never kept in raw: its value reaches the CMA only through the segment, which the database
+  // holds to at most 100 characters without an @ (addition 0008zt)
+  const segmentProps = new Set(fields.filter((f) => f.field === "segment").map((f) => f.property));
+  const raw = pick(p, propertiesFor("contact", config).filter((name) => !segmentProps.has(name)));
+  const c = { sourceId: String(obj.id), updatedAt: iso(obj.updatedAt) ?? iso(p.lastmodifieddate), raw };
   const refs = {};
   const countries = [];
   const created = [iso(obj.createdAt) ?? iso(p.createdate)];

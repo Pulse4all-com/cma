@@ -110,7 +110,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 insert into cma.setting (key, value_type, allowed_values, default_value, description) values
   ('flash.device_bands', 'text', null, '1,2,3',
-     'The bands of an active subscription''s devices in the field on Reports → Flash (Active subscriptions): one to six strictly increasing whole numbers from 1, comma-separated without spaces. The bands are 0, each value and the last one open-ended (1,2,3: 0, 1, 2, 3+); a value followed by a gap is a range (1,3: 0, 1-2, 3+)'),
+     'The bands of a device-holding subscription''s devices in the field (flash.device_holding_statuses) on Reports → Flash (Active subscriptions): one to six strictly increasing whole numbers from 1, comma-separated without spaces. The bands are 0, each value and the last one open-ended (1,2,3: 0, 1, 2, 3+); a value followed by a gap is a range (1,3: 0, 1-2, 3+)'),
   ('flash.subscription_age_months', 'text', null, '12,24,36,48,60',
      'The bands of an active subscription''s age in whole months since its creation in the subscription app, up to the business date, on Reports → Flash (Active subscriptions): one to ten strictly increasing whole numbers from 1, comma-separated without spaces (12,24: <12, 12-24, 24+; unknown without a creation time)'),
   ('flash.device_holding_statuses', 'text', null, 'active',
@@ -723,7 +723,7 @@ as $$
                          order by o) end
 $$;
 
--- A ratio of two figures to two decimals; null without a denominator (devices_per_active_subscription: never 0 for none)
+-- A ratio of two figures to two decimals; null without a denominator (devices_per_holding_subscription: never 0 for none)
 create or replace function cma.flash_ratio_of(p_num numeric, p_den numeric)
 returns numeric
 language sql immutable

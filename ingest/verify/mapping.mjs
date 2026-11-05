@@ -90,6 +90,9 @@ expect("contact → segment as given, trimmed; empty is null; not mapped, no seg
     contactFromObject({ id: "4300000013", properties: {} }, segConfig).segment,
     "segment" in contactFromObject({ id: "4300000014", properties: { customer_type: "B2C" } }, config)],
   ["B2B", null, null, false], ["  B2B ", "", undefined, true]);
+expect("contact → the segment's property never in raw (its value only through the segment); the other mapped properties still are",
+  Object.keys(contactFromObject({ id: "4300000015", properties: { customer_type: "someone@example.invalid", contact_country: "NL" } }, segConfig).raw),
+  ["contact_country"], ["contact_country", "customer_type"]);
 expect("primary contact: the labelled one", primaryContact([{ toObjectId: 9 }, { toObjectId: 12, associationTypes: [{ label: "Primary" }] }]), "12", "9");
 expect("primary contact: the held one when still associated", primaryContact([{ toObjectId: 9 }, { toObjectId: 12 }], "12"), "12", "9");
 expect("primary contact: else the lowest id", primaryContact([{ toObjectId: 12 }, { toObjectId: 9 }]), "9", "12");
