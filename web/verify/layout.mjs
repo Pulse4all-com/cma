@@ -1012,12 +1012,13 @@ async function expectLiveBoard() {
     }
     await settle(p);
     await p.waitForLoadState("networkidle");
-    if (new URL(p.url()).pathname !== "/live/newco") problems.push(`${subject} /live/board: opened ${new URL(p.url()).pathname}, expected Newco's board /live/newco`);
     if (telephony === null) {
+      // without monitoring.live the address shows the no-permission card, whatever the key (the permission first)
       if (await p.locator('[data-testid="inbound-live"]').count() > 0) problems.push(`${subject} /live/board: inbound figures shown to someone without the Live board`);
       await ctx.close();
       continue;
     }
+    if (new URL(p.url()).pathname !== "/live/newco") problems.push(`${subject} /live/board: opened ${new URL(p.url()).pathname}, expected Newco's board /live/newco`);
     if (provoke && subject === "supervisor") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-tiles"]'); if (t) t.style.width = "2400px"; });
     // --provoke puts Missed, not called back back above the team (where it sat before 0008z)
     if (provoke && subject === "analyst") await p.evaluate(() => { const m = document.querySelector('[data-testid="missed-live"]'); const t = document.querySelector('[data-testid="inbound-live"]'); if (m && t) t.after(m); });

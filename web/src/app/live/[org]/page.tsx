@@ -25,7 +25,8 @@ const FORMER_ADDRESS = "board";
  * Since addition 0008zu (Martin, 5 November 2026) one board per contact-center organisation, at /live/<key>: the
  * people, groups and statuses only of that organisation's people (lib/live boardOfOrganisation, here and in every
  * poll's ?organisation=<key>), the rail's item and the last breadcrumb its name; the inbound and missed-call parts and
- * the follow-up strip stay tenant-wide, the call parts captioned as covering all lines. A key that is no contact center
+ * the follow-up strip stay tenant-wide, the call parts captioned as covering all lines. Without monitoring.live any
+ * address shows the no-permission card (the permission first, as the API). A key that is no contact center
  * of the person's tenant (an unknown organisation or one not flagged) is a 404; /live/board, the former address, opens
  * the first contact center's board (unless an organisation is keyed board, whose board it then is). No loading
  * boundary: it would send 200 before the page decides on the 404 (RouteSkeleton).
@@ -37,17 +38,11 @@ export default async function LiveBoardPage({ params }: { params: Promise<{ org:
   const t = copy.live;
   const { org } = await params;
 
-  const center = me.contactCenters.find((c) => c.key === org);
-  if (!center) {
-    const first = me.contactCenters[0];
-    if (org === FORMER_ADDRESS && first) redirect(`/live/${first.key}`);
-    notFound();
-  }
-  const href = `/live/${center.key}` as const;
-
+  // The permission first, as the API: without monitoring.live every board's address shows the same card, so nobody
+  // without the board learns which keys are contact centers
   if (!me.permissions.includes("monitoring.live")) {
     return (
-      <Shell copy={copy} me={me} active="live-board" activeHref={href}>
+      <Shell copy={copy} me={me} active="live-board">
         <PageTitle>{t.title}</PageTitle>
         <Card>
           <h2 className="text-panel font-semibold text-p4a-heading">{t.noPermissionTitle}</h2>
@@ -56,6 +51,14 @@ export default async function LiveBoardPage({ params }: { params: Promise<{ org:
       </Shell>
     );
   }
+
+  const center = me.contactCenters.find((c) => c.key === org);
+  if (!center) {
+    const first = me.contactCenters[0];
+    if (org === FORMER_ADDRESS && first) redirect(`/live/${first.key}`);
+    notFound();
+  }
+  const href = `/live/${center.key}` as const;
 
   // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound and follow-up;
   // then this contact center's people only

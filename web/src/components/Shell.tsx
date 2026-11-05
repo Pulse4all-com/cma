@@ -14,7 +14,8 @@
  *
  * The rail's links prefetch their destination's loading boundary (the default of Next's Link for a dynamic route) since
  * night N06, 5 November 2026: every route has a loading.tsx (the page's frame with placeholder blocks), so a click
- * shows the frame at once and the page's data follows in the same request. Before (Decision log 18 October 2026) the
+ * shows the frame at once and the page's data follows in the same request; except a route that may answer 404 (a
+ * contact center's Live board since addition 0008zu, /live/[org]), where a loading boundary would send 200 first. Before (Decision log 18 October 2026) the
  * links never prefetched: no loading boundary existed, and the Live board's router.refresh() every 10 seconds
  * invalidated the client cache, so each poll fetched every visible link again; the board now polls an API route
  * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page, and so does
@@ -163,7 +164,7 @@ export async function Shell({
               const name = entry.item.key ? `${entry.item.label} (${entry.item.key})` : entry.item.label;
               // A bare page closes the open group on its click or digit key (addition 0008zu)
               return (
-                <li key={entry.item.page}>
+                <li key={entry.item.href}>
                   <NavBareLink
                     href={entry.item.href}
                     prefetch={active === "follow-up" ? false : undefined}
@@ -196,7 +197,8 @@ export async function Shell({
                 {entry.items.map((item) => {
                   const current = isCurrent(item, active, activeHref);
                   return (
-                    <li key={item.page}>
+                    // keyed by href: a contact center's Live boards share one ShellPage (addition 0008zu)
+                    <li key={item.href}>
                       <Link
                         href={item.href}
                         prefetch={active === "follow-up" ? false : undefined}

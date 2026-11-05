@@ -3,8 +3,8 @@
 /**
  * A group in the left navigation (Live, Team, Time, Reports, Sales, Customers, Campaigns, Configuration): one button that opens and
  * closes its pages. The rail is an accordion (19 October 2026): at most one group is open, opening a group closes
- * the open one, and a click on the open group closes it, so none is open. NavAccordion, around the rail's list,
- * holds the open group's id and writes it to the cookie cma-nav-open (an empty value for none; Shell reads it on
+ * the open one, and a click on the open group closes it, so none is open. NavAccordion, around the whole frame
+ * (the rail and, since addition 0008zu, the top bar's inbox), holds the open group's id and writes it to the cookie cma-nav-open (an empty value for none; Shell reads it on
  * the server, so a page renders with that group open and never flickers); the retired per-group cookies
  * cma-nav-<id> are expired on the first toggle. A closed group that holds the current page is highlighted, so the
  * person still sees where they are. The pages keep their own digit keys whether a group is open or closed. A
