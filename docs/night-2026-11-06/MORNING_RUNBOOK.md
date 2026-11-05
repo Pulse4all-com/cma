@@ -98,7 +98,7 @@ psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/133_verify_perf.sql > "$rec/133.txt" 2>&
 sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" db/133_verify_perf.sql > /tmp/provoke.sql
 psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "$rec/133-provoked.txt" 2>&1; echo "provoked: $(grep -E ' verdict' "$rec/133-provoked.txt" | tr -s ' ')"
 ```
-Expected: `connected to cma as martin@pulse4all.com`; `132: INSERT 0 1 COMMIT RESET` (the first run also computes every active tenant's first data-quality result: 5 to 30 s); `132 again: INSERT 0 0 COMMIT RESET`; `133:  verdict | 0008zr verified | 133_verify_perf: 20 ok, 0 FAIL, 1 skip` (the skip is a tenant where no active person holds `tenant.configure`, the invest tenant locally; `0 skip` when every tenant has one); `provoked:  verdict | PROVOKED, NOT A PASS | 133_verify_perf: 0 ok, 20 FAIL, 1 skip`. Any other `133` line: send me `grep -E 'FAIL|ERROR' "$rec/133.txt"`. About 3 minutes.
+Expected: `connected to cma as martin@pulse4all.com`; `132: INSERT 0 1 COMMIT RESET` (the first run also computes every active tenant's first data-quality result: 5 to 30 s); `132 again: INSERT 0 0 COMMIT RESET`; `133:  verdict | 0008zr verified | 133_verify_perf: <n> ok, 0 FAIL, <k> skip` (the row count follows the tenants' data, 20 to 29 locally; a skip is a tenant where no active person holds `tenant.configure`); `provoked:  verdict | PROVOKED, NOT A PASS | 133_verify_perf: 0 ok, 20 FAIL, 1 skip`. Any other `133` line: send me `grep -E 'FAIL|ERROR' "$rec/133.txt"`. About 3 minutes.
 
 **Terminal** (dev: the earlier verifies of every function `132` touches, unchanged and still passing)
 ```bash
@@ -142,7 +142,7 @@ for f in 41_verify_lead_metrics 53_verify_sources_configuration 61_verify_inboun
   psql "$PGCONN" -v ON_ERROR_STOP=0 -f "db/$f.sql" > "$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -E ' verdict' "$rec/${f%%_*}-rerun.txt" | tail -1 | tr -s ' ')"
 done
 ```
-Expected: as in dev: `INSERT 0 1 COMMIT RESET` (the first result for the two tenants: the data-quality computation took 2.1 to 3.5 s in prod on 3 November 2026, so under a minute), `INSERT 0 0 COMMIT RESET`, `133 … 20 ok, 0 FAIL, 0 skip` (every prod tenant has a `tenant.configure` holder; `1 skip` otherwise), the earlier verifies as above. `main`'s web keeps running on it (Order matters). About 5 minutes.
+Expected: as in dev: `INSERT 0 1 COMMIT RESET` (the first result for the two tenants: the data-quality computation took 2.1 to 3.5 s in prod on 3 November 2026, so under a minute), `INSERT 0 0 COMMIT RESET`, `133 … <n> ok, 0 FAIL, 0 skip` (every prod tenant has a `tenant.configure` holder; `1 skip` otherwise; the row count follows the tenants' data), the earlier verifies as above. `main`'s web keeps running on it (Order matters). About 5 minutes.
 
 **Terminal** (prod: the time scripts after `132`; the gate)
 ```bash

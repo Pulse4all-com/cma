@@ -12,39 +12,34 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+CREATE FUNCTION
 INSERT 0 1
 CREATE FUNCTION
-psql:db/132_perf.sql:569: NOTICE:  trigger "check_data_quality_setting" for relation "cma.tenant_setting" does not exist, skipping
 DROP TRIGGER
 CREATE TRIGGER
 INSERT 0 1
 CREATE FUNCTION
 REVOKE
 DO
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
 CREATE FUNCTION
 CREATE FUNCTION
+psql:db/132_perf.sql:723: NOTICE:  relation "data_quality_snapshot" already exists, skipping
 CREATE TABLE
 COMMENT
+psql:db/132_perf.sql:738: NOTICE:  relation "data_quality_finding" already exists, skipping
 CREATE TABLE
+psql:db/132_perf.sql:739: NOTICE:  relation "data_quality_finding_check_idx" already exists, skipping
 CREATE INDEX
 COMMENT
-psql:db/132_perf.sql:690: NOTICE:  policy "tenant_app" for relation "data_quality_snapshot" does not exist, skipping
-psql:db/132_perf.sql:690: NOTICE:  policy "tenant_readonly" for relation "data_quality_snapshot" does not exist, skipping
-psql:db/132_perf.sql:690: NOTICE:  trigger "audit" for relation "data_quality_snapshot" does not exist, skipping
+psql:db/132_perf.sql:742: NOTICE:  policy "tenant_readonly" for relation "data_quality_snapshot" does not exist, skipping
+psql:db/132_perf.sql:742: NOTICE:  trigger "audit" for relation "data_quality_snapshot" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/132_perf.sql:691: NOTICE:  policy "tenant_app" for relation "data_quality_finding" does not exist, skipping
-psql:db/132_perf.sql:691: NOTICE:  policy "tenant_readonly" for relation "data_quality_finding" does not exist, skipping
-psql:db/132_perf.sql:691: NOTICE:  trigger "audit" for relation "data_quality_finding" does not exist, skipping
+psql:db/132_perf.sql:743: NOTICE:  policy "tenant_readonly" for relation "data_quality_finding" does not exist, skipping
+psql:db/132_perf.sql:743: NOTICE:  trigger "audit" for relation "data_quality_finding" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -58,17 +53,27 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+psql:db/132_perf.sql:885: NOTICE:  function cma.data_quality_snapshot_of(uuid) does not exist, skipping
+DROP FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
+ALTER FUNCTION
 DO
 REVOKE
 DO
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
 INSERT 0 1
 COMMIT
 RESET
-
-real	0m5.443s
-user	0m0.039s
-sys	0m0.018s

@@ -42,7 +42,10 @@
 --   permission            data_quality.refresh: the scheduler's system user only, granted to every tenant's scheduler
 --                         role here and by cma.ensure_scheduler_user() from now on
 --   sync_run              the job refresh_data_quality joins the list, without a connection, through
---                         cma.job_run_start() and cma.job_run_finish()
+--                         cma.job_run_start() and cma.job_run_finish(); its two constraints come last in
+--                         the script (section 10): the sync_run constraints last: the lock they take is held to the
+--                         commit, so the jobs' run rows and the Sources and System health reads wait for the validate
+--                         alone, not for the whole migration
 --   cma.data_quality_snapshot  one row per tenant: computed_at ("Refreshed at", docs/definitions.md), duration_ms, findings
 --   cma.data_quality_finding   the findings of the latest refresh, as cma.flash_findings_of gave them live (check, the
 --                         record's connection, type and id, the value, the market, where it is fixed); ids and codes only
@@ -681,17 +684,8 @@ begin
 end
 $$;
 
--- sync_run: the job refresh_data_quality joins the list, without a connection (as 0008s and 0008zn)
-alter table cma.sync_run drop constraint if exists sync_run_job_check;
-alter table cma.sync_run add constraint sync_run_job_check
-  check (job in ('backfill', 'reconcile', 'forms_poll', 'subscriptions_check', 'link_calls', 'email_poll', 'close_forgotten_workdays',
-                 'refresh_follow_up', 'reviews_poll', 'legacy_call_import', 'assets_import', 'assets_poll', 'subscriptions_poll',
-                 'flash_snapshot', 'refresh_data_quality')) not valid;
-alter table cma.sync_run validate constraint sync_run_job_check;
-alter table cma.sync_run drop constraint if exists sync_run_connection_check;
-alter table cma.sync_run add constraint sync_run_connection_check
-  check ((connection_id is null) = (job in ('close_forgotten_workdays', 'refresh_follow_up', 'flash_snapshot', 'refresh_data_quality'))) not valid;
-alter table cma.sync_run validate constraint sync_run_connection_check;
+-- sync_run's constraints (the job refresh_data_quality joins the list, without a connection) come last, in section 10:
+-- the lock they take is held to the commit
 
 create or replace function cma.job_permission_of(p_job text)
 returns text
@@ -1065,6 +1059,25 @@ begin
   end loop;
 end
 $$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 10. sync_run's constraints, last: the lock they take is held to the commit
+-- ---------------------------------------------------------------------------------------------
+-- The job refresh_data_quality joins the list, without a connection (as 0008s and 0008zn). An alter table that adds a
+-- constraint takes an ACCESS EXCLUSIVE lock on cma.sync_run that the transaction keeps until it commits: placed earlier,
+-- every job's run row and the Sources and System health reads would wait through the functions, the tables and the
+-- first data-quality computation above (2 to 4 s per tenant in prod), twice with the rerun. Here the lock lasts the
+-- validate alone. cma.job_run_start('refresh_data_quality') is only ever called after the commit (the job's first run).
+alter table cma.sync_run drop constraint if exists sync_run_job_check;
+alter table cma.sync_run add constraint sync_run_job_check
+  check (job in ('backfill', 'reconcile', 'forms_poll', 'subscriptions_check', 'link_calls', 'email_poll', 'close_forgotten_workdays',
+                 'refresh_follow_up', 'reviews_poll', 'legacy_call_import', 'assets_import', 'assets_poll', 'subscriptions_poll',
+                 'flash_snapshot', 'refresh_data_quality')) not valid;
+alter table cma.sync_run validate constraint sync_run_job_check;
+alter table cma.sync_run drop constraint if exists sync_run_connection_check;
+alter table cma.sync_run add constraint sync_run_connection_check
+  check ((connection_id is null) = (job in ('close_forgotten_workdays', 'refresh_follow_up', 'flash_snapshot', 'refresh_data_quality'))) not valid;
+alter table cma.sync_run validate constraint sync_run_connection_check;
 
 insert into cma.schema_migration (version, description)
 values ('0008zr', 'The fastest Workspace (night N06): cma.connection_held_kinds_of answered from the indexes (Sources), cma.system_health_runs in one grouped pass, cma.missed_callbacks_of in one join and cma.inbound_now() for the Live board''s poll, cma.calls_of and cma.intake_per_day_of with the tags and the market codes read once (cma.market_codes_of), cma.open_tickets_of and cma.open_tasks_of by joins, each to the same answers (133 proves it); data quality on stored results (CMA-087): cma.data_quality_snapshot and cma.data_quality_finding refreshed by the job refresh_data_quality (data_quality.refresh, the scheduler''s) when older than data_quality.refresh_minutes, read by cma.data_quality, cma.data_quality_rows and cma.flash_findings_of, with cma.data_quality_computed_at for Refreshed at')

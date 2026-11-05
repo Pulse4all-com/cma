@@ -21,31 +21,25 @@ INSERT 0 1
 CREATE FUNCTION
 REVOKE
 DO
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
-ALTER TABLE
 CREATE FUNCTION
 CREATE FUNCTION
-psql:db/132_perf.sql:729: NOTICE:  relation "data_quality_snapshot" already exists, skipping
+psql:db/132_perf.sql:723: NOTICE:  relation "data_quality_snapshot" already exists, skipping
 CREATE TABLE
 COMMENT
-psql:db/132_perf.sql:744: NOTICE:  relation "data_quality_finding" already exists, skipping
+psql:db/132_perf.sql:738: NOTICE:  relation "data_quality_finding" already exists, skipping
 CREATE TABLE
-psql:db/132_perf.sql:745: NOTICE:  relation "data_quality_finding_check_idx" already exists, skipping
+psql:db/132_perf.sql:739: NOTICE:  relation "data_quality_finding_check_idx" already exists, skipping
 CREATE INDEX
 COMMENT
-psql:db/132_perf.sql:748: NOTICE:  policy "tenant_readonly" for relation "data_quality_snapshot" does not exist, skipping
-psql:db/132_perf.sql:748: NOTICE:  trigger "audit" for relation "data_quality_snapshot" does not exist, skipping
+psql:db/132_perf.sql:742: NOTICE:  policy "tenant_readonly" for relation "data_quality_snapshot" does not exist, skipping
+psql:db/132_perf.sql:742: NOTICE:  trigger "audit" for relation "data_quality_snapshot" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/132_perf.sql:749: NOTICE:  policy "tenant_readonly" for relation "data_quality_finding" does not exist, skipping
-psql:db/132_perf.sql:749: NOTICE:  trigger "audit" for relation "data_quality_finding" does not exist, skipping
+psql:db/132_perf.sql:743: NOTICE:  policy "tenant_readonly" for relation "data_quality_finding" does not exist, skipping
+psql:db/132_perf.sql:743: NOTICE:  trigger "audit" for relation "data_quality_finding" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -59,6 +53,7 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+psql:db/132_perf.sql:885: NOTICE:  function cma.data_quality_snapshot_of(uuid) does not exist, skipping
 DROP FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
@@ -73,6 +68,12 @@ ALTER FUNCTION
 DO
 REVOKE
 DO
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
 INSERT 0 0
 COMMIT
 RESET

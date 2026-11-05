@@ -1,25 +1,74 @@
+DO
+SET
+ set_config 
+------------
  true
+(1 row)
+
+psql:/tmp/claude-0/-home-user-cma/78c06493-d127-5e24-bef7-e26126b940a1/scratchpad/db/133-provoke.sql:41: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
                                                                        check_name                                                                        |        result        |                                           detail                                            
+---------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+---------------------------------------------------------------------------------------------
  S1 addition 0008zr recorded                                                                                                                             | FAIL                 | cma.schema_migration holds 0008zr
  S2 the two tables with their columns                                                                                                                    | FAIL                 | tenant_id,ord,check_key,connection_id,object_type,object_id,value,market,fix_in,fix_adapter
  S3 row-level security, the tenant policy, the application's grants, no audit trigger, nothing for the readers                                           | FAIL                 | as cma.setup_tenant_table() gives, the audit trigger dropped
  S4 the setting (integer, 5), the permission on every scheduler role and no other, the job's permission                                                  | FAIL                 | data_quality.refresh_minutes, data_quality.refresh, refresh_data_quality
  S5 jit off on the six set functions; data_quality and data_quality_rows volatile (the fallback writes)                                                  | FAIL                 | 6 of 6 functions carry jit=off
  S6 the new functions executable by the application only                                                                                                 | FAIL                 | revoked from public, granted to cma_app
- E pulse4all-invest                                                                                                                                      | skip                 | no active person holds tenant.configure: nothing compared
- E1 connection_held_kinds_of for every connection (pulse4all-subscriptions)                                                                              | FAIL                 | 30 rows now against 29 before: 1 only now, 0 only before
+ E1 connection_held_kinds_of for every connection (pulse4all-invest)                                                                                     | FAIL                 | 1 rows now against 0 before: 1 only now, 0 only before
+ E2 system_health_runs (pulse4all-invest)                                                                                                                | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E3 missed_callbacks_of (pulse4all-invest)                                                                                                               | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E4 calls_of over the last 92 days (pulse4all-invest)                                                                                                    | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E5 inbound_calls_of over the last 92 days (pulse4all-invest)                                                                                            | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E6 intake_per_day_of over the last 92 days (pulse4all-invest)                                                                                           | FAIL                 | 2 rows now against 1 before: 1 only now, 0 only before
+ E7 open_tickets_of (pulse4all-invest)                                                                                                                   | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E8 open_tasks_of (pulse4all-invest)                                                                                                                     | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E9 the stored findings equal the live computation (pulse4all-invest)                                                                                    | FAIL                 | 3 rows now against 2 before: 1 only now, 0 only before
+ E1 connection_held_kinds_of for every connection (pulse4all-subscriptions)                                                                              | FAIL                 | 33 rows now against 32 before: 1 only now, 0 only before
  E2 system_health_runs (pulse4all-subscriptions)                                                                                                         | FAIL                 | 20 rows now against 19 before: 1 only now, 0 only before
- E3 missed_callbacks_of (pulse4all-subscriptions)                                                                                                        | FAIL                 | 1942 rows now against 1941 before: 1 only now, 0 only before
- E4 calls_of over the last 92 days (pulse4all-subscriptions)                                                                                             | FAIL                 | 198000 rows now against 197999 before: 1 only now, 0 only before
- E5 inbound_calls_of over the last 92 days (pulse4all-subscriptions)                                                                                     | FAIL                 | 79200 rows now against 79199 before: 1 only now, 0 only before
- E6 intake_per_day_of over the last 92 days (pulse4all-subscriptions)                                                                                    | FAIL                 | 854 rows now against 853 before: 1 only now, 0 only before
- E7 open_tickets_of (pulse4all-subscriptions)                                                                                                            | FAIL                 | 3600 rows now against 3599 before: 1 only now, 0 only before
+ E3 missed_callbacks_of (pulse4all-subscriptions)                                                                                                        | FAIL                 | 1896 rows now against 1895 before: 1 only now, 0 only before
+ E4 calls_of over the last 92 days (pulse4all-subscriptions)                                                                                             | FAIL                 | 198033 rows now against 198032 before: 1 only now, 0 only before
+ E5 inbound_calls_of over the last 92 days (pulse4all-subscriptions)                                                                                     | FAIL                 | 79220 rows now against 79219 before: 1 only now, 0 only before
+ E6 intake_per_day_of over the last 92 days (pulse4all-subscriptions)                                                                                    | FAIL                 | 855 rows now against 854 before: 1 only now, 0 only before
+ E7 open_tickets_of (pulse4all-subscriptions)                                                                                                            | FAIL                 | 3601 rows now against 3600 before: 1 only now, 0 only before
  E8 open_tasks_of (pulse4all-subscriptions)                                                                                                              | FAIL                 | 7500 rows now against 7499 before: 1 only now, 0 only before
- E9 the stored findings equal the live computation (pulse4all-subscriptions)                                                                             | FAIL                 | 246793 rows now against 246792 before: 1 only now, 0 only before
- A1 a tenant without a stored result computes it once on demand; the pages read it with Refreshed at                                                     | FAIL                 | market_not_in_catalog counted 1, computed at 2026-11-05 06:14:52.941097+00
+ E9 the stored findings equal the live computation (pulse4all-subscriptions)                                                                             | FAIL                 | 224940 rows now against 224939 before: 1 only now, 0 only before
+ A1 a tenant without a stored result computes it once on demand; the pages read it with Refreshed at                                                     | FAIL                 | market_not_in_catalog counted 1, computed at 2026-11-05 08:24:37.84776+00
  A2 the refresh skips a fresh result (reason fresh), refreshes an old one, and a waiting refresh finds it present                                        | FAIL                 | data_quality.refresh_minutes 5: skipped at 0 minutes, refreshed at 6
  A3 data_quality.refresh_minutes takes 1 to 1440 (0 and 1441 refused with CMA04)                                                                         | FAIL                 | set to 1 for the tenant
  A4 the scheduler's user writes the job's run row and refreshes; an analyst is refused (CMA06) on both                                                   | FAIL                 | job refresh_data_quality without a connection
  A5 an agent is refused data_quality, data_quality_computed_at and inbound_now (CMA06); a supervisor reads inbound_now with today, callbacks and summary | FAIL                 | the summary's listed equals the callbacks listed
- verdict                                                                                                                                                 | PROVOKED, NOT A PASS | 133_verify_perf: 0 ok, 20 FAIL, 1 skip
-(22 rows)
+ verdict                                                                                                                                                 | PROVOKED, NOT A PASS | 133_verify_perf: 0 ok, 29 FAIL, 0 skip
+(30 rows)
+
+DROP TABLE
+RESET
