@@ -40,8 +40,11 @@ function Tile({ label, info, value, testId }: {
   );
 }
 
+/** The words the inbound tiles and the missed callers use: a slice of the copy object (night N06), never the whole */
+export type InboundCopy = Pick<Copy, "live" | "hints" | "inbound" | "reports">;
+
 export function InboundLive({ inbound, copy, locale, canOpenMetrics = false }: {
-  inbound: InboundNow; copy: Copy; locale: Locale;
+  inbound: InboundNow; copy: InboundCopy; locale: Locale;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
   canOpenMetrics?: boolean;
 }) {
@@ -100,7 +103,7 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false }: {
  * The missed calls not called back, the Live board's last section (addition 0008z): nothing while the tenant has no
  * telephony, since the inbound part above already says so
  */
-export function MissedCallbacks({ inbound, copy, locale, timeZone }: { inbound: InboundNow; copy: Copy; locale: Locale; timeZone: string }) {
+export function MissedCallbacks({ inbound, copy, locale, timeZone }: { inbound: InboundNow; copy: InboundCopy; locale: Locale; timeZone: string }) {
   if (!inbound.telephony) return null;
   const t = copy.live;
   const h = copy.hints;

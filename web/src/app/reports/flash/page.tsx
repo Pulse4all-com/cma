@@ -19,7 +19,7 @@ import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
-import { addDays, dateKeyInZone, fmtDate } from "@/lib/time";
+import { addDays, dateKeyInZone, fmtDate, fmtDateTime } from "@/lib/time";
 import { resolve } from "../../access";
 
 /**
@@ -293,7 +293,10 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
 
           {def.key === "data_quality" ? (
             <Card title={t.dqTitle}>
-              <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.dqIntro}</p>
+              <p className="-mt-2 mb-1 max-w-3xl text-small text-p4a-muted">{t.dqIntro}</p>
+              {doc.refreshedAt ? (
+                <p className="mb-4 text-caption text-p4a-grey" data-testid="dq-refreshed-at">{t.refreshedAt.replace("{time}", fmtDateTime(doc.refreshedAt, me.timeZone, locale))}</p>
+              ) : <div className="mb-3" />}
               <DataQualityTable doc={doc} query={query} locale={locale} t={t} />
             </Card>
           ) : (

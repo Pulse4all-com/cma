@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import type { Principal } from "@/lib/auth/identity";
 import { ClockInCard } from "@/components/ClockInCard";
 import { Swatch } from "@/components/DashboardCharts";
 import { Shell } from "@/components/Shell";
@@ -7,7 +9,7 @@ import { agentGroupOf } from "@/lib/dashboard";
 import { attentionLines, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, type AttentionLine } from "@/lib/follow-up";
 import { workedSeconds } from "@/lib/live";
 import {
-  data, dataIsMock, type AppLink, type FollowUpSummary, type InboundNow, type MyFollowUp, type MyMessages, type MyRosterDay, type TeamHours,
+  data, dataIsMock, type AppLink, type DateKey, type FollowUpSummary, type InboundNow, type MyFollowUp, type MyMessages, type TeamHours,
   type WorkStatus, type Workday,
 } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
@@ -47,43 +49,34 @@ export default async function WelcomePage() {
   const hasAttention = holdsAny(me, FOLLOW_UP_SUMMARY_PERMISSIONS);
   const hasOwn = holdsAny(me, MY_FOLLOW_UP_PERMISSIONS);
 
-  // One read per block the person may see; reading never opens a day
-  const [workday, statuses, team, links, roster, inbox, summary, inbound, mine] = await Promise.all([
-    hasClock ? data().getWorkday(me, today) : Promise.resolve(null),
-    hasClock ? data().listStatuses(me) : Promise.resolve([] as WorkStatus[]),
-    hasTeam ? data().getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
-    data().listAppLinks(me),
-    hasRoster ? data().getMyRoster(me, { from: today, to: today }) : Promise.resolve([] as MyRosterDay[]),
-    // The latest messages for the Updates card (migration 0008); listing sets their delivered time, reading is the person's own click
-    data().listMyMessages(me, null, UPDATES_SHOWN),
-    // Needs attention and Waiting for you (addition 0008o): counts for the team, the person's own rows
-    hasAttention ? data().getFollowUpSummary(me) : Promise.resolve(null),
-    hasLive ? data().getInboundNow(me) : Promise.resolve(null),
-    hasOwn ? data().getMyFollowUp(me) : Promise.resolve(null),
-  ]);
-  // The shift sentence the greeting waited for (migration 0005): from the published roster only
-  const todayRoster = roster[0] ?? null;
-  const shiftLine = !hasRoster || !todayRoster ? null
-    : !todayRoster.isPublished ? t.rosterNotPublished
-    : todayRoster.kind === "shift" ? t.shiftToday.replace("{shift}", cellLabel({ kind: "shift", start: todayRoster.start, end: todayRoster.end, absenceName: null }))
-    : todayRoster.kind === "absence" ? t.absenceToday.replace("{absence}", todayRoster.absenceName ?? "")
-    : t.noShiftToday;
-
   const hour = hourInZone(now, me.timeZone);
   const greeting = (hour < 12 ? t.morning : hour < 18 ? t.afternoon : t.evening).replace("{name}", me.displayName);
 
+  // Since night N06 (5 November 2026; the IT audit's 5.6-05) the frame and the greeting render at once and every
+  // block streams in its own Suspense boundary with a placeholder, each block reading what it needs: the slowest read
+  // no longer gates the page. One read per block the person may see; reading never opens a day
   return (
     <Shell copy={copy} me={me} active="welcome">
       <h1 className="text-title font-bold text-p4a-heading">{greeting}</h1>
       <p className="mt-1 text-body text-p4a-muted">
         {fmtDate(today, me.locale)}
-        {shiftLine ? <span data-testid="shift-line">{` · ${shiftLine}`}</span> : null}
+        {hasRoster ? (
+          <Suspense fallback={null}>
+            <ShiftLine me={me} today={today} copy={copy} />
+          </Suspense>
+        ) : null}
       </p>
 
       <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">
         <div className="flex flex-col gap-6">
-          <UpdatesBlock inbox={inbox} timeZone={me.timeZone} locale={me.locale} copy={copy} />
-          {summary ? <AttentionBlock summary={summary} team={team} inbound={inbound} copy={copy} /> : null}
+          <Suspense fallback={<CardSkeleton title={t.updates} lines={3} />}>
+            <UpdatesBlockLoader me={me} copy={copy} />
+          </Suspense>
+          {hasAttention ? (
+            <Suspense fallback={<CardSkeleton title={t.attention} lines={4} />}>
+              <AttentionBlockLoader me={me} today={today} hasTeam={hasTeam} hasLive={hasLive} copy={copy} />
+            </Suspense>
+          ) : null}
           {hasReports ? (
             <Card title={t.reports}>
               <p className="text-body">{t.reportsBody}</p>
@@ -96,10 +89,18 @@ export default async function WelcomePage() {
 
         <div className="flex flex-col gap-6">
           {hasClock ? (
-            <DayBlock workday={workday} statuses={statuses} timeZone={me.timeZone} locale={me.locale} now={now} copy={copy} />
+            <Suspense fallback={<CardSkeleton lines={3} />}>
+              <DayBlockLoader me={me} today={today} now={now} copy={copy} />
+            </Suspense>
           ) : null}
-          {mine ? <WaitingBlock mine={mine} copy={copy} /> : null}
-          {links.length > 0 ? <AppLinks links={links} copy={copy} /> : null}
+          {hasOwn ? (
+            <Suspense fallback={<CardSkeleton title={t.waitingForYou} lines={1} />}>
+              <WaitingBlockLoader me={me} copy={copy} />
+            </Suspense>
+          ) : null}
+          <Suspense fallback={null}>
+            <AppLinksLoader me={me} copy={copy} />
+          </Suspense>
         </div>
       </div>
 
@@ -110,6 +111,67 @@ export default async function WelcomePage() {
       ) : null}
     </Shell>
   );
+}
+
+/** A card's placeholder while its block's read runs (the style guide's card, placeholder bars, no spinner) */
+function CardSkeleton({ title, lines }: { title?: string; lines: number }) {
+  return (
+    <section className="rounded-card border border-p4a-border bg-white p-6" aria-busy="true" data-card-skeleton>
+      {title ? <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{title}</h2> : <div className="mb-4 h-5 w-32 animate-pulse rounded-input bg-p4a-border" />}
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: lines }, (_, i) => (
+          <div key={i} className={`h-3 animate-pulse rounded-input bg-p4a-border ${i % 2 === 0 ? "w-full" : "w-3/4"}`} aria-hidden="true" />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** The shift sentence the greeting waited for (migration 0005): from the published roster only */
+async function ShiftLine({ me, today, copy }: { me: Principal; today: DateKey; copy: Copy }) {
+  const t = copy.welcome;
+  const roster = await data().getMyRoster(me, { from: today, to: today });
+  const todayRoster = roster[0] ?? null;
+  const shiftLine = !todayRoster ? null
+    : !todayRoster.isPublished ? t.rosterNotPublished
+    : todayRoster.kind === "shift" ? t.shiftToday.replace("{shift}", cellLabel({ kind: "shift", start: todayRoster.start, end: todayRoster.end, absenceName: null }))
+    : todayRoster.kind === "absence" ? t.absenceToday.replace("{absence}", todayRoster.absenceName ?? "")
+    : t.noShiftToday;
+  return shiftLine ? <span data-testid="shift-line">{` · ${shiftLine}`}</span> : null;
+}
+
+/** The latest messages for the Updates card (migration 0008); listing sets their delivered time, reading is the person's own click */
+async function UpdatesBlockLoader({ me, copy }: { me: Principal; copy: Copy }) {
+  const inbox = await data().listMyMessages(me, null, UPDATES_SHOWN);
+  return <UpdatesBlock inbox={inbox} timeZone={me.timeZone} locale={me.locale} copy={copy} />;
+}
+
+/** Needs attention (addition 0008o): the counts for the team, the days not clocked out and the missed callers */
+async function AttentionBlockLoader({ me, today, hasTeam, hasLive, copy }: { me: Principal; today: DateKey; hasTeam: boolean; hasLive: boolean; copy: Copy }) {
+  const [summary, team, inbound] = await Promise.all([
+    data().getFollowUpSummary(me),
+    hasTeam ? data().getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
+    hasLive ? data().getInboundNow(me) : Promise.resolve(null),
+  ]);
+  return <AttentionBlock summary={summary} team={team} inbound={inbound} copy={copy} />;
+}
+
+/** The person's own day and the statuses it needs */
+async function DayBlockLoader({ me, today, now, copy }: { me: Principal; today: DateKey; now: Date; copy: Copy }) {
+  const [workday, statuses] = await Promise.all([data().getWorkday(me, today), data().listStatuses(me)]);
+  return <DayBlock workday={workday} statuses={statuses} timeZone={me.timeZone} locale={me.locale} now={now} copy={copy} />;
+}
+
+/** Waiting for you (addition 0008o): the person's own rows */
+async function WaitingBlockLoader({ me, copy }: { me: Principal; copy: Copy }) {
+  const mine = await data().getMyFollowUp(me);
+  return <WaitingBlock mine={mine} copy={copy} />;
+}
+
+/** The tenant's app links, already filtered by the database to what this person may see */
+async function AppLinksLoader({ me, copy }: { me: Principal; copy: Copy }) {
+  const links = await data().listAppLinks(me);
+  return links.length > 0 ? <AppLinks links={links} copy={copy} /> : null;
 }
 
 /**
@@ -129,7 +191,7 @@ function DayBlock({
   const t = copy.welcome;
   if (!workday) {
     const defaultStatus = statuses.find((s) => s.isDefault);
-    return <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={copy} />;
+    return <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={{ welcome: copy.welcome }} />;
   }
   if (workday.status === "ended") {
     const ended = (
@@ -148,7 +210,7 @@ function DayBlock({
     return (
       <div className="flex flex-col gap-6">
         {ended}
-        <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={copy} againUntil={fmtTime(workday.dayEndsAt, timeZone, locale)} />
+        <ClockInCard defaultStatusName={defaultStatus?.name ?? ""} copy={{ welcome: copy.welcome }} againUntil={fmtTime(workday.dayEndsAt, timeZone, locale)} />
       </div>
     );
   }

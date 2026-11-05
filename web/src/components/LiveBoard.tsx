@@ -15,35 +15,14 @@
  */
 import { useState, useSyncExternalStore } from "react";
 import type { Copy } from "@/lib/copy";
+import type { BoardRow } from "@/lib/live-board";
 import type { Group } from "@/lib/dashboard";
-import type { WorkdayClock } from "@/lib/data";
 import type { Adherence } from "@/lib/roster";
 import { type EmployerOption, type LiveGroup, type TeamOption, type Tile, fmtSeconds, secondsSince, workedSeconds } from "@/lib/live";
 import { groupLabels, Swatch } from "./DashboardCharts";
 import { Badge, Keycap } from "./primitives";
 
-/** One row, with its labels pre-formatted on the server in the person's zone and locale */
-export interface BoardRow {
-  userId: string;
-  displayName: string;
-  organisationKey: string;
-  organisationName: string;
-  group: LiveGroup;
-  /** The current status; null without a day and once the day has ended */
-  statusName: string | null;
-  statusActive: boolean;
-  statusSince: string | null;
-  /** The clock's inputs; null without a day. An ended day has nothing running */
-  clock: WorkdayClock | null;
-  inLabel: string | null;
-  outLabel: string | null;
-  /** Short zone name when the person's zone differs from the viewer's */
-  zoneLabel: string | null;
-  /** The person's current teams (migration 0004), for the team filter and the Team column */
-  teams: { key: string; name: string }[];
-  /** Today's published shift (migration 0005) with the adherence flag derived on the server */
-  shift: { label: string | null; published: boolean; flag: Adherence | null };
-}
+export type { BoardRow } from "@/lib/live-board";
 
 /** A one-second clock as an external store: no setState in effects, no hydration mismatch */
 function subscribe(onTick: () => void) {
@@ -66,7 +45,8 @@ export function LiveBoard({
   tiles: Tile[];
   employers: EmployerOption[];
   teams: TeamOption[];
-  copy: Copy;
+  /** The board's words and the groups' (a slice, never the whole copy object: it rides in the page's payload) */
+  copy: Pick<Copy, "live" | "dashboard">;
 }) {
   const t = copy.live;
   const now = useSyncExternalStore(subscribe, nowSeconds, serverNow);

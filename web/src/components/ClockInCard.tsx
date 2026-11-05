@@ -26,7 +26,8 @@ export function ClockInCard({
   againUntil = null,
 }: {
   defaultStatusName: string;
-  copy: Copy;
+  /** The Welcome words (a slice of the copy object, never the whole: it rides in the page's payload) */
+  copy: Pick<Copy, "welcome">;
   /** The "again" variant: the window end on an ended day that may take another session, pre-formatted */
   againUntil?: string | null;
 }) {

@@ -79,7 +79,8 @@ export function WorkdayPanel({
   sessionStartedLabel?: string | null;
   /** The window end of the day (dayEndsAt), for "until" when the person can clock in again */
   dayEndsLabel: string;
-  copy: Copy;
+  /** The My day words (a slice of the copy object, never the whole: it rides in the page's payload) */
+  copy: Pick<Copy, "myDay">;
 }) {
   const router = useRouter();
   const now = useSyncExternalStore(subscribe, nowSeconds, serverNow);
