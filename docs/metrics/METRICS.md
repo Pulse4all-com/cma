@@ -33915,9 +33915,9 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 #### `flash.subscriptions.subscriptions`
 
-**Subscriptions** on /reports/flash · Subscriptions (Abonnementen)
+**All statuses** on /reports/flash · All statuses (Alle statussen)
 
-Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures).
+All statuses: the subscriptions the latest full read returns in every status, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures). Labelled "All statuses" since addition 0008zu (was "Subscriptions"), so it never reads as larger than the headline, Total subscriptions.
 
 **Formula as computed**
 

@@ -83418,12 +83418,12 @@
       "key": "flash.subscriptions.subscriptions",
       "surface": "report",
       "page": "/reports/flash",
-      "tile": "Subscriptions",
+      "tile": "All statuses",
       "title": {
-        "en": "Subscriptions",
-        "nl": "Abonnementen"
+        "en": "All statuses",
+        "nl": "Alle statussen"
       },
-      "definition": "Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures).",
+      "definition": "All statuses: the subscriptions the latest full read returns in every status, merged and never-subscribed included (payment state `none`) (Active subscriptions; docs/definitions.md, Flash overview measures). Labelled \"All statuses\" since addition 0008zu (was \"Subscriptions\"), so it never reads as larger than the headline, Total subscriptions.",
       "formula": "count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full read returns, per store, status and payment state. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
       "unit": "count",
       "grain": [
