@@ -27,9 +27,10 @@
 --   A4  a period answers as 0008ze's definition (kept below as pg_temp.v0008zw_reviews_0008ze), key for key: four periods
 --       (a day that is today and so cut, two weeks by day, a month by week, 92 days by week) by every market, unknown
 --       and all; its from and to the period's, all false
---   A5  cma.reviews_page's parameters, as the application: All grouped by month passes; All by week or without a group,
---       All without an end, a period by month, a period of 200 days and a bad market are refused (CMA04); without a
---       report permission the read is refused (CMA06)
+--   A5  cma.reviews_page's parameters, as the application: All grouped by month to today (or the day after, for a reader
+--       ahead of the tenant's zone) passes; All by week or without a group, All without an end or ending two days after
+--       today or in 9999, a period by month, a period of 200 days and a bad market are refused (CMA04); without a report
+--       permission the read is refused (CMA06)
 --   A6  the orders' live headline (tenant one's three stores, as its reader): the split per kind summed over the GB
 --       stores, unknown shown only where an order has that kind, a test order left out; the parts add up to the figure
 --       in all and per market; a market without orders all zeros
@@ -401,14 +402,17 @@ begin
              || ' ' || pg_temp.v0008zw_code('select cma.reviews_page(null, null, null, ''month'')')
              || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(%L, %L, null, ''month'')', v_today - 10, v_today))
              || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(%L, %L, null, ''week'')', v_today - 199, v_today))
-             || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(null, %L, ''NLD'', ''month'')', v_today));
+             || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(null, %L, ''NLD'', ''month'')', v_today))
+             || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(null, %L, null, ''month'')', v_today + 1))
+             || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(null, %L, null, ''month'')', v_today + 2))
+             || ' ' || pg_temp.v0008zw_code('select cma.reviews_page(null, ''9999-12-31'', null, ''month'')');
     j := cma.reviews_page(null, v_today, null, 'month');
     v_txt := v_txt || ' ' || (j -> 'figures' ->> 'reviews') || ' ' || (j ->> 'from');
     perform set_config('app.user_id', v_agent::text, true);
     v_txt := v_txt || ' ' || pg_temp.v0008zw_code(format('select cma.reviews_page(null, %L, null, ''month'')', v_today));
     perform set_config('role', 'cma_owner', true);
-    v_rows := v_rows || array['15', 'A5 the read''s parameters: All by month passes; All by week, without a group or an end, a period by month, 200 days, a bad market refused (CMA04); no report permission (CMA06)',
-      case when v_txt = 'ok ok CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 9 2025-12-10 CMA06' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['15', 'A5 the read''s parameters: All by month to today or the day after passes; All by week, without a group or an end, past tomorrow, a period by month, 200 days, a bad market refused (CMA04); no report permission (CMA06)',
+      case when v_txt = 'ok ok CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok CMA04 CMA04 9 2025-12-10 CMA06' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- the orders fixture of tenant one: two GB stores and an NL store; on 30 and 31 October (Amsterdam)
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)

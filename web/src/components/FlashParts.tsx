@@ -238,6 +238,8 @@ function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, di
   // a device's subscription status: the subscription app's word, else no subscription found, else no reference
   if (dim === "subscription_status" && dims[dim] === "not_found") return t.notFound;
   if (dim === "subscription_status" && dims[dim] === "none") return t.noLink;
+  // an order's kind in the reader's language, as the headline's split names it (addition 0008zw)
+  if (def.key === "orders" && dim === "kind") return splitKeyLabel(def.key, dims[dim] ?? "", t);
   return dimText(def.key, doc.labels, dim, dims);
 }
 
@@ -487,7 +489,10 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
             <tr key={i} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
               {columns.map((c) => (
                 <td key={c.key} className={`px-3 py-2 ${c.kind === "number" ? "tabular text-right" : ""}`}>
-                  {cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t, !frozen && FLASH_LABELLED_DIMS[def.key]?.[c.key] !== undefined)}
+                  {/* an order's kind in the reader's language, as the breakdown and the headline's split (addition 0008zw) */}
+                  {def.key === "orders" && c.key === "kind" && typeof r[c.key] === "string" && r[c.key] !== ""
+                    ? <span title={String(r[c.key])}>{splitKeyLabel(def.key, String(r[c.key]), t)}</span>
+                    : cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t, !frozen && FLASH_LABELLED_DIMS[def.key]?.[c.key] !== undefined)}
                 </td>
               ))}
             </tr>

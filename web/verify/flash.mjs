@@ -759,6 +759,10 @@ expect("every link and control of an overview keeps its page: the cells, the ban
   [(partsSrc0008zu.match(/, path\)/g) ?? []).length >= 3, /router\.push\(flashHref\(path, q\) as Route\)/.test(controlsSrc0008zu),
     (overviewSrc.match(/path=\{path\}/g) ?? []).length >= 5, /\/reports\/flash/.test(overviewSrc.replace(/"\/reports\/flash"/g, "").replace(/\/api\/v1\/reports\/flash/g, ""))],
   [true, true, true, false], [false, false, false, true]);
+expect("the orders' kind is the split's word in the breakdown and the records too; the code stays in the files and on hover",
+  [/if \(def\.key === "orders" && dim === "kind"\) return splitKeyLabel\(def\.key, dims\[dim\] \?\? "", t\);/.test(partsSrc0008zu),
+    /def\.key === "orders" && c\.key === "kind"[\s\S]{0,120}<span title=\{String\(r\[c\.key\]\)\}>\{splitKeyLabel\(def\.key, String\(r\[c\.key\]\), t\)\}/.test(partsSrc0008zu)],
+  [true, true], [false, false]);
 expect("the landing labels the split: a stored card's kinds in the reader's language, a live card's as data",
   [/splitLine\(card\?\.split \?\? null, \(x\) => fmtNumber\(x, locale, 0\), \(k\) => splitKeyLabel\(o\.key, k, t\)\)/.test(flashOnlySrc),
     /splitLabels: splitLabelsOf\(o\.key, t\)/.test(flashOnlySrc), /labels\.splitLabels\?\.\[k\] \?\? k/.test(controlsSrc0008zu)],

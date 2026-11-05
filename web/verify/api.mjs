@@ -1504,8 +1504,9 @@ async function reviewsAllChecks() {
     [200, true, "month", null, null, 0, true, true, true, day(0)], [200, false, "week", day(-1), day(0), 1, false, false, false, day(-1)]);
   const refused = [`/api/v1/reports/reviews?range=all&from=${day(-10)}&to=${day(0)}`, `/api/v1/reports/reviews?range=all&to=${day(0)}&group=week`,
     "/api/v1/reports/reviews?range=all", `/api/v1/reports/reviews?range=all&to=${day(0)}&pipeline=x`, `/api/v1/reports/reviews?from=${day(-199)}&to=${day(0)}`,
-    `/api/v1/reports/reviews?from=${day(-10)}&to=${day(0)}&group=month`];
-  expect("reviews: All with a from, by week, without an end or with a pipeline, 200 days and a period by month are 400s",
+    `/api/v1/reports/reviews?from=${day(-10)}&to=${day(0)}&group=month`, "/api/v1/reports/reviews?range=all&to=9999-12-31",
+    `/api/v1/reports/reviews?range=all&to=${day(3)}`];
+  expect("reviews: All with a from, by week, without an end or with a pipeline, 200 days, a period by month and All past tomorrow are 400s",
     await Promise.all(refused.map(async (r) => (await call(ANALYST, r)).status)), refused.map(() => 400), refused.map(() => 200));
   expect("reviews: an agent is refused All", (await call(AGENT, `/api/v1/reports/reviews?range=all&to=${day(0)}`)).status, 403, 200);
   const page = await download(ANALYST, "/reports/reviews?range=all");

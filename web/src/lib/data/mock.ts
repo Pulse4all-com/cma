@@ -4552,7 +4552,7 @@ export const mockData: CmaData = {
     // as cma.reviews_page (0008zw): All (from null) runs to a date by month, with no cap; a period keeps 92 days and day or week
     if (range.from === null) {
       assertAny(me, ["reports.view", "performance.team"]);
-      if (!isDateKey(range.to)) throw new CmaDbError("CMA04", "the period All runs to a date");
+      if (!isDateKey(range.to) || range.to > addDays(mockToday(me), 1)) throw new CmaDbError("CMA04", "the period All runs to a date, today at the latest");
       if (parseFunnelFilter(market ?? "", "", "").problem) throw new CmaDbError("CMA04", "invalid filter");
       if (group !== "month") throw new CmaDbError("CMA04", "the period All is grouped by month");
     } else {

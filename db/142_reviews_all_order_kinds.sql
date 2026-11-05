@@ -4,7 +4,8 @@
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
 -- 140_live_per_organisation.sql (0008zv). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your
 -- own IAM login, away from minute 20 (the hourly snapshot job): dev first, then 143_verify_reviews_all_order_kinds.sql
--- there, then 105_verify_reviews.sql and 139_verify_flash_totals.sql again (their expected figures hold unchanged); then
+-- there, then 105_verify_reviews.sql and 139_verify_flash_totals.sql again (105's figures hold unchanged; 139's A2 accepts
+-- the orders' split dim kind since this change, the edit of this PR, Decision log); then
 -- prod in the same order, before the merge: the web of this change asks cma.reviews_page for the period All (p_from
 -- null, grouped by month), which main's functions refuse (CMA04: Reviews would show the error page for All). The web of
 -- main runs unchanged on it: its periods and groups answer as before, the reviews page only gains the keys from, to and
@@ -28,7 +29,8 @@
 --              counted review submitted by p_now, else p_to; no previous period: previous_from, previous_to null and
 --              previous_partial false, the previous figures 0); the group month (every month's first day of the period,
 --              empty ones too); the page answers its own from, to and all. cma.reviews_page(from, to, market, group):
---              from null is All, which runs to a date and is grouped by month, with no cap; a period keeps the 92 days
+--              from null is All, which runs to a date (the tenant's today at the latest, or the day after it for a
+--              reader ahead of the tenant's zone) and is grouped by month, with no cap of days; a period keeps the 92 days
 --              and day or week (month with a period is refused, CMA04)
 --   Flash      cma.flash_split_dim_of: orders → kind; cma.flash_split_set_of (new): the set a headline's split reads
 --              ([market, status], [market, store, kind]); cma.flash_split_order_of (new): the keys every split shows
@@ -180,7 +182,8 @@ $$;
 
 -- Reports, Reviews in one read (reports.view or performance.team; a market's code or unknown). A period (p_from and p_to)
 -- covers at most 92 days and is grouped by day or week; All (p_from null, 0008zw) runs from the tenant's first counted
--- review to p_to, is grouped by month and has no cap. Team figures only: no figure per person exists
+-- review to p_to (the tenant's today at the latest, or the day after it), is grouped by month and has no cap of days.
+-- Team figures only: no figure per person exists
 create or replace function cma.reviews_page(p_from date, p_to date, p_market text default null, p_group text default 'week')
 returns jsonb
 language plpgsql stable
@@ -190,9 +193,10 @@ declare
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   if p_from is null then
-    -- All (0008zw): exempt from the 92 days every other report keeps
-    if p_to is null then
-      raise exception 'the period All runs to a date' using errcode = 'CMA04';
+    -- All (0008zw): exempt from the 92 days every other report keeps, so its end is bounded instead: the tenant's today
+    -- at the latest, a day more for a reader whose zone is ahead (a later end would only add empty months)
+    if p_to is null or p_to > cma.tenant_today_of(v_tenant) + 1 then
+      raise exception 'the period All runs to a date, today at the latest' using errcode = 'CMA04';
     end if;
   else
     perform cma.report_range(v_tenant, p_from, p_to);
