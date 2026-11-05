@@ -14,7 +14,8 @@
  * with --dedupe-sessions latest-logout (the latest logout kept, an open one as latest, counted), and
  * refused without it or when the rows of one id differ in account or login; and --session-id-from
  * person-login (ids derived without a session id column, a derived id that is not unique refused
- * with its lines named, the option refused with --dedupe-sessions).
+ * with its lines named, the option refused with --dedupe-sessions). Also runs the unit test of
+ * tools/legacy-export-html-to-csv.mjs (node --test tools/legacy-export-html-to-csv.test.mjs) as one check.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -166,6 +167,10 @@ expect("a map template lists every account of the export",
   [0, ["steam_pid,work_email,include,steam_name,sessions,first_day,last_day", "1001,,,Test Account A,4,2026-01-02,2026-10-09",
        '1002,,,"Account, B",2,2026-01-05,2026-01-06']], [1, null]);
 expect("the tool prints no name and no email", /Test Account|Account, B|@example\.com/i.test(sample.printed), false, true);
+
+const htmlExport = spawnSync(process.execPath, ["--test", fileURLToPath(new URL("./legacy-export-html-to-csv.test.mjs", import.meta.url))],
+  { encoding: "utf8" });
+expect("the HTML export's converter: its unit test passes", htmlExport.status, 0, 1);
 
 rmSync(dir, { recursive: true, force: true });
 const passed = results.filter(Boolean).length;

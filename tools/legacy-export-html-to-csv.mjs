@@ -74,7 +74,7 @@ const ENTITIES = {
 /** HTML entities decoded: named (HTML 4's set), decimal and hexadecimal; an unknown name stays as written */
 export function decodeEntities(text) {
   return text.replace(/&(?:#x([0-9a-f]+)|#([0-9]+)|([a-z][a-z0-9]*));/gi, (whole, hex, dec, name) => {
-    if (name !== undefined) return name in ENTITIES ? String.fromCodePoint(ENTITIES[name]) : whole;
+    if (name !== undefined) return Object.hasOwn(ENTITIES, name) ? String.fromCodePoint(ENTITIES[name]) : whole;
     const cp = hex !== undefined ? parseInt(hex, 16) : Number(dec);
     return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : "�";
   });

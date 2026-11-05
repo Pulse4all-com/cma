@@ -4,6 +4,7 @@
  * footer row) and on small files written to a temporary folder. No database, no real data.
  *
  *   node --test tools/*.test.mjs
+ * (also run by tools/verify-legacy-sessions.mjs, from web/: npm run verify:import)
  */
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -64,7 +65,7 @@ test("the CSV: the table's header, cells trimmed, entities decoded, quoted where
   ].join("\n"));
   assert.equal(files["steam-export-w45.csv"], [
     "PersoneelsPID,Personeel,Ingelogd,Uitgelogd,Ingelogde tijd,Sessie-ID,Functie",
-    "1003,Test Account É,2-11-2026 09:00:00,2-11-2026 17:00:00,8:00:00,90004,Agent",
+    "1003,Test Account \u00c9,2-11-2026 09:00:00,2-11-2026 17:00:00,8:00:00,90004,Agent",
     '1005,"Test Account ""E""",3-11-2026 09:00:00,3-11-2026 12:00:00,3:00:00,90005,Directie',
     "",
   ].join("\n"));
@@ -143,7 +144,8 @@ test("ISO weeks: Monday to Sunday, the Thursday decides the year", () => {
 test("the table: closing tags HTML lets a file leave out, comments, tags inside a cell", () => {
   const rows = readTable("<TABLE><!-- <tr><td>x</td></tr> --><THEAD><TR><TH>A<TH>B<TBODY><TR><TD><b>1</b><TD> 2 <TR><TD>3<TD>&#52;</TABLE><table><tr><td>other</td></tr></table>");
   assert.deepEqual(rows, [{ head: true, cells: ["A", "B"] }, { head: false, cells: ["1", "2"] }, { head: false, cells: ["3", "4"] }]);
-  assert.equal(decodeEntities("&lt;a&gt; &amp;amp; &#x41;&#66; &euml; &unknown; &#0;"), "<a> &amp; AB ë &unknown; �");
+  assert.equal(decodeEntities("&lt;a&gt; &amp;amp; &#x41;&#66; &euml; &unknown; &#0;"), "<a> &amp; AB \u00eb &unknown; \ufffd");
+  assert.equal(decodeEntities("&constructor; &toString;"), "&constructor; &toString;", "no inherited name reads as an entity");
   assert.equal(splitByWeek("<table><thead><tr><th>Start</th></tr></thead><tr><td>2026-10-26 09:00</td></tr></table>",
     { loginColumn: "Start", dateFormat: "yyyy-mm-dd", prefix: "other" }).files[0].name, "other-w44.csv");
 });

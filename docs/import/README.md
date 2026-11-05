@@ -355,8 +355,9 @@ plus the footer) and `rows_dropped_footer 1` (Steam's last row, `# Records: <n>`
 table's header. A `rows_dropped_footer` above 1 means rows whose cell count differs from the
 header's, not only the footer: stop and check the export. A refusal (`refused, nothing written`)
 says why: no `<table>` (not this export), no column `Ingelogd` (another layout; the options are at
-the top of `tools/legacy-export-html-to-csv.mjs`), or a login that does not read as `d-m-yyyy` (the
-table rows named).
+the top of `tools/legacy-export-html-to-csv.mjs`), a login that does not read as `d-m-yyyy` (the
+table rows named), or another reason it names (for example `does not read as utf-8`: an export in
+another charset without a `<meta charset>`; stop and report it).
 
 **Terminal**
 ```bash
@@ -412,8 +413,10 @@ steam_pid,work_email,include
 ```
 An account in this week's export that is not in the map is dropped and counted
 (`accounts_absent_from_map`): when it belongs in the import, add the person first (Team → People),
-then add its row to the map by hand. If `accounts_absent_from_map` is not 0 in step 4, a person has to
-be added first. The file holds emails and goes in step 11 with the rest.
+then add its row to the map by hand. Accounts that are not agent hours (management accounts) stay out
+of the map (step 2), so `accounts_absent_from_map` in step 4 is 0 or the number of management
+accounts with sessions in this week's export; any other absent account needs a person first. The
+file holds emails and goes in step 11 with the rest.
 
 **4. The staging file**
 
@@ -429,7 +432,9 @@ cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export-w<ww
 ```
 Expected: the counts, with `sessions_written` above 0, `sessions_deduplicated 0`, `period_from` and
 `period_to` the week's first and last login, `accounts_written` the number of people with sessions
-that week (at most the rows of the map), `accounts_absent_from_map` 0, `map_rows_without_sessions` 0 or more (accounts in the map without sessions this week are counted there and ignored, which is fine), and the two file paths.
+that week (at most the rows of the map), `accounts_absent_from_map` 0 or the number of management
+accounts with sessions that week (they stay out, step 2; the "LogIn/Out" export of step 1b lists them),
+`map_rows_without_sessions` 0 or more (accounts in the map without sessions this week are counted there and ignored, which is fine), and the two file paths.
 
 **5. Stage the batch**
 
@@ -441,11 +446,12 @@ select set_config('app.tenant_id', '<tenant_id>', false),
        set_config('app.user_id', '<user_id>', false),
        set_config('app.actor_label', 'terminal:martin', false);
 select key, status, period_from, period_to, timezone
-from cma.stage_import_batch('steam-<yyyy>-w<ww>', 'steam_connect', 'steam-export.csv',
+from cma.stage_import_batch('steam-<yyyy>-w<ww>', 'steam_connect', '<file>',
                             '<period_from>', '<period_to>', 'Europe/Amsterdam', 'legacy_session', 'break');
 SQL
 ```
-Expected: the context row, then `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> | Europe/Amsterdam`.
+`<file>` is `steam-export.csv`, or `steam-export-w<ww>.csv` for the HTML export of step 1b. Expected: the
+context row, then `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> | Europe/Amsterdam`.
 
 **6. Copy the sessions in**: as step 6. Expected: `COPY <n>` with `n` = `sessions_written`, then one
 row per batch of the tenant (the copy lists the sessions of every batch copied in so far, whatever
