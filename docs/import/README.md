@@ -295,12 +295,13 @@ the `108` line alone is the step: run the migration, expect `COMMIT`, and do not
   the status would, and the load then refuses with `inactive and has time recorded in it on days no
   import wrote`. `legacy_session_w42`, the one-off status of the week of 12 to 18 October 2026, is not
   used again.
-- **Session ids** `--session-id-from person-login` on step 4: a weekly export has no session id column,
-  so the tool derives `<person id>@<login as in the file>` for every row. If two rows of one account
+- **Session ids** `--session-id-from person-login` on step 4 for the "Agent uren week" export (step 1):
+  it has no session id column, so the tool derives `<person id>@<login as in the file>` for every row. If two rows of one account
   have the same login text, the ids collide and the tool refuses, writes nothing and names the lines
   (`lines 12, 40: one account and login give the same session id`). Open the export at those lines: if they
   are the same session twice, delete the shorter row in your copy (the load would merge them anyway),
   and run the line again; the check covers every row of the export, also those of accounts the map leaves out. The option is not combined with `--dedupe-sessions`.
+  The "LogIn/Out" export (step 1b) carries `Sessie-ID` and runs without the option.
 - **Period** the week's first to last login: the `period_from` and `period_to` that step 4 prints (the
   first and last login of an included account), not the calendar week. Use them in step 5. The period
   must have ended: the last login day is before today.
@@ -327,6 +328,54 @@ Expected: one row.
 mkdir -p ~/import && chmod 700 ~/import && mv ~/Agent*uren*week*.csv ~/import/steam-export.csv && ls -la ~/import
 ```
 Expected: the folder lists `steam-export.csv`. If the glob matches two files, `mv` refuses; leave one.
+
+**1b. An export that is an HTML table (.xls).** Steam's "LogIn/Out" export arrives as a file named
+`.xls` that holds an HTML `<table>`, not a spreadsheet or a CSV. Move it in as `steam-export.xls`
+instead of step 1's `mv`; the glob takes the one `.xls` file in Linux files (if it matches two, `mv`
+refuses; leave one). Then check what it is:
+
+**Terminal**
+```bash
+mkdir -p ~/import && chmod 700 ~/import && mv ~/*.xls ~/import/steam-export.xls && file ~/import/steam-export.xls && head -1 ~/import/steam-export.xls
+```
+Expected: `file` says `HTML document`, followed by the text's encoding (`UTF-8 text`, `ASCII text`),
+and `head -1` shows `<html>` (a line that starts with `<html`). Anything else is not this export:
+`CSV text` is the "Agent uren week" export (step 1), `Composite Document File` a real Excel file;
+stop and report it.
+
+Convert it to one CSV per ISO week of the login date:
+
+**Terminal**
+```bash
+cd ~/cma && node tools/legacy-export-html-to-csv.mjs ~/import/steam-export.xls --out ~/import
+```
+Expected: one line per ISO week, the file's path and its rows
+(`/home/<you>/import/steam-export-w<ww>.csv  <n> rows`), then `rows_read` (the rows of every file
+plus the footer) and `rows_dropped_footer 1` (Steam's last row, `# Records: <n>`). Each file has the
+table's header. A `rows_dropped_footer` above 1 means rows whose cell count differs from the
+header's, not only the footer: stop and check the export. A refusal (`refused, nothing written`)
+says why: no `<table>` (not this export), no column `Ingelogd` (another layout; the options are at
+the top of `tools/legacy-export-html-to-csv.mjs`), a login that does not read as `d-m-yyyy` (the
+table rows named), or another reason it names (for example `does not read as utf-8`: an export in
+another charset without a `<meta charset>`; stop and report it).
+
+**Terminal**
+```bash
+rm ~/import/steam-export.xls && ls ~/import
+```
+Expected: only the week files, `steam-export-w<ww>.csv`.
+
+Then:
+
+- Step 4 reads `~/import/steam-export-w<ww>.csv`, the file of the week you load, and runs **without**
+  `--session-id-from person-login`: this export carries `Sessie-ID`, which the tool reads by default
+  (its second line in step 4). `--session-id-from` stays for the "Agent uren week" export, which has
+  no session id. Step 5 names the file `steam-export-w<ww>.csv`.
+- One export can span two ISO weeks (exported in the week after, it holds that week's first days
+  too). Each week is its own batch, with its own key and file, and a week is loaded only after it
+  has ended (Period, above): steps 2 and 4 to 10 once per ended week, oldest first. The unfinished
+  week's file is not loaded; it is deleted with the folder in step 11, and that week is exported
+  again once it has ended.
 
 **2. The map, rebuilt.** The accounts are the same people from week to week, so the map is read from
 the database, not made from scratch: the latest mapping of each account across every loaded
@@ -364,8 +413,10 @@ steam_pid,work_email,include
 ```
 An account in this week's export that is not in the map is dropped and counted
 (`accounts_absent_from_map`): when it belongs in the import, add the person first (Team → People),
-then add its row to the map by hand. If `accounts_absent_from_map` is not 0 in step 4, a person has to
-be added first. The file holds emails and goes in step 11 with the rest.
+then add its row to the map by hand. Accounts that are not agent hours (management accounts) stay out
+of the map (step 2), so `accounts_absent_from_map` in step 4 is 0 or the number of management
+accounts with sessions in this week's export; any other absent account needs a person first. The
+file holds emails and goes in step 11 with the rest.
 
 **4. The staging file**
 
@@ -373,9 +424,17 @@ be added first. The file holds emails and goes in step 11 with the rest.
 ```bash
 cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export.csv --map ~/import/steam-map.csv --zone Europe/Amsterdam --batch steam-<yyyy>-w<ww> --session-id-from person-login --out ~/import/staging.csv --map-sql ~/import/person-map.sql
 ```
+For the HTML export of step 1b, the week's file and no `--session-id-from`:
+
+**Terminal**
+```bash
+cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export-w<ww>.csv --map ~/import/steam-map.csv --zone Europe/Amsterdam --batch steam-<yyyy>-w<ww> --out ~/import/staging.csv --map-sql ~/import/person-map.sql
+```
 Expected: the counts, with `sessions_written` above 0, `sessions_deduplicated 0`, `period_from` and
 `period_to` the week's first and last login, `accounts_written` the number of people with sessions
-that week (at most the rows of the map), `accounts_absent_from_map` 0, `map_rows_without_sessions` 0 or more (accounts in the map without sessions this week are counted there and ignored, which is fine), and the two file paths.
+that week (at most the rows of the map), `accounts_absent_from_map` 0 or the number of management
+accounts with sessions that week (they stay out, step 2; the "LogIn/Out" export of step 1b lists them),
+`map_rows_without_sessions` 0 or more (accounts in the map without sessions this week are counted there and ignored, which is fine), and the two file paths.
 
 **5. Stage the batch**
 
@@ -387,14 +446,17 @@ select set_config('app.tenant_id', '<tenant_id>', false),
        set_config('app.user_id', '<user_id>', false),
        set_config('app.actor_label', 'terminal:martin', false);
 select key, status, period_from, period_to, timezone
-from cma.stage_import_batch('steam-<yyyy>-w<ww>', 'steam_connect', 'steam-export.csv',
+from cma.stage_import_batch('steam-<yyyy>-w<ww>', 'steam_connect', '<file>',
                             '<period_from>', '<period_to>', 'Europe/Amsterdam', 'legacy_session', 'break');
 SQL
 ```
-Expected: the context row, then `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> | Europe/Amsterdam`.
+`<file>` is `steam-export.csv`, or `steam-export-w<ww>.csv` for the HTML export of step 1b. Expected: the
+context row, then `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> | Europe/Amsterdam`.
 
-**6. Copy the sessions in**: as step 6. Expected: `COPY <n>` with `n` = `sessions_written`, one row
-`steam-<yyyy>-w<ww> | <n> | <accounts_written> | <period_from> | <period_to>`, `COMMIT`.
+**6. Copy the sessions in**: as step 6. Expected: `COPY <n>` with `n` = `sessions_written`, then one
+row per batch of the tenant (the copy lists the sessions of every batch copied in so far, whatever
+its status), the new batch among them as
+`steam-<yyyy>-w<ww> | <n> | <accounts_written> | <period_from> | <period_to>`, and `COMMIT`.
 
 **7. The person map**: the statement of step 4 is a file, so the context goes in with `-c` and the file
 with `-f`, in one session:
