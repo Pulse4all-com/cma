@@ -691,7 +691,7 @@ liveGroupOf(person): no day -> notClockedIn; day.status = 'ended' or no current 
 
 **Who may see it** `monitoring.live`
 
-**Refresh** on page load; LiveRefresh re-reads the whole page (router.refresh) every 10 s while the tab is visible, paused hidden, once more on return
+**Refresh** on page load; the board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, once more on return, backing off after a failure
 
 **Computed in** `cma.team_now` (0003e); `liveGroupOf` in src/lib/live.ts; `groupOf` in src/lib/dashboard.ts; `liveRows` in src/lib/live.ts
 
@@ -742,7 +742,7 @@ count of liveRows whose liveGroupOf(person) = the tile's group, over ALL rows (b
 
 **Who may see it** `monitoring.live`
 
-**Refresh** on page load; re-read every 10 s while the tab is visible (LiveRefresh)
+**Refresh** on page load; polled with the board every 10 s while the tab is visible (GET /api/v1/live/board, LiveBoardLive)
 
 **Computed in** `cma.team_now` (0003e); `tiles` in src/lib/live.ts; `liveGroupOf` in src/lib/live.ts
 
@@ -1233,7 +1233,7 @@ offered = count(telephony calls with direction='inbound', source_deleted_at null
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
@@ -1282,7 +1282,7 @@ answered = count(today's inbound calls as live.inbound.offered with answered_at 
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
@@ -1338,7 +1338,7 @@ unanswered = count(not answered and not waiting); waiting = not answered, not en
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `unansweredPct` in src/lib/reports.ts; `inboundTileValue` in src/lib/live.ts
 
@@ -1396,7 +1396,7 @@ numerator = count(answered and answer_seconds <= telephony.service_level_seconds
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
@@ -1445,7 +1445,7 @@ avg_answer_seconds = round1(avg(answered_at − started_at in seconds, floored a
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
@@ -1500,7 +1500,7 @@ waiting_now = count(inbound calls on counted lines with answered_at null, ended_
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
@@ -1554,7 +1554,7 @@ longest_waiting_seconds = floor(epoch(now() − min(started_at) over the waiting
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.inbound_today` (0008i); `cma.inbound_today_of` (0008i); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
@@ -1615,7 +1615,7 @@ rows = per counterpart_hash the latest (started_at desc, id desc) missed inbound
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts; `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -1676,7 +1676,7 @@ started_at of the listed call, shown as a time in the VIEWER'S zone (me.timeZone
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -1739,7 +1739,7 @@ waiting_business_seconds = cma.business_seconds_of(tenant, market, started_at, n
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `cma.business_seconds_of` (0007d); `callbackWaiting` in src/lib/live.ts; `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -1801,7 +1801,7 @@ missed_count = count(the caller's missed calls in the lookback, EVERY reason (ne
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `missedCallbacks` in src/lib/live.ts
 
@@ -1861,7 +1861,7 @@ anonymous_count = count(missed calls in the lookback whose reason needs_callback
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks_summary` (0008i); `cma.missed_callbacks_summary_of` (0008i); `cma.inbound_calls_of` (0008i); `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -1914,7 +1914,7 @@ Live board strip: the leads not called, right now.
 
 **Who may see it** `monitoring.live`
 
-**Refresh** follow-up snapshot once a minute; the board re-reads every 10 s while the tab is visible (LiveRefresh)
+**Refresh** follow-up snapshot once a minute; the board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026)
 
 **Computed in** `cma.follow_up_summary` (0008s); `cma.open_leads_of` (0008o); `FollowUpLive` in src/components/FollowUpLive.tsx
 
@@ -7004,7 +7004,7 @@ received = count(email_message where source_kind = 'inbox_message' and direction
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_of` (0008x); `cma.email_threads_counted_of` (0008x); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx; `seriesColumns` in src/lib/email.ts
 
@@ -7067,7 +7067,7 @@ logged_replies = count(email_message where source_kind = 'crm_email' and directi
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_of` (0008x); `cma.email_threads_counted_of` (0008x); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7136,7 +7136,7 @@ sent_agent = count(counted emails where direction = 'out' and status = 'sent' an
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_of` (0008x); `cma.email_threads_counted_of` (0008x); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx; `SentColumns` in src/components/EmailParts.tsx
 
@@ -7198,7 +7198,7 @@ sent_automated = count(counted emails where direction = 'out' and status = 'sent
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_of` (0008x); `cma.email_threads_counted_of` (0008x); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx; `SentColumns` in src/components/EmailParts.tsx
 
@@ -7261,7 +7261,7 @@ bounced_failed = count(counted emails where direction = 'out' and status in ('bo
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_of` (0008x); `cma.email_threads_counted_of` (0008x); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7326,7 +7326,7 @@ threads_opened = count(openings): a counted, non-spam conversation's source_crea
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7390,7 +7390,7 @@ threads_closed = count(email_thread_event where kind = 'closed' and occurred_at 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7462,7 +7462,7 @@ Per opening: first_in = first incoming inbox message after the close the opening
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7527,7 +7527,7 @@ reply_seconds = extract(epoch from first_reply - first_in); median = percentile_
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7599,7 +7599,7 @@ within_target = count(replied openings where reply_business_seconds <= greatest(
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx; `withinShare` in src/lib/email.ts
 
@@ -7663,7 +7663,7 @@ replied = count(openings where first_reply_at is not null), the opening in the p
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7727,7 +7727,7 @@ no_hours = count(replied openings where reply_business_seconds is null), i.e. cm
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7792,7 +7792,7 @@ Per opening: closed_at = first close event at or after the opening; close_busine
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7855,7 +7855,7 @@ close_seconds = extract(epoch from closed_at - opened_at); median = percentile_c
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_report_page` (0008x); `cma.email_report_from` (0008x); `cma.email_figures_from` (0008x); `cma.email_facts_of` (0008x); `cma.email_openings_of` (0008x); `cma.email_closes_of` (0008t); `cma.business_seconds_of` (0007d); `cma.forms_previous_of` (0008p); `getEmailReport` in src/lib/data/postgres.ts; `EmailPage` in src/app/reports/email/page.tsx; `EmailFiguresTable` in src/components/EmailParts.tsx
 
@@ -7919,7 +7919,7 @@ cma.email_history_start_of(tenant): min(business_date) over cma.email_of from th
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
+**Refresh** On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated … ago' line on the page.
 
 **Computed in** `cma.email_history_start` (0008t); `cma.email_history_start_of` (0008t); `cma.email_of` (0008x); `getEmailReport` in src/lib/data/postgres.ts; `DeltaLine` in src/components/CallsParts.tsx
 
@@ -37213,7 +37213,7 @@ cma.my_follow_up().leads: every snapshot lead item with owner_user_id = the call
 
 **Who may see it** `leads.accept` or `workday.own`
 
-**Refresh** follow-up snapshot once a minute; the page reads it on page load only (no LiveRefresh poll on /me/follow-up)
+**Refresh** follow-up snapshot once a minute; the page reads it on page load only (no poll on /me/follow-up)
 
 **Computed in** `cma.my_follow_up` (0008s); `cma.follow_up_list_of` (0008s); `cma.open_leads_of` (0008o); `LeadsTable` in src/components/FollowUpTables.tsx; `default` in src/app/me/follow-up/page.tsx
 

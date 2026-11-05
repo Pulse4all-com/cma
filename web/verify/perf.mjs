@@ -25,7 +25,7 @@
  *   REQUESTS=10 ...                                              fewer requests per route (a quick look; the verdict uses 30)
  * It sits with verify:api (a server and a database), not with the pure verifiers. Ids, routes and numbers only.
  */
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
 

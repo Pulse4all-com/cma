@@ -8,6 +8,7 @@ import { CmaDbError } from "@/lib/data/errors";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
 import type {
+  LiveBoardData, DataQualityReport,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
@@ -2777,6 +2778,13 @@ function mockInvitationFor(me: Principal, id: string): MockInvitation {
   return i;
 }
 
+/** The mock's stored data-quality result is "computed" at the start of the current minute (Refreshed at, addition 0008zr) */
+function mockRefreshedAt(): string {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return d.toISOString();
+}
+
 export const mockData: CmaData = {
   /**
    * Any verified identity may work as the test agent. A real person behind IAP
@@ -4148,6 +4156,12 @@ export const mockData: CmaData = {
     return { ...range, connections, startDate: mockStartDate(me), rows: applyConnections(counts, connections) };
   },
 
+  // The page's read (addition 0008zr): the checks and a Refreshed at; the mock's result is always of this minute
+  async getDataQualityReport(me): Promise<DataQualityReport> {
+    const checks = await mockData.getDataQuality(me);
+    return { checks, computedAt: mockRefreshedAt() };
+  },
+
   async getDataQuality(me): Promise<DataQualityCheck[]> {
     assertAny(me, ["reports.view", "tenant.configure"]);
     // The main tenant has something to fix in every check; the second tenant has nothing yet
@@ -4168,6 +4182,22 @@ export const mockData: CmaData = {
   async getInboundNow(me): Promise<InboundNow> {
     assertLive(me);
     return mockInboundNow(me);
+  },
+
+  // The Live board in one read (addition 0008zr's web): the six reads composed, as the database does in one transaction
+  async getLiveBoard(me): Promise<LiveBoardData> {
+    const [now, memberships, shifts, settings, inbound, followUp] = await Promise.all([
+      mockData.getTeamNow(me), mockData.listTeamMembersNow(me), mockData.getRosterToday(me), mockData.listSettings(me),
+      mockData.getInboundNow(me), mockData.getFollowUpSummary(me),
+    ]);
+    const numberSetting = (key: string): number | null => {
+      const v = settings.find((x) => x.key === key)?.value;
+      return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
+    };
+    return {
+      now, memberships, shifts, inbound, followUp, readAt: new Date().toISOString(),
+      settings: { adherenceToleranceMinutes: numberSetting("roster.adherence_tolerance_minutes") ?? 5, targetMinutes: numberSetting("speed_to_lead.target_minutes"), warningPct: numberSetting("tickets.sla_warning_pct") },
+    };
   },
 
   async getCallsOverview(me, range, group, filter): Promise<CallsOverview> {
@@ -4559,7 +4589,9 @@ export const mockData: CmaData = {
 
   async getFlashView(me, request) {
     const document = mockFlashOverview(me, request.overview, request.market, request.asOf, request.from, request.to);
-    return { document, rows: request.withRows ? mockFlashRows(me, { ...request, asOf: request.rowsAsOf }) : null };
+    // data quality's Refreshed at (addition 0008zr): the stored result's instant, in the mock the minute's start
+    return { document: { ...document, refreshedAt: request.overview === "data_quality" ? mockRefreshedAt() : null },
+      rows: request.withRows ? mockFlashRows(me, { ...request, asOf: request.rowsAsOf }) : null };
   },
 
   async getFlashRows(me, request) {
@@ -4575,7 +4607,7 @@ export const mockData: CmaData = {
   },
 
   async getDataQualityRows(me, request) {
-    return mockDataQualityRows(me, request);
+    return { ...mockDataQualityRows(me, request), computedAt: mockRefreshedAt() };
   },
 
   async recordFlashFile(me, read) {

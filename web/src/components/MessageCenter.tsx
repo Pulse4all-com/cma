@@ -89,11 +89,14 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
   // The latest open() for a notification's click, which fires long after the poll that created it
   const openRef = useRef<(m: MyMessage) => void>(() => {});
 
-  const poll = useCallback(async () => {
+  /** Consecutive failed polls, for the backoff: each failure doubles the wait, up to POLL_HIDDEN_MS (night N06) */
+  const failures = useRef(0);
+  const poll = useCallback(async (): Promise<boolean> => {
     try {
       const url = since.current ? `/api/v1/me/messages?since=${encodeURIComponent(since.current)}` : "/api/v1/me/messages";
       const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) { failures.current += 1; return false; }
+      failures.current = 0;
       const { data } = (await res.json()) as { data: MyMessages };
       // Unread is always the full count (older messages included), so the badge is right after the first poll
       setUnread(data.unreadCount);
@@ -118,22 +121,29 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
           return fresh.length ? [...u, ...fresh] : u;
         });
       }
+      return true;
     } catch {
-      // Network hiccup: the next tick tries again
+      // Network hiccup: the next tick tries again, after a longer wait each time
+      failures.current += 1;
+      return false;
     }
   }, []);
 
-  // The poll loop follows the tab's visibility; a change event from the inbox polls at once
+  // The poll loop follows the tab's visibility: no poll while the tab is hidden (night N06; before it one every 30 s),
+  // one at once when it comes back; a change event from the inbox polls at once; after a failed poll the wait doubles
+  // up to POLL_HIDDEN_MS
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
     const tick = async () => {
+      if (document.hidden) { timer = null; return; }
       await poll();
-      if (stopped) return;
-      timer = setTimeout(tick, document.hidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS);
+      if (stopped || document.hidden) { timer = null; return; }
+      timer = setTimeout(tick, Math.min(POLL_HIDDEN_MS, POLL_VISIBLE_MS * 2 ** failures.current));
     };
     const restart = () => {
       if (timer) clearTimeout(timer);
+      timer = null;
       void tick();
     };
     void tick();

@@ -927,6 +927,11 @@ export interface DataQualityCheck {
   description: string;
   total: number | null;
 }
+/** The Data quality page's read (addition 0008zr): the checks and when the stored result was computed (Refreshed at) */
+export interface DataQualityReport {
+  checks: DataQualityCheck[];
+  computedAt: Instant | null;
+}
 
 /** Records created per business date, type, market and pipeline (cma.crm_records_per_day, 0006) */
 export interface CrmRecordsDay {
@@ -3008,6 +3013,23 @@ export interface MyFollowUp {
 /** The summary as the snapshot computed it, and when (addition 0008s) */
 export type FollowUpSummaryAt = FollowUpSummary & { computedAt: Instant };
 
+/**
+ * The Live board in one read (addition 0008zr's web, night N06; the IT audit's 5.6-01): the team now, the current team
+ * memberships, today's published shifts, the settings the board needs, today's inbound and the follow-up counts, read
+ * in one transaction and served as GET /api/v1/live/board, which the board polls every 10 seconds while visible.
+ */
+export interface LiveBoardData {
+  now: TeamNow;
+  memberships: TeamMembership[];
+  shifts: TodayShift[];
+  /** roster.adherence_tolerance_minutes, speed_to_lead.target_minutes and tickets.sla_warning_pct as the board reads them */
+  settings: { adherenceToleranceMinutes: number; targetMinutes: number | null; warningPct: number | null };
+  inbound: InboundNow;
+  followUp: FollowUpSummaryAt;
+  /** The instant of the read, for the client's clock */
+  readAt: Instant;
+}
+
 /** Every row of one of the snapshot's lists (the API reads them in full), and when they were computed */
 export interface FollowUpRowsAt<T> {
   rows: T[];
@@ -3250,6 +3272,8 @@ export interface FlashDocumentView {
   totals: Record<string, number | Record<string, number> | null> | null;
   rows: FlashDocRowView[];
   labels: Record<string, Record<string, string>>;
+  /** Data quality only (addition 0008zr): when the stored result its figures come from was computed (Refreshed at); null for the other overviews */
+  refreshedAt?: Instant | null;
   settings: {
     fileMaxRows: number;
     negativeMaxRating: number | null;
@@ -3327,6 +3351,8 @@ export interface DataQualityRowsView {
   offset: number;
   total: number;
   rows: Record<string, unknown>[];
+  /** When the stored result the rows come from was computed (addition 0008zr; Refreshed at) */
+  computedAt?: Instant | null;
 }
 
 /** A Flash file read, as the audit log records it (never a row of the file) */
@@ -3630,6 +3656,8 @@ export interface CmaData {
   getIntake(me: Principal, range: HoursRange): Promise<Intake>;
   /** Every data-quality check with its total, in the database's order. Needs reports.view or tenant.configure */
   getDataQuality(me: Principal): Promise<DataQualityCheck[]>;
+  /** The Data quality page's read (addition 0008zr): the checks with the stored result's Refreshed at. Needs reports.view or tenant.configure */
+  getDataQualityReport(me: Principal): Promise<DataQualityReport>;
   /** CRM records created per business date, type, market and pipeline. Needs performance.team */
   getCrmRecordsPerDay(me: Principal, range: HoursRange): Promise<CrmRecordsDay[]>;
 
@@ -3638,6 +3666,8 @@ export interface CmaData {
   getInboundService(me: Principal, range: HoursRange, group: InboundGroup): Promise<InboundService>;
   /** Today's inbound and the missed calls not called back, for the Live board. Needs monitoring.live */
   getInboundNow(me: Principal): Promise<InboundNow>;
+  /** The Live board's reads in one transaction (addition 0008zr's web): the board, its tiles, inbound and follow-up. Needs monitoring.live */
+  getLiveBoard(me: Principal): Promise<LiveBoardData>;
 
   // ---- Calls overview and calls per agent (addition 0008j): the database checks the permission on every call (CMA06)
   /** Calls per group with the total, the previous period's total and the filter lists. Needs reports.view or performance.team; at most 92 days */

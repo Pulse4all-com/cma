@@ -15,7 +15,7 @@ import { Badge } from "./primitives";
 
 const minutes = (seconds: number) => fmtMinutes(Math.floor(seconds / 60));
 
-export function groupLabels(copy: Copy): Record<Group, { label: string; hint: string }> {
+export function groupLabels(copy: Pick<Copy, "dashboard">): Record<Group, { label: string; hint: string }> {
   const t = copy.dashboard;
   return {
     productive: { label: t.groupProductive, hint: t.groupProductiveHint },

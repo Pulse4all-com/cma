@@ -12,10 +12,15 @@
  * frame that globals.css styles, read from the cookies here on the server, so a page renders in its
  * state without a flicker and a click changes it at once (ShellPrefs).
  *
- * The frame's links never prefetch (prefetch={false}, Decision log 18 October 2026): every page is dynamic and has
- * no loading boundary, so a prefetch carried no page data, and the router.refresh() of a polled page (LiveRefresh)
- * invalidated the client cache, so each poll fetched every visible link's route again. A click loads the page as
- * before, in one request.
+ * The rail's links prefetch their destination's loading boundary (the default of Next's Link for a dynamic route) since
+ * night N06, 5 November 2026: every route has a loading.tsx (the page's frame with placeholder blocks), so a click
+ * shows the frame at once and the page's data follows in the same request. Before (Decision log 18 October 2026) the
+ * links never prefetched: no loading boundary existed, and the Live board's router.refresh() every 10 seconds
+ * invalidated the client cache, so each poll fetched every visible link again; the board now polls an API route
+ * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page, and so does
+ * every rail link while Reports → Follow-up is the active page: that page still polls with router.refresh()
+ * (LiveRefresh), which invalidates the client cache and would fetch every visible link again on each poll (the
+ * measurement of 18 October 2026: five requests per poll per tab); its own API poll is the remainder (NIGHT_NOTES).
  *
  * Since 23 October 2026 the frame is exactly the viewport: main and the rail are the only scroll containers.
  */
@@ -111,7 +116,6 @@ export async function Shell({
             {t.signedInAs}{" "}
             <Link
               href="/account"
-              prefetch={false}
               title={t.openAccount}
               aria-current={active === "account" ? "page" : undefined}
               className="font-semibold text-p4a-body underline-offset-2 hover:text-p4a-deepblue hover:underline"
@@ -153,7 +157,7 @@ export async function Shell({
                 <li key={entry.item.page}>
                   <Link
                     href={entry.item.href}
-                    prefetch={false}
+                    prefetch={active === "follow-up" ? false : undefined}
                     aria-current={current ? "page" : undefined}
                     data-shortcut={entry.item.key ?? undefined}
                     aria-keyshortcuts={entry.item.key ?? undefined}
@@ -186,7 +190,7 @@ export async function Shell({
                     <li key={item.page}>
                       <Link
                         href={item.href}
-                        prefetch={false}
+                        prefetch={active === "follow-up" ? false : undefined}
                         aria-current={current ? "page" : undefined}
                         data-shortcut={item.key ?? undefined}
                         aria-keyshortcuts={item.key ?? undefined}

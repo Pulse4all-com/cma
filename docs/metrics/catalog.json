@@ -1136,7 +1136,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load; LiveRefresh re-reads the whole page (router.refresh) every 10 s while the tab is visible, paused hidden, once more on return",
+      "refresh": "on page load; the board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, once more on return, backing off after a failure",
       "computed_in": {
         "sql": [
           {
@@ -1243,7 +1243,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load; re-read every 10 s while the tab is visible (LiveRefresh)",
+      "refresh": "on page load; polled with the board every 10 s while the tab is visible (GET /api/v1/live/board, LiveBoardLive)",
       "computed_in": {
         "sql": [
           {
@@ -2082,7 +2082,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "computed_in": {
         "sql": [
           {
@@ -2190,7 +2190,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "computed_in": {
         "sql": [
           {
@@ -2308,7 +2308,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.waiting_max_minutes",
@@ -2448,7 +2448,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.service_level_seconds",
@@ -2567,7 +2567,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "computed_in": {
         "sql": [
           {
@@ -2675,7 +2675,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.waiting_max_minutes",
@@ -2788,7 +2788,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.waiting_max_minutes",
@@ -2932,7 +2932,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -3082,7 +3082,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -3241,7 +3241,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -3396,7 +3396,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -3540,7 +3540,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the page re-reads itself every 10 s while the tab is visible (LiveRefresh); GET /api/v1/telephony/inbound-now computes on request from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -3637,7 +3637,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot once a minute; the board re-reads every 10 s while the tab is visible (LiveRefresh)",
+      "refresh": "follow-up snapshot once a minute; the board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026)",
       "computed_in": {
         "sql": [
           {
@@ -13410,7 +13410,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -13604,7 +13604,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -13871,7 +13871,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -14071,7 +14071,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -14272,7 +14272,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -14506,7 +14506,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -14745,7 +14745,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -15032,7 +15032,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -15292,7 +15292,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -15577,7 +15577,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -15838,7 +15838,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -16094,7 +16094,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -16351,7 +16351,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -16585,7 +16585,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -16776,7 +16776,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component, one cma.email_report_page() call; no polling, frame links never prefetch since 18 Oct 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
+      "refresh": "On page load (server component, one cma.email_report_page() call; no polling; the rail's links prefetch the route skeleton since 5 Nov 2026). Sources: ingest-poll-email every minute; a close or reassignment that brings no new message arrives with the open check (connection setting email_open_check_minutes, default 15) or the nightly reconcile; mailbox/inbox catalogs at most hourly. No 'Updated \u2026 ago' line on the page.",
       "computed_in": {
         "sql": [
           {
@@ -69269,7 +69269,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot once a minute; the page reads it on page load only (no LiveRefresh poll on /me/follow-up)",
+      "refresh": "follow-up snapshot once a minute; the page reads it on page load only (no poll on /me/follow-up)",
       "computed_in": {
         "sql": [
           {

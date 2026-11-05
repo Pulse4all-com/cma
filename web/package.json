@@ -42,7 +42,8 @@
     "verify:health": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/health.mjs",
     "verify:jobs": "node verify/jobs.mjs",
     "verify:refresh-follow-up": "node verify/refresh-follow-up.mjs",
-    "verify:perf": "node verify/perf.mjs"
+    "verify:perf": "node verify/perf.mjs",
+    "verify:cache": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/cache.mjs"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.1",
