@@ -55,12 +55,12 @@ export const FLASH_OVERVIEWS: readonly FlashOverviewDef[] = [
     headline: "active_customers", sorts: ["lifetime_orders", "total_spent", "customer_id", "store", "market", "active_subscriptions", "devices"],
     defaultDescending: true },
   { key: "subscriptions", shortcut: "2", kind: "stock", source: "subscriptions", dims: ["market", "store", "status", "payment_state", "device_band", "age_band"],
-    sets: [[], ["market"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]],
+    sets: [[], ["market"], ["market", "status"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]],
     measures: ["subscriptions", "active_subscriptions", "paused_subscriptions", "amount_per_cycle", "holding_subscriptions", "devices_on_holding",
       "devices_per_holding_subscription"],
     countMeasures: ["subscriptions", "active_subscriptions", "paused_subscriptions", "holding_subscriptions", "devices_on_holding"],
     amountMeasures: ["amount_per_cycle"], ratioMeasures: ["devices_per_holding_subscription"],
-    headline: "active_subscriptions",
+    headline: "holding_subscriptions",
     sorts: ["subscription_id", "store", "market", "status", "payment_state", "amount_per_cycle", "next_billing_at", "retry_since", "devices"],
     defaultDescending: false },
   { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link", "subscription_status"],
@@ -401,8 +401,8 @@ export const FLASH_LIST_COLUMNS: Record<FlashKey, readonly { key: string; kind: 
     { key: "customer_id", kind: "text" }, { key: "store", kind: "text" }, { key: "market", kind: "text" }, { key: "contact_id", kind: "text" },
     { key: "contact_url", kind: "text" }, { key: "contact_held", kind: "flag" }, { key: "refs", kind: "refs" }, { key: "missing_refs", kind: "list" },
     { key: "lifetime_orders", kind: "number" }, { key: "total_spent", kind: "number" }, { key: "currency", kind: "text" },
-    { key: "active_subscriptions", kind: "number" }, { key: "paused_subscriptions", kind: "number" }, { key: "devices", kind: "number" },
-    { key: "order_ids", kind: "list" }, { key: "orders_held", kind: "number" }, { key: "subscription_ids", kind: "list" },
+    { key: "active_subscriptions", kind: "number" }, { key: "paused_subscriptions", kind: "number" }, { key: "holding_subscriptions", kind: "number" },
+    { key: "devices", kind: "number" }, { key: "order_ids", kind: "list" }, { key: "orders_held", kind: "number" }, { key: "subscription_ids", kind: "list" },
   ],
   subscriptions: [
     { key: "subscription_id", kind: "text" }, { key: "store", kind: "text" }, { key: "market", kind: "text" }, { key: "customer_id", kind: "text" },
@@ -684,6 +684,8 @@ export function ratioOf(numerator: number, denominator: number): number | null {
 export const FLASH_SET_MEASURES: Partial<Record<FlashKey, Readonly<Record<string, readonly string[]>>>> = {
   orders: { "market+sku": ["orders", "units"] },
   subscriptions: {
+    // Total subscriptions' split per device-holding status (addition 0008zu)
+    "market+status": ["holding_subscriptions"],
     "market+device_band": ["holding_subscriptions", "devices_on_holding", "devices_per_holding_subscription"],
     "market+age_band": ["active_subscriptions"],
   },
@@ -772,19 +774,26 @@ export interface FlashStatusSettings {
   statusMeanings: Readonly<Record<string, Readonly<Partial<Record<"en" | "nl", string>>>>>;
 }
 
-/** Which statuses a figure's hint names: the active ones, the device-holding ones, paused, the ended ones */
-export type FlashStatusKind = "active" | "holding" | "paused" | "ended";
+/**
+ * Which statuses a figure's hint names: the active (paying) ones, the device-holding ones as the statuses a figure counts
+ * ("total": Total subscriptions and the active customers, addition 0008zu), the device-holding ones as the statuses whose
+ * devices it follows ("holding"), paused, the ended ones
+ */
+export type FlashStatusKind = "active" | "total" | "holding" | "paused" | "ended";
 
-/** The measures (and the device band) whose hint ends with the statuses they count (Martin, 5 Nov 2026) */
+/**
+ * The measures (and the device band) whose hint ends with the statuses they count (Martin, 5 Nov 2026). Since addition
+ * 0008zu the active customers and Total subscriptions count the device-holding statuses, the amounts the active ones
+ */
 export const FLASH_STATUS_HINTS: Readonly<Record<string, FlashStatusKind>> = {
-  active_customers: "active", active_subscriptions: "active", paused_customers: "paused", paused_subscriptions: "paused",
-  holding_subscriptions: "holding", in_field_on_holding: "holding", devices_on_holding: "holding", devices_per_holding_subscription: "holding",
+  active_customers: "total", active_subscriptions: "active", amount_per_cycle: "active", paused_customers: "paused", paused_subscriptions: "paused",
+  holding_subscriptions: "total", in_field_on_holding: "holding", devices_on_holding: "holding", devices_per_holding_subscription: "holding",
   device_band: "holding", churned: "ended",
 };
 
-/** The overview cards whose hint ends with the statuses their figures count */
+/** The overview cards whose hint ends with the statuses their headline counts */
 export const FLASH_CARD_STATUS_HINTS: Partial<Record<FlashKey, readonly FlashStatusKind[]>> = {
-  customers: ["active"], subscriptions: ["active", "holding"], installed_base: ["holding"],
+  customers: ["total"], subscriptions: ["total"], installed_base: ["holding"],
 };
 
 /** The words before a hint's statuses (the copy's, en or nl) */
@@ -797,6 +806,7 @@ export interface StatusHintWords {
 export function statusesOf(kind: FlashStatusKind, settings: FlashStatusSettings): readonly string[] {
   switch (kind) {
     case "active": return settings.activeSubscriptionStatuses;
+    case "total":
     case "holding": return settings.deviceHoldingStatuses;
     case "ended": return settings.endedSubscriptionStatuses;
     default: return ["paused"];
@@ -862,4 +872,76 @@ export function statusSettingsOf(j: Record<string, unknown> | null | undefined):
     activeSubscriptionStatuses: list(j?.active_subscription_statuses), deviceHoldingStatuses: list(j?.device_holding_statuses),
     endedSubscriptionStatuses: list(j?.ended_subscription_statuses), statusMeanings: meanings,
   };
+}
+
+// ---- Since addition 0008zu (brief B30) ------------------------------------------------------------------------------
+
+/** One part of a headline's split: a status (the subscription app's own word) and its figure */
+export interface FlashSplitItem {
+  key: string;
+  value: number;
+}
+
+/**
+ * The overviews whose headline is split, by which dim and which measure (cma.flash_split_dim_of): Total subscriptions per
+ * device-holding status, the rows of the set [market, status]
+ */
+export const FLASH_SPLITS: Partial<Record<FlashKey, { dim: string; measure: string }>> = {
+  subscriptions: { dim: "status", measure: "holding_subscriptions" },
+};
+
+/**
+ * A headline's split from an overview's rows, as cma.flash_split_of: the rows whose dims are a market and the split dim,
+ * of one market or summed over every market; every key of the order (the tenant's device-holding statuses, in the
+ * setting's order) with 0 where no row holds it, then any other key a row holds, by name. None for an overview without a
+ * split, and none when the rows hold no split row at all (a snapshot taken before addition 0008zu), so zeros never stand
+ * in for a split that was not stored
+ */
+export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], market: string | null, order: readonly string[]): FlashSplitItem[] | null {
+  const split = FLASH_SPLITS[def.key];
+  if (!split) return null;
+  const sums = new Map<string, number>();
+  let any = false;
+  for (const r of rows) {
+    const keys = Object.keys(r.dims);
+    if (keys.length !== 2 || !("market" in r.dims) || !(split.dim in r.dims)) continue;
+    any = true;
+    if (market !== null && r.dims.market !== market) continue;
+    const v = r.measures[split.measure];
+    if (typeof v !== "number") continue;
+    const k = r.dims[split.dim]!;
+    sums.set(k, (sums.get(k) ?? 0) + v);
+  }
+  if (!any) return null;
+  const extra = [...sums.keys()].filter((k) => !order.includes(k)).sort();
+  return [...order, ...extra].map((key) => ({ key, value: sums.get(key) ?? 0 }));
+}
+
+/** A split as the database's JSON gives it ([{key, value}]), kept to a key and a number each; none when it is not a list */
+export function splitItemsOf(j: unknown): FlashSplitItem[] | null {
+  if (!Array.isArray(j)) return null;
+  const out: FlashSplitItem[] = [];
+  for (const x of j) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const value = typeof o.value === "number" ? o.value : typeof o.value === "string" && /^-?\d+(\.\d+)?$/.test(o.value) ? Number(o.value) : null;
+    if (typeof o.key === "string" && value !== null) out.push({ key: o.key, value });
+  }
+  return out;
+}
+
+/** A split as one line under its headline: each status in the subscription app's word and its figure ("active 7 · failed 1") */
+export function splitLine(split: readonly FlashSplitItem[] | null | undefined, fmt: (n: number) => string): string | null {
+  if (!split || split.length === 0) return null;
+  return split.map((x) => `${x.key} ${fmt(x.value)}`).join(" · ");
+}
+
+/**
+ * Whether a figure and the one it is compared with were counted by different definitions (the database's definition
+ * versions): the page then marks the comparison, so a change of what a figure counts is never read as a change in the
+ * business. False without a figure to compare with or a version of either
+ */
+export function definitionChanged(version: string | null | undefined, previousVersion: string | null | undefined,
+  previous: number | null | undefined): boolean {
+  return typeof previous === "number" && Boolean(version) && Boolean(previousVersion) && version !== previousVersion;
 }

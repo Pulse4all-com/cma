@@ -33665,12 +33665,12 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Active customers** on /reports/flash · Active customers (Actieve klanten)
 
-Active customers: store customers with at least one subscription of their store whose status is in flash.active_subscription_statuses (Active customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+Active customers: store customers with at least one subscription of their store whose status is in flash.device_holding_statuses (Active customer; since addition 0008zu: a customer whose only subscription failed is a customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card, with no split; the segment rows add up to it.
 
 **Formula as computed**
 
 ```
-count(*) where active_subscriptions > 0: at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.active_subscription_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu): at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.device_holding_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of). Snapshots before 0008zu (definition 0008zt and earlier) counted flash.active_subscription_statuses; the landing marks a comparison across the change.
 ```
 
 **Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
@@ -33694,13 +33694,13 @@ count(*) where active_subscriptions > 0: at least one subscription of the custom
 
 **Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
 
-**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot. A comparison with a snapshot computed by an earlier definition (before 0008zu: the active statuses) is marked on the landing; the watch compares no overview across a change of its definition.
 
 **Settings**
 
 | Setting | Default | Pulse4all |
 |---|---|---|
-| `flash.active_subscription_statuses` | active | active |
+| `flash.device_holding_statuses` | active | active,failed |
 | `commerce.required_contact_refs` |  | netsuite |
 
 **Who may see it** `reports.view` or `performance.team`
@@ -33728,12 +33728,12 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Paused customers** on /reports/flash · Paused customers (Gepauzeerde klanten)
 
-Store customers with a paused subscription and none active (Active customers; docs/definitions.md, Flash overview measures).
+Store customers with a paused subscription and none in a device-holding status (since addition 0008zu; Active customers; docs/definitions.md, Flash overview measures).
 
 **Formula as computed**
 
 ```
-count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; before: active_subscriptions = 0). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
 ```
 
 **Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
@@ -33763,7 +33763,7 @@ count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping s
 
 | Setting | Default | Pulse4all |
 |---|---|---|
-| `flash.active_subscription_statuses` | active | active |
+| `flash.device_holding_statuses` | active | active,failed |
 | `commerce.required_contact_refs` |  | netsuite |
 
 **Who may see it** `reports.view` or `performance.team`
@@ -33975,7 +33975,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Active subscriptions** on /reports/flash · Active subscriptions (Actieve abonnementen)
 
-Of those, a status in `flash.active_subscription_statuses` (Active subscriptions; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+Of those, a status in `flash.active_subscription_statuses`: the paying ones (Active subscriptions; docs/definitions.md, Flash overview measures). Since addition 0008zu the active part of Total subscriptions, no longer the overview's headline.
 
 **Formula as computed**
 
@@ -34147,14 +34147,14 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 #### `flash.subscriptions.holding_subscriptions`
 
-**Holding subscriptions** on /reports/flash · Holding subscriptions (Apparaathoudende abonnementen)
+**Total subscriptions** on /reports/flash · Total subscriptions (Totaal abonnementen)
 
-Subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Active subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Not active_subscriptions, which counts the paying ones.
+Total subscriptions: the subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Total subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Since addition 0008zu the Subscriptions overview's headline on its card, split per holding status (the subscription app's word for each). Not active_subscriptions, which counts the paying ones and is the active part of the total.
 
 **Formula as computed**
 
 ```
-count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, [market, status] (its split: every holding status per market with a holding subscription, zeros included, adding up to the market's figure; 0008zu), the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).
 ```
 
 **Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
@@ -34174,7 +34174,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
 
-**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot. Since 0008zu its card compares Total subscriptions; a comparison with a snapshot computed by an earlier definition is marked; the watch compares no overview across a change of its definition.
 
 **Settings**
 

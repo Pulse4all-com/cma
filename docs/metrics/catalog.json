@@ -83626,8 +83626,8 @@
         "en": "Active customers",
         "nl": "Actieve klanten"
       },
-      "definition": "Active customers: store customers with at least one subscription of their store whose status is in flash.active_subscription_statuses (Active customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card.",
-      "formula": "count(*) where active_subscriptions > 0: at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.active_subscription_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
+      "definition": "Active customers: store customers with at least one subscription of their store whose status is in flash.device_holding_statuses (Active customer; since addition 0008zu: a customer whose only subscription failed is a customer) (Active customers; docs/definitions.md, Flash overview measures). The overview's headline on its card, with no split; the segment rows add up to it.",
+      "formula": "count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu): at least one subscription of the customer's store, not missing from the latest full read, whose status is in flash.device_holding_statuses. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of). Snapshots before 0008zu (definition 0008zt and earlier) counted flash.active_subscription_statuses; the landing marks a comparison across the change.",
       "unit": "count",
       "grain": [
         "now",
@@ -83720,12 +83720,12 @@
         "a source not set up gives no figure (never zero)"
       ],
       "time": "Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).",
-      "comparison": "The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.",
+      "comparison": "The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot. A comparison with a snapshot computed by an earlier definition (before 0008zu: the active statuses) is marked on the landing; the watch compares no overview across a change of its definition.",
       "settings": [
         {
-          "key": "flash.active_subscription_statuses",
+          "key": "flash.device_holding_statuses",
           "default": "active",
-          "pulse4all": "active"
+          "pulse4all": "active,failed"
         },
         {
           "key": "commerce.required_contact_refs",
@@ -83803,8 +83803,8 @@
         "en": "Paused customers",
         "nl": "Gepauzeerde klanten"
       },
-      "definition": "Store customers with a paused subscription and none active (Active customers; docs/definitions.md, Flash overview measures).",
-      "formula": "count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
+      "definition": "Store customers with a paused subscription and none in a device-holding status (since addition 0008zu; Active customers; docs/definitions.md, Flash overview measures).",
+      "formula": "count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; before: active_subscriptions = 0). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
       "unit": "count",
       "grain": [
         "now",
@@ -83900,9 +83900,9 @@
       "comparison": "The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.",
       "settings": [
         {
-          "key": "flash.active_subscription_statuses",
+          "key": "flash.device_holding_statuses",
           "default": "active",
-          "pulse4all": "active"
+          "pulse4all": "active,failed"
         },
         {
           "key": "commerce.required_contact_refs",
@@ -84465,7 +84465,7 @@
         "en": "Active subscriptions",
         "nl": "Actieve abonnementen"
       },
-      "definition": "Of those, a status in `flash.active_subscription_statuses` (Active subscriptions; docs/definitions.md, Flash overview measures). The overview's headline on its card.",
+      "definition": "Of those, a status in `flash.active_subscription_statuses`: the paying ones (Active subscriptions; docs/definitions.md, Flash overview measures). Since addition 0008zu the active part of Total subscriptions, no longer the overview's headline.",
       "formula": "count(*) where status = any(flash.active_subscription_statuses). Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
       "unit": "count",
       "grain": [
@@ -84853,13 +84853,13 @@
       "key": "flash.subscriptions.holding_subscriptions",
       "surface": "report",
       "page": "/reports/flash",
-      "tile": "Holding subscriptions",
+      "tile": "Total subscriptions",
       "title": {
-        "en": "Holding subscriptions",
-        "nl": "Apparaathoudende abonnementen"
+        "en": "Total subscriptions",
+        "nl": "Totaal abonnementen"
       },
-      "definition": "Subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Active subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Not active_subscriptions, which counts the paying ones.",
-      "formula": "count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).",
+      "definition": "Total subscriptions: the subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Total subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Since addition 0008zu the Subscriptions overview's headline on its card, split per holding status (the subscription app's word for each). Not active_subscriptions, which counts the paying ones and is the active part of the total.",
+      "formula": "count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, [market, status] (its split: every holding status per market with a holding subscription, zeros included, adding up to the market's figure; 0008zu), the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).",
       "unit": "count",
       "grain": [
         "now",
@@ -84902,7 +84902,7 @@
         "a source not set up gives no figure (never zero)"
       ],
       "time": "Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).",
-      "comparison": "The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.",
+      "comparison": "The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot. Since 0008zu its card compares Total subscriptions; a comparison with a snapshot computed by an earlier definition is marked; the watch compares no overview across a change of its definition.",
       "settings": [
         {
           "key": "flash.device_holding_statuses",

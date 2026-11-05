@@ -10,7 +10,8 @@
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
 import {
-  bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, frozenFilters, overviewOf, ratioOf, withLabels, type FlashKey, type FlashOverviewDef, type FlashStatusSettings,
+  bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_SPLITS, frozenFilters, overviewOf, ratioOf, splitOf, withLabels, type FlashKey, type FlashOverviewDef,
+  type FlashSplitItem, type FlashStatusSettings,
 } from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
@@ -132,6 +133,8 @@ function fixtureOf(me: Principal, today: string): Fixture {
       contact_url: linked ? `${CRM_URL}/contact/43${String(i).padStart(8, "0")}` : null, contact_held: held, refs, missing_refs: held && i % 7 === 0 ? ["netsuite"] : [],
       lifetime_orders: 1 + (i % 6), total_spent: 40 + (i % 9) * 35, currency: currency(m),
       active_subscriptions: own.filter((s) => s.is_active).length, paused_subscriptions: own.filter((s) => s.status === "paused").length,
+      // addition 0008zu: the subscriptions in a device-holding status (a customer whose only subscription failed is active)
+      holding_subscriptions: own.filter((s) => s.is_holding).length,
       devices: own.reduce((n, s) => n + Number(s.devices), 0), order_ids: [`#${3000 + i}`], orders_held: 1 + (i % 6),
       subscription_ids: own.map((s) => s.subscription_id),
       // the linked contact's segment when the setting holds it (addition 0008zt), else unknown
@@ -257,8 +260,9 @@ type Measures = FlashDocRowView["measures"];
 export function mockCustomersFigures(rs: readonly Record<string, unknown>[], contactRefsRequired: boolean): Measures {
   const n = (f: (r: Record<string, unknown>) => boolean) => rs.filter(f).length;
   return {
-    customers_held: rs.length, active_customers: n((r) => Number(r.active_subscriptions) > 0),
-    paused_customers: n((r) => Number(r.active_subscriptions) === 0 && Number(r.paused_subscriptions) > 0), linked_to_contact: n((r) => r.contact_id !== null),
+    // addition 0008zu: active on the device-holding statuses, paused with none holding
+    customers_held: rs.length, active_customers: n((r) => Number(r.holding_subscriptions) > 0),
+    paused_customers: n((r) => Number(r.holding_subscriptions) === 0 && Number(r.paused_subscriptions) > 0), linked_to_contact: n((r) => r.contact_id !== null),
     ...(contactRefsRequired
       ? { with_required_refs: n((r) => r.contact_id !== null && r.contact_held === true && (r.missing_refs as string[]).length === 0) }
       : {}),
@@ -327,6 +331,18 @@ function rowsOf(def: FlashOverviewDef, rs: readonly Rec[]): FlashDocRowView[] {
       }
       continue;
     }
+    // Total subscriptions' split (addition 0008zu): every device-holding status per market with a holding subscription,
+    // zeros included, carrying holding_subscriptions only, as cma.flash_compute_of
+    const split = FLASH_SPLITS[def.key];
+    if (split && set.length === 2 && set[0] === "market" && set[1] === split.dim) {
+      const holding = rs.filter((r) => r.is_holding === true);
+      for (const m of [...new Set(holding.map((r) => r.market))].sort()) {
+        for (const st of HOLDING) {
+          out.push({ dims: { market: m, [split.dim]: st }, measures: { holding_subscriptions: holding.filter((r) => r.market === m && r.status === st).length } });
+        }
+      }
+      continue;
+    }
     if (def.key === "orders" && set.includes("sku")) {
       const groups = new Map<string, Rec[]>();
       for (const r of rs) for (const sku of r.skus as string[]) {
@@ -384,6 +400,16 @@ function assertParams(today: string, market: string | null, asOf: string | null,
   if ((from !== null && from > today) || (to !== null && to > today) || (from !== null && to !== null && from > to)) {
     throw new CmaDbError("CMA04", "a period runs forward and ends today at the latest");
   }
+}
+
+/**
+ * The definition a figure of a date follows: customers and subscriptions 0008zu from three days before today (the mock's
+ * change of definition, so the landing marks a comparison across it), 0008zt before; the installed base 0008zt; the rest
+ * 0008zn. Live (no date), today's
+ */
+function versionOf(def: FlashOverviewDef, today: string, date: string | null): string {
+  if (def.key === "customers" || def.key === "subscriptions") return date !== null && date < addDays(today, -3) ? "0008zt" : "0008zu";
+  return def.key === "installed_base" ? "0008zt" : "0008zn";
 }
 
 function headlineOf(def: FlashOverviewDef, rows: readonly FlashDocRowView[], market: string | null): number | null {
@@ -453,8 +479,13 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
     let value: number | null = null;
     let previous: number | null = null;
     let previousOn: string | null = null;
+    let split: FlashSplitItem[] | null = null;
     if (up) {
-      if (asOf) value = headlineOf(def, rowsOf(def, recordsOf(me, today, def, asOf, def.kind === "flow" ? f : null, def.kind === "flow" ? t : null)), market);
+      if (asOf) {
+        const rows = rowsOf(def, recordsOf(me, today, def, asOf, def.kind === "flow" ? f : null, def.kind === "flow" ? t : null));
+        value = headlineOf(def, rows, market);
+        split = splitOf(def, rows, market, statusSettingsMock(me).deviceHoldingStatuses);
+      }
       if (def.kind === "stock") {
         previousOn = [...dates].reverse().find((d) => d < (asOf ?? today)) ?? null;
         if (previousOn) previous = headlineOf(def, rowsOf(def, recordsOf(me, today, def, previousOn, null, null)), market);
@@ -469,7 +500,7 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
       }
     }
     return { key: def.key, kind: def.kind, source: def.source, setUp: up, headline: def.headline, value, previous, previousOn,
-      definitionVersion: ["customers", "subscriptions", "installed_base"].includes(def.key) ? "0008zt" : "0008zn" };
+      definitionVersion: versionOf(def, today, asOf), previousDefinitionVersion: previousOn ? versionOf(def, today, previousOn) : null, split };
   });
   return {
     mode: asOf ? "snapshot" : "live", asOf: asOf ?? new Date().toISOString(), market, from: f, to: t, snapshotMissing: false, nearestBefore: null, nearestAfter: null,
@@ -529,7 +560,7 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
     settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: [...REQUIRED_DEVICE_REFS], requiredContactRefs: [...REQUIRED_CONTACT_REFS], activeSubscriptionStatuses: ["active"],
       endedSubscriptionStatuses: ENDED, deviceBands: [1, 2, 3], subscriptionAgeMonths: [12, 24, 36, 48, 60], customerSegments: [...SEGMENTS] },
     statusSettings: statusSettingsMock(me),
-    definitionVersion: ["customers", "subscriptions", "installed_base"].includes(def.key) ? "0008zt" : "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
+    definitionVersion: versionOf(def, today, asOf), firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
   };
 }
 
@@ -593,7 +624,7 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
     throw new CmaDbError("CMA04", "with_required_refs does not apply: commerce.required_contact_refs is empty");
   }
   const keep: Record<string, (r: Rec) => boolean> = {
-    active_customers: (r) => Number(r.active_subscriptions) > 0, paused_customers: (r) => Number(r.active_subscriptions) === 0 && Number(r.paused_subscriptions) > 0,
+    active_customers: (r) => Number(r.holding_subscriptions) > 0, paused_customers: (r) => Number(r.holding_subscriptions) === 0 && Number(r.paused_subscriptions) > 0,
     linked_to_contact: (r) => r.contact_id !== null, with_required_refs: (r) => r.contact_held === true && (r.missing_refs as string[]).length === 0,
     active_subscriptions: (r) => r.is_active === true, paused_subscriptions: (r) => r.status === "paused", in_field: (r) => r.in_field === true,
     in_stock: (r) => r.in_stock === true, components_past_due: (r) => Number(r.past_due_items) > 0, items_due_3m: (r) => Number(r.items_due_3m) > 0,
@@ -630,8 +661,10 @@ export function mockFlashHeadline(me: Principal, overview: string, market: strin
   const up = setUp(me, today, def);
   const f = def.kind === "flow" ? from ?? today : null;
   const t = def.kind === "flow" ? to ?? today : null;
+  const rows = up ? rowsOf(def, recordsOf(me, today, def, null, f, t)) : [];
   return { overview: def.key, headline: def.headline, market, asOf: new Date().toISOString(), from: f, to: t, setUp: up,
-    value: up ? headlineOf(def, rowsOf(def, recordsOf(me, today, def, null, f, t)), market) : null };
+    value: up ? headlineOf(def, rows, market) : null, split: up ? splitOf(def, rows, market, statusSettingsMock(me).deviceHoldingStatuses) : null,
+    definitionVersion: versionOf(def, today, null) };
 }
 
 export function mockFlashSnapshots(me: Principal, from: string | null, to: string | null): FlashSnapshotsView {
