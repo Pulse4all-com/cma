@@ -278,7 +278,7 @@ export function BreakdownTable({ def, doc, set, query, locale, t, path }: {
         </thead>
         <tbody>
           {!set.includes("sku") ? (
-            <tr className="border-b border-p4a-border font-semibold">
+            <tr className="h-10 border-b border-p4a-border font-semibold">
               <td className="px-3 py-2" colSpan={set.length}>{t.totalRow}</td>
               {measures.map((m) => (
                 <td key={m} className="tabular px-3 py-2 text-right">
@@ -356,7 +356,7 @@ export function BandTable({ def, doc, set, query, locale, t, path }: {
           </tr>
         </thead>
         <tbody>
-          <tr className="border-b border-p4a-border font-semibold">
+          <tr className="h-10 border-b border-p4a-border font-semibold">
             <td className="px-3 py-2">{t.totalRow}</td>
             {measures.map((m) => (
               <td key={m} className="tabular px-3 py-2 text-right"><MeasureValue measure={m} value={doc.totals?.[m]} locale={locale} /></td>
@@ -378,7 +378,7 @@ export function BandTable({ def, doc, set, query, locale, t, path }: {
             );
           })}
           {cumulative ? moreThanRows(rows, dim, cumulativeMeasure).map((c) => (
-            <tr key={`more-${c.months}`} className="h-10 border-b border-p4a-border text-p4a-muted" data-testid={`flash-more-than-${c.months}`}>
+            <tr key={`more-${c.months}`} className="h-10 border-b border-p4a-border text-p4a-muted even:bg-p4a-offwhite" data-testid={`flash-more-than-${c.months}`}>
               <td className="px-3 py-2">{t.moreThan.replace("{n}", fmtNumber(c.months, locale))}</td>
               <td className="tabular px-3 py-2 text-right">{fmtNumber(c.value, locale)}</td>
               {measures.slice(1).map((m) => <td key={m} />)}
