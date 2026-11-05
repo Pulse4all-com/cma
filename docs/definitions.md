@@ -1209,7 +1209,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Term | Customer segment |
 | Key | Dim `segment` (overview `customers`); `cma.crm_contact.segment`; field `segment` of entity `contact` in `cma.connection_field`; setting `crm.customer_segments` (default empty) |
 | Definition | The segment of an Active customer: the value of a mapped CRM contact property (Pulse4all: HubSpot `customer_type`) on the linked contact, when it equals one of the codes of `crm.customer_segments` (case-insensitively, shown in the setting's spelling), else `unknown`; never inferred from anything else. Pulse4all's codes are `B2B` (a business customer) and `B2C` (a consumer), the values of its HubSpot `customer_type`; with this term B2B and B2C leave Domains still to define. |
-| Source | The CRM contact's mapped property, read by the ingest and stored trimmed in `cma.crm_contact.segment` (1 to 100 characters, no @ or control character; never kept in `raw`; cleared when the contact is deleted or forgotten) |
+| Source | The CRM contact's mapped property, of any type (free text or a dropdown; no enumeration is required), read by the ingest and stored trimmed in `cma.crm_contact.segment` (1 to 100 characters, no @ or control character; never kept in `raw`; cleared when the contact is deleted or forgotten) |
 | Counts / does not count | A customer without a linked contact, with an empty or unlisted value, or whose contact is deleted counts as `unknown` |
 | Unit and display | The code, or `unknown`, with `active_customers` |
 | Time rule | As of the instant or of the snapshot's date (the contact as the CMA holds it) |
@@ -1217,7 +1217,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | The mapped contact property |
 | Not to use | "Customer type" as the CMA's word; "B2B" for a rule of the CMA |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Customer segment comes from a mapped CRM contact property" (addition 0008zt, #233) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Customer segment comes from a mapped CRM contact property"; "The customer segment's mapped CRM property may be of any type" (addition 0008zt, #233) |
 | Used by | `cma.flash_store_customers_of`, `cma.flash_segment_of`; `flash.customers.active_customers` by `segment`; Reports → Flash (Active customers) |
 | As built today | `136` (column, trigger, ingest, bands); seed `02` maps the property and sets `B2B,B2C`; `137` proves them. Matches the definition |
 
