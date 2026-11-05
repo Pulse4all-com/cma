@@ -1,5 +1,6 @@
-import { forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
+import { ApiError, forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
 import { data } from "@/lib/data";
+import { boardOfOrganisation } from "@/lib/live";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,21 @@ export const dynamic = "force-dynamic";
  * route every 10 seconds while its tab is visible and updates itself from the answer instead of rendering the page
  * again. Needs monitoring.live, here and again in the database (cma.team_now refuses first). Staff data, references
  * and counts only, never customer data; no-store: a live view is never cached.
+ *
+ * ?organisation=<key> (addition 0008zv): one contact center's board, as /live/<key> shows it: the people, their team
+ * memberships and shifts only of that organisation's people (lib/live boardOfOrganisation); the status flags, inbound,
+ * the missed callers and follow-up stay tenant-wide. A key that is no contact center of the caller's tenant (an unknown
+ * organisation, or one not flagged) is a 404, after the permission check. Without the parameter the whole tenant's
+ * board, as before.
  */
-export async function GET() {
+export async function GET(request: Request) {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, ["monitoring.live"]);
-    return ok(await data().getLiveBoard(me));
+    const key = new URL(request.url).searchParams.get("organisation");
+    if (key === null) return ok(await data().getLiveBoard(me));
+    if (!me.contactCenters.some((c) => c.key === key)) {
+      throw new ApiError(404, "not_found", "organisation is not a contact center of this tenant");
+    }
+    return ok(boardOfOrganisation(await data().getLiveBoard(me), key));
   });
 }

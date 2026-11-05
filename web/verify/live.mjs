@@ -16,10 +16,12 @@
  * reason without a callback, anonymous calls counted and never listed, a waiting call not missed and a
  * lost one missed, oldest first, office time or the time since the call, the link only with a template,
  * no caller in any answer, and the times missed counted since the latest callback (61 B15). Since the IT audit of
- * 17 October 2026 also when the waiting figure reads Closed (no office time since the call) instead of 0 min.
+ * 17 October 2026 also when the waiting figure reads Closed (no office time since the call) instead of 0 min. Since
+ * addition 0008zv also one contact center's board (boardOfOrganisation): its people only, with their memberships and
+ * shifts, a person without an organisation on no board, the status flags, inbound and follow-up as read.
  */
 import {
-  INBOUND_TILES, LIVE_GROUPS, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
+  INBOUND_TILES, LIVE_GROUPS, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
   secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
 import { personalDataIn } from "../src/lib/reports.ts";
@@ -110,6 +112,34 @@ expect("the team filter combines with the others", filterRows(rows, { group: "pr
 expect("no team filter without memberships changes nothing", filterRows(rows, { group: "", employer: "", team: "" }, []).length, 7, 2);
 expect("teams on the board by name, a team of nobody on it left out", teamsOf(rows, memberships), [{ key: "aa", name: "Alpha" }, { key: "zz", name: "Zulu" }],
   [{ key: "aa", name: "Alpha" }, { key: "mm", name: "Not on the board" }, { key: "zz", name: "Zulu" }]);
+
+// One contact center's board (addition 0008zv): its people, their memberships and shifts; the rest as read
+const read = {
+  now: { people, statusFlags: [{ isWorking: true, isProductive: true, isPaid: true }] },
+  memberships,
+  shifts: [{ userId: "p1", date: "2026-10-07" }, { userId: "p2", date: "2026-10-07" }, { userId: "p3", date: "2026-10-07" }],
+  inbound: { telephony: true, callbacks: [{ sourceId: "c-1" }] },
+  followUp: { leadsPastTarget: 4 },
+  settings: { adherenceToleranceMinutes: 5 },
+  readAt: T1,
+};
+const partner = boardOfOrganisation(read, "partner");
+expect("a contact center's board holds its people only, a person without one on none",
+  [partner.now.people.map((p) => p.userId), boardOfOrganisation(read, "company").now.people.map((p) => p.userId)],
+  [["p1", "p3", "p4"], ["p2", "p5", "p7"]], [["p1", "p3", "p4", "p6"], ["p2", "p5", "p6", "p7"]]);
+expect("and only their memberships and shifts",
+  [partner.memberships.map((m) => `${m.userId}:${m.teamKey}`), partner.shifts.map((x) => x.userId)],
+  [["p1:zz", "p1:aa"], ["p1", "p3"]], [["p1:zz", "p1:aa", "p2:aa", "p9:mm"], ["p1", "p2", "p3"]]);
+expect("the status flags, inbound, follow-up, settings and the instant stay as read",
+  [partner.now.statusFlags === read.now.statusFlags, partner.inbound === read.inbound, partner.followUp === read.followUp,
+    partner.settings === read.settings, partner.readAt === read.readAt],
+  [true, true, true, true, true], [false, true, true, true, true]);
+expect("the tiles count the board's people only",
+  tiles(liveRows(partner.now.people), [S.work, S.other, S.paidPause, S.unpaidPause]).map((x) => `${x.group}:${x.count}`),
+  ["productive:1", "otherWork:0", "paidPause:1", "unpaidPause:1", "clockedOut:0", "notClockedIn:0"],
+  ["productive:2", "otherWork:1", "paidPause:1", "unpaidPause:1", "clockedOut:1", "notClockedIn:1"]);
+expect("an organisation no one works for gives an empty board, the read itself unchanged",
+  [boardOfOrganisation(read, "nobody").now.people.length, read.now.people.length, read.memberships.length], [0, 7, 4], [7, 7, 4]);
 
 // The figures that tick, from fixed instants
 const nowMs = Date.parse("2026-10-07T09:00:30.000Z");

@@ -9,9 +9,14 @@
  * unknown role key is ignored; a non-admin's cookie is ignored; an empty intersection is allowed, and such a
  * person still lands on Welcome, as everyone with a role does (firstPage()); canPreview is true for the admin
  * whether or not a preview is on; the cookie's name and 12 hours; which keys are accepted at all.
+ * Since addition 0008zv (5 November 2026) also the rail each role sees, from the navigation model alone: the pages in
+ * order with Reports, Sales and Customers split (Funnel before Attempts per deal; an agent sees none of the three), the
+ * digit keys 1 to 9 without gaps for the agent, supervisor and admin mocks, one Live board per contact center labelled
+ * with its name (none: no Live group, and the keys close up), and the breadcrumbs of a contact center's board and of a
+ * moved report; the bare rail pages whose links, in the rail and in the breadcrumbs, close the open group.
  */
 import { applyPreview, isRoleKey, mayPreview, narrowPermissions, PREVIEW_COOKIE, PREVIEW_MAX_AGE_S } from "../src/lib/auth/preview.ts";
-import { firstPage, visiblePages } from "../src/lib/nav.ts";
+import { bareHrefsOf, breadcrumbs, firstPage, isCurrent, visibleNav, visiblePages } from "../src/lib/nav.ts";
 import { t } from "../src/lib/copy.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -30,6 +35,7 @@ const copy = t("en");
 const principal = (permissions, roleKey = "admin") => ({
   tenantId: "t", tenantName: "Tenant", userId: "u", displayName: "Someone", organisationName: "Org", roleKey,
   permissions, locale: "en", timeZone: "Europe/Madrid", preview: null, canPreview: false, perPerson: ["email", "orders"],
+  contactCenters: [{ key: "newco", name: "Newco" }],
 });
 const ADMIN = ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
   "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view", "messages.send"];
@@ -81,6 +87,76 @@ expect("with no permission left the person still lands on Welcome, like everyone
   [firstPage(empty, copy), visiblePages(empty, copy).map((p) => p.href)], ["/", ["/", "/messages"]], [null, []]);
 expect("the real principal is not changed by the narrowing", principal(ADMIN).permissions.length, ADMIN.length, 2);
 expect("the user and the tenant stay the person's own", [asAgent.userId, asAgent.tenantId, asAgent.roleKey], ["u", "t", "admin"], ["agent", "t", "agent"]);
+
+// ---- the rail per role (addition 0008zv) ------------------------------------------------------------------
+// The mocks' permission sets (src/lib/data/mock.ts) with the dev seed's per-person pages and its contact center, Newco
+const mock = (permissions, roleKey, contactCenters = [{ key: "newco", name: "Newco" }]) =>
+  ({ ...principal(permissions, roleKey), perPerson: ["email", "orders", "attempts", "deals"], contactCenters });
+const AGENT = mock(["workday.own", "roster.view"], "agent");
+const SUPERVISOR = mock(["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"], "supervisor");
+const ADMIN_MOCK = mock([...ADMIN, "messages.withdraw"], "admin");
+const READER = mock(["reports.view"], "reader");
+const hrefs = (me) => visiblePages(me, copy).map((p) => p.href);
+const keys = (me) => visiblePages(me, copy).map((p) => p.key);
+const groups = (me) => visibleNav(me, copy).flatMap((e) => (e.kind === "group" ? [e.id] : []));
+const REPORTS = ["/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email",
+  "/reports/email-per-agent", "/reports/intake", "/reports/forms"];
+const SALES = ["/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent",
+  "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person"];
+const CUSTOMERS = ["/reports/cancellations", "/reports/reviews", "/reports/maintenance"];
+const digits = (n) => Array.from({ length: n }, (_, i) => (i < 9 ? String(i + 1) : null));
+
+expect("the agent: Welcome, Messages and Time, keys 1 to 5",
+  [hrefs(AGENT), keys(AGENT)], [["/", "/messages", "/day", "/hours", "/schedule"], digits(5)], [["/", "/messages", "/day", "/hours"], digits(4)]);
+expect("the agent sees none of Reports, Sales and Customers", groups(AGENT), ["time"], ["time", "reports"]);
+expect("the supervisor: the Live board of Newco, Time, Reports, Sales, Customers, Campaigns",
+  hrefs(SUPERVISOR), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, "/campaigns"],
+  ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, "/campaigns"]);
+expect("the supervisor's keys: 1 to 9 without gaps, none from the tenth",
+  keys(SUPERVISOR), digits(hrefs(SUPERVISOR).length), digits(hrefs(SUPERVISOR).length).map((k, i) => (i === 3 ? "5" : k)));
+expect("the admin: Live, Team, Time, Reports with Data quality, Sales, Customers, Campaigns",
+  hrefs(ADMIN_MOCK), ["/", "/messages", "/live/newco", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours",
+    ...REPORTS, "/reports/data-quality", ...SALES, ...CUSTOMERS, "/campaigns", ...hrefs(ADMIN_MOCK).filter((h) => h.startsWith("/configuration/"))],
+  []);
+expect("the admin's keys: 1 to 9 without gaps; the Configuration pages none",
+  keys(ADMIN_MOCK), [...digits(hrefs(ADMIN_MOCK).filter((h) => !h.startsWith("/configuration/")).length), ...hrefs(ADMIN_MOCK).filter((h) => h.startsWith("/configuration/")).map(() => null)],
+  digits(hrefs(ADMIN_MOCK).length).map((k, i) => (i === 9 ? "10" : k)));
+expect("the rail's groups in order: Live, Team, Time, Reports, Sales, Customers, Campaigns, Configuration",
+  groups(ADMIN_MOCK), ["live", "team", "time", "reports", "sales", "customers", "campaigns", "configuration"],
+  ["live", "team", "time", "reports", "campaigns", "configuration"]);
+const salesOf = (me) => visibleNav(me, copy).find((e) => e.kind === "group" && e.id === "sales")?.items.map((i) => i.href) ?? [];
+expect("Sales: Funnel comes before Attempts per deal",
+  salesOf(SUPERVISOR).indexOf("/reports/funnel") < salesOf(SUPERVISOR).indexOf("/reports/attempts"), true, false);
+expect("a reports reader: each group's pages for reports.view alone",
+  hrefs(READER), ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
+    "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
+    "/reports/first-orders", ...CUSTOMERS, "/campaigns"],
+  ["/", "/messages", "/reports/flash", "/reports/speed-to-lead"]);
+const labels = (me, id) => visibleNav(me, copy).find((e) => e.kind === "group" && e.id === id)?.items.map((i) => i.label) ?? null;
+expect("the groups' labels: Reports, Sales, Customers (Verkoop, Klanten in Dutch)",
+  [...visibleNav(READER, copy).flatMap((e) => (e.kind === "group" ? [e.label] : [])), ...visibleNav(READER, t("nl")).flatMap((e) => (e.kind === "group" ? [e.label] : []))],
+  ["Reports", "Sales", "Customers", "Campaigns", "Rapportages", "Verkoop", "Klanten", "Campagnes"], ["Reports", "Campaigns"]);
+const two = mock(SUPERVISOR.permissions, "supervisor", [{ key: "atlas", name: "Atlas" }, { key: "newco", name: "Newco" }]);
+expect("two contact centers: two Live boards, labelled with their names, each with a key",
+  [labels(two, "live"), visiblePages(two, copy).filter((p) => p.page === "live-board").map((p) => [p.href, p.key])],
+  [["Atlas", "Newco"], [["/live/atlas", "3"], ["/live/newco", "4"]]], [["Live board"], [["/live/board", "3"]]]);
+const none = mock(SUPERVISOR.permissions, "supervisor", []);
+expect("no contact center: no Live group, and the keys close up",
+  [groups(none).includes("live"), hrefs(none).slice(0, 3), keys(none).slice(0, 3)], [false, ["/", "/messages", "/day"], ["1", "2", "3"]],
+  [true, ["/", "/messages", "/live/board"], ["1", "2", "4"]]);
+expect("a contact center's board is current by its href, not by its page alone",
+  [isCurrent({ page: "live-board", href: "/live/newco" }, "live-board", "/live/newco"), isCurrent({ page: "live-board", href: "/live/atlas" }, "live-board", "/live/newco")],
+  [true, false], [true, true]);
+expect("the board's breadcrumbs: Welcome › Live › the organisation's name",
+  breadcrumbs(two, copy, "live-board", [], "/live/newco"), [{ label: "Welcome", href: "/" }, { label: "Live", href: "/live/atlas" }, { label: "Newco" }],
+  [{ label: "Welcome", href: "/" }, { label: "Live", href: "/live/atlas" }, { label: "Atlas" }]);
+expect("the bare rail pages, whose links and crumbs close the open group: Welcome and Messages",
+  [bareHrefsOf(visibleNav(AGENT, copy)), bareHrefsOf(visibleNav(ADMIN_MOCK, copy)),
+    breadcrumbs(SUPERVISOR, copy, "messages-send").filter((c) => c.href && bareHrefsOf(visibleNav(SUPERVISOR, copy)).includes(c.href)).map((c) => c.href)],
+  [["/", "/messages"], ["/", "/messages"], ["/", "/messages"]], [["/"], ["/", "/messages", "/live/newco"], ["/"]]);
+expect("a moved report's breadcrumbs: Welcome › Sales › Funnel, the group to its first page",
+  breadcrumbs(SUPERVISOR, copy, "funnel"), [{ label: "Welcome", href: "/" }, { label: "Sales", href: "/reports/speed-to-lead" }, { label: "Funnel" }],
+  [{ label: "Welcome", href: "/" }, { label: "Reports", href: "/reports/flash" }, { label: "Funnel" }]);
 
 // ---- the cookie and the keys -----------------------------------------------------------------------------
 expect("the cookie's name and 12 hours", [PREVIEW_COOKIE, PREVIEW_MAX_AGE_S], ["cma-preview-role", 43200], ["cma-preview", 86400]);

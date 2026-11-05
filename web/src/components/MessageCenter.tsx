@@ -9,7 +9,9 @@
  * pop-up with a sound that has to be confirmed. References only: a toast carries the title, the body
  * and the record link, never customer data. The kind label on a toast and the eyebrow of the pop-up are
  * caption-size semi-bold in Muted or Warning amber, never in capitals (style guide rule 4; the IT audit of
- * 17 October 2026 found a CSS transform doing what the copy verifier forbids).
+ * 17 October 2026 found a CSS transform doing what the copy verifier forbids). Messages is a bare rail page, so the
+ * inbox link and a toast that opens the inbox close the rail's open group, as the rail's own Messages does (addition
+ * 0008zv; NavGroup's useCloseNavGroup).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,6 +19,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { arrivals, POLL_HIDDEN_MS, POLL_VISIBLE_MS, titleWithUnread, TOAST_MS } from "@/lib/messages";
+import { useCloseNavGroup } from "./NavGroup";
 import { Button } from "./primitives";
 
 /** Fired by the inbox after it changed something, so the centre polls right away */
@@ -76,6 +79,7 @@ function notify(m: MyMessage, onOpen: (m: MyMessage) => void) {
 
 export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active: boolean }) {
   const router = useRouter();
+  const closeNavGroup = useCloseNavGroup();
   const [unread, setUnread] = useState<number | null>(null);
   const [toasts, setToasts] = useState<MyMessage[]>([]);
   const [urgent, setUrgent] = useState<MyMessage[]>([]);
@@ -188,7 +192,10 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
     setToasts((t) => t.filter((x) => x.id !== m.id));
     const w = m.ref?.url ? window.open(m.ref.url, "_blank", "noopener,noreferrer") : null;
     await markRead([m.id]);
-    if (!w) router.push("/messages");
+    if (!w) {
+      closeNavGroup();
+      router.push("/messages");
+    }
   }
 
   async function acknowledge(m: MyMessage) {
@@ -218,6 +225,7 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
         aria-label={badge && unread ? `${copy.openInbox} · ${unread === 1 ? copy.unreadOne : copy.unread.replace("{n}", String(unread))}` : copy.openInbox}
         aria-current={active ? "page" : undefined}
         data-testid="inbox-link"
+        onClick={closeNavGroup}
         className="relative inline-flex h-8 items-center gap-2 rounded-button px-2 text-p4a-body hover:bg-p4a-bgblue"
       >
         <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">

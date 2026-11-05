@@ -59,6 +59,18 @@ export interface Principal {
    * rail item and its route); the database refuses the read as well (CMA06)
    */
   perPerson: string[];
+  /**
+   * The tenant's contact-center organisations (cma.organisation.is_contact_center, addition 0008zv), active ones by name:
+   * one Live board each (/live/<key>, labelled with the name in the rail's Live group). Tenant configuration read with
+   * the identity, so the rail needs no read of its own; the same while previewing. Keys and names only
+   */
+  contactCenters: ContactCenter[];
+}
+
+/** A contact-center organisation of the tenant (addition 0008zv): its key (the Live board's address) and its name */
+export interface ContactCenter {
+  key: string;
+  name: string;
 }
 
 /** Outcome of the app_user check for a proven identity */
@@ -108,6 +120,8 @@ export const MOCK_PRINCIPAL: Principal = {
   canPreview: false,
   // the dev seed (03) switches the four on (attempts since addition 0008y, deals since 0008zb)
   perPerson: ["email", "orders", "attempts", "deals"],
+  // the dev seed's contact center (02, addition 0008zv): Newco, where Agent One works; Pulse4all is none
+  contactCenters: [{ key: "newco", name: "Newco" }],
 };
 
 /** The identity proxy.ts attached to this request, or null if it attached none */

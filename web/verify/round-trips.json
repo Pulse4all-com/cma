@@ -78,7 +78,7 @@
     "rt": 45
   },
   {
-    "path": "/live/board",
+    "path": "/live/newco",
     "subject": "manager",
     "tx": 7,
     "rt": 33
@@ -252,6 +252,12 @@
     "rt": 16
   },
   {
+    "path": "/api/v1/live/board?organisation=newco",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 16
+  },
+  {
     "path": "/api/v1/team/shifts-today",
     "subject": "manager",
     "tx": 2,
@@ -264,7 +270,7 @@
     "rt": 45
   },
   {
-    "path": "/live/board",
+    "path": "/live/newco",
     "subject": "supervisor",
     "tx": 7,
     "rt": 33

@@ -6,13 +6,16 @@
  * is visible and once more when it comes back, never while it is hidden; after a failed poll the wait doubles up to a
  * minute. The answer replaces the data and the rows are computed again (lib/live-board, the same function the page
  * used for the first render), so a poll costs one transaction instead of the page's render (eight transactions and 26
- * statements before). The filters the board holds survive every poll: they are the board's own state.
+ * statements before). The filters the board holds survive every poll: they are the board's own state. Since addition
+ * 0008zv the board is one contact center's: the poll asks for its organisation (?organisation=<key>), and the inbound
+ * and missed-call parts, which stay tenant-wide, say they cover all lines, and the follow-up strip the whole business line.
  */
 import { useCallback, useEffect, useState } from "react";
 import { FollowUpLive } from "./FollowUpLive";
 import { InboundLive, MissedCallbacks, type InboundCopy } from "./InboundLive";
 import { LiveBoard } from "./LiveBoard";
 import { Card } from "./primitives";
+import type { ContactCenter } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import type { LiveBoardData } from "@/lib/data";
 import { type FollowUpTileKey } from "@/lib/follow-up";
@@ -32,8 +35,10 @@ const STRIP_METRIC: Record<FollowUpTileKey, string> = {
 
 export type LiveBoardCopy = InboundCopy & Pick<Copy, "followUp" | "dashboard">;
 
-export function LiveBoardLive({ initial, viewer, copy, canOpenMetrics }: {
+export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetrics }: {
   initial: LiveBoardData;
+  /** The contact center whose board this is (addition 0008zv): its people only, polled with its key */
+  organisation: ContactCenter;
   viewer: LiveViewer;
   copy: LiveBoardCopy;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration → Metrics */
@@ -41,10 +46,15 @@ export function LiveBoardLive({ initial, viewer, copy, canOpenMetrics }: {
 }) {
   const [data, setData] = useState(initial);
   const t = copy.live;
+  const organisationKey = organisation.key;
+  // The call parts count every line of the tenant, not only this contact center's (addition 0008zv)
+  const allLines = t.callsAllLines.replace("{organisation}", organisation.name);
+  // and the follow-up counts the whole business line's leads, tickets and tasks (Martin, 5 November 2026)
+  const wholeBusinessLine = t.followUpWholeBusinessLine.replace("{organisation}", organisation.name);
 
   const poll = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await fetch("/api/v1/live/board", { cache: "no-store" });
+      const res = await fetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}`, { cache: "no-store" });
       if (!res.ok) return false;
       const body = (await res.json()) as { data: LiveBoardData };
       setData(body.data);
@@ -52,7 +62,7 @@ export function LiveBoardLive({ initial, viewer, copy, canOpenMetrics }: {
     } catch {
       return false;
     }
-  }, []);
+  }, [organisationKey]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -92,12 +102,12 @@ export function LiveBoardLive({ initial, viewer, copy, canOpenMetrics }: {
   return (
     <div data-live-board-read-at={data.readAt}>
       <div className="mb-8">
-        <InboundLive inbound={data.inbound} copy={copy} locale={viewer.locale} canOpenMetrics={canOpenMetrics} />
+        <InboundLive inbound={data.inbound} copy={copy} locale={viewer.locale} canOpenMetrics={canOpenMetrics} scope={allLines} />
       </div>
 
       <div className="mb-8">
         <FollowUpLive summary={data.followUp} copy={copy} locale={viewer.locale}
-          targetMinutes={data.settings.targetMinutes} warningPct={data.settings.warningPct} moreOf={moreOf} />
+          targetMinutes={data.settings.targetMinutes} warningPct={data.settings.warningPct} moreOf={moreOf} scope={wholeBusinessLine} />
       </div>
 
       <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>
@@ -116,7 +126,7 @@ export function LiveBoardLive({ initial, viewer, copy, canOpenMetrics }: {
       )}
 
       <div className="mt-8">
-        <MissedCallbacks inbound={data.inbound} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} />
+        <MissedCallbacks inbound={data.inbound} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines} />
       </div>
     </div>
   );

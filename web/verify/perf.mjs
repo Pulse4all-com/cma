@@ -95,7 +95,8 @@ for (const row of budget.requests) {
   const cls = budget.classes[row.class];
   const maxP50 = provoke ? 0 : cls.p50 * factor;
   const maxP95 = provoke ? 0 : cls.p95 * factor;
-  const js = row.path.startsWith("/api/") ? null : routeJs(row.path.replace(/\?.*$/, ""));
+  // A dynamic route names its build directory in the row (route: "/live/[org]", addition 0008zv); a static one is its path
+  const js = row.path.startsWith("/api/") ? null : routeJs(row.route ?? row.path.replace(/\?.*$/, ""));
   const o = { path: row.path, subject: row.subject, class: row.class, p50, p95, done_p50: done50, done_p95: done95, requests: times.length,
               html_kb: htmlGzip === null ? null : kb(htmlGzip), js_kb: js ? kb(js.gzipBytes) : null, js_chunks: js?.chunks ?? null };
   observed.push(o);

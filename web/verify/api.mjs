@@ -30,7 +30,9 @@
  * since addition 0008i Inbound and the Live board's inbound part, since addition 0008j Calls and
  * Calls per agent (reads only), since addition 0008k the telephony history start on Calls, since addition 0008y
  * Attempts per deal, Attempts per agent and a line's stored calls (reads only), and since addition 0008z one deal's
- * attempts, the attempted and outcome filters, withdrawing the run's message (the admin; dev data) and Welcome on open.
+ * attempts, the attempted and outcome filters, withdrawing the run's message (the admin; dev data) and Welcome on open,
+ * and since addition 0008zv a Live board per contact-center organisation (Newco's people only, ?organisation=, the API's
+ * 404 and the page's not-found of an unflagged key, /live/board opening Newco's board; needs 140 and seed 02 run again).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -621,6 +623,52 @@ expect("the analyst reads the board and is not on it",
   [nowN.status, (nowN.body?.data?.people ?? []).some((p) => p.userId === meN?.userId),
    (nowN.body?.data?.people ?? []).length === teamNow.people.length],
   [200, false, true], [200, true, true]);
+
+// ---- Live per contact-center organisation (addition 0008zv), 7 checks -------------------------------
+// Seed 02 flags Newco of Pulse4all Subscriptions (140, then 02 again); seed 03 puts the agents and the supervisor in
+// Newco and the manager, the analyst and the admin in Pulse4all. A board holds its organisation's people only, with
+// their memberships and shifts; inbound and follow-up stay tenant-wide. An unflagged or unknown key is the API's 404,
+// after the permission, and the page's not-found (soft, status 200 behind the loading boundary); /live/board opens
+// Newco's board.
+const boardAll = await get(SUPERVISOR, "/api/v1/live/board");
+const boardNewco = await get(SUPERVISOR, "/api/v1/live/board?organisation=newco");
+const peopleOf = (r) => r.body?.data?.now?.people ?? [];
+const newcoIds = new Set(peopleOf(boardNewco).map((p) => p.userId));
+expect("Newco's board lists only Newco's people, the agent among them",
+  [boardNewco.status, peopleOf(boardNewco).length > 0, peopleOf(boardNewco).every((p) => p.organisationKey === "newco"),
+   newcoIds.has(meA.userId), peopleOf(boardAll).some((p) => p.organisationKey !== "newco")],
+  [200, true, true, true, true], [200, true, false, true, true]);
+expect("Newco's board is the tenant's board filtered to Newco's people",
+  [peopleOf(boardAll).filter((p) => p.organisationKey === "newco").map((p) => p.userId).join(","),
+   (boardNewco.body?.data?.memberships ?? []).every((m) => newcoIds.has(m.userId)),
+   (boardNewco.body?.data?.shifts ?? []).every((x) => newcoIds.has(x.userId))],
+  [[...newcoIds].join(","), true, true], ["", true, true]);
+expect("inbound, follow-up and the status flags stay tenant-wide on Newco's board",
+  [JSON.stringify(boardNewco.body?.data?.inbound?.today ?? null) === JSON.stringify(boardAll.body?.data?.inbound?.today ?? null),
+   JSON.stringify(boardNewco.body?.data?.now?.statusFlags) === JSON.stringify(boardAll.body?.data?.now?.statusFlags),
+   boardNewco.body?.data?.followUp?.leadsPastTarget === boardAll.body?.data?.followUp?.leadsPastTarget],
+  [true, true, true], [false, true, true]);
+const boardStatus = async (s, key) => {
+  const r = await get(s, `/api/v1/live/board?organisation=${encodeURIComponent(key)}`);
+  return `${r.status}:${r.body?.error?.code ?? "ok"}`;
+};
+expect("an unflagged, unknown or empty key is a 404",
+  [await boardStatus(SUPERVISOR, "pulse4all"), await boardStatus(SUPERVISOR, "no-such-organisation"), await boardStatus(SUPERVISOR, "")],
+  ["404:not_found", "404:not_found", "404:not_found"], ["200:ok", "404:not_found", "404:not_found"]);
+expect("the permission comes first: an agent is refused, whatever the key",
+  [await boardStatus(AGENT, "newco"), await boardStatus(AGENT, "pulse4all")], ["403:not_permitted", "403:not_permitted"], ["200:ok", "404:not_found"]);
+// The board keeps its loading boundary (Martin, 5 November 2026): the boundary sends 200 before the page decides, so the
+// redirect and the not-found page are streamed (a meta refresh; Next's NEXT_HTTP_ERROR_FALLBACK;404 with noindex), a soft
+// 404 accepted on Live to keep the skeleton. A real 307 or 404, should Next send one before streaming, passes as well.
+const redirectOf = (r) => (r.status === 307 ? r.headers.get("location")
+  : r.status === 200 ? /http-equiv="refresh" content="\d+;url=([^"]+)"/.exec(r.text)?.[1] ?? null : null);
+const notFoundOf = (r) => r.status === 404 || (r.status === 200 && r.text.includes("NEXT_HTTP_ERROR_FALLBACK;404"));
+const formerAddress = await download(SUPERVISOR, "/live/board");
+expect("/live/board opens Newco's board", redirectOf(formerAddress), "/live/newco", null);
+expect("an unflagged or unknown organisation's board is the not-found page; Newco's is the board",
+  [notFoundOf(await download(SUPERVISOR, "/live/pulse4all")), notFoundOf(await download(SUPERVISOR, "/live/no-such-organisation")),
+   await download(SUPERVISOR, "/live/newco").then((r) => [r.status, notFoundOf(r), r.text.includes("data-live-board-read-at")])],
+  [true, true, [200, false, true]], [false, true, [200, false, true]]);
 
 
 // ---- the Team screen (migration 0004), 20 checks --------------------------------------------

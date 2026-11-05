@@ -8,7 +8,8 @@
 -- reads (the sum is a ceiling: the web runs a page's reads in parallel). No addition, no write: the reads run in a
 -- read-only subtransaction that is rolled back (its rows kept in variables), so the script runs alike as one transaction
 -- (Cloud SQL Studio) and statement by statement (psql), in any database, at any time, as often as wanted. Run as your
--- own IAM login after 128_sources_last_read.sql (0008zq). Prod is the proof; dev's shared core is for information.
+-- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
+-- cma.organisation.is_contact_center), after 140_live_per_organisation.sql. Prod is the proof; dev's shared core is for information.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -45,6 +46,10 @@ do $$
 begin
   if not exists (select 1 from cma.schema_migration where version = '0008zq') then
     raise exception 'addition 0008zq (128_sources_last_read.sql) has not run in this database';
+  end if;
+  -- the identity read names cma.organisation.is_contact_center since addition 0008zv
+  if not exists (select 1 from cma.schema_migration where version = '0008zv') then
+    raise exception 'addition 0008zv (140_live_per_organisation.sql) has not run in this database';
   end if;
 end
 $$;
@@ -114,7 +119,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    (select r.key from cma.user_role ur join cma.app_role r on r.tenant_id = ur.tenant_id and r.id = ur.role_id
      where ur.tenant_id = u.tenant_id and ur.user_id = u.id order by ur.granted_at, r.key limit 1),
    array(select p from cma.user_permissions(u.id) p order by 1),
-   (select string_to_array(nullif(s.value, ''), ',') from cma.tenant_settings() s where s.key = 'reports.per_person')
+   (select string_to_array(nullif(s.value, ''), ',') from cma.tenant_settings() s where s.key = 'reports.per_person'),
+   coalesce((select json_agg(json_build_object('key', c.key, 'name', c.name) order by c.name, c.key) from cma.organisation c
+     where c.tenant_id = u.tenant_id and c.is_contact_center and c.status = 'active'), '[]'::json)
    from cma.app_user_external_id x join cma.app_user u on u.tenant_id = x.tenant_id and u.id = x.user_id
    join cma.tenant t on t.id = u.tenant_id left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id
    where x.tenant_id = cma.current_tenant_id() and x.system = '{sys}' and x.external_id = '{ext}' and u.status = 'active'$q$, 'poll', array['*']),

@@ -43,10 +43,12 @@ function Tile({ label, info, value, testId }: {
 /** The words the inbound tiles and the missed callers use: a slice of the copy object (night N06), never the whole */
 export type InboundCopy = Pick<Copy, "live" | "hints" | "inbound" | "reports">;
 
-export function InboundLive({ inbound, copy, locale, canOpenMetrics = false }: {
+export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, scope }: {
   inbound: InboundNow; copy: InboundCopy; locale: Locale;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
   canOpenMetrics?: boolean;
+  /** A caption under the title on what the figures cover (a contact center's Live board: all lines, addition 0008zv) */
+  scope?: string;
 }) {
   const t = copy.live;
   const h = copy.hints;
@@ -80,7 +82,10 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false }: {
 
   return (
     <section aria-labelledby="inbound-today" className="flex flex-col gap-4" data-testid="inbound-live">
-      <h2 id="inbound-today" className="text-panel font-semibold text-p4a-heading">{t.inboundTitle}</h2>
+      <div>
+        <h2 id="inbound-today" className="text-panel font-semibold text-p4a-heading">{t.inboundTitle}</h2>
+        {scope && inbound.telephony ? <p className="mt-1 text-small text-p4a-muted" data-testid="inbound-scope">{scope}</p> : null}
+      </div>
       {!inbound.telephony ? (
         <Card>
           <p className="text-body" data-testid="inbound-not-connected">
@@ -103,7 +108,11 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false }: {
  * The missed calls not called back, the Live board's last section (addition 0008z): nothing while the tenant has no
  * telephony, since the inbound part above already says so
  */
-export function MissedCallbacks({ inbound, copy, locale, timeZone }: { inbound: InboundNow; copy: InboundCopy; locale: Locale; timeZone: string }) {
+export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
+  inbound: InboundNow; copy: InboundCopy; locale: Locale; timeZone: string;
+  /** A caption after the intro on what the list covers (a contact center's Live board: all lines, addition 0008zv) */
+  scope?: string;
+}) {
   if (!inbound.telephony) return null;
   const t = copy.live;
   const h = copy.hints;
@@ -127,7 +136,7 @@ export function MissedCallbacks({ inbound, copy, locale, timeZone }: { inbound: 
           {t.missedTitle}
           {hint(t.missedTitle, h.missedCallbacks)}
         </h2>
-        <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}</p>
+        <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}{scope ? <> <span data-testid="missed-scope">{scope}</span></> : null}</p>
         {inbound.callbacks.length === 0 ? (
           <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
         ) : (

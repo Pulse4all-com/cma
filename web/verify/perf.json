@@ -56,7 +56,8 @@
       "class": "agent"
     },
     {
-      "path": "/live/board",
+      "path": "/live/newco",
+      "route": "/live/[org]",
       "subject": "manager",
       "class": "agent"
     },
@@ -154,6 +155,11 @@
       "path": "/api/v1/live/board",
       "subject": "manager",
       "class": "poll"
+    },
+    {
+      "path": "/api/v1/live/board?organisation=newco",
+      "subject": "manager",
+      "class": "poll"
     }
   ],
   "html_kb": {
@@ -163,7 +169,7 @@
     "/messages": 13,
     "/schedule": 11,
     "/me/follow-up": 9,
-    "/live/board": 114,
+    "/live/newco": 114,
     "/team/people": 73,
     "/team/hours": 71,
     "/roster/planner": 72,
@@ -184,7 +190,7 @@
     "/messages": 169,
     "/schedule": 166,
     "/me/follow-up": 168,
-    "/live/board": 178,
+    "/live/newco": 178,
     "/team/people": 176,
     "/team/hours": 174,
     "/roster/planner": 174,

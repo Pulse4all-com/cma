@@ -1,8 +1,8 @@
 /**
  * App frame: top bar, left rail, content. White top bar, the rail on Background Blue, the content
  * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Welcome is
- * a page of its own at the top of the rail; the other pages sit in groups (Live, Time, Reports; the
- * model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
+ * a page of its own at the top of the rail; the other pages sit in groups (Live, Team, Time, Reports, Sales,
+ * Customers, Campaigns, Configuration; the model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
  * (see hooks/useKeyboardShortcuts), and named for assistive tech in aria-keyshortcuts.
  *
  * Since 16 October 2026 the rail folds to icons (cookie cma-rail, the toggle at its foot, W), the
@@ -14,7 +14,8 @@
  *
  * The rail's links prefetch their destination's loading boundary (the default of Next's Link for a dynamic route) since
  * night N06, 5 November 2026: every route has a loading.tsx (the page's frame with placeholder blocks), so a click
- * shows the frame at once and the page's data follows in the same request. Before (Decision log 18 October 2026) the
+ * shows the frame at once and the page's data follows in the same request (a contact center's Live board too, whose
+ * unknown key is then a soft 404 with status 200: Decision log, 5 November 2026). Before (Decision log 18 October 2026) the
  * links never prefetched: no loading boundary existed, and the Live board's router.refresh() every 10 seconds
  * invalidated the client cache, so each poll fetched every visible link again; the board now polls an API route
  * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page, and so does
@@ -33,8 +34,8 @@ import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { requestDbTrace } from "@/lib/data";
 import { Keycap, Notice } from "./primitives";
-import { breadcrumbs, HINTS_COOKIE, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
-import { NavAccordion, NavGroup, NavIconMark } from "./NavGroup";
+import { bareHrefsOf, breadcrumbs, HINTS_COOKIE, isCurrent, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type NavHref, type ShellPage } from "@/lib/nav";
+import { NavAccordion, NavBareLink, NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 import { MessageCenter } from "./MessageCenter";
 import { HintsToggle, RailToggle } from "./ShellPrefs";
@@ -46,6 +47,7 @@ export async function Shell({
   copy,
   me,
   active,
+  activeHref,
   wide = false,
   trail = [],
   children,
@@ -53,6 +55,11 @@ export async function Shell({
   copy: Copy;
   me: Principal;
   active: ShellPage;
+  /**
+   * The page's own address when several rail pages share its ShellPage: a contact center's Live board (addition 0008zv),
+   * so only its own item is current and its breadcrumb carries its organisation's name
+   */
+  activeHref?: NavHref;
   /**
    * Report and operational screens with wide tables: the width up to 1536 px (max-w-screen-2xl), as Pulse4all-Style
    * 7.1 allows operational screens (Decision log, 19 October 2026); the other pages keep the narrow column
@@ -71,7 +78,7 @@ export async function Shell({
   const openGroup = openGroupOf(jar.get(NAV_OPEN_COOKIE)?.value, nav.flatMap((e) => (e.kind === "group" ? [e.id] : [])));
   const collapsed = jar.get(RAIL_COOKIE)?.value === "collapsed";
   const hintsHidden = jar.get(HINTS_COOKIE)?.value === "hidden";
-  const crumbs = breadcrumbs(me, copy, active, trail);
+  const crumbs = breadcrumbs(me, copy, active, trail, activeHref);
   const t = copy.shell;
   // Preview as role: the tenant's roles for the select, listed with the real principal (the mock checks
   // the caller's own permissions, which a preview narrows; the database checks the real user either way)
@@ -90,6 +97,9 @@ export async function Shell({
     >
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       <Shortcuts />
+      {/* The rail's open group, for the rail and the top bar's inbox (a bare rail page closes it, addition 0008zv); a
+          context only, so the frame's grid keeps the header, the rail and main as its own children */}
+      <NavAccordion initial={openGroup}>
       <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
         <div className="flex items-center gap-4">
           <Image
@@ -146,16 +156,16 @@ export async function Shell({
       </header>
 
       <nav aria-label={copy.app.name} data-rail-nav className="flex min-h-0 flex-col overflow-y-auto border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
-        <NavAccordion initial={openGroup}>
         <ul className="flex flex-col gap-2">
           {nav.map((entry) => {
             if (entry.kind === "page") {
-              const current = entry.item.page === active;
+              const current = isCurrent(entry.item, active, activeHref);
               // The label with its key is the name in the folded rail (title and aria-label); the keycap is hidden there
               const name = entry.item.key ? `${entry.item.label} (${entry.item.key})` : entry.item.label;
+              // A bare page closes the open group on its click or digit key (addition 0008zv)
               return (
-                <li key={entry.item.page}>
-                  <Link
+                <li key={entry.item.href}>
+                  <NavBareLink
                     href={entry.item.href}
                     prefetch={active === "follow-up" ? false : undefined}
                     aria-current={current ? "page" : undefined}
@@ -171,7 +181,7 @@ export async function Shell({
                     <NavIconMark name={entry.icon} />
                     <span data-rail-text className="min-w-0 flex-1 truncate">{entry.item.label}</span>
                     {entry.item.key ? <Keycap data-rail-text>{entry.item.key}</Keycap> : null}
-                  </Link>
+                  </NavBareLink>
                 </li>
               );
             }
@@ -181,13 +191,14 @@ export async function Shell({
                 id={entry.id}
                 label={entry.label}
                 icon={entry.icon}
-                current={entry.items.some((i) => i.page === active)}
+                current={entry.items.some((i) => isCurrent(i, active, activeHref))}
                 shortcut={entry.shortcut}
               >
                 {entry.items.map((item) => {
-                  const current = item.page === active;
+                  const current = isCurrent(item, active, activeHref);
                   return (
-                    <li key={item.page}>
+                    // keyed by href: a contact center's Live boards share one ShellPage (addition 0008zv)
+                    <li key={item.href}>
                       <Link
                         href={item.href}
                         prefetch={active === "follow-up" ? false : undefined}
@@ -211,7 +222,6 @@ export async function Shell({
             );
           })}
         </ul>
-        </NavAccordion>
         <div className="mt-auto flex flex-col gap-2 text-caption text-p4a-grey">
           {/* The shortcuts line and the version hide with the fold; the shortcuts line also with the hints */}
           <div data-rail-text className="flex flex-col gap-2">
@@ -236,18 +246,21 @@ export async function Shell({
             </Notice>
           </div>
         ) : null}
-        {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} /> : null}
+        {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} bare={bareHrefsOf(nav)} /> : null}
         <div className={wide ? "max-w-screen-2xl" : "max-w-4xl"}>{children}</div>
       </main>
+      </NavAccordion>
     </div>
   );
 }
 
 /**
  * Where the person is (16 October 2026): caption size in Footnote Grey, a 16 px chevron between the
- * crumbs, the last crumb Inkt semi-bold with aria-current and never a link. Welcome shows none.
+ * crumbs, the last crumb Inkt semi-bold with aria-current and never a link. Welcome shows none. A crumb to a bare rail
+ * page (Welcome; Messages on Send a message) closes the open group, as the rail's own link does (NavBareLink; Martin,
+ * 5 November 2026).
  */
-function Breadcrumbs({ crumbs, label }: { crumbs: Crumb[]; label: string }) {
+function Breadcrumbs({ crumbs, label, bare }: { crumbs: Crumb[]; label: string; bare: readonly string[] }) {
   return (
     <nav aria-label={label} data-testid="breadcrumbs" className="mb-4">
       <ol className="flex flex-wrap items-center gap-1 text-caption text-p4a-grey">
@@ -262,6 +275,8 @@ function Breadcrumbs({ crumbs, label }: { crumbs: Crumb[]; label: string }) {
               ) : null}
               {last ? (
                 <span aria-current="page" className="font-semibold text-p4a-inkt">{c.label}</span>
+              ) : c.href && bare.includes(c.href) ? (
+                <NavBareLink href={c.href} prefetch={false} className="hover:text-p4a-deepblue hover:underline">{c.label}</NavBareLink>
               ) : c.href ? (
                 <Link href={c.href} prefetch={false} className="hover:text-p4a-deepblue hover:underline">{c.label}</Link>
               ) : (

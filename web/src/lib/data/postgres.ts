@@ -1575,6 +1575,7 @@ export const postgresData: CmaData = {
         role_key: string | null;
         permissions: string[];
         per_person: string[] | null;
+        contact_centers: { key: string; name: string }[] | null;
       }>(
         `select u.id                         as user_id,
                 u.display_name,
@@ -1590,7 +1591,12 @@ export const postgresData: CmaData = {
                   limit 1)                   as role_key,
                 array(select p from cma.user_permissions(u.id) p order by 1) as permissions,
                 -- the per-person report pages switched on (addition 0008t); a catalog without the setting reads none
-                (select string_to_array(nullif(s.value, ''), ',') from cma.tenant_settings() s where s.key = 'reports.per_person') as per_person
+                (select string_to_array(nullif(s.value, ''), ',') from cma.tenant_settings() s where s.key = 'reports.per_person') as per_person,
+                -- the tenant's contact centers (addition 0008zv), active ones by name: the rail's Live boards. A few rows of
+                -- a small configuration table, in the same statement, so the rail costs no read of its own
+                coalesce((select json_agg(json_build_object('key', c.key, 'name', c.name) order by c.name, c.key)
+                            from cma.organisation c
+                           where c.tenant_id = u.tenant_id and c.is_contact_center and c.status = 'active'), '[]'::json) as contact_centers
            from cma.app_user_external_id x
            join cma.app_user u      on u.tenant_id = x.tenant_id and u.id = x.user_id
            join cma.tenant t        on t.id = u.tenant_id
@@ -1618,6 +1624,7 @@ export const postgresData: CmaData = {
         preview: null,
         canPreview: false,
         perPerson: (row.per_person ?? []).filter((k) => k === "email" || k === "orders" || k === "attempts" || k === "deals"),
+        contactCenters: (row.contact_centers ?? []).map((c) => ({ key: c.key, name: c.name })),
       };
     });
   },
