@@ -9,7 +9,9 @@
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { FLASH_FROZEN_LIST, FLASH_OVERVIEWS, frozenFilters, overviewOf, withLabels, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
+import {
+  bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, frozenFilters, overviewOf, ratioOf, withLabels, type FlashKey, type FlashOverviewDef, type FlashStatusSettings,
+} from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
   DataQualityRowsView, FlashCardView, FlashDocRowView, FlashDocumentView, FlashFileRead, FlashHeadlineView, FlashPageView, FlashRowsRequest,
@@ -28,6 +30,30 @@ const CONN = {
 const CRM_URL = "https://crm.example/record";
 /** The ended statuses (flash.ended_subscription_statuses, its default): churn and field_device_on_ended_subscription */
 const ENDED = ["canceled", "expired"];
+/** The fixture's device-holding statuses (flash.device_holding_statuses; addition 0008zt): active and failed hold devices */
+const HOLDING = ["active", "failed"];
+/** The fixture's bands (flash.device_bands, flash.subscription_age_months: their defaults) and segments (crm.customer_segments) */
+const DEVICE_WORDS = ["0", "1", "2", "3+"];
+const AGE_WORDS = ["<12", "12-24", "24-36", "36-48", "48-60", "60+"];
+const SEGMENTS = ["B2B", "B2C"];
+/**
+ * The statuses' settings and invented meanings of tenant one (subscription.status_meanings is configuration: each tenant
+ * writes its own); tenant two has none, so its hints name the statuses alone
+ */
+function statusSettingsMock(me: Principal): FlashStatusSettings {
+  const invest = me.tenantId === MOCK_TENANT_2;
+  return {
+    activeSubscriptionStatuses: ["active"], deviceHoldingStatuses: invest ? ["active"] : HOLDING, endedSubscriptionStatuses: ENDED,
+    statusMeanings: invest ? {} : {
+      active: { en: "Paying; the devices are at the customer.", nl: "Betalend; de apparaten staan bij de klant." },
+      failed: { en: "A payment failed; the devices stay at the customer.", nl: "Een betaling mislukte; de apparaten blijven bij de klant." },
+      paused: { en: "No devices at the customer.", nl: "Geen apparaten bij de klant." },
+    },
+  };
+}
+const countBandOf = (n: number) => (n >= 3 ? "3+" : String(Math.max(0, n)));
+const ageBandOf = (months: number | null) => (months === null ? "unknown" : months < 12 ? "<12" : months >= 60 ? "60+"
+  : `${Math.floor(months / 12) * 12}-${Math.floor(months / 12) * 12 + 12}`);
 // the fixture's required references (set, so the required-reference checks have findings; Pulse4all's own are empty
 // until NetSuite holds its customers and devices, Decision log, 3 Nov 2026)
 const REQUIRED_CONTACT_REFS: readonly string[] = ["netsuite"];
@@ -87,6 +113,10 @@ function fixtureOf(me: Principal, today: string): Fixture {
       currency: currency(m), billing_interval: "month", billing_interval_count: 1,
       next_billing_at: status === "active" ? stamp(day(-((i % 28) + 1)), i) : null, retry_since: retry ? stamp(day(3), i) : null, last_attempt: retry ? 2 : null,
       devices: i % 6 === 0 ? 0 : 1, is_active: status === "active",
+      // addition 0008zt: every device of the fixture is in the field; the bands of a holding and an active subscription
+      devices_in_field: i % 6 === 0 ? 0 : i % 10 === 4 ? 2 : 1, is_holding: HOLDING.includes(status),
+      device_band: HOLDING.includes(status) ? countBandOf(i % 6 === 0 ? 0 : i % 10 === 4 ? 2 : 1) : null,
+      age_band: status === "active" ? ageBandOf(i % 13 === 0 ? null : (i * 7) % 75) : null,
     });
   }
   const customers: Rec[] = [];
@@ -104,6 +134,8 @@ function fixtureOf(me: Principal, today: string): Fixture {
       active_subscriptions: own.filter((s) => s.is_active).length, paused_subscriptions: own.filter((s) => s.status === "paused").length,
       devices: own.reduce((n, s) => n + Number(s.devices), 0), order_ids: [`#${3000 + i}`], orders_held: 1 + (i % 6),
       subscription_ids: own.map((s) => s.subscription_id),
+      // the linked contact's segment when the setting holds it (addition 0008zt), else unknown
+      segment: held ? (["B2B", "B2C", "unknown"][i % 3] as string) : "unknown",
     });
   }
   const devices: Rec[] = [];
@@ -117,7 +149,7 @@ function fixtureOf(me: Principal, today: string): Fixture {
       since: day(70 - (i % 50)), status: stock ? "in_stock" : "installed", in_field: !stock, in_stock: stock, warehouse: stock ? "wh-utrecht" : "none",
       refs: i % 10 === 0 ? {} : { ns_internal_id: String(700000 + i) }, missing_refs: i % 10 === 0 ? ["ns_internal_id"] : [],
       customer_id: stock ? null : sub.customer_id, subscription_id: stock ? null : link === "not_found" ? `s-79${i}` : sub.subscription_id, link,
-      subscription_status: link === "linked" ? sub.status : null, subscription_payment_state: link === "linked" ? sub.payment_state : null,
+      subscription_status: link === "linked" ? sub.status : link, subscription_payment_state: link === "linked" ? sub.payment_state : null,
       past_due_items: i % 9 === 0 ? 1 : 0, items_due_3m: i % 5 === 0 ? 1 : 0, next_due_on: addDays(today, (i * 23) % 400 - 30),
     });
   }
@@ -197,9 +229,14 @@ function fixtureOf(me: Principal, today: string): Fixture {
       finding("field_device_on_ended_subscription", "device", String(d.device_id), String(d.subscription_status), d.market, "assets", "airtable",
         { type: "subscription", id: String(d.subscription_id), url: null });
     }
+    // a device in the field on a subscription that neither holds devices nor is ended (addition 0008zt)
+    if (d.link === "linked" && d.in_field === true && !HOLDING.includes(String(d.subscription_status)) && !ENDED.includes(String(d.subscription_status))) {
+      finding("field_device_on_non_holding_subscription", "device", String(d.device_id), String(d.subscription_status), d.market, "assets", "airtable",
+        { type: "subscription", id: String(d.subscription_id), url: null });
+    }
   }
   for (const s of subscriptions) {
-    if (s.is_active && s.devices === 0) finding("active_subscription_without_device", "subscription", s.id, "active", s.market, "assets", "airtable");
+    if (s.is_holding && s.devices === 0) finding("active_subscription_without_device", "subscription", s.id, String(s.status), s.market, "assets", "airtable");
   }
   for (const s of subscriptions.filter((_, k) => k % 17 === 3)) {
     finding("subscription_customer_unmatched", "subscription", s.id, null, s.market, "commerce", "shopify");
@@ -244,10 +281,17 @@ function measuresOf(def: FlashOverviewDef, rs: readonly Rec[]): Measures {
   const median = ages.length ? (ages.length % 2 ? ages[(ages.length - 1) / 2]! : ((ages[ages.length / 2 - 1]! + ages[ages.length / 2]!) / 2)) : null;
   switch (def.key) {
     case "customers": return mockCustomersFigures(rs, REQUIRED_CONTACT_REFS.length > 0);
-    case "subscriptions": return { subscriptions: rs.length, active_subscriptions: n((r) => r.is_active === true), paused_subscriptions: n((r) => r.status === "paused"),
-      amount_per_cycle: per("amount_per_cycle", (r) => r.is_active === true) };
+    case "subscriptions": {
+      const holding = rs.filter((r) => r.is_holding === true);
+      const devices = holding.reduce((s, r) => s + Number(r.devices_in_field), 0);
+      const ratio = ratioOf(devices, holding.length);
+      return { subscriptions: rs.length, active_subscriptions: n((r) => r.is_active === true), paused_subscriptions: n((r) => r.status === "paused"),
+        amount_per_cycle: per("amount_per_cycle", (r) => r.is_active === true), holding_subscriptions: holding.length, devices_on_holding: devices,
+        ...(ratio === null ? {} : { devices_per_holding_subscription: ratio }) };
+    }
     case "installed_base": return { devices: rs.length, in_field: n((r) => r.in_field === true), in_stock: n((r) => r.in_stock === true),
-      components_past_due: sum("past_due_items"), items_due_3m: sum("items_due_3m") };
+      components_past_due: sum("past_due_items"), items_due_3m: sum("items_due_3m"),
+      in_field_on_holding: n((r) => r.in_field === true && HOLDING.includes(String(r.subscription_status))) };
     case "churn": return { churned: rs.length };
     case "orders": return { orders: rs.length, units: sum("units"), amount: per("total") };
     case "payments": return { orders: n((r) => r.kind === "order"), amount: per("amount", (r) => r.kind === "order"),
@@ -264,6 +308,25 @@ function measuresOf(def: FlashOverviewDef, rs: readonly Rec[]): Measures {
 function rowsOf(def: FlashOverviewDef, rs: readonly Rec[]): FlashDocRowView[] {
   const out: FlashDocRowView[] = [];
   for (const set of def.sets) {
+    // a band set (addition 0008zt): the device bands of the holding subscriptions, the age bands of the active ones, every
+    // band with its row per market that has one of them, as cma.flash_compute_of
+    const band = bandDimOf(def, set);
+    if (band) {
+      const holding = band === "device_band";
+      const members = rs.filter((r) => (holding ? r.is_holding === true : r.is_active === true));
+      for (const m of [...new Set(members.map((r) => r.market))].sort()) {
+        const inMarket = members.filter((r) => r.market === m);
+        for (const b of [...new Set([...(holding ? DEVICE_WORDS : AGE_WORDS), ...inMarket.map((r) => String(r[band]))])]) {
+          const g = inMarket.filter((r) => r[band] === b);
+          const devices = g.reduce((s, r) => s + Number(r.devices_in_field), 0);
+          const ratio = ratioOf(devices, g.length);
+          out.push({ dims: { market: m, [band]: b }, measures: holding
+            ? { holding_subscriptions: g.length, devices_on_holding: devices, ...(ratio === null ? {} : { devices_per_holding_subscription: ratio }) }
+            : { active_subscriptions: g.length } });
+        }
+      }
+      continue;
+    }
     if (def.key === "orders" && set.includes("sku")) {
       const groups = new Map<string, Rec[]>();
       for (const r of rs) for (const sku of r.skus as string[]) {
@@ -357,9 +420,10 @@ function labelsOf(def: FlashOverviewDef): Record<string, Record<string, string>>
       customer_required_ref_missing: "Store customers with an order whose CRM contact lacks a required reference, or is not held",
       device_required_ref_missing: "Devices lacking a required named id, with the ids missing",
       subscription_customer_unmatched: "Subscriptions whose customer id no customer of their store holds",
-      active_subscription_without_device: "Active subscriptions no device in the register names",
+      active_subscription_without_device: "Subscriptions in a device-holding status that no device in the register names",
       device_subscription_ref_unknown: "Devices in the field whose subscription reference names no subscription the Workspace holds",
       field_device_on_ended_subscription: "Devices in the field linked to a subscription in an ended status (flash.ended_subscription_statuses), with its status",
+      field_device_on_non_holding_subscription: "Devices in the field linked to a subscription in a status that is neither device-holding nor ended, with its status",
       deal_without_contact: "Lead deals without any contact",
       device_serial_missing: "Devices without a serial number",
     },
@@ -379,7 +443,7 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
   if (asOf && !dates.includes(asOf)) {
     return { mode: "snapshot", asOf, market, from: null, to: null, snapshotMissing: true, nearestBefore: [...dates].reverse().find((d) => d < asOf) ?? null,
       nearestAfter: dates.find((d) => d > asOf) ?? null, sources: {}, overviews: [], markets: [], watch: [], firstSnapshotDate: first, lastSnapshotDate: last,
-      today, timeZone: me.timeZone };
+      today, timeZone: me.timeZone, statusSettings: statusSettingsMock(me) };
   }
   const f = from ?? asOf ?? today;
   const t = to ?? asOf ?? today;
@@ -404,12 +468,13 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
         }
       }
     }
-    return { key: def.key, kind: def.kind, source: def.source, setUp: up, headline: def.headline, value, previous, previousOn, definitionVersion: "0008zn" };
+    return { key: def.key, kind: def.kind, source: def.source, setUp: up, headline: def.headline, value, previous, previousOn,
+      definitionVersion: ["customers", "subscriptions", "installed_base"].includes(def.key) ? "0008zt" : "0008zn" };
   });
   return {
     mode: asOf ? "snapshot" : "live", asOf: asOf ?? new Date().toISOString(), market, from: f, to: t, snapshotMissing: false, nearestBefore: null, nearestAfter: null,
     sources: sourcesOf(me, today), overviews, markets: [{ code: "GB", name: "United Kingdom" }, { code: "NL", name: "Netherlands" }], watch: watchOf(me, today),
-    firstSnapshotDate: first, lastSnapshotDate: last, today, timeZone: me.timeZone,
+    firstSnapshotDate: first, lastSnapshotDate: last, today, timeZone: me.timeZone, statusSettings: statusSettingsMock(me),
   };
 }
 
@@ -437,7 +502,9 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
   const all = up ? rowsOf(def, rs) : [];
   const total = all.find((r) => Object.keys(r.dims).length === 0)?.measures ?? null;
   const own = market ? all.find((r) => Object.keys(r.dims).length === 1 && r.dims.market === market)?.measures ?? null : null;
-  const zero = (m: Measures | null) => (m ? Object.fromEntries(Object.entries(m).filter(([k]) => !k.endsWith("_age_days")).map(([k, v]) => [k, v !== null && typeof v === "object" ? {} : 0])) : null);
+  // a market without a row: zeros, but never an age and never a ratio (none without its denominator)
+  const zero = (m: Measures | null) => (m ? Object.fromEntries(Object.entries(m).filter(([k]) => !k.endsWith("_age_days") && !def.ratioMeasures.includes(k))
+    .map(([k, v]) => [k, v !== null && typeof v === "object" ? {} : 0])) : null);
   const history: FlashDocumentView["history"] = [];
   if (def.key === "data_quality") {
     const checks = [...new Set(fixtureOf(me, today).data_quality.map((r) => String(r.check)))].sort();
@@ -460,14 +527,18 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
     headline: def.headline, sorts: [...def.sorts], totals: market ? own ?? zero(total) : total,
     rows: all.filter((r) => Object.keys(r.dims).length > 0 && (!market || r.dims.market === market)), labels: labelsOf(def),
     settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: [...REQUIRED_DEVICE_REFS], requiredContactRefs: [...REQUIRED_CONTACT_REFS], activeSubscriptionStatuses: ["active"],
-      endedSubscriptionStatuses: ENDED },
-    definitionVersion: "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
+      endedSubscriptionStatuses: ENDED, deviceBands: [1, 2, 3], subscriptionAgeMonths: [12, 24, 36, 48, 60], customerSegments: [...SEGMENTS] },
+    statusSettings: statusSettingsMock(me),
+    definitionVersion: ["customers", "subscriptions", "installed_base"].includes(def.key) ? "0008zt" : "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
   };
 }
 
-/** A record as the API answers it: the fixture's own fields (its key, its date and its active flag) left out */
+/** The fixture's own fields, which no list answers: its key, its date, its flags and the bands and segment it is filtered by */
+const PRIVATE_FIELDS = new Set(["id", "since", "is_active", "is_holding", "age_band", "device_band", "segment"]);
+
+/** A record as the API answers it: the fixture's own fields left out */
 function publicOf(r: Rec): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(r).filter(([k]) => k !== "id" && k !== "since" && k !== "is_active"));
+  return Object.fromEntries(Object.entries(r).filter(([k]) => !PRIVATE_FIELDS.has(k)));
 }
 
 function compare(a: unknown, b: unknown): number {
@@ -528,6 +599,8 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
     in_stock: (r) => r.in_stock === true, components_past_due: (r) => Number(r.past_due_items) > 0, items_due_3m: (r) => Number(r.items_due_3m) > 0,
     renewals: (r) => r.kind === "renewal" && r.status === "renewed", failed_renewals: (r) => r.kind === "renewal" && r.status === "renew_failed",
     overdue: (r) => r.overdue === true, negative: (r) => r.negative === true,
+    holding_subscriptions: (r) => r.is_holding === true, devices_on_holding: (r) => r.is_holding === true && Number(r.devices_in_field) > 0,
+    in_field_on_holding: (r) => r.in_field === true && HOLDING.includes(String(r.subscription_status)),
   };
   if (m && keep[m]) rs = rs.filter(keep[m]!);
   if (m === "orders" && def.key === "payments") rs = rs.filter((r) => r.kind === "order");

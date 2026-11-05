@@ -17,8 +17,8 @@
         },
         {
           "name": "crm_contact",
-          "what": "Thin contact: country with the slot it came from, language, currency, store, and when it was created in the source (0008u)",
-          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot and created-time slot (the object's createdAt and the configured properties, the earliest kept); re-read every 10 min in its first hour; nightly reconcile; since 0008zn also a contact a store customer is linked to, taken in by the sweep's second read (the links of the last hour, newest first, within ten minutes of the link), by the nightly reconcile's 26-hour look-back for the links the sweep did not reach and by ingest-backfill --object linked_contact"
+          "what": "Thin contact: country with the slot it came from, language, currency, store, the customer segment (a mapped property's value, 1 to 100 characters, no @; none once the contact is deleted or forgotten; 0008zt), and when it was created in the source (0008u)",
+          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot and created-time slot (the object's createdAt and the configured properties, the earliest kept) and, since 0008zt, the mapped segment property (its value kept in the segment column, never in raw; no change to the HubSpot scopes or webhooks); re-read every 10 min in its first hour; nightly reconcile; since 0008zn also a contact a store customer is linked to, taken in by the sweep's second read (the links of the last hour, newest first, within ten minutes of the link), by the nightly reconcile's 26-hour look-back for the links the sweep did not reach and by ingest-backfill --object linked_contact"
         },
         {
           "name": "crm_contact_ref",
@@ -254,8 +254,8 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots; the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb); on an asset register connection the register's fields, each property an Airtable field id (starting fld): a device's staging columns, a component kind's serial and expiry, the named ids, and each field's type as the ingest first read it (0008zj, 0008zk)",
-          "how": "Configuration (the reason property on Configuration, Sources); the data type read by the sweep hourly, or at once while unchecked (0008zb); an asset register's fields by cma.set_connection_field in Studio, from a block generated from the Airtable dry run's field list (docs/ingest/airtable-fields.mjs), the type recorded by the ingest's first read through cma.ingest_record_field_types and a later different type failing the read (0008zj, 0008zk)"
+          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots and its customer segment (one slot, field segment; 0008zt); the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb); on an asset register connection the register's fields, each property an Airtable field id (starting fld): a device's staging columns, a component kind's serial and expiry, the named ids, and each field's type as the ingest first read it (0008zj, 0008zk)",
+          "how": "Configuration (the reason property on Configuration, Sources; a contact's segment property by cma.set_connection_field(<CRM conn>, 'contact', 'segment', '', <property>, 1)); the data type read by the sweep hourly, or at once while unchecked (0008zb); an asset register's fields by cma.set_connection_field in Studio, from a block generated from the Airtable dry run's field list (docs/ingest/airtable-fields.mjs), the type recorded by the ingest's first read through cma.ingest_record_field_types and a later different type failing the read (0008zj, 0008zk)"
         },
         {
           "name": "connection_reason",

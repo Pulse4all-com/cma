@@ -4,7 +4,7 @@ import { FlashAsOf, FlashLiveFigure, FlashMarket } from "@/components/FlashContr
 import { HeaderHint } from "@/components/HeaderHint";
 import { HintLabel } from "@/components/HintLabel";
 import {
-  BreakdownTable, changeText, DataQualityTable, FlashCard, FlashStrip, fmtNumber, MarketBars, OverviewHeading, RowsTable, SourcesLine, TotalsRow, WatchStrip,
+  BandTable, BreakdownTable, changeText, DataQualityTable, FlashCard, FlashStrip, fmtNumber, MarketBars, OverviewHeading, RowsTable, SourcesLine, TotalsRow, WatchStrip,
 } from "@/components/FlashParts";
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission } from "@/components/ReportParts";
@@ -12,7 +12,7 @@ import { Shell } from "@/components/Shell";
 import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import { CmaDbError, data, dataIsMock, type FlashDocumentView, type FlashPageView, type FlashRowsView } from "@/lib/data";
 import {
-  breakdownSets, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, filtersShown, filtersText, frozenFilters, listUnavailable, metricKey, overviewOf, parseAsOf,
+  bandDimOf, breakdownSets, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, filtersShown, filtersText, frozenFilters, listUnavailable, metricKey, overviewOf, parseAsOf,
   parseFilters, parseMarket, parseSort, periodComplete, type FlashOverviewDef,
 } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
@@ -167,6 +167,7 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
               );
               return (
                 <FlashCard key={o.key} def={o} setUp={setUp} sourceLabel={sourceLabel(o.source)} figure={figure} query={base} t={t}
+                  statusSettings={page.statusSettings} locale={locale}
                   change={asOf ? changeText(card?.value ?? null, card?.previous ?? null, card?.previousOn ?? null, locale, t) : null} />
               );
             })}
@@ -274,13 +275,13 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
         <div data-testid="flash-snapshot-missing"><Notice tone="info">{t.noSnapshot}</Notice></div>
       ) : !doc.setUp ? (
         <Card>
-          <OverviewHeading def={def} t={t} more={more(def.key)} />
+          <OverviewHeading def={def} t={t} more={more(def.key)} statusSettings={doc.statusSettings} locale={locale} />
           <p className="text-body text-p4a-muted" data-testid="flash-not-set-up">{t.notSetUp.replace("{source}", sourceLabel)}</p>
         </Card>
       ) : (
         <div className="flex flex-col gap-6">
           <section aria-label={String(t[`o_${def.key}` as keyof typeof t])}>
-            <OverviewHeading def={def} t={t} more={more(def.key)} />
+            <OverviewHeading def={def} t={t} more={more(def.key)} statusSettings={doc.statusSettings} locale={locale} />
             {doc.days && doc.days.missing.length > 0 ? (
               <div className="mb-4"><Notice tone="info">{t.daysMissing.replace("{covered}", String(doc.days.covered))
                 .replace("{missing}", doc.days.missing.map((d) => fmtDate(d, locale)).join(", "))}</Notice></div>
@@ -304,11 +305,19 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
               <Card title={t.perMarket}>
                 <MarketBars def={def} doc={doc} locale={locale} t={t} />
               </Card>
-              {breakdownSets(def).map((set) => (
-                <Card key={set.join("+")} title={`${t.breakdown}: ${set.map((d) => String(t[`d_${d}` as keyof typeof t] ?? d)).join(", ")}`}>
-                  <BreakdownTable def={def} doc={doc} set={set} query={query} locale={locale} t={t} />
-                </Card>
-              ))}
+              {breakdownSets(def).map((set) => {
+                // a band set (addition 0008zt): one row per band, of the market or summed over every market
+                const band = bandDimOf(def, set);
+                return band ? (
+                  <Card key={set.join("+")} title={`${t.breakdown}: ${String(t[`d_${band}` as keyof typeof t] ?? band)}`}>
+                    <BandTable def={def} doc={doc} set={set} query={query} locale={locale} t={t} />
+                  </Card>
+                ) : (
+                  <Card key={set.join("+")} title={`${t.breakdown}: ${set.map((d) => String(t[`d_${d}` as keyof typeof t] ?? d)).join(", ")}`}>
+                    <BreakdownTable def={def} doc={doc} set={set} query={query} locale={locale} t={t} />
+                  </Card>
+                );
+              })}
             </>
           )}
           <div className="-mt-2 flex justify-end">

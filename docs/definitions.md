@@ -748,14 +748,15 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | Juo's own status of a subscription, in Juo's words (convention 2): active, paused, canceled, expired, failed, merged or never-subscribed. The CMA stores it as Juo gives it, Juo's `cancelled` written `canceled` and `NEVER_SUBSCRIBED` written `never-subscribed`. |
 | Source | Juo's `status` on a subscription (lower case) and on a status event (upper case: `previousStatus`, `data.status` and `data.input.status`), read by the poll and the nightly full read; Juo's own move to failed arrives as an update from active to failed by the system |
 | Counts / does not count | Every subscription has one status. A subscription with status merged or never-subscribed is stored and has no payment state. The status is Juo's fact: no CMA rule changes it, and a subscription the latest full read no longer returns keeps its last status with `source_deleted_at` set. When Juo sets failed, and whether its retries continue, is an Open decision |
+| Pulse4all's meanings | Beside Juo's words, never instead of them: active and failed hold devices, paused holds none, canceled means the devices are returned and the warehouse confirmed receipt, expired is unused (Bas, 5 November 2026). They are tenant configuration (`flash.device_holding_statuses`, `subscription.status_meanings`) and show in Flash's hints; Juo's words are unchanged (addition 0008zt) |
 | Unit and display | Juo's word in lower case; no label rewords it |
 | Time rule | As of the latest read of the subscription (the poll when an event touched it, else the nightly full read); the events `canceled`, `paused`, `resumed`, `reactivated` and `status_changed` hold the moves (`status_from`, `status_to`, `occurred_at`) |
 | Scope | As Subscription |
 | Equivalent in the source system | Juo's subscription `status` (Admin API) |
 | Not to use | "Cancelled" (Juo's spelling) in a key or a label: the CMA says canceled; Cancellation is another term, still to define (Reports → Cancellations counts cancellation requests, not statuses); "active" for a device's state (Device status) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
-| Used by | `cma.subscription.status`, `cma.subscription_event.status_from` and `status_to`, `cma_read.subscription`, `cma_read.subscription_event`, `cma.subscription_payment_state_of`; `flash.subscriptions.active_subscriptions`, `flash.subscriptions.paused_subscriptions`; Reports → Flash (Active subscriptions) and its files |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" (addition 0008zt, #233) |
+| Used by | `cma.subscription.status`, `cma.subscription_event.status_from` and `status_to`, `cma_read.subscription`, `cma_read.subscription_event`, `cma.subscription_payment_state_of`; `flash.subscriptions.active_subscriptions`, `flash.subscriptions.paused_subscriptions`, `flash.subscriptions.holding_subscriptions`; `subscription.status_meanings`; Reports → Flash (Active subscriptions, with the statuses in its hints) and its files |
 | As built today | `cma.subscription.status` written by `cma.ingest_upsert_subscriptions`, which refuses a status outside the seven (`CMA04`); the events `canceled`, `paused`, `resumed` and `reactivated` carry `status_from` and `status_to`, a `status_changed` has both (an update without a status, or with the same one, is no event of the CMA). Matches the definition |
 
 ### Payment state
@@ -792,7 +793,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Equivalent in the source system | Juo's event `subscription:renew-failed` (severity problem); HubSpot's copy of Juo's events stays as it is and is not read for this |
 | Not to use | "Failed" alone for it (Failed is the payment state of status failed: a failed renewal on an active subscription is In retry); "failed payment" and "dunning" (NetSuite's words, README, Source of truth) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" (addition 0008zt, #233) |
 | Used by | `cma.subscription_event` (`event_type` `renew_failed`), `cma_read.subscription_event`, `cma.subscription_payment_state_of` (In retry with `retry_cycle`, `retry_since` and `last_attempt`); `flash.payments.failed_renewals`; Reports → Flash (Payments) and its files |
 | As built today | `cma.subscription_event` (`118`): `event_type` `renew_failed` with `cycle_index`, `attempt`, `error_code` (a code of letters, digits and `_`) and `reason_code` (a lower case code, at most 60), written by `cma.ingest_upsert_subscription_events` (an event already held is left as it is, and the application never updates or deletes one); the adapter reads no error message and counts a reason outside its fixed list as `reason_dropped`. Matches the definition |
 
@@ -896,8 +897,9 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Customer" alone for it (Domains still to define); "subscriber" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
-| Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files |
-| As built today | `cma.flash_customers_of` (`122`). Matches the definition |
+| Dims | Since 0008zt `segment` (Customer segment) beside `market`; `flash.active_subscription_statuses` stays the paying statuses, not the Device-holding statuses |
+| Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`, by `segment`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files |
+| As built today | `cma.flash_customers_of` (`122`), over `cma.flash_store_customers_of` with the segment (`136`). Matches the definition |
 
 ### Open deal
 
@@ -1086,6 +1088,177 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: the result is the CMA's own computation over its mirrors |
 | Used by | Reports → Data quality, Reports → Flash (data quality), `cma.data_quality()`, `cma.data_quality_rows()`, `cma.flash_findings_of()` |
 | Decided | 5 Nov 2026, "Data quality on stored results" (addition 0008zr, night N06; backlog CMA-087) |
+### Device-holding status
+
+| Field | Value |
+|---|---|
+| Term | Device-holding status; a subscription in one is a Holding subscription (no Dutch label of its own in `copy.ts` beyond the hints) |
+| Key | Setting `flash.device_holding_statuses`; `cma.flash_holding_statuses_of(tenant)`; measure `holding_subscriptions` |
+| Definition | A subscription status in which, by the tenant's operational meaning of Juo's statuses, the subscription holds devices. Pulse4all (confirmed by Bas, 5 November 2026): active and failed hold devices, paused holds none, canceled means the devices are returned and the warehouse confirmed receipt, expired is unused. A Holding subscription is a subscription whose status is one of them. |
+| Source | The tenant setting (default `active`, seed `02` `active,failed`: one to six of Juo's seven statuses, never `paused`, none of `flash.ended_subscription_statuses`); the status is Juo's (Subscription status) |
+| Counts / does not count | `flash.active_subscription_statuses` stays the paying statuses (active) and drives Active customer and Active subscription; the holding statuses drive only the device figures and the data-quality checks `active_subscription_without_device` and `field_device_on_non_holding_subscription` |
+| Unit and display | A count of subscriptions (`holding_subscriptions`); the hint's "Holds devices: …" ends with the tenant's statuses, each with its meaning |
+| Time rule | As of the instant (live) or of the take of the snapshot's business date |
+| Scope | The tenant's subscriptions connections; per market and store |
+| Equivalent in the source system | None: Juo has statuses, not this meaning |
+| Not to use | "Active" for a subscription that holds devices (active is the paying status); "paused" in the setting |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Device-holding statuses (Bas, 5 Nov 2026)" (addition 0008zt, #233) |
+| Used by | `flash.subscriptions.holding_subscriptions`, `flash.subscriptions.devices_on_holding`, `flash.installed_base.in_field_on_holding`, `device_band`; `cma.data_quality_of` (`active_subscription_without_device`); Reports → Flash (Active subscriptions, Installed base) and its files |
+| As built today | `cma.flash_holding_statuses_of` and the setting's check (`136`); `137` proves them. Matches the definition |
+
+### In the field on a holding subscription
+
+| Field | Value |
+|---|---|
+| Term | In the field on a holding subscription (nl: as the page shows it) |
+| Key | `in_field_on_holding` (overview `installed_base`); dim `subscription_status` |
+| Definition | A device in a status flagged in the field (Device status) whose linked subscription, matched within the device's market, is a Holding subscription. The dim `subscription_status` gives the Juo status of that subscription, else `not_found` (the link names no subscription the CMA holds of that market), else `none` (the device has no link). In the field = `in_field_on_holding` plus the devices in the field on non-holding, ended, `not_found` and `none` subscriptions, per market too. |
+| Source | `cma.device` (the register), `cma.subscription` (Juo) |
+| Counts / does not count | Devices in the field only; a device in stock or another status is in `devices` and never here. A device on a non-holding or ended subscription is also a data-quality finding (`field_device_on_non_holding_subscription`, `field_device_on_ended_subscription`) |
+| Unit and display | A count |
+| Time rule | As of the instant or of the snapshot's date |
+| Scope | The tenant; per market and subscription status |
+| Equivalent in the source system | None: the CMA's join of the register and Juo |
+| Not to use | "Active devices" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Device measures count devices in the field only" (addition 0008zt, #233) |
+| Used by | `cma.flash_devices_of`, `flash.installed_base.in_field_on_holding`; Reports → Flash (Installed base) and its files |
+| As built today | `cma.flash_devices_of` and `cma.flash_compute_of` (`136`); `137` reconciles the parts to in the field. Matches the definition |
+
+### Devices on holding subscriptions
+
+| Field | Value |
+|---|---|
+| Term | Devices on holding subscriptions |
+| Key | `devices_on_holding`; the subscriptions list's column `devices_in_field` (its `devices` column is unchanged) |
+| Definition | The devices in the field (Device status) linked to Holding subscriptions. A subscription's `devices_in_field` is its own devices in the field. |
+| Source | `cma.device`, `cma.subscription` |
+| Counts / does not count | Devices in the field only, on a Holding subscription only |
+| Unit and display | A count |
+| Time rule | As of the instant or of the snapshot's date |
+| Scope | The tenant; per market |
+| Equivalent in the source system | None |
+| Not to use | "Devices" alone for it (Device) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" |
+| Used by | `flash.subscriptions.devices_on_holding`; Reports → Flash (Active subscriptions) and its files |
+| As built today | `cma.flash_subscriptions_of(tenant, date)` and `cma.flash_compute_of` (`136`). Matches the definition |
+
+### Devices per holding subscription
+
+| Field | Value |
+|---|---|
+| Term | Devices per holding subscription |
+| Key | `devices_per_holding_subscription`; a measure of kind ratio (`web/src/lib/flash.ts`), never in `count_measures` |
+| Definition | Devices on holding subscriptions divided by Holding subscriptions, to two decimals; left out of a row without a holding subscription. A subscription briefly holds one device more while an exchange runs (the new device before the old one is returned); no check flags this, so the figure can sit slightly above the contracted number. |
+| Source | The two counts above |
+| Counts / does not count | A ratio: the watch's jump never compares it, and a total is the ratio of the totals, never a sum of rows |
+| Unit and display | A number with two decimals |
+| Time rule | As of the instant or of the snapshot's date |
+| Scope | The tenant; per market and device band |
+| Equivalent in the source system | None |
+| Not to use | "Average devices per customer" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" |
+| Used by | `flash.subscriptions.devices_per_holding_subscription`; Reports → Flash (Active subscriptions) |
+| As built today | `cma.flash_ratio_of` (`136`); `137` checks every row against the quotient. Matches the definition |
+
+### Device band
+
+| Field | Value |
+|---|---|
+| Term | Device band |
+| Key | Dim `device_band`; setting `flash.device_bands` (default `1,2,3`) |
+| Definition | The group a Holding subscription falls in by its devices in the field: `0`, each listed value, and the last one open-ended (`1,2,3` gives `0`, `1`, `2`, `3+`; `1,3` gives `0`, `1-2`, `3+`). The setting holds strictly increasing positive whole numbers, one to six, no spaces. Every band has its row per market, zeros included. |
+| Source | The setting and the Devices on holding subscriptions of each Holding subscription |
+| Counts / does not count | Holding subscriptions only |
+| Unit and display | The band's label; with `holding_subscriptions`, `devices_on_holding` and the ratio |
+| Time rule | As of the instant or of the snapshot's date |
+| Scope | The tenant; per market |
+| Equivalent in the source system | None |
+| Not to use | "Tier", "bucket" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Bands and segments are tenant settings" (addition 0008zt, #233) |
+| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Active subscriptions) |
+| As built today | `136`; `137` proves the default and a custom setting. Matches the definition |
+
+### Subscription age
+
+| Field | Value |
+|---|---|
+| Term | Subscription age |
+| Key | Dim `age_band`; setting `flash.subscription_age_months` (default `12,24,36,48,60`); `cma.flash_age_months_of` |
+| Definition | The whole months, as PostgreSQL's `age()` counts them, from the subscription's creation in Juo (`source_created_at`, Juo's `createdAt`) up to the business date: live, today in the tenant's zone; a snapshot, its own date. Juo's created date is the subscription's start (Juo owns subscriptions); a subscription moved into Juo carries the date it was moved. The bands over the active subscriptions are `<12`, `12-24`, …, `60+` and `unknown` without a creation date. The page also shows the cumulative "More than N months", derived from the bands; it includes subscriptions of exactly N whole months. |
+| Source | `cma.subscription.source_created_at`, the setting |
+| Counts / does not count | Active subscriptions only (`flash.active_subscription_statuses`); one to ten values in the setting |
+| Unit and display | The band's label with `active_subscriptions`; "More than N months" per value |
+| Time rule | Against the business date |
+| Scope | The tenant; per market |
+| Equivalent in the source system | Juo's subscription `createdAt` |
+| Not to use | "Tenure", "lifetime" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Juo's created date is the subscription's start for age" (addition 0008zt, #233) |
+| Used by | `flash.subscriptions.active_subscriptions` by `age_band`; Reports → Flash (Active subscriptions) |
+| As built today | `cma.flash_age_months_of`, `cma.flash_age_band_of`, `cma.flash_age_bands_of` (`136`); `137` checks the bands against the business date. Matches the definition |
+
+### Customer segment
+
+| Field | Value |
+|---|---|
+| Term | Customer segment |
+| Key | Dim `segment` (overview `customers`); `cma.crm_contact.segment`; field `segment` of entity `contact` in `cma.connection_field`; setting `crm.customer_segments` (default empty) |
+| Definition | The segment of an Active customer: the value of a mapped CRM contact property (Pulse4all: HubSpot `customer_type`) on the linked contact, when it equals one of the codes of `crm.customer_segments` (case-insensitively, shown in the setting's spelling), else `unknown`; never inferred from anything else. Pulse4all's codes are `B2B` (a business customer) and `B2C` (a consumer), the values of its HubSpot `customer_type`; with this term B2B and B2C leave Domains still to define. |
+| Source | The CRM contact's mapped property, of any type (free text or a dropdown; no enumeration is required), read by the ingest and stored trimmed in `cma.crm_contact.segment` (1 to 100 characters, no @ or control character; never kept in `raw`; cleared when the contact is deleted or forgotten) |
+| Counts / does not count | A customer without a linked contact, with an empty or unlisted value, or whose contact is deleted counts as `unknown` |
+| Unit and display | The code, or `unknown`, with `active_customers` |
+| Time rule | As of the instant or of the snapshot's date (the contact as the CMA holds it) |
+| Scope | The tenant; per market |
+| Equivalent in the source system | The mapped contact property |
+| Not to use | "Customer type" as the CMA's word; "B2B" for a rule of the CMA |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Customer segment comes from a mapped CRM contact property"; "The customer segment's mapped CRM property may be of any type" (addition 0008zt, #233) |
+| Used by | `cma.flash_store_customers_of`, `cma.flash_segment_of`; `flash.customers.active_customers` by `segment`; Reports → Flash (Active customers) |
+| As built today | `136` (column, trigger, ingest, bands); seed `02` maps the property and sets `B2B,B2C`; `137` proves them. Matches the definition |
+
+### Status meaning
+
+| Field | Value |
+|---|---|
+| Term | Status meaning (nl: Betekenis van de status) |
+| Key | Setting `subscription.status_meanings` (JSON, default `{}`); `cma.flash_status_settings_of`; copy keys `mh_<measure>` |
+| Definition | A tenant's own words for what a Juo status means for its business line, per status an `en` and/or `nl` text of 1 to 200 characters without an @. Flash's hints on the status measures end with the tenant's statuses, each with its meaning in the reader's language or the word alone. Juo's words stay the status itself (Subscription status). |
+| Source | The tenant setting (seed `02` holds Bas's meanings for active, failed, paused, canceled and expired); keys only from Juo's seven statuses |
+| Counts / does not count | Not a figure. A second tenant never sees another's meanings; a hint on an older snapshot uses today's statuses and meanings |
+| Unit and display | A hint line: "Counts: …" (active customers, active subscriptions), "Holds devices: …" (the holding measures and `device_band`), paused, "Ended: …" (churned); also the overview cards and headings of customers, subscriptions and installed base |
+| Time rule | As of today's configuration |
+| Scope | The tenant |
+| Equivalent in the source system | None |
+| Not to use | A meaning in code or in copy |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Status meanings in Flash's tooltips come from tenant configuration" (addition 0008zt, #233) |
+| Used by | `cma.flash_page` (`settings`), `cma.flash_document_of` (`settings`); Reports → Flash (hints) |
+| As built today | `136`; `137` proves two tenants never share meanings. Matches the definition |
+
+### Data-quality check field_device_on_non_holding_subscription
+
+| Field | Value |
+|---|---|
+| Term | Field device on a non-holding subscription |
+| Key | `field_device_on_non_holding_subscription` (order 370); `cma_read.dq_field_device_on_non_holding_subscription` |
+| Definition | A device in the field on a subscription whose status neither holds devices (Device-holding status) nor is ended (`flash.ended_subscription_statuses`); Pulse4all: paused, merged, never-subscribed. Fixed in the asset register. `field_device_on_ended_subscription` is unchanged, so no device is listed twice; `active_subscription_without_device` now reads the holding statuses (its key kept). |
+| Source | `cma.device`, `cma.subscription` |
+| Counts / does not count | Devices in the field with a linked subscription the CMA holds; a `not_found` link is `device_subscription_ref_unknown` |
+| Unit and display | Findings per check and market |
+| Time rule | As of the stored data-quality result (Refreshed at) |
+| Scope | The tenant; per market |
+| Equivalent in the source system | None |
+| Not to use | "Orphan device" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Device-holding statuses (Bas, 5 Nov 2026)" (addition 0008zt, #233) |
+| Used by | `cma.data_quality_of`, `cma.data_quality_flash_checks`; Reports → Data quality and Flash's data-quality overview |
+| As built today | `136`; `137`. Matches the definition |
+
 ### Flash overview measures
 
 | Field | Value |
@@ -1101,14 +1274,14 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: each figure is the CMA's count over its mirror |
 | Not to use | "Failed payment", "dunning" (Payments: Failed renewal); "connected" for a source (a source is set up or not); "customer" alone (Active customer) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
-| Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`); the metric catalog's `flash.<overview>.<measure>` entries; Reports → Flash (`/reports/flash`) and its files |
-| As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" (addition 0008zt, #233) |
+| Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`, `active_subscription_without_device` and `field_device_on_non_holding_subscription` read `flash.device_holding_statuses`); every measure has a hint (copy key `mh_<measure>`, Status meaning); the metric catalog's `flash.<overview>.<measure>` entries; Reports → Flash (`/reports/flash`) and its files |
+| As built today | `122`, `136` (0008zt's dims and measures); `123` and `137` check every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
 
 | Overview | Measure | Meaning |
 |---|---|---|
 | Active customers (`customers`) | `customers_held` | Store customers the CMA holds |
-| | `active_customers` | Active customer |
+| | `active_customers` | Active customer (by dim `segment`, Customer segment) |
 | | `paused_customers` | Store customers with a paused subscription and none active |
 | | `linked_to_contact` | Store customers linked to a CRM contact (0008h) |
 | | `with_required_refs` | Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs`. Not applicable while that setting is empty (no reference is required, so none is met or missed): left out live and in the snapshot, absent from the JSON, an empty cell in a file, "Not applicable" (nl "Niet van toepassing") on screen, never 0 or all |
@@ -1116,8 +1289,10 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `active_subscriptions` | Of those, a status in `flash.active_subscription_statuses` |
 | | `paused_subscriptions` | Of those, status paused |
 | | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval; nl: Bedrag per cyclus) |
+| | `holding_subscriptions`, `devices_on_holding`, `devices_per_holding_subscription` | Device-holding status, Devices on holding subscriptions, Devices per holding subscription (a ratio); by dim `device_band`; `active_subscriptions` by dim `age_band` (Subscription age) |
 | Installed base (`installed_base`) | `devices` | Devices the asset register holds, in any status (the installed base) |
 | | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) |
+| | `in_field_on_holding` | Of those in the field, on a Holding subscription (by dim `subscription_status`; In the field on a holding subscription) |
 | | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms; nl: Items achterstallig) |
 | | `items_due_3m` | Their items not past due whose due date falls within three months of today (live) or of the snapshot's date |
 | Churn (`churn`) | `churned` | Churn (subscription) (nl: Uitgevallen) |
@@ -1218,7 +1393,7 @@ Status: Pending for every term below; none is defined yet. Each is added term by
 Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
 
 ### Customers and orders
-Contact, customer, new customer, first order, direct order, indirect order, B2B, B2C, cancellation, minimum term. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
+Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
 
 ### Tickets and tasks
 Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zn).

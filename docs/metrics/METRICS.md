@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-586 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 93 · cadence_unconfirmed 68.
+590 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 97 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -34145,6 +34145,182 @@ sum(amount_per_cycle) per currency (an object of currency codes; never summed ac
 
 Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
 
+#### `flash.subscriptions.holding_subscriptions`
+
+**Holding subscriptions** on /reports/flash · Holding subscriptions (Apparaathoudende abonnementen)
+
+Subscriptions the latest full read returns whose status is one of `flash.device_holding_statuses` (Pulse4all: active and failed): the subscriptions that hold devices in the field (Active subscriptions; docs/definitions.md, Flash overview measures and Device-holding status). Not active_subscriptions, which counts the paying ones.
+
+**Formula as computed**
+
+```
+count(*) where status = any(flash.device_holding_statuses). Grouping sets: the totals, per market, the breakdown and [market, device_band] (every band with its row); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.device_bands` | 1,2,3 | 1,2,3 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/137_verify_flash_insights.sql (B3, B4, B7, B8, D1, D2) compares this measure with hand-computed figures on a throwaway tenant, proves the snapshot equals the live computation and checks every tenant's own figures add up; 21 ok and 4 skip locally on PostgreSQL 16, 5 November 2026 (24 ok and 1 skip expected in dev and prod). Martin runs 137 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (additions 0008zn, 0008zt); data-model/0008.md, Data model: Flash insights (addition 0008zt); definitions.md, Flash overview measures; definitions.md, Device-holding status
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
+
+#### `flash.subscriptions.devices_on_holding`
+
+**Devices on holding subscriptions** on /reports/flash · Devices on holding subscriptions (Apparaten op apparaathoudende abonnementen)
+
+The devices in the field (a device status flagged is_in_field) whose subscription reference names a subscription of the same market with a status in `flash.device_holding_statuses` (Active subscriptions; docs/definitions.md, Flash overview measures). Equals the installed base's in_field_on_holding while no two subscriptions of a market share an id.
+
+**Formula as computed**
+
+```
+sum(devices_in_field) over the subscriptions where status = any(flash.device_holding_statuses) (cma.flash_subscriptions_of). Grouping sets: the totals, per market, the breakdown and [market, device_band]; one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/137_verify_flash_insights.sql (B3, B4, B7, B8, D1, D2) compares this measure with hand-computed figures on a throwaway tenant, proves the snapshot equals the live computation and checks every tenant's own figures add up; 21 ok and 4 skip locally on PostgreSQL 16, 5 November 2026 (24 ok and 1 skip expected in dev and prod). Martin runs 137 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (additions 0008zn, 0008zt); data-model/0008.md, Data model: Flash insights (addition 0008zt); definitions.md, Flash overview measures; definitions.md, Device-holding status
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure). Its records on the list are the holding subscriptions with a device in the field, each with its devices_in_field.
+
+#### `flash.subscriptions.devices_per_holding_subscription`
+
+**Devices per holding subscription** on /reports/flash · Devices per holding subscription (Apparaten per apparaathoudend abonnement)
+
+devices_on_holding / holding_subscriptions, to two decimals; none (left out) where no subscription holds devices (Active subscriptions; docs/definitions.md, Flash overview measures). During an exchange a subscription briefly holds one device more (the replacement ships first, the serviced device comes back after); no check flags a subscription for holding more devices.
+
+**Formula as computed**
+
+```
+round(devices_on_holding::numeric / holding_subscriptions, 2), left out when holding_subscriptions is 0 (cma.flash_ratio_of). Per row of the totals, per market, the breakdown and each device band; never summed over rows or dates.
+```
+
+**Unit** average · **Grain** now, per_market, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_ratio_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/137_verify_flash_insights.sql (B3, B4, B7, B8, D1, D2) compares this measure with hand-computed figures on a throwaway tenant, proves the snapshot equals the live computation and checks every tenant's own figures add up; 21 ok and 4 skip locally on PostgreSQL 16, 5 November 2026 (24 ok and 1 skip expected in dev and prod). Martin runs 137 in dev.
+
+**Data prerequisites**
+
+- A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision) (data quality check `subscription_customer_unmatched`)
+
+**Documented in** features.md, Reports → Flash (additions 0008zn, 0008zt); data-model/0008.md, Data model: Flash insights (addition 0008zt); definitions.md, Flash overview measures; definitions.md, Device-holding status
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. A ratio: neither a count nor an amount (lib/flash ratioMeasures), so a list is never narrowed to it and the watch's jump never compares it.
+
 #### `flash.installed_base.devices`
 
 **Devices** on /reports/flash · Devices (Apparaten)
@@ -34444,6 +34620,66 @@ sum(items_due_3m): items not past due whose due date falls within three months o
 **Notes**
 
 Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+#### `flash.installed_base.in_field_on_holding`
+
+**In the field on a holding subscription** on /reports/flash · In the field on a holding subscription (In het veld op een apparaathoudend abonnement)
+
+Of the devices in the field, those linked to a subscription (matched within the device's market) whose status is one of `flash.device_holding_statuses` (Installed base; docs/definitions.md, Flash overview measures and Device-holding status). A device in stock is never counted, whatever its reference.
+
+**Formula as computed**
+
+```
+count(*) where the device status's is_in_field and the linked subscription's status = any(flash.device_holding_statuses) (cma.flash_devices_of's subscription_status). Grouping sets: the totals, per market, the breakdown and [market, subscription_status], where in_field adds up over the statuses (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+
+**Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_devices_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run as a Studio query here: db/137_verify_flash_insights.sql (B3, B4, B7, B8, D1, D2) compares this measure with hand-computed figures on a throwaway tenant, proves the snapshot equals the live computation and checks every tenant's own figures add up; 21 ok and 4 skip locally on PostgreSQL 16, 5 November 2026 (24 ok and 1 skip expected in dev and prod). Martin runs 137 in dev.
+
+**Data prerequisites**
+
+- The asset register set up with ns_internal_id mapped (data quality check `device_required_ref_missing`)
+- A subscription reference on each device in the field (data quality check `device_subscription_ref_unknown`)
+
+**Documented in** features.md, Reports → Flash (additions 0008zn, 0008zt); data-model/0008.md, Data model: Flash insights (addition 0008zt); definitions.md, Flash overview measures; definitions.md, Device-holding status
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
 
 #### `flash.churn.churned`
 
