@@ -147,15 +147,13 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'waiting for you', $q$select cma.my_follow_up()$q$, 'agent', array['leads.accept', 'workday.own']),
-('a', 'welcome manager', 'team hours 31 days', $q$select t.*, (select count(*) from cma.time_event_effective e join cma.workday w on w.tenant_id = e.tenant_id and w.id = e.workday_id
-   where w.user_id = t.user_id and w.business_date = t.business_date and e.kind = 'start')::int as sessions
-   from cma.team_hours(date '{today}' - 31, date '{today}' - 1, null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
+('a', 'welcome manager', 'team hours 31 days', $q$select t.* from cma.team_hours(date '{today}' - 31, date '{today}' - 1, null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
 ('a', 'welcome manager', 'follow-up summary', $q$select * from cma.follow_up_summary()$q$, 'agent', array['monitoring.live', 'performance.team', 'workday.team']),
 ('a', 'welcome admin', 'roles', $q$select * from cma.roles()$q$, 'agent', array['users.manage_all']),
 ('a', 'my hours', 'own days 7 days', $q$select s.business_date, s.status, s.started_at, s.ended_at, s.working_seconds,
    coalesce((select sum(i.seconds) from cma.time_interval i join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = i.status_id
      where i.workday_id = s.workday_id and not ws.is_working), 0)::bigint,
-   (select count(*) from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start')::int
+   s.sessions
    from cma.workday_summary s where s.user_id = cma.current_user_id() and s.business_date between date '{today}' - 6 and '{today}' order by s.business_date$q$, 'agent', array['workday.own']),
 ('a', 'my schedule', 'my roster week', $q$select * from cma.my_roster('{monday}', date '{monday}' + 6)$q$, 'agent', array['roster.view']),
 ('a', 'messages', 'inbox (50 messages)', $q$select (select count(*) from cma.my_messages(null, 50)), cma.my_unread_count()$q$, 'agent', array['*']),
@@ -171,9 +169,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'team people', 'linked accounts', $q$select * from cma.linked_account_systems(), cma.linked_accounts()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'invitations', $q$select * from cma.invitations()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team hours', 'team people', $q$select * from cma.team_people()$q$, 'agent', array['workday.team']),
-('a', 'team hours', 'team hours 7 days', $q$select t.*, (select count(*) from cma.time_event_effective e join cma.workday w on w.tenant_id = e.tenant_id and w.id = e.workday_id
-   where w.user_id = t.user_id and w.business_date = t.business_date and e.kind = 'start')::int as sessions
-   from cma.team_hours(date '{today}' - 6, '{today}', null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
+('a', 'team hours', 'team hours 7 days', $q$select t.* from cma.team_hours(date '{today}' - 6, '{today}', null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
 ('a', 'roster week', 'roster week', $q$select * from cma.roster_week('{monday}', null)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'roster people', $q$select * from cma.roster_people('{monday}', null)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'roster entries', $q$select * from cma.roster_entries('{monday}', null)$q$, 'agent', array['roster.manage']),

@@ -26,6 +26,7 @@ Written in the night of 5 to 6 November 2026 by Claude Code. Labels: **Browser**
 | 5 | Prod "after": `131` and `124` again now; the log percentiles after a working day, in a table for the decision log | 10 min now, 10 min tomorrow |
 | 6 | The Gemini audit (the job, the log-based metric, the alert policy, the Cloud SQL questions) | 15 min |
 | 7 | Rollback, if needed | 5 to 10 min |
+| 8 | N06d (its own pull request, after both merges): `134` twice and `135` in dev and prod, the earlier verifies (no `FAIL` line), `131` part a | 10 min |
 
 ---
 
@@ -310,3 +311,43 @@ Write Gemini's answer down as `records/n06-prod-2026-11-06/gemini-audit.md` (the
 cd ~/cma && git switch main -q && git pull -q && git revert --no-edit <N06b merge sha> && git switch -c revert-n06b && git push -u origin revert-n06b && gh pr create --fill
 ```
 Expected: a pull request with the revert; merge it; the build.
+
+## 8. N06d: the hours reads (`134`, `135`), after N06a and N06b
+
+Addition 0008zs, its own pull request from `main` after #229 and #230: a day's stretches and summary as functions, the two core views a plain scan of the workdays with a lateral call, the readers' `cma_read` views the same through owner's-rights wrappers, `sessions` a column of the face `cma.workday_summary` and of `cma.team_hours`, `cma.team_now` looking today's day up per person. Order matters: `134` runs in dev and prod **before** its merge (`main`'s web counts the sessions per row itself and keeps working on the new views; the merged web reads the function's column), the same way as `132`. About 10 minutes.
+
+**Terminal** (dev: `134` twice, `135` normal and provoked)
+```bash
+cd ~/cma && rec=records/n06d-dev-2026-11-06 && mkdir -p "$rec" && cma_db dev
+psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/134_hours_reads.sql > "$rec/134.txt" 2>&1; echo "134: $(tail -3 "$rec/134.txt" | tr '\n' ' ')"
+psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/134_hours_reads.sql > "$rec/134-rerun.txt" 2>&1; echo "134 again: $(tail -3 "$rec/134-rerun.txt" | tr '\n' ' ')"
+psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/135_verify_hours_reads.sql > "$rec/135.txt" 2>&1; echo "135: $(grep -E ' verdict' "$rec/135.txt" | tr -s ' ')"
+sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" db/135_verify_hours_reads.sql > /tmp/provoke.sql
+psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "$rec/135-provoked.txt" 2>&1; echo "provoked: $(grep -E ' verdict' "$rec/135-provoked.txt" | tr -s ' ')"
+```
+Expected: `134: GRANT INSERT 0 1 COMMIT`, `134 again: GRANT INSERT 0 0 COMMIT`; `135:  verdict | 0008zs verified | 135_verify_hours_reads: <n> ok, 0 FAIL, <k> skip` (a skip is a tenant where no active person holds `workday.team` or `monitoring.live`; the row count follows the tenants: 24 locally with two tenants; A2 reads `cma_read` as `cma_readonly`, which your login holds); `provoked:  verdict | PROVOKED, NOT A PASS | … 0 ok, <n> FAIL`. The verify compares every stretch and every day of every tenant with the previous definitions: at prod's size under a minute.
+
+**Terminal** (dev: the earlier verifies of what `134` touches, then the time script's part a)
+```bash
+cd ~/cma && rec=records/n06d-dev-2026-11-06 && for f in 07_verify_time_model 10_verify_corrections 16_verify_team_status_time 47_verify_workday_window 51_verify_legacy_time_import 127_verify_workday_sessions; do
+  psql "$PGCONN" -v ON_ERROR_STOP=0 -f "db/$f.sql" > "$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -c FAIL "$rec/${f%%_*}-rerun.txt") FAIL lines; $(grep -E ' verdict' "$rec/${f%%_*}-rerun.txt" | tail -1 | tr -s ' ')"
+done
+sed "s/select set_config('verify.part', 'all', false);/select set_config('verify.part', 'a', false);/" db/131_time_all.sql > /tmp/131-a.sql
+psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/131-a.sql > "$rec/131_time_all-a.txt" 2>&1; echo "131 a: $(grep -E ' verdict' "$rec/131_time_all-a.txt" | tr -s ' ')"
+grep -E "team hours|own days 7 days|team now" "$rec/131_time_all-a.txt" | tr -s ' '
+```
+Expected: every verify as its last run and no `FAIL` line in any file (`grep -c FAIL` 0; 07 and 10 end in `ROLLBACK` by design, 47 A4 and 51 A5 assert the core view's column list, which `134` keeps); the three hours rows `ok` against 50 ms.
+
+**Terminal** (prod, before the merge: point-in-time recovery as in step 3, then the same)
+```bash
+cd ~/cma && rec=records/n06d-prod-2026-11-06 && mkdir -p "$rec" && cma_db prod
+psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/134_hours_reads.sql > "$rec/134.txt" 2>&1; echo "134: $(tail -3 "$rec/134.txt" | tr '\n' ' ')"
+psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/134_hours_reads.sql > "$rec/134-rerun.txt" 2>&1; echo "134 again: $(tail -3 "$rec/134-rerun.txt" | tr '\n' ' ')"
+psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/135_verify_hours_reads.sql > "$rec/135.txt" 2>&1; echo "135: $(grep -E ' verdict' "$rec/135.txt" | tr -s ' ')"
+sed "s/select set_config('verify.part', 'all', false);/select set_config('verify.part', 'a', false);/" db/131_time_all.sql > /tmp/131-a.sql
+psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/131-a.sql > "$rec/131_time_all-a-after.txt" 2>&1; echo "131 a: $(grep -E ' verdict' "$rec/131_time_all-a-after.txt" | tr -s ' ')"
+grep -E "team hours|own days 7 days|team now" "$rec/131_time_all-a-after.txt" | tr -s ' '
+```
+Expected: as in dev; `team hours 7 days` and `team hours 31 days` at or under 50 ms (832 and 91 ms before), `own days 7 days` under 50 (80 before), `polls: team now` lower than before (the Live board's team read joins the summary; 1.6 s → 6 ms locally at volume). Then the merge; `verify:api` against dev on its image as in 4b; **Browser:** Team → Hours for the last 7 days with each day's sessions, My hours with the same, Welcome's Needs attention card.
+
+**Rollback:** `134` can be reversed by running the previous definitions (`db/46` for `time_interval_all`, `db/50` section 8 for `workday_summary_all`, `db/05` for the face and for `cma_read.time_interval` and `cma_read.workday_summary`, `db/09` for `team_hours` with 76's grants, `db/19` for `team_now`) and dropping the four functions (`cma.workday_stretches_of`, `cma.workday_summary_of`, `cma.workday_stretches_reader_of`, `cma.workday_summary_reader_of`); `main`'s web runs on either. Tell me and I write the script.

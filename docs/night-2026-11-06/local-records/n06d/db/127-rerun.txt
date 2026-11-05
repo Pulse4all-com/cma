@@ -1,0 +1,67 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/127_verify_workday_sessions.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+                                    check_name                                     | result |                                                 detail                                                  
+-----------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------
+ S1 addition, setting, rule function and grants                                    | PASS   | workday.clock_in_again boolean false; invoker, stable, cma_app only; open_workday rechecks under a lock
+ A1 setting off: an ended day stays ended                                          | PASS   | ended 13:00, one start, nothing written
+ A6 the rule agrees with Clock in (A1)                                             | PASS   | false, nothing written
+ A2 Clock in again opens the day                                                   | PASS   | open, started 09:00, two starts; not clocked in during the gap
+ A6 the rule agrees with Clock in (A2)                                             | PASS   | true, a start written
+ A2 the new session starts in the default status                                   | PASS   | source user, the default status
+ A2 the day: first start, last end, 4 h + 4 h                                      | PASS   | 09:00 to 21:00, 28800 s worked, not flagged
+ A2 the gap is in no stretch and no pause                                          | PASS   | two stretches, 0 s paused
+ A2 the status-changes export: one row per stretch, no gap                         | PASS   | 09:00-13:00:14400:user 17:00-21:00:14400:user
+ A2 the hours export: first start, last end, the gap not worked                    | PASS   | 09:00-21:00:28800:ended
+ A2 time per status, the day's events, Team hours                                  | PASS   | available:28800:2; start,end,start,end
+ A3 a third session, counted                                                       | PASS   | three starts, 30000 s worked, ended 21:50
+ A6 the rule agrees with Clock in (A3)                                             | PASS   | true, a third start written
+ A4 outside the window, at or before the end: unchanged                            | PASS   | 13:00, 12:59, 22:00, 22:05: ended, nothing written
+ A6 the rule agrees with Clock in (A4)                                             | PASS   | 4 cases false, nothing written
+ A5 the scheduler's, a correction's, Add day's and an import's end: unchanged      | PASS   | each ended, one start, nothing written
+ A5 a person whose time is no longer kept: unchanged                               | PASS   | ended, nothing written
+ A5 another date: the earlier day unchanged                                        | PASS   | the 11th opened its own day; the 10th ended, one start
+ A5 another tenant: false                                                          | PASS   | true from tenant one at 14:00, false from tenant two
+ A6 the rule agrees with Clock in (A5)                                             | PASS   | 7 cases false, nothing written
+ A7 the second start moved                                                         | PASS   | 09:00 to 13:00 and 17:30 to 21:00, 27000 s
+ A7 the first end and the second start voided: one session                         | PASS   | 09:00 to 21:00, 43200 s
+ A7 a status in the gap, two ends, a start at the end, a start in a session: CMA04 | PASS   | status 15:00, end 14:00, start 13:00, start 10:00: each refused with its rule, nothing written
+ A7 Add day with two sessions                                                      | PASS   | 08:00 to 12:00 and 13:00 to 16:00, 25200 s
+ A8 the open later session closed by the rule, never before its start              | PASS   | p1 18:00 last_event, p2 20:00 shift, p3 17:00 default
+ A8 the closed days: counted, flagged for review                                   | PASS   | p1:14400:true:ended p2:25200:true:ended p3:27000:true:ended
+ A8 one notice per closed day, to that person                                      | PASS   | three notices; p2's at 20:00
+ A8 one digest to the holders of workday.team; a second run closes nothing         | PASS   | 3 workday(s) of Tue 10 Mar were closed automatically. Review them on Team hours.
+ A9 a one-session day reads as before                                              | PASS   | 09:00 to 17:30, 27900 s worked, 28800 s paid, five stretches
+ A9 a status at the end's instant, recorded after it: refused                      | PASS   | CMA04 (before 0008zp it was accepted and counted as a stretch to the window end)
+ A10 a second Clock in adds no second start                                        | PASS   | open, two starts, nothing written
+ verdict                                                                           | PASS   | 31 PASS, 0 FAIL
+(32 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET

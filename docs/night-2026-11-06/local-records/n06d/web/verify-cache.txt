@@ -1,0 +1,11 @@
+PASS  two tenants, one entry name: each reads its own value, and the second read of tenant 1 is tenant 1's cached value, never tenant 2's
+PASS  two permission sets under one tenant are two entries: the agent's read never answers the manager's
+PASS  within the time to live the cached value, after it a fresh read
+PASS  invalidating tenant 1's settings drops that entry alone: tenant 1 reads again, tenant 2 keeps its value
+PASS  a failed read is thrown to the caller and not kept: the next read reads again
+PASS  CMA_CACHE_TTL_MS 0: every read reads
+PASS  an entry without a tenant is refused
+PASS  the entries held count the live ones
+
+ALL 8 PASS
+exit 0

@@ -479,14 +479,11 @@ type TeamRow = {
 };
 
 /**
- * cma.team_hours with each day's sessions (addition 0008zp): the effective clock-ins of the person's day
- * on that date, read in the same query (the function's columns stay as they are), in the function's own
- * order. `args` are the call's bound parameters, never caller text
+ * cma.team_hours in the function's own order, with each day's sessions (the effective clock-ins of the person's
+ * day, addition 0008zp) as the function's last column since addition 0008zs: the summary computes them once for
+ * the days asked, where the web counted them per row before. `args` are the call's bound parameters, never caller text
  */
-const TEAM_HOURS = (args: string) => `select t.*,
-         (select count(*) from cma.time_event_effective e
-            join cma.workday w on w.tenant_id = e.tenant_id and w.id = e.workday_id
-           where w.user_id = t.user_id and w.business_date = t.business_date and e.kind = 'start')::int as sessions
+const TEAM_HOURS = (args: string) => `select t.*
     from cma.team_hours(${args}) t
    order by t.business_date, t.display_name, t.user_id`;
 
@@ -1694,13 +1691,14 @@ export const postgresData: CmaData = {
     assertDate(range.to, "to");
     return withTenant(ctx(me), async (q) => {
       // Pauses: the day's seconds in non-working statuses, summed from the stretches; the time between two
-      // sessions is no stretch, so it is no pause (0008zp). Sessions: the day's effective clock-ins
+      // sessions is no stretch, so it is no pause (0008zp). Sessions: the day's effective clock-ins, a column of
+      // the summary since addition 0008zs
       const r = await q.query<SummaryRow & { pause_seconds: number; sessions: number }>(
         `select ${HEADER}, s.working_seconds,
                 coalesce((select sum(i.seconds) from cma.time_interval i
                             join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = i.status_id
                            where i.workday_id = s.workday_id and not ws.is_working), 0)::bigint as pause_seconds,
-                (select count(*) from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start')::int as sessions
+                s.sessions
            from cma.workday_summary s
           where s.${OWN} and s.business_date between $1::date and $2::date
           order by s.business_date`,
