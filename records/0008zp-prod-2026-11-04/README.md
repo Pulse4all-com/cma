@@ -2,7 +2,7 @@
 
 Addition 0008zp (`db/126_workday_sessions.sql`, `db/127_verify_workday_sessions.sql`, `Pulse4all-com/cma#217`), run by
 Martin in p4a-cma-prod (`cma-prod-pg`) on 4 November 2026 by `docs/night-2026-11-04/MORNING_RUNBOOK.md` (step 5 before
-the merge, then steps 6 and 9), as `martin@pulse4all.com`. Written down by Claude Code at Martin's request from his
+the merge, then steps 6 and 9), as `<operator>`. Written down by Claude Code at Martin's request from his
 report of the runs (4 November 2026); the values below are his. Times Europe/Amsterdam unless marked UTC. Counts, times
 and verdicts only, as reported: no key, no secret, no customer data.
 
