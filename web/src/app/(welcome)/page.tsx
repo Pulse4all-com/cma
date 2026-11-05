@@ -16,7 +16,7 @@ import { holdsAny } from "@/lib/nav";
 import { cellLabel } from "@/lib/roster";
 import type { Copy, Locale } from "@/lib/copy";
 import { addDays, dateKeyInZone, fmtDate, fmtMinutes, fmtTime, hourInZone } from "@/lib/time";
-import { resolve } from "./access";
+import { resolve } from "../access";
 
 /** The to-do line looks back this many days, today excluded */
 const TODO_DAYS = 31;

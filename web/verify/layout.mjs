@@ -774,6 +774,7 @@ async function expectCampaigns() {
       await p.screenshot({ path: `${outDir}/${subject}-campaigns.png`, fullPage: true });
       await p.locator('[data-testid="journey-card"][data-code="fca-uk-consumers"] h2 a').click();
       await p.waitForURL("**/campaigns/fca-uk-consumers");
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const d = await p.evaluate(() => {
         const banner = document.querySelector('[data-testid="journey-banner"]');
@@ -1572,6 +1573,7 @@ async function expectFrame() {
     if (cookie?.value !== "collapsed" || cookie.path !== "/") problems.push(`rail: the cookie is ${JSON.stringify(cookie)}, expected cma-rail=collapsed on /`);
     await p.keyboard.press("2");
     await p.waitForURL("**/messages").catch(() => undefined);
+    await settle(p);
     if (new URL(p.url()).pathname !== "/messages") problems.push("rail: key 2 does not open Messages while folded");
     await p.waitForLoadState("networkidle");
     const next = await railOf(p);
@@ -1628,6 +1630,7 @@ async function expectFrame() {
     if (m.kbd !== (provoke ? 1 : 0) || m.hint || m.pressed !== "true" || m.state !== "hidden") problems.push(`hints: hidden by cookie gives ${JSON.stringify(m)}, expected no keycap, no shortcuts line, the toggle pressed`);
     await p.keyboard.press("n");
     await p.waitForURL("**/roster/planner?**").catch(() => undefined);
+    await settle(p);
     if (!new URL(p.url()).searchParams.get("week")) problems.push("hints: N no longer moves to the next week while the keycaps are hidden");
     await p.waitForLoadState("networkidle");
     await p.keyboard.press("?");
@@ -1846,6 +1849,7 @@ async function expectAccordion() {
     // the manager's sixth page is My day, in the closed Time group
     await p.keyboard.press("6");
     await p.waitForURL("**/day").catch(() => undefined);
+    await settle(p);
     if (new URL(p.url()).pathname !== "/day") problems.push(`accordion: key 6 opened ${new URL(p.url()).pathname} with every group closed, expected /day`);
     await p.waitForLoadState("networkidle");
     const pill = (await groupsOf(p)).find((x) => x.id === "time");

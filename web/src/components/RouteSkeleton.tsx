@@ -5,7 +5,8 @@ import { RAIL_COOKIE } from "@/lib/nav";
  * The route skeleton (night N06, 5 November 2026): what a click shows within 100 ms, before the destination's data
  * is there. The page's frame as Shell draws it (the white top bar, the rail on Background Blue, the Sand content area)
  * with placeholder blocks where the title and the cards go, in the style guide's colours and radii (7.1, 7.3); no
- * spinner. Every route segment's loading.tsx renders it, and the rail's links prefetch it, so the frame is on screen
+ * spinner. Every route segment's loading.tsx renders it (except a page that may answer 404: a loading boundary sends 200
+ * before the page decides), and the rail's links prefetch it, so the frame is on screen
  * while the page's reads run. It reads the rail's cookie, as the Shell does, so the frame comes up folded or expanded
  * in the person's state and nothing jumps when the page replaces it; no data.
  */
