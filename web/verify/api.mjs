@@ -1383,10 +1383,16 @@ async function flashChecks() {
   expect("flash: every form out of range is a 400 (overview, sort, measure, filter, limit, market, a future As of, part, check)",
     await Promise.all(bad.map(async (r) => (await call(ANALYST, r)).status)), bad.map(() => 400), bad.map(() => 200));
   const landing = (await call(ANALYST, "/api/v1/reports/flash")).body?.data;
-  expect("flash: the landing has the eleven overviews in their order, each with its definition version and set_up",
-    [landing?.overviews?.map((o) => o.key), landing?.overviews?.every((o) => o.definitionVersion === "0008zn" && typeof o.setUp === "boolean")],
-    [["customers", "subscriptions", "installed_base", "churn", "orders", "payments", "open_deals", "open_tickets", "open_tasks", "reviews", "data_quality"], true],
-    [[], false]);
+  // since addition 0008zt the customers', subscriptions' and installed base's definitions are 0008zt's; the landing gives the
+  // statuses its figures count and the tenant's meanings of them (the hints), as lists and an object
+  expect("flash: the landing has the eleven overviews in their order, each with its definition version and set_up; the hints' statuses",
+    [landing?.overviews?.map((o) => o.key),
+      landing?.overviews?.every((o) => o.definitionVersion === (["customers", "subscriptions", "installed_base"].includes(o.key) ? "0008zt" : "0008zn")
+        && typeof o.setUp === "boolean"),
+      Array.isArray(landing?.statusSettings?.deviceHoldingStatuses) && Array.isArray(landing?.statusSettings?.activeSubscriptionStatuses)
+        && typeof landing?.statusSettings?.statusMeanings === "object"],
+    [["customers", "subscriptions", "installed_base", "churn", "orders", "payments", "open_deals", "open_tickets", "open_tasks", "reviews", "data_quality"], true, true],
+    [[], false, false]);
   const head = (await call(ANALYST, "/api/v1/reports/flash?overview=orders&part=headline")).body?.data;
   expect("flash: a card's live headline: the overview's headline measure, a number when set up",
     [head?.headline, head?.setUp === false || typeof head?.value === "number"], ["orders", true], ["", false]);
