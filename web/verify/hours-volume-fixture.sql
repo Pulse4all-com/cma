@@ -10,8 +10,9 @@
 -- business day (Monday to Friday) for the last 84 × m business days, each with 12 effective events (a start, ten
 -- status changes through the tenant's active statuses, an end) and, every twentieth day, a correction that
 -- supersedes the day's end (so the effective view's anti-join has rows to exclude). At m = 3: 8 people × 252 days
--- × 12 events = about 24,000 events and 2,000 workdays. Prod (census of 5 November 2026) holds under 10,000 time
--- events, so this is at least three times prod's volume as the brief asks. Times in the tenant's zone, source
+-- × 12 events = about 24,000 events and 2,000 workdays; N06d's records were taken at m = 6 (about 30,000 events, 2,500
+-- workdays). Prod (census of 5 November 2026) holds under 10,000 time events, so either is at least three times prod's
+-- volume as the brief asks. Times in the tenant's zone, source
 -- 'user', recorded when they occurred; the audit trigger is off while loading, as the perf fixture does.
 set role cma_owner;
 do $$

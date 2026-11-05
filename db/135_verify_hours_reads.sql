@@ -17,11 +17,14 @@
 -- before the comparison, or the row says the set was empty), every S row reads FAIL, and the verdict PROVOKED, NOT A
 -- PASS.
 --   S  the addition row after 0008zr; time_interval_all's columns unchanged; workday_summary_all's and the face's
---      columns as before with sessions last; team_hours's columns with sessions last, executable by cma_app only;
---      cma.workday_stretches_of and cma.workday_summary_of present, executable by cma_app and not by public or the readers
---   E  time_interval_all row for row; workday_summary_all's columns before sessions row for row; sessions against the
---      per-row count; team_hours for the last 7 days, 31 days, 92 days and the tenant's first person, in order;
+--      columns as before, the face with sessions last; team_hours's columns with sessions last, executable by cma_app
+--      only; cma.workday_stretches_of and cma.workday_summary_of present with the caller's rights for the application;
+--      the readers' wrappers with the owner's rights for cma_readonly alone; the readers' views keep their columns
+--   E  time_interval_all row for row; workday_summary_all row for row; sessions on the face against the per-row count; team_hours for the last 7 days, 31 days, 92 days and the tenant's first person, in order;
 --      team_now against 19's join, in order, as the first person holding monitoring.live
+--   A  the rights: as the application the day functions answer the own tenant's day only (another tenant's id or no
+--      tenant set gives nothing, by row-level security); as a reader cma_read.workday_summary and cma_read.time_interval
+--      read every tenant, through the wrappers, as many rows as the owner's core views hold
 -- =============================================================================================
 
 do $$
@@ -251,13 +254,13 @@ begin
 
   select string_agg(column_name, ',' order by ordinal_position) into v_txt
   from information_schema.columns where table_schema = 'cma' and table_name = 'workday_summary_all';
-  v_ok := v_txt = 'workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id,sessions';
-  insert into verify_0008zs values (103, 'S3 workday_summary_all keeps its columns in their order, sessions last', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_txt, 'no columns'));
+  v_ok := v_txt = 'workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id';
+  insert into verify_0008zs values (103, 'S3 workday_summary_all keeps its sixteen columns in their order (47 A4, 51 A5)', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_txt, 'no columns'));
 
   select string_agg(column_name, ',' order by ordinal_position) into v_txt
   from information_schema.columns where table_schema = 'cma' and table_name = 'workday_summary';
-  v_ok := v_txt like '%,current_status_id,sessions';
-  insert into verify_0008zs values (104, 'S4 the face workday_summary carries sessions last', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_txt, 'no columns'));
+  v_ok := v_txt = 'workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id,sessions';
+  insert into verify_0008zs values (104, 'S4 the face workday_summary carries the sixteen columns and sessions last', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_txt, 'no columns'));
 
   select pg_get_function_result(p.oid) into v_txt from pg_proc p where p.oid = 'cma.team_hours(date, date, uuid)'::regprocedure;
   v_ok := v_txt like '%has_correction boolean, sessions integer)';
@@ -265,22 +268,35 @@ begin
 
   v_ok := has_function_privilege('cma_app', 'cma.team_hours(date, date, uuid)', 'execute')
       and not has_function_privilege('cma_readonly', 'cma.team_hours(date, date, uuid)', 'execute')
+      and (select proconfig @> array['jit=off'] from pg_proc where oid = 'cma.team_hours(date, date, uuid)'::regprocedure)
+      and (select proconfig @> array['jit=off'] from pg_proc where oid = 'cma.team_now()'::regprocedure)
       and not has_table_privilege('cma_app', 'cma.workday_summary_all', 'select')
       and not has_table_privilege('cma_app', 'cma.time_interval_all', 'select')
       and has_table_privilege('cma_app', 'cma.workday_summary', 'select');
-  insert into verify_0008zs values (106, 'S6 team_hours executable by cma_app only; the core views for the owner, the face for the application', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
+  insert into verify_0008zs values (106, 'S6 team_hours executable by cma_app only, team_hours and team_now with jit off; the core views for the owner, the face for the application', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
 
   v_ok := to_regprocedure('cma.workday_stretches_of(uuid, uuid, timestamptz)') is not null
       and has_function_privilege('cma_app', 'cma.workday_stretches_of(uuid, uuid, timestamptz)', 'execute')
       and not has_function_privilege('cma_readonly', 'cma.workday_stretches_of(uuid, uuid, timestamptz)', 'execute')
-      and (select provolatile from pg_proc where oid = 'cma.workday_stretches_of(uuid, uuid, timestamptz)'::regprocedure) = 's';
-  insert into verify_0008zs values (107, 'S7 cma.workday_stretches_of exists, stable, executable by cma_app and not by the readers or public', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
-
-  v_ok := to_regprocedure('cma.workday_summary_of(uuid, uuid, timestamptz)') is not null
+      and (select provolatile = 's' and not prosecdef and prorows = 12 from pg_proc where oid = 'cma.workday_stretches_of(uuid, uuid, timestamptz)'::regprocedure)
+      and to_regprocedure('cma.workday_summary_of(uuid, uuid, timestamptz)') is not null
       and has_function_privilege('cma_app', 'cma.workday_summary_of(uuid, uuid, timestamptz)', 'execute')
       and not has_function_privilege('cma_readonly', 'cma.workday_summary_of(uuid, uuid, timestamptz)', 'execute')
-      and (select provolatile from pg_proc where oid = 'cma.workday_summary_of(uuid, uuid, timestamptz)'::regprocedure) = 's';
-  insert into verify_0008zs values (108, 'S8 cma.workday_summary_of exists, stable, executable by cma_app and not by the readers or public', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
+      and (select provolatile = 's' and not prosecdef and prorows = 1 from pg_proc where oid = 'cma.workday_summary_of(uuid, uuid, timestamptz)'::regprocedure);
+  insert into verify_0008zs values (107, 'S7 the day functions exist, stable, the caller''s rights, 12 and 1 rows estimated, executable by the application and not by the readers or public', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
+
+  v_ok := to_regprocedure('cma.workday_stretches_reader_of(uuid, uuid, timestamptz)') is not null
+      and to_regprocedure('cma.workday_summary_reader_of(uuid, uuid, timestamptz)') is not null
+      and (select bool_and(prosecdef and provolatile = 's') from pg_proc where oid in ('cma.workday_stretches_reader_of(uuid, uuid, timestamptz)'::regprocedure, 'cma.workday_summary_reader_of(uuid, uuid, timestamptz)'::regprocedure))
+      and has_function_privilege('cma_readonly', 'cma.workday_summary_reader_of(uuid, uuid, timestamptz)', 'execute')
+      and not has_function_privilege('cma_app', 'cma.workday_summary_reader_of(uuid, uuid, timestamptz)', 'execute')
+      and not has_function_privilege('public', 'cma.workday_stretches_reader_of(uuid, uuid, timestamptz)', 'execute')
+      and has_table_privilege('cma_readonly', 'cma_read.workday_summary', 'select')
+      and (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns where table_schema = 'cma_read' and table_name = 'workday_summary')
+          = 'workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id'
+      and (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns where table_schema = 'cma_read' and table_name = 'time_interval')
+          = 'tenant_id,workday_id,user_id,event_id,status_id,from_at,to_at,is_open,is_capped,seconds';
+  insert into verify_0008zs values (108, 'S8 the readers'' wrappers exist with the owner''s rights, the readers'' alone; cma_read.workday_summary and cma_read.time_interval keep their columns', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
 end
 $$;
 
@@ -295,16 +311,10 @@ begin
   select count(*) into v_n from cma.time_interval_all;
   insert into verify_0008zs values (201, 'E1 time_interval_all: every stretch of every tenant as before', case when v_diff is null then 'ok' else 'FAIL' end, coalesce(v_diff, v_n || ' stretches'));
 
-  v_diff := pg_temp.v0008zs_diff(
-    'select workday_id, tenant_id, user_id, business_date, timezone, status, started_at, ended_at, working_seconds, productive_seconds, paid_seconds, billable_seconds, is_capped, needs_correction, has_correction, current_status_id from cma.workday_summary_all',
-    'select * from pg_temp.old_workday_summary_all', false);
+  v_diff := pg_temp.v0008zs_diff('select * from cma.workday_summary_all', 'select * from pg_temp.old_workday_summary_all', false);
   select count(*) into v_n from cma.workday_summary_all;
   insert into verify_0008zs values (202, 'E2 workday_summary_all: every day of every tenant as before, column for column', case when v_diff is null then 'ok' else 'FAIL' end, coalesce(v_diff, v_n || ' days'));
 
-  v_diff := pg_temp.v0008zs_diff(
-    'select workday_id, sessions from cma.workday_summary_all',
-    'select s.workday_id, (select count(*) from cma.time_event_effective_all e where e.tenant_id = s.tenant_id and e.workday_id = s.workday_id and e.kind = ''start'')::integer from pg_temp.old_workday_summary_all s', false);
-  insert into verify_0008zs values (203, 'E3 sessions: each day''s effective clock-ins as the per-row count gave them', case when v_diff is null then 'ok' else 'FAIL' end, coalesce(v_diff, 'every day'));
 end
 $$;
 
@@ -326,6 +336,10 @@ begin
       insert into verify_0008zs values (210, 'E4 ' || t.slug || ' team_hours', 'skip', 'no active person holds workday.team: not compared');
       continue;
     end if;
+    v_diff := pg_temp.v0008zs_diff(
+      'select workday_id, sessions from cma.workday_summary',
+      'select s.workday_id, (select count(*) from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = ''start'')::integer from cma.workday_summary s', false);
+    insert into verify_0008zs values (203, 'E3 ' || t.slug || ' sessions on the face: each day''s effective clock-ins as the per-row count gave them', case when v_diff is null then 'ok' else 'FAIL' end, coalesce(v_diff, 'every day'));
     for i in 1..3 loop
       v_diff := pg_temp.v0008zs_diff(format('select * from cma.team_hours(%s, null)', v_ranges[i]), format('select * from pg_temp.old_team_hours(%s, null)', v_ranges[i]), true);
       execute format('select count(*) from cma.team_hours(%s, null)', v_ranges[i]) into v_n;
@@ -349,6 +363,61 @@ end
 $$;
 reset role;
 set role cma_owner;
+
+-- ---------------------------------------------------------------------------------------------
+-- A. The rights: the application fails closed, the readers read through cma_read
+-- ---------------------------------------------------------------------------------------------
+do $$
+declare
+  v_provoke boolean := current_setting('verify.provoke')::boolean;
+  v_mine uuid; v_other uuid; v_day uuid; v_end timestamptz; v_n1 bigint; v_n2 bigint; v_n3 bigint; v_n4 bigint; v_ok boolean;
+begin
+  -- the first active tenant with a day and another tenant's id, looked up as the owner; the calls as the application
+  select t.id into v_mine from cma.tenant t where t.status = 'active' and exists (select 1 from cma.workday w where w.tenant_id = t.id) order by t.slug limit 1;
+  select t.id into v_other from cma.tenant t where t.id <> v_mine order by t.slug limit 1;
+  if v_mine is null then
+    insert into verify_0008zs values (301, 'A1 the day functions fail closed', 'skip', 'no tenant with a workday');
+    return;
+  end if;
+  select w.id, cma.business_day_time(w.business_date, w.timezone, '23:59'::time) into v_day, v_end from cma.workday w where w.tenant_id = v_mine order by w.business_date desc limit 1;
+  set local role cma_app;
+  perform set_config('app.tenant_id', v_mine::text, true), set_config('app.user_id', '', true);
+  select count(*) into v_n1 from cma.workday_stretches_of(v_mine, v_day, v_end);                -- own tenant: the day's stretches
+  select count(*) into v_n2 from cma.workday_stretches_of(v_other, v_day, v_end);               -- another tenant's id: nothing
+  perform set_config('app.tenant_id', '', true);
+  select count(*) into v_n3 from cma.workday_stretches_of(v_mine, v_day, v_end);                -- no tenant set: nothing
+  select count(*) into v_n4 from cma.workday_summary_of(v_mine, v_day, v_end) x where x.sessions > 0;
+  set local role cma_owner;
+  perform set_config('app.tenant_id', '', true);
+  v_ok := v_n1 > 0 and v_n2 = 0 and v_n3 = 0 and v_n4 = 0;
+  insert into verify_0008zs values (301, 'A1 as the application the day functions answer the own tenant''s day only: another tenant''s id or no tenant set gives nothing (row-level security)',
+    case when v_ok and not v_provoke then 'ok' else 'FAIL' end, format('%s stretches of the own day, %s with the other tenant''s id, %s and %s without a tenant', v_n1, v_n2, v_n3, v_n4));
+exception when others then
+  set local role cma_owner;
+  insert into verify_0008zs values (301, 'A1 the day functions fail closed', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 160));
+end
+$$;
+grant select, insert on pg_temp.verify_0008zs to cma_readonly;
+do $$
+declare
+  v_provoke boolean := current_setting('verify.provoke')::boolean;
+  v_n1 bigint; v_n2 bigint; v_ok boolean;
+begin
+  if not pg_has_role(session_user, 'cma_readonly', 'member') then
+    insert into verify_0008zs values (302, 'A2 the readers read cma_read.workday_summary and cma_read.time_interval', 'skip', 'this login is no member of cma_readonly: not checked here');
+    return;
+  end if;
+  set local role cma_readonly;
+  select count(*) into v_n1 from cma_read.workday_summary;
+  select count(*) into v_n2 from cma_read.time_interval;
+  set local role cma_owner;
+  v_ok := v_n1 = (select count(*) from cma.workday_summary_all) and v_n2 = (select count(*) from cma.time_interval_all);
+  insert into verify_0008zs values (302, 'A2 the readers read cma_read.workday_summary and cma_read.time_interval, every tenant, through the day functions',
+    case when v_ok and not v_provoke then 'ok' else 'FAIL' end, format('%s days, %s stretches', v_n1, v_n2));
+exception when others then
+  insert into verify_0008zs values (302, 'A2 the readers read cma_read.workday_summary and cma_read.time_interval', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 160));
+end
+$$;
 
 drop function if exists pg_temp.v0008zs_diff(text, text, boolean);
 drop function if exists pg_temp.v0008zs_user(uuid, text);

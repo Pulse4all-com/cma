@@ -5,13 +5,8 @@ SET
  false
 (1 row)
 
-psql:db/51_verify_legacy_time_import.sql:124: ERROR:  FAIL A5: workday_summary_all has the columns workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id,sessions or the wrong readers
-CONTEXT:  PL/pgSQL function inline_code_block line 70 at RAISE
-psql:db/51_verify_legacy_time_import.sql:418: ERROR:  permission denied for function workday_summary_of
-CONTEXT:  SQL expression "(select count(*) from cma_read.import_batch x where x.id = b.id and x.status = 'loaded') <> 1
-       or (select count(*) from cma_read.time_event e where e.import_batch_id = b.id) <> 16
-       or (select s.working_seconds from cma_read.workday_summary s where s.user_id = v_p1 and s.business_date = date '2026-03-06') <> 27015"
-PL/pgSQL function inline_code_block line 205 at IF
+DO
+DO
 DO
          tenant          | staged | loaded | voided | imported_days | verdict 
 -------------------------+--------+--------+--------+---------------+---------

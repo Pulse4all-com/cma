@@ -5,12 +5,8 @@ SET
  false
 (1 row)
 
-psql:db/47_verify_workday_window.sql:100: ERROR:  FAIL A4: workday_summary_all has the columns workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id,sessions
-CONTEXT:  PL/pgSQL function inline_code_block line 56 at RAISE
-psql:db/47_verify_workday_window.sql:265: ERROR:  permission denied for function workday_summary_of
-CONTEXT:  SQL expression "(select s.working_seconds from cma_read.workday_summary s where s.workday_id = v_day) <> 15 * 3600
-       or (select sum(i.seconds) from cma_read.time_interval i where i.workday_id = v_day) <> 15 * 3600"
-PL/pgSQL function inline_code_block line 120 at IF
+DO
+DO
 DO
          tenant          |     window     | auto_close_at | grace_minutes |  digest_to   | open_past_grace | verdict 
 -------------------------+----------------+---------------+---------------+--------------+-----------------+---------

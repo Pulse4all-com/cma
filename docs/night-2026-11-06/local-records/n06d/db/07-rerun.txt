@@ -284,7 +284,7 @@ SET
  0008zp  | Split shifts: the setting workday.clock_in_again (default false); cma.workday_can_clock_in_again, the one rule (own log out, strictly after it, the same business date within the workday window, time kept); cma.refresh_workday validates a day of one or more sessions (start, statuses, end, start, ...: a later start directly after an end and strictly after it, nothing between an end and the next start, at most the last session open; started_at the first start, ended_at the last end); cma.open_workday clocks in again on such a day under a lock with the rule checked again, every other day unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | cma_local  | 2026-11-05
  0008zq  | Sources last read: cma.sources() (0008e) recreated with five columns after the catalog sizes, last_read_at, last_read_job, reads_24h, reads_failed_24h and last_read_error, read from the connection's own cma.sync_run rows, so a polled connection (reviews, subscriptions, assets) that writes runs and never an ingest event shows its last read on Configuration → Sources instead of Never; same permission, same columns before them, same grants; cma.source_reads(connection_id), the connection's last 20 runs newest first for the connection page's Reads panel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | cma_local  | 2026-11-05
  0008zr  | The fastest Workspace (night N06): cma.connection_held_kinds_of answered from the indexes (Sources), cma.system_health_runs in one grouped pass, cma.missed_callbacks_of in one join and cma.inbound_now() for the Live board's poll, cma.calls_of and cma.intake_per_day_of with the tags and the market codes read once (cma.market_codes_of), cma.open_tickets_of and cma.open_tasks_of by joins, each to the same answers (133 proves it); data quality on stored results (CMA-087): cma.data_quality_snapshot and cma.data_quality_finding refreshed by the job refresh_data_quality (data_quality.refresh, the scheduler's) when older than data_quality.refresh_minutes, read by cma.data_quality, cma.data_quality_rows and cma.flash_findings_of, with cma.data_quality_computed_at for Refreshed at                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | cma_local  | 2026-11-05
- 0008zs  | The hours reads at volume (N06d): a day's stretches and summary as functions (cma.workday_stretches_of, cma.workday_summary_of), cma.time_interval_all and cma.workday_summary_all a scan of the workdays with a lateral call, a sessions column (the day's effective clock-ins); cma.team_hours answers sessions as its last column; cma.team_now looks today's day up per person; same values, 135 proves it row for row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | cma_local  | 2026-11-05
+ 0008zs  | The hours reads at volume (N06d): a day's stretches and summary as functions (cma.workday_stretches_of, cma.workday_summary_of), cma.time_interval_all and cma.workday_summary_all a scan of the workdays with a lateral call, the readers' cma_read.time_interval and cma_read.workday_summary through owner's-rights wrappers, sessions (the day's effective clock-ins) on the face cma.workday_summary; cma.team_hours answers sessions as its last column; cma.team_now looks today's day up per person; same values, 135 proves it row for row                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | cma_local  | 2026-11-05
 (64 rows)
 
 RESET
@@ -327,7 +327,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a1ab59-bf1d-7134-a55d-b1bb5e5dc0b7
+ 01a1ab6c-77de-7747-82d5-71346a940b5c
 (1 row)
 
  status 
@@ -345,7 +345,7 @@ SET
  ended
 (1 row)
 
-psql:db/07_verify_time_model.sql:119: ERROR:  workday 01a1ab59-bf25-7d27-8a9a-024919566742 is already ended; resuming is a correction
+psql:db/07_verify_time_model.sql:119: ERROR:  workday 01a1ab6c-77ed-78a4-9558-affbd4067fca is already ended; resuming is a correction
 CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 25 at RAISE
 ROLLBACK
 BEGIN
@@ -360,7 +360,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a1ab59-bf31-7247-80c1-1b88bfe127d9
+ 01a1ab6c-7801-7372-9d80-6a300e2afca5
 (1 row)
 
  status 
@@ -370,7 +370,7 @@ SET
 
               set_config              
 --------------------------------------
- 01a1ab59-bf31-73c5-9e17-d3f9cf04e2ea
+ 01a1ab6c-7801-7050-bc9a-c0a4f29993ca
 (1 row)
 
 psql:db/07_verify_time_model.sql:142: ERROR:  a user can only end their own workday
@@ -1467,7 +1467,7 @@ SET
  agent.two@example.com  | 2026-11-02    | ended  |      6.97 |   6.97 | f         | f                | f
  agent.two@example.com  | 2026-11-03    | ended  |      0.02 |   0.02 | f         | f                | t
  agent.two@example.com  | 2026-11-04    | ended  |      8.00 |   8.00 | f         | f                | f
- agent.two@example.com  | 2026-11-05    | open   |      4.60 |   4.60 | f         | f                | f
+ agent.two@example.com  | 2026-11-05    | open   |      4.95 |   4.95 | f         | f                | f
  analyst@example.com    | 2025-06-19    | ended  |      7.22 |   7.22 | f         | f                | t
  analyst@example.com    | 2025-06-20    | ended  |      6.97 |   6.97 | f         | f                | f
  analyst@example.com    | 2025-06-23    | ended  |      6.97 |   6.97 | f         | f                | f
@@ -2940,7 +2940,11 @@ SET
 (1 row)
 
 ROLLBACK
-psql:db/07_verify_time_model.sql:172: ERROR:  permission denied for function workday_summary_of
+ reader_sees_all 
+-----------------
+            2524
+(1 row)
+
 BEGIN
 SET
               set_config              
@@ -2997,7 +3001,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a1ab59-c164-77ee-8df3-c06cab5566ea
+ 01a1ab6c-7cc9-79f6-b540-0f47d4f57b73
 (1 row)
 
  agent_may_correct 
@@ -3005,7 +3009,7 @@ SET
  f
 (1 row)
 
-psql:db/07_verify_time_model.sql:236: ERROR:  user 01a1ab59-c164-77ee-8df3-c06cab5566ea lacks permission workday.team
+psql:db/07_verify_time_model.sql:236: ERROR:  user 01a1ab6c-7cc9-79f6-b540-0f47d4f57b73 lacks permission workday.team
 CONTEXT:  PL/pgSQL function assert_permission(text) line 13 at RAISE
 PL/pgSQL function correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 9 at assignment
 ROLLBACK
@@ -3021,7 +3025,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a1ab59-c16d-7d10-9b81-427aaf8cf21b
+ 01a1ab6c-7cdf-70b6-8ee1-41df4a50b0f6
 (1 row)
 
  status 
@@ -3031,7 +3035,7 @@ SET
 
 SET
 psql:db/07_verify_time_model.sql:260: ERROR:  new row for relation "time_event" violates check constraint "time_event_correction_needs_reason_and_approver"
-DETAIL:  Failing row contains (01a1ab59-c172-7a3e-9d01-f89168846961, 01a1aa08-1e27-723d-8deb-8709ceecde45, 01a1ab59-c170-7914-bc32-45b2dadcb8cd, 01a1ab59-c16d-7d10-9b81-427aaf8cf21b, end, null, 2026-11-05 10:55:48.588545+00, 2026-11-05 10:55:48.594748+00, correction, null, null, null, null).
+DETAIL:  Failing row contains (01a1ab6c-7cf1-7fbc-a7b8-d63f973d0389, 01a1aa08-1e27-723d-8deb-8709ceecde45, 01a1ab6c-7ceb-7b0e-8b3d-efeb8e15b470, 01a1ab6c-7cdf-70b6-8ee1-41df4a50b0f6, end, null, 2026-11-05 11:16:16.222504+00, 2026-11-05 11:16:16.241438+00, correction, null, null, null, null).
 ROLLBACK
 BEGIN
 SET

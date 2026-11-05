@@ -10,6 +10,6 @@ events on 5 November 2026, the census's threshold). Milliseconds are the contain
 | `db/hours-before.txt`, `db/hours-after.txt` | `explain analyze` of the four reads (Team hours 7 and 31 days as the web runs them, the function alone, My hours 7 days) before and after `134`, as the application acting as the manager |
 | `db/134_hours_reads-first-run.txt`, `-rerun.txt` | `134` twice (`INSERT 0 1`, then `INSERT 0 0`) |
 | `db/135_verify_hours_reads.txt`, `-provoked.txt` | `135` normal and provoked |
-| `db/07-rerun.txt`, `10-`, `16-`, `47-`, `51-`, `127-rerun.txt` | the earlier verifies of what `134` touches, rerun after it |
+| `db/07-rerun.txt`, `10-`, `16-`, `47-`, `51-`, `127-rerun.txt` | the earlier verifies of what `134` touches, rerun after it: no `FAIL` line in any of them (`127`'s one `FAIL` string is its own verdict, `31 PASS, 0 FAIL`). `07` prints ten expected-error lines here against seven in the night's replay: the three more come from its correction of Agent Two's open day, which the API verifier had opened today at 06:19 (the correction then lands at 18:00 today, in the future); not from `134` |
 | `db/131_time_all-a-after.txt` | `131` part a after `134` (the three hours rows) |
 | `web/` | build, typecheck, lint, the pure verifiers, `round-trips` observed and checked against the api-mode server on the final build |
