@@ -102,7 +102,7 @@ go to section 3.
    real events on your own day and stay in the audit log, which is fine; never do this on a colleague's account
    or device (README, Authentication). Without `workday.own` on your account, skip and say so in the record.
 
-9. **Browser:** Live → Live board (`/live/board`).
+9. **Browser:** Live → Newco (`/live/newco`).
    Expected: everyone clocked in with a status and a running clock; your change of step 8 visible within the
    board's refresh; the inbound tiles with figures or "no calls yet", not an error.
 
@@ -288,7 +288,7 @@ What stops while each is paused, and how it catches up (`docs/ingest/README.md`,
 | `ingest-poll-email` | email engagements and inbox threads | the cursors continue |
 | `ingest-reconcile` | the nightly 26-hour catch-up, the Aircall webhook check, the Shopify subscription check | run it by hand once; a gap longer than 26 hours needs a backfill (`ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>`; PROD_RUNBOOK 7.8, 8.8, 9.8) |
 | `cma-close-forgotten-workdays-hourly` | the hourly close of days left open | idempotent: the next run or a manual execution closes everything overdue |
-| `cma-refresh-follow-up-minutely` | the follow-up snapshot: Reports → Follow-up, the Live board's Follow-up now and Welcome's Waiting for you keep the last one, and "Updated …" turns muted after three minutes | the next run, or `gcloud run jobs execute cma-refresh-follow-up`, refreshes every tenant |
+| `cma-refresh-follow-up-minutely` | the follow-up snapshot: Sales → Follow-up, the Live board's Follow-up now and Welcome's Waiting for you keep the last one, and "Updated …" turns muted after three minutes | the next run, or `gcloud run jobs execute cma-refresh-follow-up`, refreshes every tenant |
 | `cma-snapshot-flash-hourly` | the Flash snapshot (addition 0008zn): the day's figures of every Flash overview, the month-end id lists and the watch; a business date D is due at D + 1 at `flash.snapshot_local_time` in the tenant's zone (00:00 to 23:59) and each hourly run takes the latest due date unless a succeeded run holds it, so every allowed time gives one snapshot per date; a take that starts more than an hour after the due time is marked late; a date that stops being the latest due one without a succeeded take is recorded as missed by the next take (one run row of status `missed`, no figures), never taken afterwards (the next take's watch raises `snapshot_missing`) | the next hourly run takes the tenant's latest due date, which stays the latest for a whole local day, so a stop shorter than that loses nothing and a longer one leaves each date missed, never invented; `gcloud run jobs execute cma-snapshot-flash` runs every tenant now |
 | `cma-refresh-data-quality-minutely` | the stored data-quality result (addition 0008zr): Reports → Data quality, Flash's data-quality overview and list, the snapshot take and the watch keep reading the last result, and its "Refreshed at" stops moving; a tenant whose result is older than `data_quality.refresh_minutes` is refreshed by the next run, so a stop shorter than that changes nothing | the next run, or `gcloud run jobs execute cma-refresh-data-quality`, refreshes every tenant whose result is due; nothing is lost, the result is a computation over the mirrors |
 

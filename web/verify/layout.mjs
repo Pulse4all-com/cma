@@ -2102,7 +2102,7 @@ async function expectAttempts() {
 // A deal's row (addition 0008z): Enter on the deal opens its attempts below it (aria-expanded, the attempts or "No attempt
 // yet" read from the API), inside the card without a sideways scroll; Esc closes it and the focus stays on the deal
 // Funnel and Cancellations (addition 0008zb), per identity at 1280 px: both in the rail and on the page for reports.view
-// or performance.team after Attempts per agent (the agent gets the no-permission card); deals per person on Funnel for
+// or performance.team, Funnel directly before Attempts per deal since 0008zu (the agent gets the no-permission card); deals per person on Funnel for
 // performance.team while reports.per_person holds deals (not for the reader, not for the invest tenant without the
 // switch); the page never scrolls sideways, by week and by day; the keycaps K, P, S, G and X on Funnel, K, G and X on
 // Cancellations, next to the period bar's; ten tiles and four; the tables end inside their cards. --provoke lets the
@@ -2123,8 +2123,9 @@ async function expectFunnel() {
     for (const href of ["/reports/funnel", "/reports/cancellations"]) {
       if (rail.includes(href) !== may) problems.push(`${subject}: ${href} ${may ? "missing from" : "shown in"} the rail`);
     }
-    if (may && rail.indexOf("/reports/funnel") !== rail.indexOf(subject === "reader" || subject === "invest-analyst" ? "/reports/attempts" : "/reports/attempts-per-agent") + 1) {
-      problems.push(`${subject}: Funnel does not follow Attempts in the rail`);
+    // Since addition 0008zu (Martin, 5 November 2026) Funnel comes directly before Attempts per deal, in Sales
+    if (may && rail.indexOf("/reports/funnel") + 1 !== rail.indexOf("/reports/attempts")) {
+      problems.push(`${subject}: Funnel does not come directly before Attempts per deal in the rail`);
     }
     const pages = [
       ["/reports/funnel?range=month&group=week", ["funnel-stages", "funnel-by-period", "funnel-by-market"], ["K", "P", "S", "G", "X", "T", "W", "M", "C"], 10],

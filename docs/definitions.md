@@ -85,7 +85,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "CRM call" or "logged call" as an attempt (R1); "Call attempt" and, in Dutch, "belpoging" next to "poging" (proposed; both appear today, see Gaps) |
 | Status | Decided |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Attempt" |
-| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Attempts per deal, Attempts per agent, Calls, Calls per agent, Speed to lead |
+| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Sales → Attempts per deal, Attempts per agent, Speed to lead |
 | As built today | Attempts per deal (`cma.deal_attempts_of`, `94`): under `attempts.source` `telephony` (the default, and Pulse4all's) an outbound telephony call on a counted line, not deleted, with a start, linked to a CRM call associated with the deal or its contacts; under `crm` every outbound CRM call so associated (R1 gap). Attempts per agent counts the attempts on the deals a person owns in the CRM, by whoever placed them. Reports → Calls counts every outbound call as Outbound, which matches. Speed to lead takes the first outbound CRM call, linked or not (`cma.speed_to_lead_of`, `40`). First orders' evidence "attempt" is an outbound telephony call linked to a CRM call with the contact (`100`), which matches |
 
 ### Connected
@@ -104,7 +104,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | connected at 10 seconds of talk (0008j); "answered" for an outbound call; "technically answered"; connected as a HubSpot call outcome (R1) |
 | Status | Decided; built in addition 0008zc |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Connected" (retires the 10-second rule of 14 October 2026, 0008j); built in addition 0008zc ("Definitions: Connected and Conversation built, step 1") |
-| Used by | `calls.outbound`, `calls.outbound_connected`, `calls.outbound_connected_rate`, `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.connected`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.outbound_talk_total`, `api.calls_per_agent.outbound_talk_seconds_total`, `attempts.deal.connected`, `data_quality.telephony_call_unlinked`; Reports → Calls, Calls per agent, Attempts per deal, Data quality |
+| Used by | `calls.outbound`, `calls.outbound_connected`, `calls.outbound_connected_rate`, `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.connected`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.outbound_talk_total`, `api.calls_per_agent.outbound_talk_seconds_total`, `attempts.deal.connected`, `data_quality.telephony_call_unlinked`; Reports → Calls, Calls per agent, Data quality; Sales → Attempts per deal |
 | As built today | `cma.is_connected` (`100`): outbound with `answered_at` set; with `telephony.connected_min_seconds` above 0 also that much talk time. `cma.calls_of`, `cma.calls_figures_of` and `cma.calls_per_person_of` read it (columns `is_connected_outbound`, `connected`, `connected_rate`), and so do `cma.deal_calls_of` (`is_connected` from the linked telephony call only, never the CRM call outcome) and one deal's attempts (`connected`). The setting defaults to 0, and `100` moves a tenant value of 10 to 0. The data-quality check `telephony_call_unlinked` skips an outbound call without `answered_at` and without a tag, its own rule (`100`). Matches the definition |
 
 ### Not connected
@@ -161,7 +161,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | reached (0008z); "spoken to lead"; "in contact" ("talk time in contact"); "Conversation" for an email thread (Gaps) |
 | Status | Decided, for outbound and inbound calls; built in addition 0008zc, incorrect data in addition 0008zd |
 | Decided | 24 October 2026 (Martin); docs/decisions.md, 24 Oct 2026, "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*"; incorrect data 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning". Evidence: the outbound connected calls of 1 to 23 October 2026 by talk-time band against the agents' "Not Reached" tags. The share of tagged connected calls tagged "Not Reached" per band: 0–9 s 98 %, 10–19 s 85 %, 20–29 s 72 %, 30–44 s 71 %, 45–59 s 42 %, 60–89 s 27 %, 90 s and more 4 %. Talk time alone at 30 s would count 35 % voicemails; the tag rule removes them while keeping 84 % of the real conversations. Inbound: decided the same day (Martin), under the same rule. Built in addition 0008zc ("Definitions: Connected and Conversation built, step 1") |
-| Used by | `calls.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.conversations`, `calls_per_agent.tag_split`, `calls_per_agent.total_row`, `attempts.conversation_share`, `attempts.outcomes.conversation_share`, `attempts.outcomes.avg_talk_conversation`, `attempts.first_conversation_per_attempt`, `attempts.list.conversations`, `attempts.list.first_conversation`, `attempts.list.talk_conversation`, `attempts.deal.conversation`, `attempts_per_agent.conversation_share`, `attempts_per_agent.talk_conversation`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`; Reports → Calls, Calls per agent, Attempts per deal, Attempts per agent, First orders, Orders per person, Email |
+| Used by | `calls.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.conversations`, `calls_per_agent.tag_split`, `calls_per_agent.total_row`, `attempts.conversation_share`, `attempts.outcomes.conversation_share`, `attempts.outcomes.avg_talk_conversation`, `attempts.first_conversation_per_attempt`, `attempts.list.conversations`, `attempts.list.first_conversation`, `attempts.list.talk_conversation`, `attempts.deal.conversation`, `attempts_per_agent.conversation_share`, `attempts_per_agent.talk_conversation`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`; Reports → Calls, Calls per agent, Email; Sales → Attempts per deal, Attempts per agent, First orders, Orders per person |
 | As built today | One helper, `cma.is_conversation` (`100`): connected outbound (`cma.is_connected`) or answered inbound, talk time of at least `calls.conversation_min_talk_seconds` (0 to 600; 30 by default and for Pulse4all, the value `attempts.reached_min_talk_seconds` held, which `100` retires), and no current tag whose meaning is `not_reached` or `incorrect_data` (`cma.call_not_reached_of`, `102`, which reads `cma.tag_meaning_excludes_conversation`, the one place that names the meanings that exclude a call; a tag that does not count still excludes). Read by `cma.calls_of` (Reports → Calls and Calls per agent), `cma.crm_call_conversation_of` (in place of 0008t's `cma.crm_call_connected_of`, which `100` drops: a CRM call is a conversation only through its linked telephony call; Email's not-responding deals, `cma.email_not_responding_of`), first orders (`cma.first_orders_of`, evidence `conversation`) and Attempts per deal and per agent (`cma.deal_attempts_of`, `cma.attempt_deal`, `cma_read.attempts_per_deal`: `conversation_attempts`, `first_conversation_attempt`, `talk_seconds_conversation`). No CRM call outcome decides it (R1). Until a tag of the connection has the meaning not reached, Conversation counts on talk time alone, and Configuration → Sources, Tags says so (that notice looks at not reached only). Matches the definition |
 
 ### Talk time
@@ -180,7 +180,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | duration (Aircall's `duration` includes ringing); "talk in contact" |
 | Status | Decided |
 | Decided | 24 October 2026; evidence: docs/decisions.md, 24 Oct 2026, "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
-| Used by | `calls.avg_talk`, `calls.talk_total`, `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.inbound_talk_avg`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.inbound_talk_total`, `calls_per_agent.outbound_talk_total`, `api.calls_per_agent.inbound_talk_seconds_total`, `api.calls_per_agent.outbound_talk_seconds_total`, `attempts.deal.talk_seconds`, `attempts.list.talk_conversation`, `attempts.outcomes.avg_talk_conversation`, `attempts_per_agent.talk_conversation`; Reports → Calls, Calls per agent, Attempts per deal, Attempts per agent |
+| Used by | `calls.avg_talk`, `calls.talk_total`, `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.inbound_talk_avg`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.inbound_talk_total`, `calls_per_agent.outbound_talk_total`, `api.calls_per_agent.inbound_talk_seconds_total`, `api.calls_per_agent.outbound_talk_seconds_total`, `attempts.deal.talk_seconds`, `attempts.list.talk_conversation`, `attempts.outcomes.avg_talk_conversation`, `attempts_per_agent.talk_conversation`; Reports → Calls, Calls per agent; Sales → Attempts per deal, Attempts per agent |
 | As built today | `cma.telephony_call.talk_seconds` is generated by the database: ended − answered in whole seconds, null while unanswered (`34`), which matches. Reports → Calls' total and average run over the answered calls with talk time, in and out (`cma.calls_figures_of`, `100`), which matches; Calls per agent averages per answered inbound and per connected outbound call; Attempts per deal and per agent add the talk time of the attempts that were a conversation. The copy no longer says talk time is shorter than the phone system's own duration on purpose (`calls.intro`, `hints.callsAvgTalk`); the catalog's `calls.avg_talk` still does (Gaps, C6) |
 
 ### Inbound call
@@ -306,7 +306,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | None yet |
 | Status | Decided (R2); Pending for transferred calls, untested in the reconciliation of 23 October 2026 because that day had none; as built the CMA uses `call.user`, a gap to fix |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
-| Used by | `calls_per_agent.*`, `attempts.deal.agent_name`; Reports → Calls per agent, Attempts per deal |
+| Used by | `calls_per_agent.*`, `attempts.deal.agent_name`; Reports → Calls per agent; Sales → Attempts per deal |
 | As built today | `userRef` is Aircall's `call.user.id` (`ingest/src/adapters/aircall/map.mjs`), stored as `cma.telephony_call.user_ref` and mapped to a person in `cma.calls_per_person_of` (`62`) and `cma.attempts_of_deal` (`94`). On 23 October 2026, a day without transfers, every person's total, inbound and outbound equalled Aircall's; whether `user` is the last participant of a transferred call is not verified |
 
 ### Line
@@ -353,7 +353,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 |---|---|
 | Term | Speed to lead (nl: Snelheid tot lead) |
 | Key | `speed_to_lead`; API `speedToLead`; settings `speed_to_lead.creation_sources`, `speed_to_lead.target_minutes`, `speed_to_lead.pre_window_minutes` |
-| Definition | From the creation of an automatically created lead deal to its first Attempt, in business minutes of the deal's market. One definition and one function serve Reports → Speed to lead, the Dashboard tile, Attempts and the cockpit. |
+| Definition | From the creation of an automatically created lead deal to its first Attempt, in business minutes of the deal's market. One definition and one function serve Sales → Speed to lead, the Dashboard tile, Attempts and the cockpit. |
 | Source | The deal and its creation from the CRM (HubSpot owns deals); its creation source from the CRM's record-source fields, mapped per CRM connection (HubSpot: `hs_object_source` and `hs_created_by_user_id`, to verify); the first attempt from Aircall through the call link; office hours and holidays from Configuration → Markets (CMA) |
 | Counts / does not count | **Deals:** every deal created in a lead pipeline (configured; Pulse4all: Sales Pipeline – Subscriptions) whose creation source counts (`speed_to_lead.creation_sources`; Pulse4all: form, automation), test deals excluded. The creation source is a neutral value per deal: form, automation, user, import or unknown. **Shown apart, out of the measures:** deals created by hand, as "Created by hand, not in speed to lead"; a deal closed (won or lost, for example by a Self Serve order) before any attempt, as closed before first call. **Not called yet:** an open deal without an attempt, shown with its age. The measure Created deals keeps counting every new deal |
 | Unit and display | Median business minutes over the called deals, shown with the count not called yet; % within `speed_to_lead.target_minutes` (60); % called before 12:00 the next working day; the count not called yet. A deal not called yet counts as late in "% within 1 hour" once past the target, and in "% before 12:00 next working day" once past that moment |
@@ -363,8 +363,8 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "Mediane speed to lead" and "Speed to lead" in Dutch copy next to "Snelheid tot lead" (one Dutch label; see Gaps); "Open, not called" for Not called yet (proposed) |
 | Status | Decided |
 | Decided | 24 October 2026 (Martin); docs/decisions.md, 24 Oct 2026, "Definitions: Speed to lead = from creation of an automatically created lead deal to its first attempt, in business minutes; uncalled deals count as late; one function for all pages (closes MA-003)" |
-| Used by | `speed_to_lead.*`, `api.speed_to_lead.*`, `dashboard.intake.speed_to_lead`, `follow_up.leads_open_not_called`, `follow_up.leads_past_target`, `attempts.median_speed_to_lead`, `attempts.outcomes.median_speed`, `attempts.list.speed_to_lead`, `attempts.win_rate_by_speed`, `attempts_per_agent.median_speed`; Reports → Speed to lead, Follow-up, Attempts per deal, Attempts per agent; Dashboard; Live board |
-| As built today | **Reports → Speed to lead** (`cma.speed_to_lead_of`, `40`; the Dashboard tile computes the same rows in the web). **Deals:** every deal of a counted lead pipeline created from `intake.start_date` (`cma.lead_deals_of`, `76`); deals carry no creation source and no test flag, so neither filter exists. **End:** the first outbound CRM call associated with the deal or its contacts; its start is the linked Aircall call's, else the CRM call's own time, so a call logged in HubSpot without an Aircall call counts (R1). There is no window end. **Uncalled deals:** an uncalled deal, open or closed, is left out of the percentages until the target's business time (or the next noon) has passed, and then counts as late; a deal closed before its first call is therefore not shown apart (audit findings MA-015, MA-016). **Cutoff:** 12:00 is hardcoded in `cma.next_business_noon_of` (`40`). **Per person:** the first call's CRM owner, else the deal's owner. **Elsewhere:** Attempts per deal (`94`) measures to the first attempt within the deal's window, and Follow-up (`72`, `80`) reads the same target on its own, so the pages can differ (MA-003) |
+| Used by | `speed_to_lead.*`, `api.speed_to_lead.*`, `dashboard.intake.speed_to_lead`, `follow_up.leads_open_not_called`, `follow_up.leads_past_target`, `attempts.median_speed_to_lead`, `attempts.outcomes.median_speed`, `attempts.list.speed_to_lead`, `attempts.win_rate_by_speed`, `attempts_per_agent.median_speed`; Sales → Speed to lead, Follow-up, Attempts per deal, Attempts per agent; Dashboard; Live board |
+| As built today | **Sales → Speed to lead** (`cma.speed_to_lead_of`, `40`; the Dashboard tile computes the same rows in the web). **Deals:** every deal of a counted lead pipeline created from `intake.start_date` (`cma.lead_deals_of`, `76`); deals carry no creation source and no test flag, so neither filter exists. **End:** the first outbound CRM call associated with the deal or its contacts; its start is the linked Aircall call's, else the CRM call's own time, so a call logged in HubSpot without an Aircall call counts (R1). There is no window end. **Uncalled deals:** an uncalled deal, open or closed, is left out of the percentages until the target's business time (or the next noon) has passed, and then counts as late; a deal closed before its first call is therefore not shown apart (audit findings MA-015, MA-016). **Cutoff:** 12:00 is hardcoded in `cma.next_business_noon_of` (`40`). **Per person:** the first call's CRM owner, else the deal's owner. **Elsewhere:** Attempts per deal (`94`) measures to the first attempt within the deal's window, and Follow-up (`72`, `80`) reads the same target on its own, so the pages can differ (MA-003) |
 
 ### Call link
 
@@ -439,7 +439,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | The reviewer, the reviewer's email or the review's text in any figure, label, alert or log |
 | Status | Decided |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
-| Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.invite_events`, `reviews.by_channel`, `reviews.market_states`; Reports → Reviews (`/reports/reviews`) |
+| Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.invite_events`, `reviews.by_channel`, `reviews.market_states`; Customers → Reviews (`/reports/reviews`) |
 | As built today | `cma.reviews_of` (`104`): a review with `is_published` of a counted `cma.review_channel`, its market the channel's else unknown, its business date the submission's in the tenant's zone, its rating a number (a whole star is the rating rounded up). Matches the definition |
 
 ### Published review
@@ -458,7 +458,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | A vendor's state word (APPROVED, MODERATION, REJECTED) in SQL; "published" for a review the platform counts but has not approved |
 | Status | Decided |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "Definitions: "published review" is a review in the platform's state APPROVED" |
-| Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.by_channel`, `reviews.market_states`; the alert trigger `review_submitted` and the rule "Negative review"; Reports → Reviews |
+| Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.by_channel`, `reviews.market_states`; the alert trigger `review_submitted` and the rule "Negative review"; Customers → Reviews |
 | As built today | `cma.review.is_published`, set by the adapter from the state APPROVED; `cma.reviews_of` (`104`) takes published reviews of counted review channels only, and the alert takes published reviews only. Matches the definition |
 
 ### Review channel
@@ -477,7 +477,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | "Channel" alone, which is a customer contact channel (phone, email, chat; the `channel` table); "shop" or "country" for the channel |
 | Status | Decided |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
-| Used by | `reviews.by_channel`, `reviews.market_states`, `data_quality.review_channel_unmapped`, `data_quality.market_without_review_channel`; Reports → Reviews, Data quality; Configuration → Sources (Review channels), Alert rules (Every counted review channel) |
+| Used by | `reviews.by_channel`, `reviews.market_states`, `data_quality.review_channel_unmapped`, `data_quality.market_without_review_channel`; Reports → Data quality; Customers → Reviews; Configuration → Sources (Review channels), Alert rules (Every counted review channel) |
 | As built today | `cma.review_channel` (`104`): `market` and `is_counted` (default false), set by `cma.set_review_channel` (`tenant.configure`; `PUT /api/v1/configuration/sources/{id}/review-channels`); the ingest writes only name, language and deletion, so a catalog read keeps both. Data quality lists unmapped channels and active markets without a counted one. Matches the definition |
 
 ### Average rating
@@ -496,7 +496,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | An average over unpublished reviews or reviews of a channel that is not counted |
 | Status | Decided; which window the review score KPI means is open for Kira (Open decisions), the report uses the page's period |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
-| Used by | `reviews.average_rating` and the averages of `reviews.by_market`, `reviews.by_period` and `reviews.by_channel`; `flash.reviews.rating_sum` (the sum of ratings behind Reports → Flash's Reviews, whose average is `rating_sum` / `reviews`); KPI 3; Reports → Reviews and Reports → Flash (Reviews) |
+| Used by | `reviews.average_rating` and the averages of `reviews.by_market`, `reviews.by_period` and `reviews.by_channel`; `flash.reviews.rating_sum` (the sum of ratings behind Reports → Flash's Reviews, whose average is `rating_sum` / `reviews`); KPI 3; Customers → Reviews and Reports → Flash (Reviews) |
 | As built today | `cma.review_figures` (`104`): the mean of the ratings of `cma.reviews_of`, rounded to two decimals over the page's period. Matches the definition |
 
 ### Negative review
@@ -515,7 +515,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | A threshold of the alert rule other than its own Ratings that alert: the rule's highest rating can differ and never changes what the report counts as negative |
 | Status | Decided; the threshold (default 2) and the alert audience are for Kira to confirm before the rule is switched on (Open decisions) |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Reports → Reviews shows team figures only" |
-| Used by | `reviews.negative`, `flash.reviews.negative`; the alert rule "Negative review" and its highest rating; Reports → Reviews and Reports → Flash (Reviews); Configuration → Alert rules |
+| Used by | `reviews.negative`, `flash.reviews.negative`; the alert rule "Negative review" and its highest rating; Customers → Reviews and Reports → Flash (Reviews); Configuration → Alert rules |
 | As built today | `cma.reviews_of` flags `is_negative` against the setting, validated 1 to 4 (`cma.check_tenant_setting`, `104`); seed `02` adds the rule "Negative review" switched off with the setting's value as its highest rating. Matches the definition |
 
 ### Link level
@@ -534,7 +534,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | The reviewer's name, email or the transaction reference as a shown value |
 | Status | Decided |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders"; 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
-| Used by | `reviews.link_levels`, `reviews.linked`; Reports → Reviews; Reports → Flash (Reviews): the `link_level` column of its reviews list (`/api/v1/reports/flash/rows`) and its files |
+| Used by | `reviews.link_levels`, `reviews.linked`; Customers → Reviews; Reports → Flash (Reviews): the `link_level` column of its reviews list (`/api/v1/reports/flash/rows`) and its files |
 | As built today | `cma.review.link_level` (`104`), set by `cma.ingest_upsert_reviews` (the order, through `cma.review_order_of`) and `cma.set_review_contact` (the contact), cleared by `cma.forget_review_contact_links`; check constraints keep an order id only with `order` and a contact only with `contact`. Matches the definition |
 
 ### Linked review
@@ -553,16 +553,16 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | "Connected" for a link or for a tenant's reviews connection ("set up", W19); Call link is another term |
 | Status | Decided |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
-| Used by | `reviews.linked`; Reports → Reviews |
+| Used by | `reviews.linked`; Customers → Reviews |
 | As built today | `cma.review_figures` (`104`) counts the levels order and contact (`linkedOrder`, `linkedContact`) and none (`unlinked`); the tile shows the first two together with their share. Matches the definition |
 
 ### Platform facts
 
-Facts about the review platform's own figures, recorded so nobody mistakes them for CMA metrics (docs/decisions.md, 25 Oct 2026, "Definitions: "published review" is a review in the platform's state APPROVED"). Trusted Shops' Control Centre counts the reviews in the states APPROVED and MODERATION and leaves out REJECTED; its score is the simple average of the APPROVED reviews submitted in the last 12 months, apparently cut to two decimals. Reports → Reviews' average rating is per selected period (Average rating), so the two differ by design; which one the review score KPI means is an Open decision for Kira.
+Facts about the review platform's own figures, recorded so nobody mistakes them for CMA metrics (docs/decisions.md, 25 Oct 2026, "Definitions: "published review" is a review in the platform's state APPROVED"). Trusted Shops' Control Centre counts the reviews in the states APPROVED and MODERATION and leaves out REJECTED; its score is the simple average of the APPROVED reviews submitted in the last 12 months, apparently cut to two decimals. Customers → Reviews' average rating is per selected period (Average rating), so the two differ by design; which one the review score KPI means is an Open decision for Kira.
 
 ## Asset terms
 
-Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl: Assetregister; docs/decisions.md, 2 Nov 2026, "Definitions: Flash's labels after the second review") owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl: Assetregister; docs/decisions.md, 2 Nov 2026, "Definitions: Flash's labels after the second review") owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Customers → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
 
 ### Device
 
@@ -572,7 +572,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Key | `device`; API `devices`, `deviceId`; SQL `cma.device`, `cma_read.device` |
 | Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
 | Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0", read through its API by the ingest (addition 0008zj: the changed records by the poll, the full snapshot nightly) and loaded in chunks by `cma.ingest_load_device_chunk`, a full snapshot reading the whole table, never a view, and ending with `cma.ingest_mark_devices_missing` in slices (addition 0008zk), or through its CSV export by a person with `cma.load_device_snapshot` (the fallback); both run the one load, `cma.device_rows_apply`, into `cma.device` (one row per register record id and connection) |
-| Counts / does not count | Reports → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
+| Counts / does not count | Customers → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
 | Unit and display | A count (`maintenance.devices`, "{n} tracked devices"); the list shows a device by its serial number and its register record id, never a customer's name |
 | Time rule | None of its own; a device's dates are dates as the register writes them |
 | Scope | The tenant's asset register connections; the filters market, model and scope (in the field, in stock, every tracked device) |
@@ -580,7 +580,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Asset" for one unit in a label (the asset register is the system); "AED" in a label or a key (the model is configuration) |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register", "The asset register is read by scheduled API polling" (addition 0008zj), 28 Oct 2026, "The asset sync reads no view", "A full snapshot's final step runs in slices" and "The Airtable adapter's chunks adapt to the database" (addition 0008zk) and "Definitions: Device" |
-| Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Reports → Maintenance (`/reports/maintenance`) |
+| Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Customers → Maintenance (`/reports/maintenance`) |
 | As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`; filled by `cma.device_rows_apply` (`116`, set-based) from the API in chunks, from `assets_load_chunk` rows and halved while a call is slow (`cma.ingest_load_device_chunk`, then `cma.ingest_mark_devices_missing` in slices for a full snapshot, which reads the whole table: `cma.set_connection_settings` refuses `view_id` on an asset register) or, through `cma.device_snapshot_apply`, from a file. Matches the definition |
 
 ### Component
@@ -599,7 +599,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Part" or "consumable" in a label; a vendor's own component word in a key |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A component serial that differs from the previous snapshot's is an observed replacement" and "Definitions: Component"; 28 Oct 2026, "The Airtable adapter maps by field id", "A component kind whose serial and expiry the register both empties closes the device's current component", "A kind the register holds again after emptying it" and "Definitions: Due date and Component" (addition 0008zk) |
-| Used by | `maintenance.components`, `maintenance.by_month`, `maintenance.list.components`; `component_due_unknown`; `cma_read.device_component`, `cma_read.maintenance_due`; Reports → Maintenance |
+| Used by | `maintenance.components`, `maintenance.by_month`, `maintenance.list.components`; `component_due_unknown`; `cma_read.device_component`, `cma_read.maintenance_due`; Customers → Maintenance |
 | As built today | `cma.device_component` (`112`): at most one current row per device and kind; a serial that differs from the stored one closes the old row (`replaced_at`) and inserts a new one (counted in `components_replaced`). A kind the register emptied (serial and expiry both empty) closes the current row with no new one (`cma.device_rows_apply`, `116`; counted in `components_closed`, which counts these closures only); when the register holds the kind again with none current, the same serial (or a missing one on either side) reopens that row (`replaced_at` cleared, the same row) and a different serial inserts a new one; a kind the source does not stage is left as it is. `cma.maintenance_items_of` builds the due items. Matches the definition |
 
 ### Device status
@@ -618,7 +618,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | A status name in SQL or code; "connected" or "active" for a device's state |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Device status is a catalog with the flags" and "Definitions: Device status" |
-| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Reports → Maintenance |
+| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Customers → Maintenance |
 | As built today | `cma.device_status` (`112`), its flags read by `cma.maintenance_items_of` and `cma.maintenance_bucketed_of`. Matches the definition |
 
 ### Due date
@@ -637,7 +637,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Expiry" for a date the rule worked out; "deadline" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Due date"; 28 Oct 2026, "A component kind whose serial and expiry the register both empties closes the device's current component", "A kind the register holds again after emptying it" and "Definitions: Due date and Component" (addition 0008zk) |
-| Used by | `maintenance.list.due_date`, `maintenance.list.basis`, `maintenance.unknown_items`; `component_due_unknown`; `cma_read.maintenance_due`; Reports → Maintenance |
+| Used by | `maintenance.list.due_date`, `maintenance.list.basis`, `maintenance.unknown_items`; `component_due_unknown`; `cma_read.maintenance_due`; Customers → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`): the anchor is `first_seen_at` in the tenant's zone for a current component with a replaced row of the same device and kind, else the shipment. Components of the first load keep the shipment. A kind with a closed component and none current is an item of basis `unknown` (`116`; its model's rule or none); a reopened component keeps its `first_seen_at`, so it keeps its anchor. Matches the definition |
 
 ### Action date
@@ -646,7 +646,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 |---|---|
 | Term | Action date (nl: Actiedatum) |
 | Key | `action_on`; API `actionOn` |
-| Definition | The due date less the maintenance rule's lead days for the model and kind: the day to act on a due item. A due item without a rule, and a device's end of life, have no lead days. The month of a due item on Reports → Maintenance is its action date's month. |
+| Definition | The due date less the maintenance rule's lead days for the model and kind: the day to act on a due item. A due item without a rule, and a device's end of life, have no lead days. The month of a due item on Customers → Maintenance is its action date's month. |
 | Source | The due date and `cma.maintenance_rule.lead_days` (tenant configuration; 60 for Pulse4all, to confirm, docs/open-decisions.md) |
 | Counts / does not count | Every due item with a due date has one; an item of basis `unknown` has none |
 | Unit and display | A date in the tenant's date format |
@@ -656,7 +656,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Due date" for the action date; "reminder date" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Action date" |
-| Used by | `maintenance.by_month`, `maintenance.list.action_date`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
+| Used by | `maintenance.by_month`, `maintenance.list.action_date`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Customers → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`). Matches the definition |
 
 ### Past due
@@ -665,7 +665,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 |---|---|
 | Term | Past due (nl: Achterstallig; Reports → Flash's count of its items: Items achterstallig; "achterstallig" in every Dutch hint) |
 | Key | `past_due`; API bucket `past_due` |
-| Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
+| Definition | A due item whose action date lies before the first day of the tenant's current month. On Customers → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
 | Counts / does not count | Counts every past-due item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays past due until a later read (the poll, the nightly snapshot or a loaded file) gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule |
 | Unit and display | A count in the Past due column (`maintenance.past_due`) |
@@ -675,7 +675,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Overdue" (undefined: it is still to define for tasks and tickets, Domains still to define); "late" or "expired" for a past-due item |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Past due"; 2 November 2026, "Definitions: Flash's labels after the second review" (addition 0008zn, #214) |
-| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); `flash.installed_base.components_past_due`; Reports → Maintenance; Reports → Flash (Installed base: `components_past_due` and the list's `past_due_items`) |
+| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); `flash.installed_base.components_past_due`; Customers → Maintenance; Reports → Flash (Installed base: `components_past_due` and the list's `past_due_items`) |
 | As built today | `cma.maintenance_items_of` (`112`): `past_due` when the action date is before the month of the tenant's today. Matches the definition |
 
 ### Exchange (planned)
@@ -694,7 +694,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Exchange" alone for this term: the exchange form is service intake (docs/decisions.md, 12 Oct 2026) and Exchange is a journey of Campaign monitoring (docs/open-decisions.md); "swap", "visit" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Exchange (planned)" |
-| Used by | `maintenance.exchanges`, `maintenance.by_month`, `maintenance.total`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
+| Used by | `maintenance.exchanges`, `maintenance.by_month`, `maintenance.total`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Customers → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`): one ordered pass per device in action-date order. Matches the definition |
 
 ### Bundling window
@@ -713,7 +713,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Grace period" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Bundling window" |
-| Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Reports → Maintenance |
+| Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Customers → Maintenance |
 | As built today | `cma.check_tenant_setting` and `cma.maintenance_items_of` (`112`). Matches the definition |
 
 ## Subscription terms
@@ -753,7 +753,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Time rule | As of the latest read of the subscription (the poll when an event touched it, else the nightly full read); the events `canceled`, `paused`, `resumed`, `reactivated` and `status_changed` hold the moves (`status_from`, `status_to`, `occurred_at`) |
 | Scope | As Subscription |
 | Equivalent in the source system | Juo's subscription `status` (Admin API) |
-| Not to use | "Cancelled" (Juo's spelling) in a key or a label: the CMA says canceled; Cancellation is another term, still to define (Reports → Cancellations counts cancellation requests, not statuses); "active" for a device's state (Device status) |
+| Not to use | "Cancelled" (Juo's spelling) in a key or a label: the CMA says canceled; Cancellation is another term, still to define (Customers → Cancellations counts cancellation requests, not statuses); "active" for a device's state (Device status) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" (addition 0008zt, #233) |
 | Used by | `cma.subscription.status`, `cma.subscription_event.status_from` and `status_to`, `cma_read.subscription`, `cma_read.subscription_event`, `cma.subscription_payment_state_of`; `flash.subscriptions.active_subscriptions`, `flash.subscriptions.paused_subscriptions`, `flash.subscriptions.holding_subscriptions`; `subscription.status_meanings`; Reports → Flash (Active subscriptions, with the statuses in its hints) and its files |
@@ -767,7 +767,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the field `payment_state` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
 | Definition | Per subscription, Juo's renewal state of it, one of six: Paid (status active, no open failed renewal), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Failed (status failed), Paused (status paused), Canceled (status canceled or expired) and Awaiting payment (Pending: a renewal by draft order, Mollie, not paid yet; not built). It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
 | Source | `cma.subscription` and `cma.subscription_event` only, computed at read time by `cma.subscription_payment_state_of(tenant)` with no call to Juo: the subscription's status and its `renewed` and `renew_failed` events. Where either event lacks its cycle, a renewal after the failure closes it |
-| Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Reports → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
+| Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Customers → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
 | Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; Reports → Flash (Active subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
 | Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
 | Scope | As Subscription |
@@ -799,7 +799,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 
 ## Cohort terms
 
-Decided with addition 0008zm (30 October 2026, Martin): Reports → Lead cohorts follows the lead deals of one ISO week or one month over time, at fixed ages. Kira confirms Pulse4all's ages and the period (docs/open-decisions.md, Lead cohort). The other cohorts of KPIs 12 (customers, agents) are defined when they are built.
+Decided with addition 0008zm (30 October 2026, Martin): Sales → Lead cohorts follows the lead deals of one ISO week or one month over time, at fixed ages. Kira confirms Pulse4all's ages and the period (docs/open-decisions.md, Lead cohort). The other cohorts of KPIs 12 (customers, agents) are defined when they are built.
 
 ### Lead cohort
 
@@ -817,7 +817,7 @@ Decided with addition 0008zm (30 October 2026, Martin): Reports → Lead cohorts
 | Not to use | "Ordered" for First orders' attributed first order (docs/decisions.md, 30 Oct 2026); "Days to order" for the median from the creation to the store order (First orders' "Days to order" counts from the first touch to the attributed first order; this page says "Days to store order"); "cohort" for a group of a period report (a week of the Funnel is no cohort) |
 | Status | Decided; Pulse4all's ages and period for Kira to confirm (docs/open-decisions.md, Lead cohort) |
 | Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Reports → Lead cohorts (addition 0008zm)", "Ordered in a lead cohort is lead to order" and "Definitions: Lead cohort, Cohort age and Mature" |
-| Used by | `cohorts.lead.created`, `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.median_days_to_order`, `cohorts.lead.not_called_yet`, `cohorts.lead.ordered_by_age`; Reports → Lead cohorts; Configuration → Exports, Lead cohorts; `GET /api/v1/reports/lead-cohorts`; `cma_read.lead_cohorts` |
+| Used by | `cohorts.lead.created`, `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.median_days_to_order`, `cohorts.lead.not_called_yet`, `cohorts.lead.ordered_by_age`; Sales → Lead cohorts; Configuration → Exports, Lead cohorts; `GET /api/v1/reports/lead-cohorts`; `cma_read.lead_cohorts` |
 | As built today | `cma.lead_cohorts_of` (`120`): one row per deal of `cma.lead_to_order_of` (over `cma.lead_deals_of`), its first attempt and first conversation from `cma.deal_attempts_of` under `attempts.source` in `cma.sales_deals_of`'s window (the arguments `cma.attempts_per_deal_of` gives it, so the two pages agree: 121's B3), its outcome and close from `cma.sales_deals_of`, its order and days to order from `cma.lead_to_order_of`, its source channel from `crm_record.source_channel`. `cma.lead_cohorts_report` groups them per ISO week or month (and per market or source channel), newest first, a market unknown and a deal without a source channel last. Deals carry no creation source and no test flag, so neither filter exists (Gaps D24, D25 and I6). Attempts per deal's outcome ordered also counts a won order deal; Ordered here counts store orders only. With the 92-day limit a month view holds at most four cohorts |
 
 ### Cohort age
@@ -836,7 +836,7 @@ Decided with addition 0008zm (30 October 2026, Martin): Reports → Lead cohorts
 | Not to use | business days for a Cohort age |
 | Status | Decided |
 | Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Definitions: Lead cohort, Cohort age and Mature" |
-| Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Reports → Lead cohorts; Configuration → Exports, Lead cohorts |
+| Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Sales → Lead cohorts; Configuration → Exports, Lead cohorts |
 | As built today | `cma.lead_cohort_figures_from` (`120`) compares each fact with `created_at + make_interval(days => n)`; `age_days` in `cma_read.lead_cohorts` is the whole days of 24 hours since the creation. `cma.check_tenant_setting()` takes one to six increasing whole numbers (spaces dropped), the largest at most `lead_to_order.max_days`, and refuses `lead_to_order.max_days` below the largest age; a reset to a default is no write the check sees, so an age above `lead_to_order.max_days` shows Ordered as a dash. Matches the definition |
 
 ### Mature
@@ -855,7 +855,7 @@ Decided with addition 0008zm (30 October 2026, Martin): Reports → Lead cohorts
 | Not to use | None yet |
 | Status | Decided |
 | Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Definitions: Lead cohort, Cohort age and Mature" |
-| Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Reports → Lead cohorts |
+| Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Sales → Lead cohorts |
 | As built today | `cma.lead_cohort_figures_from` (`120`): a row with deals whose every `created_at + n days` lies at or before now. Matches the definition |
 
 ## Flash terms
@@ -936,7 +936,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Case" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn); 4 Nov 2026, "Definitions: Flash shows a stage's and a pipeline's label" (#221) |
-| Used by | `cma.flash_tickets_of`, `cma.flash_labels_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`); `flash.open_tickets.open_tickets`, `flash.open_tickets.median_age_days`, `flash.open_tickets.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open tickets) and its files |
+| Used by | `cma.flash_tickets_of`, `cma.flash_labels_of`, the overview `open_tickets`; Sales → Follow-up reads the same tickets (`cma.open_tickets_of`); `flash.open_tickets.open_tickets`, `flash.open_tickets.median_age_days`, `flash.open_tickets.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open tickets) and its files |
 | As built today | `cma.flash_tickets_of` (`122`); the labels from `cma.flash_labels_of` (`122`) in the statement of `cma.flash_rows`. Matches the definition but for one gap: the list's Ticket queue and Stage columns sort by id (`cma.flash_order_by`) while they show labels |
 
 ### Open task
@@ -955,7 +955,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Overdue" for anything but a task (Past due is the asset term); its Dutch label "Te laat" is also on the Live board in another sense (copy key `live.late`: a person late for their shift, "Late" in English, not a defined term), so the two uses are known apart: the task's overdue counts open tasks past their due date and never a person, and the Live board's says nothing of tasks |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
-| Used by | `cma.flash_tasks_of`, the overview `open_tasks`; Reports → Follow-up reads the same tasks; `flash.open_tasks.open_tasks`, `flash.open_tasks.overdue`; Reports → Flash (`/reports/flash`) (Open tasks) and its files |
+| Used by | `cma.flash_tasks_of`, the overview `open_tasks`; Sales → Follow-up reads the same tasks; `flash.open_tasks.open_tasks`, `flash.open_tasks.overdue`; Reports → Flash (`/reports/flash`) (Open tasks) and its files |
 | As built today | `cma.flash_tasks_of` (`122`). Matches the definition |
 
 ### Ticket queue
@@ -983,7 +983,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 |---|---|
 | Term | Churn (nl: Uitval; the measure: Uitgevallen) |
 | Key | `churned`; dims `reason` (`none` when absent); setting `flash.ended_subscription_statuses` (default `canceled,expired`) |
-| Definition | A subscription that moved into an ended status (`flash.ended_subscription_statuses`; default and Pulse4all: canceled and expired) on a business date of the period: a `canceled` event (while canceled is an ended status), or a `status_changed` event to an ended status, of that date in the tenant's zone. A subscription counts once per date, with the reason code of its canceled event, else of the other. It is not Cancellation: Reports → Cancellations counts cancellation requests (tickets). |
+| Definition | A subscription that moved into an ended status (`flash.ended_subscription_statuses`; default and Pulse4all: canceled and expired) on a business date of the period: a `canceled` event (while canceled is an ended status), or a `status_changed` event to an ended status, of that date in the tenant's zone. A subscription counts once per date, with the reason code of its canceled event, else of the other. It is not Cancellation: Customers → Cancellations counts cancellation requests (tickets). |
 | Source | `cma.subscription_event` (the subscription app's events, 0008zl) |
 | Counts / does not count | Counts each subscription once per date it churned (a subscription that churned on two dates of a period counts on each, so a period is the sum of its dates). Does not count a pause or a failed renewal |
 | Unit and display | A count per market, store and reason code; the active subscriptions at the period's end beside it (the subscriptions snapshot of that date, or now for a live period that runs to today) |
@@ -1311,6 +1311,86 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `rating_sum` | The sum of their ratings; the average is `rating_sum` / `reviews` |
 | Data quality (`data_quality`) | `findings` | Data-quality findings: the records a check of `cma.data_quality_catalog()` finds, `field_device_on_ended_subscription` flags a device in the field on a subscription in a status of `flash.ended_subscription_statuses`, and `customer_required_ref_missing` says `contact_deleted` for a contact the CRM deleted; per check and market ("data quality" itself stays under Domains still to define) |
 
+## Rail terms
+
+Decided by Martin on 5 November 2026 (addition 0008zu, #PR): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
+
+### Contact-center organisation
+
+| Field | Value |
+|---|---|
+| Term | Contact-center organisation (nl: Contactcenterorganisatie; the rail shows the organisation's own name) |
+| Key | SQL `cma.organisation.is_contact_center` (`cma_read.organisation.is_contact_center`); the web's `Principal.contactCenters`; the organisation key in `/live/<organisation key>` and in `?organisation=<key>` |
+| Definition | An organisation of the tenant (an employer) that the tenant flags as a contact center: its people have a Live board of their own. |
+| Source | The CMA: tenant configuration on `cma.organisation`, set by seed `02` or in Studio; no screen writes it |
+| Counts / does not count | Counts an active, flagged organisation. Does not count an inactive or an unflagged one; a person belongs to the organisation their user record names |
+| Unit and display | A name in the rail's Live group, one item per organisation; a tenant with none flagged has no Live group |
+| Time rule | None (configuration, read with every request) |
+| Scope | One tenant; Pulse4all's value is seed `02`'s (Newco of Pulse4all Subscriptions), never code |
+| Equivalent in the source system | None |
+| Not to use | "Call center" alone for the organisation (the Live board's people are the organisation's users, its lines are not tied to it yet); "department" |
+| Status | Decided |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #PR) |
+| Used by | The Live group and the Live board; `live.people.*`, `live.tiles.*` (the people of one organisation); `GET /api/v1/live/board?organisation=<key>`; Welcome's Needs attention (the missed callers line shows only where a contact center exists) |
+| As built today | The identity read returns the tenant's active flagged organisations by name (`findPrincipal`, one statement); `/live/<key>` of an unknown or unflagged key is a 404. The filter is a view, not an access boundary: every `monitoring.live` holder may read the whole tenant |
+
+### Live board
+
+| Field | Value |
+|---|---|
+| Term | Live board (nl: Live-bord) |
+| Key | `/live/<organisation key>`; `GET /api/v1/live/board`; `live.*` catalog keys; the page key `/live/board` in the metric catalog |
+| Definition | The screen of one contact-center organisation's people right now: their status groups, clock times and shifts, with the day's inbound calls, the missed callers and the Follow-up now strip. It is per contact-center organisation. |
+| Source | `cma.team_now()`, `cma.team_members_now()`, `cma.roster_today()`, `cma.inbound_now()`, `cma.follow_up_summary()`, in one transaction |
+| Counts / does not count | The people, their team memberships and today's shifts are those of the organisation's users. The status flags, the inbound tiles, the missed callers and the Follow-up now strip cover the whole tenant: a line is not tied to an organisation yet, and the board says so in a caption on the call parts |
+| Unit and display | One board per flagged organisation, labelled with its name; breadcrumbs Welcome › Live › the organisation's name; without `?organisation` the API answers the whole tenant |
+| Time rule | Today in each person's own zone; polled every 10 seconds while the tab is visible |
+| Scope | One contact-center organisation (people); the tenant (calls); needs `monitoring.live` |
+| Equivalent in the source system | None; the call figures follow Aircall's definitions (Inbound call, Missed inbound call) |
+| Not to use | "Team board" (a team is a group of people inside an organisation, a different term) |
+| Status | Decided |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zu, #PR) |
+| Used by | `live.*`; the Live group; `GET /api/v1/live/board` |
+| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption is "All lines, not only {organisation}'s: a line is not tied to a contact center yet." (nl: "Alle lijnen, niet alleen die van {organisation}: een lijn hoort nog niet bij een contactcenter."). The mapping of lines to an organisation is an Open decision |
+
+### Sales (rail group)
+
+| Field | Value |
+|---|---|
+| Term | Sales (nl: Verkoop), a rail group |
+| Key | Copy key `nav.sales`; group id `sales` |
+| Definition | The rail group of the pages about leads and orders: Speed to lead, Follow-up, Funnel, Attempts per deal, Attempts per agent, Lead cohorts, First orders and Orders per person. |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Every page keeps its href (`/reports/...`), its permission and its per-person key; a group with no page the person may see is absent |
+| Unit and display | A group with a trend icon, in the rail order Time, Reports, Sales, Customers, Campaigns, Configuration |
+| Time rule | None |
+| Scope | The rail of every tenant |
+| Equivalent in the source system | None |
+| Not to use | "Sales" for a figure or for the HubSpot sales pipeline |
+| Status | Decided |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #PR) |
+| Used by | `speed_to_lead.*`, `follow_up.*`, `funnel.*`, `attempts.*`, `attempts_per_agent.*`, `cohorts.*`, `first_orders.*`, `orders_per_person.*`; Sales → the eight pages above |
+| As built today | Matches the definition; the first page of the group a person may see is the target of its breadcrumb |
+
+### Customers (rail group)
+
+| Field | Value |
+|---|---|
+| Term | Customers (nl: Klanten), a rail group label |
+| Key | Copy key `nav.customers`; group id `customers` |
+| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations, Reviews and Maintenance. The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
+| Unit and display | A group with a person icon, after Sales |
+| Time rule | None |
+| Scope | The rail of every tenant |
+| Equivalent in the source system | None |
+| Not to use | "Customers" or "Klanten" for a count of people or as the term "customer" (see Active customer: Store customer, Webwinkelklant) |
+| Status | Decided (the label only; the term "customer" stays pending) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zu, #PR) |
+| Used by | `cancellations.*`, `reviews.*`, `maintenance.*`; Customers → Cancellations, Reviews, Maintenance |
+| As built today | Matches the definition |
+
 ## Time terms
 
 Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Hours worked, status, working status and the other time words stay under Domains still to define.
@@ -1379,7 +1459,7 @@ Status: Retired. A retired word is never introduced again; where it still appear
 | Retired | Use instead | Note | Where it appears today |
 |---|---|---|---|
 | connected (≥ 10 s talk, 0008j) | Connected (Aircall) | The 10 s threshold goes | Nowhere since addition 0008zc; `telephony.connected_min_seconds` stays as an optional talk condition, 0 by default and for Pulse4all |
-| reached (0008z) | Conversation | Dutch "bereikt" goes with it. The tag meaning "not reached" (the agents' Aircall tag "Not Reached") is a defined meaning of Tag and stays | Nowhere as a call term since addition 0008zc; Reports → Funnel's "Reached won" is another word with its own row (W20, D16, C17) |
+| reached (0008z) | Conversation | Dutch "bereikt" goes with it. The tag meaning "not reached" (the agents' Aircall tag "Not Reached") is a defined meaning of Tag and stays | Nowhere as a call term since addition 0008zc; Sales → Funnel's "Reached won" is another word with its own row (W20, D16, C17) |
 | spoken to lead | Conversation | | Not found in the repository (searched on 24 October 2026); the nearest wording is the catalog's "spoke with (or called)" in `follow_up.leads.last_call_days` and `callbacks.week.kept` |
 | answered (for outbound calls) | Connected | "Answered" stays for inbound calls only | The data-quality skip value `outbound_unanswered_untagged` of a telephony connection's `dq_unlinked_skip` setting (`72`, `100`; `web/src/lib/follow-up.ts`), a stored value (Gaps, D30); nowhere else since addition 0008zc (one deal's attempts say Connected, API `connected`) |
 | CRM call / HubSpot call as a call fact | Attempt / Call (telephony) | R1 | `attempts.source` `crm` (`94`); `cma.lead_calls_of` and `cma.speed_to_lead_of` (`40`); callbacks kept (`88`); copy `attempts.noteCrm`; catalog `speed_to_lead.*`, `follow_up.leads*`, `callbacks.*`. Since addition 0008zc Conversation, Connected and first orders' evidence come from the linked telephony call only |
@@ -1393,7 +1473,7 @@ Status: Pending for every term below; none is defined yet. Each is added term by
 Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
 
 ### Customers and orders
-Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
+Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
 
 ### Tickets and tasks
 Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zn).
@@ -1425,7 +1505,7 @@ Where the code or the catalog says something else than this file: every retired 
 | W13 | `web/src/lib/copy.ts` | `attempts.noteCrm` | Attempts are outbound calls logged in the customer records | Attempts come from the telephony system only (R1) |
 | W17 | `web/src/lib/copy.ts` | `speedToLead.intro` "first outbound call"; Dutch `speedToLead.intro`, `speedToLead.minutesNote` "belpoging"; Dutch `attempts.speed`, `attempts.colMedianSpeed`, `attempts.speedTitle`, `attempts.speedCol`, `hints.atOutcomes` "speed to lead" | The first outbound (CRM) call; two Dutch labels for one term | The first attempt; one Dutch label, "Snelheid tot lead", and one Dutch word for attempt, "poging" |
 | W18 | `web/src/lib/copy.ts` | `email.conversation`, `email.opened` "Conversations opened" ("Gesprekken geopend"), `email.waitingIntro`, `emailPerAgent.intro`, hints `emailOpened`, `emailOpenedCol`, `emailClosedCol`, `emailWait*`, `emailAgentReplies`, `emailAgentClosed` | Conversation for an inbox thread | Another word for the email thread: Conversation is a call term (to settle when Email is defined) |
-| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Reports → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
+| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
 | W20 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `funnel.colReachedWon`, `funnelFile.reachedWon`, `hints.fnColReachedWon` ("Reached won", "Gewonnen bereikt"); API `reachedWon` | Reached for a deal won now | A word that is not retired (for example "Won now") |
 | W21 | `web/src/lib/data/types.ts` | API fields `unanswered`, `unansweredByReason` (Inbound) | 0008i's words (the Calls, Calls per agent and Attempts per deal fields took the terms' keys in addition 0008zc) | The term's camelCase key (`missedInbound`) |
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |
@@ -1439,7 +1519,7 @@ Where the code or the catalog says something else than this file: every retired 
 | D4 | `db/100_definitions_calls.sql` (`cma.calls_of`, `cma.calls_per_person_of`); `db/76_audit_hardening.sql` (`cma.inbound_calls_of`); `db/64_calls_history_start.sql` | `business_date`, week, hour and time of day | In the line's market zone, else the tenant's | In the tenant's zone (Day). Acceptance after step 2: Friday 23 October 2026 gives 199 calls, 20 inbound, 179 outbound and untagged 12.1 %, as Aircall's 46-number filter; the missed inbound call on UK Sales at 00:05 Amsterdam time on 24 October (23:05 London time), dated 23 October today, moves to 24 October (`docs/definitions-2026-10/records/step1-dev-prod-2026-10-25.md`) |
 | D5 | `db/62_calls_overview.sql` (`cma.calls_per_person_of`); `db/94_attempts_for_sales.sql` (`cma.attempts_of_deal`) | The person behind `user_ref` | Aircall's `call.user` | The last participant |
 | D9 | `db/100_definitions_calls.sql` (`cma.deal_calls_of`, which `cma.lead_calls_of` reads) | `effective_at`, `direction` | The CRM call's time and direction when unlinked (`is_connected` comes from the linked telephony call since addition 0008zc) | The call's time and direction from Aircall (R1) |
-| D10 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`, `cma.lead_calls_of`) | The end of speed to lead | Reports → Speed to lead reads HubSpot calls: the first outbound CRM call, linked or not, with no window end (R1) | The first Attempt linked to the deal or its contacts through the call link; a call in the pre-window counts as 0 minutes |
+| D10 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`, `cma.lead_calls_of`) | The end of speed to lead | Sales → Speed to lead reads HubSpot calls: the first outbound CRM call, linked or not, with no window end (R1) | The first Attempt linked to the deal or its contacts through the call link; a call in the pre-window counts as 0 minutes |
 | D12 | `db/94_attempts_for_sales.sql` | `attempts.source` value `crm` | Every outbound CRM call is an attempt | Attempts from the telephony system only (R1) |
 | D13 | `db/32_intake_core.sql` | `cma.connection_call_outcome.is_connected`, `cma.set_call_outcome` | Which HubSpot call outcomes count as connected (a conversation) | Retired (R1) |
 | D14 | `db/88_callbacks_kept.sql` (`cma.callbacks_kept_of`) | The call that keeps a callback | Its start: the linked Aircall call's, else the CRM call's time | The Aircall call, tied through the call link (R1) |
@@ -1452,7 +1532,7 @@ Where the code or the catalog says something else than this file: every retired 
 | D26 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`) | The person of a deal's speed to lead | The first CRM call's owner, else the deal's owner | The person who placed the first attempt (its last participant) |
 | D27 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`, `cma.speed_to_lead_summary`) | Deals without a call in the percentages | An uncalled deal, open or closed, is null until the target's business time (or the next noon) passes, then late; a deal closed before its first call counts the same way | An open deal not called yet counts as late once past the target or the cutoff; a deal closed before its first call is shown apart and stays out of the measures |
 | D28 | `db/40_lead_metrics.sql` (`cma.next_business_noon_of`) | The cutoff of "% before 12:00 next working day" | 12:00 hardcoded | A tenant setting (12:00 for Pulse4all) |
-| D29 | `db/40_lead_metrics.sql`; `db/94_attempts_for_sales.sql`; `db/72_follow_up.sql`, `db/80_follow_up_snapshot.sql`; the Dashboard tile in `web/src/lib/reports.ts` | Where speed to lead is computed | Separately for Reports → Speed to lead, Attempts per deal and Follow-up, and in the web for the Dashboard tile (MA-003) | One definition and one function for Reports → Speed to lead, the Dashboard tile, Attempts and the cockpit |
+| D29 | `db/40_lead_metrics.sql`; `db/94_attempts_for_sales.sql`; `db/72_follow_up.sql`, `db/80_follow_up_snapshot.sql`; the Dashboard tile in `web/src/lib/reports.ts` | Where speed to lead is computed | Separately for Sales → Speed to lead, Attempts per deal and Follow-up, and in the web for the Dashboard tile (MA-003) | One definition and one function for Sales → Speed to lead, the Dashboard tile, Attempts and the cockpit |
 | D30 | `db/72_follow_up.sql`, `db/100_definitions_calls.sql` (`cma.data_quality_of`); `web/src/lib/follow-up.ts` (`DQ_UNLINKED_SKIP_DEFAULT`) | The skip value `outbound_unanswered_untagged` of the connection setting `dq_unlinked_skip` | "unanswered" for an outbound call (the rule itself is the term's since addition 0008zc: no answer and no tag) | A value named by Not connected (for example `outbound_not_connected_untagged`), the stored settings moved with it |
 | D31 | `db/100_definitions_calls.sql` (`cma.calls_of` with `cma.call_not_reached_of`, read by `cma.calls_overview` and `cma.calls_per_person`) | The speed of Reports → Calls and Calls per agent | About 565 ms for 1 to 25 October 2026 in prod as `cma_app` (`calls_overview` 565.6 ms, `calls_per_person` 564.7 ms), twice 0008zb's: Conversation reads each call's tags; a quarter's range would pass 1000 ms (`docs/definitions-2026-10/records/step1-dev-prod-2026-10-25.md`) | Under 1000 ms for a quarter's range; fixed with the step 2 work: an index on the current tags by call, or the tag rule computed once per call |
 | D32 | `db/74_forms_reporting.sql` (`cma.data_quality_of`) | The calls tagged incorrect data | Not counted apart: a call with a current tag meaning "incorrect data" is only kept out of Conversation (`102`) | Definitions step 2 (data quality checks): the calls with a current tag meaning "incorrect data" reported apart, a data-quality figure (to define with step 2) |

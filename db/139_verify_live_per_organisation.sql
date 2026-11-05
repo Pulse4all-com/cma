@@ -136,7 +136,7 @@ declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_flags   text;
 begin
-  select string_agg(format('%s/%s:%s', t.slug, o.key, o.is_contact_center), ',' order by t.slug, o.key)
+  select string_agg(format('%s/%s:%s', t.slug, o.key, o.is_contact_center::text), ',' order by t.slug, o.key)
   into v_flags
   from cma.organisation o
   join cma.tenant t on t.id = o.tenant_id
