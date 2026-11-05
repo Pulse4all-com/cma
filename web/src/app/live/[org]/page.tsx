@@ -1,9 +1,14 @@
+import { notFound, redirect } from "next/navigation";
 import { LiveBoardLive } from "@/components/LiveBoardLive";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
+import { boardOfOrganisation } from "@/lib/live";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
+
+/** The board's address before addition 0008zu: it opens the first contact center's board */
+const FORMER_ADDRESS = "board";
 
 /**
  * Live board (Live, first page of the Live group): who is on the clock right now, in which status
@@ -16,16 +21,33 @@ import { resolve } from "../../access";
  * ranking. Since addition 0008i it opens with today's inbound tiles (InboundLive); the missed calls not
  * called back (MissedCallbacks) close the board since addition 0008z (Martin, 20 October 2026): line
  * names, codes and counts, never a number, a name or the caller's hash.
+ *
+ * Since addition 0008zu (Martin, 5 November 2026) one board per contact-center organisation, at /live/<key>: the
+ * people, groups and statuses only of that organisation's people (lib/live boardOfOrganisation, here and in every
+ * poll's ?organisation=<key>), the rail's item and the last breadcrumb its name; the inbound and missed-call parts and
+ * the follow-up strip stay tenant-wide, the call parts captioned as covering all lines. A key that is no contact center
+ * of the person's tenant (an unknown organisation or one not flagged) is a 404; /live/board, the former address, opens
+ * the first contact center's board (unless an organisation is keyed board, whose board it then is). No loading
+ * boundary: it would send 200 before the page decides on the 404 (RouteSkeleton).
  */
-export default async function LiveBoardPage() {
+export default async function LiveBoardPage({ params }: { params: Promise<{ org: string }> }) {
   const r = await resolve();
   if (!r.ok) return r.page;
   const { me, copy } = r;
   const t = copy.live;
+  const { org } = await params;
+
+  const center = me.contactCenters.find((c) => c.key === org);
+  if (!center) {
+    const first = me.contactCenters[0];
+    if (org === FORMER_ADDRESS && first) redirect(`/live/${first.key}`);
+    notFound();
+  }
+  const href = `/live/${center.key}` as const;
 
   if (!me.permissions.includes("monitoring.live")) {
     return (
-      <Shell copy={copy} me={me} active="live-board">
+      <Shell copy={copy} me={me} active="live-board" activeHref={href}>
         <PageTitle>{t.title}</PageTitle>
         <Card>
           <h2 className="text-panel font-semibold text-p4a-heading">{t.noPermissionTitle}</h2>
@@ -35,20 +57,21 @@ export default async function LiveBoardPage() {
     );
   }
 
-  // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound and follow-up
-  const board = await data().getLiveBoard(me);
+  // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound and follow-up;
+  // then this contact center's people only
+  const board = boardOfOrganisation(await data().getLiveBoard(me), center.key);
   // The board's words only (a slice of the copy object; the whole one weighed about 90 kB in every poll's page before)
   const liveCopy = { live: copy.live, hints: copy.hints, inbound: copy.inbound, reports: copy.reports, followUp: copy.followUp, dashboard: copy.dashboard };
 
   return (
-    <Shell copy={copy} me={me} active="live-board" wide>
+    <Shell copy={copy} me={me} active="live-board" activeHref={href} wide>
       <PageTitle>
         {t.title}
         <span className="ml-3 text-small font-normal text-p4a-muted">{fmtDate(dateKeyInZone(new Date(), me.timeZone), me.locale)}</span>
       </PageTitle>
       <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
 
-      <LiveBoardLive initial={board} viewer={{ locale: me.locale, timeZone: me.timeZone }} copy={liveCopy}
+      <LiveBoardLive initial={board} organisation={center} viewer={{ locale: me.locale, timeZone: me.timeZone }} copy={liveCopy}
         canOpenMetrics={me.permissions.includes("tenant.configure")} />
 
       {dataIsMock ? (

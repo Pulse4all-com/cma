@@ -114,6 +114,32 @@ export function employersOf(rows: LiveRow[]): EmployerOption[] {
   return [...out.entries()].map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
 }
 
+/** What one contact center's board keeps of the board's read: the people with their memberships and shifts */
+export interface OrganisationScoped {
+  now: { people: TeamNowPerson[] };
+  memberships: TeamMembership[];
+  shifts: { userId: string }[];
+}
+
+/**
+ * One contact center's board (addition 0008zu, /live/<key> and GET /api/v1/live/board?organisation=<key>): only the
+ * people whose organisation has the key (a person without one is on no contact center's board), and only their team
+ * memberships and today's shifts, so the tiles, the groups, the statuses, the team filter and the shift column all
+ * follow from them. Everything else stays as read: the tenant's status flags (configuration), and the inbound, missed
+ * and follow-up figures, tenant-wide until a line maps to an organisation (Open decisions). Pure, so the page's first
+ * render and every poll's answer are filtered by one function
+ */
+export function boardOfOrganisation<T extends OrganisationScoped>(data: T, organisationKey: string): T {
+  const people = data.now.people.filter((p) => p.organisationKey === organisationKey);
+  const ids = new Set(people.map((p) => p.userId));
+  return {
+    ...data,
+    now: { ...data.now, people },
+    memberships: data.memberships.filter((m) => ids.has(m.userId)),
+    shifts: data.shifts.filter((x) => ids.has(x.userId)),
+  };
+}
+
 /** Whole seconds since an instant at `nowMs`, never negative */
 export function secondsSince(since: Instant, nowMs: number): number {
   return Math.max(0, Math.floor((nowMs - Date.parse(since)) / 1000));

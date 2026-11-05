@@ -105,8 +105,8 @@ const cases = [
   ["manager", "/reports/inbound?range=month&group=line", 13, 0],
   ["manager", "/reports/inbound?range=month&group=hour", 13, 0],
   // The Live board's inbound part only: its seven tiles; the missed calls' six headers, the board's last section since 0008z
-  ["supervisor", "/live/board", 0, 7, '[data-testid="inbound-live"]'],
-  ["supervisor", "/live/board", 6, 0, '[data-testid="missed-live"]'],
+  ["supervisor", "/live/newco", 0, 7, '[data-testid="inbound-live"]'],
+  ["supervisor", "/live/newco", 6, 0, '[data-testid="missed-live"]'],
   // Calls (addition 0008j): eight tiles (four with the change, three outbound, the untagged share) and the tag
   // table's headers: the group, conversations, the top twelve tags, Other and Untagged, in each grouping
   ["manager", "/reports/calls?range=month&group=day", 16, 8],
@@ -125,7 +125,7 @@ const cases = [
   ["manager", "/reports/follow-up", 48, 8],
   ["reader", "/reports/follow-up", 34, 8],
   ["agent-one", "/me/follow-up", 23, 0],
-  ["supervisor", "/live/board", 0, 6, '[data-testid="follow-up-live"]'],
+  ["supervisor", "/live/newco", 0, 6, '[data-testid="follow-up-live"]'],
   // Forms (addition 0008p): four tiles; the forms table's five headers, the totals per category and per market
   // (four each) and the answers' four, by day and by week
   ["manager", "/reports/forms?range=month&group=day", 17, 4],

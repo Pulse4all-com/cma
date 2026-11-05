@@ -106,7 +106,7 @@ const pages = [
   { path: "/" }, { path: "/day" }, { path: "/day", subject: "agent-two", start: true },
   { path: "/hours" }, { path: "/team/hours" },
   { path: "/reports/dashboard?range=month", subject: "supervisor" },
-  { path: "/live/board", subject: "supervisor", tables: true },
+  { path: "/live/newco", subject: "supervisor", tables: true },
   { path: "/team/people", subject: "admin" },
   { path: "/roster/planner", subject: "manager" },
   { path: "/roster/planner/print", subject: "manager" },
@@ -135,11 +135,10 @@ const pages = [
   { path: "/reports/intake?range=month", subject: "invest-analyst" },
   { path: "/reports/data-quality", subject: "manager" },
   { path: "/reports/dashboard?range=month", subject: "invest-analyst" },
-  // Inbound and the Live board's inbound part (addition 0008i): the reasons' series and the bars, and the
-  // board of a tenant without telephony
+  // Inbound and the Live board's inbound part (addition 0008i): the reasons' series and the bars. The board of a tenant
+  // without telephony left with addition 0008zu: that tenant (the invest analyst's) has no contact center, so no board
   { path: "/reports/inbound?range=month", subject: "manager", tables: true },
   { path: "/reports/inbound?range=month&group=hour", subject: "analyst", tables: true },
-  { path: "/live/board", subject: "invest-analyst" },
   // Calls and Calls per agent (addition 0008j): the tiles, the bars and the tag table by day and by market,
   // the per-agent table with a person's row and the not-linked row opened, and a tenant without telephony
   { path: "/reports/calls?range=month", subject: "manager", tables: true },

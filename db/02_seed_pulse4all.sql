@@ -6,8 +6,8 @@
 -- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows,
 -- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
 -- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings, (after 0008zp) whether its people may clock in
--- again on the same day and (after 0008zt) its customer segments and the contact property they come from, the statuses
--- whose subscriptions hold devices and what each status means.
+-- again on the same day, (after 0008zt) its customer segments and the contact property they come from, the statuses
+-- whose subscriptions hold devices and what each status means and (after 0008zu) which organisation is a contact center.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -614,5 +614,24 @@ begin
   from cma.integration_connection c
   where c.tenant_id = v_subs and c.adapter = 'hubspot' and c.status = 'active'
   on conflict (tenant_id, connection_id, entity, field, ref_system, slot) do nothing;
+end
+$$;
+
+-- Contact centers (after addition 0008zu; Martin, 5 November 2026): Newco is the contact center of Pulse4all
+-- Subscriptions, so its people get a Live board of their own (/live/newco, "Newco" in the rail's Live group). Pulse4all
+-- itself and both organisations of Pulse4all Invest are no contact center (the column's default). As the time zone
+-- above, Newco is flagged on every run: to take the flag away, change it here as well as in Studio. A database without
+-- the column yet says so; rerun this seed after 138_live_per_organisation.sql.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'cma' and table_name = 'organisation' and column_name = 'is_contact_center') then
+    raise notice 'organisation.is_contact_center does not exist yet (addition 0008zu): rerun this seed after 138_live_per_organisation.sql';
+    return;
+  end if;
+  update cma.organisation o
+  set is_contact_center = true
+  from cma.tenant t
+  where t.id = o.tenant_id and t.slug = 'pulse4all-subscriptions' and o.key = 'newco' and not o.is_contact_center;
 end
 $$;

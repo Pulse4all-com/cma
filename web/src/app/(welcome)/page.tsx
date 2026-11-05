@@ -45,7 +45,9 @@ export default async function WelcomePage() {
   const hasTeam = me.permissions.includes("workday.team");
   const hasReports = me.permissions.includes("performance.team");
   const hasRoster = me.permissions.includes("roster.view");
-  const hasLive = me.permissions.includes("monitoring.live");
+  // The missed callers link to the Live board (/live/board opens the first contact center's): a tenant without a
+  // contact center has no board, so no line and no read (addition 0008zu)
+  const hasLive = me.permissions.includes("monitoring.live") && me.contactCenters.length > 0;
   const hasAttention = holdsAny(me, FOLLOW_UP_SUMMARY_PERMISSIONS);
   const hasOwn = holdsAny(me, MY_FOLLOW_UP_PERMISSIONS);
 

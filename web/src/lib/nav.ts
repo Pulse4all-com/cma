@@ -4,8 +4,10 @@
  * pages use firstPage() to send someone without a clock to a page they may see.
  * Screens check a permission, never a role key; the database checks again on every call.
  * No runtime imports beyond types, so a client module may import the cookie prefix from here.
+ * The Live group's pages come from the tenant's contact centers (addition 0008zu), which the caller passes in
+ * (Principal.contactCenters, read with the identity), one board per organisation, labelled with its name.
  */
-import type { Principal } from "@/lib/auth/identity";
+import type { ContactCenter, Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 
 /**
@@ -36,11 +38,12 @@ export function openGroupOf(value: string | undefined, groupIds: readonly string
   return value && groupIds.includes(value) ? value : null;
 }
 
-export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "flag" | "gear";
+export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "trend" | "person" | "flag" | "gear";
 export type ShellPage =
   | "welcome"
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
   | "messages" | "messages-send"
+  /** A contact center's Live board (addition 0008zu): one page per organisation, told apart by its href */
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
   /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j), Forms (addition 0008p) */
   | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "forms" | "data-quality"
@@ -74,7 +77,7 @@ export type ShellPage =
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
-  | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
+  | "/" | "/messages" | `/live/${string}` | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
@@ -120,8 +123,11 @@ export interface NavGroupEntry {
 
 export type NavEntry = NavPage | NavGroupEntry;
 
-/** Every page and group in rail order; a new module adds its group here */
-export function navEntries(copy: Copy): NavEntry[] {
+/**
+ * Every page and group in rail order; a new module adds its group here. contactCenters: the tenant's contact-center
+ * organisations (Principal.contactCenters), each one a Live board; none, and the Live group has no page, so it is absent
+ */
+export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[]): NavEntry[] {
   return [
     {
       kind: "page",
@@ -138,14 +144,14 @@ export function navEntries(copy: Copy): NavEntry[] {
     },
     {
       // Live before Time (Martin, 7 October 2026): the screen a supervisor keeps open. Agents do not
-      // hold monitoring.live, so their keys do not move.
+      // hold monitoring.live, so their keys do not move. Since addition 0008zu (Martin, 5 November 2026) one board per
+      // contact-center organisation, labelled with its name, in the order the identity read gives (by name); a tenant
+      // without one has no Live group. Each board takes a digit key, so a second contact center moves the keys after it
       kind: "group",
       id: "live",
       label: copy.nav.live,
       icon: "live",
-      items: [
-        { page: "live-board", href: "/live/board", label: copy.nav.liveBoard, permission: "monitoring.live" },
-      ],
+      items: contactCenters.map((c): NavItem => ({ page: "live-board", href: `/live/${c.key}`, label: c.name, permission: "monitoring.live" })),
     },
     {
       // Team (night build, 7 October 2026): the people and, with 0005, the roster. After Live and before
@@ -172,6 +178,14 @@ export function navEntries(copy: Copy): NavEntry[] {
       ],
     },
     {
+      // Reports, Sales and Customers (Martin, 5 November 2026; addition 0008zu): the report pages in three groups, replacing
+      // the one Reports group in the order of 20 October 2026 (addition 0008z). Reports holds the overviews and the
+      // channels (calls, inbound, email, intake, forms) with Data quality last; Sales the leads and deals through to the
+      // first order, Funnel before Attempts per deal; Customers what happens after the order. Every page keeps its href,
+      // its permission and its per-person key; a group none of whose pages a person may see is absent. The digit keys
+      // follow the visible order, so they move for everyone who sees these groups. The permissions are the lists of
+      // REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here, because this module has no runtime
+      // imports): reports.view or performance.team, a per-person page performance.team with the tenant's reports.per_person
       kind: "group",
       id: "reports",
       label: copy.nav.reports,
@@ -181,61 +195,75 @@ export function navEntries(copy: Copy): NavEntry[] {
         // click each for an auditor, the CFO or the COO; reports.view or performance.team, as every report's team figures
         { page: "flash", href: "/reports/flash", label: copy.nav.flash, permission: ["reports.view", "performance.team"] },
         { page: "dashboard", href: "/reports/dashboard", label: copy.nav.dashboard, permission: "performance.team" },
-        // The order since addition 0008z (Martin, README Decision log, 20 October 2026): the reports a team lead reads first,
-        // then the follow-up and the attempts behind them, then intake, inbound and orders, Data quality last. Each report
-        // keeps its own permissions; the digit keys follow the visible order, so they moved for everyone who sees Reports.
-        // The intake reports (B11, 12 October 2026) carry their function's permissions (migration 0007d), the same lists
-        // as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here, because this module has no
-        // runtime imports)
-        { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
         // Calls (addition 0008j, brief B16): the calls, conversations, talk time and tags; Calls per agent the same per
         // person, for performance.team only (README Decision log, 14 October 2026)
         { page: "calls", href: "/reports/calls", label: copy.nav.calls, permission: ["reports.view", "performance.team"] },
         { page: "calls-per-agent", href: "/reports/calls-per-agent", label: copy.nav.callsPerAgent, permission: "performance.team" },
+        // Inbound (addition 0008i, brief B15): the service level and the missed calls per reason, after the calls
+        { page: "inbound", href: "/reports/inbound", label: copy.nav.inbound, permission: ["reports.view", "performance.team"] },
         // Email (addition 0008t, brief N19-A part 1): received per inbox and mailbox, sent, first replies, as Calls; Email per
         // agent the same per person, for performance.team while the tenant's reports.per_person holds email (Yordi agreed,
         // README Decision log, 18 October 2026)
         { page: "email", href: "/reports/email", label: copy.nav.email, permission: ["reports.view", "performance.team"] },
         { page: "email-per-agent", href: "/reports/email-per-agent", label: copy.nav.emailPerAgent, permission: "performance.team", perPerson: "email" },
+        // The intake reports (B11, 12 October 2026) carry their function's permissions (migration 0007d); Forms (addition
+        // 0008p, brief B17d): every polled form's submissions per form and market, as Calls
+        { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
+        { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
+        { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
+      ],
+    },
+    {
+      // Sales (addition 0008zu): the leads and the deals, from the first call to the first order
+      kind: "group",
+      id: "sales",
+      label: copy.nav.sales,
+      icon: "trend",
+      items: [
+        { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
         // Follow-up (addition 0008o, 16 October 2026): what is waiting right now, for the permissions of cma.open_leads
         // (reports.view, performance.team or monitoring.live)
         { page: "follow-up", href: "/reports/follow-up", label: copy.nav.followUp, permission: ["reports.view", "performance.team", "monitoring.live"] },
+        // Funnel (addition 0008zb, Kira's KPI 4): the sales deals through their stages with why they are lost (deals per
+        // person on the page for performance.team while reports.per_person holds deals); before the attempts behind it
+        { page: "funnel", href: "/reports/funnel", label: copy.nav.funnel, permission: ["reports.view", "performance.team"] },
         // Attempts per deal (addition 0008y; for sales since 0008z): the attempts on the sales deals until they are won,
         // lost or ordered another way; Attempts per agent the same per deal owner, for performance.team while the tenant's
         // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions)
         { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
         { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
-        // Funnel and Cancellations (addition 0008zb, Kira's KPIs 4 and 5): the sales deals through their stages with why they are
-        // lost (deals per person on the page for performance.team while reports.per_person holds deals), and the cancellation
-        // requests of the tenant's cancellation kind per market and week
-        { page: "funnel", href: "/reports/funnel", label: copy.nav.funnel, permission: ["reports.view", "performance.team"] },
-        { page: "cancellations", href: "/reports/cancellations", label: copy.nav.cancellations, permission: ["reports.view", "performance.team"] },
-        // Forms (addition 0008p, brief B17d): every polled form's submissions per form and market, as Calls
-        { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
-        { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
-        // Inbound (addition 0008i, brief B15): the service level and the missed calls per reason, as Intake
-        { page: "inbound", href: "/reports/inbound", label: copy.nav.inbound, permission: ["reports.view", "performance.team"] },
+        // Lead cohorts (addition 0008zm; KPIs 1 and 12): the lead deals by the week or month of their creation, followed at the
+        // ages of cohorts.lead_ages_days; team figures only, for the funnel's permissions
+        { page: "lead-cohorts", href: "/reports/lead-cohorts", label: copy.nav.leadCohorts, permission: ["reports.view", "performance.team"] },
         // First orders (addition 0008u, brief N19-A part 2): self-service or call center, as Email; Orders per person the
         // credited first orders per person, for performance.team while the tenant's reports.per_person holds orders
         // (off for Pulse4all until Yordi confirms it, README Open decisions)
         { page: "first-orders", href: "/reports/first-orders", label: copy.nav.firstOrders, permission: ["reports.view", "performance.team"] },
         { page: "orders-per-person", href: "/reports/orders-per-person", label: copy.nav.ordersPerPerson, permission: "performance.team", perPerson: "orders" },
-        // Lead cohorts (addition 0008zm; KPIs 1 and 12): the lead deals by the week or month of their creation, followed at the ages of
-        // cohorts.lead_ages_days; after First orders and its per-person page, so the pages after it move one key down. Team figures
-        // only, for the funnel's permissions
-        { page: "lead-cohorts", href: "/reports/lead-cohorts", label: copy.nav.leadCohorts, permission: ["reports.view", "performance.team"] },
+      ],
+    },
+    {
+      // Customers (addition 0008zu): what happens after the order; team figures only, as every report
+      kind: "group",
+      id: "customers",
+      label: copy.nav.customers,
+      icon: "person",
+      items: [
+        // Cancellations (addition 0008zb, Kira's KPI 5): the cancellation requests of the tenant's cancellation kind per
+        // market and week
+        { page: "cancellations", href: "/reports/cancellations", label: copy.nav.cancellations, permission: ["reports.view", "performance.team"] },
         // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
-        // average rating, the negative reviews and how they link to an order or a contact; team figures only, as every report
+        // average rating, the negative reviews and how they link to an order or a contact
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
-        // Maintenance (addition 0008zi): the asset register's devices' due components and end of life per month, market and model,
-        // bundled into planned exchanges, with the device list of a cell; team figures only, as every report
+        // Maintenance (addition 0008zi): the asset register's devices' due components and end of life per month, market and
+        // model, bundled into planned exchanges, with the device list of a cell
         { page: "maintenance", href: "/reports/maintenance", label: copy.nav.maintenance, permission: ["reports.view", "performance.team"] },
-        { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
       ],
     },
     {
       // Campaigns (addition 0008v, brief N19-A part 3): Campaign monitoring, the journeys as placeholders for the
-      // compliance and campaign monitors, for the report permissions; after Reports, so no key above it moves
+      // compliance and campaign monitors, for the report permissions; after Customers since addition 0008zu (after
+      // Reports before), so no key above it moves
       kind: "group",
       id: "campaigns",
       label: copy.nav.campaigns,
@@ -288,6 +316,14 @@ export function holdsAny(me: Pick<Principal, "permissions">, permission: string 
   return permission.some((p) => me.permissions.includes(p));
 }
 
+/**
+ * The rail's item for the page being shown: its ShellPage, and its href when several items share the page (a contact
+ * center's Live board, addition 0008zu); without an href, the first item of the page
+ */
+export function isCurrent(item: Pick<NavItem, "page" | "href">, active: ShellPage, activeHref?: string): boolean {
+  return item.page === active && (activeHref === undefined || item.href === activeHref);
+}
+
 function mayOpen(me: Principal, item: NavItem): boolean {
   return holdsAny(me, item.permission) && (item.perPerson === undefined || me.perPerson.includes(item.perPerson));
 }
@@ -305,7 +341,7 @@ export function visibleNav(me: Principal, copy: Copy): VisibleEntry[] {
   let n = 0;
   const out: VisibleEntry[] = [];
   const nextKey = (): string | null => (++n <= MAX_DIGIT_KEYS ? String(n) : null);
-  for (const entry of navEntries(copy)) {
+  for (const entry of navEntries(copy, me.contactCenters)) {
     if (entry.kind === "page") {
       if (mayOpen(me, entry.item)) out.push({ kind: "page", icon: entry.icon, item: { ...entry.item, key: nextKey() } });
       continue;
@@ -338,9 +374,10 @@ export interface Crumb {
  * model; a bare page is Welcome › the page. My account and Send a message are no rail items and get
  * their own trail; Welcome shows none. A page's own trail (the connection's name on Sources) is appended,
  * and the page's crumb becomes a link; a journey's page (0008v) is Welcome › Campaigns › the journey. The last
- * crumb is never a link.
+ * crumb is never a link. A contact center's Live board (addition 0008zu) is Welcome › Live › the organisation's name,
+ * found by its href (activeHref) among the Live group's boards.
  */
-export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail: Crumb[] = []): Crumb[] {
+export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail: Crumb[] = [], activeHref?: string): Crumb[] {
   if (active === "welcome") return [];
   let own: Crumb[] = [];
   if (active === "account") own = [{ label: copy.account.title, href: "/account" }];
@@ -349,12 +386,12 @@ export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail:
   // A journey's page (addition 0008v): Campaigns › the journey's name, the group's one page being the list of journeys
   else if (active === "campaigns" && trail.length > 0) own = [{ label: copy.nav.campaigns, href: "/campaigns" }];
   else {
-    for (const entry of navEntries(copy)) {
+    for (const entry of navEntries(copy, me.contactCenters)) {
       if (entry.kind === "page") {
-        if (entry.item.page === active) own = [{ label: entry.item.label, href: entry.item.href }];
+        if (isCurrent(entry.item, active, activeHref)) own = [{ label: entry.item.label, href: entry.item.href }];
         continue;
       }
-      const item = entry.items.find((i) => i.page === active);
+      const item = entry.items.find((i) => isCurrent(i, active, activeHref));
       if (!item) continue;
       const first = entry.items.find((i) => mayOpen(me, i));
       own = [{ label: entry.label, href: first?.href }, { label: item.label, href: item.href }];

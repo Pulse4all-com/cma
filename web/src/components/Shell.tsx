@@ -1,8 +1,8 @@
 /**
  * App frame: top bar, left rail, content. White top bar, the rail on Background Blue, the content
  * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Welcome is
- * a page of its own at the top of the rail; the other pages sit in groups (Live, Time, Reports; the
- * model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
+ * a page of its own at the top of the rail; the other pages sit in groups (Live, Team, Time, Reports, Sales,
+ * Customers, Campaigns, Configuration; the model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
  * (see hooks/useKeyboardShortcuts), and named for assistive tech in aria-keyshortcuts.
  *
  * Since 16 October 2026 the rail folds to icons (cookie cma-rail, the toggle at its foot, W), the
@@ -33,8 +33,8 @@ import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { requestDbTrace } from "@/lib/data";
 import { Keycap, Notice } from "./primitives";
-import { breadcrumbs, HINTS_COOKIE, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
-import { NavAccordion, NavGroup, NavIconMark } from "./NavGroup";
+import { breadcrumbs, HINTS_COOKIE, isCurrent, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type NavHref, type ShellPage } from "@/lib/nav";
+import { NavAccordion, NavBareLink, NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 import { MessageCenter } from "./MessageCenter";
 import { HintsToggle, RailToggle } from "./ShellPrefs";
@@ -46,6 +46,7 @@ export async function Shell({
   copy,
   me,
   active,
+  activeHref,
   wide = false,
   trail = [],
   children,
@@ -53,6 +54,11 @@ export async function Shell({
   copy: Copy;
   me: Principal;
   active: ShellPage;
+  /**
+   * The page's own address when several rail pages share its ShellPage: a contact center's Live board (addition 0008zu),
+   * so only its own item is current and its breadcrumb carries its organisation's name
+   */
+  activeHref?: NavHref;
   /**
    * Report and operational screens with wide tables: the width up to 1536 px (max-w-screen-2xl), as Pulse4all-Style
    * 7.1 allows operational screens (Decision log, 19 October 2026); the other pages keep the narrow column
@@ -71,7 +77,7 @@ export async function Shell({
   const openGroup = openGroupOf(jar.get(NAV_OPEN_COOKIE)?.value, nav.flatMap((e) => (e.kind === "group" ? [e.id] : [])));
   const collapsed = jar.get(RAIL_COOKIE)?.value === "collapsed";
   const hintsHidden = jar.get(HINTS_COOKIE)?.value === "hidden";
-  const crumbs = breadcrumbs(me, copy, active, trail);
+  const crumbs = breadcrumbs(me, copy, active, trail, activeHref);
   const t = copy.shell;
   // Preview as role: the tenant's roles for the select, listed with the real principal (the mock checks
   // the caller's own permissions, which a preview narrows; the database checks the real user either way)
@@ -90,6 +96,9 @@ export async function Shell({
     >
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       <Shortcuts />
+      {/* The rail's open group, for the rail and the top bar's inbox (a bare rail page closes it, addition 0008zu); a
+          context only, so the frame's grid keeps the header, the rail and main as its own children */}
+      <NavAccordion initial={openGroup}>
       <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
         <div className="flex items-center gap-4">
           <Image
@@ -146,16 +155,16 @@ export async function Shell({
       </header>
 
       <nav aria-label={copy.app.name} data-rail-nav className="flex min-h-0 flex-col overflow-y-auto border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
-        <NavAccordion initial={openGroup}>
         <ul className="flex flex-col gap-2">
           {nav.map((entry) => {
             if (entry.kind === "page") {
-              const current = entry.item.page === active;
+              const current = isCurrent(entry.item, active, activeHref);
               // The label with its key is the name in the folded rail (title and aria-label); the keycap is hidden there
               const name = entry.item.key ? `${entry.item.label} (${entry.item.key})` : entry.item.label;
+              // A bare page closes the open group on its click or digit key (addition 0008zu)
               return (
                 <li key={entry.item.page}>
-                  <Link
+                  <NavBareLink
                     href={entry.item.href}
                     prefetch={active === "follow-up" ? false : undefined}
                     aria-current={current ? "page" : undefined}
@@ -171,7 +180,7 @@ export async function Shell({
                     <NavIconMark name={entry.icon} />
                     <span data-rail-text className="min-w-0 flex-1 truncate">{entry.item.label}</span>
                     {entry.item.key ? <Keycap data-rail-text>{entry.item.key}</Keycap> : null}
-                  </Link>
+                  </NavBareLink>
                 </li>
               );
             }
@@ -181,11 +190,11 @@ export async function Shell({
                 id={entry.id}
                 label={entry.label}
                 icon={entry.icon}
-                current={entry.items.some((i) => i.page === active)}
+                current={entry.items.some((i) => isCurrent(i, active, activeHref))}
                 shortcut={entry.shortcut}
               >
                 {entry.items.map((item) => {
-                  const current = item.page === active;
+                  const current = isCurrent(item, active, activeHref);
                   return (
                     <li key={item.page}>
                       <Link
@@ -211,7 +220,6 @@ export async function Shell({
             );
           })}
         </ul>
-        </NavAccordion>
         <div className="mt-auto flex flex-col gap-2 text-caption text-p4a-grey">
           {/* The shortcuts line and the version hide with the fold; the shortcuts line also with the hints */}
           <div data-rail-text className="flex flex-col gap-2">
@@ -239,6 +247,7 @@ export async function Shell({
         {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} /> : null}
         <div className={wide ? "max-w-screen-2xl" : "max-w-4xl"}>{children}</div>
       </main>
+      </NavAccordion>
     </div>
   );
 }

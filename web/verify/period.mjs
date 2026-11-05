@@ -155,7 +155,7 @@ expect("Forms: Category answers to A, with its keycap",
 const shellLetters = [
   ...lettersIn(src("../src/components/Shell.tsx")),
   ...Array.from({ length: MAX_DIGIT_KEYS }, (_, i) => String(i + 1)),
-  ...navEntries(copy.en).flatMap((e) => (e.kind === "group" && e.shortcut ? [e.shortcut] : [])),
+  ...navEntries(copy.en, []).flatMap((e) => (e.kind === "group" && e.shortcut ? [e.shortcut] : [])),
   ...lettersIn(src("../src/components/ShellPrefs.tsx")),
 ];
 const barLetters = keys.map((k) => k.toLowerCase());

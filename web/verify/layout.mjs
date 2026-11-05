@@ -198,31 +198,38 @@ async function expectNavigation() {
     // performance.team) follows Orders per person (First orders for the reader), so the keys after it move one down. Since
     // 0008zn Flash (reports.view or performance.team) is first in Reports, so every Reports key moves by one for everyone who
     // sees it (brief B21)
-    ["analyst", ["/", "/messages", "/live/board", "/reports/flash", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
-      "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms",
-      "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality",
-      "/campaigns"], false],
+    // Since 0008zu (Martin, 5 November 2026) the Live group holds one board per contact center (Newco in the dev seed and
+    // the mock, /live/newco), and the report pages sit in three groups: Reports (Flash, Dashboard, Calls, Calls per agent,
+    // Inbound, Email, Email per agent, Intake, Forms, Data quality), Sales (Speed to lead, Follow-up, Funnel, Attempts per
+    // deal, Attempts per agent, Lead cohorts, First orders, Orders per person) and Customers (Cancellations, Reviews,
+    // Maintenance), then Campaigns; every page keeps its permission, and the digit keys follow the new order
+    ["analyst", ["/", "/messages", "/live/newco", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
+      "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
+      "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
+      "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
-    ["reader", ["/", "/messages", "/reports/flash", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/funnel",
-      "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance",
-      "/reports/data-quality", "/campaigns"], false],
+    ["reader", ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
+      "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
+      "/reports/first-orders", "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls",
-      "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent",
-      "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
+    ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/calls",
+      "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms",
+      "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts",
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard",
-      "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
-      "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard",
-      "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
-      "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], true],
+    ["manager", ["/", "/messages", "/live/newco", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash",
+      "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
+      "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
+      "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
+      "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
+    ["admin", ["/", "/messages", "/live/newco", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash",
+      "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
+      "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
+      "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
+      "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -990,12 +997,22 @@ async function expectForms() {
 // people board without horizontal scrolling, a tile's hint inside the viewport; a tenant without telephony
 // says so in words; an agent gets the no-permission card and no inbound figures
 async function expectLiveBoard() {
-  for (const [subject, telephony] of [["supervisor", true], ["manager", true], ["admin", true], ["analyst", true], ["invest-analyst", false], ["agent-one", null]]) {
+  // Since addition 0008zu one board per contact center: /live/board opens the first one's (Newco's, /live/newco), every
+  // part of the board as before; the invest analyst's tenant has no contact center, so no Live group and /live/board is a
+  // 404 (a tenant without telephony still says so on Reports → Inbound, expectReports)
+  for (const [subject, telephony] of [["supervisor", true], ["manager", true], ["admin", true], ["analyst", true], ["invest-analyst", "none"], ["agent-one", null]]) {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
-    await p.goto(BASE + "/live/board");
+    const opened = await p.goto(BASE + "/live/board");
+    if (telephony === "none") {
+      const live = await p.locator('nav[data-rail-nav] button[aria-controls="nav-group-live"]').count();
+      if (opened?.status() !== 404 || live > 0) problems.push(`${subject} /live/board: answers ${opened?.status()} with ${live} Live group, expected 404 and none in a tenant without a contact center`);
+      await ctx.close();
+      continue;
+    }
     await settle(p);
     await p.waitForLoadState("networkidle");
+    if (new URL(p.url()).pathname !== "/live/newco") problems.push(`${subject} /live/board: opened ${new URL(p.url()).pathname}, expected Newco's board /live/newco`);
     if (telephony === null) {
       if (await p.locator('[data-testid="inbound-live"]').count() > 0) problems.push(`${subject} /live/board: inbound figures shown to someone without the Live board`);
       await ctx.close();
@@ -1013,7 +1030,8 @@ async function expectLiveBoard() {
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
-        notConnected: !!document.querySelector('[data-testid="inbound-live"] [data-testid="inbound-not-connected"]'),
+        // the call parts stay tenant-wide on a contact center's board and say so (addition 0008zu)
+        scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="missed-scope"]')].map((el) => el.textContent ?? ""),
         unnamedLabels: [...document.querySelectorAll("main div[aria-label], main span[aria-label]")].filter((el) => !el.getAttribute("role")).length,
         // Missed, not called back is the board's last section since 0008z: the last heading in main is its own
         lastHeading: [...document.querySelectorAll("main h2")].at(-1)?.closest('[data-testid="missed-live"]') !== null,
@@ -1024,7 +1042,7 @@ async function expectLiveBoard() {
     if (m.mainX > 0) problems.push(`${subject} /live/board: the main area scrolls sideways by ${m.mainX}px at 1280`);
     if (telephony && (m.tiles !== 7 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 7 and a table`);
     if (telephony && !m.lastHeading) problems.push(`${subject} /live/board: Missed, not called back is not the board's last section`);
-    if (!telephony && (!m.notConnected || m.tiles > 0)) problems.push(`${subject} /live/board: a tenant without telephony must say so instead of showing tiles`);
+    if (telephony && (m.scopes.length !== 2 || !m.scopes.every((x) => x.includes("Newco")))) problems.push(`${subject} /live/board: ${m.scopes.length} captions on the call parts naming Newco, expected 2`);
     if (telephony) {
       const mark = p.locator('[data-testid="inbound-longestWaiting"] button[data-header-hint]');
       await mark.focus();
@@ -1062,7 +1080,7 @@ async function expectFrameFixed() {
   const docOf = (p) => p.evaluate(() => ({ height: document.scrollingElement.scrollHeight, inner: window.innerHeight, y: window.scrollY }));
   for (const [width, height] of [[1280, 800], [1920, 1080]]) {
     const tag = `${width}x${height}`;
-    for (const path of ["/live/board", "/reports/speed-to-lead?range=month", "/reports/follow-up"]) {
+    for (const path of ["/live/newco", "/reports/speed-to-lead?range=month", "/reports/follow-up"]) {
       const where = `manager ${path} at ${tag}`;
       const before = problems.length;
       const ctx = await b.newContext({ viewport: { width, height }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
@@ -1071,7 +1089,7 @@ async function expectFrameFixed() {
       await settle(p);
       await p.waitForLoadState("networkidle");
       if (provoke) await unfix(p);
-      if (path === "/live/board" && await p.locator('[data-testid="missed-callbacks"]').count() === 0) problems.push(`${where}: the fixture's missed calls are missing`);
+      if (path === "/live/newco" && await p.locator('[data-testid="missed-callbacks"]').count() === 0) problems.push(`${where}: the fixture's missed calls are missing`);
       // The content's own height, before any scrolling: from the top of main's first child to the bottom of its last, with main's padding
       const natural = await p.evaluate(() => {
         const main = document.querySelector("main");
@@ -1113,7 +1131,7 @@ async function expectFrameFixed() {
       const doc = await docOf(p);
       if (doc.height !== doc.inner) problems.push(`${where}: the document is ${doc.height}px tall in a ${doc.inner}px window, so the page scrolls below the frame`);
       if (doc.y !== 0) problems.push(`${where}: the wheel and End scrolled the page by ${doc.y}px`);
-      if (path === "/live/board" && tag === "1280x800" && natural <= m.clientHeight) problems.push(`${where}: the board fits in main (${Math.round(natural)}px in ${m.clientHeight}px), so the check has no page longer than the window`);
+      if (path === "/live/newco" && tag === "1280x800" && natural <= m.clientHeight) problems.push(`${where}: the board fits in main (${Math.round(natural)}px in ${m.clientHeight}px), so the check has no page longer than the window`);
       if (natural > m.clientHeight) {
         if (m.scrollHeight <= m.clientHeight || wheeled <= 0) problems.push(`${where}: the content is ${Math.round(natural)}px in a ${m.clientHeight}px main, which the wheel does not scroll (scrollHeight ${m.scrollHeight}, moved ${wheeled}px)`);
         if (m.lastBottom > m.mainBottom + 1) problems.push(`${where}: at the bottom of main its last line ends at ${Math.round(m.lastBottom)}px, below main's ${Math.round(m.mainBottom)}px`);
@@ -1121,7 +1139,7 @@ async function expectFrameFixed() {
       if (m.probes.some((ok) => !ok)) problems.push(`${where}: a fixed element in the ${m.probes[0] ? "content" : "top bar"} no longer sits 24px from the window's bottom right`);
       const ok = problems.length === before;
       console.log(`${ok ? "PASS" : "FAIL"}  frame does not scroll: ${path} at ${tag}${natural > m.clientHeight ? ", main scrolls" : ", fits"}`);
-      if (path === "/live/board") await p.screenshot({ path: `${outDir}/manager-live-board-bottom-${tag}.png` });
+      if (path === "/live/newco") await p.screenshot({ path: `${outDir}/manager-live-board-bottom-${tag}.png` });
       await ctx.close();
     }
   }
@@ -1677,13 +1695,17 @@ async function expectFrame() {
     ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/teams", "/configuration/sources", null]],
     ["agent-one", "/account", ["Welcome", "My account"], ["/", null]],
     ["supervisor", "/messages/send", ["Welcome", "Messages", "Send a message"], ["/", "/messages", null]],
-    // Follow-up and Waiting for you (addition 0008o): a report in its group; the person's own page, no rail item
-    ["manager", "/reports/follow-up", ["Welcome", "Reports", "Follow-up"], ["/", "/reports/flash", null]],
+    // Follow-up and Waiting for you (addition 0008o): a report in its group (Sales since 0008zu, which links to Speed to
+    // lead, its first page); the person's own page, no rail item
+    ["manager", "/reports/follow-up", ["Welcome", "Sales", "Follow-up"], ["/", "/reports/speed-to-lead", null]],
     ["agent-one", "/me/follow-up", ["Welcome", "Waiting for you"], ["/", null]],
-    // Attempts per deal and Attempts per agent (addition 0008y): reports in their group
-    ["manager", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/flash", null]],
-    ["reader", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/flash", null]],
-    ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Reports", "Attempts per agent"], ["/", "/reports/flash", null]],
+    // Attempts per deal and Attempts per agent (addition 0008y): reports in their group (Sales since 0008zu)
+    ["manager", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
+    ["reader", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
+    ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Sales", "Attempts per agent"], ["/", "/reports/speed-to-lead", null]],
+    // A contact center's Live board (addition 0008zu): Live › the organisation's name; Reviews in Customers
+    ["supervisor", "/live/newco", ["Welcome", "Live", "Newco"], ["/", "/live/newco", null]],
+    ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/cancellations", null]],
   ]) {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
@@ -1775,8 +1797,8 @@ async function expectFrame() {
 // none) and rendered by the server, a click on the open group closing it, a group's letter opening it (closing the other)
 // with the focus on its first page, a click in the folded rail unfolding it with only that group open, the retired
 // per-group cookies ignored and expired on the first toggle; aria-expanded and aria-controls agree with what shows, a
-// closed group holding the current page keeps its white pill and the digit keys work with every group closed.
-// Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
+// closed group holding the current page keeps its white pill and the digit keys work with every group closed; a bare rail
+// page (Welcome, Messages, the top bar's inbox) closes the open group (addition 0008zu). Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
 // 7 October 2026 (Time still open after Reports opens)
 async function expectAccordion() {
   const host = new URL(BASE).hostname;
@@ -1876,6 +1898,37 @@ async function expectAccordion() {
     const focus = await p.evaluate(() => document.activeElement?.getAttribute("href"));
     if (focus !== "/configuration/teams") problems.push(`accordion: after C the focus is on ${JSON.stringify(focus)}, expected Configuration's first page`);
     if ((await jarOf(ctx))["cma-nav-open"] !== "configuration") problems.push("accordion: C did not write cma-nav-open=configuration");
+    await ctx.close();
+  }
+
+  // 2b. A bare rail page closes the open group (addition 0008zu, Martin, 5 November 2026): with Time open on My day, a click
+  // on Welcome, the key 2 (Messages) and a click on the top bar's inbox each close it; the cookie is then empty and a
+  // reload opens none. --provoke expects Time still open
+  {
+    const ctx = await contextOf("manager", {});
+    const p = await ctx.newPage();
+    for (const [how, act, path] of [
+      ["a click on Welcome", () => p.locator('nav[data-rail-nav] a[href="/"]').click(), "/"],
+      ["the key 2", async () => { await p.locator("main h1").click(); await p.keyboard.press("2"); }, "/messages"],
+      ["a click on the inbox", () => p.locator('[data-testid="inbox-link"]').click(), "/messages"],
+    ]) {
+      await p.goto(BASE + "/day");
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      if (!openOf(await groupsOf(p)).includes("time")) await click(p, "time");
+      expectOpen(`on My day before ${how}`, await groupsOf(p), ["time"]);
+      await act();
+      await p.waitForURL((u) => new URL(u).pathname === path).catch(() => undefined);
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      if (new URL(p.url()).pathname !== path) problems.push(`accordion: ${how} opened ${new URL(p.url()).pathname}, expected ${path}`);
+      expectOpen(`after ${how}`, await groupsOf(p), provoke ? ["time"] : []);
+      const jar = await jarOf(ctx);
+      if (jar["cma-nav-open"] !== "") problems.push(`accordion: after ${how} the cookie is ${JSON.stringify(jar["cma-nav-open"])}, expected empty`);
+      await p.reload();
+      await p.waitForLoadState("networkidle");
+      expectOpen(`after ${how} and a reload`, await groupsOf(p), []);
+    }
     await ctx.close();
   }
 

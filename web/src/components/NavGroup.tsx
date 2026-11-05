@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * A group in the left navigation (Live, Team, Time, Reports, Campaigns, Configuration): one button that opens and
+ * A group in the left navigation (Live, Team, Time, Reports, Sales, Customers, Campaigns, Configuration): one button that opens and
  * closes its pages. The rail is an accordion (19 October 2026): at most one group is open, opening a group closes
  * the open one, and a click on the open group closes it, so none is open. NavAccordion, around the rail's list,
  * holds the open group's id and writes it to the cookie cma-nav-open (an empty value for none; Shell reads it on
@@ -11,8 +11,14 @@
  * group's letter (Configuration's C) is a click on its button and focuses the first page once it opens. In the
  * folded rail (16 October 2026) the button shows its icon only, named by title and aria-label; it then unfolds the
  * rail and opens its group (closing the other), and a folded group that holds the current page keeps its white pill.
+ *
+ * A bare rail page closes the open group (Martin, 5 November 2026; addition 0008zu): Welcome and Messages render through
+ * NavBareLink, whose click (a digit key is the same click, hooks/useKeyboardShortcuts) sets the open group to none, and
+ * the top bar's inbox (MessageCenter) does the same through useCloseNavGroup(); the cookie then holds no group, so a
+ * reload opens none. NavAccordion therefore wraps the whole frame in Shell, the top bar included.
  */
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { createContext, useCallback, useContext, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { expiredCookie, NAV_COOKIE_PREFIX, NAV_OPEN_COOKIE, prefCookie, type NavIcon } from "@/lib/nav";
 import { Keycap } from "./primitives";
 import { railCollapsed, setRailCollapsed } from "./ShellPrefs";
@@ -36,6 +42,29 @@ export function NavAccordion({ initial, children }: { initial: string | null; ch
     }
   }, []);
   return <OpenGroup.Provider value={{ open, setOpen }}>{children}</OpenGroup.Provider>;
+}
+
+/** Closes the rail's open group, for a link to a bare rail page outside the rail (the top bar's inbox) */
+export function useCloseNavGroup(): () => void {
+  const { setOpen } = useContext(OpenGroup);
+  return useCallback(() => setOpen(null), [setOpen]);
+}
+
+/**
+ * A bare rail page's link (Welcome, Messages): a click, or its digit key, closes the open group before it navigates
+ * (addition 0008zu), so the rail shows no group open on the bare page and after a reload
+ */
+export function NavBareLink({ onClick, ...props }: ComponentProps<typeof Link>) {
+  const close = useCloseNavGroup();
+  return (
+    <Link
+      {...props}
+      onClick={(e) => {
+        close();
+        onClick?.(e);
+      }}
+    />
+  );
 }
 
 export function NavGroup({
@@ -234,6 +263,40 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         >
           <path d="M4.5 17.5v-14" />
           <path d="M4.5 3.5h9.5l-2 3.25 2 3.25h-9.5" />
+        </svg>
+      );
+    case "trend":
+      // Sales (addition 0008zu): a line rising to an arrow
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3.5 14.5l4.5-4.5 3 3 5.5-6" />
+          <path d="M12.5 7h4v4" />
+        </svg>
+      );
+    case "person":
+      // Customers (addition 0008zu): one person, apart from Team's two
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="10" cy="7" r="3" />
+          <path d="M4.5 16.5a5.5 5.5 0 0 1 11 0" />
         </svg>
       );
     case "chart":
