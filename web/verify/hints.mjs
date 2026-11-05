@@ -27,6 +27,11 @@
  */
 import { chromium } from "playwright";
 
+/** Since night N06 every page route streams its skeleton first (loading.tsx): wait until the page has replaced it */
+async function settle(page) {
+  await page.waitForSelector("[data-route-skeleton]", { state: "detached", timeout: 30000 }).catch(() => {});
+}
+
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const provoke = process.argv.includes("--provoke");
 const provokeTopbar = provoke || process.argv.includes("--provoke-topbar");
@@ -181,6 +186,7 @@ for (const [subject, path, minHeaders, minTiles, scope] of cases) {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
   const p = await ctx.newPage();
   await p.goto(BASE + path);
+  await settle(p);
   await p.waitForLoadState("networkidle");
   if (provoke && path.startsWith("/reports/data-quality")) {
     await p.evaluate(() => document.querySelector("main th button[data-header-hint]")?.closest("span")?.remove());
@@ -201,6 +207,7 @@ let levelBars = 0;
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/first-orders?range=month");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   const bars = await p.evaluate(() => [...document.querySelectorAll('[data-testid="first-order-levels"] > li')].map((li) => {
     const marks = li.querySelectorAll("button[data-header-hint]");
@@ -224,6 +231,7 @@ let barCards = 0;
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/attempts?range=month");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   const intros = await p.evaluate(() => [...document.querySelectorAll("main [data-attempt-intro]")].map((el) => {
     const marks = el.querySelectorAll("button[data-header-hint]");
@@ -269,6 +277,7 @@ for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cance
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + path);
+  await settle(p);
   await p.waitForLoadState("networkidle");
   if (provoke && path.startsWith("/reports/cancellations")) await p.evaluate(() => document.querySelector("[data-funnel-intro] button[data-header-hint]")?.remove());
   const intros = await p.evaluate(() => [...document.querySelectorAll("[data-funnel-intro]")].map((el) => {
@@ -290,6 +299,7 @@ for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cance
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/speed-to-lead?range=month");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   const mark = p.locator('[data-testid="speed-summary"] th button[data-header-hint]').nth(1);
   const panelOf = async (m) => p.locator(`[id="${await m.getAttribute("aria-describedby")}"]`);
@@ -319,6 +329,7 @@ for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cance
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, hasTouch: true, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/data-quality");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   const mark = p.locator("main th button[data-header-hint]").first();
   const panel = p.locator(`[id="${await mark.getAttribute("aria-describedby")}"]`);
@@ -339,6 +350,7 @@ for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cance
   await ctx.addCookies([{ name: "cma-hints", value: provoke ? "shown" : "hidden", domain: new URL(BASE).hostname, path: "/" }]);
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/speed-to-lead?range=month");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   // Log out's keycap keeps its place in the layout, invisible (19 October 2026), so visible means rendered and not hidden
   const visibleKeycaps = () => p.evaluate(() => [...document.querySelectorAll("kbd")].filter((k) => k.getClientRects().length > 0 && getComputedStyle(k).visibility !== "hidden").length);
@@ -361,6 +373,7 @@ for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cance
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/dashboard?range=month");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   await p.locator('[data-testid="intake-leads"] button[data-header-hint]').click();
   if (new URL(p.url()).pathname !== "/reports/dashboard") problems.push("dashboard: the Leads tile's mark navigated away");
@@ -391,7 +404,7 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
     ]);
     const p = await ctx.newPage();
     const load = async (how) => {
-      if (how === "goto") await p.goto(BASE + "/configuration/statuses");
+      if (how === "goto") { await p.goto(BASE + "/configuration/statuses"); await settle(p); }
       else await p.reload();
       await p.waitForLoadState("networkidle");
       if (provokeTopbar) await p.addStyleTag({ content: '[data-hints="hidden"] [data-logout="with-key"] kbd { display: none !important; }' });

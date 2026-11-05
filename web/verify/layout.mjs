@@ -94,6 +94,11 @@
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
+/** Since night N06 every page route streams its skeleton first (loading.tsx): wait until the page has replaced it */
+async function settle(page) {
+  await page.waitForSelector("[data-route-skeleton]", { state: "detached", timeout: 30000 }).catch(() => {});
+}
+
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const provoke = process.argv.includes("--provoke");
 const outDir = process.env.OUT_DIR ?? new URL("../../records/layout", import.meta.url).pathname;
@@ -137,6 +142,7 @@ async function expectDialogNamed(p, where) {
 async function expectShell(width, height) {
   const p = await b.newPage({ viewport: { width, height } });
   await p.goto(BASE + "/");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   const m = await p.evaluate(() => {
     const nav = document.querySelector("nav");
@@ -222,6 +228,7 @@ async function expectNavigation() {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const path = new URL(p.url()).pathname;
     // Since the IT audit of 17 October 2026 only the first nine pages carry a digit key (one keypress; "10" can never be
@@ -255,6 +262,7 @@ async function expectNavigation() {
     if (JSON.stringify(accountLinks) !== JSON.stringify(["HEADER"])) problems.push(`${subject}: My account linked from ${JSON.stringify(accountLinks)}, expected the top bar only`);
     await p.screenshot({ path: `${outDir}/${subject}-welcome.png` });
     await p.goto(BASE + "/account");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const accountPath = new URL(p.url()).pathname;
     const accountTitle = await p.locator("main h1").first().textContent().catch(() => null);
@@ -262,6 +270,7 @@ async function expectNavigation() {
     await p.screenshot({ path: `${outDir}/${subject}-account.png` });
     if (!clock) {
       await p.goto(BASE + "/day");
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const dayPath = new URL(p.url()).pathname;
       if (dayPath !== "/") problems.push(`${subject}: My day answered ${dayPath}, expected to be sent to Welcome`);
@@ -301,6 +310,7 @@ async function expectReports() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + path);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate(() => ({
       scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -375,16 +385,19 @@ async function expectReports() {
     "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
     "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/reports/flash"]) {
     await p.goto(BASE + path);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
   }
   // The reader (reports.view alone) sees no per-person table on Follow-up (performance.team only, 0008o)
   await p.goto(BASE + "/reports/follow-up");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   await ctx.close();
   const reader = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "reader" } });
   const rp = await reader.newPage();
   await rp.goto(BASE + "/reports/follow-up");
+  await settle(rp);
   await rp.waitForLoadState("networkidle");
   if (await rp.locator('[data-testid="follow-up-by-owner"]').count() !== (provoke ? 1 : 0)) problems.push("reader /reports/follow-up: the per-person table is shown without performance.team");
   await reader.close();
@@ -437,6 +450,7 @@ async function expectCalls() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     if (rail.includes("/reports/calls") !== calls) problems.push(`${subject}: Calls ${calls ? "missing from" : "shown in"} the rail`);
@@ -444,6 +458,7 @@ async function expectCalls() {
     for (const [path, may, table] of [["/reports/calls?range=month&group=day", calls, "tag-table"], ["/reports/calls-per-agent?range=month", perAgent, "agents-table"]]) {
       const where = `${subject} ${path.split("?")[0]}`;
       await p.goto(BASE + path);
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const m = await p.evaluate(() => ({
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -492,6 +507,7 @@ async function expectCalls() {
         for (const [q, want] of [["range=week&group=day", "partial"], [`range=custom&from=${day(-8)}&to=${day(-2)}&group=day`, "whole"],
           [`range=custom&from=${day(-30)}&to=${day(-1)}&group=day`, "none"]]) {
           await p.goto(`${BASE}/reports/calls?${q}`);
+          await settle(p);
           await p.waitForLoadState("networkidle");
           const deltas = await p.evaluate(() => [...document.querySelectorAll('[data-testid="delta"]')].map((d) => ({
             compares: d.getAttribute("data-compares"), text: d.textContent?.trim() ?? "", title: d.getAttribute("title") ?? "",
@@ -531,6 +547,7 @@ async function expectEmail() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     if (rail.includes("/reports/email") !== email) problems.push(`${subject}: Email ${email ? "missing from" : "shown in"} the rail`);
@@ -539,6 +556,7 @@ async function expectEmail() {
       ["/reports/email-per-agent?range=month", perAgent, "email-agents-scroll", "email-agents-table"]]) {
       const where = `${subject} ${path.split("?")[0]}`;
       const r = await p.goto(BASE + path);
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const m = await p.evaluate(() => ({
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -624,6 +642,7 @@ async function expectFirstOrders() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     if (rail.includes("/reports/first-orders") !== orders) problems.push(`${subject}: First orders ${orders ? "missing from" : "shown in"} the rail`);
@@ -638,6 +657,7 @@ async function expectFirstOrders() {
       const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1]})` : ""}`;
       const firstOrders = path.startsWith("/reports/first-orders");
       const r = await p.goto(BASE + path);
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const m = await p.evaluate(() => ({
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -720,10 +740,12 @@ async function expectCampaigns() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     if (rail.includes("/campaigns") !== may) problems.push(`${subject}: Campaign monitoring ${may ? "missing from" : "shown in"} the rail`);
     await p.goto(BASE + "/campaigns");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate((spill) => {
       const cards = [...document.querySelectorAll('[data-testid="journey-card"]')];
@@ -781,6 +803,7 @@ async function expectCampaigns() {
       await p.screenshot({ path: `${outDir}/${subject}-campaign-fca.png`, fullPage: true });
       for (const code of ["old-pilot", "no-such-journey"]) {
         const r = await p.goto(BASE + `/campaigns/${code}`);
+        await settle(p);
         if (r?.status() !== 404) problems.push(`${subject} /campaigns/${code}: answers ${r?.status()}, expected 404`);
       }
     }
@@ -790,6 +813,7 @@ async function expectCampaigns() {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "analyst" } });
   const p = await ctx.newPage();
   await p.goto(BASE + "/campaigns/opc");
+  await settle(p);
   await p.waitForLoadState("networkidle");
   const crumbs = await p.evaluate(() => [...document.querySelectorAll('[data-testid="breadcrumbs"] li')].map((li) => li.textContent?.trim()));
   if (JSON.stringify(crumbs) !== JSON.stringify(["Welcome", "Campaigns", "OPC"])) problems.push(`analyst /campaigns/opc: breadcrumbs ${JSON.stringify(crumbs)}, expected Welcome › Campaigns › OPC`);
@@ -809,6 +833,7 @@ async function expectCallbacks() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/reports/follow-up");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const where = `${subject} /reports/follow-up`;
     const m = await p.evaluate(([spill]) => {
@@ -856,6 +881,7 @@ async function expectCallbacks() {
     }
     if (subject === "manager" || subject === "invest-analyst") {
       await p.goto(BASE + "/reports/dashboard?range=month");
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const tile = await p.evaluate(() => {
         const el = document.querySelector('[data-testid="intake-callbacks"]');
@@ -884,11 +910,13 @@ async function expectForms() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     if (rail.includes("/reports/forms") !== may) problems.push(`${subject}: Forms ${may ? "missing from" : "shown in"} the rail`);
     const where = `${subject} /reports/forms`;
     await p.goto(BASE + "/reports/forms?range=month&group=day");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate((spill) => {
       const main = document.querySelector("main");
@@ -943,6 +971,7 @@ async function expectForms() {
       const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
       for (const [q, want] of [["range=week", "partial"], [`range=custom&from=${day(-30)}&to=${day(-1)}`, "none"]]) {
         await p.goto(`${BASE}/reports/forms?${q}`);
+        await settle(p);
         await p.waitForLoadState("networkidle");
         const deltas = await p.evaluate(() => [...document.querySelectorAll('[data-testid="forms-tiles"] [data-testid="delta"]')].map((d) => ({
           compares: d.getAttribute("data-compares"), text: d.textContent?.trim() ?? "", title: d.getAttribute("title") ?? "" })));
@@ -964,6 +993,7 @@ async function expectLiveBoard() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/live/board");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     if (telephony === null) {
       if (await p.locator('[data-testid="inbound-live"]').count() > 0) problems.push(`${subject} /live/board: inbound figures shown to someone without the Live board`);
@@ -1037,6 +1067,7 @@ async function expectFrameFixed() {
       const ctx = await b.newContext({ viewport: { width, height }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
       const p = await ctx.newPage();
       await p.goto(BASE + path);
+      await settle(p);
       await p.waitForLoadState("networkidle");
       if (provoke) await unfix(p);
       if (path === "/live/board" && await p.locator('[data-testid="missed-callbacks"]').count() === 0) problems.push(`${where}: the fixture's missed calls are missing`);
@@ -1101,6 +1132,7 @@ async function expectFrameFixed() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     if (provoke) await unfix(p);
     const foot = await p.evaluate(() => {
@@ -1147,6 +1179,7 @@ async function expectFrameFixed() {
 async function expectGate(width, height) {
   const p = await b.newPage({ viewport: { width, height } });
   await p.goto(BASE + "/");
+  await settle(p);
   const gate = await p.locator('[data-testid="desktop-only"]').isVisible();
   const shell = await p.locator("nav").isVisible();
   if (!gate || shell) problems.push(`${width}x${height}: expected the desktop-only gate, got the app`);
@@ -1172,6 +1205,7 @@ async function expectIntakeConfiguration() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "admin" } });
     const p = await ctx.newPage();
     await p.goto(BASE + path);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate((spill) => {
       if (spill) document.querySelector("main table")?.setAttribute("style", "min-width: 2000px");
@@ -1222,6 +1256,7 @@ async function expectInvitations() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/team/people");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate((spill) => {
       const section = document.querySelector('[data-testid="invitations"]');
@@ -1280,6 +1315,7 @@ async function expectInvitations() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(`${BASE}/invite/${token}`);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate(() => {
       const card = document.querySelector('[data-testid^="invite-"]');
@@ -1336,6 +1372,7 @@ async function expectIrreversibleConfirmations() {
     const puts = [];
     p.on("request", (r) => { if (r.method() === "PUT" && new URL(r.url()).pathname.endsWith("/lines")) puts.push(r.postDataJSON()); });
     await p.goto(BASE + "/configuration/sources/00000000-0000-7000-8000-00000000c002");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const box = p.locator('[data-testid="source-lines"] input[type="checkbox"]').first();
     const dialog = p.locator("dialog[open]");
@@ -1422,6 +1459,7 @@ async function expectIrreversibleConfirmations() {
     const writes = [];
     p.on("request", (r) => { if (r.method() !== "GET" && new URL(r.url()).pathname.startsWith("/api/v1/") && !new URL(r.url()).pathname.startsWith("/api/v1/me/messages")) writes.push(`${r.method()} ${new URL(r.url()).pathname}`); });
     await p.goto(BASE + path);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     await open(p);
     await p.locator("dialog[open]").waitFor({ timeout: 5000 }).catch(() => undefined);
@@ -1448,6 +1486,7 @@ async function expectIrreversibleConfirmations() {
       const writes = [];
       p.on("request", (r) => { const u = new URL(r.url()); if (r.method() !== "GET" && u.pathname.startsWith("/api/v1/") && !u.pathname.startsWith("/api/v1/me/messages")) writes.push(`${r.method()} ${u.pathname}`); });
       await p.goto(BASE + "/day");
+      await settle(p);
       await p.waitForLoadState("networkidle");
       await p.keyboard.press("e");
       await p.locator("dialog[open]").waitFor({ timeout: 5000 }).catch(() => undefined);
@@ -1508,6 +1547,7 @@ async function expectFrame() {
     const ctx = await withCookies("manager", {});
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const r = await railOf(p);
     if (r.width !== 256 || r.state !== "expanded") problems.push(`rail: the default is ${r.state} at ${r.width}px, expected expanded at 256`);
@@ -1556,6 +1596,7 @@ async function expectFrame() {
     const ctx = await withCookies("manager", { "cma-rail": "collapsed" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/reports/inbound?range=month");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const r = await railOf(p);
     if (r.width !== 64 || r.labelsVisible > 0) problems.push(`rail: with the cookie Inbound renders at ${r.width}px with ${r.labelsVisible} labels, expected 64 and none`);
@@ -1572,6 +1613,7 @@ async function expectFrame() {
     const ctx = await withCookies("manager", { "cma-hints": "hidden" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/roster/planner");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate(() => {
       // Log out's keycap and the shortcuts line keep their space, invisible (19 October 2026)
@@ -1643,6 +1685,7 @@ async function expectFrame() {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
     await p.goto(BASE + path);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const where = `${subject} ${path.split("?")[0]}`;
     const c = await crumbsOf(p);
@@ -1668,6 +1711,7 @@ async function expectFrame() {
     const ctx = await withCookies("admin", { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate(() => ({
       banner: document.querySelector('[data-testid="preview-banner"]')?.textContent?.trim() ?? null,
@@ -1687,6 +1731,7 @@ async function expectFrame() {
     if (report.status() !== 403) problems.push(`preview: a report route answered ${report.status()} to the admin previewing as agent, expected the role's 403`);
     await p.screenshot({ path: `${outDir}/admin-preview-agent.png` });
     await p.goto(BASE + "/account");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const allows = await p.locator('[data-testid="permissions-list"] li').count();
     if (allows !== 2) problems.push(`preview: My account lists ${allows} permissions while previewing as agent, expected the narrowed 2`);
@@ -1711,6 +1756,7 @@ async function expectFrame() {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate(() => ({
       banner: !!document.querySelector('[data-testid="preview-banner"]'),
@@ -1774,6 +1820,7 @@ async function expectAccordion() {
     const ctx = await contextOf("manager", {});
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     expectOpen("on a first visit", await groupsOf(p), []);
     await click(p, "time");
@@ -1813,6 +1860,7 @@ async function expectAccordion() {
     const ctx = await contextOf("admin", { "cma-nav-open": "reports" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     expectOpen("for the admin with the cookie", await groupsOf(p), ["reports"]);
     await p.locator("main h1").click();
@@ -1832,6 +1880,7 @@ async function expectAccordion() {
     const ctx = await contextOf("manager", { "cma-rail": "collapsed", "cma-nav-open": "time" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     await click(p, "reports");
     const width = await p.evaluate(() => Math.round(document.querySelector("nav[data-rail-nav]").getBoundingClientRect().width));
@@ -1848,6 +1897,7 @@ async function expectAccordion() {
     const ctx = await contextOf("manager", { "cma-nav-time": "open", "cma-nav-reports": "open" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     expectOpen("with the retired cookies", await groupsOf(p), []);
     if ((await serverOpen(ctx, "/")).length !== 0) problems.push("accordion: the server renders a group open from a retired per-group cookie");
@@ -1868,6 +1918,7 @@ async function expectNoWrappedMarks() {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + path);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1].split("&")[0]})` : ""} at 1440`;
     const r = await p.evaluate((spoil) => {
@@ -1918,6 +1969,7 @@ async function expectAttempts() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     if (rail.includes("/reports/attempts") !== deals) problems.push(`${subject}: Attempts per deal ${deals ? "missing from" : "shown in"} the rail`);
@@ -1933,6 +1985,7 @@ async function expectAttempts() {
       const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1].split("&")[0]})` : ""}`;
       const perDeal = path.startsWith("/reports/attempts?");
       const r = await p.goto(BASE + path);
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const m = await p.evaluate(() => ({
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -2006,6 +2059,7 @@ async function expectFunnel() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
     for (const href of ["/reports/funnel", "/reports/cancellations"]) {
@@ -2023,6 +2077,7 @@ async function expectFunnel() {
     for (const [path, tables, keys, tiles] of pages) {
       const where = `${subject} ${path.split("?")[0]} (${path.split("group=")[1]})`;
       await p.goto(BASE + path);
+      await settle(p);
       await p.waitForLoadState("networkidle");
       const m = await p.evaluate(() => ({
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -2111,12 +2166,14 @@ async function expectWelcomeOnOpen() {
     const p = await ctx.newPage();
     const deep = subject === "manager" ? "/reports/attempts?range=month" : "/hours";
     await p.goto(BASE + deep);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const first = new URL(p.url()).pathname;
     if (first !== "/") problems.push(`${subject}: a fresh sign-in opening ${deep} landed on ${first}, expected Welcome at /`);
     const jar = Object.fromEntries((await ctx.cookies()).map((c) => [c.name, c]));
     if (!provoke && (!jar["cma-session"] || jar["cma-session"].expires !== -1 || !jar["cma-session"].httpOnly)) problems.push(`${subject}: the browser session is not an HttpOnly session cookie`);
     await p.goto(BASE + deep);
+    await settle(p);
     await p.waitForLoadState("networkidle");
     const second = new URL(p.url()).pathname;
     if (second !== deep.split("?")[0]) problems.push(`${subject}: a deep link while signed in landed on ${second}, expected ${deep.split("?")[0]}`);
