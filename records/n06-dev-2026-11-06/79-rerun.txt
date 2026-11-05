@@ -1,0 +1,37 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/79_verify_system_health.sql:51: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+DO
+DO
+                                      check_name                                      | result |                                                                                     detail                                                                                      
+--------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008r recorded                                                           | PASS   | 
+ A2 the heartbeat settings with their defaults                                        | PASS   | health.heartbeat_fresh_seconds=120:integer, health.heartbeat_late_seconds=900:integer
+ A3 the functions are the application's only, in the caller's rights, the read stable | PASS   | 
+ A4 sync_run takes the scheduler's job and has the index on the tenant's runs         | PASS   | 
+ B1 the Scheduler user starts and finishes its run: one row, the days closed          | PASS   | 1 row(s): job close_forgotten_workdays, connection none, status succeeded, counts {"closed": 3}, error none, finished t
+ B2 a finished run, an unknown run, a bad status and a negative count are refused     | PASS   | 5 of 5 refusals
+ B3 only the Scheduler user starts a scheduler run                                    | PASS   | 2 of 2 refusals
+ B4 the read sums the runs per job and connection                                     | PASS   | close_forgotten_workdays/none: last failed (verify_failure), ok t, bad t verify_failure, 24h 2/1 | link_calls/conn1: last succeeded, ok t, bad f, 24h 1/0
+ B5 tenant.configure reads System health; refusals                                    | PASS   | 3 of 3 refusals
+ B6 tenant isolation                                                                  | PASS   | 0 then 1: close_forgotten_workdays/1
+ B7 the heartbeat settings: defaults, bounds, fresh below late, a change kept         | PASS   | health.heartbeat_fresh_seconds=120 (default), health.heartbeat_late_seconds=900 (default) | health.heartbeat_fresh_seconds=180, health.heartbeat_late_seconds=1200 | 4 refusals
+ B8 the read covers the last 30 days only                                             | PASS   | 0 then 1 (24h 0)
+ B9 the two link settings take an https address or nothing                            | PASS   | health.link_datamap=empty, health.link_gemini_doc=empty | health.link_datamap=https://example.invalid/map, health.link_gemini_doc=empty | 3 refusals
+ verdict                                                                              | PASS   | 13 PASS, 0 FAIL
+(14 rows)
+
+RESET

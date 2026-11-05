@@ -1,0 +1,907 @@
+DO
+   relname   |   owner   | rls_on 
+-------------+-----------+--------
+ time_event  | cma_owner | t
+ work_status | cma_owner | t
+ workday     | cma_owner | t
+(3 rows)
+
+  tablename  | policyname |   roles   | cmd 
+-------------+------------+-----------+-----
+ time_event  | tenant_app | {cma_app} | ALL
+ work_status | tenant_app | {cma_app} | ALL
+ workday     | tenant_app | {cma_app} | ALL
+(3 rows)
+
+ table_name  
+-------------
+ time_event
+ work_status
+ workday
+(3 rows)
+
+          relname           |   owner   
+----------------------------+-----------
+ device_import_staging      | cma_owner
+ import_session_staging     | cma_owner
+ roster_published_entry     | cma_owner
+ roster_published_entry_all | cma_owner
+ time_event_effective       | cma_owner
+ time_event_effective_all   | cma_owner
+ time_interval              | cma_owner
+ time_interval_all          | cma_owner
+ workday_summary            | cma_owner
+ workday_summary_all        | cma_owner
+(10 rows)
+
+                table_name                
+------------------------------------------
+ absence_type
+ app_link
+ app_role
+ app_user
+ app_user_external_id
+ attempts_per_deal
+ audit_log
+ business_holiday
+ business_hours
+ call_link
+ callbacks_kept
+ cancellation_rows
+ channel
+ commerce_customer
+ commerce_order
+ commerce_order_line
+ commerce_store
+ connection_call_outcome
+ connection_email_rule
+ connection_form
+ connection_form_field
+ connection_inbox
+ connection_inbox_account
+ connection_inbox_channel
+ connection_pipeline
+ connection_pipeline_sla
+ connection_reason
+ connection_record_kind
+ connection_stage
+ connection_task_status
+ connection_task_type
+ coverage_target
+ crm_association
+ crm_call
+ crm_contact
+ crm_contact_ref
+ crm_record
+ crm_record_detail
+ crm_record_stage
+ crm_task
+ deal_funnel_rows
+ device
+ device_component
+ device_component_kind
+ device_model
+ device_status
+ dq_active_subscription_without_device
+ dq_commerce_ambiguous
+ dq_commerce_unmatched
+ dq_component_due_unknown
+ dq_contact_country_differs
+ dq_contact_country_fallback
+ dq_contact_slots_full
+ dq_crm_call_without_contact
+ dq_crm_task_owner_unlinked
+ dq_customer_in_two_stores
+ dq_customer_required_ref_missing
+ dq_deal_contact_incomplete
+ dq_deal_without_contact
+ dq_device_customer_ref_invalid
+ dq_device_market_unmapped
+ dq_device_model_unmapped
+ dq_device_required_ref_missing
+ dq_device_serial_duplicate
+ dq_device_serial_missing
+ dq_device_status_unmapped
+ dq_device_subscription_ref_unknown
+ dq_field_device_on_ended_subscription
+ dq_field_device_without_subscription_ref
+ dq_form_answer_not_in_options
+ dq_form_without_market
+ dq_market_not_in_catalog
+ dq_market_without_review_channel
+ dq_owner_without_person
+ dq_pipeline_unreviewed
+ dq_review_channel_unmapped
+ dq_subscription_customer_unmatched
+ dq_telephony_call_unlinked
+ dq_telephony_user_without_person
+ dq_ticket_no_market
+ dq_ticket_no_owner
+ dq_writeback_parked
+ email_message
+ email_not_responding
+ email_thread
+ email_thread_event
+ email_waiting
+ first_orders
+ flash_snapshot
+ flash_snapshot_ids
+ flash_snapshot_run
+ flash_watch_finding
+ follow_up_by_owner
+ follow_up_summary
+ form_category
+ form_submission
+ import_batch
+ ingest_event
+ intake_per_day_v
+ integration_connection
+ invitation
+ journey
+ lead_cohorts
+ lead_to_order
+ legacy_call_batch
+ legacy_call_outcome
+ maintenance_due
+ maintenance_per_month
+ maintenance_rule
+ market
+ market_alias
+ message
+ message_delivery
+ message_rule
+ open_lead
+ open_task
+ open_ticket
+ organisation
+ outbox_action
+ permission
+ record_kind
+ review
+ review_channel
+ review_market_state
+ reviews_per_channel
+ reviews_per_day
+ reviews_per_market
+ reviews_per_week
+ role_permission
+ roster_entry
+ roster_publication
+ roster_published_entry
+ roster_week
+ setting
+ skill
+ skill_level
+ speed_to_lead
+ subscription
+ subscription_event
+ subscription_payment_state
+ sync_run
+ team
+ team_member
+ telephony_call
+ telephony_call_tag
+ telephony_missed_reason
+ telephony_number
+ telephony_tag
+ tenant
+ tenant_setting
+ time_event
+ time_interval
+ user_role
+ user_skill
+ work_status
+ workday
+ workday_summary
+ writeback_field
+(158 rows)
+
+SET
+ app_inserts_events | app_updates_events | app_deletes_events | app_deletes_workdays | app_deletes_statuses | app_reads_summary | app_reads_summary_all 
+--------------------+--------------------+--------------------+----------------------+----------------------+-------------------+-----------------------
+ t                  | f                  | f                  | f                    | f                    | t                 | f
+(1 row)
+
+RESET
+          proname           | security_definer | app_may_call 
+----------------------------+------------------+--------------
+ business_date              | f                | t
+ correct_time_event         | f                | t
+ end_workday                | f                | t
+ find_tenants_for_identity  | t                | t
+ has_permission             | f                | t
+ open_workday               | f                | t
+ refresh_workday            | f                | t
+ seed_default_work_statuses | f                | f
+ set_status                 | f                | t
+ user_permissions           | f                | t
+ user_timezone              | f                | t
+(11 rows)
+
+SET
+ version |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |      applied_by      | applied_at 
+---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | <operator> | 2026-10-04
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | <operator> | 2026-10-05
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | <operator> | 2026-10-06
+ 0003a   | Team people: team_people for Add day and the person filter                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | <operator> | 2026-10-06
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | <operator> | 2026-10-07
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-07
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | <operator> | 2026-10-07
+ 0003e   | Team now: today's day and current status per person whose time is kept, for the Live board, needs monitoring.live                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-07
+ 0004    | Teams and skills: team, team_member, skill, skill_level, user_skill; the admin role, users.manage split into users.manage_agents and users.manage_all; directory, add_person and the people and catalog functions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-08
+ 0005    | Roster: absence types, roster weeks with publications, versioned entries (shift or absence within the business day), coverage targets, the planner functions, the own schedule and today's shift reads, the adherence tolerance setting                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | <operator> | 2026-10-08
+ 0005a   | Configuration: work status, app link, absence type and coverage target functions for tenant.configure; the scheduler system user and role per tenant with workday.close_forgotten; cma.close_forgotten_workdays() and the auto-close grace setting; a system end keeps a day flagged                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | <operator> | 2026-10-08
+ 0005b   | My profile: cma.my_profile(), the acting person's own details, role, teams and skills for the My account page                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | <operator> | 2026-10-09
+ 0006    | Ingest and CRM records: connections with field mapping, pipelines and stages, the ingest log, thin CRM records and contacts with refs, the Ingest system user, crm_records_per_day                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | <operator> | 2026-10-09
+ 0007    | Intake core: markets with aliases, office hours and holidays, business time, connection settings and slots, CRM calls, call outcomes, associations, forms and submissions, sync cursors and runs, contact forget, people's ids in other systems                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | <operator> | 2026-10-10
+ 0007a   | Telephony: calls with a stale guard on the source version, tags with history, lines with market, the keyed-hash call link to CRM calls, contact forget clearing linked telephony hashes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | <operator> | 2026-10-10
+ 0007b   | Commerce: stores (one per connection, unique handle), customers, orders with lines replaced as a set, order_kind (first, repeat, renewal, unknown) from the prior order count and the renewal settings, reclassified when a setting changes, the store in connection_config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | <operator> | 2026-10-10
+ 0007c   | Outbox and CRM contact write-back: write-back fields per CRM connection (always, if_empty, slot), the outbox with forward-only states, dedupe and supersede per contact, claim with SKIP LOCKED and backoff, parking after outbox.max_attempts and resolve by a person, outbox_status, the write-back fields in connection_config                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-11
+ 0007d   | Lead metrics and data quality: speed to lead with its summary, lead to order, intake per day, the data-quality checks, their reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | <operator> | 2026-10-11
+ 0008    | Messaging core and record alerts: messages, deliveries with delivered, read and acknowledged times, alert rules, record alerts for the ingest service, manual messages, the caller's reads and writes, stats                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | <operator> | 2026-10-10
+ 0008a   | Assignment alerts (a record alerts the person its owner maps to, once per record and owner) and messages from automations through the ingest service (owners and emails as targets)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | <operator> | 2026-10-12
+ 0008b   | Workday window and forgotten-day close: window start and end per tenant (clock-in refused before the start, time counted up to the end, corrections within it), forgotten days closed at the planned shift end or the auto-close time with a notice to the person and a digest to management                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | <operator> | 2026-10-12
+ 0008c   | Alert times in the tenant's time zone: the created and assigned time in the body of record and assignment alerts uses the tenant's zone, not the market's                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | <operator> | 2026-10-12
+ 0008d   | Legacy time import: time_event source import with its batch, import batches staged, loaded and withdrawn as a unit, sessions, the person map and the days written; stage, load and void for tenant.configure; imported days closed by rule or clipped need a correction, a withdrawn day is no day; the batch key in the day history                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | <operator> | 2026-10-12
+ 0008e   | Sources, markets and alert rules configuration reads, the connection kind, linked accounts on People (set_user_external_id follows the People rule); _owner and _user reserved for linked accounts; adapter names lower-case letters and digits                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | <operator> | 2026-10-13
+ 0008f   | Uncounted lines: a telephony connection stores calls on its counted lines only; a call on a line that does not count is skipped, switching a line off removes its calls, taggings and links (ids only in the audit for those deletes)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | <operator> | 2026-10-13
+ 0008g   | Commerce phone hash: the keyed hash of the phone number on commerce customers and orders (the call hash's shape and pepper), accepted by the two upserts as phoneHash, cleared by a read without it and by a deletion; never the number                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | <operator> | 2026-10-13
+ 0008h   | Commerce contact link: a store customer's matched CRM contact kept in the CMA (connection, contact id, matched_at), set or cleared by cma.set_commerce_customer_contact and forgotten with the CRM's privacy deletion; nothing written to the CRM                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-13
+ 0008i   | Inbound service and callbacks: the missed-reason catalog, three telephony settings, inbound service per day, market, line and hour, today's inbound with the calls waiting, missed calls not called back (the hash matched inside the tenant, never returned)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | <operator> | 2026-10-14
+ 0008j   | Calls overview and calls per agent: the connected-call threshold, calls, conversations, talk time and tag use per day, week, market and line with the previous period's totals like for like, the same per person with tags per person (no call id, hash or number returned)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | <operator> | 2026-10-14
+ 0008k   | Telephony history start: the business date of a tenant's earliest stored call (as cma.calls_of defines a call, in its line's zone, tenant-wide), so the Calls report shows no change against a period before it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | <operator> | 2026-10-14
+ 0008l   | Invitations by email: cma.invitation (the token's hash only, never in the audit), the two invitation settings, create, renew, revoke and list for the people rule, and the invitee's preview and acceptance, which bind the sign-in id when the verified address matches                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | <operator> | 2026-10-15
+ 0008m   | Email activity, metadata only: inboxes and source channels with counted, market, work type and channel, classification rules, emails of two sources kept apart, inbox conversations and their events, the four email settings, the ingest writes, the market by email.market_order with the form step, the privacy deletions, the reporting views; contacts' country with fallback slots and its source, contacts held for emails and threads, the data-quality check contact_country_fallback                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | <operator> | 2026-10-15
+ 0008n   | CRM tasks: the thin task mirror (ids, owner, status, type, priority, due and completed, the contact, deal and ticket by source id; never body or subject), the status and type catalogs per connection with is_done, is_callback and is_counted as configuration, the ingest upsert with the raw filter, the Sources read, contacts held for tasks and cleared by the privacy deletion, the reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | <operator> | 2026-10-16
+ 0008o   | The follow-up layer: the four settings (ticket SLA in business minutes and its warning share, the age buckets of open leads, the callback window), the SLA per pipeline, open leads not called with their age bucket and last call, open tickets against their SLA, open tasks with their due state, the summary, per person and the person's own rows, the data-quality skip rule for unlinked outbound calls and the checks ticket_no_owner, ticket_no_market and crm_task_owner_unlinked, the reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | <operator> | 2026-10-16
+ 0008p   | Forms reporting: forms polled apart from counted, form categories as configuration, the forms' fields with their options, choice answers only (checked against the options, filled by the backfill, never after a privacy deletion), the lead rule on Intake's form count, the market of a submission (form, market field, contact), submissions and answers per form and market per day or week with the previous period like for like, the history start, the data-quality check form_answer_not_in_options                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | <operator> | 2026-10-17
+ 0008q   | Audit hardening (17 October 2026): switching a line off asserts the acting person's tenant.configure inside the trigger; no payload in ingest_event's audit images; the report cores bound their period on the index; indexes for the sources read; DELETE revoked from the application on five master-data tables; PUBLIC execute revoked on nine early functions; two SECURITY DEFINER search paths completed; telephony raw without @ strings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | <operator> | 2026-10-18
+ 0008r   | System health: the heartbeat thresholds and the two document links as tenant settings, the scheduler's close on the sync_run list with its own start and finish, sync_run summed per job and connection for Configuration → System health, an index on the tenant's runs by time                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | <operator> | 2026-10-18
+ 0008s   | The follow-up snapshot: follow_up_snapshot and follow_up_item per tenant, refreshed once a minute by the scheduler's refresh job (follow_up.refresh, its sync_run row through job_run_start and job_run_finish) or once on demand when a tenant has none, an advisory lock per tenant; Reports → Follow-up in one read with the lists capped at follow_up.list_rows; the summary, the person's own rows and 0008o's list reads from the snapshot with computed_at                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-18
+ 0008t   | Email reports: mailboxes (the inboxes' channel accounts) with label, counted and market, account refs on emails and threads, an engagement's origin with inbox copies and automations as configuration, the setting reports.per_person, the market's inbox step through the mailbox, the definitions cma.email_of, email_openings_of and email_closes_of, the overview, the figures per inbox, mailbox, category and market, received per day and inbox or mailbox, per person, waiting now, not responding, the history start, the reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | <operator> | 2026-10-19
+ 0008u   | First orders: order pipelines, stage outcomes from the source or a person, a contact's creation time with slots, the attribution settings, the definition cma.first_orders_of (kind, linked store order, evidence, level, call center or self-service, credited person), the report, amounts per currency, the list, per person, the history start, the reporting views                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | <operator> | 2026-10-19
+ 0008v   | Journeys (Campaign monitoring): placeholders with code, name, summary, market, status (placeholder, building, live, archived; never deleted), design link, prerequisites and sort order as configuration; the read cma.journeys() without the archived ones, cma.set_journey and cma.set_journey_status, the reporting view                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | <operator> | 2026-10-19
+ 0008w   | Callbacks kept (KPI 5): the definition cma.callbacks_kept_of (a counted callback task kept when a call to its contact starts within tasks.callback_window_minutes of the due time; not kept, pending, no contact and no due time apart), the figures per ISO week and in total with the previous period like for like, per person for performance.team, whether a callback type is counted, the reporting view                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | <operator> | 2026-10-19
+ 0008x   | Report speed: cma.first_orders_of with the touches once per first order and the calls set-based, one pass per First orders page (cma.first_order, the *_from reads, cma.first_orders_page); cma.email_of and email_threads_counted_of with the contact as a plain column and the market steps set-based, the openings' business seconds in the query; one pass per Email page and Email per agent (cma.email_fact, the *_from reads, cma.email_report_page, cma.email_per_person_page); the catalogs analyzed; no index, the same figures                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | <operator> | 2026-10-19
+ 0008y   | Attempts per deal: the settings attempts.max_bucket and attempts.since_last_buckets_business_days, attempts in reports.per_person, the deal population written once (cma.counted_deals_of under cma.lead_deals_of), the definition cma.attempts_per_deal_of (outbound CRM calls up to the close, connected, the first connected attempt, the outcome, the business days since the last attempt), the deal and per-person pages, the stored calls of a line, the reporting view                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | <operator> | 2026-10-19
+ 0008z   | Attempts per deal for sales and message withdrawal: the settings attempts.source, attempts.reached_min_talk_seconds and attempts.speed_buckets_business_minutes; the calls of a deal and the store orders of a contact written once (cma.deal_calls_of under cma.lead_calls_of, cma.contact_store_orders_of under cma.lead_to_order_of); the sales deals with their window to the close or the first order (cma.sales_deals_of); the attempts of a deal with reached by the outcome or the talk time (cma.deal_attempts_of); the definition rebuilt without the scope, the page reads with won against lost, the win rate by speed to lead and the attempted and outcome filters, one deal's attempts; the reader view's new columns; messages withdrawn once (withdrawn_at, withdrawn_by), the permission messages.withdraw on the default admin role, cma.withdraw_message, the reads leaving a withdrawn message out, the stats marking it                                                                                                                                                                                                                                                                                                                           | <operator> | 2026-10-20
+ 0008za  | Stage times: connection_stage.read_times (null follows the pipeline: on for a counted pipeline), cma.read_times_of and cma.set_stage_read_times (tenant.configure), readTimes and readTimesSet per stage in cma.connection_config; cma.crm_record_stage, one row per record and stage with entered_at, exited_at and synced_at (row-level security, audit, no delete for the application); cma.ingest_record_stages with the record upsert's stale guard, a read never clearing a time; cma_read.crm_record_stage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-21
+ 0008zb  | Reasons, record kinds and the funnel reports: connection_field reason for deals and tickets with the source type checked (an enumeration only), crm_record.reason, the reason catalog cma.connection_reason with is_data_quality kept by every refresh (cma.ingest_upsert_reasons, cma.set_reason_data_quality); record kinds cma.record_kind and their rules cma.connection_record_kind by pipeline and category (cma.kind_rule_matches, cma.record_kind_of, the configuration functions, cma.record_kinds); the settings reports.cancellation_kind and deals in reports.per_person; the funnel deals over 0008z's sales deals (cma.funnel_deals_of); the page reads cma.deal_funnel_page, lost_reasons_page, cancellations_page and deals_per_person_page; the reporting views deal_funnel_rows, cancellation_rows, connection_reason, record_kind, connection_record_kind, and reason on crm_record_detail                                                                                                                                                                                                                                                                                                                                                           | <operator> | 2026-10-21
+ 0008zc  | Definitions step 1 (docs/definitions.md): tag meanings (cma.telephony_tag.meaning with cma.set_telephony_tag_meaning, configuration only); Connected as answered at any talk time (telephony.connected_min_seconds default 0, a value of 10 moved to 0); Conversation as a connected or answered call with at least calls.conversation_min_talk_seconds of talk (replacing attempts.reached_min_talk_seconds) and no current tag meaning not_reached, through the linked telephony call only (cma.is_connected, cma.is_conversation, cma.call_not_reached_of); Calls and Calls per agent with connected, connected_rate and untagged over every call, talk time over the answered calls, tag use without the untagged row; Email's not responding and first orders from the linked telephony call; the data-quality skip by its own rule; Attempts per deal with connected and conversation, the reached columns renamed to conversation in cma.attempt_deal and cma_read.attempts_per_deal                                                                                                                                                                                                                                                                             | <operator> | 2026-10-25
+ 0008zd  | A seventh tag meaning (docs/definitions.md, Tag): incorrect_data, the contact data is wrong; cma.telephony_tag's check and cma.set_telephony_tag_meaning accept it. Like not_reached it keeps a call from being a Conversation: cma.tag_meaning_excludes_conversation names the two meanings once and cma.call_not_reached_of reads it. Nothing renamed; the description of calls.conversation_min_talk_seconds names both meanings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | <operator> | 2026-10-25
+ 0008ze  | Reviews: the connection kind reviews; cma.review_channel (source id, name, locale, market and is_counted as configuration, a new channel unmapped and not counted) and cma.review (type, state, published, rating 1 to 5, times, reply, invite event type, transaction reference, the link level order, contact or none with the order, the CRM contact and matched_at, a filtered raw; never a name, an email, a phone, a title or a text); the settings reviews.negative_max_rating and reviews.history_start_date; ingest of the channel catalog and of reviews with a stale guard, the order link by order name then source id and the order's customer's contact, the contact found by email in memory, and the CRM's privacy deletion; the alert trigger review_submitted with max_rating and cma.ingest_review_alerts; review channels on Sources; Reports, Reviews (cma.reviews_page); the data-quality checks review_channel_unmapped and market_without_review_channel; the reader views; sync_run job reviews_poll                                                                                                                                                                                                                                           | <operator> | 2026-10-25
+ 0008zf  | Review reference guard: a review's transaction reference never holds an email address. cma.review_image_without_at_reference(); cma.audit_row() passes both images of a review through it; cma.clear_review_at_references() clears an @ reference from the stored reviews and their audit rows (transaction_ref null, raw's transaction removed); a run's counts take ref_dropped (cma.ingest_sync_run_finish); the check review_reference_no_at on cma.review                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | <operator> | 2026-10-25
+ 0008zg  | Legacy call outcomes: cma.legacy_call_batch (source system, CRM connection, the file's SHA-256 with one live batch per file, cutover date, counts, times, withdrawal) and cma.legacy_call_outcome (the file's row, date, tag meaning, the old system's tag text, the CRM contact or none, match method email_phone, email, phone, customer_id, none, conflict or forgotten); start, upsert (a rerun fills a contact only where none is set), finish and the reconciliation read (ingest.write); cma.withdraw_legacy_call_batch (tenant.configure, once); the privacy deletion sets forgotten; the reader views without withdrawn batches; sync_run job legacy_call_import                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | <operator> | 2026-10-26
+ 0008zh  | Legacy import status reuse: cma.load_import_batch refuses an inactive work status only when it holds effective time on a workday no import batch wrote; the days of a loaded batch, with the corrections made to them since, do not block, so a later batch loads into the tenant's import status                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <operator> | 2026-10-26
+ 0008zi  | Asset register: the connection kind assets; the catalogs cma.device_model, cma.device_component_kind, cma.maintenance_rule and cma.device_status (flags is_in_field, is_in_stock, is_tracked; the source's labels as aliases); the setting assets.bundle_window_days; cma.device (record id, serial, model, market, status, references, dates, named ids, raw held to a key allow-list, missing from a full snapshot) and cma.device_component (serial and recorded expiry, one current per kind, an observed replacement on a serial change); the import cma.device_import_staging (the COPY target, a view over cma.device_import_row) and cma.load_device_snapshot (tenant.configure); the forecast cma.maintenance_items_of and cma.maintenance_due_of (due date recorded, by rule or unknown, action date, past due, planned exchanges within the bundling window); Reports, Maintenance (cma.maintenance_page, cma.maintenance_rows); eight data-quality checks; the reader views; sync_run job assets_import                                                                                                                                                                                                                                                     | <operator> | 2026-10-27
+ 0008zj  | Asset sync: the asset register read through its API on a schedule (the poll of changed records, the nightly full snapshot, a read on demand) through 0008zi's load. sync_run job assets_poll; cma.ingest_sync_run_finish takes the device load's counts; the register's fields as connection fields (entity device, device_component with the kind as ref_system, named ids as ref), kept to asset register connections by a trigger and counted as assets by cma.connection_held_kinds_of; cma.set_connection_settings checks an asset register's table_id, view_id, date_format and assets_poll_interval_minutes; the staging takes ingest.write; the shared load cma.device_snapshot_apply (one per connection at a time), called by cma.load_device_snapshot (tenant.configure, its run assets_import) and cma.ingest_load_device_snapshot (ingest.write, a connection with a token secret name only)                                                                                                                                                                                                                                                                                                                                                               | <operator> | 2026-10-27
+ 0008zk  | Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row's device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi's results unchanged; cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest's chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging's columns and lengths, no staging) and the final cma.ingest_mark_devices_missing; the setting assets_load_chunk (100 to 5,000); cma.ingest_sync_run_finish takes the phase times                                                                                                                                                                                                                                                                                                                                                                                                                           | <operator> | 2026-10-28
+ 0008zl  | Subscriptions: a subscription app's subscriptions and their events mirrored read-only, one connection per store (connection kind subscriptions; the store matched by the handle in the account id, cma.subscription_store_connection_of, no new link column). cma.subscription (the source's status of seven, cycle, next billing, interval, amount per cycle, the instrument's type, times, source_deleted_at, a checked raw) and cma.subscription_event (renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; actor type, a staff actor's id only, cycle, attempt, error and reason codes, statuses; append-only); cma.ingest_subscription_store, cma.ingest_upsert_subscriptions (stale guard; the customer matched among the store's customers), cma.ingest_upsert_subscription_events, cma.ingest_mark_subscriptions_missing in slices; cma.subscription_payment_state_of (failed, paused, canceled, in_retry, paid; awaiting payment not built); the settings subscriptions_poll_interval_minutes and subscriptions_max_per_second checked; sync_run job subscriptions_poll and the counts events_new, customers_unmatched, reason_dropped; cma_read.subscription, subscription_event, subscription_payment_state                       | <operator> | 2026-10-28
+ 0008zm  | Lead cohorts: the setting cohorts.lead_ages_days (one to six increasing ages in days, the largest at most lead_to_order.max_days, which is refused below it; cma.check_tenant_setting() as 0008zi with both); the row type cma.lead_cohort_deal and cma.lead_cohorts_of (per lead deal of cma.lead_deals_of its ISO week and month, age, Attempts per deal's first attempt and first conversation, cma.sales_deals_of's outcome and lost time, lead to order's first order, the source channel, not called yet); the report cma.lead_cohorts_report (period week or month, market, source channel and pipeline filters, split none, market or source; per cohort and age the deals attempted, with a conversation, ordered and lost, null at an age not reached; the median days to order; not called yet now); the reporting view cma_read.lead_cohorts over cma_read.lead_cohort_rows()                                                                                                                                                                                                                                                                                                                                                                               | <operator> | 2026-11-02
+ 0008zn  | Flash: eleven overviews (customers, subscriptions, installed_base, churn, orders, payments, open_deals, open_tickets, open_tasks, reviews, data_quality) from one base set each, computed by cma.flash_compute_of per grouping set (amounts per currency), live through cma.flash_overview, cma.flash_rows and cma.flash_page and stored once per business date and tenant by cma.flash_snapshot_take (flash.snapshot, the scheduler's only, SECURITY DEFINER: the application holds no write on the four tables; sync_run job flash_snapshot; a date due the day after it at flash.snapshot_local_time, the latest due date taken by the hourly job, a date missed recorded as such) into cma.flash_snapshot (stock figures measured against the date), cma.flash_snapshot_run and, at a month end, cma.flash_snapshot_ids (kept flash.id_list_retention_months from the tenant's today); the deterministic watch cma.flash_watch_finding (jump, flow_zero, source_stale, snapshot_missing, dq_rise) in a subtransaction of its own; six data-quality checks with cma.data_quality_rows (active and ended statuses from settings, references matched within a market); contacts held while a commerce customer is linked to them; the Flash settings; the reader views | <operator> | 2026-11-02
+ 0008zo  | Flash watch cadence: source_stale measures a cadence per job and stream (the median gap between succeeded runs of the same job and stream in the 7 days before the take, backfills aside), at least flash.watch_stale_min_minutes (5), a connection's poll interval setting its job's cadence; a connection is stale only when its most frequent job and stream last succeeded more than three of its cadences before; the finding names that job and stream                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | <operator> | 2026-11-03
+ 0008zp  | Split shifts: the setting workday.clock_in_again (default false); cma.workday_can_clock_in_again, the one rule (own log out, strictly after it, the same business date within the workday window, time kept); cma.refresh_workday validates a day of one or more sessions (start, statuses, end, start, ...: a later start directly after an end and strictly after it, nothing between an end and the next start, at most the last session open; started_at the first start, ended_at the last end); cma.open_workday clocks in again on such a day under a lock with the rule checked again, every other day unchanged                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | <operator> | 2026-11-04
+(61 rows)
+
+RESET
+          slug           |         key          | is_working | is_productive | is_paid | is_billable | is_default 
+-------------------------+----------------------+------------+---------------+---------+-------------+------------
+ pulse4all-invest        | available            | t          | t             | t       | t           | t
+ pulse4all-invest        | training             | t          | f             | t       | t           | f
+ pulse4all-invest        | meeting              | t          | f             | t       | t           | f
+ pulse4all-invest        | break                | f          | f             | t       | t           | f
+ pulse4all-invest        | lunch                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | available            | t          | t             | t       | t           | f
+ pulse4all-subscriptions | available_sales      | t          | t             | t       | t           | t
+ pulse4all-subscriptions | available_operations | t          | t             | t       | t           | f
+ pulse4all-subscriptions | training             | t          | f             | t       | t           | f
+ pulse4all-subscriptions | meeting              | t          | f             | t       | t           | f
+ pulse4all-subscriptions | coaching             | t          | f             | t       | t           | f
+ pulse4all-subscriptions | break                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | lunch                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | legacy_session       | t          | t             | t       | t           | f
+ pulse4all-subscriptions | verify_0005a         | t          | f             | t       | t           | f
+(15 rows)
+
+          slug           |    key    |   timezone    
+-------------------------+-----------+---------------
+ pulse4all-invest        | clubdeal  | 
+ pulse4all-invest        | pulse4all | 
+ pulse4all-subscriptions | newco     | Europe/Madrid
+ pulse4all-subscriptions | pulse4all | 
+(4 rows)
+
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a1a6e3-41ab-7baf-8188-a7064d1bf7d8
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+ status | zero_length 
+--------+-------------
+ ended  | t
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+psql:db/07_verify_time_model.sql:119: ERROR:  workday 01a1a6e3-4208-7575-89ff-7c225574c277 is already ended; resuming is a correction
+CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 25 at RAISE
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a1a6e3-42b2-7110-8d59-74735215a86f
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a1a6e3-42b2-742b-ae10-4760bbec1a10
+(1 row)
+
+psql:db/07_verify_time_model.sql:142: ERROR:  a user can only end their own workday
+CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 14 at RAISE
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+         email          | business_date | status | working_h | paid_h | is_capped | needs_correction | has_correction 
+------------------------+---------------+--------+-----------+--------+-----------+------------------+----------------
+ agent.one@example.com  | 2026-10-02    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.one@example.com  | 2026-10-03    | ended  |      5.92 |   5.92 | f         | f                | f
+ agent.one@example.com  | 2026-10-04    | ended  |      8.07 |   8.07 | f         | f                | t
+ agent.two@example.com  | 2025-07-12    | ended  |      8.00 |   8.00 | f         | t                | f
+ agent.two@example.com  | 2025-07-13    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-14    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-15    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-16    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-17    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-18    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-19    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-20    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-21    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-22    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-23    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-24    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-25    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-26    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-27    | ended  |      8.00 |   8.00 | f         | t                | f
+ agent.two@example.com  | 2025-07-28    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-29    | ended  |      8.00 |   8.00 | f         | t                | f
+ agent.two@example.com  | 2025-07-30    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-07-31    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-01    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-02    | ended  |     13.00 |  13.00 | f         | t                | f
+ agent.two@example.com  | 2025-08-03    | ended  |     13.00 |  13.00 | f         | t                | f
+ agent.two@example.com  | 2025-08-04    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-05    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-06    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-07    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-08    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-09    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-10    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-11    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-12    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-13    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-14    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-15    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-16    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-17    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-18    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-19    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-20    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-21    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-22    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-23    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-24    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-25    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-26    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-27    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-28    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-29    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-30    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-31    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-01    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-02    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-03    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-04    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-05    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-06    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-07    | ended  |      8.00 |   8.00 | f         | t                | f
+ agent.two@example.com  | 2025-09-08    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-09    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-10    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-11    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-12    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-13    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-14    | ended  |      8.00 |   8.00 | f         | t                | f
+ agent.two@example.com  | 2025-09-18    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-19    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-20    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2026-10-03    | ended  |      7.00 |   7.00 | f         | f                | t
+ agent.two@example.com  | 2026-10-04    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.two@example.com  | 2026-10-05    | ended  |      0.28 |   0.28 | f         | f                | t
+ agent.two@example.com  | 2026-10-06    | ended  |      4.12 |   4.12 | f         | f                | t
+ agent.two@example.com  | 2026-10-07    | ended  |     14.74 |  14.74 | f         | f                | t
+ agent.two@example.com  | 2026-10-08    | ended  |     11.96 |  11.96 | f         | t                | f
+ agent.two@example.com  | 2026-10-09    | ended  |     15.91 |  15.91 | f         | t                | f
+ agent.two@example.com  | 2026-10-11    | ended  |      9.60 |   9.60 | f         | t                | f
+ agent.two@example.com  | 2026-10-12    | ended  |      9.10 |   9.10 | f         | t                | f
+ agent.two@example.com  | 2026-10-14    | ended  |      4.04 |   4.04 | f         | t                | f
+ agent.two@example.com  | 2026-10-17    | ended  |      4.80 |   4.80 | f         | t                | f
+ agent.two@example.com  | 2026-10-18    | ended  |      8.82 |   8.82 | f         | t                | f
+ agent.two@example.com  | 2026-10-19    | ended  |      9.10 |   9.10 | f         | t                | f
+ agent.two@example.com  | 2026-10-23    | ended  |      0.00 |   0.00 | f         | t                | f
+ agent.two@example.com  | 2026-10-25    | ended  |      4.93 |   4.93 | f         | t                | f
+ supervisor@example.com | 2026-10-05    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-06    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-07    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-08    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-09    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-11    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-12    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-14    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-17    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-18    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-23    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-25    | ended  |      0.00 |   0.00 | f         | f                | f
+(98 rows)
+
+ROLLBACK
+BEGIN
+SET
+ no_tenant_set 
+---------------
+             0
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a10573-6fe6-7163-8d9a-d11967a61ced
+(1 row)
+
+ invest_days 
+-------------
+           0
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+ subs_days 
+-----------
+        98
+(1 row)
+
+ROLLBACK
+ reader_sees_all 
+-----------------
+              98
+(1 row)
+
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+psql:db/07_verify_time_model.sql:176: ERROR:  permission denied for view workday_summary_all
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+psql:db/07_verify_time_model.sql:184: ERROR:  permission denied for table time_event
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+psql:db/07_verify_time_model.sql:190: ERROR:  permission denied for table time_event
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a10573-a796-7633-9237-b2defa7ca037
+(1 row)
+
+ kind 
+------
+(0 rows)
+
+ business_date | status | working_h | needs_correction | has_correction 
+---------------+--------+-----------+------------------+----------------
+ 2025-07-12    | ended  |      8.00 | t                | f
+ 2025-07-13    | ended  |      5.00 | f                | t
+ 2025-07-14    | ended  |      5.00 | f                | t
+ 2025-07-15    | ended  |      5.00 | f                | t
+ 2025-07-16    | ended  |      5.00 | f                | t
+ 2025-07-17    | ended  |      5.00 | f                | t
+ 2025-07-18    | ended  |      5.00 | f                | t
+ 2025-07-19    | ended  |      5.00 | f                | t
+ 2025-07-20    | ended  |      5.00 | f                | t
+ 2025-07-21    | ended  |      5.00 | f                | t
+ 2025-07-22    | ended  |      5.00 | f                | t
+ 2025-07-23    | ended  |      5.00 | f                | t
+ 2025-07-24    | ended  |      5.00 | f                | t
+ 2025-07-25    | ended  |      5.00 | f                | t
+ 2025-07-26    | ended  |      5.00 | f                | t
+ 2025-07-27    | ended  |      8.00 | t                | f
+ 2025-07-28    | ended  |      5.00 | f                | t
+ 2025-07-29    | ended  |      8.00 | t                | f
+ 2025-07-30    | ended  |      5.00 | f                | t
+ 2025-07-31    | ended  |      5.00 | f                | t
+ 2025-08-01    | ended  |      5.00 | f                | t
+ 2025-08-02    | ended  |     13.00 | t                | f
+ 2025-08-03    | ended  |     13.00 | t                | f
+ 2025-08-04    | ended  |      5.00 | f                | t
+ 2025-08-05    | ended  |      5.00 | f                | t
+ 2025-08-06    | ended  |      5.00 | f                | t
+ 2025-08-07    | ended  |      5.00 | f                | t
+ 2025-08-08    | ended  |      5.00 | f                | t
+ 2025-08-09    | ended  |      5.00 | f                | t
+ 2025-08-10    | ended  |      5.00 | f                | t
+ 2025-08-11    | ended  |      5.00 | f                | t
+ 2025-08-12    | ended  |      5.00 | f                | t
+ 2025-08-13    | ended  |      5.00 | f                | t
+ 2025-08-14    | ended  |      5.00 | f                | t
+ 2025-08-15    | ended  |      5.00 | f                | t
+ 2025-08-16    | ended  |      5.00 | f                | t
+ 2025-08-17    | ended  |      5.00 | f                | t
+ 2025-08-18    | ended  |      5.00 | f                | t
+ 2025-08-19    | ended  |      5.00 | f                | t
+ 2025-08-20    | ended  |      5.00 | f                | t
+ 2025-08-21    | ended  |      5.00 | f                | t
+ 2025-08-22    | ended  |      5.00 | f                | t
+ 2025-08-23    | ended  |      5.00 | f                | t
+ 2025-08-24    | ended  |      5.00 | f                | t
+ 2025-08-25    | ended  |      5.00 | f                | t
+ 2025-08-26    | ended  |      5.00 | f                | t
+ 2025-08-27    | ended  |      5.00 | f                | t
+ 2025-08-28    | ended  |      5.00 | f                | t
+ 2025-08-29    | ended  |      5.00 | f                | t
+ 2025-08-30    | ended  |      5.00 | f                | t
+ 2025-08-31    | ended  |      5.00 | f                | t
+ 2025-09-01    | ended  |      5.00 | f                | t
+ 2025-09-02    | ended  |      5.00 | f                | t
+ 2025-09-03    | ended  |      5.00 | f                | t
+ 2025-09-04    | ended  |      5.00 | f                | t
+ 2025-09-05    | ended  |      5.00 | f                | t
+ 2025-09-06    | ended  |      5.00 | f                | t
+ 2025-09-07    | ended  |      8.00 | t                | f
+ 2025-09-08    | ended  |      5.00 | f                | t
+ 2025-09-09    | ended  |      5.00 | f                | t
+ 2025-09-10    | ended  |      5.00 | f                | t
+ 2025-09-11    | ended  |      5.00 | f                | t
+ 2025-09-12    | ended  |      5.00 | f                | t
+ 2025-09-13    | ended  |      5.00 | f                | t
+ 2025-09-14    | ended  |      8.00 | t                | f
+ 2025-09-18    | ended  |      5.00 | f                | t
+ 2025-09-19    | ended  |      5.00 | f                | t
+ 2025-09-20    | ended  |      5.00 | f                | t
+ 2026-10-03    | ended  |      7.00 | f                | t
+ 2026-10-04    | ended  |      8.00 | f                | f
+ 2026-10-05    | ended  |      0.28 | f                | t
+ 2026-10-06    | ended  |      4.12 | f                | t
+ 2026-10-07    | ended  |     14.74 | f                | t
+ 2026-10-08    | ended  |     11.96 | t                | f
+ 2026-10-09    | ended  |     15.91 | t                | f
+ 2026-10-11    | ended  |      9.60 | t                | f
+ 2026-10-12    | ended  |      9.10 | t                | f
+ 2026-10-14    | ended  |      4.04 | t                | f
+ 2026-10-17    | ended  |      4.80 | t                | f
+ 2026-10-18    | ended  |      8.82 | t                | f
+ 2026-10-19    | ended  |      9.10 | t                | f
+ 2026-10-23    | ended  |      0.00 | t                | f
+ 2026-10-25    | ended  |      4.93 | t                | f
+(83 rows)
+
+ kind  |   source   | has_reason | approved_by_manager | actor_is_manager |      actor_db_role      
+-------+------------+------------+---------------------+------------------+-------------------------
+ end   | correction | t          | t                   | f                | cma_app
+ end   | correction | t          | t                   | f                | cma_app
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ start | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+ end   | correction | t          | f                   | f                | cma-web@p4a-cma-dev.iam
+(187 rows)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a1a6e3-47b8-7e8e-af4c-0e5bcf23be88
+(1 row)
+
+ agent_may_correct 
+-------------------
+ f
+(1 row)
+
+psql:db/07_verify_time_model.sql:236: ERROR:  user 01a1a6e3-47b8-7e8e-af4c-0e5bcf23be88 lacks permission workday.team
+CONTEXT:  PL/pgSQL function assert_permission(text) line 13 at RAISE
+PL/pgSQL function correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 9 at assignment
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a1a6e3-4878-7b2c-b434-ae6a06017603
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+SET
+psql:db/07_verify_time_model.sql:260: ERROR:  new row for relation "time_event" violates check constraint "time_event_correction_needs_reason_and_approver"
+DETAIL:  Failing row contains (01a1a6e3-4927-7f35-9c93-bb4540aad41c, 01a10573-6fcc-7245-99d0-a9a9b64c8759, 01a1a6e3-48d5-78f5-839f-3f7b0f554738, 01a1a6e3-4878-7b2c-b434-ae6a06017603, end, null, 2026-11-04 14:07:55.459238+00, 2026-11-04 14:07:55.687959+00, correction, null, null, null, null).
+ROLLBACK
+BEGIN
+SET
+          slug           
+-------------------------
+ pulse4all-invest
+ pulse4all-subscriptions
+(2 rows)
+
+ unknown_subject 
+-----------------
+               0
+(1 row)
+
+ wrong_system 
+--------------
+            0
+(1 row)
+
+ROLLBACK

@@ -1,0 +1,45 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:/tmp/provoke.sql:165: ERROR:  FAIL S1: addition 0008zp not recorded after 0008zn
+CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+psql:/tmp/provoke.sql:200: ERROR:  FAIL A1: with the setting off a Clock in on an ended day gave ended (1 starts)
+CONTEXT:  PL/pgSQL function inline_code_block line 20 at RAISE
+psql:/tmp/provoke.sql:301: ERROR:  FAIL A2: the person counts as clocked in after their log out
+CONTEXT:  PL/pgSQL function inline_code_block line 18 at RAISE
+psql:/tmp/provoke.sql:344: ERROR:  FAIL A4: a Clock in at 13:00 (the end's own instant) gave ended with 1 starts
+CONTEXT:  PL/pgSQL function inline_code_block line 30 at RAISE
+psql:/tmp/provoke.sql:459: ERROR:  FAIL A5: the scheduler did not close the one forgotten day
+CONTEXT:  PL/pgSQL function inline_code_block line 24 at RAISE
+psql:/tmp/provoke.sql:554: ERROR:  FAIL A7: moving the second start gave ended from 2026-03-10 08:00:00+00 with 2 starts
+CONTEXT:  PL/pgSQL function inline_code_block line 33 at RAISE
+psql:/tmp/provoke.sql:630: ERROR:  FAIL A8: the sweep closed [p1 18:00 last_event, p2 20:00 shift, p3 17:00 default]
+CONTEXT:  PL/pgSQL function inline_code_block line 38 at RAISE
+psql:/tmp/provoke.sql:685: ERROR:  FAIL A9: the one-session day reads ended 2026-03-10 08:00:00+00 to 2026-03-10 16:30:00+00, 27900 worked, 28800 paid
+CONTEXT:  PL/pgSQL function inline_code_block line 26 at RAISE
+psql:/tmp/provoke.sql:717: ERROR:  FAIL A10: a second Clock in gave open with 2 starts
+CONTEXT:  PL/pgSQL function inline_code_block line 21 at RAISE
+ check_name |        result        |     detail      
+------------+----------------------+-----------------
+ verdict    | PROVOKED, NOT A PASS | 0 PASS, 31 FAIL
+(1 row)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET
