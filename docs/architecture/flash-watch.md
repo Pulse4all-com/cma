@@ -26,6 +26,8 @@ The watch is the first line and the only one that runs without AI. The Flash rev
 | `snapshot_missing` | the date before the one taken has no succeeded snapshot while an earlier one has (a date missed has a run of status `missed`, is never taken afterwards, and the run row's `missed_before` counts them) | the next take, whose date before is present |
 | `dq_rise` | a data-quality check (its [check] row) rose from the day before by more than the jump thresholds | the first snapshot where it no longer rose day over day |
 
+Since 0008zu the `jump` check compares no overview whose totals are stored under two definition versions on the two dates (a change of definition is not a movement of the business): the first take after 0008zu raises no jump of `active_customers`. Two side effects of that first take: every count measure of the customers and subscriptions overviews goes uncompared for a day (the unchanged `active_subscriptions` included), and any open jump finding of those two overviews is resolved by it. A jump within one definition is still found.
+
 One open finding per kind, overview, dims and measure (a condition that holds twice is one finding, so a take never fails on it); a finding moves once from open to resolved, by the take only (the application holds no write on the findings; a guard refuses any other change). Flash shows the open ones in its watch strip; `cma_read.flash_watch_finding` gives them to the readers and to the review below. Thresholds are tenant settings (seed `02`: 20 % and 10 for Pulse4all Subscriptions).
 
 ### (b) The Flash review (B22)

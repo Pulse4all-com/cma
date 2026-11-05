@@ -10,7 +10,7 @@
  */
 import type { Identity, Principal } from "@/lib/auth/identity";
 import type { HealthRun } from "@/lib/health";
-import type { FlashStatusSettings } from "@/lib/flash";
+import type { FlashSplitItem, FlashStatusSettings } from "@/lib/flash";
 
 /** ISO 8601 instant, always UTC on the wire; screens format in the user's zone */
 export type Instant = string;
@@ -3218,7 +3218,12 @@ export interface FlashCardView {
   value: number | null;
   previous: number | null;
   previousOn: string | null;
+  /** The definition the figure follows: now's live, the snapshot's As of a date */
   definitionVersion: string;
+  /** The definition the figure it is compared with followed (addition 0008zu); none without one */
+  previousDefinitionVersion: string | null;
+  /** As of a date, the stored headline's split (Total subscriptions per device-holding status); none live and elsewhere */
+  split: FlashSplitItem[] | null;
 }
 
 /** The landing (cma.flash_page) */
@@ -3338,6 +3343,10 @@ export interface FlashHeadlineView {
   to: string | null;
   setUp: boolean;
   value: number | null;
+  /** The headline's split (Total subscriptions per device-holding status, addition 0008zu); none for another overview */
+  split: FlashSplitItem[] | null;
+  /** The definition the figure follows */
+  definitionVersion: string | null;
 }
 
 /** The snapshot dates of a period (cma.flash_snapshots) */

@@ -16,7 +16,8 @@ import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesVie
 import {
   amountsOf, averageRating, bandRows, barShare, cardStatusHint, cellFilters, changeLineOf, dataQualityRowShown, FLASH_BAND_DIMS, FLASH_DEFINITION_STATUS,
   FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS, FLASH_FROZEN_COLUMNS, FLASH_LABELLED_DIMS, FLASH_OVERVIEWS, FLASH_RATIOS, FLASH_SOURCES, dimText, fixInOf, labelColumnOf,
-  measureHint, measureNotApplicable, moreThanRows, overviewOf, rowsOfSet, setMeasures, statusTone, type FlashKey, type FlashOverviewDef, type FlashStatusSettings,
+  measureHint, measureNotApplicable, moreThanRows, overviewOf, rowsOfSet, setMeasures, splitLine, splitOf, statusTone, type FlashKey, type FlashOverviewDef,
+  type FlashStatusSettings,
 } from "@/lib/flash";
 import { fmtDate, fmtDateTimeShort, fmtLastRead } from "@/lib/time";
 
@@ -161,8 +162,10 @@ export function WatchStrip({ items, query, t, copy, locale }: {
 }
 
 /** A landing card: the overview's name and key, its headline figure, the change, the definition's status */
-export function FlashCard({ def, setUp, sourceLabel, figure, change, query, t, statusSettings, locale }: {
+export function FlashCard({ def, setUp, sourceLabel, figure, change, note, query, t, statusSettings, locale }: {
   def: FlashOverviewDef; setUp: boolean; sourceLabel: string; figure: ReactNode; change: string | null; query: Query; t: T;
+  /** A line under the change: the figure compared with was counted by an earlier definition (addition 0008zu) */
+  note?: string | null;
   /** The statuses the card's figures count and the tenant's meanings (addition 0008zt), for its hint */
   statusSettings?: FlashStatusSettings | null; locale?: "en" | "nl";
 }) {
@@ -180,6 +183,7 @@ export function FlashCard({ def, setUp, sourceLabel, figure, change, query, t, s
         <>
           {figure}
           {change !== null ? <span className="text-small text-p4a-muted">{change}</span> : null}
+          {note ? <span className="text-small text-p4a-muted" data-testid={`flash-definition-${def.key}`}>{note}</span> : null}
         </>
       ) : (
         <span className="text-small text-p4a-muted" data-testid={`flash-not-set-up-${def.key}`}>{t.notSetUp.replace("{source}", sourceLabel)}</span>
@@ -201,6 +205,10 @@ export function changeText(value: number | null, previous: number | null, previo
 export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc: FlashDocumentView; locale: "en" | "nl"; t: T }) {
   const totals = doc.totals ?? {};
   const order = [def.headline, ...def.measures.filter((m) => m !== def.headline)];
+  // the headline's split per device-holding status, each in the subscription app's word (addition 0008zu): the document's
+  // rows are the market's when one is chosen; none for a snapshot taken before the split was stored
+  const split = splitLine(splitOf(def, doc.rows, null, doc.statusSettings?.deviceHoldingStatuses ?? []),
+    (x) => fmtNumber(x, locale, 0));
   return (
     <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5" data-testid="flash-totals">
       {order.map((m) => (
@@ -213,6 +221,7 @@ export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc:
               ? <NotApplicable measure={m} t={t} />
               : <MeasureValue measure={m} value={totals[m]} reviews={totals.reviews} locale={locale} />}
           </p>
+          {m === def.headline && split ? <p className="tabular mt-1 text-small text-p4a-body" data-testid={`flash-split-${def.key}`}>{split}</p> : null}
         </div>
       ))}
     </div>

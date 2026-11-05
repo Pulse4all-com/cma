@@ -718,7 +718,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 
 ## Subscription terms
 
-Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Active subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth).
+Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth).
 
 ### Subscription
 
@@ -729,14 +729,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | One subscription of a store's subscription app (Juo), one row per subscription and connection: its store customer's id, status, cycle, next billing time, billing interval, amount per cycle and currency, the type of its payment instrument and its times. A subscription the latest full read no longer returns stays stored and is marked missing (`source_deleted_at`). |
 | Source | The subscription app; for Pulse4all Subscriptions Juo's Admin API (`GET /subscriptions`, the payment method expanded for its instrument's type only), read by `ingest-poll-subscriptions` (the subscriptions the store's events touched, every `subscriptions_poll_interval_minutes`, default 5) and by the nightly full read in `ingest-reconcile` (also `ingest-backfill --object subscription`), written by `cma.ingest_upsert_subscriptions`. The store customer's id joins `cma.commerce_customer.source_id` of the store whose handle is the connection's account id up to its first dot. Only whitelisted fields are read: a name, email, phone, address, payment detail or custom attribute never reaches a row |
 | Counts / does not count | Counts one row per subscription and connection that the latest full read still returns (`source_deleted_at` empty). A subscription missing from the latest full read stays stored and is not counted. The amount per cycle is the sum of the total prices of the items Juo has not canceled, as Juo states them, in the subscription's currency. A subscription whose customer the store's customers do not hold is still counted (the run's `customers_unmatched`) |
-| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); Reports → Flash (Active subscriptions) shows them, and a page shows a subscription by its Juo id and its status, never a customer's name or email; Reports → Flash's list labels the next billing Next billing (nl: Volgende verlenging), the billing interval Billing interval (nl: Cyclusinterval) and the amount per cycle Amount per cycle (nl: Bedrag per cyclus), and a billing cycle is "cyclus" in every Dutch label (Cycles: Cycli; Cycle: Cyclus) |
+| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); Reports → Flash (Subscriptions) shows them, and a page shows a subscription by its Juo id and its status, never a customer's name or email; Reports → Flash's list labels the next billing Next billing (nl: Volgende verlenging), the billing interval Billing interval (nl: Cyclusinterval) and the amount per cycle Amount per cycle (nl: Bedrag per cyclus), and a billing cycle is "cyclus" in every Dutch label (Cycles: Cycli; Cycle: Cyclus) |
 | Time rule | Instants as Juo writes them (`source_created_at`, `next_billing_at`, `canceled_at`, `source_updated_at`); `paused_at` is when the current pause began (Juo's time, else the latest pause event; empty unless paused). The day a report puts a subscription on is decided with the first report |
 | Scope | The tenant's connections of the kind `subscriptions`, one per store (the GB store is the pilot). The store is the tenant's commerce store whose handle is the connection's account id up to its first dot; a connection whose handle has no store is refused (`store_not_configured`) |
 | Equivalent in the source system | A subscription of Juo's Admin API (`GET /subscriptions`; Juo's admin shows the counts per status). Juo's help article: not checked (juo.dev was out of reach when built) |
 | Not to use | "Subscription" for a webhook subscription (Shopify's `webhookSubscriptions`, Aircall's webhook): say webhook, as System health's label "Shop webhooks check" does (Gaps D33, I7); Pulse4all Subscriptions is a business line's name, not this term |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
-| Used by | `flash.subscriptions.*` (the Active subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
+| Used by | `flash.subscriptions.*` (the Subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
 | As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` `card`, `paypal` or `other`, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Matches the definition |
 
 ### Subscription status
@@ -768,14 +768,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | Per subscription, Juo's renewal state of it, one of six: Paid (status active, no open failed renewal), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Failed (status failed), Paused (status paused), Canceled (status canceled or expired) and Awaiting payment (Pending: a renewal by draft order, Mollie, not paid yet; not built). It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
 | Source | `cma.subscription` and `cma.subscription_event` only, computed at read time by `cma.subscription_payment_state_of(tenant)` with no call to Juo: the subscription's status and its `renewed` and `renew_failed` events. Where either event lacks its cycle, a renewal after the failure closes it |
 | Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Customers → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
-| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; Reports → Flash (Active subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
+| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; Reports → Flash (Subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
 | Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
 | Scope | As Subscription |
 | Equivalent in the source system | None: the CMA's own derivation from Juo's status and its renewal events |
 | Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "paid" for a payment in NetSuite, since Paid here is Juo's renewal state |
 | Status | Proposed (for Kira to confirm); Awaiting payment is Pending: whether a renewal by draft order is a payment state of its own, per store (docs/open-decisions.md), and nothing is built as if settled |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
-| Used by | `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Active subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
+| Used by | `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
 | As built today | `cma.subscription_payment_state_of(tenant)` (`118`): Failed for status failed, Paused for paused, Canceled for canceled or expired, In retry for active with an open failed renewal (also `retry_cycle`, the latest open cycle, `retry_since`, its first failure, and `last_attempt`, its highest attempt), else Paid; `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function. Awaiting payment is not built: no subscription has it. Matches the definition apart from Awaiting payment (Pending) |
 
 ### Failed renewal
@@ -886,20 +886,39 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Active customer (nl: Actieve klant) |
-| Key | `active_customers`; settings `flash.active_subscription_statuses` and, kept apart from it, `flash.ended_subscription_statuses` |
-| Definition | A store customer the CMA holds (not deleted) with at least one subscription of its store, not missing from the latest full read, whose status is one of `flash.active_subscription_statuses` (default and Pulse4all: `active`; never paused, and never a status of `flash.ended_subscription_statuses`). A customer whose subscriptions are paused and none active is counted apart as paused, not as active. |
+| Key | `active_customers`; settings `flash.device_holding_statuses` and, kept apart from it, `flash.ended_subscription_statuses` (since 0008zu; `flash.active_subscription_statuses` stays the paying statuses) |
+| Definition | A store customer the CMA holds (not deleted) with at least one subscription of its store, not missing from the latest full read, whose status is one of `flash.device_holding_statuses` (Device-holding status; Pulse4all: `active` and `failed`; never paused, and never a status of `flash.ended_subscription_statuses`). A customer with only a failed subscription is therefore an Active customer. A customer with a paused subscription and none in a holding status is counted apart as paused, not as active. Before 0008zu (snapshots taken earlier keep their figure and version) only the paying statuses counted. |
 | Source | `cma.commerce_customer` (the store), `cma.subscription` (the subscription app, joined by the store customer's id within the store of the subscription's connection) |
-| Counts / does not count | Counts each store customer once per store. Does not count a customer whose subscriptions are all paused (counted as paused customers), canceled, expired, failed, merged or never-subscribed, nor a subscription whose customer the store does not hold (`subscription_customer_unmatched`) |
+| Counts / does not count | Counts each store customer once per store. Does not count a customer whose subscriptions are all paused (counted as paused customers), canceled, expired, merged or never-subscribed (none in a holding status), nor a subscription whose customer the store does not hold (`subscription_customer_unmatched`) |
 | Unit and display | A count (`flash.customers.active_customers`); the list shows a customer by the store's customer id, its store and market, and its CRM contact's id with its link; labelled Store customer (nl: Webwinkelklant), never "Customer" alone |
 | Time rule | As of the instant (live) or of the take of the snapshot's business date (a snapshot) |
 | Scope | The tenant's commerce stores and their subscriptions connections; per market (the store's) and store |
 | Equivalent in the source system | None: the CMA's join of the store's customers and the subscription app's statuses |
 | Not to use | "Customer" alone for it (Domains still to define); "subscriber" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
-| Dims | Since 0008zt `segment` (Customer segment) beside `market`; `flash.active_subscription_statuses` stays the paying statuses, not the Device-holding statuses |
-| Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`, by `segment`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files |
-| As built today | `cma.flash_customers_of` (`122`), over `cma.flash_store_customers_of` with the segment (`136`). Matches the definition |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 5 Nov 2026, "Definitions: Total subscriptions and Active customer count device-holding statuses" (addition 0008zu, #234) |
+| Dims | Since 0008zt `segment` (Customer segment) beside `market`; no breakdown on the card |
+| Used by | `cma.flash_customers_of`, `cma.flash_customer_figures_of`, the overview `customers` (`active_customers`, `paused_customers`, by `segment`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files |
+| As built today | `cma.flash_customers_of` (`122`), over `cma.flash_customer_figures_of` (`138`, definition `0008zu`; `cma.flash_store_customers_of` is a wrapper with 0008zt's columns); `139` proves it. Matches the definition |
+
+### Total subscriptions
+
+| Field | Value |
+|---|---|
+| Term | Total subscriptions (nl: Totaal abonnementen); the Subscriptions overview's headline |
+| Key | `holding_subscriptions` (overview `subscriptions`, headline); grouping set [market, status]; `cma.flash_split_of`, `cma.flash_split_dim_of`, `cma.flash_stored_split_of` |
+| Definition | The subscriptions whose status is one of `flash.device_holding_statuses` (Device-holding status; Pulse4all: active + failed), split per holding status ("active 44 · failed 7", each status in Juo's own word, in the setting's order). It counts the Holding subscriptions, not every status: "All statuses" (nl "Alle statussen"; `subscriptions`, every status the latest full read returns, merged and never-subscribed included) is a different figure, and `active_subscriptions` (the paying ones) is the "active" part of this one. |
+| Source | `cma.subscription` (Juo) |
+| Counts / does not count | Counts each holding subscription once; the split has every holding status for each market with a holding subscription, zeros included, and adds up to the market's figure. Does not count paused, canceled, expired, merged or never-subscribed subscriptions. `amount_per_cycle` stays over the paying statuses |
+| Unit and display | A count; the card shows the split under the figure, live from the headline read and as of a date from the stored split; the overview shows it under the tile and as a breakdown. The hint ends with "Counts:" and the tenant's holding statuses with their meanings. A card whose compared figure was counted by an earlier definition says "The figure of {date} was counted by an earlier definition." |
+| Time rule | As of the instant (live) or of the take of the snapshot's business date; snapshots taken before 0008zu keep their figures and version: their headline was `active_subscriptions` (the paying ones), and those taken before 0008zt hold no `holding_subscriptions` |
+| Scope | The tenant's subscriptions connections; per market and holding status |
+| Equivalent in the source system | None |
+| Not to use | "All statuses" or "Subscriptions" for it (every status); "Active subscriptions" for it |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Total subscriptions and Active customer count device-holding statuses" and "Flash headlines count device-holding statuses" (addition 0008zu, #234) |
+| Used by | `flash.subscriptions.holding_subscriptions`; Reports → Flash (the Subscriptions card and overview) and its files |
+| As built today | `138` (`cma.flash_headline` returns `split` and `definition_version`; `cma.flash_page` the stored split); `139` proves it. Matches the definition |
 
 ### Open deal
 
@@ -1096,15 +1115,15 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Key | Setting `flash.device_holding_statuses`; `cma.flash_holding_statuses_of(tenant)`; measure `holding_subscriptions` |
 | Definition | A subscription status in which, by the tenant's operational meaning of Juo's statuses, the subscription holds devices. Pulse4all (confirmed by Bas, 5 November 2026): active and failed hold devices, paused holds none, canceled means the devices are returned and the warehouse confirmed receipt, expired is unused. A Holding subscription is a subscription whose status is one of them. |
 | Source | The tenant setting (default `active`, seed `02` `active,failed`: one to six of Juo's seven statuses, never `paused`, none of `flash.ended_subscription_statuses`); the status is Juo's (Subscription status) |
-| Counts / does not count | `flash.active_subscription_statuses` stays the paying statuses (active) and drives Active customer and Active subscription; the holding statuses drive only the device figures and the data-quality checks `active_subscription_without_device` and `field_device_on_non_holding_subscription` |
+| Counts / does not count | Since 0008zu the holding statuses drive Active customer, Total subscriptions (`holding_subscriptions`, split per status), the device figures and the data-quality checks `active_subscription_without_device` and `field_device_on_non_holding_subscription`; `flash.active_subscription_statuses` stays the paying statuses (active) and drives `active_subscriptions` and `amount_per_cycle` only |
 | Unit and display | A count of subscriptions (`holding_subscriptions`); the hint's "Holds devices: …" ends with the tenant's statuses, each with its meaning |
 | Time rule | As of the instant (live) or of the take of the snapshot's business date |
 | Scope | The tenant's subscriptions connections; per market and store |
 | Equivalent in the source system | None: Juo has statuses, not this meaning |
 | Not to use | "Active" for a subscription that holds devices (active is the paying status); "paused" in the setting |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Device-holding statuses (Bas, 5 Nov 2026)" (addition 0008zt, #233) |
-| Used by | `flash.subscriptions.holding_subscriptions`, `flash.subscriptions.devices_on_holding`, `flash.installed_base.in_field_on_holding`, `device_band`; `cma.data_quality_of` (`active_subscription_without_device`); Reports → Flash (Active subscriptions, Installed base) and its files |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Device-holding statuses (Bas, 5 Nov 2026)" (addition 0008zt, #233); 5 Nov 2026, "Definitions: Total subscriptions and Active customer count device-holding statuses" (addition 0008zu, #234) |
+| Used by | `flash.customers.active_customers`, `flash.subscriptions.holding_subscriptions`, `flash.subscriptions.devices_on_holding`, `flash.installed_base.in_field_on_holding`, `device_band`; `cma.data_quality_of` (`active_subscription_without_device`); Reports → Flash (Active subscriptions, Installed base) and its files |
 | As built today | `cma.flash_holding_statuses_of` and the setting's check (`136`); `137` proves them. Matches the definition |
 
 ### In the field on a holding subscription
@@ -1142,7 +1161,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Devices" alone for it (Device) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" |
-| Used by | `flash.subscriptions.devices_on_holding`; Reports → Flash (Active subscriptions) and its files |
+| Used by | `flash.subscriptions.devices_on_holding`; Reports → Flash (Subscriptions) and its files |
 | As built today | `cma.flash_subscriptions_of(tenant, date)` and `cma.flash_compute_of` (`136`). Matches the definition |
 
 ### Devices per holding subscription
@@ -1161,7 +1180,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Average devices per customer" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" |
-| Used by | `flash.subscriptions.devices_per_holding_subscription`; Reports → Flash (Active subscriptions) |
+| Used by | `flash.subscriptions.devices_per_holding_subscription`; Reports → Flash (Subscriptions) |
 | As built today | `cma.flash_ratio_of` (`136`); `137` checks every row against the quotient. Matches the definition |
 
 ### Device band
@@ -1180,7 +1199,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Tier", "bucket" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Bands and segments are tenant settings" (addition 0008zt, #233) |
-| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Active subscriptions) |
+| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Subscriptions) |
 | As built today | `136`; `137` proves the default and a custom setting. Matches the definition |
 
 ### Subscription age
@@ -1199,7 +1218,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Tenure", "lifetime" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Juo's created date is the subscription's start for age" (addition 0008zt, #233) |
-| Used by | `flash.subscriptions.active_subscriptions` by `age_band`; Reports → Flash (Active subscriptions) |
+| Used by | `flash.subscriptions.active_subscriptions` by `age_band`; Reports → Flash (Subscriptions) |
 | As built today | `cma.flash_age_months_of`, `cma.flash_age_band_of`, `cma.flash_age_bands_of` (`136`); `137` checks the bands against the business date. Matches the definition |
 
 ### Customer segment
@@ -1230,7 +1249,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Definition | A tenant's own words for what a Juo status means for its business line, per status an `en` and/or `nl` text of 1 to 200 characters without an @. Flash's hints on the status measures end with the tenant's statuses, each with its meaning in the reader's language or the word alone. Juo's words stay the status itself (Subscription status). |
 | Source | The tenant setting (seed `02` holds Bas's meanings for active, failed, paused, canceled and expired); keys only from Juo's seven statuses |
 | Counts / does not count | Not a figure. A second tenant never sees another's meanings; a hint on an older snapshot uses today's statuses and meanings |
-| Unit and display | A hint line: "Counts: …" (active customers, active subscriptions), "Holds devices: …" (the holding measures and `device_band`), paused, "Ended: …" (churned); also the overview cards and headings of customers, subscriptions and installed base |
+| Unit and display | A hint line: "Counts: …" (since 0008zu Active customers, Total subscriptions and their cards, each with the tenant's holding statuses and their meanings; Active subscriptions as before), "Active statuses: …" on amount_per_cycle, "Holds devices: …" (the holding measures and `device_band`), paused, "Ended: …" (churned); also the overview cards and headings of customers, subscriptions and installed base |
 | Time rule | As of today's configuration |
 | Scope | The tenant |
 | Equivalent in the source system | None |
@@ -1276,20 +1295,21 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" (addition 0008zt, #233) |
 | Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`, `active_subscription_without_device` and `field_device_on_non_holding_subscription` read `flash.device_holding_statuses`); every measure has a hint (copy key `mh_<measure>`, Status meaning); the metric catalog's `flash.<overview>.<measure>` entries; Reports → Flash (`/reports/flash`) and its files |
-| As built today | `122`, `136` (0008zt's dims and measures); `123` and `137` check every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
+| As built today | `122`, `136` (0008zt's dims and measures), `138` (0008zu: the split set, the definition version); `123`, `137` and `139` check every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
 
 | Overview | Measure | Meaning |
 |---|---|---|
 | Active customers (`customers`) | `customers_held` | Store customers the CMA holds |
 | | `active_customers` | Active customer (by dim `segment`, Customer segment) |
-| | `paused_customers` | Store customers with a paused subscription and none active |
+| | `paused_customers` | Store customers with a paused subscription and none in a device-holding status |
 | | `linked_to_contact` | Store customers linked to a CRM contact (0008h) |
 | | `with_required_refs` | Of those linked, whose contact the CMA holds and carries every ref of `commerce.required_contact_refs`. Not applicable while that setting is empty (no reference is required, so none is met or missed): left out live and in the snapshot, absent from the JSON, an empty cell in a file, "Not applicable" (nl "Niet van toepassing") on screen, never 0 or all |
-| Active subscriptions (`subscriptions`) | `subscriptions` | Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) |
-| | `active_subscriptions` | Of those, a status in `flash.active_subscription_statuses` |
+| Subscriptions (`subscriptions`; titled "Active subscriptions" before 0008zu) | `subscriptions` | All statuses (nl Alle statussen; labelled "Subscriptions" before 0008zu, renamed so it never reads as a figure larger than the headline): subscriptions the latest full read returns in every status, merged and never-subscribed included (payment state `none`). Total subscriptions is the headline; All statuses counts every status |
+| | `holding_subscriptions` | Total subscriptions (nl Totaal abonnementen), the overview's headline: of those, a status in `flash.device_holding_statuses` (Pulse4all: active + failed); split per holding status by the set [market, status] (zeros included, adding up to the market's figure). It is not `subscriptions` (All statuses), which counts every status |
+| | `active_subscriptions` | Of those, a status in `flash.active_subscription_statuses` (the paying ones; the "active" part of Total subscriptions) |
 | | `paused_subscriptions` | Of those, status paused |
 | | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval; nl: Bedrag per cyclus) |
-| | `holding_subscriptions`, `devices_on_holding`, `devices_per_holding_subscription` | Device-holding status, Devices on holding subscriptions, Devices per holding subscription (a ratio); by dim `device_band`; `active_subscriptions` by dim `age_band` (Subscription age) |
+| | `devices_on_holding`, `devices_per_holding_subscription` | Device-holding status, Devices on holding subscriptions, Devices per holding subscription (a ratio); by dim `device_band`; `active_subscriptions` by dim `age_band` (Subscription age) |
 | Installed base (`installed_base`) | `devices` | Devices the asset register holds, in any status (the installed base) |
 | | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) |
 | | `in_field_on_holding` | Of those in the field, on a Holding subscription (by dim `subscription_status`; In the field on a holding subscription) |

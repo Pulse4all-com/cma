@@ -9,7 +9,7 @@
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { changeLineOf } from "@/lib/flash";
+import { changeLineOf, definitionChanged, splitItemsOf, splitLine, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
 
 function go(router: ReturnType<typeof useRouter>, query: Record<string, string>, change: Record<string, string | null>) {
@@ -77,36 +77,52 @@ export function FlashMarket({ market, markets, query, labels }: {
  * a failed read shows the dash, never an error code. The change against the figure to compare with is written here too,
  * since it needs the live value; a flow whose period is open (open: lib/flash periodComplete) says "so far" instead
  */
-export function FlashLiveFigure({ overview, market, from, to, previous, open, locale, labels }: {
+export function FlashLiveFigure({ overview, market, from, to, previous, previousDefinitionVersion, open, locale, labels }: {
   overview: string;
   market: string | null;
   from: string | null;
   to: string | null;
   previous: number | null;
+  /** The definition the figure compared with followed (addition 0008zu): a different one is marked under the change */
+  previousDefinitionVersion?: string | null;
   /** The period is open (a flow's Today, a running week or month, or a source not read since its end): no change shown */
   open: boolean;
   locale: string;
-  labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; openPeriod: string; previousOnText: string | null };
+  labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; openPeriod: string; previousOnText: string | null;
+    /** "The figure of <date> was counted by an earlier definition", its date filled in; none without a date */
+    definitionEarlier?: string | null };
 }) {
-  const [value, setValue] = useState<number | null | "loading" | "failed">("loading");
+  const [read, setRead] = useState<{ value: number | null; split: FlashSplitItem[] | null; version: string | null } | "loading" | "failed">("loading");
   useEffect(() => {
     const q = new URLSearchParams({ overview, part: "headline", ...(market ? { market } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
     let gone = false;
     fetch(`/api/v1/reports/flash?${q.toString()}`, { headers: { accept: "application/json" } })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { data?: { value?: number | null } }) => { if (!gone) setValue(typeof j.data?.value === "number" ? j.data.value : null); })
-      .catch(() => { if (!gone) setValue("failed"); });
+      .then((j: { data?: { value?: number | null; split?: unknown; definitionVersion?: string | null } }) => {
+        if (!gone) {
+          setRead({ value: typeof j.data?.value === "number" ? j.data.value : null, split: splitItemsOf(j.data?.split),
+            version: typeof j.data?.definitionVersion === "string" ? j.data.definitionVersion : null });
+        }
+      })
+      .catch(() => { if (!gone) setRead("failed"); });
     return () => { gone = true; };
   }, [overview, market, from, to]);
   const n = (x: number) => new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", { maximumFractionDigits: 1 }).format(x);
-  if (value === "loading") return <p className="text-small text-p4a-muted" data-testid={`flash-live-${overview}`}>{labels.loading}</p>;
-  const shown = typeof value === "number" ? value : null;
+  if (read === "loading") return <p className="text-small text-p4a-muted" data-testid={`flash-live-${overview}`}>{labels.loading}</p>;
+  const shown = read === "failed" ? null : read.value;
   // the change as the stored cards write it (lib/flash's changeLineOf, which verify:flash tests)
   const change = changeLineOf(shown, previous, labels.previousOnText, open, labels, n);
+  // the headline's split per device-holding status, each in the subscription app's word (addition 0008zu)
+  const split = read === "failed" ? null : splitLine(read.split, n);
+  // a figure compared with one counted by an earlier definition is marked, never read as a change in the business
+  const earlier = !open && read !== "failed" && labels.definitionEarlier && definitionChanged(read.version, previousDefinitionVersion, previous)
+    ? labels.definitionEarlier : null;
   return (
     <>
       <p className="tabular text-title font-bold text-p4a-heading" data-testid={`flash-live-${overview}`}>{shown === null ? "–" : n(shown)}</p>
+      {split ? <p className="tabular text-small text-p4a-body" data-testid={`flash-split-${overview}`}>{split}</p> : null}
       <p className="text-small text-p4a-muted">{change}</p>
+      {earlier ? <p className="text-small text-p4a-muted" data-testid={`flash-definition-${overview}`}>{earlier}</p> : null}
     </>
   );
 }

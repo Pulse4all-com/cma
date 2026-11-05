@@ -30,7 +30,7 @@ import type {
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
-import { FLASH_LABELLED_DIMS, overviewOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
+import { FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
 
 /**
@@ -1380,7 +1380,8 @@ interface FlashPageDb {
   mode: "live" | "snapshot"; as_of: string; market: string | null; from?: string | null; to?: string | null; snapshot_missing: boolean;
   nearest_before?: string | null; nearest_after?: string | null; sources?: FlashSourcesDb;
   overviews: { key: string; kind: "stock" | "flow"; source: FlashPageView["overviews"][number]["source"]; set_up: boolean; headline: string;
-    value: number | string | null; previous: number | string | null; previous_on: string | null; definition_version: string }[];
+    value: number | string | null; previous: number | string | null; previous_on: string | null; definition_version: string;
+    previous_definition_version?: string | null; split?: unknown }[];
   markets: { code: string; name: string }[]; watch: FlashWatchDb[]; first_snapshot_date?: string | null; last_snapshot_date?: string | null;
   today: string; time_zone: string; settings?: Record<string, unknown> | null;
 }
@@ -1403,6 +1404,7 @@ interface FlashRowsDb {
 }
 interface FlashHeadlineDb {
   overview: string; headline: string; market: string | null; as_of: string; from: string | null; to: string | null; set_up: boolean; value: number | string | null;
+  split?: unknown; definition_version?: string | null;
 }
 interface FlashSnapshotsDb {
   from: string; to: string; dates: { date: string; status: "succeeded" | "failed" | "missed"; missed_before: number | null; finished_at: string; error: string | null }[];
@@ -1438,7 +1440,8 @@ function toFlashPage(j: FlashPageDb): FlashPageView {
     mode: j.mode, asOf: j.as_of, market: j.market, from: j.from ?? null, to: j.to ?? null, snapshotMissing: Boolean(j.snapshot_missing),
     nearestBefore: j.nearest_before ?? null, nearestAfter: j.nearest_after ?? null, sources: toFlashSources(j.sources),
     overviews: j.overviews.map((o) => ({ key: o.key, kind: o.kind, source: o.source, setUp: o.set_up, headline: o.headline, value: flashNumber(o.value),
-      previous: flashNumber(o.previous), previousOn: o.previous_on, definitionVersion: o.definition_version })),
+      previous: flashNumber(o.previous), previousOn: o.previous_on, definitionVersion: o.definition_version,
+      previousDefinitionVersion: o.previous_definition_version ?? null, split: splitItemsOf(o.split) })),
     markets: j.markets ?? [], watch: (j.watch ?? []).map(toFlashWatch), firstSnapshotDate: j.first_snapshot_date ?? null, lastSnapshotDate: j.last_snapshot_date ?? null,
     today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "", statusSettings: statusSettingsOf(j.settings),
   };
@@ -3338,7 +3341,8 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), async (q) => {
       const j = one((await q.query<{ j: FlashHeadlineDb }>(`select cma.flash_headline($1, $2, $3::date, $4::date) as j`,
         [overview, market, from, to])).rows, "flash_headline").j;
-      return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value) };
+      return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value),
+        split: splitItemsOf(j.split), definitionVersion: j.definition_version ?? null };
     });
   },
 

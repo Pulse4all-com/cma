@@ -5,7 +5,7 @@
  *   node --experimental-strip-types verify/flash.mjs --provoke   every check must FAIL
  *
  * Covers: the eleven overviews in their order with the keys 1 to 9, 0 and Q, each as cma.flash_overviews() holds it in
- * its latest definition in db/ (136_flash_insights.sql since addition 0008zt: kind, source, dims, grouping sets, measures,
+ * its latest definition in db/ (138_flash_totals.sql since addition 0008zu: kind, source, dims, grouping sets, measures,
  * count measures, headline, sort whitelist: read from the script, so the page and the database cannot drift); the address keys (market among them); the sort whitelist and its
  * default direction; the list's filters (the overview's dims and a count measure only); As of (now, a past business date,
  * today and a future date refused); the file names (overview, market or all, the date or the instant in the tenant's
@@ -25,7 +25,7 @@ import {
   breakdownRows, filtersText, FLASH_LINKS_LEFT_OUT, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_FIX_IN, fixInOf, cellFilters, frozenFilters,
   FLASH_FROZEN_LIST, listUnavailable, FLASH_CONDITIONAL_MEASURES, measureNotApplicable, measureKind, watchedMeasures, FLASH_RATIOS, ratioOf, setMeasures,
   FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
-  statusHintPart, measureHint, cardStatusHint, statusSettingsOf,
+  statusHintPart, measureHint, cardStatusHint, statusSettingsOf, FLASH_SPLITS, splitOf, splitItemsOf, splitLine, definitionChanged,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -39,7 +39,7 @@ function expect(name, actual, expected, provoked) {
   console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(80)} got ${JSON.stringify(actual).slice(0, 90)}${pass ? "" : `, wanted ${JSON.stringify(want).slice(0, 90)}`}`);
 }
 
-// ---- The overviews, against their latest definition in db/ (122_flash.sql's, 136_flash_insights.sql's since 0008zt) ---
+// ---- The overviews, against their latest definition in db/ (122's, 136's since 0008zt, 138_flash_totals.sql's since 0008zu)
 // A function's latest definition: the db/ script with the highest number that creates it (a later addition makes a
 // function again; the page follows the one the database runs)
 const dbDir = path.join(here, "..", "..", "db");
@@ -62,7 +62,7 @@ const fromSql = tuples.map((t) => ({ key: t[1], kind: t[3], source: t[5] ?? null
   countMeasures: arr(t[9]), headline: t[10], sorts: arr(t[11]) }));
 const fromTs = FLASH_OVERVIEWS.map((o) => ({ key: o.key, kind: o.kind, source: o.source, dims: [...o.dims], sets: o.sets.map((s) => [...s]),
   measures: [...o.measures], countMeasures: [...o.countMeasures], headline: o.headline, sorts: [...o.sorts] }));
-expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "136_flash_insights.sql"], [0, ""]);
+expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "138_flash_totals.sql"], [0, ""]);
 expect("the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts",
   JSON.stringify(fromTs) === JSON.stringify(fromSql), true, false);
 expect("the keys 1 to 9, 0 and Q in the page's order, each once",
@@ -597,15 +597,16 @@ expect("every Flash measure, band and the segment has its hint in en and nl; the
   [allHinted.filter((m) => typeof hintCopy.en.flash[`mh_${m}`] !== "string" || typeof hintCopy.nl.flash[`mh_${m}`] !== "string"),
     Object.keys(FLASH_STATUS_HINTS).sort(), FLASH_CARD_STATUS_HINTS,
     Object.keys(FLASH_STATUS_HINTS).every((m) => FLASH_OVERVIEWS.some((o) => o.measures.includes(m) || o.dims.includes(m)))],
-  [[], ["active_customers", "active_subscriptions", "churned", "device_band", "devices_on_holding", "devices_per_holding_subscription", "holding_subscriptions",
-    "in_field_on_holding", "paused_customers", "paused_subscriptions"], { customers: ["active"], subscriptions: ["active", "holding"], installed_base: ["holding"] }, true],
+  // since 0008zu: the amounts name the active statuses; the active customers and Total subscriptions (and their cards) the holding ones they count
+  [[], ["active_customers", "active_subscriptions", "amount_per_cycle", "churned", "device_band", "devices_on_holding", "devices_per_holding_subscription",
+    "holding_subscriptions", "in_field_on_holding", "paused_customers", "paused_subscriptions"], { customers: ["total"], subscriptions: ["total"], installed_base: ["holding"] }, true],
   [["x"], [], {}, false]);
 expect("devices per holding subscription's hint: its own words, the exchange's note (en, nl), then the holding statuses; a card's hint its parts",
   [measureHint("devices_per_holding_subscription", hintCopy.en.flash.mh_devices_per_holding_subscription, tenantB, "en", hintCopy.en.flash),
     /exchange/i.test(hintCopy.en.flash.mh_devices_per_holding_subscription) && /wissel/i.test(hintCopy.nl.flash.mh_devices_per_holding_subscription),
     cardStatusHint("subscriptions", "Base.", tenantB, "en", hintCopy.en.flash), cardStatusHint("orders", "Base.", tenantA, "en", hintCopy.en.flash),
     measureHint("orders", "Orders.", tenantA, "en", hintCopy.en.flash)],
-  [`${hintCopy.en.flash.mh_devices_per_holding_subscription}\nHolds devices: active.`, true, "Base.\nCounts: active.\nHolds devices: active.", "Base.", "Orders."],
+  [`${hintCopy.en.flash.mh_devices_per_holding_subscription}\nHolds devices: active.`, true, "Base.\nCounts: active.", "Base.", "Orders."],
   ["", false, "Base.", "x", ""]);
 // no tenant's meaning is written anywhere in the web's code or copy: seed 02's texts are configuration only
 const seed = readFileSync(path.join(dbDir, "02_seed_pulse4all.sql"), "utf8");
@@ -624,7 +625,7 @@ expect("the page uses them: the tiles' and the headers' hints (MeasureLabel), th
     /statusSettings=\{page\.statusSettings\}/.test(pageSrc0008zt), /statusSettings=\{doc\.statusSettings\}/.test(pageSrc0008zt), /<BandTable def=\{def\}/.test(pageSrc0008zt),
     /moreThanRows\(rows, dim, cumulativeMeasure\)/.test(partsSrc0008zt), /whitespace-pre-line/.test(hintSrc), /FLASH_RATIOS\[measure\] \? 2/.test(partsSrc0008zt)],
   [true, true, true, true, true, true, true, true, true], [false, false, false, false, false, false, false, false, false]);
-const { mockFlashOverview, mockFlashPage } = await import("../src/lib/data/mock-flash.ts");
+const { mockFlashOverview, mockFlashPage, mockFlashHeadline } = await import("../src/lib/data/mock-flash.ts");
 const mockSubs = mockFlashOverview(reader, "subscriptions", null, null, null, null);
 const mockBase = mockFlashOverview(reader, "installed_base", null, null, null, null);
 const mockGbBands = mockSubs.rows.filter((r) => r.dims.market === "GB" && "device_band" in r.dims).map((r) => r.dims.device_band);
@@ -636,6 +637,70 @@ expect("the mock answers as the database: every device band's row per market, th
     sumOf(mockBase.rows.filter((r) => "subscription_status" in r.dims), "in_field") === mockBase.totals.in_field,
     mockFlashPage(reader, null, null, null, null).statusSettings.deviceHoldingStatuses, mockSubs.statusSettings.deviceHoldingStatuses],
   [["0", "1", "2", "3+"], true, true, true, true, ["active", "failed"], ["active", "failed"]], [[], false, false, false, false, [], []]);
+
+// ---- Since addition 0008zu (brief B30): Total subscriptions and the active customers on the device-holding statuses ----
+const subs0008zu = overviewOf("subscriptions");
+const cust0008zu = overviewOf("customers");
+const splitSrc = defOf("flash_split_dim_of").text;
+expect("Total subscriptions is the subscriptions' headline, split per status by the set [market, status] (its rows carry it alone); the database's split dim the page's",
+  [subs0008zu.headline, subs0008zu.sets.some((x) => x.join("+") === "market+status"), setMeasures(subs0008zu, ["market", "status"]), FLASH_SPLITS,
+    /when p_overview = 'subscriptions' then 'status'/.test(splitSrc), cust0008zu.headline, FLASH_SPLITS.customers ?? null],
+  ["holding_subscriptions", true, ["holding_subscriptions"], { subscriptions: { dim: "status", measure: "holding_subscriptions" } }, true, "active_customers", null],
+  ["active_subscriptions", false, [], {}, false, "", "x"]);
+const splitRows = [
+  { dims: {}, measures: { holding_subscriptions: 9 } }, { dims: { market: "GB" }, measures: { holding_subscriptions: 7 } },
+  { dims: { market: "GB", status: "active" }, measures: { holding_subscriptions: 3 } }, { dims: { market: "GB", status: "failed" }, measures: { holding_subscriptions: 1 } },
+  { dims: { market: "NL", status: "active" }, measures: { holding_subscriptions: 2 } }, { dims: { market: "NL", status: "zz-other" }, measures: { holding_subscriptions: 1 } },
+  { dims: { market: "GB", store: "x", status: "active", payment_state: "paid" }, measures: { holding_subscriptions: 50 } },
+];
+const line = (x) => splitLine(x, (n) => String(n));
+expect("a split as the database gives it (139 A4): the setting's order, a status without rows 0, another key after by name, one market; other sets never counted",
+  [line(splitOf(subs0008zu, splitRows, null, ["failed", "active", "never-subscribed"])), line(splitOf(subs0008zu, splitRows, "GB", ["active", "failed"])),
+    line(splitOf(subs0008zu, splitRows, "FR", ["active", "failed"]))],
+  ["failed 1 · active 5 · never-subscribed 0 · zz-other 1", "active 3 · failed 1", "active 0 · failed 0"], ["", "", ""]);
+expect("no split for another overview, nor for rows that hold none (a snapshot before 0008zu): zeros never stand in for a split not stored",
+  [splitOf(cust0008zu, splitRows, null, ["active"]), splitOf(subs0008zu, splitRows.slice(0, 2), null, ["active", "failed"]), line(null), line([])],
+  [null, null, null, null], [[], [], "", ""]);
+expect("a split from the database's JSON: a key and a number (or a numeric text) each, anything else left out; not a list, none",
+  [splitItemsOf([{ key: "active", value: 7 }, { key: "failed", value: "2" }, { key: "x" }, { value: 1 }, null, { key: "y", value: "two" }]), splitItemsOf(null), splitItemsOf({ key: "a" })],
+  [[{ key: "active", value: 7 }, { key: "failed", value: 2 }], null, null], [[], [], []]);
+expect("a change of definition is marked where a figure is compared with one counted by an earlier one; never without a figure or a version",
+  [definitionChanged("0008zu", "0008zt", 5), definitionChanged("0008zu", "0008zu", 5), definitionChanged("0008zu", "0008zt", null), definitionChanged("0008zu", null, 5),
+    definitionChanged(null, "0008zt", 5)],
+  [true, false, false, false, false], [false, true, true, true, true]);
+expect("the hints since 0008zu: the active customers and Total subscriptions count the holding statuses (Counts:), the amounts the active ones",
+  [statusHintPart("total", tenantA, "en", hintCopy.en.flash), measureHint("amount_per_cycle", "Amounts.", tenantA, "en", hintCopy.en.flash),
+    measureHint("active_customers", "Customers.", tenantB, "nl", hintCopy.nl.flash), cardStatusHint("customers", "Base.", tenantA, "en", hintCopy.en.flash)],
+  ["Counts:\nactive: Devices at the customer.\nfailed: Unpaid; devices stay.", "Amounts.\nCounts: active: Devices at the customer.", "Customers.\nTelt: active.",
+    "Base.\nCounts:\nactive: Devices at the customer.\nfailed: Unpaid; devices stay."],
+  ["", "", "", ""]);
+expect("the copy: Total subscriptions (Totaal abonnementen), the overview Subscriptions, the earlier definition's line with its date, en and nl",
+  [hintCopy.en.flash.m_holding_subscriptions, hintCopy.nl.flash.m_holding_subscriptions, hintCopy.en.flash.o_subscriptions, hintCopy.nl.flash.o_subscriptions,
+    [hintCopy.en.flash.definitionEarlier, hintCopy.nl.flash.definitionEarlier].every((x) => typeof x === "string" && x.includes("{date}")),
+    /device-holding/.test(hintCopy.en.flash.mh_active_customers) && /apparaathoudende/.test(hintCopy.nl.flash.mh_active_customers)],
+  ["Total subscriptions", "Totaal abonnementen", "Subscriptions", "Abonnementen", true, true], ["", "", "", "", false, false]);
+const controlsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
+const partsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
+const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+expect("the page uses them: a live card's split and its definition's line, a stored card's split and note, the totals' split under the headline",
+  [/splitLine\(read\.split, n\)/.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
+    /previousDefinitionVersion=\{card\?\.previousDefinitionVersion \?\? null\}/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
+    /note=\{asOf && card && definitionChanged\(card\.definitionVersion, card\.previousDefinitionVersion, card\.previous\)/.test(pageSrc0008zu),
+    /splitOf\(def, doc\.rows, null, doc\.statusSettings/.test(partsSrc0008zu)],
+  [true, true, true, true, true, true], [false, false, false, false, false, false]);
+const mockCust0008zu = mockFlashOverview(reader, "customers", null, null, null, null);
+const mockRowsCust = (await import("../src/lib/data/mock-flash.ts")).mockFlashRows(reader, { overview: "customers", market: null, asOf: null, from: null, to: null,
+  filters: { measure: "active_customers" }, sort: "customer_id", descending: false, limit: 500, offset: 0 });
+const mockSplitSum = (m) => sumOf(mockSubs.rows.filter((r) => Object.keys(r.dims).length === 2 && "status" in r.dims && (m === null || r.dims.market === m)), "holding_subscriptions");
+const mockToday = mockFlashPage(reader, null, null, null, null);
+const mockCut = mockToday.lastSnapshotDate ? new Date(Date.parse(`${mockToday.today}T00:00:00Z`) - 3 * 86_400_000).toISOString().slice(0, 10) : null;
+const mockAsOf = mockCut ? mockFlashPage(reader, null, mockCut, null, null).overviews.find((c) => c.key === "subscriptions") : null;
+expect("the mock answers as the database: the active customers on the holding statuses (their list the same), the split adding up, the cards' split and versions",
+  [mockCust0008zu.totals.active_customers === mockRowsCust.total, mockRowsCust.rows.every((r) => Number(r.holding_subscriptions) > 0),
+    mockSplitSum(null) === mockSubs.totals.holding_subscriptions, mockFlashHeadline(reader, "subscriptions", null, null, null).split?.map((x) => x.key),
+    mockFlashHeadline(reader, "subscriptions", null, null, null).definitionVersion,
+    mockAsOf ? [mockAsOf.definitionVersion, mockAsOf.previousDefinitionVersion, Array.isArray(mockAsOf.split)] : null],
+  [true, true, true, ["active", "failed"], "0008zu", ["0008zu", "0008zt", true]], [false, false, false, [], "", null]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
