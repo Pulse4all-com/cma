@@ -1,0 +1,47 @@
+verify/api.mjs against http://localhost:8081
+
+PASS  preview: a manager may not preview: 403, nothing set got [403,""]
+PASS  preview: an agent may not either             got 403
+PASS  preview: an unknown role is a 403 for the admin too, nothing set got [403,""]
+PASS  preview: an ill-formed key is a 400          got 400
+PASS  preview: a write needs the request header    got 400
+PASS  preview: the admin starts one: 204, the cookie for 12 hours, httpOnly, secure, lax, on / got [204,true,true,true,true,true,true]
+PASS  preview: /me stays the admin's own identity while previewing got [200,"admin",true]
+PASS  preview: a report route answers the role's 403 to the previewing admin got 403
+PASS  preview: without the cookie the admin reads the report got 200
+PASS  preview: a manager's preview cookie is ignored got 200
+PASS  preview: Exit while previewing clears the cookie with a 204 got [204,true,true]
+PASS  follow-up: an agent is refused the lists and the summary got [403,403,403,403,403]
+PASS  follow-up: the supervisor (monitoring.live) reads the summary's eight counts and computedAt got [200,true,true,true]
+PASS  follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures got [200,403,403]
+PASS  follow-up: the manager reads the three lists, every row in shape, no customer data got [200,200,200,true,true,true,true]
+PASS  follow-up: each list says when its snapshot was computed (computedAt) got [true,true,true]
+PASS  follow-up: tickets come with the least time left first, no business hours last got true
+PASS  follow-up: the state and market filters are read back and applied got [{"market":"NL","owner":null,"state":"attention"},true]
+PASS  follow-up: owner=none keeps the leads whose owner maps to nobody got true
+PASS  follow-up: per person for the manager: people by name, the not-linked row last, each row with computedAt got [200,true,true,true]
+PASS  follow-up: the agent reads their own rows (leads.accept or workday.own), every row theirs, and computedAt got [200,true,true,true]
+PASS  follow-up: the analyst (no leads.accept, no workday.own) is refused their own got 403
+PASS  follow-up: a connection answers its task catalogs and every pipeline's own response time got [true,true,true]
+PASS  follow-up: a ticket pipeline's response time is written and put back got [200,90,null]
+PASS  follow-up: a response time on a deal pipeline, out of bounds, or on an unknown pipeline is refused got [400,400,404]
+PASS  follow-up: the manager cannot write a response time or a task status got [403,403]
+note  the connection has no task status: the task-status write is left out
+PASS  follow-up: an ill-formed task type is a 400  got 400
+PASS  identity in two tenants is refused           got 403
+PASS  unknown identity is refused                  got 403
+PASS  tenant comes from the identity only          got 01a1a9bd-cc74-7383-a371-fc69d13d8bf7
+PASS  ?as= is a 303 to the same path, relative     got [303,"/day",true]
+PASS  ?as= keeps the other parameters              got [303,"/day?date=2026-10-01"]
+PASS  an invalid ?as= is a 400                     got [400,"bad-mock-subject"]
+PASS  the cookie from ?as= is honoured             got 200
+PASS  a deep link opened without the browser session goes to Welcome and starts it got [303,"/",true]
+PASS  with the session a deep link opens; / starts the session got [200,200,true]
+PASS  ?as= keeps its 303 to the same path and starts the session got [303,true]
+PASS  the API, a fetch and Log out's pages are never sent to Welcome got [200,200,200]
+PASS  a visit opens no workday                     got null
+PASS  the database keeps no time for someone without a clock got 403
+PASS  start needs the request header               got 400
+PASS  cross-site start is refused                  got 403
+FAIL  clock-in refused: outside the workday window (07:00 to 22:00 Europe/Amsterdam); run this verifier inside the window
+exit 1

@@ -21,16 +21,21 @@
 -- What it changes
 --   cma.sources()      dropped and created again (a function's return type cannot change under create or replace): the
 --                      same permission check (tenant.configure), the same columns in the same order, then five more:
---                        last_read_at        timestamptz  the finish of the connection's latest succeeded sync_run, any job
+--                        last_read_at        timestamptz  the finish of the connection's latest started succeeded sync_run,
+--                                                         any job (a long reconcile that started before a poll and finished
+--                                                         after it is not the last read: the poll is)
 --                        last_read_job       text         that run's job (sync_run's own vocabulary: backfill, reconcile,
 --                                                         reviews_poll, subscriptions_poll, assets_poll, ...)
 --                        reads_24h           integer      sync_run rows of the connection started in the last 24 hours
 --                        reads_failed_24h    integer      of those, status failed
 --                        last_read_error     text         the error of the latest failed run started in the last 24 hours
 --                                                         (a code the ingest writes, never a value), null otherwise
---                      Owner cma_owner, execute for cma_app only, as 52 set them. The index sync_run_started_idx
---                      (tenant_id, connection_id, started_at) of 32 serves the 24-hour counts; the latest succeeded run is
---                      read over the connection's runs (a polled connection writes under 300 a day).
+--                      Owner cma_owner, execute for cma_app only, as 52 set them. Every read of cma.sync_run here is served
+--                      by sync_run_started_idx (tenant_id, connection_id, started_at) of 32: the 24-hour counts as a range,
+--                      the latest succeeded run and the latest failed run as the index scanned backward that stops at the
+--                      first match (order by started_at desc, id desc). Measured in cma-dev-pg on 5 November 2026 on the
+--                      HubSpot connection's 40,534 runs: ordered by finished_at 125 ms (a parallel seq scan and a top-N
+--                      sort), ordered by started_at 0.14 ms (an index scan backward); Decision log, 5 November 2026.
 --   cma.source_reads(connection_id)   new (the connection's page, Reads panel): the connection's last 20 cma.sync_run rows,
 --                      newest first (started_at desc, id desc): run_id, job, stream, started_at, finished_at, status, the
 --                      counts the run recorded and its error (a code the ingest writes, never a value). tenant.configure;
@@ -123,17 +128,18 @@ begin
            (select count(*)::integer from cma.sync_run r where r.tenant_id = c.tenant_id and r.connection_id = c.id and r.started_at > now() - interval '24 hours'),
            (select count(*)::integer from cma.sync_run r where r.tenant_id = c.tenant_id and r.connection_id = c.id and r.started_at > now() - interval '24 hours' and r.status = 'failed'),
            (select r.error::text from cma.sync_run r where r.tenant_id = c.tenant_id and r.connection_id = c.id and r.started_at > now() - interval '24 hours' and r.status = 'failed'
-             order by r.finished_at desc, r.id desc limit 1)
+             order by r.started_at desc, r.id desc limit 1)
     from cma.integration_connection c
+    -- the latest started succeeded run, shown by its finish: sync_run_started_idx scanned backward, stopping at the first match
     left join lateral (select r.finished_at, r.job from cma.sync_run r
                        where r.tenant_id = c.tenant_id and r.connection_id = c.id and r.status = 'succeeded'
-                       order by r.finished_at desc, r.id desc limit 1) lr on true
+                       order by r.started_at desc, r.id desc limit 1) lr on true
     where c.tenant_id = cma.current_tenant_id()
     order by c.name, c.id;
 end
 $$;
 
-comment on function cma.sources() is 'Every connection of the tenant (tenant.configure): kind, held kinds, secret names, settings, its events of cma.ingest_event (24 hours, waiting, for review, the last) and, since 0008zq, its reads of cma.sync_run (the latest succeeded run''s finish and job, the runs and failed runs of the last 24 hours, the latest failure''s code), and its catalog sizes';
+comment on function cma.sources() is 'Every connection of the tenant (tenant.configure): kind, held kinds, secret names, settings, its events of cma.ingest_event (24 hours, waiting, for review, the last) and, since 0008zq, its reads of cma.sync_run (the latest started succeeded run, shown by its finish, and its job; the runs and failed runs of the last 24 hours; the latest started failure''s code), and its catalog sizes';
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. cma.source_reads(): one connection's last 20 runs, newest first (the connection page's Reads panel)

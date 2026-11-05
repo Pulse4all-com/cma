@@ -86,7 +86,9 @@ reset role;
 ```
 Expected on both instances: `0008zo` and `0008zp` (4 November 2026). With `0008zq` already there, stop and tell me.
 
-## 2. Dev: `128` twice, `129` normal and provoked, the earlier verifies
+## 2. Dev: `128` again after the pull, `129` normal and provoked, the earlier verifies
+
+`128` ran in dev on 5 November 2026 before the amendment (the started_at order, Decision log, 5 November 2026). After `gh pr checkout` pulled the amended branch, `128` runs again: it replaces the two functions and inserts nothing (`on conflict do nothing`), so both lines below read `INSERT 0 0`. On a dev that never ran it, the first reads `INSERT 0 1`.
 
 **Terminal** (dev, on the pull request's branch): the migration twice; the second run adds nothing.
 ```bash
@@ -94,7 +96,7 @@ cd ~/cma && rec=records/0008zq-dev-2026-11-05 && mkdir -p "$rec" && cma_db dev
 psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/128_sources_last_read.sql > "$rec/128.txt" 2>&1; echo "128: $(tail -3 "$rec/128.txt" | tr '\n' ' ')"
 psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/128_sources_last_read.sql > "$rec/128-rerun.txt" 2>&1; echo "128 again: $(tail -3 "$rec/128-rerun.txt" | tr '\n' ' ')"
 ```
-Expected: `connected to cma as martin@pulse4all.com`; then `128: INSERT 0 1 COMMIT RESET`, `128 again: INSERT 0 0 COMMIT RESET`. An `ERROR` line: stop and send me `tail "$rec/128.txt"`. `addition 0008zp (126_workday_sessions.sql) must run before 0008zq`: dev is not at 0008zp; tell me.
+Expected: `connected to cma as martin@pulse4all.com`; then `128: INSERT 0 0 COMMIT RESET` (dev ran `128` on 5 November already; `INSERT 0 1` on a dev that never did), `128 again: INSERT 0 0 COMMIT RESET`. An `ERROR` line: stop and send me `tail "$rec/128.txt"`. `addition 0008zp (126_workday_sessions.sql) must run before 0008zq`: dev is not at 0008zp; tell me.
 
 **Terminal** (dev): the verify, normal and provoked (universal: throwaway tenants, always rolled back)
 ```bash
@@ -102,7 +104,7 @@ cd ~/cma && psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/129_verify_sources_last_read
 sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" db/129_verify_sources_last_read.sql > /tmp/provoke.sql
 psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "$rec/129-provoked.txt" 2>&1; echo "provoked: $(grep -c 'ERROR:  FAIL' "$rec/129-provoked.txt") blocks failed, $(grep -E ' verdict' "$rec/129-provoked.txt" | tr -s ' ')"
 ```
-Expected: `129:  verdict | PASS | 14 PASS, 0 FAIL`; `provoked: 6 blocks failed,  verdict | PROVOKED, NOT A PASS | 0 PASS, 14 FAIL`. Any other `129` line: send me `grep -E 'FAIL|ERROR' "$rec/129.txt"`.
+Expected: `129:  verdict | PASS | 15 PASS, 0 FAIL`; `provoked: 6 blocks failed,  verdict | PROVOKED, NOT A PASS | 0 PASS, 15 FAIL`. Any other `129` line: send me `grep -E 'FAIL|ERROR' "$rec/129.txt"`.
 
 **Terminal** (dev): the earlier verifies of what `128` touches (unchanged, still passing)
 ```bash
@@ -124,13 +126,24 @@ reset role;
 ```
 Expected: one row per dev connection; the polled ones (reviews, assets, subscriptions, where dev has them) with `events_24h` 0 and a `last_read_at`; the HubSpot connection with events and its nightly `reconcile` as `last_read_job`; then at most 20 runs of the most-read connection, newest first, codes and counts only. (The context block's first part gives the two ids, as PROD_RUNBOOK's Studio context block does for prod.)
 
-## 3. Prod, just before the merge: point-in-time recovery, `128` twice, `129`
+## 3. Prod, just before the merge: point-in-time recovery, the baseline, `128` twice, `129`, the timing check
 
 **Terminal** (from the Chromebook; point-in-time recovery on, as before every prod migration)
 ```bash
 gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
 ```
 Expected: `True	7`.
+
+**Studio (cma-prod-pg)** (the baseline, before `128`: the old `cma.sources()` timed; after the context block, in one Run with `explain analyze` on; counts only)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+explain (analyze, timing off, summary on) select count(*) from cma.sources();
+reset role;
+```
+Expected: one row of three values, then the plan with `Execution Time: <n> ms` at its end. On 5 November 2026 before the migration it read 862 ms for the 19 connections (the old function; `NIGHT_NOTES.md`, Open: the baseline). Write the figure into the report.
 
 **Terminal** (prod)
 ```bash
@@ -139,7 +152,18 @@ psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/128_sources_last_read.sql > "$rec/128.tx
 psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/128_sources_last_read.sql > "$rec/128-rerun.txt" 2>&1; echo "128 again: $(tail -3 "$rec/128-rerun.txt" | tr '\n' ' ')"
 psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/129_verify_sources_last_read.sql > "$rec/129.txt" 2>&1; echo "129: $(grep -E ' verdict' "$rec/129.txt" | tr -s ' ')"
 ```
-Expected: `connected to cma as martin@pulse4all.com`; `128: INSERT 0 1 COMMIT RESET`; `128 again: INSERT 0 0 COMMIT RESET`; `129:  verdict | PASS | 14 PASS, 0 FAIL`. `main`'s web keeps running on it (Order matters). **Browser:** Configuration → Sources in prod once: the page as before (no Last read column yet; the new columns are ignored by `main`'s web).
+Expected: `connected to cma as martin@pulse4all.com`; `128: INSERT 0 1 COMMIT RESET`; `128 again: INSERT 0 0 COMMIT RESET`; `129:  verdict | PASS | 15 PASS, 0 FAIL`. `main`'s web keeps running on it (Order matters).
+
+**Studio (cma-prod-pg)** (the timing check, after `128`: the same Run as the baseline)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+explain (analyze, timing off, summary on) select count(*) from cma.sources();
+reset role;
+```
+Expected: `Execution Time` not above the baseline (862 ms on 5 November 2026, 19 connections): the five new reads are served by `sync_run_started_idx` scanned backward and add well under a millisecond per connection (measured in dev: 0.14 ms for the HubSpot connection's 40,534 runs). Higher than the baseline: stop and roll back per OPERATIONS 3.5 (there is no rollback of a migration; the Sources page keeps working on the new function, so "roll back" here means do not merge, tell me the two figures, and the fix is a new pair of scripts). **Browser:** Configuration → Sources in prod once: the page as before (no Last read column yet; the new columns are ignored by `main`'s web).
 
 ## 4. Merge, watch the prod build, the ingest from `main`, `verify:api` against dev
 

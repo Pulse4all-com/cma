@@ -83,3 +83,20 @@ Martin's brief of the follow-up, sent a second time the same evening, counts **t
 | `web/verify-theme-c.txt`, `verify-layout-c.txt` | Against the mock build: theme `FAIL (1 problems)` and layout `FAIL (10 problems)`, line for line the first follow-up pass's (`-b`) and the night's: Attempts by pipeline and Funnel's tables, as on `main`; the Sources list and the connection page pass. The layout verifier writes its screenshots into `records/layout/`; they were removed again, so `records/` is untouched. |
 
 The standalone server needs `.next/static` and `public` copied next to it, as the `Dockerfile` does; without them the browser verifiers see unstyled pages. The container's Chromium is linked under the folder name `web/`'s Playwright looks for, as above.
+
+## The amendment of 5 November 2026 (`*-d.txt`)
+
+`128`'s last read and last failure ordered by `started_at desc, id desc` (served by `sync_run_started_idx` backward; Martin's measurement in dev and prod is in the Decision log of 5 November, not here: this container holds the seed's handful of runs, so a local timing says nothing). The night's container again (PostgreSQL 16.15 with the shim, Node 22.23.4): a fresh replay of `db/00` to `127` with the seeds (`db/replay-00-to-127-d.txt`), then:
+
+| File | What |
+|---|---|
+| `db/128_sources_last_read-first-run-d.txt`, `-rerun-d.txt` | `INSERT 0 1 COMMIT RESET`, then `INSERT 0 0 COMMIT RESET`. |
+| `db/129_verify_sources_last_read-d.txt` | 15 checks (A2's new one: a reconcile started 3 hours ago and finished an hour ago, a poll started 2 hours ago inside it; the poll is the last read, shown by its finish), `PASS | 15 PASS, 0 FAIL`. |
+| `db/129_verify_sources_last_read-provoked-d.txt` | Provoked: six blocks raise `FAIL`, `PROVOKED, NOT A PASS | 0 PASS, 15 FAIL`. |
+| `db/02_seed_pulse4all-after-128-d.txt` | The Pulse4all seed after `128`: no error, no notice. |
+| `db/53_verify_sources_configuration-after-128-d.txt`, `79_…-d.txt` | `53` 16 PASS (on the clean replay, before any fixture), `79` 13 PASS. |
+| `web/reports-fixture-load-d.txt` | The reports fixture loaded with `-v ON_ERROR_STOP=1` and the local switch set: `fixture written`. |
+| `web/verify-api-local-d.txt` | The full `verify/api.mjs` in api mode at 04:28 Amsterdam time: 46 PASS, then its own refusal "clock-in refused: outside the workday window (07:00 to 22:00 Europe/Amsterdam); run this verifier inside the window" (the verifier's rule, not a failure of the change; the full run inside the window is the follow-up's `-b`, 325 PASS). |
+| `web/verify-api-local-sources-d.txt`, `-provoked-d.txt`, `verify-api-local-reports-d.txt` | The subsets without the window, against the amended `cma.sources()` and `cma.source_reads` in api mode: `--sources` `ALL 34 PASS` (provoked all 34 failed), `--reports` `ALL 27 PASS`. |
+
+The web is unchanged by the amendment (no file under `web/` changed): its verifiers are the `-b` and `-c` files; only the API verifier ran again, against the amended function.

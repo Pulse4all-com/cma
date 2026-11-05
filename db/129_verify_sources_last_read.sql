@@ -6,8 +6,8 @@
 -- in prod; A7 does the same for cma.source_reads (the connection page's Reads panel). The connections are invented (adapters verifypoll, verifyhook; account ids verify-…; secret names verify-…),
 -- the events and runs are written straight into cma.ingest_event and cma.sync_run as the owner with chosen instants, so
 -- the verdict never depends on the time it runs. Cloud SQL Studio shows no notices: a check that fails raises "FAIL …"
--- and stops its block; every check that passed writes one row, and the last row is the verdict: "PASS | 14 PASS, 0 FAIL"
--- (provoked: "PROVOKED, NOT A PASS | 0 PASS, 14 FAIL"). A block that stopped counts its checks as FAIL; the verdict is
+-- and stops its block; every check that passed writes one row, and the last row is the verdict: "PASS | 15 PASS, 0 FAIL"
+-- (provoked: "PROVOKED, NOT A PASS | 0 PASS, 15 FAIL"). A block that stopped counts its checks as FAIL; the verdict is
 -- reached only when the client goes on after an error (psql -v ON_ERROR_STOP=0, as the provoked run does; with
 -- ON_ERROR_STOP=1 the run ends at the first FAIL, which names the check). Run as your own IAM login after
 -- 128_sources_last_read.sql, dev first, then prod; then 53 (its B2) and 79 again (unchanged, still PASS).
@@ -17,8 +17,9 @@
 --   A1  a connection with events and no runs (a webhook source): events_24h and last_event_at as before; last_read_at,
 --       last_read_job and last_read_error null, reads_24h and reads_failed_24h 0
 --   A2  a connection with runs and no events (a polled source): events 0 and last_event_at null; last_read_at the latest
---       succeeded run's finish and last_read_job its job, not a later failed run and not a running one; reads_24h counts
---       every run started in the window, running included
+--       started succeeded run's finish and last_read_job its job, not a later failed run and not a running one; reads_24h
+--       counts every run started in the window, running included; a long reconcile that started before a poll and
+--       finished after it is not the last read: the poll is (the latest started, served by sync_run_started_idx backward)
 --   A3  a failed run in the window: reads_failed_24h 1 and last_read_error its code; two failed runs: the latest's code
 --   A4  a succeeded run older than 24 hours: last_read_at still it (the latest succeeded), reads_24h 0; a failed run
 --       older than 24 hours gives no reads_failed_24h and no last_read_error
@@ -201,6 +202,7 @@ declare
   c_poll    uuid;
   c_fail    uuid;
   c_old     uuid;
+  c_long    uuid;
   v_t0      timestamptz := now();
   r         jsonb;
 begin
@@ -210,6 +212,7 @@ begin
     c_poll := pg_temp.v0008zq_connection(x, 'verifypoll', 'Verify poll', 'verify-poll-key');
     c_fail := pg_temp.v0008zq_connection(x, 'verifypoll', 'Verify fail', 'verify-fail-key');
     c_old  := pg_temp.v0008zq_connection(x, 'verifypoll', 'Verify old', 'verify-old-key');
+    c_long := pg_temp.v0008zq_connection(x, 'verifypoll', 'Verify long', 'verify-long-key');
     -- the webhook connection: three events, one waiting, nothing read by a job
     perform pg_temp.v0008zq_event(x, c_hook, 'e1', v_t0 - interval '3 hours');
     perform pg_temp.v0008zq_event(x, c_hook, 'e2', v_t0 - interval '2 hours');
@@ -225,6 +228,10 @@ begin
     -- the old connection: a succeeded and a failed run, both older than 24 hours
     perform pg_temp.v0008zq_run(x, c_old, 'reconcile', v_t0 - interval '30 hours', 10, 'succeeded');
     perform pg_temp.v0008zq_run(x, c_old, 'reconcile', v_t0 - interval '27 hours', 1, 'failed', 'http_500');
+    -- the overlap: a long reconcile started 3 hours ago and finished an hour ago; a poll started 2 hours ago and finished
+    -- a minute later, inside the reconcile; the poll is the latest started, so it is the last read, shown by its finish
+    perform pg_temp.v0008zq_run(x, c_long, 'reconcile', v_t0 - interval '3 hours', 120, 'succeeded');
+    perform pg_temp.v0008zq_run(x, c_long, 'subscriptions_poll', v_t0 - interval '2 hours', 1, 'succeeded');
 
     perform pg_temp.v0008zq_as(x, 'admin');
 
@@ -245,7 +252,15 @@ begin
     end if;
     v_rows := v_rows || array['20', 'A2 runs and no events: the latest succeeded run''s finish and job; every run of 24 h counted', 'PASS',
                               'events 0, last event null; last read 3 h ago by subscriptions_poll (not the failed or the running one); reads_24h 4'];
+    r := pg_temp.v0008zq_row(c_long);
+    if (r ->> 'last_read_at')::timestamptz <> v_t0 - interval '2 hours' + interval '1 minute' or r ->> 'last_read_job' <> 'subscriptions_poll'
+       or (r ->> 'reads_24h')::int <> 2 then
+      raise exception 'FAIL A2: a poll inside a long reconcile that finished later is not the last read: %', r;
+    end if;
+    v_rows := v_rows || array['21', 'A2 the latest started run is the last read, not an older one that finished later', 'PASS',
+                              'a reconcile started 3 h ago and finished 1 h ago; the poll started 2 h ago is the last read, shown by its finish'];
 
+    r := pg_temp.v0008zq_row(c_poll);
     if (r ->> 'reads_failed_24h')::int <> 1 or r ->> 'last_read_error' <> 'rate_limited' then
       raise exception 'FAIL A3: the polled connection''s failure reads % / %', r ->> 'reads_failed_24h', r ->> 'last_read_error';
     end if;
@@ -265,10 +280,10 @@ begin
     v_rows := v_rows || array['40', 'A4 runs older than 24 hours: the last read kept, nothing counted, no error', 'PASS',
                               'last read 30 h ago by reconcile; reads_24h 0; the old failure''s code not shown'];
 
-    if (select count(*) from cma.sources()) <> 4 then
-      raise exception 'FAIL A4: the tenant lists % connections, not 4', (select count(*) from cma.sources());
+    if (select count(*) from cma.sources()) <> 5 then
+      raise exception 'FAIL A4: the tenant lists % connections, not 5', (select count(*) from cma.sources());
     end if;
-    v_rows := v_rows || array['41', 'A4 the list holds every connection of the tenant', 'PASS', '4 rows'];
+    v_rows := v_rows || array['41', 'A4 the list holds every connection of the tenant', 'PASS', '5 rows'];
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
   end;
@@ -419,16 +434,16 @@ begin
 end
 $$;
 
--- Verdict: one row per check that passed, then the verdict (14 checks; a block that stopped counts its checks as FAIL)
+-- Verdict: one row per check that passed, then the verdict (15 checks; a block that stopped counts its checks as FAIL)
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zq
       union all
       select 999, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zq where result = 'PASS') = 14 then 'PASS'
+                  when (select count(*) from verify_0008zq where result = 'PASS') = 15 then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008zq where result = 'PASS'),
-                                        14 - (select count(*) from verify_0008zq where result = 'PASS'))) x
+                                        15 - (select count(*) from verify_0008zq where result = 'PASS'))) x
 order by ord;
 drop function if exists pg_temp.v0008zq_row(uuid);
 drop function if exists pg_temp.v0008zq_as(jsonb, text);
