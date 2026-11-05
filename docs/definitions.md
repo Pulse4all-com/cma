@@ -1346,7 +1346,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: the CMA's own derivation from the store's orders and the two settings |
 | Not to use | "First" or "First order" for Sales → First orders' attributed first order (pending, Customers and orders: that is the CRM's attribution, this is the store-order count); "New" or "Reorder" for Repeat |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 5 November 2026 (Proposed, Martin's brief); docs/decisions.md, 5 Nov 2026, "Flash's Orders headline is split by order kind" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw) |
+| Decided | 5 November 2026 (Proposed, Martin's brief); docs/decisions.md, 5 Nov 2026, "Flash's Orders headline is split by order kind" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
 | Used by | `flash.orders.orders` (the split), `cma.flash_split_set_of`, `cma.flash_split_order_of`, `cma.flash_headline_split_of`, `cma.flash_headline`, `cma.flash_stored_split_of`; Reports → Flash (Orders: the landing card, the overview's totals, the [market, store, kind] breakdown and the records' kind column) |
 | As built today | `db/142` (0008zw): the split read from the set [market, store, kind] summed over stores, live and as of a date; the definition version of Orders stays 0008zn. Matches the definition |
 
@@ -1365,13 +1365,13 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: the CMA's classification (Order kind) |
 | Not to use | "Renewal" alone for Payments' renewals or a failed renewal |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
 | Used by | `flash.orders.orders` (the Renewal part); Reports → Flash (Orders) |
 | As built today | As Order kind. Matches the definition |
 
 ## Rail terms
 
-Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
+Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
 
 ### Contact-center organisation
 
@@ -1420,7 +1420,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Definition | The rail group of the pages about leads and orders: Speed to lead, Follow-up, Funnel, Attempts per deal, Attempts per agent, Lead cohorts, First orders and Orders per person. |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href (`/reports/...`), its permission and its per-person key; a group with no page the person may see is absent |
-| Unit and display | A group with a trend icon, in the rail order Welcome, Messages, Live, Time, Team, Reports, Sales, Customers, Assets, Campaigns, Configuration (Time before Team and Assets after Customers since addition 0008zw) |
+| Unit and display | A group with a trend icon, in the rail order Welcome, Messages, Live, Time, Team, Reports, Sales, Customers, Assets, Campaigns, Configuration (Time before Team and Assets after Customers since addition 0008zw, #236) |
 | Time rule | None |
 | Scope | The rail of every tenant |
 | Equivalent in the source system | None |
@@ -1436,7 +1436,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations and Reviews (Maintenance moved to Assets, addition 0008zw). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations and Reviews (Maintenance moved to Assets, addition 0008zw, #236). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
 | Unit and display | A group with a person icon, after Sales and before Assets |
@@ -1464,7 +1464,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Assets" for one device or a count of devices (Device); "Customers → Maintenance" (Maintenance moved here) |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
 | Used by | `flash.installed_base.*`, `maintenance.*`; Assets → Installed base, Maintenance |
 | As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/FlashOverview.tsx`, shared with Flash) |
 
@@ -1550,7 +1550,7 @@ Status: Pending for every term below; none is defined yet. Each is added term by
 Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
 
 ### Customers and orders
-Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Order kind (First, Renewal, Repeat, Unknown) and Renewal (order) are defined under Flash terms (addition 0008zw); the store's First is not the attributed first order below. Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
+Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Order kind (First, Renewal, Repeat, Unknown) and Renewal (order) are defined under Flash terms (addition 0008zw, #236); the store's First is not the attributed first order below. Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
 
 ### Tickets and tasks
 Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zn).
