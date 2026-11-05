@@ -83745,11 +83745,11 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zn"
+            "migration": "0008zu"
           },
           {
-            "object": "cma.flash_customers_of",
-            "migration": "0008zn"
+            "object": "cma.flash_customer_figures_of",
+            "migration": "0008zu"
           },
           {
             "object": "cma.flash_overview",
@@ -83757,7 +83757,7 @@
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zn"
+            "migration": "0008zu"
           }
         ],
         "ts": [
@@ -83792,7 +83792,7 @@
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero."
+      "notes": "Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customer_figures_of (0008zu) is the one query behind the figure and its list, and 123 and 139 recompute it from fixtures; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero."
     },
     {
       "key": "flash.customers.paused_customers",
@@ -83922,11 +83922,11 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zn"
+            "migration": "0008zu"
           },
           {
-            "object": "cma.flash_customers_of",
-            "migration": "0008zn"
+            "object": "cma.flash_customer_figures_of",
+            "migration": "0008zu"
           },
           {
             "object": "cma.flash_overview",
@@ -83934,7 +83934,7 @@
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zn"
+            "migration": "0008zu"
           }
         ],
         "ts": [
@@ -83969,7 +83969,7 @@
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero."
+      "notes": "Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customer_figures_of (0008zu) is the one query behind the figure and its list, and 123 and 139 recompute it from fixtures; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero."
     },
     {
       "key": "flash.customers.linked_to_contact",
@@ -84542,7 +84542,7 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zn"
+            "migration": "0008zu"
           },
           {
             "object": "cma.flash_subscriptions_of",
@@ -84927,7 +84927,7 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zt"
+            "migration": "0008zu"
           },
           {
             "object": "cma.flash_subscriptions_of",
@@ -84939,7 +84939,15 @@
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zt"
+            "migration": "0008zu"
+          },
+          {
+            "object": "cma.flash_headline",
+            "migration": "0008zu"
+          },
+          {
+            "object": "cma.flash_split_of",
+            "migration": "0008zu"
           }
         ],
         "ts": [
@@ -84970,7 +84978,7 @@
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure)."
+      "notes": "Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 and 139 recompute it from fixtures. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure)."
     },
     {
       "key": "flash.subscriptions.devices_on_holding",

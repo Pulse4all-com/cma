@@ -33707,7 +33707,7 @@ count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu)
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -33722,7 +33722,7 @@ count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu)
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customer_figures_of (0008zu) is the one query behind the figure and its list, and 123 and 139 recompute it from fixtures; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.paused_customers`
 
@@ -33770,7 +33770,7 @@ count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; b
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -33785,7 +33785,7 @@ count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; b
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customer_figures_of (0008zu) is the one query behind the figure and its list, and 123 and 139 recompute it from fixtures; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.linked_to_contact`
 
@@ -34013,7 +34013,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -34187,7 +34187,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
 
-**Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
+**Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `cma.flash_headline` (0008zu); `cma.flash_split_of` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -34201,7 +34201,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
+Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 and 139 recompute it from fixtures. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
 
 #### `flash.subscriptions.devices_on_holding`
 

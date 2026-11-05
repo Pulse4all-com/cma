@@ -9,8 +9,11 @@
 -- snapshot job): dev first, then 139_verify_flash_totals.sql there, then 123_verify_flash.sql and
 -- 137_verify_flash_insights.sql again (their expected figures follow 0008zu since this change); then prod, with 139,
 -- 123 and 137. No table, view or column changes, and no setting: seed 02 need not run again. The web of main runs
--- unchanged on it (the landing's and the headline's new keys are extra; the subscriptions card shows the new headline
--- under main's old caption until the web of this change is deployed): in prod the script runs before the merge.
+-- unchanged on it (the landing's and the headline's new keys are extra), but until the web of this change is deployed
+-- its subscriptions card shows the new headline (Total subscriptions, failed included) under main's caption "Active
+-- subscriptions", and its customers' and subscriptions' cards compare with the 0008zt snapshot without marking the
+-- change of definition: in prod the script runs right before the merge, and the merge follows as soon as 139 passes
+-- (deploying the web first would mislabel the other way round).
 --
 -- Why (brief B30, Martin, 5 November 2026): a failed subscription still holds its devices and its customer is still a
 -- customer (Bas, 0008zt), so Reports → Flash's two first figures count the device-holding statuses:
@@ -379,7 +382,8 @@ begin
       union all
       -- Total subscriptions' split (0008zu): the device-holding subscriptions per market and status, every status of
       -- flash.device_holding_statuses for each market with a holding subscription (zeros included), so they add up to the
-      -- market's holding_subscriptions
+      -- market's holding_subscriptions; the setting holds the subscription app's status words alone (0008zt's check), so a
+      -- split row's dim is always such a word
       select jsonb_build_object('market', m.market, 'status', h.status), jsonb_build_object('holding_subscriptions', coalesce(n.n, 0))
       from (select distinct b.market from b where b.is_holding) m
       cross join unnest(v_holding) h(status)
