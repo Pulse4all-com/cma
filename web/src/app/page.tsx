@@ -9,7 +9,7 @@ import { agentGroupOf } from "@/lib/dashboard";
 import { attentionLines, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, type AttentionLine } from "@/lib/follow-up";
 import { workedSeconds } from "@/lib/live";
 import {
-  data, dataIsMock, type AppLink, type DateKey, type FollowUpSummary, type InboundNow, type MyFollowUp, type MyMessages, type TeamHours,
+  data, dataIsMock, requestDbTrace, type AppLink, type FollowUpSummary, type InboundNow, type MyFollowUp, type MyMessages, type MyRosterDay, type TeamHours,
   type WorkStatus, type Workday,
 } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
@@ -51,6 +51,22 @@ export default async function WelcomePage() {
 
   const hour = hourInZone(now, me.timeZone);
   const greeting = (hour < 12 ? t.morning : hour < 18 ? t.afternoon : t.evening).replace("{name}", me.displayName);
+  // Every block's read starts here, in parallel, and streams into its own boundary below; the trace meta
+  // (verification only) waits for all of them
+  const d = data();
+  const reads = {
+    roster: hasRoster ? d.getMyRoster(me, { from: today, to: today }) : null,
+    inbox: d.listMyMessages(me, null, UPDATES_SHOWN),
+    attention: hasAttention ? Promise.all([
+      d.getFollowUpSummary(me),
+      hasTeam ? d.getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
+      hasLive ? d.getInboundNow(me) : Promise.resolve(null),
+    ]) : null,
+    day: hasClock ? Promise.all([d.getWorkday(me, today), d.listStatuses(me)]) : null,
+    mine: hasOwn ? d.getMyFollowUp(me) : null,
+    links: d.listAppLinks(me),
+  };
+  const traced = requestDbTrace() !== null;
 
   // Since night N06 (5 November 2026; the IT audit's 5.6-05) the frame and the greeting render at once and every
   // block streams in its own Suspense boundary with a placeholder, each block reading what it needs: the slowest read
@@ -62,7 +78,7 @@ export default async function WelcomePage() {
         {fmtDate(today, me.locale)}
         {hasRoster ? (
           <Suspense fallback={null}>
-            <ShiftLine me={me} today={today} copy={copy} />
+            <ShiftLine read={reads.roster} copy={copy} />
           </Suspense>
         ) : null}
       </p>
@@ -70,11 +86,11 @@ export default async function WelcomePage() {
       <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">
         <div className="flex flex-col gap-6">
           <Suspense fallback={<CardSkeleton title={t.updates} lines={3} />}>
-            <UpdatesBlockLoader me={me} copy={copy} />
+            <UpdatesBlockLoader read={reads.inbox} me={me} copy={copy} />
           </Suspense>
           {hasAttention ? (
             <Suspense fallback={<CardSkeleton title={t.attention} lines={4} />}>
-              <AttentionBlockLoader me={me} today={today} hasTeam={hasTeam} hasLive={hasLive} copy={copy} />
+              <AttentionBlockLoader read={reads.attention} copy={copy} />
             </Suspense>
           ) : null}
           {hasReports ? (
@@ -90,19 +106,24 @@ export default async function WelcomePage() {
         <div className="flex flex-col gap-6">
           {hasClock ? (
             <Suspense fallback={<CardSkeleton lines={3} />}>
-              <DayBlockLoader me={me} today={today} now={now} copy={copy} />
+              <DayBlockLoader read={reads.day} me={me} now={now} copy={copy} />
             </Suspense>
           ) : null}
           {hasOwn ? (
             <Suspense fallback={<CardSkeleton title={t.waitingForYou} lines={1} />}>
-              <WaitingBlockLoader me={me} copy={copy} />
+              <WaitingBlockLoader read={reads.mine} copy={copy} />
             </Suspense>
           ) : null}
           <Suspense fallback={null}>
-            <AppLinksLoader me={me} copy={copy} />
+            <AppLinksLoader read={reads.links} copy={copy} />
           </Suspense>
         </div>
       </div>
+      {traced ? (
+        <Suspense fallback={null}>
+          <TraceMeta reads={Object.values(reads)} />
+        </Suspense>
+      ) : null}
 
       {dataIsMock ? (
         <div className="mt-6">
@@ -128,9 +149,9 @@ function CardSkeleton({ title, lines }: { title?: string; lines: number }) {
 }
 
 /** The shift sentence the greeting waited for (migration 0005): from the published roster only */
-async function ShiftLine({ me, today, copy }: { me: Principal; today: DateKey; copy: Copy }) {
+async function ShiftLine({ read, copy }: { read: Promise<MyRosterDay[]> | null; copy: Copy }) {
   const t = copy.welcome;
-  const roster = await data().getMyRoster(me, { from: today, to: today });
+  const roster = (await read) ?? [];
   const todayRoster = roster[0] ?? null;
   const shiftLine = !todayRoster ? null
     : !todayRoster.isPublished ? t.rosterNotPublished
@@ -141,37 +162,47 @@ async function ShiftLine({ me, today, copy }: { me: Principal; today: DateKey; c
 }
 
 /** The latest messages for the Updates card (migration 0008); listing sets their delivered time, reading is the person's own click */
-async function UpdatesBlockLoader({ me, copy }: { me: Principal; copy: Copy }) {
-  const inbox = await data().listMyMessages(me, null, UPDATES_SHOWN);
+async function UpdatesBlockLoader({ read, me, copy }: { read: Promise<MyMessages>; me: Principal; copy: Copy }) {
+  const inbox = await read;
   return <UpdatesBlock inbox={inbox} timeZone={me.timeZone} locale={me.locale} copy={copy} />;
 }
 
 /** Needs attention (addition 0008o): the counts for the team, the days not clocked out and the missed callers */
-async function AttentionBlockLoader({ me, today, hasTeam, hasLive, copy }: { me: Principal; today: DateKey; hasTeam: boolean; hasLive: boolean; copy: Copy }) {
-  const [summary, team, inbound] = await Promise.all([
-    data().getFollowUpSummary(me),
-    hasTeam ? data().getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
-    hasLive ? data().getInboundNow(me) : Promise.resolve(null),
-  ]);
+async function AttentionBlockLoader({ read, copy }: { read: Promise<[FollowUpSummary, TeamHours | null, InboundNow | null]> | null; copy: Copy }) {
+  if (!read) return null;
+  const [summary, team, inbound] = await read;
   return <AttentionBlock summary={summary} team={team} inbound={inbound} copy={copy} />;
 }
 
 /** The person's own day and the statuses it needs */
-async function DayBlockLoader({ me, today, now, copy }: { me: Principal; today: DateKey; now: Date; copy: Copy }) {
-  const [workday, statuses] = await Promise.all([data().getWorkday(me, today), data().listStatuses(me)]);
+async function DayBlockLoader({ read, me, now, copy }: { read: Promise<[Workday | null, WorkStatus[]]> | null; me: Principal; now: Date; copy: Copy }) {
+  if (!read) return null;
+  const [workday, statuses] = await read;
   return <DayBlock workday={workday} statuses={statuses} timeZone={me.timeZone} locale={me.locale} now={now} copy={copy} />;
 }
 
 /** Waiting for you (addition 0008o): the person's own rows */
-async function WaitingBlockLoader({ me, copy }: { me: Principal; copy: Copy }) {
-  const mine = await data().getMyFollowUp(me);
+async function WaitingBlockLoader({ read, copy }: { read: Promise<MyFollowUp> | null; copy: Copy }) {
+  if (!read) return null;
+  const mine = await read;
   return <WaitingBlock mine={mine} copy={copy} />;
 }
 
 /** The tenant's app links, already filtered by the database to what this person may see */
-async function AppLinksLoader({ me, copy }: { me: Principal; copy: Copy }) {
-  const links = await data().listAppLinks(me);
+async function AppLinksLoader({ read, copy }: { read: Promise<AppLink[]>; copy: Copy }) {
+  const links = await read;
   return links.length > 0 ? <AppLinks links={links} copy={copy} /> : null;
+}
+
+/**
+ * Verification only (CMA_DB_TRACE=1 with mock sign-in): the blocks stream after the Shell, so the Shell's cma-db meta
+ * counts none of their reads; this one, written once every block's read has settled, carries the request's total
+ * (verify/round-trips.mjs reads the last meta, as on System health). Never rendered when the trace is off
+ */
+async function TraceMeta({ reads }: { reads: (Promise<unknown> | null)[] }) {
+  await Promise.allSettled(reads);
+  const dbTrace = requestDbTrace();
+  return dbTrace ? <meta name="cma-db" content={dbTrace} /> : null;
 }
 
 /**
