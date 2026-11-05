@@ -69,157 +69,157 @@ DROP TABLE
  rolled back                                                         | info   | the timed part is rolled back: 0 audit row(s) of its writes remain
  pulse4all-invest periods                                            | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-06 to 2026-11-05; today 2026-11-05; connection 01a1aa70-6125-71bd-98d7-245116f47f98
  pulse4all-invest polls: identity principal                          | ok     | 1.4 ms (best of 2) against 20 ms
- pulse4all-invest polls: messages poll (since now)                   | ok     | 1.0 ms (best of 2) against 20 ms
- pulse4all-invest polls: team now                                    | ok     | 3.4 ms (best of 2) against 20 ms
+ pulse4all-invest polls: messages poll (since now)                   | ok     | 1.3 ms (best of 2) against 20 ms
+ pulse4all-invest polls: team now                                    | ok     | 3.6 ms (best of 2) against 20 ms
  pulse4all-invest polls: work status flags                           | ok     | 0.1 ms (best of 2) against 20 ms
- pulse4all-invest polls: inbound today                               | FAIL   | 78.4 ms (best of 2) against 20 ms
- pulse4all-invest polls: missed callbacks                            | FAIL   | 40.3 ms (best of 2) against 20 ms
- pulse4all-invest polls: missed callbacks summary                    | FAIL   | 69.0 ms (best of 2) against 20 ms
- pulse4all-invest polls: inbound now (one statement)                 | FAIL   | 137.3 ms (best of 2) against 20 ms
+ pulse4all-invest polls: inbound today                               | FAIL   | 65.3 ms (best of 2) against 20 ms
+ pulse4all-invest polls: missed callbacks                            | FAIL   | 32.7 ms (best of 2) against 20 ms
+ pulse4all-invest polls: missed callbacks summary                    | FAIL   | 61.9 ms (best of 2) against 20 ms
+ pulse4all-invest polls: inbound now (one statement)                 | FAIL   | 130.2 ms (best of 2) against 20 ms
  pulse4all-invest polls: shifts today                                | ok     | 1.5 ms (best of 2) against 20 ms
- pulse4all-invest welcome agent: own day today                       | ok     | 3.3 ms (best of 2) against 50 ms
+ pulse4all-invest welcome agent: own day today                       | ok     | 3.7 ms (best of 2) against 50 ms
  pulse4all-invest welcome agent: statuses                            | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-invest welcome agent: app links                           | ok     | 0.2 ms (best of 2) against 50 ms
  pulse4all-invest welcome agent: my roster today                     | ok     | 0.8 ms (best of 2) against 50 ms
- pulse4all-invest welcome agent: updates (5 messages)                | ok     | 0.9 ms (best of 2) against 50 ms
- pulse4all-invest welcome agent: waiting for you                     | ok     | 0.6 ms (best of 2) against 50 ms
- pulse4all-invest welcome manager: team hours 31 days                | ok     | 4.3 ms (best of 2) against 50 ms
- pulse4all-invest welcome manager: follow-up summary                 | ok     | 0.4 ms (best of 2) against 50 ms
- pulse4all-invest welcome admin: roles                               | ok     | 0.8 ms (best of 2) against 50 ms
- pulse4all-invest my hours: own days 7 days                          | ok     | 3.9 ms (best of 2) against 50 ms
+ pulse4all-invest welcome agent: updates (5 messages)                | ok     | 1.0 ms (best of 2) against 50 ms
+ pulse4all-invest welcome agent: waiting for you                     | ok     | 0.4 ms (best of 2) against 50 ms
+ pulse4all-invest welcome manager: team hours 31 days                | ok     | 2.8 ms (best of 2) against 50 ms
+ pulse4all-invest welcome manager: follow-up summary                 | ok     | 0.2 ms (best of 2) against 50 ms
+ pulse4all-invest welcome admin: roles                               | ok     | 0.6 ms (best of 2) against 50 ms
+ pulse4all-invest my hours: own days 7 days                          | ok     | 2.4 ms (best of 2) against 50 ms
  pulse4all-invest my schedule: my roster week                        | ok     | 0.9 ms (best of 2) against 50 ms
  pulse4all-invest messages: inbox (50 messages)                      | ok     | 1.0 ms (best of 2) against 50 ms
- pulse4all-invest my account: my profile                             | ok     | 1.6 ms (best of 2) against 50 ms
+ pulse4all-invest my account: my profile                             | ok     | 1.5 ms (best of 2) against 50 ms
  pulse4all-invest live board: team members now                       | ok     | 0.1 ms (best of 2) against 50 ms
- pulse4all-invest live board: tenant settings                        | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-invest live board: tenant settings                        | ok     | 0.2 ms (best of 2) against 50 ms
  pulse4all-invest team people: directory                             | ok     | 2.3 ms (best of 2) against 50 ms
  pulse4all-invest team people: teams                                 | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-invest team people: skills                                | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-invest team people: organisations                         | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-invest team people: linked accounts                       | ok     | 0.2 ms (best of 2) against 50 ms
  pulse4all-invest team people: invitations                           | ok     | 1.3 ms (best of 2) against 50 ms
- pulse4all-invest team hours: team people                            | ok     | 1.3 ms (best of 2) against 50 ms
- pulse4all-invest team hours: team hours 7 days                      | ok     | 2.5 ms (best of 2) against 50 ms
+ pulse4all-invest team hours: team people                            | ok     | 1.4 ms (best of 2) against 50 ms
+ pulse4all-invest team hours: team hours 7 days                      | ok     | 3.6 ms (best of 2) against 50 ms
  pulse4all-invest roster week: roster week                           | ok     | 0.6 ms (best of 2) against 50 ms
- pulse4all-invest roster week: roster people                         | ok     | 2.8 ms (best of 2) against 50 ms
+ pulse4all-invest roster week: roster people                         | ok     | 2.6 ms (best of 2) against 50 ms
  pulse4all-invest roster week: roster entries                        | ok     | 0.5 ms (best of 2) against 50 ms
- pulse4all-invest roster week: roster coverage                       | ok     | 0.7 ms (best of 2) against 50 ms
+ pulse4all-invest roster week: roster coverage                       | ok     | 0.9 ms (best of 2) against 50 ms
  pulse4all-invest roster week: roster weeks around                   | ok     | 0.6 ms (best of 2) against 50 ms
- pulse4all-invest roster week: absence types                         | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-invest follow-up: follow-up page with callbacks           | ok     | 8.4 ms (best of 2) against 500 ms
- pulse4all-invest sources: sources                                   | ok     | 1.8 ms (best of 2) against 150 ms
+ pulse4all-invest roster week: absence types                         | ok     | 0.1 ms (best of 2) against 50 ms
+ pulse4all-invest follow-up: follow-up page with callbacks           | ok     | 9.2 ms (best of 2) against 500 ms
+ pulse4all-invest sources: sources                                   | ok     | 2.4 ms (best of 2) against 150 ms
  pulse4all-invest sources: form categories                           | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-invest sources: record kinds                              | ok     | 0.3 ms (best of 2) against 50 ms
- pulse4all-invest connection page: the connection                    | ok     | 1.7 ms (best of 2) against 150 ms
- pulse4all-invest connection page: connection config                 | ok     | 1.2 ms (best of 2) against 50 ms
- pulse4all-invest connection page: connection catalogs               | ok     | 0.9 ms (best of 2) against 50 ms
+ pulse4all-invest sources: record kinds                              | ok     | 0.4 ms (best of 2) against 50 ms
+ pulse4all-invest connection page: the connection                    | ok     | 2.1 ms (best of 2) against 150 ms
+ pulse4all-invest connection page: connection config                 | ok     | 2.0 ms (best of 2) against 50 ms
+ pulse4all-invest connection page: connection catalogs               | ok     | 1.3 ms (best of 2) against 50 ms
  pulse4all-invest connection page: pipeline response times           | ok     | 0.1 ms (best of 2) against 50 ms
- pulse4all-invest connection page: reads                             | ok     | 0.3 ms (best of 2) against 50 ms
- pulse4all-invest connection page: markets, hours, holidays          | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-invest connection page: reads                             | ok     | 0.2 ms (best of 2) against 50 ms
+ pulse4all-invest connection page: markets, hours, holidays          | ok     | 0.7 ms (best of 2) against 50 ms
  pulse4all-invest system health: storage round trip                  | ok     | 0.0 ms (best of 2) against 20 ms
- pulse4all-invest system health: system health runs                  | ok     | 0.6 ms (best of 2) against 500 ms
+ pulse4all-invest system health: system health runs                  | ok     | 1.0 ms (best of 2) against 500 ms
  pulse4all-invest system health: outbox status                       | ok     | 0.1 ms (best of 2) against 500 ms
- pulse4all-invest data quality: data quality checks                  | ok     | 16.9 ms (best of 2) against 500 ms
+ pulse4all-invest data quality: data quality checks                  | ok     | 19.9 ms (best of 2) against 500 ms
  pulse4all-invest data quality: outbox late                          | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-invest data quality: flash data quality overview          | ok     | 7.9 ms (best of 2) against 500 ms
- pulse4all-invest data quality: flash data quality first page        | ok     | 5.1 ms (best of 2) against 500 ms
- pulse4all-invest flash: landing                                     | ok     | 5.3 ms (best of 2) against 500 ms
- pulse4all-invest flash: snapshots                                   | ok     | 0.6 ms (best of 2) against 50 ms
+ pulse4all-invest data quality: flash data quality overview          | ok     | 12.3 ms (best of 2) against 500 ms
+ pulse4all-invest data quality: flash data quality first page        | ok     | 1.5 ms (best of 2) against 500 ms
+ pulse4all-invest flash: landing                                     | ok     | 6.5 ms (best of 2) against 500 ms
+ pulse4all-invest flash: snapshots                                   | ok     | 0.5 ms (best of 2) against 50 ms
  pulse4all-invest campaigns: journeys                                | ok     | 0.1 ms (best of 2) against 50 ms
- pulse4all-invest welcome agent (set)                                | ok     | 5.9 ms, the reads summed, against 100 ms
- pulse4all-invest welcome manager (set)                              | ok     | 4.7 ms, the reads summed, against 100 ms
- pulse4all-invest welcome admin (set)                                | ok     | 0.8 ms, the reads summed, against 100 ms
- pulse4all-invest my hours (set)                                     | ok     | 3.9 ms, the reads summed, against 100 ms
+ pulse4all-invest welcome agent (set)                                | ok     | 6.2 ms, the reads summed, against 100 ms
+ pulse4all-invest welcome manager (set)                              | ok     | 3.0 ms, the reads summed, against 100 ms
+ pulse4all-invest welcome admin (set)                                | ok     | 0.6 ms, the reads summed, against 100 ms
+ pulse4all-invest my hours (set)                                     | ok     | 2.4 ms, the reads summed, against 100 ms
  pulse4all-invest my schedule (set)                                  | ok     | 0.9 ms, the reads summed, against 100 ms
  pulse4all-invest messages (set)                                     | ok     | 1.0 ms, the reads summed, against 100 ms
- pulse4all-invest my account (set)                                   | ok     | 1.6 ms, the reads summed, against 100 ms
- pulse4all-invest live board (set)                                   | ok     | 0.4 ms, the reads summed, against 100 ms
+ pulse4all-invest my account (set)                                   | ok     | 1.5 ms, the reads summed, against 100 ms
+ pulse4all-invest live board (set)                                   | ok     | 0.3 ms, the reads summed, against 100 ms
  pulse4all-invest team people (set)                                  | ok     | 4.1 ms, the reads summed, against 100 ms
- pulse4all-invest team hours (set)                                   | ok     | 3.8 ms, the reads summed, against 100 ms
- pulse4all-invest roster week (set)                                  | ok     | 5.4 ms, the reads summed, against 100 ms
- pulse4all-invest follow-up (set)                                    | ok     | 8.4 ms, the reads summed, against 500 ms
- pulse4all-invest sources (set)                                      | ok     | 2.3 ms, the reads summed, against 500 ms
- pulse4all-invest connection page (set)                              | ok     | 4.5 ms, the reads summed, against 500 ms
- pulse4all-invest system health (set)                                | ok     | 0.7 ms, the reads summed, against 500 ms
- pulse4all-invest data quality (set)                                 | ok     | 30.1 ms, the reads summed, against 500 ms
- pulse4all-invest flash (set)                                        | ok     | 5.9 ms, the reads summed, against 500 ms
+ pulse4all-invest team hours (set)                                   | ok     | 5.0 ms, the reads summed, against 100 ms
+ pulse4all-invest roster week (set)                                  | ok     | 5.3 ms, the reads summed, against 100 ms
+ pulse4all-invest follow-up (set)                                    | ok     | 9.2 ms, the reads summed, against 500 ms
+ pulse4all-invest sources (set)                                      | ok     | 3.0 ms, the reads summed, against 500 ms
+ pulse4all-invest connection page (set)                              | ok     | 6.4 ms, the reads summed, against 500 ms
+ pulse4all-invest system health (set)                                | ok     | 1.1 ms, the reads summed, against 500 ms
+ pulse4all-invest data quality (set)                                 | ok     | 33.9 ms, the reads summed, against 500 ms
+ pulse4all-invest flash (set)                                        | ok     | 7.0 ms, the reads summed, against 500 ms
  pulse4all-subscriptions periods                                     | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-06 to 2026-11-05; today 2026-11-05; connection 01a1aa1a-4dac-71d1-a07f-c03da9724d18
  pulse4all-subscriptions polls: identity principal                   | ok     | 1.2 ms (best of 2) against 20 ms
  pulse4all-subscriptions polls: messages poll (since now)            | ok     | 11.9 ms (best of 2) against 20 ms
- pulse4all-subscriptions polls: team now                             | FAIL   | 41.6 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: team now                             | FAIL   | 72.4 ms (best of 2) against 20 ms
  pulse4all-subscriptions polls: work status flags                    | ok     | 0.1 ms (best of 2) against 20 ms
- pulse4all-subscriptions polls: inbound today                        | FAIL   | 81.6 ms (best of 2) against 20 ms
- pulse4all-subscriptions polls: missed callbacks                     | FAIL   | 1202.3 ms (best of 2) against 20 ms
- pulse4all-subscriptions polls: missed callbacks summary             | FAIL   | 933.1 ms (best of 2) against 20 ms
- pulse4all-subscriptions polls: inbound now (one statement)          | FAIL   | 327.7 ms (best of 2) against 20 ms
- pulse4all-subscriptions polls: shifts today                         | ok     | 3.4 ms (best of 2) against 20 ms
- pulse4all-subscriptions welcome agent: own day today                | ok     | 2.8 ms (best of 2) against 50 ms
+ pulse4all-subscriptions polls: inbound today                        | FAIL   | 78.4 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: missed callbacks                     | FAIL   | 1071.1 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: missed callbacks summary             | FAIL   | 1061.6 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: inbound now (one statement)          | FAIL   | 335.2 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: shifts today                         | ok     | 3.6 ms (best of 2) against 20 ms
+ pulse4all-subscriptions welcome agent: own day today                | ok     | 3.3 ms (best of 2) against 50 ms
  pulse4all-subscriptions welcome agent: statuses                     | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-subscriptions welcome agent: app links                    | ok     | 0.4 ms (best of 2) against 50 ms
- pulse4all-subscriptions welcome agent: my roster today              | ok     | 1.0 ms (best of 2) against 50 ms
- pulse4all-subscriptions welcome agent: updates (5 messages)         | ok     | 11.8 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: my roster today              | ok     | 1.1 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: updates (5 messages)         | ok     | 11.7 ms (best of 2) against 50 ms
  pulse4all-subscriptions welcome agent: waiting for you              | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-subscriptions welcome manager: team hours 31 days         | ok     | 4.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome manager: team hours 31 days         | ok     | 4.2 ms (best of 2) against 50 ms
  pulse4all-subscriptions welcome manager: follow-up summary          | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-subscriptions welcome admin: roles                        | ok     | 0.4 ms (best of 2) against 50 ms
- pulse4all-subscriptions my hours: own days 7 days                   | ok     | 2.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions my hours: own days 7 days                   | ok     | 2.4 ms (best of 2) against 50 ms
  pulse4all-subscriptions my schedule: my roster week                 | ok     | 0.9 ms (best of 2) against 50 ms
- pulse4all-subscriptions messages: inbox (50 messages)               | ok     | 12.3 ms (best of 2) against 50 ms
- pulse4all-subscriptions my account: my profile                      | ok     | 1.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions messages: inbox (50 messages)               | ok     | 12.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions my account: my profile                      | ok     | 1.7 ms (best of 2) against 50 ms
  pulse4all-subscriptions live board: team members now                | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-subscriptions live board: tenant settings                 | ok     | 0.3 ms (best of 2) against 50 ms
- pulse4all-subscriptions team people: directory                      | ok     | 3.4 ms (best of 2) against 50 ms
- pulse4all-subscriptions team people: teams                          | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-subscriptions team people: skills                         | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: directory                      | ok     | 3.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: teams                          | ok     | 0.1 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: skills                         | ok     | 0.2 ms (best of 2) against 50 ms
  pulse4all-subscriptions team people: organisations                  | ok     | 0.1 ms (best of 2) against 50 ms
- pulse4all-subscriptions team people: linked accounts                | ok     | 1.0 ms (best of 2) against 50 ms
- pulse4all-subscriptions team people: invitations                    | ok     | 1.4 ms (best of 2) against 50 ms
- pulse4all-subscriptions team hours: team people                     | ok     | 2.2 ms (best of 2) against 50 ms
- pulse4all-subscriptions team hours: team hours 7 days               | ok     | 4.5 ms (best of 2) against 50 ms
- pulse4all-subscriptions roster week: roster week                    | ok     | 0.7 ms (best of 2) against 50 ms
- pulse4all-subscriptions roster week: roster people                  | ok     | 3.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: linked accounts                | ok     | 0.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: invitations                    | ok     | 1.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team hours: team people                     | ok     | 2.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team hours: team hours 7 days               | ok     | 5.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster week                    | ok     | 0.6 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster people                  | ok     | 4.1 ms (best of 2) against 50 ms
  pulse4all-subscriptions roster week: roster entries                 | ok     | 0.5 ms (best of 2) against 50 ms
  pulse4all-subscriptions roster week: roster coverage                | ok     | 0.9 ms (best of 2) against 50 ms
- pulse4all-subscriptions roster week: roster weeks around            | ok     | 0.6 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster weeks around            | ok     | 0.5 ms (best of 2) against 50 ms
  pulse4all-subscriptions roster week: absence types                  | ok     | 0.1 ms (best of 2) against 50 ms
- pulse4all-subscriptions follow-up: follow-up page with callbacks    | ok     | 404.8 ms (best of 2) against 500 ms
+ pulse4all-subscriptions follow-up: follow-up page with callbacks    | ok     | 455.9 ms (best of 2) against 500 ms
  pulse4all-subscriptions sources: sources                            | ok     | 19.7 ms (best of 2) against 150 ms
  pulse4all-subscriptions sources: form categories                    | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-subscriptions sources: record kinds                       | ok     | 0.4 ms (best of 2) against 50 ms
- pulse4all-subscriptions connection page: the connection             | ok     | 19.3 ms (best of 2) against 150 ms
- pulse4all-subscriptions connection page: connection config          | ok     | 1.6 ms (best of 2) against 50 ms
- pulse4all-subscriptions connection page: connection catalogs        | ok     | 22.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions sources: record kinds                       | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: the connection             | ok     | 20.0 ms (best of 2) against 150 ms
+ pulse4all-subscriptions connection page: connection config          | ok     | 1.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: connection catalogs        | ok     | 22.6 ms (best of 2) against 50 ms
  pulse4all-subscriptions connection page: pipeline response times    | ok     | 0.1 ms (best of 2) against 50 ms
  pulse4all-subscriptions connection page: reads                      | ok     | 0.2 ms (best of 2) against 50 ms
  pulse4all-subscriptions connection page: markets, hours, holidays   | ok     | 0.3 ms (best of 2) against 50 ms
  pulse4all-subscriptions system health: storage round trip           | ok     | 0.0 ms (best of 2) against 20 ms
- pulse4all-subscriptions system health: system health runs           | ok     | 271.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions system health: system health runs           | ok     | 281.5 ms (best of 2) against 500 ms
  pulse4all-subscriptions system health: outbox status                | ok     | 0.1 ms (best of 2) against 500 ms
- pulse4all-subscriptions data quality: data quality checks           | ok     | 289.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions data quality: data quality checks           | ok     | 297.9 ms (best of 2) against 500 ms
  pulse4all-subscriptions data quality: outbox late                   | ok     | 0.2 ms (best of 2) against 50 ms
- pulse4all-subscriptions data quality: flash data quality overview   | ok     | 308.1 ms (best of 2) against 500 ms
- pulse4all-subscriptions data quality: flash data quality first page | ok     | 265.0 ms (best of 2) against 500 ms
- pulse4all-subscriptions flash: landing                              | ok     | 205.9 ms (best of 2) against 500 ms
- pulse4all-subscriptions flash: snapshots                            | ok     | 0.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions data quality: flash data quality overview   | ok     | 311.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions data quality: flash data quality first page | ok     | 259.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions flash: landing                              | ok     | 199.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions flash: snapshots                            | ok     | 0.5 ms (best of 2) against 50 ms
  pulse4all-subscriptions campaigns: journeys                         | ok     | 0.1 ms (best of 2) against 50 ms
- pulse4all-subscriptions welcome agent (set)                         | ok     | 16.3 ms, the reads summed, against 100 ms
- pulse4all-subscriptions welcome manager (set)                       | ok     | 4.4 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions welcome agent (set)                         | ok     | 16.8 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions welcome manager (set)                       | ok     | 4.3 ms, the reads summed, against 100 ms
  pulse4all-subscriptions welcome admin (set)                         | ok     | 0.4 ms, the reads summed, against 100 ms
- pulse4all-subscriptions my hours (set)                              | ok     | 2.2 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions my hours (set)                              | ok     | 2.4 ms, the reads summed, against 100 ms
  pulse4all-subscriptions my schedule (set)                           | ok     | 0.9 ms, the reads summed, against 100 ms
- pulse4all-subscriptions messages (set)                              | ok     | 12.3 ms, the reads summed, against 100 ms
- pulse4all-subscriptions my account (set)                            | ok     | 1.5 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions messages (set)                              | ok     | 12.4 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions my account (set)                            | ok     | 1.7 ms, the reads summed, against 100 ms
  pulse4all-subscriptions live board (set)                            | ok     | 0.4 ms, the reads summed, against 100 ms
- pulse4all-subscriptions team people (set)                           | ok     | 6.4 ms, the reads summed, against 100 ms
- pulse4all-subscriptions team hours (set)                            | ok     | 6.7 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions team people (set)                           | ok     | 6.1 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions team hours (set)                            | ok     | 8.2 ms, the reads summed, against 100 ms
  pulse4all-subscriptions roster week (set)                           | ok     | 6.7 ms, the reads summed, against 100 ms
- pulse4all-subscriptions follow-up (set)                             | ok     | 404.8 ms, the reads summed, against 500 ms
- pulse4all-subscriptions sources (set)                               | ok     | 20.3 ms, the reads summed, against 500 ms
- pulse4all-subscriptions connection page (set)                       | ok     | 44.0 ms, the reads summed, against 500 ms
- pulse4all-subscriptions system health (set)                         | ok     | 271.5 ms, the reads summed, against 500 ms
- pulse4all-subscriptions data quality (set)                          | FAIL   | 862.9 ms, the reads summed, against 500 ms
- pulse4all-subscriptions flash (set)                                 | ok     | 206.3 ms, the reads summed, against 500 ms
- verdict                                                             | FAIL   | 131_time_all (part a): 140 ok, 10 FAIL, 0 skip; worst 1202.3 ms (pulse4all-subscriptions polls: missed callbacks)
+ pulse4all-subscriptions follow-up (set)                             | ok     | 455.9 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions sources (set)                               | ok     | 20.2 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions connection page (set)                       | ok     | 44.7 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions system health (set)                         | ok     | 281.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions data quality (set)                          | FAIL   | 869.2 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions flash (set)                                 | ok     | 199.9 ms, the reads summed, against 500 ms
+ verdict                                                             | FAIL   | 131_time_all (part a): 140 ok, 10 FAIL, 0 skip; worst 1071.1 ms (pulse4all-subscriptions polls: missed callbacks)
 (154 rows)
 
 DROP TABLE

@@ -68,7 +68,7 @@ FAIL  end needs the request header                 got 400, wanted 200
 FAIL  cross-site end is refused                    got 403, wanted 200
 FAIL  end ends the own day                         got ended, wanted working
       (branch: clock in again; workday.clock_in_again on, the window open until 2026-11-05T21:00:00.000Z)
-FAIL  clocking in again opens the day, its first start kept got [true,"working",true,null,true,true,false], wanted [true,"ended",true,"2026-11-05T06:49:58.611Z",false,false,fa
+FAIL  clocking in again opens the day, its first start kept got [true,"working",true,null,true,true,false], wanted [true,"ended",true,"2026-11-05T07:21:17.419Z",false,false,fa
 FAIL  the second session ends the day again, later got ["ended",true,true], wanted ["working",true,false]
 FAIL  a second end changes nothing                 got true, wanted false
 FAIL  log out on an ended day changes nothing      got [303,true], wanted [303,false]

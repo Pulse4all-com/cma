@@ -156,6 +156,46 @@
       "class": "poll"
     }
   ],
-  "html_kb": {},
-  "js_kb": {}
+  "html_kb": {
+    "/": 15,
+    "/day": 11,
+    "/hours": 10,
+    "/messages": 13,
+    "/schedule": 11,
+    "/me/follow-up": 9,
+    "/live/board": 114,
+    "/team/people": 73,
+    "/team/hours": 71,
+    "/roster/planner": 72,
+    "/reports/dashboard": 74,
+    "/reports/speed-to-lead": 17,
+    "/reports/calls": 76,
+    "/reports/follow-up": 20,
+    "/reports/funnel": 25,
+    "/reports/flash": 48,
+    "/reports/data-quality": 16,
+    "/configuration/sources": 78,
+    "/configuration/health": 21
+  },
+  "js_kb": {
+    "/": 170,
+    "/day": 171,
+    "/hours": 166,
+    "/messages": 169,
+    "/schedule": 166,
+    "/me/follow-up": 168,
+    "/live/board": 178,
+    "/team/people": 176,
+    "/team/hours": 174,
+    "/roster/planner": 174,
+    "/reports/dashboard": 168,
+    "/reports/speed-to-lead": 167,
+    "/reports/calls": 168,
+    "/reports/follow-up": 169,
+    "/reports/funnel": 170,
+    "/reports/flash": 169,
+    "/reports/data-quality": 167,
+    "/configuration/sources": 173,
+    "/configuration/health": 167
+  }
 }

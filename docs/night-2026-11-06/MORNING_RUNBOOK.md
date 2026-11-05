@@ -85,7 +85,7 @@ cd ~/cma && git fetch -q origin claude/youthful-meitner-ve6gtm-n06b && git check
 cd web && npm ci --silent && npm run build 2>&1 | tail -3 && npm run typecheck 2>&1 | tail -1 && npm run lint 2>&1 | tail -2
 for v in copy corrections csv dashboard live team roster configuration messages import devices-import datamap signed-out invitations preview follow-up reports flash period health boundaries jobs metrics cache; do printf "%s: " $v; npm run --silent verify:$v 2>&1 | tail -1; done; cd ..
 ```
-Expected: three commits (N06b, N06a, N05's #227); the build's route list ending in `ƒ Proxy (Middleware)`; `✓ Types generated successfully`; lint `0 errors, 2 warnings` (both pre-existing); every verifier `PASS` or `ALL n PASS` with the counts of NIGHT_NOTES (copy 3,422 keys, configuration 121, reports 215, flash 64, live 43, jobs 31, cache 8, …). `datamap` passes here and fails after step 2's snapshot until `catalog.json` and `schema.json` are committed together (step 2 says so). About 5 minutes.
+Expected: three commits (N06b, N06a, N05's #227); the build's route list ending in `ƒ Proxy (Middleware)`; `✓ Types generated successfully`; lint `0 errors, 2 warnings` (both pre-existing); every verifier `PASS` or `ALL n PASS` with the counts of NIGHT_NOTES (copy 3,422 keys, configuration 121, reports 215, flash 64, live 43, jobs 31, cache 8, …). `datamap` fails here with three problems (the two new tables are not in `schema.json` yet, and `index.html` is older than the catalog): expected until step 2's snapshot and build. About 5 minutes.
 
 ## 2. Dev: `132` twice, `133` normal and provoked, the earlier verifies, the time scripts, the schema snapshot
 
@@ -120,9 +120,9 @@ Expected: at dev's volume every row `ok` except, possibly, the three missed-call
 **Terminal** (dev: the data map's schema snapshot, on this branch, then commit it with the catalog; `docs/RUNBOOK.md`, Setup step 9)
 ```bash
 cd ~/cma && git checkout -q claude/youthful-meitner-ve6gtm && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json && head -c 60 docs/datamap/schema.json; echo
-cd web && npm run --silent verify:datamap; cd .. && git add docs/datamap/schema.json && git commit -q -m "Data map: schema snapshot from dev after 0008zr" && git push -q origin claude/youthful-meitner-ve6gtm && git log --oneline -1
+node tools/datamap/build.mjs && cd web && npm run --silent verify:datamap; cd .. && git add docs/datamap/schema.json docs/datamap/index.html && git commit -q -m "Data map: schema snapshot from dev after 0008zr" && git push -q origin claude/youthful-meitner-ve6gtm && git log --oneline -1
 ```
-Expected: `{"generated_at" : "…`; `datamap: PASS (104 tables, 158 views, all described; index.html current)`; the commit on N06a's branch. N06b is rebased on it in step 4.
+Expected: `{"generated_at" : "…`; the data map's build line; `datamap: PASS (104 tables, 158 views, all described; index.html current)` (on the branch before this step it fails with three problems, the two new tables not in the snapshot and the index older than the catalog: expected, CLAUDE.md Database); the commit on N06a's branch. N06b is rebased on it in step 4. After the merge: in the Claude project, say "republish the data map".
 
 ## 3. Prod, just before the merge: point-in-time recovery, `132` twice, `133`, the earlier verifies, the time scripts
 

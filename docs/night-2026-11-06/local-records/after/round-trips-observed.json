@@ -32,8 +32,8 @@
   {
     "path": "/me/follow-up",
     "subject": "agent-two",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 13
   },
   {
     "path": "/account",

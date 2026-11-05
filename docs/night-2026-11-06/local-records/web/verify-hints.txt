@@ -1,7 +1,3 @@
-  manager /reports/inbound?range=month&group=day: 12 headers, expected at least 13
-  manager /reports/inbound?range=month&group=market: 12 headers, expected at least 13
-  manager /reports/inbound?range=month&group=line: 12 headers, expected at least 13
-  manager /reports/inbound?range=month&group=hour: 12 headers, expected at least 13
   manager /reports/calls?range=month&group=day: 14 headers, expected at least 16
   manager /reports/calls?range=month&group=week: 14 headers, expected at least 16
   manager /reports/calls?range=month&group=market: 14 headers, expected at least 16
@@ -12,5 +8,5 @@
   reader /reports/attempts?range=month&group=pipeline: 25 headers, expected at least 33
   manager /reports/funnel?range=month&group=week: 32 headers, expected at least 50
   reader /reports/funnel?range=month&group=day: 27 headers, expected at least 45
-hints: FAIL (14 problems)
+hints: FAIL (10 problems)
 exit 1

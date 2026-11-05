@@ -16,7 +16,7 @@ Night of 5 to 6 November 2026, brief N06. Written by Claude Code while Martin wa
 - Documentation (N06a's documentation describes the stacked pair, so CLAUDE.md's `verify:cache` and cache references, PERFORMANCE.md's v2 rows and the web records in `local-records/web` name N06b's work; `docs/architecture/api.md` is edited in N06b): `CLAUDE.md` (a Performance section), `docs/decisions.md` (16 rows of 5 November 2026), `docs/definitions.md` (Refreshed at), `docs/architecture/infrastructure.md` (the connection budget: 92 of 93, one to spare), `docs/OPERATIONS.md` (the job: parts table, pause and resume, what it means when it stops, its log line, the weekly count), `docs/architecture/data-model/0008.md` (the addition), `docs/datamap/catalog.json` (two tables), `docs/audits/2026-10-17-full-audit/PERFORMANCE.md` (section 9, v2 done), `README.md` (the map), `CHANGELOG.md`, this folder.
 
 **N06b, the web.**
-- A `loading.tsx` for every page route (46; not for the invitation, log-out and no-access pages, nor the roster print view) rendering the page's frame with placeholder blocks (`RouteSkeleton`, the style guide's card and bars, no spinner); the rail's links prefetch their destinations (Next 16.4.3's `Link` prefetches a dynamic route's loading boundary by default; the `prefetch={false}` of 18 October 2026 removed from the rail and the account link, kept on Log out).
+- A `loading.tsx` for every page route (41; not for the invitation, log-out and no-access pages, the roster print view, nor the four pages that answer 404, a campaign's page and the three per-person reports behind `reports.per_person`, and the campaigns list above a campaign's page, where a loading boundary would send 200 before the page decides, which the layout verifier caught; Welcome's page and skeleton sit in a route group `(welcome)` for the same reason, a root boundary would cover every route) rendering the page's frame with placeholder blocks (`RouteSkeleton`, the style guide's card and bars, no spinner); the rail's links prefetch their destinations (Next 16.4.3's `Link` prefetches a dynamic route's loading boundary by default; the `prefetch={false}` of 18 October 2026 removed from the rail and the account link, kept on Log out).
 - Welcome streams every block in its own `Suspense` boundary with a card placeholder; its reads start together at the page level.
 - The Live board as one read: `data().getLiveBoard()` in one transaction, served as `GET /api/v1/live/board`; `LiveBoardLive` polls it every 10 s while visible, never while hidden, doubling its wait after a failure up to a minute; the rows are computed on the client by `src/lib/live-board.ts`. The message centre polls only while visible and backs off the same way (up to 30 s).
 - Copy slices: the client components of Welcome, My day and the Live board take `Pick<Copy, …>` instead of the whole copy object (about 90 kB serialised into every page before).
@@ -98,7 +98,44 @@ Every agent page read (Welcome's blocks, My day, My hours, My schedule, Messages
 
 **Time to first byte and payload** (`verify:perf --observed`; 30 requests after 3 warm-ups; `container_factor` 0.5 doubles the targets for the container: the milliseconds are local, the ratios carry).
 
-<<PERF_TABLE>>
+| Route (subject) | First byte p50 / p95, before → after | Last byte p50 / p95, before → after | HTML kB gzip, before → after | JS kB gzip, before → after |
+|---|---|---|---|---|
+| `/` (agent-two) | 28 / 47 → 9 / 16 | 30 / 54 → 26 / 48 | 8 → 9 | 152 → 154 |
+| `/day` (agent-two) | 34 / 44 → 9 / 16 | 46 / 63 → 24 / 37 | 59 → 9 | 153 → 155 |
+| `/hours` (agent-two) | 24 / 35 → 9 / 17 | 26 / 37 → 24 / 42 | 7 → 9 | 150 → 150 |
+| `/messages` (agent-two) | 31 / 45 → 10 / 15 | 33 / 47 → 34 / 42 | 10 → 11 | 153 → 153 |
+| `/schedule` (agent-two) | 22 / 38 → 10 / 15 | 24 / 40 → 22 / 30 | 8 → 9 | 150 → 150 |
+| `/me/follow-up` (agent-two) | 19 / 31 → 12 / 17 | 22 / 33 → 22 / 32 | 7 → 8 | 152 → 152 |
+| `/` (manager) | 503 / 582 → 9 / 16 | 513 / 594 → 405 / 465 | 61 → 12 | 152 → 154 |
+| `/` (admin) | 492 / 573 → 9 / 16 | 506 / 582 → 390 / 434 | 62 → 13 | 152 → 154 |
+| `/live/board` (manager) | 1103 / 1307 → 11 / 20 | 1132 / 1363 → 947 / 1021 | 147 → 103 | 154 → 162 |
+| `/team/people` (manager) | 35 / 48 → 9 / 16 | 46 / 60 → 44 / 73 | 64 → 66 | 160 → 160 |
+| `/team/hours` (manager) | 40 / 60 → 10 / 15 | 51 / 71 → 50 / 64 | 62 → 64 | 157 → 157 |
+| `/roster/planner` (manager) | 41 / 58 → 11 / 18 | 51 / 67 → 59 / 79 | 63 → 65 | 156 → 158 |
+| `/reports/dashboard` (manager) | 120 / 149 → 10 / 18 | 129 / 162 → 141 / 164 | 66 → 67 | 152 → 152 |
+| `/reports/speed-to-lead` (manager) | 66 / 92 → 9 / 12 | 69 / 95 → 63 / 87 | 14 → 15 | 152 → 152 |
+| `/reports/calls` (manager) | 898 / 1019 → 10 / 19 | 907 / 1030 → 954 / 1030 | 68 → 69 | 152 → 152 |
+| `/reports/follow-up` (manager) | 457 / 492 → 10 / 21 | 465 / 495 → 521 / 581 | 16 → 18 | 153 → 153 |
+| `/reports/funnel` (manager) | 4995 / 5601 → 11 / 17 | 4998 / 5604 → 5433 / 7134 | 19 → 22 | 153 → 154 |
+| `/reports/flash` (manager) | 243 / 268 → 12 / 24 | 245 / 270 → 268 / 306 | 14 → 14 | 153 → 153 |
+| `/reports/flash?o=customers` (manager) | 2050 / 2183 → 11 / 21 | 2081 / 2202 → 2156 / 2422 | 40 → 43 | 153 → 153 |
+| `/reports/data-quality` (manager) | 347 / 384 → 9 / 19 | 350 / 386 → 358 / 438 | 14 → 14 | 152 → 152 |
+| `/configuration/sources` (admin) | 64 / 82 → 10 / 24 | 74 / 93 → 88 / 113 | 69 → 70 | 157 → 157 |
+| `/configuration/health` (admin) | 23 / 40 → 10 / 20 | 318 / 364 → 325 / 357 | 18 → 19 | 152 → 152 |
+| `/api/v1/me` (agent-two) | 8 / 12 → 8 / 12 | 8 / 13 → 8 / 12 | - → - | - → - |
+| `/api/v1/me/messages?unread=1` (agent-two) | 11 / 14 → 12 / 21 | 11 / 14 → 12 / 21 | - → - | - → - |
+| `/api/v1/team/now` (manager) | 17 / 24 → 21 / 36 | 17 / 25 → 21 / 36 | - → - | - → - |
+| `/api/v1/telephony/inbound-now` (manager) | 446 / 475 → 392 / 463 | 448 / 476 → 394 / 464 | - → - | - → - |
+| `/api/v1/team/shifts-today` (manager) | 14 / 31 → 14 / 24 | 14 / 31 → 14 / 24 | - → - | - → - |
+| `/api/v1/live/board` (manager) | - / - → 405 / 444 | - / - → 406 / 445 | - → - | - → - |
+
+A dash in the "before" columns: `main` has no `GET /api/v1/live/board`. The first byte of a page is its route skeleton after this night (every page route has a loading boundary), on `main` the page itself; the last byte is the complete page in both. Milliseconds are the container's.
+
+**`verify:perf`'s verdict on the final build: FAIL (25 problems).** The first byte passes on every page (the route skeleton, 8 to 18 ms p95 locally); what fails is the time to the last byte of the report pages whose database reads are the remainder (Funnel 5.0 s p50, Flash's customers overview 2.0 s, Calls 0.9 s, Reports → Follow-up 0.46 s, Dashboard, Data quality and System health between 0.32 and 0.35 s against the 200 ms the container factor leaves them, Flash's landing 273 ms) and the two inbound polls (`/api/v1/telephony/inbound-now` 395 ms, `/api/v1/live/board` 405 ms against 20 ms: remainder 6). The verifier keeps the targets as budgets so the remainder stays red until it is done; provoked (every budget 0, 5 requests per route) 112 problems. `main`'s build on the same database: the Live board page 1,103 ms p50 (the board's reads before the first byte), Welcome 503 ms for a manager, Funnel 4,995 ms, Calls 898 ms, the inbound poll 446 ms.
+
+**The second `131` run (part a, after the reports fixture).** `web/verify/reports-fixture.sql` was loaded for `verify:api` after the first "after" run; it gives the invest tenant people and telephony (0 skips now) and the subscriptions tenant's lines office hours for NL and GB. With those hours the legacy wrappers `cma.missed_callbacks()` and `cma.missed_callbacks_summary()`, which `main`'s web polls and `131` still times, cost 1,071 and 1,062 ms at volume (216 and 150 ms before the fixture): the per-caller waiting time in office hours is the cost. `cma.inbound_now()`, which N06b's board polls, computes the summary from its own list and costs 335 ms. Remainder 6 is the fix for both.
+
+**`verify:hints` and `verify:layout` on `main`'s build, same database, same verifier code with the settle step:** hints 14 problems (static header expectations), theme 1, layout 10 (Funnel's scroll containers); on the final build hints 10 (a subset), theme 1, layout 10 (after the four 404 pages lost their loading boundary: with it, a 404 page answered 200, because the boundary streams before the page decides). None of the three predates or follows the night's code in a way that changes a page; the verifiers' expectations are a follow-up.
 
 ## Design
 
@@ -154,11 +191,11 @@ All in `docs/decisions.md` dated 5 November 2026.
 | 123 after `132` | `32 ok, 1 FAIL, 4 skip`: the local `uuidv7` shim, as before the night | |
 | web build, typecheck, lint | clean; lint 0 errors, 2 pre-existing warnings (`scripts/metrics-doc.mjs`, `verify/follow-up.mjs`) | |
 | `verify:copy` | 3,422 keys, en and nl | |
-| `verify:configuration` 121, `verify:reports` 215, `verify:flash` 64, `verify:live` 43, `verify:health` 39, `verify:corrections` 44, `verify:roster` 36, `verify:follow-up` 34, `verify:jobs` 31, `verify:import` 29, `verify:invitations` 27, `verify:team` 26, `verify:messages` 24, `verify:csv` 22, `verify:signed-out` 20, `verify:preview` 18, `verify:dashboard` 17, `verify:period` 16, `verify:devices-import` 13, `verify:cache` 8, `verify:boundaries` 397 files, `verify:datamap`, `verify:metrics` | all PASS | `verify:cache` and `verify:jobs` provoked: every check fails |
-| `verify:round-trips` | <<ROUND_TRIPS_RESULT>> | |
-| `verify:perf` | <<PERF_RESULT>> | every budget 0: every row fails |
-| `verify:api` (api mode, local database) | <<API_RESULT>> | <<API_PROVOKED>> |
-| `verify:layout`, `verify:theme`, `verify:hints`, `verify:api --sources` (mock mode) | <<BROWSER_RESULT>> | |
+| `verify:configuration` 121, `verify:reports` 215, `verify:flash` 64, `verify:live` 43, `verify:health` 39, `verify:corrections` 44, `verify:roster` 36, `verify:follow-up` 34, `verify:jobs` 31, `verify:import` 29, `verify:invitations` 27, `verify:team` 26, `verify:messages` 24, `verify:csv` 22, `verify:signed-out` 20, `verify:preview` 18, `verify:dashboard` 17, `verify:period` 16, `verify:devices-import` 13, `verify:cache` 8, `verify:boundaries` 392 files, `verify:metrics` | all PASS; `verify:datamap` fails with the three expected problems (the two new tables are not in `schema.json`, `index.html` older than the catalog) until Martin's snapshot and build (runbook step 2) | `verify:cache` and `verify:jobs` provoked: every check fails |
+| `verify:round-trips` | round-trips: PASS (59 requests within their transaction and statement budgets) | |
+| `verify:perf` | perf: FAIL (25 problems, 30 requests per route, container factor 0.5) | every budget 0: every row fails |
+| `verify:api` (api mode, local database) | ALL 325 PASS | ALL 325 PROVOKED CHECKS FAILED, as they must |
+| `verify:layout`, `verify:theme`, `verify:hints`, `verify:api --sources` (mock mode) | theme: FAIL (1 problem), the pre-existing one (Attempts by pipeline with an outcome filter has no table; the same line on main's build); hints: FAIL (10 problems), all among the 14 main's build reports on the same database (static header expectations on Calls, Attempts and Funnel; Inbound passes now); layout: FAIL (10 problems), the pre-existing Funnel scroll containers, line for line main's; the api --sources run ALL 34 PASS | |
 
 The `api` verifier ran against the local server, outside the 07:00 to 22:00 Amsterdam window the dev run keeps; against dev it is the runbook's step 4b.
 
@@ -196,4 +233,4 @@ The `api` verifier ran against the local server, outside the 07:00 to 22:00 Amst
 ## Open
 
 - **"Calls: history start" 28 → 265 ms.** The read `cma.calls_history_start` was within budget before `132` and over it after, in both parts b and c. `132` does not touch it; the likely cause is the `jit = off` setting on `cma.calls_of`, which the history read may inline. Not understood tonight: re-time it in the morning's step 2 (dev) and, if it holds, `alter function cma.calls_history_start set jit = off` is the one-line fix for a follow-up.
-- The `datamap` verifier passes on the catalog with the two new tables but compares against `schema.json` from before `132`; Martin refreshes it from dev after step 2.
+- The `datamap` verifier fails on this branch with three expected problems (the two new tables are not in `schema.json`, `index.html` is older than the catalog) until Martin's snapshot and build from dev (runbook step 2); after the merge the data map is republished from the Claude project.

@@ -1,16 +1,19 @@
-node:internal/modules/run_main:123
-    triggerUncaughtException(
-    ^
-
-page.evaluate: TypeError: Cannot read properties of null (reading 'querySelectorAll')
-    at eval (eval at evaluate (:370:30), <anonymous>:4:27)
-    at UtilityScript.evaluate (<anonymous>:372:16)
-    at UtilityScript.<anonymous> (<anonymous>:1:44)
-    at railOf (/home/user/cma/web/verify/layout.mjs:1484:27)
-    at expectFrame (/home/user/cma/web/verify/layout.mjs:1537:24)
-    at async file:///home/user/cma/web/verify/layout.mjs:2130:1 {
-  log: []
-}
-
-Node.js v22.23.4
+PASS  frame does not scroll: /live/board at 1280x800, main scrolls
+PASS  frame does not scroll: /reports/speed-to-lead?range=month at 1280x800, main scrolls
+PASS  frame does not scroll: /reports/follow-up at 1280x800, main scrolls
+PASS  frame does not scroll: /live/board at 1920x1080, main scrolls
+PASS  frame does not scroll: /reports/speed-to-lead?range=month at 1920x1080, main scrolls
+PASS  frame does not scroll: /reports/follow-up at 1920x1080, main scrolls
+PASS  frame does not scroll: the rail at 1280x600 with reports open
+  manager /reports/funnel (week): funnel-by-market has no scroll container
+  manager /reports/funnel (day): funnel-by-source has no scroll container
+  supervisor /reports/funnel (week): funnel-by-market has no scroll container
+  supervisor /reports/funnel (day): funnel-by-source has no scroll container
+  admin /reports/funnel (week): funnel-by-market has no scroll container
+  admin /reports/funnel (day): funnel-by-source has no scroll container
+  analyst /reports/funnel (week): funnel-by-market has no scroll container
+  analyst /reports/funnel (day): funnel-by-source has no scroll container
+  reader /reports/funnel (week): funnel-by-market has no scroll container
+  reader /reports/funnel (day): funnel-by-source has no scroll container
+layout: FAIL (10 problems)
 exit 1

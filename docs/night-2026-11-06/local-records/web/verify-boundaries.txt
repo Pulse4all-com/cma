@@ -1,2 +1,2 @@
-boundaries: PASS (397 files)
+boundaries: PASS (392 files)
 exit 0
