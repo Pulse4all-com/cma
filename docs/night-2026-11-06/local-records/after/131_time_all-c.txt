@@ -1,0 +1,113 @@
+ false
+ c
+                                 check_name                                 | result |                                                                    detail                                                                    
+ rolled back                                                                | info   | the timed part is rolled back: 0 audit row(s) of its writes remain
+ pulse4all-invest periods                                                   | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-06 to 2026-11-05; today 2026-11-05; connection none
+ pulse4all-invest dashboard 92 days: team status time                       | skip   | no active person holds performance.team: not timed
+ pulse4all-invest dashboard 92 days: intake per day                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest dashboard 92 days: crm records per day                    | skip   | no active person holds performance.team: not timed
+ pulse4all-invest dashboard 92 days: speed to lead rows                     | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest dashboard 92 days: callbacks kept                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest speed to lead 92 days: summary by day                     | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls 92 days: overview by day                            | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls 92 days: overview by market                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls 92 days: overview by line                           | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls 92 days: history start                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls 92 days: tag use                                    | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls per agent 92 days: per person                       | skip   | no active person holds performance.team: not timed
+ pulse4all-invest calls per agent 92 days: tags per person                  | skip   | no active person holds performance.team: not timed
+ pulse4all-invest inbound 92 days: inbound service                          | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest intake 92 days: intake per day                            | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email 92 days: email report                               | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email 92 days: email waiting                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email 92 days: email not responding                       | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email per agent 92 days: email per person                 | skip   | no active person holds performance.team: not timed
+ pulse4all-invest first orders 92 days: first orders                        | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest orders per person 92 days: first orders per person        | skip   | no active person holds performance.team: not timed
+ pulse4all-invest attempts 92 days: attempts per deal                       | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest attempts per agent 92 days: attempts per person           | skip   | no active person holds performance.team: not timed
+ pulse4all-invest funnel 92 days: deal funnel                               | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest funnel 92 days: lost reasons                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest funnel 92 days: deals per person                          | skip   | no active person holds performance.team: not timed
+ pulse4all-invest cancellations 92 days: cancellations                      | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest reviews 92 days: reviews                                  | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest lead cohorts 92 days: lead cohorts                        | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest forms 92 days: forms report                               | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest forms 92 days: forms whole period                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest forms 92 days: forms answers                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest maintenance now: maintenance 12 months                    | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest dashboard 92 days (set)                                   | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest speed to lead 92 days (set)                               | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest calls 92 days (set)                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest calls per agent 92 days (set)                             | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest inbound 92 days (set)                                     | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest intake 92 days (set)                                      | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest email 92 days (set)                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest email per agent 92 days (set)                             | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest first orders 92 days (set)                                | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest orders per person 92 days (set)                           | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest attempts 92 days (set)                                    | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest attempts per agent 92 days (set)                          | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest funnel 92 days (set)                                      | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest cancellations 92 days (set)                               | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest reviews 92 days (set)                                     | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest lead cohorts 92 days (set)                                | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest forms 92 days (set)                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest maintenance now (set)                                     | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions periods                                            | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-06 to 2026-11-05; today 2026-11-05; connection 01a1aa1a-4dac-71d1-a07f-c03da9724d18
+ pulse4all-subscriptions dashboard 92 days: team status time                | ok     | 1.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions dashboard 92 days: intake per day                  | FAIL   | 1457.1 ms (best of 2) against 500 ms
+ pulse4all-subscriptions dashboard 92 days: crm records per day             | ok     | 44.7 ms (best of 2) against 500 ms
+ pulse4all-subscriptions dashboard 92 days: speed to lead rows              | FAIL   | 2353.8 ms (best of 2) against 300 ms
+ pulse4all-subscriptions dashboard 92 days: callbacks kept                  | ok     | 177.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions speed to lead 92 days: summary by day              | FAIL   | 1795.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls 92 days: overview by day                     | FAIL   | 1092.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls 92 days: overview by market                  | FAIL   | 993.3 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls 92 days: overview by line                    | FAIL   | 1019.8 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls 92 days: history start                       | FAIL   | 262.7 ms (best of 2) against 50 ms
+ pulse4all-subscriptions calls 92 days: tag use                             | FAIL   | 912.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls per agent 92 days: per person                | FAIL   | 1027.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls per agent 92 days: tags per person           | FAIL   | 1643.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions inbound 92 days: inbound service                   | ok     | 414.3 ms (best of 2) against 500 ms
+ pulse4all-subscriptions intake 92 days: intake per day                     | FAIL   | 1330.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions email 92 days: email report                        | ok     | 11.0 ms (best of 2) against 500 ms
+ pulse4all-subscriptions email 92 days: email waiting                       | ok     | 1.0 ms (best of 2) against 300 ms
+ pulse4all-subscriptions email 92 days: email not responding                | ok     | 137.3 ms (best of 2) against 300 ms
+ pulse4all-subscriptions email per agent 92 days: email per person          | ok     | 7.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions first orders 92 days: first orders                 | ok     | 14.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions orders per person 92 days: first orders per person | ok     | 9.7 ms (best of 2) against 500 ms
+ pulse4all-subscriptions attempts 92 days: attempts per deal                | FAIL   | 4776.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions attempts per agent 92 days: attempts per person    | FAIL   | 4616.8 ms (best of 2) against 500 ms
+ pulse4all-subscriptions funnel 92 days: deal funnel                        | FAIL   | 3904.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions funnel 92 days: lost reasons                       | FAIL   | 3754.3 ms (best of 2) against 500 ms
+ pulse4all-subscriptions funnel 92 days: deals per person                   | FAIL   | 3885.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions cancellations 92 days: cancellations               | ok     | 4.1 ms (best of 2) against 500 ms
+ pulse4all-subscriptions reviews 92 days: reviews                           | ok     | 85.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions lead cohorts 92 days: lead cohorts                 | FAIL   | 116625.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions forms 92 days: forms report                        | FAIL   | not timed: the run stopped starting reads at verify.time_budget_s
+ pulse4all-subscriptions forms 92 days: forms whole period                  | FAIL   | not timed: the run stopped starting reads at verify.time_budget_s
+ pulse4all-subscriptions forms 92 days: forms answers                       | FAIL   | not timed: the run stopped starting reads at verify.time_budget_s
+ pulse4all-subscriptions maintenance now: maintenance 12 months             | FAIL   | not timed: the run stopped starting reads at verify.time_budget_s
+ pulse4all-subscriptions dashboard 92 days (set)                            | FAIL   | 4035.1 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions speed to lead 92 days (set)                        | FAIL   | 1795.4 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions calls 92 days (set)                                | FAIL   | 4281.1 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions calls per agent 92 days (set)                      | FAIL   | 2670.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions inbound 92 days (set)                              | ok     | 414.3 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions intake 92 days (set)                               | FAIL   | 1330.5 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions email 92 days (set)                                | ok     | 149.3 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions email per agent 92 days (set)                      | ok     | 7.5 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions first orders 92 days (set)                         | ok     | 14.9 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions orders per person 92 days (set)                    | ok     | 9.7 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions attempts 92 days (set)                             | FAIL   | 4776.9 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions attempts per agent 92 days (set)                   | FAIL   | 4616.8 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions funnel 92 days (set)                               | FAIL   | 11544.4 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions cancellations 92 days (set)                        | ok     | 4.1 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions reviews 92 days (set)                              | ok     | 85.9 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions lead cohorts 92 days (set)                         | FAIL   | 116625.2 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions forms 92 days (set)                                | FAIL   | a read of the page failed or was not timed
+ pulse4all-subscriptions maintenance now (set)                              | FAIL   | a read of the page failed or was not timed
+ verdict                                                                    | FAIL   | 131_time_all (part c): 37 ok, 32 FAIL, 33 skip; worst 116625.2 ms (pulse4all-subscriptions lead cohorts 92 days: lead cohorts)
+(106 rows)
+real	5m9.427s
+user	0m0.044s
+sys	0m0.006s

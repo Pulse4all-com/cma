@@ -1,0 +1,201 @@
+{
+  "container_factor": 0.5,
+  "classes": {
+    "poll": {
+      "p50": 40,
+      "p95": 80
+    },
+    "agent": {
+      "p50": 150,
+      "p95": 400
+    },
+    "report": {
+      "p50": 400,
+      "p95": 1000
+    }
+  },
+  "requests": [
+    {
+      "path": "/",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/day",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/hours",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/messages",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/schedule",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/me/follow-up",
+      "subject": "agent-two",
+      "class": "agent"
+    },
+    {
+      "path": "/",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/",
+      "subject": "admin",
+      "class": "agent"
+    },
+    {
+      "path": "/live/board",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/team/people",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/team/hours",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/roster/planner",
+      "subject": "manager",
+      "class": "agent"
+    },
+    {
+      "path": "/reports/dashboard",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/speed-to-lead",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/calls",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/follow-up",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/funnel",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/flash",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/flash?o=customers",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/data-quality",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/configuration/sources",
+      "subject": "admin",
+      "class": "report"
+    },
+    {
+      "path": "/configuration/health",
+      "subject": "admin",
+      "class": "report"
+    },
+    {
+      "path": "/api/v1/me",
+      "subject": "agent-two",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/me/messages?unread=1",
+      "subject": "agent-two",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/team/now",
+      "subject": "manager",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/telephony/inbound-now",
+      "subject": "manager",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/team/shifts-today",
+      "subject": "manager",
+      "class": "poll"
+    },
+    {
+      "path": "/api/v1/live/board",
+      "subject": "manager",
+      "class": "poll"
+    }
+  ],
+  "html_kb": {
+    "/": 15,
+    "/day": 11,
+    "/hours": 10,
+    "/messages": 13,
+    "/schedule": 11,
+    "/me/follow-up": 9,
+    "/live/board": 114,
+    "/team/people": 73,
+    "/team/hours": 71,
+    "/roster/planner": 72,
+    "/reports/dashboard": 74,
+    "/reports/speed-to-lead": 17,
+    "/reports/calls": 76,
+    "/reports/follow-up": 20,
+    "/reports/funnel": 25,
+    "/reports/flash": 48,
+    "/reports/data-quality": 16,
+    "/configuration/sources": 78,
+    "/configuration/health": 21
+  },
+  "js_kb": {
+    "/": 170,
+    "/day": 171,
+    "/hours": 166,
+    "/messages": 169,
+    "/schedule": 166,
+    "/me/follow-up": 168,
+    "/live/board": 178,
+    "/team/people": 176,
+    "/team/hours": 174,
+    "/roster/planner": 174,
+    "/reports/dashboard": 168,
+    "/reports/speed-to-lead": 167,
+    "/reports/calls": 168,
+    "/reports/follow-up": 169,
+    "/reports/funnel": 170,
+    "/reports/flash": 169,
+    "/reports/data-quality": 167,
+    "/configuration/sources": 173,
+    "/configuration/health": 167
+  }
+}

@@ -1,0 +1,4 @@
+(154 rows)
+
+DROP TABLE
+RESET

@@ -1070,6 +1070,22 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Used by | Configuration → Sources (`/configuration/sources`, `SourcesList`), `GET /api/v1/configuration/sources`; a connection's page, whose Reads panel lists the last 20 runs behind the last read (`cma.source_reads`, `GET /api/v1/configuration/sources/{id}` `reads`); Reports → Flash's sources line and its Change line's rule (b) |
 | As built today | Matches the definition. `128` derives the five columns from `cma.sync_run` per connection, the latest run by `started_at` on `sync_run_started_idx` (Decision log, 5 Nov 2026, measured), and `cma.source_reads` lists the runs; `129` proves them (events without runs, runs without events, a failed read, a run older than 24 hours, another tenant invisible, the permission). Flash's per-kind read is unchanged (0008zn): one store read after midnight completes a period for every store, the known limit of the Change line |
 
+
+### Refreshed at
+
+| Field | Value |
+|---|---|
+| Term | Refreshed at (nl: Ververst om) |
+| Key | `cma.data_quality_snapshot.computed_at`, read by `cma.data_quality_computed_at()`; API fields `computedAt` (`GET /api/v1/reports/data-quality/rows`, the Data quality page's read) and `refreshedAt` (Flash's data-quality document); copy keys `dataQuality.refreshedAt`, `dataQuality.refreshedHint`, `flash.refreshedAt` |
+| Definition | The instant a tenant's stored data-quality result was computed: every check of `cma.data_quality_of` evaluated once by the refresh job `cma-refresh-data-quality` (or once on demand when a tenant has no result yet), its findings stored in `cma.data_quality_finding`. Reports → Data quality, Flash's data-quality overview and list, the Flash snapshot take and the watch read that result; the counts and the records they show are those of the last refresh, not of the instant of the page (addition 0008zr, night N06) |
+| Source | `cma.data_quality_snapshot` (`computed_at`, `duration_ms`, `findings`), written by `cma.refresh_data_quality_of()`; the job runs every minute and refreshes a tenant whose result is older than its setting `data_quality.refresh_minutes` (5 by default, 1 to 1440) |
+| Counts / does not count | A refresh that skipped (the result fresh, or another refresh running) leaves the instant as it was. A tenant without a result computes one on the first read. A transaction that writes and reads data quality (a verify script) sees its own writes: a result computed earlier in the same transaction is computed again on the next read |
+| Unit and display | The weekday, date and time in the viewer's zone ("Refreshed at Thu 5 Nov 2026, 07:14"), under the page's intro on Data quality (its hint says the checks run every few minutes in the background) and under Flash's data-quality card's intro; absent until a result exists |
+| Time rule | The transaction time of the refresh (`now()`), in the tenant's database; shown in the viewer's zone |
+| Scope | Per tenant |
+| Equivalent in the source system | None: the result is the CMA's own computation over its mirrors |
+| Used by | Reports → Data quality, Reports → Flash (data quality), `cma.data_quality()`, `cma.data_quality_rows()`, `cma.flash_findings_of()` |
+| Decided | 5 Nov 2026, "Data quality on stored results" (addition 0008zr, night N06; backlog CMA-087) |
 ### Flash overview measures
 
 | Field | Value |
