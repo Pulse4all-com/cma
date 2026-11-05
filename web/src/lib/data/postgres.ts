@@ -1589,7 +1589,7 @@ export const postgresData: CmaData = {
                 array(select p from cma.user_permissions(u.id) p order by 1) as permissions,
                 -- the per-person report pages switched on (addition 0008t); a catalog without the setting reads none
                 (select string_to_array(nullif(s.value, ''), ',') from cma.tenant_settings() s where s.key = 'reports.per_person') as per_person,
-                -- the tenant's contact centers (addition 0008zu), active ones by name: the rail's Live boards. A few rows of
+                -- the tenant's contact centers (addition 0008zv), active ones by name: the rail's Live boards. A few rows of
                 -- a small configuration table, in the same statement, so the rail costs no read of its own
                 coalesce((select json_agg(json_build_object('key', c.key, 'name', c.name) order by c.name, c.key)
                             from cma.organisation c

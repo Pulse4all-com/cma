@@ -4,7 +4,7 @@
  * pages use firstPage() to send someone without a clock to a page they may see.
  * Screens check a permission, never a role key; the database checks again on every call.
  * No runtime imports beyond types, so a client module may import the cookie prefix from here.
- * The Live group's pages come from the tenant's contact centers (addition 0008zu), which the caller passes in
+ * The Live group's pages come from the tenant's contact centers (addition 0008zv), which the caller passes in
  * (Principal.contactCenters, read with the identity), one board per organisation, labelled with its name.
  */
 import type { ContactCenter, Principal } from "@/lib/auth/identity";
@@ -43,7 +43,7 @@ export type ShellPage =
   | "welcome"
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
   | "messages" | "messages-send"
-  /** A contact center's Live board (addition 0008zu): one page per organisation, told apart by its href */
+  /** A contact center's Live board (addition 0008zv): one page per organisation, told apart by its href */
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
   /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j), Forms (addition 0008p) */
   | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "forms" | "data-quality"
@@ -144,7 +144,7 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
     },
     {
       // Live before Time (Martin, 7 October 2026): the screen a supervisor keeps open. Agents do not
-      // hold monitoring.live, so their keys do not move. Since addition 0008zu (Martin, 5 November 2026) one board per
+      // hold monitoring.live, so their keys do not move. Since addition 0008zv (Martin, 5 November 2026) one board per
       // contact-center organisation, labelled with its name, in the order the identity read gives (by name); a tenant
       // without one has no Live group. Each board takes a digit key, so a second contact center moves the keys after it
       kind: "group",
@@ -178,7 +178,7 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       ],
     },
     {
-      // Reports, Sales and Customers (Martin, 5 November 2026; addition 0008zu): the report pages in three groups, replacing
+      // Reports, Sales and Customers (Martin, 5 November 2026; addition 0008zv): the report pages in three groups, replacing
       // the one Reports group in the order of 20 October 2026 (addition 0008z). Reports holds the overviews and the
       // channels (calls, inbound, email, intake, forms) with Data quality last; Sales the leads and deals through to the
       // first order, Funnel before Attempts per deal; Customers what happens after the order. Every page keeps its href,
@@ -214,7 +214,7 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       ],
     },
     {
-      // Sales (addition 0008zu): the leads and the deals, from the first call to the first order
+      // Sales (addition 0008zv): the leads and the deals, from the first call to the first order
       kind: "group",
       id: "sales",
       label: copy.nav.sales,
@@ -243,7 +243,7 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       ],
     },
     {
-      // Customers (addition 0008zu): what happens after the order; team figures only, as every report
+      // Customers (addition 0008zv): what happens after the order; team figures only, as every report
       kind: "group",
       id: "customers",
       label: copy.nav.customers,
@@ -262,7 +262,7 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
     },
     {
       // Campaigns (addition 0008v, brief N19-A part 3): Campaign monitoring, the journeys as placeholders for the
-      // compliance and campaign monitors, for the report permissions; after Customers since addition 0008zu (after
+      // compliance and campaign monitors, for the report permissions; after Customers since addition 0008zv (after
       // Reports before), so no key above it moves
       kind: "group",
       id: "campaigns",
@@ -318,7 +318,7 @@ export function holdsAny(me: Pick<Principal, "permissions">, permission: string 
 
 /**
  * The rail's item for the page being shown: its ShellPage, and its href when several items share the page (a contact
- * center's Live board, addition 0008zu); without an href, the first item of the page
+ * center's Live board, addition 0008zv); without an href, the first item of the page
  */
 export function isCurrent(item: Pick<NavItem, "page" | "href">, active: ShellPage, activeHref?: string): boolean {
   return item.page === active && (activeHref === undefined || item.href === activeHref);
@@ -374,7 +374,7 @@ export interface Crumb {
  * model; a bare page is Welcome › the page. My account and Send a message are no rail items and get
  * their own trail; Welcome shows none. A page's own trail (the connection's name on Sources) is appended,
  * and the page's crumb becomes a link; a journey's page (0008v) is Welcome › Campaigns › the journey. The last
- * crumb is never a link. A contact center's Live board (addition 0008zu) is Welcome › Live › the organisation's name,
+ * crumb is never a link. A contact center's Live board (addition 0008zv) is Welcome › Live › the organisation's name,
  * found by its href (activeHref) among the Live group's boards.
  */
 export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail: Crumb[] = [], activeHref?: string): Crumb[] {

@@ -7,7 +7,7 @@ import { boardOfOrganisation } from "@/lib/live";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
-/** The board's address before addition 0008zu: it opens the first contact center's board */
+/** The board's address before addition 0008zv: it opens the first contact center's board */
 const FORMER_ADDRESS = "board";
 
 /**
@@ -22,7 +22,7 @@ const FORMER_ADDRESS = "board";
  * called back (MissedCallbacks) close the board since addition 0008z (Martin, 20 October 2026): line
  * names, codes and counts, never a number, a name or the caller's hash.
  *
- * Since addition 0008zu (Martin, 5 November 2026) one board per contact-center organisation, at /live/<key>: the
+ * Since addition 0008zv (Martin, 5 November 2026) one board per contact-center organisation, at /live/<key>: the
  * people, groups and statuses only of that organisation's people (lib/live boardOfOrganisation, here and in every
  * poll's ?organisation=<key>), the rail's item and the last breadcrumb its name; the inbound and missed-call parts and
  * the follow-up strip stay tenant-wide, the call parts captioned as covering all lines. Without monitoring.live any

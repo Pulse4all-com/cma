@@ -9,7 +9,7 @@
  * unknown role key is ignored; a non-admin's cookie is ignored; an empty intersection is allowed, and such a
  * person still lands on Welcome, as everyone with a role does (firstPage()); canPreview is true for the admin
  * whether or not a preview is on; the cookie's name and 12 hours; which keys are accepted at all.
- * Since addition 0008zu (5 November 2026) also the rail each role sees, from the navigation model alone: the pages in
+ * Since addition 0008zv (5 November 2026) also the rail each role sees, from the navigation model alone: the pages in
  * order with Reports, Sales and Customers split (Funnel before Attempts per deal; an agent sees none of the three), the
  * digit keys 1 to 9 without gaps for the agent, supervisor and admin mocks, one Live board per contact center labelled
  * with its name (none: no Live group, and the keys close up), and the breadcrumbs of a contact center's board and of a
@@ -88,7 +88,7 @@ expect("with no permission left the person still lands on Welcome, like everyone
 expect("the real principal is not changed by the narrowing", principal(ADMIN).permissions.length, ADMIN.length, 2);
 expect("the user and the tenant stay the person's own", [asAgent.userId, asAgent.tenantId, asAgent.roleKey], ["u", "t", "admin"], ["agent", "t", "agent"]);
 
-// ---- the rail per role (addition 0008zu) ------------------------------------------------------------------
+// ---- the rail per role (addition 0008zv) ------------------------------------------------------------------
 // The mocks' permission sets (src/lib/data/mock.ts) with the dev seed's per-person pages and its contact center, Newco
 const mock = (permissions, roleKey, contactCenters = [{ key: "newco", name: "Newco" }]) =>
   ({ ...principal(permissions, roleKey), perPerson: ["email", "orders", "attempts", "deals"], contactCenters });

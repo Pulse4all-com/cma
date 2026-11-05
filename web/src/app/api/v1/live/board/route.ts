@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * again. Needs monitoring.live, here and again in the database (cma.team_now refuses first). Staff data, references
  * and counts only, never customer data; no-store: a live view is never cached.
  *
- * ?organisation=<key> (addition 0008zu): one contact center's board, as /live/<key> shows it: the people, their team
+ * ?organisation=<key> (addition 0008zv): one contact center's board, as /live/<key> shows it: the people, their team
  * memberships and shifts only of that organisation's people (lib/live boardOfOrganisation); the status flags, inbound,
  * the missed callers and follow-up stay tenant-wide. A key that is no contact center of the caller's tenant (an unknown
  * organisation, or one not flagged) is a 404, after the permission check. Without the parameter the whole tenant's

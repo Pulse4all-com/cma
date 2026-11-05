@@ -8,8 +8,8 @@
 -- reads (the sum is a ceiling: the web runs a page's reads in parallel). No addition, no write: the reads run in a
 -- read-only subtransaction that is rolled back (its rows kept in variables), so the script runs alike as one transaction
 -- (Cloud SQL Studio) and statement by statement (psql), in any database, at any time, as often as wanted. Run as your
--- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zu (the identity read names
--- cma.organisation.is_contact_center), after 138_live_per_organisation.sql. Prod is the proof; dev's shared core is for information.
+-- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
+-- cma.organisation.is_contact_center), after 140_live_per_organisation.sql. Prod is the proof; dev's shared core is for information.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -47,9 +47,9 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0008zq') then
     raise exception 'addition 0008zq (128_sources_last_read.sql) has not run in this database';
   end if;
-  -- the identity read names cma.organisation.is_contact_center since addition 0008zu
-  if not exists (select 1 from cma.schema_migration where version = '0008zu') then
-    raise exception 'addition 0008zu (138_live_per_organisation.sql) has not run in this database';
+  -- the identity read names cma.organisation.is_contact_center since addition 0008zv
+  if not exists (select 1 from cma.schema_migration where version = '0008zv') then
+    raise exception 'addition 0008zv (140_live_per_organisation.sql) has not run in this database';
   end if;
 end
 $$;

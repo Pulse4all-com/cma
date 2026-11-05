@@ -136,7 +136,7 @@ const pages = [
   { path: "/reports/data-quality", subject: "manager" },
   { path: "/reports/dashboard?range=month", subject: "invest-analyst" },
   // Inbound and the Live board's inbound part (addition 0008i): the reasons' series and the bars. The board of a tenant
-  // without telephony left with addition 0008zu: that tenant (the invest analyst's) has no contact center, so no board
+  // without telephony left with addition 0008zv: that tenant (the invest analyst's) has no contact center, so no board
   { path: "/reports/inbound?range=month", subject: "manager", tables: true },
   { path: "/reports/inbound?range=month&group=hour", subject: "analyst", tables: true },
   // Calls and Calls per agent (addition 0008j): the tiles, the bars and the tag table by day and by market,

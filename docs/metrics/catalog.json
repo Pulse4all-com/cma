@@ -1126,7 +1126,7 @@
         "tenant: RLS on tenant_id plus the function's where u.tenant_id = cma.current_tenant_id()",
         "people whose time is kept only (cma.time_is_kept)",
         "today only: the workday on cma.business_date(now(), the person's own zone); earlier open days belong to Welcome/Team hours, not the board",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "today = the business date in each person's own zone; now = the server's now() at read time; the workday window (0008b) caps counted time at cma.business_day_end(date, zone)",
       "comparison": null,
@@ -1234,7 +1234,7 @@
         "people whose time is kept only",
         "counts are over all rows, deliberately before the client-side group/employer/team filters (code comment lib/live.ts tiles())",
         "tiles only for groups with at least one active status, plus Clocked out and Not clocked in always",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "now = the server read; today in each person's own zone",
       "comparison": null,
@@ -1310,7 +1310,7 @@
         "tenant: RLS plus cma.team_now()'s tenant filter",
         "people whose time is kept only",
         "today in each person's own zone",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "today = business date in the person's own zone; a day of an earlier date still open is NOT on the board (it belongs to Welcome/Team hours)",
       "comparison": null,
@@ -1393,7 +1393,7 @@
       "filters": [
         "tenant: RLS plus cma.team_now()'s tenant filter",
         "people whose time is kept only (cma.time_is_kept)",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "today = business date in the person's own zone",
       "comparison": null,
@@ -1465,7 +1465,7 @@
       "filters": [
         "tenant: as the board",
         "n after the client-side group, employer and team filters; total before them",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "now = the last server read",
       "comparison": null,
@@ -1539,7 +1539,7 @@
       "filters": [
         "tenant: as the board",
         "the open (not capped) interval only: null while nothing runs or past the workday window",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "ticks on the browser's clock (Date.now, floored to whole seconds) against the server's instant; never negative",
       "comparison": null,
@@ -1612,7 +1612,7 @@
       "filters": [
         "tenant: as the board",
         "empty when the person has no day today",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "shown in the person's own zone (as Team hours shows times), Madrid and Amsterdam share one clock so no zone label between them, London shows one",
       "comparison": null,
@@ -1680,7 +1680,7 @@
       "filters": [
         "tenant: as the board",
         "empty while open or without a day (never 0 or a dash)",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "the person's own zone",
       "comparison": null,
@@ -1761,7 +1761,7 @@
         "tenant: as the board",
         "is_working stretches only (pauses excluded)",
         "an open stretch capped at the workday window's end by the database",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "ticks on the browser's clock; the server inputs count to least(now(), cma.business_day_end) in the day's own zone",
       "comparison": null,
@@ -1868,7 +1868,7 @@
         "published entries only, as of each week's latest publication (the planner's unpublished edits never show here)",
         "people whose time is kept only",
         "team-roster coverage counts membership at publication time",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "today = business date in the person's own zone; shift times are local times in the person's zone, 00:00\u201324:00, never across midnight (decision, 7 Oct 2026)",
       "comparison": null,
@@ -1970,7 +1970,7 @@
         "tenant: both reads are tenant-filtered functions",
         "published shift only (a draft never flags anyone)",
         "no flag while there is nothing to say: before the start plus tolerance, or on time",
-        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zu)"
+        "on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)"
       ],
       "time": "planned instants resolved in the person's zone (lib/corrections instantsForLocal; DST: the earlier instant when a time occurs twice, verified by verify:roster across the autumn change); now = the server render, at most 10 s old",
       "comparison": null,
@@ -2085,7 +2085,7 @@
         "direction = inbound; source_deleted_at is null; started_at not null",
         "counted lines only (telephony_number.is_counted; a line not in the catalog counts)",
         "today window on started_at in the tenant's zone (not on the business date)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2194,7 +2194,7 @@
       "filters": [
         "as live.inbound.offered",
         "answered_at is not null",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2313,7 +2313,7 @@
       "filters": [
         "as live.inbound.offered",
         "denominator: calls with an outcome only (waiting calls excluded from numerator and denominator)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2454,7 +2454,7 @@
       "filters": [
         "as live.inbound.offered",
         "denominator: answered calls plus unanswered calls whose reason counts_in_service_level (catalog per tenant and source system; default true)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2574,7 +2574,7 @@
       "filters": [
         "as live.inbound.offered",
         "answered calls only",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2683,7 +2683,7 @@
       "filters": [
         "tenant, direction, deleted, counted lines as live.inbound.offered",
         "started within telephony.waiting_max_minutes of now(), regardless of the business date",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2797,7 +2797,7 @@
       ],
       "filters": [
         "the waiting calls of live.inbound.waiting_now",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_of); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
@@ -2942,7 +2942,7 @@
         "listed = per caller (counterpart_hash) the LATEST missed call whose reason needs_callback (catalog, default true), with no later callback",
         "callback = any later outbound call to the caller (connected or not) OR any later answered inbound call from them, on any telephony connection of the tenant, not deleted",
         "calls without a hash are never listed (counted apart as anonymous)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Lookback measured from now(); times shown in the viewer's zone",
       "permissions": {
@@ -3093,7 +3093,7 @@
         "listed = per caller (counterpart_hash) the LATEST missed call whose reason needs_callback (catalog, default true), with no later callback",
         "callback = any later outbound call to the caller (connected or not) OR any later answered inbound call from them, on any telephony connection of the tenant, not deleted",
         "calls without a hash are never listed (counted apart as anonymous)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Shown in the viewer's zone, unlike the report's line-market zone; hint says 'in your time zone'",
       "permissions": {
@@ -3253,7 +3253,7 @@
         "callback = any later outbound call to the caller (connected or not) OR any later answered inbound call from them, on any telephony connection of the tenant, not deleted",
         "calls without a hash are never listed (counted apart as anonymous)",
         "office time of the LINE'S market (never the tenant's zone); a line without a market gets elapsed time, not business time",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Office time per the line's market's hours and holidays; now() is the database's clock",
       "permissions": {
@@ -3409,7 +3409,7 @@
         "callback = any later outbound call to the caller (connected or not) OR any later answered inbound call from them, on any telephony connection of the tenant, not deleted",
         "calls without a hash are never listed (counted apart as anonymous)",
         "the count ignores needs_callback: every missed reason counts toward times missed",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Lookback from now()",
       "permissions": {
@@ -3554,7 +3554,7 @@
         "missed = inbound, not deleted, counted line, unanswered and not waiting, started within telephony.callback_lookback_days of now()",
         "reason needs_callback (default true)",
         "counterpart_hash is null",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Lookback from now()",
       "permissions": {
@@ -3644,7 +3644,7 @@
       "filters": [
         "tenant: RLS",
         "the Live board requires monitoring.live (the function itself also accepts performance.team or workday.team)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at; the strip shows no age.",
       "comparison": null,
@@ -3726,7 +3726,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at.",
       "comparison": null,
@@ -3804,7 +3804,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at.",
       "comparison": null,
@@ -3887,7 +3887,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at.",
       "comparison": null,
@@ -3965,7 +3965,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Tenant-zone business date at the refresh's now().",
       "comparison": null,
@@ -4038,7 +4038,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zu)"
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
       "time": "Tenant-zone business date at the refresh's now().",
       "comparison": null,

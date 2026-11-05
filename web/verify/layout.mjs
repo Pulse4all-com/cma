@@ -198,7 +198,7 @@ async function expectNavigation() {
     // performance.team) follows Orders per person (First orders for the reader), so the keys after it move one down. Since
     // 0008zn Flash (reports.view or performance.team) is first in Reports, so every Reports key moves by one for everyone who
     // sees it (brief B21)
-    // Since 0008zu (Martin, 5 November 2026) the Live group holds one board per contact center (Newco in the dev seed and
+    // Since 0008zv (Martin, 5 November 2026) the Live group holds one board per contact center (Newco in the dev seed and
     // the mock, /live/newco), and the report pages sit in three groups: Reports (Flash, Dashboard, Calls, Calls per agent,
     // Inbound, Email, Email per agent, Intake, Forms, Data quality), Sales (Speed to lead, Follow-up, Funnel, Attempts per
     // deal, Attempts per agent, Lead cohorts, First orders, Orders per person) and Customers (Cancellations, Reviews,
@@ -997,7 +997,7 @@ async function expectForms() {
 // people board without horizontal scrolling, a tile's hint inside the viewport; a tenant without telephony
 // says so in words; an agent gets the no-permission card and no inbound figures
 async function expectLiveBoard() {
-  // Since addition 0008zu one board per contact center: /live/board opens the first one's (Newco's, /live/newco), every
+  // Since addition 0008zv one board per contact center: /live/board opens the first one's (Newco's, /live/newco), every
   // part of the board as before; the invest analyst's tenant has no contact center, so no Live group and /live/board is a
   // 404 (a tenant without telephony still says so on Reports → Inbound, expectReports)
   for (const [subject, telephony] of [["supervisor", true], ["manager", true], ["admin", true], ["analyst", true], ["invest-analyst", "none"], ["agent-one", null]]) {
@@ -1031,7 +1031,7 @@ async function expectLiveBoard() {
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
-        // the call parts stay tenant-wide on a contact center's board and say so (addition 0008zu)
+        // the call parts stay tenant-wide on a contact center's board and say so (addition 0008zv)
         scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="missed-scope"]')].map((el) => el.textContent ?? ""),
         unnamedLabels: [...document.querySelectorAll("main div[aria-label], main span[aria-label]")].filter((el) => !el.getAttribute("role")).length,
         // Missed, not called back is the board's last section since 0008z: the last heading in main is its own
@@ -1696,15 +1696,15 @@ async function expectFrame() {
     ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/teams", "/configuration/sources", null]],
     ["agent-one", "/account", ["Welcome", "My account"], ["/", null]],
     ["supervisor", "/messages/send", ["Welcome", "Messages", "Send a message"], ["/", "/messages", null]],
-    // Follow-up and Waiting for you (addition 0008o): a report in its group (Sales since 0008zu, which links to Speed to
+    // Follow-up and Waiting for you (addition 0008o): a report in its group (Sales since 0008zv, which links to Speed to
     // lead, its first page); the person's own page, no rail item
     ["manager", "/reports/follow-up", ["Welcome", "Sales", "Follow-up"], ["/", "/reports/speed-to-lead", null]],
     ["agent-one", "/me/follow-up", ["Welcome", "Waiting for you"], ["/", null]],
-    // Attempts per deal and Attempts per agent (addition 0008y): reports in their group (Sales since 0008zu)
+    // Attempts per deal and Attempts per agent (addition 0008y): reports in their group (Sales since 0008zv)
     ["manager", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
     ["reader", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
     ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Sales", "Attempts per agent"], ["/", "/reports/speed-to-lead", null]],
-    // A contact center's Live board (addition 0008zu): Live › the organisation's name; Reviews in Customers
+    // A contact center's Live board (addition 0008zv): Live › the organisation's name; Reviews in Customers
     ["supervisor", "/live/newco", ["Welcome", "Live", "Newco"], ["/", "/live/newco", null]],
     ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/cancellations", null]],
   ]) {
@@ -1799,7 +1799,7 @@ async function expectFrame() {
 // with the focus on its first page, a click in the folded rail unfolding it with only that group open, the retired
 // per-group cookies ignored and expired on the first toggle; aria-expanded and aria-controls agree with what shows, a
 // closed group holding the current page keeps its white pill and the digit keys work with every group closed; a bare rail
-// page (Welcome, Messages, the top bar's inbox) closes the open group (addition 0008zu). Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
+// page (Welcome, Messages, the top bar's inbox) closes the open group (addition 0008zv). Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
 // 7 October 2026 (Time still open after Reports opens)
 async function expectAccordion() {
   const host = new URL(BASE).hostname;
@@ -1902,7 +1902,7 @@ async function expectAccordion() {
     await ctx.close();
   }
 
-  // 2b. A bare rail page closes the open group (addition 0008zu, Martin, 5 November 2026): with Time open on My day, a click
+  // 2b. A bare rail page closes the open group (addition 0008zv, Martin, 5 November 2026): with Time open on My day, a click
   // on Welcome, the key 2 (Messages) and a click on the top bar's inbox each close it; the cookie is then empty and a
   // reload opens none. --provoke expects Time still open
   {
@@ -2102,7 +2102,7 @@ async function expectAttempts() {
 // A deal's row (addition 0008z): Enter on the deal opens its attempts below it (aria-expanded, the attempts or "No attempt
 // yet" read from the API), inside the card without a sideways scroll; Esc closes it and the focus stays on the deal
 // Funnel and Cancellations (addition 0008zb), per identity at 1280 px: both in the rail and on the page for reports.view
-// or performance.team, Funnel directly before Attempts per deal since 0008zu (the agent gets the no-permission card); deals per person on Funnel for
+// or performance.team, Funnel directly before Attempts per deal since 0008zv (the agent gets the no-permission card); deals per person on Funnel for
 // performance.team while reports.per_person holds deals (not for the reader, not for the invest tenant without the
 // switch); the page never scrolls sideways, by week and by day; the keycaps K, P, S, G and X on Funnel, K, G and X on
 // Cancellations, next to the period bar's; ten tiles and four; the tables end inside their cards. --provoke lets the
@@ -2123,7 +2123,7 @@ async function expectFunnel() {
     for (const href of ["/reports/funnel", "/reports/cancellations"]) {
       if (rail.includes(href) !== may) problems.push(`${subject}: ${href} ${may ? "missing from" : "shown in"} the rail`);
     }
-    // Since addition 0008zu (Martin, 5 November 2026) Funnel comes directly before Attempts per deal, in Sales
+    // Since addition 0008zv (Martin, 5 November 2026) Funnel comes directly before Attempts per deal, in Sales
     if (may && rail.indexOf("/reports/funnel") + 1 !== rail.indexOf("/reports/attempts")) {
       problems.push(`${subject}: Funnel does not come directly before Attempts per deal in the rail`);
     }

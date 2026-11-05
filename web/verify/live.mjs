@@ -17,7 +17,7 @@
  * lost one missed, oldest first, office time or the time since the call, the link only with a template,
  * no caller in any answer, and the times missed counted since the latest callback (61 B15). Since the IT audit of
  * 17 October 2026 also when the waiting figure reads Closed (no office time since the call) instead of 0 min. Since
- * addition 0008zu also one contact center's board (boardOfOrganisation): its people only, with their memberships and
+ * addition 0008zv also one contact center's board (boardOfOrganisation): its people only, with their memberships and
  * shifts, a person without an organisation on no board, the status flags, inbound and follow-up as read.
  */
 import {
@@ -113,7 +113,7 @@ expect("no team filter without memberships changes nothing", filterRows(rows, { 
 expect("teams on the board by name, a team of nobody on it left out", teamsOf(rows, memberships), [{ key: "aa", name: "Alpha" }, { key: "zz", name: "Zulu" }],
   [{ key: "aa", name: "Alpha" }, { key: "mm", name: "Not on the board" }, { key: "zz", name: "Zulu" }]);
 
-// One contact center's board (addition 0008zu): its people, their memberships and shifts; the rest as read
+// One contact center's board (addition 0008zv): its people, their memberships and shifts; the rest as read
 const read = {
   now: { people, statusFlags: [{ isWorking: true, isProductive: true, isPaid: true }] },
   memberships,

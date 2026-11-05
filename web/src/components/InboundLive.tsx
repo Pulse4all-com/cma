@@ -47,7 +47,7 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, sco
   inbound: InboundNow; copy: InboundCopy; locale: Locale;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
   canOpenMetrics?: boolean;
-  /** A caption under the title on what the figures cover (a contact center's Live board: all lines, addition 0008zu) */
+  /** A caption under the title on what the figures cover (a contact center's Live board: all lines, addition 0008zv) */
   scope?: string;
 }) {
   const t = copy.live;
@@ -110,7 +110,7 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, sco
  */
 export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
   inbound: InboundNow; copy: InboundCopy; locale: Locale; timeZone: string;
-  /** A caption after the intro on what the list covers (a contact center's Live board: all lines, addition 0008zu) */
+  /** A caption after the intro on what the list covers (a contact center's Live board: all lines, addition 0008zv) */
   scope?: string;
 }) {
   if (!inbound.telephony) return null;

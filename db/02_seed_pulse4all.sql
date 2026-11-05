@@ -7,7 +7,7 @@
 -- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
 -- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings, (after 0008zp) whether its people may clock in
 -- again on the same day, (after 0008zt) its customer segments and the contact property they come from, the statuses
--- whose subscriptions hold devices and what each status means and (after 0008zu) which organisation is a contact center.
+-- whose subscriptions hold devices and what each status means and (after 0008zv) which organisation is a contact center.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -617,16 +617,16 @@ begin
 end
 $$;
 
--- Contact centers (after addition 0008zu; Martin, 5 November 2026): Newco is the contact center of Pulse4all
+-- Contact centers (after addition 0008zv; Martin, 5 November 2026): Newco is the contact center of Pulse4all
 -- Subscriptions, so its people get a Live board of their own (/live/newco, "Newco" in the rail's Live group). Pulse4all
 -- itself and both organisations of Pulse4all Invest are no contact center (the column's default). As the time zone
 -- above, Newco is flagged on every run: to take the flag away, change it here as well as in Studio. A database without
--- the column yet says so; rerun this seed after 138_live_per_organisation.sql.
+-- the column yet says so; rerun this seed after 140_live_per_organisation.sql.
 do $$
 begin
   if not exists (select 1 from information_schema.columns
                  where table_schema = 'cma' and table_name = 'organisation' and column_name = 'is_contact_center') then
-    raise notice 'organisation.is_contact_center does not exist yet (addition 0008zu): rerun this seed after 138_live_per_organisation.sql';
+    raise notice 'organisation.is_contact_center does not exist yet (addition 0008zv): rerun this seed after 140_live_per_organisation.sql';
     return;
   end if;
   update cma.organisation o

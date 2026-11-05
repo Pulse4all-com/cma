@@ -122,7 +122,7 @@ export interface OrganisationScoped {
 }
 
 /**
- * One contact center's board (addition 0008zu, /live/<key> and GET /api/v1/live/board?organisation=<key>): only the
+ * One contact center's board (addition 0008zv, /live/<key> and GET /api/v1/live/board?organisation=<key>): only the
  * people whose organisation has the key (a person without one is on no contact center's board), and only their team
  * memberships and today's shifts, so the tiles, the groups, the statuses, the team filter and the shift column all
  * follow from them. Everything else stays as read: the tenant's status flags (configuration), and the inbound, missed

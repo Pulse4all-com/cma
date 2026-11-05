@@ -31,8 +31,8 @@
  * Calls per agent (reads only), since addition 0008k the telephony history start on Calls, since addition 0008y
  * Attempts per deal, Attempts per agent and a line's stored calls (reads only), and since addition 0008z one deal's
  * attempts, the attempted and outcome filters, withdrawing the run's message (the admin; dev data) and Welcome on open,
- * and since addition 0008zu a Live board per contact-center organisation (Newco's people only, ?organisation=, the 404
- * of an unflagged key, /live/board opening Newco's board; needs 138 and seed 02 run again).
+ * and since addition 0008zv a Live board per contact-center organisation (Newco's people only, ?organisation=, the 404
+ * of an unflagged key, /live/board opening Newco's board; needs 140 and seed 02 run again).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -624,8 +624,8 @@ expect("the analyst reads the board and is not on it",
    (nowN.body?.data?.people ?? []).length === teamNow.people.length],
   [200, false, true], [200, true, true]);
 
-// ---- Live per contact-center organisation (addition 0008zu), 7 checks -------------------------------
-// Seed 02 flags Newco of Pulse4all Subscriptions (138, then 02 again); seed 03 puts the agents and the supervisor in
+// ---- Live per contact-center organisation (addition 0008zv), 7 checks -------------------------------
+// Seed 02 flags Newco of Pulse4all Subscriptions (140, then 02 again); seed 03 puts the agents and the supervisor in
 // Newco and the manager, the analyst and the admin in Pulse4all. A board holds its organisation's people only, with
 // their memberships and shifts; inbound and follow-up stay tenant-wide. An unflagged or unknown key is a 404, after
 // the permission; /live/board opens Newco's board.

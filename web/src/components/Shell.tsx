@@ -15,7 +15,7 @@
  * The rail's links prefetch their destination's loading boundary (the default of Next's Link for a dynamic route) since
  * night N06, 5 November 2026: every route has a loading.tsx (the page's frame with placeholder blocks), so a click
  * shows the frame at once and the page's data follows in the same request; except a route that may answer 404 (a
- * contact center's Live board since addition 0008zu, /live/[org]), where a loading boundary would send 200 first. Before (Decision log 18 October 2026) the
+ * contact center's Live board since addition 0008zv, /live/[org]), where a loading boundary would send 200 first. Before (Decision log 18 October 2026) the
  * links never prefetched: no loading boundary existed, and the Live board's router.refresh() every 10 seconds
  * invalidated the client cache, so each poll fetched every visible link again; the board now polls an API route
  * instead (LiveBoardLive). Log out keeps prefetch={false}: a prefetch of it would reach the logout page, and so does
@@ -56,7 +56,7 @@ export async function Shell({
   me: Principal;
   active: ShellPage;
   /**
-   * The page's own address when several rail pages share its ShellPage: a contact center's Live board (addition 0008zu),
+   * The page's own address when several rail pages share its ShellPage: a contact center's Live board (addition 0008zv),
    * so only its own item is current and its breadcrumb carries its organisation's name
    */
   activeHref?: NavHref;
@@ -97,7 +97,7 @@ export async function Shell({
     >
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       <Shortcuts />
-      {/* The rail's open group, for the rail and the top bar's inbox (a bare rail page closes it, addition 0008zu); a
+      {/* The rail's open group, for the rail and the top bar's inbox (a bare rail page closes it, addition 0008zv); a
           context only, so the frame's grid keeps the header, the rail and main as its own children */}
       <NavAccordion initial={openGroup}>
       <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
@@ -162,7 +162,7 @@ export async function Shell({
               const current = isCurrent(entry.item, active, activeHref);
               // The label with its key is the name in the folded rail (title and aria-label); the keycap is hidden there
               const name = entry.item.key ? `${entry.item.label} (${entry.item.key})` : entry.item.label;
-              // A bare page closes the open group on its click or digit key (addition 0008zu)
+              // A bare page closes the open group on its click or digit key (addition 0008zv)
               return (
                 <li key={entry.item.href}>
                   <NavBareLink
@@ -197,7 +197,7 @@ export async function Shell({
                 {entry.items.map((item) => {
                   const current = isCurrent(item, active, activeHref);
                   return (
-                    // keyed by href: a contact center's Live boards share one ShellPage (addition 0008zu)
+                    // keyed by href: a contact center's Live boards share one ShellPage (addition 0008zv)
                     <li key={item.href}>
                       <Link
                         href={item.href}

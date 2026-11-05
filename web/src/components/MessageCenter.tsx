@@ -11,7 +11,7 @@
  * caption-size semi-bold in Muted or Warning amber, never in capitals (style guide rule 4; the IT audit of
  * 17 October 2026 found a CSS transform doing what the copy verifier forbids). Messages is a bare rail page, so the
  * inbox link and a toast that opens the inbox close the rail's open group, as the rail's own Messages does (addition
- * 0008zu; NavGroup's useCloseNavGroup).
+ * 0008zv; NavGroup's useCloseNavGroup).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";

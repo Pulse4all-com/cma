@@ -4,7 +4,7 @@
  * A group in the left navigation (Live, Team, Time, Reports, Sales, Customers, Campaigns, Configuration): one button that opens and
  * closes its pages. The rail is an accordion (19 October 2026): at most one group is open, opening a group closes
  * the open one, and a click on the open group closes it, so none is open. NavAccordion, around the whole frame
- * (the rail and, since addition 0008zu, the top bar's inbox), holds the open group's id and writes it to the cookie cma-nav-open (an empty value for none; Shell reads it on
+ * (the rail and, since addition 0008zv, the top bar's inbox), holds the open group's id and writes it to the cookie cma-nav-open (an empty value for none; Shell reads it on
  * the server, so a page renders with that group open and never flickers); the retired per-group cookies
  * cma-nav-<id> are expired on the first toggle. A closed group that holds the current page is highlighted, so the
  * person still sees where they are. The pages keep their own digit keys whether a group is open or closed. A
@@ -12,7 +12,7 @@
  * folded rail (16 October 2026) the button shows its icon only, named by title and aria-label; it then unfolds the
  * rail and opens its group (closing the other), and a folded group that holds the current page keeps its white pill.
  *
- * A bare rail page closes the open group (Martin, 5 November 2026; addition 0008zu): Welcome and Messages render through
+ * A bare rail page closes the open group (Martin, 5 November 2026; addition 0008zv): Welcome and Messages render through
  * NavBareLink, whose click (a digit key is the same click, hooks/useKeyboardShortcuts) sets the open group to none, and
  * the top bar's inbox (MessageCenter) does the same through useCloseNavGroup(); the cookie then holds no group, so a
  * reload opens none. NavAccordion therefore wraps the whole frame in Shell, the top bar included.
@@ -52,7 +52,7 @@ export function useCloseNavGroup(): () => void {
 
 /**
  * A bare rail page's link (Welcome, Messages): a click, or its digit key, closes the open group before it navigates
- * (addition 0008zu), so the rail shows no group open on the bare page and after a reload
+ * (addition 0008zv), so the rail shows no group open on the bare page and after a reload
  */
 export function NavBareLink({ onClick, ...props }: ComponentProps<typeof Link>) {
   const close = useCloseNavGroup();
@@ -266,7 +266,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         </svg>
       );
     case "trend":
-      // Sales (addition 0008zu): a line rising to an arrow
+      // Sales (addition 0008zv): a line rising to an arrow
       return (
         <svg
           aria-hidden="true"
@@ -283,7 +283,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         </svg>
       );
     case "person":
-      // Customers (addition 0008zu): one person, apart from Team's two
+      // Customers (addition 0008zv): one person, apart from Team's two
       return (
         <svg
           aria-hidden="true"

@@ -6,7 +6,7 @@
  *      sequential, p50 and p95 in milliseconds, each route in its class (poll, agent, report) with the class's budget.
  *      Every page route has a loading boundary since night N06, so its first byte is the skeleton and arrives in a few
  *      milliseconds whatever the reads cost (except a route that may answer 404, a contact center's Live board since
- *      addition 0008zu, whose first byte waits for its reads); the last byte is when the streamed page is complete, and both are held to
+ *      addition 0008zv, whose first byte waits for its reads); the last byte is when the streamed page is complete, and both are held to
  *      the class's budget (the first byte is the click's feedback, the last byte the page). The budgets are the targets
  *      of the Decision log of 5 November 2026 scaled by perf.json's container_factor: the container's database is on
  *      loopback and its CPU is not Cloud Run's, so a route that misses here is slow for sure, and one that passes is not
@@ -96,7 +96,7 @@ for (const row of budget.requests) {
   const cls = budget.classes[row.class];
   const maxP50 = provoke ? 0 : cls.p50 * factor;
   const maxP95 = provoke ? 0 : cls.p95 * factor;
-  // A dynamic route names its build directory in the row (route: "/live/[org]", addition 0008zu); a static one is its path
+  // A dynamic route names its build directory in the row (route: "/live/[org]", addition 0008zv); a static one is its path
   const js = row.path.startsWith("/api/") ? null : routeJs(row.route ?? row.path.replace(/\?.*$/, ""));
   const o = { path: row.path, subject: row.subject, class: row.class, p50, p95, done_p50: done50, done_p95: done95, requests: times.length,
               html_kb: htmlGzip === null ? null : kb(htmlGzip), js_kb: js ? kb(js.gzipBytes) : null, js_chunks: js?.chunks ?? null };

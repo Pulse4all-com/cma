@@ -1,10 +1,10 @@
 -- =============================================================================================
--- 138_live_per_organisation.sql: addition 0008zu, a Live board per contact-center organisation
+-- 140_live_per_organisation.sql: addition 0008zv, a Live board per contact-center organisation
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: which organisation is a contact center is tenant configuration
 -- (Pulse4all's value is seed 02's: Newco of Pulse4all Subscriptions). Runs unchanged in every database, after
--- 136_flash_insights.sql (0008zt). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM
--- login: dev first, then 02_seed_pulse4all.sql again (it flags Newco), then 139_verify_live_per_organisation.sql there;
+-- 138_flash_totals.sql (0008zu). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM
+-- login: dev first, then 02_seed_pulse4all.sql again (it flags Newco), then 141_verify_live_per_organisation.sql there;
 -- then prod in the same order, before the merge: the web of this change reads the column in the identity read of every
 -- request (web/src/lib/data/postgres.ts, findPrincipal), so it must exist before that web is deployed. The web of main
 -- runs unchanged on it: it reads no new column, and cma_read.organisation only gains one at its end.
@@ -45,8 +45,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0008zt') then
-    raise exception 'addition 0008zt (136_flash_insights.sql) must run before 0008zu';
+  if not exists (select 1 from cma.schema_migration where version = '0008zu') then
+    raise exception 'addition 0008zu (138_flash_totals.sql) must run before 0008zv';
   end if;
 end
 $$;
@@ -58,7 +58,7 @@ $$;
 -- the ACCESS EXCLUSIVE lock of the add is held until the commit, so only the view, the comment and the record follow it.
 alter table cma.organisation add column if not exists is_contact_center boolean not null default false;
 comment on column cma.organisation.is_contact_center is
-  'The organisation is a contact center: its people get a Live board of their own (/live/<key>, the rail''s Live group, addition 0008zu). Tenant configuration, false by default';
+  'The organisation is a contact center: its people get a Live board of their own (/live/<key>, the rail''s Live group, addition 0008zv). Tenant configuration, false by default';
 
 create or replace view cma_read.organisation as
   select id, tenant_id, key, name, status, created_at, updated_at, timezone, is_contact_center
@@ -69,7 +69,7 @@ create or replace view cma_read.organisation as
 -- 2. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zu', 'Live per contact-center organisation: cma.organisation.is_contact_center (boolean, not null, default false; the organisation''s people get a Live board of their own, /live/<key>, labelled with its name in the rail''s Live group), at the end of cma_read.organisation too; tenant configuration, set by seed 02 for Newco of Pulse4all Subscriptions')
+values ('0008zv', 'Live per contact-center organisation: cma.organisation.is_contact_center (boolean, not null, default false; the organisation''s people get a Live board of their own, /live/<key>, labelled with its name in the rail''s Live group), at the end of cma_read.organisation too; tenant configuration, set by seed 02 for Newco of Pulse4all Subscriptions')
 on conflict (version) do nothing;
 
 commit;
