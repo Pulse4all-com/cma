@@ -1352,7 +1352,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235): the left rail's gr
 | Status | Decided |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zv, #235) |
 | Used by | The Live group and the Live board; `live.people.*`, `live.tiles.*` (the people of one organisation); `GET /api/v1/live/board?organisation=<key>`; Welcome's Needs attention (the missed callers line shows only where a contact center exists) |
-| As built today | The identity read returns the tenant's active flagged organisations by name (`findPrincipal`, one statement); `/live/<key>` of an unknown or unflagged key is a 404. The filter is a view, not an access boundary: every `monitoring.live` holder may read the whole tenant |
+| As built today | The identity read returns the tenant's active flagged organisations by name (`findPrincipal`, one statement); `/live/<key>` of an unknown or unflagged key renders the not-found page with status 200 (a soft 404, to keep the loading skeleton). The filter is a view, not an access boundary: every `monitoring.live` holder may read the whole tenant |
 
 ### Live board
 
@@ -1362,7 +1362,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235): the left rail's gr
 | Key | `/live/<organisation key>`; `GET /api/v1/live/board`; `live.*` catalog keys; the page key `/live/board` in the metric catalog |
 | Definition | The screen of one contact-center organisation's people right now: their status groups, clock times and shifts, with the day's inbound calls, the missed callers and the Follow-up now strip. It is per contact-center organisation. |
 | Source | `cma.team_now()`, `cma.team_members_now()`, `cma.roster_today()`, `cma.inbound_now()`, `cma.follow_up_summary()`, in one transaction |
-| Counts / does not count | The people, their team memberships and today's shifts are those of the organisation's users. The status flags, the inbound tiles, the missed callers and the Follow-up now strip cover the whole tenant: a line is not tied to an organisation yet, and the board says so in a caption on the call parts |
+| Counts / does not count | The people, their team memberships and today's shifts are those of the organisation's users. The status flags, the inbound tiles, the missed callers and the Follow-up now strip cover the whole tenant: a line is not tied to an organisation yet, and the board says so in a caption on the call parts; the Follow-up now strip has its own caption, saying it covers the whole business line |
 | Unit and display | One board per flagged organisation, labelled with its name; breadcrumbs Welcome › Live › the organisation's name; without `?organisation` the API answers the whole tenant |
 | Time rule | Today in each person's own zone; polled every 10 seconds while the tab is visible |
 | Scope | One contact-center organisation (people); the tenant (calls); needs `monitoring.live` |
@@ -1371,7 +1371,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235): the left rail's gr
 | Status | Decided |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zv, #235) |
 | Used by | `live.*`; the Live group; `GET /api/v1/live/board` |
-| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption is "All lines, not only {organisation}'s: a line is not tied to a contact center yet." (nl: "Alle lijnen, niet alleen die van {organisation}: een lijn hoort nog niet bij een contactcenter."). The mapping of lines to an organisation is an Open decision |
+| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption is "All lines, not only {organisation}'s: a line is not tied to a contact center yet." (nl: "Alle lijnen, niet alleen die van {organisation}: een lijn hoort nog niet bij een contactcenter."). The Follow-up now strip's caption is "The whole business line, not only {organisation}'s." (nl: "De hele businesslijn, niet alleen die van {organisation}."; copy key `live.followUpWholeBusinessLine`). The mapping of lines to an organisation is an Open decision |
 
 ### Sales (rail group)
 

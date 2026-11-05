@@ -1060,6 +1060,16 @@ async function expectLiveBoard() {
       else if (!h) problems.push(`${subject} /live/board: the tile's hint leaves the viewport`);
     }
     await p.screenshot({ path: `${outDir}/${subject}-live-board.png` });
+    // An unflagged or unknown organisation's board shows the not-found page, no board (Martin, 5 November 2026: the
+    // skeleton stays, so the status is 200, a soft 404; the UI is what counts)
+    if (subject === "supervisor") {
+      for (const path of ["/live/pulse4all", "/live/no-such-organisation"]) {
+        await p.goto(BASE + path);
+        const shown = await p.locator('[data-testid="not-found-page"]').waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false);
+        const board = await p.locator("[data-live-board-read-at]").count();
+        if (!shown || board > 0) problems.push(`${subject} ${path}: ${shown ? "the" : "no"} not-found page and ${board} board, expected the not-found page and no board`);
+      }
+    }
     await ctx.close();
   }
 }

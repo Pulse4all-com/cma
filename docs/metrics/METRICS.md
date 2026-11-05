@@ -1926,7 +1926,7 @@ Live board strip: the leads not called, right now.
 
 - tenant: RLS
 - the Live board requires monitoring.live (the function itself also accepts performance.team or workday.team)
-- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)
 
 **Time** The snapshot's computed_at; the strip shows no age.
 
@@ -1984,7 +1984,7 @@ Live board strip: leads not called past the speed-to-lead target.
 
 - tenant: RLS
 - monitoring.live (the board)
-- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)
 
 **Time** The snapshot's computed_at.
 
@@ -2042,7 +2042,7 @@ Live board strip: open tickets at the warning share of their response time, not 
 
 - tenant: RLS
 - monitoring.live (the board)
-- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)
 
 **Time** The snapshot's computed_at.
 
@@ -2101,7 +2101,7 @@ Live board strip: open tickets over their response time.
 
 - tenant: RLS
 - monitoring.live (the board)
-- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)
 
 **Time** The snapshot's computed_at.
 
@@ -2159,7 +2159,7 @@ Live board strip: open tasks due before today (tenant zone).
 
 - tenant: RLS
 - monitoring.live (the board)
-- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)
 
 **Time** Tenant-zone business date at the refresh's now().
 
@@ -2211,7 +2211,7 @@ Live board strip: open tasks due today (tenant zone).
 
 - tenant: RLS
 - monitoring.live (the board)
-- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)
 
 **Time** Tenant-zone business date at the refresh's now().
 

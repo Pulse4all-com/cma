@@ -3644,7 +3644,7 @@
       "filters": [
         "tenant: RLS",
         "the Live board requires monitoring.live (the function itself also accepts performance.team or workday.team)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
+        "tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at; the strip shows no age.",
       "comparison": null,
@@ -3726,7 +3726,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
+        "tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at.",
       "comparison": null,
@@ -3804,7 +3804,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
+        "tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at.",
       "comparison": null,
@@ -3887,7 +3887,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
+        "tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)"
       ],
       "time": "The snapshot's computed_at.",
       "comparison": null,
@@ -3965,7 +3965,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
+        "tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)"
       ],
       "time": "Tenant-zone business date at the refresh's now().",
       "comparison": null,
@@ -4038,7 +4038,7 @@
       "filters": [
         "tenant: RLS",
         "monitoring.live (the board)",
-        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
+        "tenant-wide on every contact center's board: the board captions the strip as covering the whole business line (addition 0008zv)"
       ],
       "time": "Tenant-zone business date at the refresh's now().",
       "comparison": null,
