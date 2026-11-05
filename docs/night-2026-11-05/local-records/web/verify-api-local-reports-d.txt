@@ -1,0 +1,32 @@
+verify/api.mjs against http://localhost:8081
+
+PASS  reports: an agent is refused on every route  got [403,403,403,403]
+PASS  reports: the supervisor reads all but data quality got [200,200,200,403]
+PASS  reports: the analyst reads all four          got [200,200,200,200]
+PASS  reports: the manager reads data quality      got 200
+PASS  reports: more than 92 days is a 400 on every ranged route got [400,400,400]
+PASS  reports: 92 days are answered                got 200
+PASS  reports: a backwards range is a 400          got 400
+PASS  reports: a group outside the four is a 400   got [400,400,400]
+PASS  reports: each group answers as itself, none means day got ["day","market","agent","pipeline","day"]
+PASS  reports: no field named email, phone, name or firstname in the rows got []
+PASS  reports: statuses are called, not called open or closed got true
+PASS  reports: every record link is https or empty got true
+PASS  reports: the summary by day adds up to the rows got [7,5,1]
+PASS  reports: agents not mapped are one group without a label, never an owner id got [true,4,true]
+PASS  reports: intake figures follow the tenant's connections got true
+PASS  reports: data quality lists each check once with a count got [true,true,true]
+PASS  reports: without telephony and a shop those figures are null, never 0 got [{"telephony":false,"commerce":false},true,false]
+PASS  flash: an agent is refused on every route    got [403,403,403,403,403,403]
+PASS  flash: the analyst reads every route         got [200,200,200,200,200,200]
+PASS  flash: the supervisor (performance.team) reads Flash, not data quality's rows (reports.view or tenant.configure) got [200,200,200,200,200,403]
+PASS  flash: every form out of range is a 400 (overview, sort, measure, filter, limit, market, a future As of, part, check) got [400,400,400,400,400,400,400,400,400]
+PASS  flash: the landing has the eleven overviews in their order, each with its definition version and set_up got [["customers","subscriptions","installed_base","churn","orde
+PASS  flash: a card's live headline: the overview's headline measure, a number when set up got ["orders",true]
+PASS  flash: amounts sorted within currency (currency first), the total before the limit got [true,true]
+PASS  flash: the file: its name (overview, market, as of), its first columns as_of and filters, no @ anywhere got [200,true,true,false]
+PASS  flash: the snapshots of a period and the open watch findings, no id of a record got [true,true,false]
+PASS  flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop) got [false,null,0]
+
+ALL 27 PASS
+exit 0

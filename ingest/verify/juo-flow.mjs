@@ -26,11 +26,18 @@
  * backfill; 401 wrong tenant (another store's key: key_rejected); 429 paced (held for its Retry-After and sent again: the
  * run succeeds); tenant two's store loads into tenant two only; no personal fixture text in any row of the run's tenants
  * or in a log line; nothing written to another tenant; the jobs' pool of 2 (the poll under its lock: at most 2 connections
- * at once, its work on one, no wait on its own pool; P1 the same for every poll, reconcile and backfill run).
+ * at once, its work on one, no wait on its own pool; P1 the same for every poll, reconcile and backfill run). Since
+ * addition 0008zq (section H) the backfill with --adapter juo: the two fake stores (two tenants) in one execution, each its
+ * own dry-run line and its own run, in id order; the store without a key skipped (key_not_set) and counted, never a usage
+ * error; the store-less handle failed store_not_configured; one store answering 503 while the other completes, the job's
+ * failed counting it; --connection with --adapter a usage error; the job process exiting 1 when a connection failed and 2
+ * on the usage error.
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { expect, verdict, poolCheck, writesOutside, PROVOKE } from "./lib.mjs";
@@ -74,7 +81,7 @@ setLogSink((line) => logs.push(line));
 const { createIngestServer } = await import("../src/server.mjs");
 const { runPollSubscriptions } = await import("../src/jobs/poll-subscriptions.mjs");
 const { runReconcile } = await import("../src/jobs/reconcile.mjs");
-const { runBackfill } = await import("../src/jobs/backfill.mjs");
+const { runBackfill, runAdapterBackfill } = await import("../src/jobs/backfill.mjs");
 const { UsageError, withJobLock } = await import("../src/jobs/runner.mjs");
 const { clearSecretCache } = await import("../src/core/secrets.mjs");
 const { closeDb, measurePool, poolRuns } = await import("../src/core/db.mjs");
@@ -337,6 +344,63 @@ expect("G3 the logs hold no key and no value: connection ids, counts, codes and 
 expect("G4 every request carried its store's id and a key, in headers; none for the store-less handle",
   [fake.state.requests.every((r) => r.tenant && !r.keyInUrl), asksFor(`juo-${RUN}-nostore.myshopify.com`).length], [true, 0], [false, 1]);
 expect("G5 nothing written to another tenant by this run's logins", await writesOutside(q, { tenants: [T1.t, T2.t], since, logins: [ADMIN, process.env.CMA_DB_USER] }), [], ["x"]);
+
+// ---- H. --adapter juo: every served store in one execution (addition 0008zq) --------------------------------------------------
+// The walk serves every active Juo connection of the database, so the checks read only this run's four
+const mine = new Set([juo1.id, juo2.id, nostore.id, keyless.id]);
+const ownResults = (r) => r.results.filter((x) => mine.has(x.connection));
+const byId = (ids) => [...ids].sort();
+logs.length = 0;
+let walk = await runAdapterBackfill({ adapter: "juo", objects: "subscription", dryRun: true });
+let own = ownResults(walk);
+const dryLines = logs.map((l) => JSON.parse(l)).filter((l) => l.message === "backfill dry run" && mine.has(l.connection));
+expect("H1 the dry run with --adapter juo: one `backfill dry run` line per store with its counts, in id order, nothing written",
+  [dryLines.map((l) => l.connection), dryLines.map((l) => [l.object, l.fetched, l.mapped]), own.map((x) => x.connection),
+    (await runsOf(juo1.id, "backfill")).length, (await runsOf(juo2.id, "backfill")).length],
+  [byId([juo1.id, juo2.id]), [["subscription", 230, 230], ["subscription", 230, 230]], byId(mine), 2, 1],
+  [[], [], [], 3, 2]);
+expect("H2 the store without a key is skipped (key_not_set, one log line) and counted, never a usage error; the store-less handle fails store_not_configured",
+  [own.find((x) => x.connection === keyless.id), own.find((x) => x.connection === nostore.id)?.error, own.find((x) => x.connection === nostore.id)?.failed,
+    logs.filter((l) => JSON.parse(l).message === "backfill: connection skipped" && JSON.parse(l).connection === keyless.id && JSON.parse(l).code === "key_not_set").length,
+    walk.skipped >= 1, walk.failed >= 1],
+  [{ connection: keyless.id, skipped: "key_not_set", failed: 0 }, "store_not_configured", 1, 1, true, true],
+  [null, null, 0, 0, false, false]);
+// One store answers 503 while the other completes: each its own run, the failure counted, the walk goes on in id order
+fake.state.failTenant = two.domain;
+logs.length = 0;
+walk = await runAdapterBackfill({ adapter: "juo", objects: "subscription" });
+own = ownResults(walk);
+fake.state.failTenant = null;
+const run1 = (await runsOf(juo1.id, "backfill")).at(-1);
+const run2 = (await runsOf(juo2.id, "backfill")).at(-1);
+expect("H3 one store answering 503 while the other completes: store one's run succeeded with its counts, store two's failed http_503, both in the walk's results in id order",
+  [run1.stream, run1.status, run1.counts.fetched, run2.stream, run2.status, run2.error,
+    own.filter((x) => x.object === "subscription").map((x) => [x.connection, x.error ?? null, x.failed]).sort((a, b) => (a[0] < b[0] ? -1 : 1))],
+  ["subscription", "succeeded", 230, "subscription", "failed", "http_503",
+    [[juo1.id, null, 0], [juo2.id, "http_503", 1], [nostore.id, "store_not_configured", 1]].sort((a, b) => (a[0] < b[0] ? -1 : 1))],
+  [null, "failed", 0, null, "succeeded", null, []]);
+expect("H4 the walk's totals: the connections of the adapter, the served ones, the skipped and the failed (store two and the store-less handle)",
+  [walk.adapter, walk.connections >= 4, walk.served === walk.connections - walk.skipped, walk.skipped >= 1, walk.failed >= 2, walk.results.length >= 4],
+  ["juo", true, true, true, true, true], ["x", false, false, false, false, false]);
+expect("H5 the refusals before any walk: an unknown adapter, --dry-run with two objects, an object the adapter has not",
+  [await usageOf(() => runAdapterBackfill({ adapter: "nosuch", objects: "subscription" })),
+    await usageOf(() => runAdapterBackfill({ adapter: "juo", objects: "subscription,subscription_event", dryRun: true })),
+    await usageOf(() => runAdapterBackfill({ adapter: "juo", objects: "device" })),
+    await usageOf(() => runAdapterBackfill({ adapter: "juo", objects: "subscription", from: FROM }))],
+  ["usage", "usage", "usage", "usage"], ["ran", "ran", "ran", "ran"]);
+// The job as a process: the exit code is 1 when any connection failed (the store-less handle) and 2 on a usage error
+const job = async (...args) => {
+  const r = await promisify(execFile)(process.execPath, ["jobs/backfill.mjs", ...args], { cwd: path.join(path.dirname(new URL(import.meta.url).pathname), ".."),
+    env: { ...process.env, CMA_DB_POOL_MAX: process.env.CMA_DB_POOL_MAX ?? "2" } }).then(() => ({ code: 0, out: "" }), (e) => ({ code: e.code, out: String(e.stdout ?? "") + String(e.stderr ?? "") }));
+  return r;
+};
+const exit1 = await job("--adapter", "juo", "--object", "subscription", "--dry-run");
+const exit2 = await job("--adapter", "juo", "--connection", juo1.id, "--object", "subscription", "--dry-run");
+expect("H6 the job process: exit 1 when a connection of the walk failed (the store-less handle), its finished line with the per-connection results",
+  [exit1.code, /"message":"backfill finished"/.test(exit1.out), /"results":\[/.test(exit1.out), /store_not_configured/.test(exit1.out)], [1, true, true, true], [0, false, false, false]);
+expect("H7 the job process: --connection with --adapter is a usage error (exit 2, nothing run)",
+  [exit2.code, /"code":"usage"/.test(exit2.out), /exclude each other/.test(exit2.out)], [2, true, true], [0, false, false]);
+expect("H8 the logs of the walk hold no key and no value", [KEY1, KEY2, one.subscriptions[0].customer].filter((v) => logs.join("\n").includes(v) || exit1.out.includes(v)), [], ["x"]);
 
 // This run's connections stop being served (a later run's unfiltered jobs leave them alone); the tenants stay
 for (const [tenant, c] of [[T1, juo1.id], [T1, nostore.id], [T1, keyless.id], [T2, juo2.id]]) await asAdmin(tenant, () => q("select cma.set_connection_status($1, 'inactive')", [c]));

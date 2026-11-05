@@ -1,0 +1,130 @@
+01_foundation.sql: migration, exit 0
+02_seed_pulse4all.sql: seed, exit 3
+03_seed_dev_test_data.sql: seed, exit 0
+04_verify.sql: verify, exit 0, 2 error lines
+05_time_model.sql: migration, exit 0
+  02_seed_pulse4all after 05_time_model.sql: exit 3 psql:db/02_seed_pulse4all.sql:548: ERROR:  relation "cma.setting" does not exist
+06_seed_dev_time_model.sql: seed, exit 0
+07_verify_time_model.sql: verify, exit 0, 7 error lines
+09_corrections.sql: migration, exit 0
+  02_seed_pulse4all after 09_corrections.sql: exit 3 psql:db/02_seed_pulse4all.sql:548: ERROR:  relation "cma.setting" does not exist
+10_verify_corrections.sql: verify, exit 0, 0 error lines
+11_team_people.sql: migration, exit 0
+  02_seed_pulse4all after 11_team_people.sql: exit 3 psql:db/02_seed_pulse4all.sql:548: ERROR:  relation "cma.setting" does not exist
+12_verify_team_people.sql: verify, exit 0, 1 error lines
+13_tenant_settings.sql: migration, exit 0
+14_verify_tenant_settings.sql: verify, exit 0, 0 error lines
+15_team_status_time.sql: migration, exit 0
+16_verify_team_status_time.sql: verify, exit 0, 0 error lines
+17_clock_in_app_links.sql: migration, exit 0
+18_verify_clock_in_app_links.sql: verify, exit 0, 0 error lines
+19_team_now.sql: migration, exit 0
+20_verify_team_now.sql: verify, exit 0, 0 error lines
+21_teams_skills.sql: migration, exit 0
+22_verify_teams_skills.sql: verify, exit 0, 0 error lines
+23_roster.sql: migration, exit 0
+24_seed_dev_roster.sql: seed, exit 0
+25_verify_roster.sql: verify, exit 0, 0 error lines
+26_configuration.sql: migration, exit 0
+27_verify_configuration.sql: verify, exit 0, 0 error lines
+28_my_profile.sql: migration, exit 0
+29_verify_my_profile.sql: verify, exit 0, 0 error lines
+30_ingest_crm_records.sql: migration, exit 0
+31_verify_ingest_crm_records.sql: verify, exit 0, 0 error lines
+32_intake_core.sql: migration, exit 0
+33_verify_intake_core.sql: verify, exit 0, 0 error lines
+34_telephony.sql: migration, exit 0
+35_verify_telephony.sql: verify, exit 0, 0 error lines
+36_commerce.sql: migration, exit 0
+37_verify_commerce.sql: verify, exit 0, 0 error lines
+38_outbox.sql: migration, exit 0
+39_verify_outbox.sql: verify, exit 0, 1 error lines
+40_lead_metrics.sql: migration, exit 0
+41_verify_lead_metrics.sql: verify, exit 0, 2 error lines
+42_messaging.sql: migration, exit 0
+43_verify_messaging.sql: verify, exit 0, 0 error lines
+44_assignment_alerts.sql: migration, exit 0
+45_verify_assignment_alerts.sql: verify, exit 0, 0 error lines
+46_workday_window.sql: migration, exit 0
+47_verify_workday_window.sql: verify, exit 0, 1 error lines
+48_alert_time_zone.sql: migration, exit 0
+49_verify_alert_time_zone.sql: verify, exit 0, 0 error lines
+50_legacy_time_import.sql: migration, exit 0
+51_verify_legacy_time_import.sql: verify, exit 0, 1 error lines
+52_sources_configuration.sql: migration, exit 0
+53_verify_sources_configuration.sql: verify, exit 0, 0 error lines
+54_uncounted_lines.sql: migration, exit 0
+55_verify_uncounted_lines.sql: verify, exit 0, 0 error lines
+56_commerce_phone_hash.sql: migration, exit 0
+57_verify_commerce_phone_hash.sql: verify, exit 0, 0 error lines
+58_commerce_contact_link.sql: migration, exit 0
+59_verify_commerce_contact_link.sql: verify, exit 0, 0 error lines
+60_inbound_service.sql: migration, exit 0
+61_verify_inbound_service.sql: verify, exit 0, 0 error lines
+62_calls_overview.sql: migration, exit 0
+63_verify_calls_overview.sql: verify, exit 0, 0 error lines
+64_calls_history_start.sql: migration, exit 0
+65_verify_calls_history_start.sql: verify, exit 0, 0 error lines
+66_invitations.sql: migration, exit 0
+67_verify_invitations.sql: verify, exit 0, 0 error lines
+68_email_activity.sql: migration, exit 0
+69_verify_email_activity.sql: verify, exit 0, 0 error lines
+70_crm_tasks.sql: migration, exit 0
+71_verify_crm_tasks.sql: verify, exit 0, 0 error lines
+72_follow_up.sql: migration, exit 0
+73_verify_follow_up.sql: verify, exit 0, 0 error lines
+74_forms_reporting.sql: migration, exit 0
+75_verify_forms_reporting.sql: verify, exit 0, 0 error lines
+76_audit_hardening.sql: migration, exit 0
+77_verify_audit_hardening.sql: verify, exit 0, 0 error lines
+78_system_health.sql: migration, exit 0
+79_verify_system_health.sql: verify, exit 0, 0 error lines
+80_follow_up_snapshot.sql: migration, exit 0
+81_verify_follow_up_snapshot.sql: verify, exit 0, 0 error lines
+82_email_reports.sql: migration, exit 0
+83_verify_email_reports.sql: verify, exit 0, 0 error lines
+84_first_orders.sql: migration, exit 0
+85_verify_first_orders.sql: verify, exit 0, 0 error lines
+86_journeys.sql: migration, exit 0
+87_verify_journeys.sql: verify, exit 0, 0 error lines
+88_callbacks_kept.sql: migration, exit 0
+89_verify_callbacks_kept.sql: verify, exit 0, 0 error lines
+90_report_speed.sql: migration, exit 0
+91_verify_report_speed.sql: verify, exit 0, 2 error lines
+92_attempts_per_deal.sql: migration, exit 0
+93_verify_attempts_per_deal.sql: verify, exit 0, 1 error lines
+94_attempts_for_sales.sql: migration, exit 0
+95_verify_attempts_for_sales.sql: verify, exit 0, 1 error lines
+96_stage_times.sql: migration, exit 0
+97_verify_stage_times.sql: verify, exit 0, 0 error lines
+98_funnel.sql: migration, exit 0
+99_verify_funnel.sql: verify, exit 0, 0 error lines
+100_definitions_calls.sql: migration, exit 0
+101_verify_definitions_calls.sql: verify, exit 0, 0 error lines
+102_tag_meaning_incorrect_data.sql: migration, exit 0
+103_verify_tag_meaning_incorrect_data.sql: verify, exit 0, 0 error lines
+104_reviews.sql: migration, exit 0
+105_verify_reviews.sql: verify, exit 0, 0 error lines
+106_review_reference_guard.sql: migration, exit 0
+107_verify_review_reference_guard.sql: verify, exit 0, 0 error lines
+108_legacy_call_outcome.sql: migration, exit 0
+109_verify_legacy_call_outcome.sql: verify, exit 0, 0 error lines
+110_import_status_reuse.sql: migration, exit 0
+111_verify_import_status_reuse.sql: verify, exit 0, 0 error lines
+112_assets.sql: migration, exit 0
+113_verify_assets.sql: verify, exit 0, 0 error lines
+114_asset_sync.sql: migration, exit 0
+115_verify_asset_sync.sql: verify, exit 0, 0 error lines
+116_asset_sync_load.sql: migration, exit 0
+117_verify_asset_sync_load.sql: verify, exit 0, 0 error lines
+118_subscriptions.sql: migration, exit 0
+119_verify_subscriptions.sql: verify, exit 0, 0 error lines
+120_lead_cohorts.sql: migration, exit 0
+121_verify_lead_cohorts.sql: verify, exit 0, 0 error lines
+122_flash.sql: migration, exit 0
+123_verify_flash.sql: verify, exit 0, 0 error lines
+124_time_flash.sql: migration, exit 0
+125_flash_watch_cadence.sql: migration, exit 0
+126_workday_sessions.sql: migration, exit 0
+127_verify_workday_sessions.sql: verify, exit 0, 0 error lines
+replayed to 127

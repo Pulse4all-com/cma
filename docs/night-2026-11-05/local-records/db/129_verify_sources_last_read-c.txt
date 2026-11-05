@@ -1,0 +1,50 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/129_verify_sources_last_read.sql:45: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DO
+                                         check_name                                          | result |                                                       detail                                                        
+---------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------
+ S1 addition, columns, function and grants                                                   | PASS   | 27 columns, the five of 0008zq last; stable, invoker, cma_owner's, cma_app only; reads cma.sync_run
+ S2 cma.source_reads: columns, function and grants                                           | PASS   | eight columns; stable, invoker, cma_owner's, cma_app only; tenant.configure; limit 20
+ A1 events and no runs: the events as before, no last read, 0 reads                          | PASS   | 3 events, 1 waiting, last event an hour ago; last_read_at null, reads_24h 0
+ A2 runs and no events: the latest succeeded run's finish and job; every run of 24 h counted | PASS   | events 0, last event null; last read 3 h ago by subscriptions_poll (not the failed or the running one); reads_24h 4
+ A3 a failed run in the window: counted, its code; two failed: the latest's code             | PASS   | rate_limited beside a later succeeded read; token_unavailable after http_503; no last read without a succeeded run
+ A4 runs older than 24 hours: the last read kept, nothing counted, no error                  | PASS   | last read 30 h ago by reconcile; reads_24h 0; the old failure's code not shown
+ A4 the list holds every connection of the tenant                                            | PASS   | 4 rows
+ A5 another tenant's runs and events are invisible                                           | PASS   | tenant one: one row, its own read 6 h ago, 1 read, no failure, 0 events; tenant two's connection absent
+ A6 without tenant.configure the read is refused (CMA06)                                     | PASS   | a manager
+ A6 with tenant.configure the list is served                                                 | PASS   | the admin, one row
+ A7 the newest 20 of 25 runs, newest first                                                   | PASS   | the running one first, then a succeeded and the failed one; the five oldest left out
+ A7 each row carries its stream, finish, counts and error code                               | PASS   | counts {fetched 7, events_new 2}; the running run without a finish; rate_limited
+ A7 another tenant's connection and an unknown id answer no rows                             | PASS   | 0 and 0
+ A7 without tenant.configure the reads are refused (CMA06)                                   | PASS   | a manager
+ verdict                                                                                     | PASS   | 14 PASS, 0 FAIL
+(15 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET
+exit 0

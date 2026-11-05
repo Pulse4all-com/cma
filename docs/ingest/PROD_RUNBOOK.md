@@ -1,6 +1,6 @@
 # Prod runbook: HubSpot, Aircall and Shopify into cma-ingest in prod
 
-The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026), the Trusted Shops reviews (phase 13, brief B18, 25 October 2026), the asset register's API sync (phase 14, addition 0008zj, 27 October 2026), Juo subscriptions (phase 15, addition 0008zl, 28 October 2026) and Flash (phase 16, addition 0008zm, 1 November 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
+The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026), the Trusted Shops reviews (phase 13, brief B18, 25 October 2026), the asset register's API sync (phase 14, addition 0008zj, 27 October 2026), Juo subscriptions (phase 15, addition 0008zl, 28 October 2026; the other 11 live stores with Juo, the store customers from each store's start and Flash's coverage per market in 15.10 to 15.12, addition 0008zq, 5 November 2026) and Flash (phase 16, addition 0008zm, 1 November 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
@@ -1416,7 +1416,7 @@ Expected: `Review channels without a market` lists the channels with the reviews
 
 **Browser:** Configuration → Sources → **Trusted Shops Subscriptions** → Review channels: per channel choose the market its reviews count for and switch **Counted** on. Leave off the channels of another business line and test channels (their reviews stay stored either way). Below, the review settings: the threshold for a negative review (default: rated 2 or lower) and the history start date (default empty: the backfill reads all history; leave it empty for 13.10).
 
-Expected: each change saved and still there after a reload; the `New, choose a market` badge gone from every channel you mapped. A channel switched on without a market counts under the market `unknown`: give every counted channel its market. Reports → Data quality: `Review channels without a market` at 0 for the mapped channels; a market with no Trusted Shops channel stays listed under `Active markets without a review channel` (a decision for Kira, not a fault).
+Expected: each change saved and still there after a reload; the `New, choose a market` badge gone from every channel you mapped. A channel switched on without a market counts under the market `unknown`: give every counted channel its market. Reports → Data quality: `Review channels without a market` at 0 for the mapped channels; a market with no Trusted Shops channel stays listed under `Active markets without a review channel` (a decision for Kira, not a fault). The catalog has channels for DE, FR, NL, AT, SE and GB only (prod, 4 November 2026), so the other markets have no reviews by design, not by a gap in the poll.
 
 The fallback in **Studio (cma-prod-pg)**, one statement per channel:
 ```sql
@@ -1894,7 +1894,7 @@ Expected: a `Y/n` prompt; after `Y`, `Destroyed version [<old version>] of the s
 
 # 15. Juo subscriptions in prod, the GB pilot (addition 0008zl, brief B20)
 
-Written on 28 October 2026 for 0008zl. The ingest reads the subscriptions of the GB store (`pulse4all.myshopify.com`) and the events of its subscriptions from Juo's Admin API into `cma.subscription` and `cma.subscription_event`: the events since the cursor every 5 minutes (`ingest-poll-subscriptions`), with the subscriptions they touched, and every subscription nightly (`ingest-reconcile`); each subscription's payment state follows from both (`docs/ingest/README.md`, section Juo; `docs/architecture/data-model/0008.md`, Data model: subscriptions). Read only: nothing is written to Juo. HubSpot's own Juo events stay as they are. The other 13 stores follow later, one connection and one key each (Open decisions). Order: the migration in dev with its verify, the data map and the migration in prod, all before the merge, then the merge (Before 15.1); then the Gemini audit, the key and its secret, the ingest from `main` (15.1, 15.2), the store and the connection (15.3, 15.4), the dry runs (15.5, 15.6), the backfills (15.7), the checks (15.8) and the schedule (15.9). Do 15.4 to 15.7 in one sitting, before 03:30: from 15.4 on the nightly reconcile reads the store too. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. The Terminal blocks run in `~/cma`.
+Written on 28 October 2026 for 0008zl. The ingest reads the subscriptions of the GB store (`pulse4all.myshopify.com`) and the events of its subscriptions from Juo's Admin API into `cma.subscription` and `cma.subscription_event`: the events since the cursor every 5 minutes (`ingest-poll-subscriptions`), with the subscriptions they touched, and every subscription nightly (`ingest-reconcile`); each subscription's payment state follows from both (`docs/ingest/README.md`, section Juo; `docs/architecture/data-model/0008.md`, Data model: subscriptions). Read only: nothing is written to Juo. HubSpot's own Juo events stay as they are. The GB pilot ran on 29 October 2026 (`records/0008zl-prod-2026-10-29`). The other 11 live stores with Juo follow in 15.10, one connection and one key each, in one sitting with the backfill's `--adapter juo` (addition 0008zq, 5 November 2026); the NO store has no Juo yet and the CH store is not live, so both stay out until they join (Decision log, 4 November 2026); 15.11 reads every store's customers from the store's start and 15.12 checks Flash's coverage per market. Order for the pilot: the migration in dev with its verify, the data map and the migration in prod, all before the merge, then the merge (Before 15.1); then the Gemini audit, the key and its secret, the ingest from `main` (15.1, 15.2), the store and the connection (15.3, 15.4), the dry runs (15.5, 15.6), the backfills (15.7), the checks (15.8) and the schedule (15.9). Do 15.4 to 15.7 in one sitting, before 03:30: from 15.4 on the nightly reconcile reads the store too. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. The Terminal blocks run in `~/cma`.
 
 **Data prerequisites:**
 - The GB store's Juo Admin API key (the GB key answered 200 for `pulse4all.myshopify.com` and 401 for `pulse4all-nl.myshopify.com` on 28 October 2026); whether a key can be read-only is an Open decision (15.1).
@@ -2155,6 +2155,293 @@ Expected: one `subscriptions_poll | subscriptions | succeeded` row with the even
 Expected: the row **Subscriptions poll** with its last run succeeded, and the connection **Juo GB** OK. After 03:30 the next day: a **Nightly reconcile** run of the connection, stream `subscription`, succeeded, `missing_now` the subscriptions Juo no longer returns (usually 0). System health's counts column shows only counts above 0.
 
 Day one: **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select job, status, error, count(*) from cma.sync_run where connection_id = '<juo conn>' and started_at > now() - interval '1 day' group by 1, 2, 3 order by 1, 2;`. Expected: about 288 `subscriptions_poll` `succeeded` and one `reconcile` `succeeded`; a `failed` with `rate_limited` makes the execution exit 1, so the alert `Cloud Run job failed (any job)` fires (OPERATIONS 9); one now and then needs no action (the next run carries on); several a day: report them (Open decisions: Juo's rate limit). `key_rejected` means the key was revoked or replaced: 15.1 and 15.2 again. `empty_snapshot` on the reconcile means Juo answered no subscription: nothing was marked missing; report it. A failed poll does not move its cadence, so a lasting failure writes one `failed` row every 5 minutes until it is fixed: fix it the same day. **Records:** the outputs of (a), (c) and 15.2 to 15.9 into `records/0008zl-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
+
+## 15.10 The other stores at once (addition 0008zq, 5 November 2026)
+
+Written on 4 November 2026 for the morning of 5 November (`docs/night-2026-11-05/MORNING_RUNBOOK.md` orders the whole morning). The 11 live stores that run Juo get what the GB pilot got, in one sitting: one key per store in Secret Manager, stored on the evening of 4 November and checked here (a), one service deploy that grants the accessor on all eleven and one jobs deploy with the image that has `--adapter` (b), one Studio Run for the eleven connections (c), the poll paused for the backfills (d), one dry run over every store (e), the two backfills over every store (f), the checks grouped by store (g), the schedule resumed and the morning's checks (h). Two stores stay out (Decision log, 4 November 2026): the NO store (`pulse4all-no`) has no Juo yet, so it gets no key, no secret, no connection and no `--secret` flag, and joins with this section's blocks, one handle, the day Juo is installed there; the CH store (`pulse4all-ch`) is not live, its secret `ingest-juo-pulse4all-ch-key` exists in `p4a-cma-prod` since the evening of 4 November 2026 (stored with the eleven, one enabled version, no accessor, no connection; (a) checks it with them) and it joins the same way once it sells. Everything below is prefilled with the eleven handles; only `<tenant_id>`, `<user_id>` and the ids the Studio output gives are placeholders. Do (c) to (f) in one sitting, before 03:30: from (c) on the nightly reconcile reads every store too.
+
+The eleven stores (the Sources page, 4 November 2026; the handle is the store's Shopify subdomain and must equal its commerce store's handle, or every read fails `store_not_configured`):
+
+| Handle | Market | Connection name | Secret |
+|---|---|---|---|
+| `pulse4all-at` | AT | Juo AT | `ingest-juo-pulse4all-at-key` |
+| `pulse4all-be` | BE | Juo BE | `ingest-juo-pulse4all-be-key` |
+| `pulse4all-de` | DE | Juo DE | `ingest-juo-pulse4all-de-key` |
+| `pulse4all-dk` | DK | Juo DK | `ingest-juo-pulse4all-dk-key` |
+| `pulse4all-esp` | ES | Juo ES | `ingest-juo-pulse4all-esp-key` |
+| `pulse4all-fi` | FI | Juo FI | `ingest-juo-pulse4all-fi-key` |
+| `pulse4all-fr` | FR | Juo FR | `ingest-juo-pulse4all-fr-key` |
+| `pulse4all-ie` | IE | Juo IE | `ingest-juo-pulse4all-ie-key` |
+| `pulse4all-ita` | IT | Juo IT | `ingest-juo-pulse4all-ita-key` |
+| `pulse4all-nl` | NL | Juo NL | `ingest-juo-pulse4all-nl-key` |
+| `pulse4all-se` | SE | Juo SE | `ingest-juo-pulse4all-se-key` |
+
+The GB store (`pulse4all`, **Juo GB**, `ingest-juo-pulse4all-key`) exists since 15.4 and is not in (a) to (c); `--adapter juo` in (e) and (f) includes it at no cost (a finished backfill with the same start reads nothing; the subscription read is the reconcile's full read).
+
+Elapsed, hands-on and unattended: (a) 3 minutes (a check: the twelve secrets exist); (b) 10 minutes; (c) 5 minutes; (d) 1 minute; (e) 5 to 10 minutes; (f) unattended, the events 30 to 90 minutes and the subscriptions 5 to 15 minutes (the GB events took 20 minutes for 230k events at two requests a second, 100 events each; the eleven stores together hold from about the same to three times as many; the subscriptions a few hundred requests in all); (g) 5 minutes; (h) 10 minutes.
+
+**(a) The twelve secrets exist.** Martin stored twelve keys on the evening of 4 November 2026 with `put_secret`, one per store from that store's Juo admin, pasted once at the hidden prompt: the eleven of the table and CH's (`ingest-juo-pulse4all-ch-key`, without a connection or an accessor until the CH store sells). Each of the twelve has one enabled version, nine of them an earlier version disabled, and none has an accessor yet ((b) grants it on the eleven). This block checks that, nothing else.
+
+**Terminal** (the Juo secrets and their versions; names and version states only)
+```bash
+gcloud secrets list --project=p4a-cma-prod --filter='name~ingest-juo-' --format='value(name.basename())' | sort
+for h in pulse4all-at pulse4all-be pulse4all-de pulse4all-dk pulse4all-esp pulse4all-fi pulse4all-fr pulse4all-ie pulse4all-ita pulse4all-nl pulse4all-se pulse4all-ch; do
+  echo "== ingest-juo-$h-key: $(gcloud secrets versions list "ingest-juo-$h-key" --project=p4a-cma-prod --format='value(name.basename(),state)' | tr '\n\t' ' :')"
+done
+```
+Expected: thirteen names, `ingest-juo-pulse4all-key` (GB, since 15.2) and `ingest-juo-pulse4all-<handle>-key` for the eleven handles of the table and for `ch`; no `ingest-juo-pulse4all-no-key`. Then twelve lines, the eleven of the table and CH's last, each with exactly one `ENABLED` version, nine of them also an older `DISABLED` one (the shape: `== ingest-juo-<handle>-key: 2:ENABLED 1:DISABLED`, or `1:ENABLED` alone; the numbers are Secret Manager's version numbers). A missing secret, or one without an enabled version: make the key in that store's Juo admin (Settings → API, Admin API keys, named `CMA ingest prod`, read-only when Juo offers it) and store it with the block below for that one handle; a secret with two enabled versions: disable the older one (OPERATIONS 7).
+
+**Terminal** (a store that joins later: NO the day Juo is installed there; not for CH, whose secret exists since 4 November 2026 and is checked above, unless its key is replaced. `put_secret` defined first, the handle in place of `<handle>`; one hidden prompt)
+```bash
+for h in <handle>; do
+  put_secret p4a-cma-prod "ingest-juo-$h-key"
+done
+```
+Expected: the hidden prompt naming the secret, then `stored ingest-juo-<handle>-key (version added)`. The key is pasted only at that prompt, never into a command, a chat or a file; a key answers 200 for its own store and 401 for any other (15.1), so a key of the wrong store fails that store's read with `key_rejected` in (e). Then (b) with `--secret ingest-juo-<handle>-key`, (c) with that one `values` row, and (d) to (h) as written: the walk serves the new connection with the others. CH the day it sells starts at (b) with `--secret ingest-juo-pulse4all-ch-key`. A store without a secret is skipped by every job (`key_not_set`) and does not stop the others.
+
+**(b) The ingest from `main`, the accessors.** `--front` goes with the service deploy and never with `--jobs` (13.6). The service deploy grants `cma-ingest` the accessor on each named secret (on those secrets only); the jobs deploy puts the image of `main` after the merge on the ten jobs, which has `--adapter`, and keeps the schedules as they are.
+
+**Terminal** (in `~/cma`, on `main` after the merge of the morning's pull request)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions \
+  --secret ingest-juo-pulse4all-at-key --secret ingest-juo-pulse4all-be-key --secret ingest-juo-pulse4all-de-key --secret ingest-juo-pulse4all-dk-key \
+  --secret ingest-juo-pulse4all-esp-key --secret ingest-juo-pulse4all-fi-key --secret ingest-juo-pulse4all-fr-key --secret ingest-juo-pulse4all-ie-key \
+  --secret ingest-juo-pulse4all-ita-key --secret ingest-juo-pulse4all-nl-key --secret ingest-juo-pulse4all-se-key \
+  && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha; the image is built once under it, because the merge touched `ingest/`); eleven lines `accessor on ingest-juo-<handle>-key`; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`): ten job deploys, the schedules unchanged (`ingest-poll-subscriptions` `*/5 * * * *` as 15.9 left it). `secret ingest-juo-<handle>-key does not exist yet`: (a) found it missing; store it with (a)'s `put_secret` block and rerun this block (a rerun grants the rest again, harmlessly).
+
+**Terminal** (who may read each secret)
+```bash
+for h in pulse4all-at pulse4all-be pulse4all-de pulse4all-dk pulse4all-esp pulse4all-fi pulse4all-fr pulse4all-ie pulse4all-ita pulse4all-nl pulse4all-se; do
+  echo "== ingest-juo-$h-key"
+  gcloud secrets get-iam-policy "ingest-juo-$h-key" --project=p4a-cma-prod --flatten='bindings[].members' --format='value(bindings.role,bindings.members)'
+done
+```
+Expected: per secret its `==` line and exactly one line, `roles/secretmanager.secretAccessor	serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com`. Another member on any secret: report it and remove it before (c). `ingest-juo-pulse4all-ch-key` keeps no binding until CH joins.
+
+**(c) The eleven connections in one Run.** The shape of 9.6's "Several stores at once": a temporary table that lives only in this Run, one `values` row per store; the kind first (the settings are checked on a subscriptions connection); then one read-back row per store with `ok` true and `subscription_store_connection_of` resolving the store, exactly 15.4's expectation. A rerun is safe: the same ids and keys come back.
+
+**Studio (cma-prod-pg)** in one Run (after the context block; `<tenant_id>` and `<user_id>` from its first part)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+create temp table new_juo as
+select v.handle, v.cc, c.connection_id, c.key
+from (values ('pulse4all-at', 'AT'), ('pulse4all-be', 'BE'), ('pulse4all-de', 'DE'), ('pulse4all-dk', 'DK'),
+             ('pulse4all-esp', 'ES'), ('pulse4all-fi', 'FI'), ('pulse4all-fr', 'FR'), ('pulse4all-ie', 'IE'),
+             ('pulse4all-ita', 'IT'), ('pulse4all-nl', 'NL'), ('pulse4all-se', 'SE')) v(handle, cc)
+cross join lateral cma.upsert_connection('juo', 'Juo ' || v.cc, v.handle || '.myshopify.com', null, 'ingest-juo-' || v.handle || '-key') c;
+select cma.set_connection_kind(connection_id, 'subscriptions') from new_juo;
+select cma.set_connection_settings(connection_id, '{"subscriptions_poll_interval_minutes": 5, "subscriptions_max_per_second": 2}'::jsonb) from new_juo;
+select n.handle, n.cc, n.connection_id as juo_conn, s.name,
+       s.kind = 'subscriptions' and s.status = 'active' and s.external_account_id = n.handle || '.myshopify.com'
+         and s.token_secret_name = 'ingest-juo-' || n.handle || '-key' and s.signing_secret_name is null as ok,
+       x.handle as store_handle, x.store_connection_id as shop_conn
+from new_juo n
+left join cma.sources() s on s.connection_id = n.connection_id and s.key = n.key
+left join cma.subscription_store_connection_of('<tenant_id>', n.connection_id) x on true
+order by n.handle;
+reset role;
+```
+Expected: one row of three values; `SELECT 11`; eleven empty results from `set_connection_kind` and eleven from `set_connection_settings`; then eleven rows, one per handle, with `name` `Juo <CC>`, `ok` true, `store_handle` the same handle and `shop_conn` the store's Shopify connection (9.6's `<shop conn>`). Copy the `juo_conn` column into the report (the ids are not secrets). An empty `ok`: no connection matched that id and key (the Run was cut in two: run it whole). An empty `store_handle`: no commerce store has that handle (phase 9's store row for that store; stop for that store and report it; the others go on). **Browser:** Configuration → Sources lists **Juo AT** to **Juo SE** with the kind **Subscriptions**, `0` events and, under Last read, `–` with no reads yet.
+
+**(d) The poll paused for the backfills.** The scheduled poll would read the new stores from (c) on (their first poll takes the last 24 hours of events, with the subscriptions those events touched) while the backfills walk the same stores. It is paused for the duration and resumed in (h) (OPERATIONS 5; Night default N4). The nightly reconcile at 03:30 is not paused: do (c) to (f) before it.
+
+**Terminal**
+```bash
+gcloud scheduler jobs pause ingest-poll-subscriptions --location=europe-west4 --project=p4a-cma-prod && gcloud scheduler jobs describe ingest-poll-subscriptions --project=p4a-cma-prod --location=europe-west4 --format='value(state)'
+```
+Expected: gcloud's confirmation, then `PAUSED`. An execution already running finishes on its own (task timeout 10 minutes); the Juo GB poll keeps its cursors, so nothing is lost.
+
+**(e) The dry run of the subscriptions, every store in one execution.** One `backfill dry run` line per store (the GB store included: twelve), nothing written. The events dry run of 15.6 is not repeated for the other stores: the GB pilot confirmed Juo's paths, query forms and event types (Night default N3).
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;subscription;--dry-run'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` within about ten minutes (100 subscriptions a page, two requests a second per store, the stores one after the other). `Execution [ingest-backfill-…] failed` means a store's read failed and the job exited 1: the others still ran; the next block names the store and its code.
+
+**Terminal** (the twelve lines, counts and statuses only, oldest first; then the finished line's per-store results)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run" AND jsonPayload.object="subscription"' --project=p4a-cma-prod --freshness=1h --limit=12 --order=asc --format='value(jsonPayload.connection,jsonPayload.fetched,jsonPayload.mapped,jsonPayload.unreadable,jsonPayload.statuses,jsonPayload.instrumentKnown,jsonPayload.withoutCustomer,jsonPayload.customersUnmatched,jsonPayload.apiCalls)'
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill finished" AND jsonPayload.adapter="juo"' --project=p4a-cma-prod --freshness=1h --limit=1 --format='value(jsonPayload.connections,jsonPayload.served,jsonPayload.skipped,jsonPayload.failed,jsonPayload.results)'
+```
+Expected: twelve lines, one per Juo connection in id order (the GB one first, the oldest id), each with `fetched` the store's subscriptions (Juo's admin shows the count), `mapped` the same, `unreadable` 0, `statuses` per status, `instrumentKnown` close to `mapped`, `withoutCustomer` 0 and `customersUnmatched` the customers the CMA does not hold (high until 15.11: a store's customers are held from 1 October 2026 only); then `12 12 0 0` and `results` with a row per connection. A connection in `results` with `skipped: key_not_set` has no secret name (its (c) row); one with an `error`: `token_unavailable` (its secret or accessor, (a) and (b)), `key_rejected` (another store's key pasted at its prompt: (a) again for that store), `store_not_configured` ((c)'s `store_handle` was empty), `rate_limited` (run the dry run again), `http_<status>` (report it). Fix the store and run this block again: the others cost nothing but their reads. Write the twelve lines into the report.
+
+**(f) The backfills: the events, then the subscriptions, every store in one execution.** The events first: a paused subscription's `paused_at` comes from its pause event, and the events backfill moves each store's poll cursor to its own start. Every store's events from 2024-01-01, as the GB store's (Night default N2; the log's `from` reads 23:00Z, midnight in Amsterdam). The GB store reads nothing again (its finished backfill has the same start) and its subscription read is the nightly full read brought forward.
+
+**Terminal** (unattended; keep the tab open, or run it under `nohup` as 9.6 does)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;subscription_event;--from;2024-01-01'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`, 30 to 90 minutes. A failed execution (`failed`, exit 1) is run again with the same arguments once the store's problem is fixed: every store continues from its cursor, and a finished store reads nothing.
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;subscription'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`, 5 to 15 minutes.
+
+**Terminal** (the two finished lines: served, skipped, failed, the per-store results)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill finished" AND jsonPayload.adapter="juo"' --project=p4a-cma-prod --freshness=3h --limit=2 --format='value(timestamp,jsonPayload.connections,jsonPayload.served,jsonPayload.skipped,jsonPayload.failed,jsonPayload.results)'
+```
+Expected: two lines, each `12 12 0 0` and `results` with one row per connection: the events run with `object subscription_event`, `events_new`, `skipped` (the other types), `reason_dropped` and no `error`; the subscriptions run with `object subscription`, `fetched` and `inserted` as (e)'s `mapped` per store (the GB row `unchanged` instead), `customers_unmatched` as (e)'s, `missing_now` 0. A row with `error`: as (e); `skipped_after_failure` on a later object of the same connection means that connection stopped at its first failure.
+
+**(g) The checks, grouped by store.** 15.8's checks for every Juo connection in one Run (read only; counts only, no customer row). The email pattern is written with a single backslash before the dot (`\.`): the doubled form never matches (Martin, 4 November 2026).
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+j as (select c.id, c.name from cma.integration_connection c where c.tenant_id = (select id from t) and c.adapter = 'juo' and c.status = 'active')
+select j.name, r.job, r.stream, r.status, r.error, r.counts, r.started_at, r.finished_at
+from j join cma.sync_run r on r.tenant_id = (select id from t) and r.connection_id = j.id
+where r.job = 'backfill' and r.started_at > now() - interval '12 hours'
+order by j.name, r.started_at;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+j as (select c.id, c.name from cma.integration_connection c where c.tenant_id = (select id from t) and c.adapter = 'juo' and c.status = 'active')
+select j.name, s.status, count(*) as subscriptions, count(*) filter (where s.customer_source_id is null) as without_customer,
+       count(*) filter (where s.payment_instrument_type is null) as instrument_unknown
+from j join cma.subscription s on s.tenant_id = (select id from t) and s.connection_id = j.id and s.source_deleted_at is null
+group by 1, 2 order by 1, 2;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+j as (select c.id, c.name from cma.integration_connection c where c.tenant_id = (select id from t) and c.adapter = 'juo' and c.status = 'active')
+select j.name, e.event_type, count(*) as events, min(e.occurred_at)::date as first, max(e.occurred_at)::date as last
+from j join cma.subscription_event e on e.tenant_id = (select id from t) and e.connection_id = j.id
+group by 1, 2 order by 1, 2;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+j as (select c.id, c.name from cma.integration_connection c where c.tenant_id = (select id from t) and c.adapter = 'juo' and c.status = 'active')
+select j.name, p.payment_state, count(*) as subscriptions
+from cma.subscription_payment_state_of((select id from t)) p join j on j.id = p.connection_id
+group by 1, 2 order by 1, 2;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select count(*) filter (where to_jsonb(s)::text ~ '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}') as subscriptions_with_an_email,
+       (select count(*) from cma.subscription_event e where e.tenant_id = (select id from t)
+          and to_jsonb(e)::text ~ '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}') as events_with_an_email
+from cma.subscription s where s.tenant_id = (select id from t);
+reset role;
+```
+Expected:
+- the runs: per store `backfill | subscription_event | succeeded` with `events_new`, `skipped` and `reason_dropped`, then `backfill | subscription | succeeded` with `fetched` and `inserted` as (e)'s `mapped` for that store (the GB store's with `unchanged`), `customers_unmatched` as (e)'s, `missing_now` 0; no `failed`;
+- the subscriptions per store and status as (e)'s `statuses`, `without_customer` 0 and `instrument_unknown` small; a store that sells nothing yet (ES, FI, IE, IT on 4 November 2026) has no rows here and zeros on Flash (15.12);
+- the events per store and type (`renewed`, `renew_failed`, `status_changed`, `canceled`, `paused`, `resumed`, `reactivated`), the first on or after 1 January 2024;
+- the payment states per store: `canceled`, `failed`, `in_retry`, `paid`, `paused` (no row for a state no subscription is in); `paid` and `in_retry` together the store's active subscriptions;
+- `subscriptions_with_an_email` 0 and `events_with_an_email` 0. Above 0: stop and report it before (h).
+
+**Browser:** Juo's admin of two or three stores (the largest, NL, and a small one): the active, paused and canceled counts against the statuses above (the same, give or take subscriptions changed since (f)). Copy the figures into the report.
+
+**(h) The schedule, the next poll, System health, Sources.** The first scheduled run after the resume is due at once for the eleven new connections (no cadence yet) and reads each store's events since its events backfill's start less five minutes; the GB connection reads since its own cursor.
+
+**Terminal**
+```bash
+gcloud scheduler jobs resume ingest-poll-subscriptions --project=p4a-cma-prod --location=europe-west4 && gcloud scheduler jobs describe ingest-poll-subscriptions --project=p4a-cma-prod --location=europe-west4 --format='value(state,schedule,timeZone)'
+```
+Expected: gcloud's confirmation, then `ENABLED	*/5 * * * *	Europe/Amsterdam`.
+
+Wait for the next five minutes.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+j as (select c.id, c.name from cma.integration_connection c where c.tenant_id = (select id from t) and c.adapter = 'juo' and c.status = 'active')
+select j.name, r.status, r.error, r.counts ->> 'fetched' as fetched, r.counts ->> 'events_new' as events_new, r.counts ->> 'updated' as updated,
+       r.counts ->> 'inserted' as inserted, r.started_at
+from j join cma.sync_run r on r.tenant_id = (select id from t) and r.connection_id = j.id
+where r.job = 'subscriptions_poll' and r.started_at > now() - interval '15 minutes'
+order by j.name, r.started_at;
+reset role;
+```
+Expected: twelve rows `succeeded`, one per connection, each with the events since its backfill (`events_new`, small) and the subscriptions they touched; no `failed`. A connection without a row: its poll is not due yet (within five minutes it is), or it was skipped (`key_not_set`: its secret name) — the log line `poll-subscriptions: connection skipped` names it.
+
+**Browser:** Workspace → Configuration → System health: the row **Subscriptions poll** with its last run succeeded, and every **Juo** connection OK. Configuration → Sources: every Juo row with a Last read of a few minutes ago, `Subscriptions poll` under it and `1 read in 24 hours` (or more), no warning badge; Juo GB with its reads of the day. Open **Juo NL**: its Reads panel lists the poll, the two backfills and, after 03:30, the reconcile, each with its counts. Reports → Flash: 15.12.
+
+Expected: as written. Day one as 15.9: about 288 `subscriptions_poll` `succeeded` rows per connection, 12 × 288 in all, and one `reconcile` per connection after 03:30; a `failed` with `rate_limited` now and then needs no action; several a day: report them. **Records:** the outputs of (a) to (h) into `records/0008zq-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
+
+## 15.11 Store customers from each store's start (addition 0008zq)
+
+Flash's Active customers and the Juo customer match need every store customer, not only those changed since 1 October 2026 (9.8's window): the GB store held 5,840 customers and matched every subscription (15.5, 0 unmatched), the NL store held 1,874 on 14 October 2026 and its subscriptions would mostly join nothing. One execution reads every store's customers from the store's start (Night default N5: `--from 2000-01-01`, before any store's first sale; a new start walks the customers anew, `created_at` ascending, paced by each shop's own cost bucket; the CH store is included and harmless, it has no customers). Orders stay as they are: Shopify's `read_orders` covers the last 60 days and `read_all_orders` is not granted (Open decisions, Shopify backfill window). Each customer not linked to a contact yet costs one HubSpot search at one per 400 ms (about seven minutes per thousand), within the CRM connection's daily floor: a paused run (`daily_floor`) is continued by the same command the next day, from its cursor. Unattended; 1 to 4 hours for the fourteen stores.
+
+**Studio (cma-prod-pg)** (read only: the customers held per store, before)
+```sql
+set role cma_owner;
+select s.handle, s.market, count(cu.id) as customers_held,
+       count(cu.id) filter (where cu.orders_count >= 1) as with_an_order,
+       count(cu.id) filter (where cu.crm_contact_source_id is not null) as linked_to_a_contact,
+       min(cu.source_created_at)::date as oldest_created
+from cma.commerce_store s
+join cma.tenant t on t.id = s.tenant_id and t.slug = 'pulse4all-subscriptions'
+left join cma.commerce_customer cu on cu.tenant_id = s.tenant_id and cu.connection_id = s.connection_id and cu.source_deleted_at is null
+group by s.handle, s.market order by s.handle;
+reset role;
+```
+Expected: fourteen rows; `pulse4all` near 5,840 with `oldest_created` years back; the others with `oldest_created` near October 2026 and far below their Shopify admin's customer count. Write them into the report.
+
+**Terminal** (unattended; keep the tab open, or under `nohup` as 9.6)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;shopify;--object;commerce_customer;--from;2000-01-01'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` A `failed` execution: the finished line (the `backfill finished` read of 15.10 (f), with `jsonPayload.adapter="shopify"`) names the store and its code; the same command continues every store from its cursor. A store paused at the daily floor shows `backfill paused` with `daily_floor`: the same command tomorrow.
+
+**Studio (cma-prod-pg)**: the customers block above again.
+
+Expected: every store's `customers_held` close to the customer count in its Shopify admin (Customers), `oldest_created` near the store's first sales day and `linked_to_a_contact` grown (a customer without a contact in HubSpot stays unlinked, by design). Then 16.8's `linked_contact` backfill (its last block: the contacts the new links point to that the sweep's hourly window did not take in), and 15.10 (g)'s subscriptions block again: `without_customer` stays 0 and Data quality's `subscription_customer_unmatched` falls to the subscriptions whose customer the store itself no longer holds.
+
+What stays open: the retention of the keyed phone hashes of customers older than a year (Open decisions, Indirect sales: no retention job exists for call data either), to settle with Yordi; the orders before 1 October 2026 (Open decisions, Order history before 1 October 2026).
+
+## 15.12 Flash coverage per market (addition 0008zq)
+
+16.8's coverage checks extended to every market, after 15.10 and 15.11. A market with a store and no subscriptions (ES, FI, IE, IT on 4 November 2026; NO until Juo is installed there) shows zeros on Flash, not "not set up": a source is set up for the tenant, not per market (`cma.flash_sources_of`: subscriptions set up when any subscriptions connection resolves to a store), the market list is the tenant's active markets (`cma.flash_page`), and a market filter without rows answers zero totals (`cma.flash_document_of`); verified against a local database with two stores, one empty (`docs/night-2026-11-05/local-records/db/flash-two-stores-one-empty.txt`), nothing to fix.
+
+**Studio (cma-prod-pg)** (read only: subscriptions per store and status, the stores without a Juo connection, active customers per market, churn's ended statuses, payments)
+```sql
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select coalesce(s.handle, split_part(c.external_account_id, '.', 1)) as store, s.market, sb.status, count(*) as subscriptions,
+       count(cu.id) as customer_held, min(sb.source_created_at)::date as oldest_created
+from cma.subscription sb
+join cma.integration_connection c on c.tenant_id = sb.tenant_id and c.id = sb.connection_id
+left join cma.commerce_store s on s.tenant_id = sb.tenant_id and s.handle = split_part(c.external_account_id, '.', 1)
+left join cma.commerce_customer cu on cu.tenant_id = sb.tenant_id and cu.connection_id = s.connection_id
+     and cu.source_id = sb.customer_source_id and cu.source_deleted_at is null
+where sb.tenant_id = (select id from t) and sb.source_deleted_at is null
+group by 1, 2, 3 order by 1, 3;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select s.handle, s.market from cma.commerce_store s
+where s.tenant_id = (select id from t)
+  and not exists (select 1 from cma.integration_connection c
+                  where c.tenant_id = s.tenant_id and c.adapter = 'juo' and c.status = 'active'
+                    and split_part(c.external_account_id, '.', 1) = s.handle)
+order by 1;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select s.market, count(distinct cu.id) as customers_held,
+       count(distinct cu.id) filter (where exists (select 1 from cma.subscription sb
+                                                   where sb.tenant_id = cu.tenant_id and sb.customer_source_id = cu.source_id and sb.source_deleted_at is null
+                                                     and sb.status = any (cma.flash_active_statuses_of((select id from t))))) as with_an_active_subscription
+from cma.commerce_store s
+left join cma.commerce_customer cu on cu.tenant_id = s.tenant_id and cu.connection_id = s.connection_id and cu.source_deleted_at is null
+where s.tenant_id = (select id from t)
+group by 1 order by 1;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select cma.flash_ended_statuses_of((select id from t)) as churn_ended_statuses, cma.flash_active_statuses_of((select id from t)) as active_statuses;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+select s.market, count(*) filter (where o.source_created_at >= now() - interval '30 days') as orders_30d,
+       count(*) filter (where o.source_created_at >= now() - interval '30 days' and o.order_kind = 'renewal') as renewals_30d
+from cma.commerce_store s
+join cma.commerce_order o on o.tenant_id = s.tenant_id and o.connection_id = s.connection_id and o.source_deleted_at is null
+where s.tenant_id = (select id from t)
+group by 1 order by 1;
+reset role;
+```
+Expected: the first result one row per store, status and market for the twelve Juo stores (no row for a store that sells nothing yet: rows for AT, BE, DE, DK, FR, GB, NL and SE on 4 November 2026), `customer_held` equal or close to `subscriptions` after 15.11; the second result `pulse4all-ch` (CH is not live) and `pulse4all-no` (no Juo yet); the third one row per market, `with_an_active_subscription` what Flash's Active customers shows per market (0 for a market without subscriptions); the fourth `{canceled,expired}` and the active statuses as Decision log 2 November 2026 left them; the fifth one row per market with orders in the last 30 days and the renewals among them (the stores without sales absent).
+
+**Browser:** Reports → Flash with All markets: Active customers, Active subscriptions, Churn and Payments with figures (never "not set up"), the sources line with Subscriptions read a few minutes ago. Then each market that has subscriptions (AT, BE, DE, DK, FR, GB, NL, SE): the four overviews with that market's figures; open Active subscriptions → the breakdown per store, status and payment state against 15.10 (g). Then a market without subscriptions (ES, FI, IE, IT, and NO until Juo is installed there): zeros on Active subscriptions and Churn, Active customers 0 with the customers held in the breakdown, Payments with that store's orders (if any), no "not set up" card.
+
+Expected: as written. After the next hourly take (`cma-snapshot-flash-hourly`): the watch's `source_stale` covers twelve subscriptions connections (0008zo: each connection's cadence from its own poll, five minutes, at least `flash.watch_stale_min_minutes`), so a store whose poll stops for a quarter of an hour raises one finding naming that connection and no other. **Records:** the outputs into `records/0008zq-prod-<date>/` with 15.10's.
 
 # Phase 16. Flash in prod (addition 0008zn)
 

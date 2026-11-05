@@ -1,0 +1,45 @@
+verify/assets-flow.mjs
+
+PASS  A1 no route for the polling-only adapter: its own key and an unknown key → 404 got [404,404]
+PASS  B1 the first poll: one run assets_poll, stream devices, succeeded; fetched 201, the load's counts (one address as a customer id) got [1,0,[["assets_poll","devices","succeeded",201,201,201,201,0,1,0]]]
+PASS  B2 the devices: model, market and status through the catalogs, the customer reference, dates (ISO, a formula's, a text one in dmy), components, ids got [201,{"source_id":"recFixture0001aaa","serial":"FX-TEST-0001","model_k
+PASS  B3 the address as a customer id: no reference, flagged invalid; the lookup's list read; nothing missing (a partial batch) got [null,true,"NL",0]
+PASS  B4 no staged row left, no run of the file import's job           got [0,0]
+PASS  B5 the run's log line: counts, the chunks (three of at most 100), the details and the requests per endpoint; the cursors at the run's start got [201,3,20,1,1,{"GET /{id}/{id}":3,"GET /meta/bases/{id}/tables":1},tru
+PASS  B6 the run's counts carry the load's phase times, whole milliseconds summed over the chunks (no staging to clean up) got [true,0,0]
+PASS  B7 the first poll recorded the 20 mapped fields' types by field id, in lower case got [20,true,"date","singleselect"]
+PASS  C1 a second poll within the interval (15 minutes): not due, no request, no run got [1,0,1]
+PASS  C2 the next poll asks for the records modified after its cursor less five minutes got "IS_AFTER(LAST_MODIFIED_TIME(), DATETIME_PARSE(\"2026-11-04T16:31:11.4
+PASS  C3 only the changed records loaded: updated 2, one's pads replaced; the record the register dropped not marked missing got [2,2,1,false,2]
+PASS  C4 a field emptied in Airtable (left out of the record) is written empty, never kept: the subscription reference null, the serial as it was got [null,"FX-TEST-0003"]
+PASS  C4b a kind emptied in Airtable (both its fields) closes the device's component: replaced_at, no new row, counted; its item due unknown; the run's slowest chunk recorded got [1,0,1,[["unknown",null]],true]
+PASS  D1 the reconcile: one run (stream device) succeeded, every record read, the dropped one marked missing, the rest unchanged got [0,[["device","succeeded",200,200,1,200,0]],["recFixture0007aaa"]]
+PASS  D1b the reconcile's run records its slowest chunk and its slowest slice (whole milliseconds), components_closed 0 on the rerun got [true,true,0]
+PASS  D2 the run's two pages asked the 20 mapped fields only, by field id, no filter, no view, authorized got [[20,true,null,null,true],[20,true,null,null,true]]
+PASS  D3 the run's final step in slices of the chunk's size: two chunks of at most 100, two slices got [2,2,200]
+PASS  D4 an expired paging fails the reconcile paging_expired before it loads anything: nothing marked missing, the cursor kept, logged got [1,"failed","paging_expired",0,1,true,"paging_expired"]
+PASS  D5 the next reconcile reads from the first page again and succeeds, nothing new missing got [0,null,0]
+PASS  E1 a connection without a token secret name: the poll and the reconcile skip it (csv_only, one line each), no run; the backfill refuses got [1,1,2,0,"usage"]
+PASS  F1 a 429 fails the run (rate_limited), logged; the cursor stays  got [1,"failed","rate_limited",true,1793810172260]
+PASS  F2 the next run carries on                                       got [0,"succeeded"]
+PASS  F3 a field renamed in Airtable changes nothing (its id stays): the poll succeeds got [0,"succeeded",null]
+PASS  F3b a changed type: the run fails field_type_changed before a record is read; the log names the field (id, name) and both types got ["failed","field_type_changed","fldFixture0000014","pads_expiry_date_c
+PASS  F4 a text date without date_format: the backfill fails date_format_not_set, the log names the field (id and name); nothing written got [1,"date_format_not_set","fldFixture0000012","aed_expected_end_of_life
+PASS  G1 the dry run lists the table's fields (id, name, type) and reads and counts: fetched, mapped, the fields, date failures, values with an @, unknown fields got [200,200,20,25,1,1,0,0,{"id":"fldFixture0000000","name":"aed_sn","type
+PASS  G2 …and writes nothing: no run, no staged row, the cursor as it was got [0,0,true]
+PASS  G3 the backfill: a full snapshot on demand (stream device), every record unchanged, nothing new missing got [0,"device","succeeded",200,200,0]
+PASS  G4 a backfill of device takes no --from                          got "usage"
+PASS  H1 tenant two's register loads into tenant two only; tenant one's devices as they were got [0,30,true,201,30]
+PASS  H1b a field deleted in tenant two's register: the poll fails unknown_field, the log naming the field's id got ["failed","unknown_field","fldFixture0000007"]
+PASS  H2 no request asked for a field outside the mapping or by name, none for a view; every one carried the token got [0,0,true]
+PASS  H3 no name, address, editor or note in any row of the run's tenants (audit log included) got []
+PASS  H4 the logs hold no token and no value: connection ids, counts, codes and field names got []
+PASS  H5 nothing written to another tenant by this run's logins        got []
+PASS  I1 a chunk slower than a third of the statement timeout halves the next (400, then 200): the run succeeds, chunk_halvings 1, chunk_size_min 200 got [0,[400,200],"succeeded",1,200,true,400,true]
+PASS  I2 a chunk the statement timeout cancels (57014) is sent again once at half its size (400 cancelled, then 200, 200, 200): the run succeeds, the log names it got [0,[400,200,200,200],"succeeded",1,200,600,0,true]
+PASS  I3 cancelled again while its rows are sent again: the run fails (db_57014) before its final step, no slice sent, nothing marked missing got [1,[400,200],"failed","db_57014",0,0]
+pool: poll-assets 10 runs, peak 1, work 1; reconcile 7 runs, peak 1, work 1; backfill 5 runs, peak 1, work 1
+PASS  P1 every job's run kept to the jobs' pool of 2: its work on one connection at a time (the lock the other), no wait on its own pool got [true,[]]
+
+ALL 39 PASS
+exit 0

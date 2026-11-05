@@ -1,0 +1,72 @@
+===== block 2
+SET
+ name | job | stream | status | error | counts | started_at | finished_at 
+------+-----+--------+--------+-------+--------+------------+-------------
+(0 rows)
+
+ name | status | subscriptions | without_customer | instrument_unknown 
+------+--------+---------------+------------------+--------------------
+(0 rows)
+
+ name | event_type | events | first | last 
+------+------------+--------+-------+------
+(0 rows)
+
+ name | payment_state | subscriptions 
+------+---------------+---------------
+(0 rows)
+
+ subscriptions_with_an_email | events_with_an_email 
+-----------------------------+----------------------
+                           0 |                    0
+(1 row)
+
+RESET
+===== block 3
+SET
+ name | status | error | fetched | events_new | updated | inserted | started_at 
+------+--------+-------+---------+------------+---------+----------+------------
+(0 rows)
+
+RESET
+===== block 4
+SET
+      handle      | market | customers_held | with_an_order | linked_to_a_contact | oldest_created 
+------------------+--------+----------------+---------------+---------------------+----------------
+ juo-7b7bc83f-one | GB     |            200 |             0 |                   0 | 
+(1 row)
+
+RESET
+===== block 5
+SET
+      store       | market |      status      | subscriptions | customer_held | oldest_created 
+------------------+--------+------------------+---------------+---------------+----------------
+ juo-7b7bc83f-one | GB     | active           |           224 |           200 | 2026-01-08
+ juo-7b7bc83f-one | GB     | canceled         |             1 |             0 | 2026-01-08
+ juo-7b7bc83f-one | GB     | expired          |             1 |             0 | 2026-01-08
+ juo-7b7bc83f-one | GB     | failed           |             1 |             0 | 2026-01-08
+ juo-7b7bc83f-one | GB     | merged           |             1 |             0 | 2026-01-08
+ juo-7b7bc83f-one | GB     | never-subscribed |             1 |             0 | 2026-01-08
+ juo-7b7bc83f-one | GB     | paused           |             1 |             0 | 2026-01-08
+(7 rows)
+
+      handle      | market 
+------------------+--------
+ juo-7b7bc83f-one | GB
+(1 row)
+
+ market | customers_held | with_an_active_subscription 
+--------+----------------+-----------------------------
+ GB     |            200 |                         200
+(1 row)
+
+ churn_ended_statuses | active_statuses 
+----------------------+-----------------
+ {canceled,expired}   | {active}
+(1 row)
+
+ market | orders_30d | renewals_30d 
+--------+------------+--------------
+(0 rows)
+
+RESET

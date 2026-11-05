@@ -1,0 +1,60 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+                   set_config                   
+------------------------------------------------
+ [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+(1 row)
+
+psql:<repo>/db/119_verify_subscriptions.sql:47: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                               check_name                                                                | result |                                                                                                                                            detail                                                                                                                                            
+-----------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zl recorded, after 0008zk                                                                                               | PASS   | 
+ A2 both tables tenant-aware (RLS, policy, audit); no delete by the application, no update of an event                                   | PASS   | 
+ A3 the unique keys (tenant_id, connection_id, source_id) and (tenant_id, id) on both tables                                             | PASS   | 
+ A4 the job subscriptions_poll and the connection kind subscriptions                                                                     | PASS   | 
+ A5 every function the application's only and invoker; the reader function the readers' only, definer, pinned                            | PASS   | 
+ A6 the reader views (no raw), readable by readers                                                                                       | PASS   | 
+ A7 the settings by form: the poll interval from 1 to 60, the pace from 1 to 10                                                          | PASS   | ok ok ok ok subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes subscriptions_max_per_second subscriptions_max_per_second subscriptions_max_per_second ok
+ B1 the store of a connection by the handle in its account id; none without a store                                                      | PASS   | verify-store-1 true null
+ B2 the upserts as the Ingest user: inserted, the customers matched, a rerun unchanged, paused_at from the pause event                   | PASS   | inserted:11 | sub-canceled:inserted:true sub-expired:inserted:true sub-failed:inserted:- sub-merged:inserted:true sub-never:inserted:true sub-paid:inserted:true sub-paused:inserted:true sub-renewed:inserted:false sub-retry:inserted:true | unchanged:11 unchanged:9 | 2026-10-12 08:30 1
+ B3 a stale subscription left as it is; a later change updated                                                                           | PASS   | stale 4 updated 2026-12-15
+ B4 the payment state of each case: failed, paused, canceled, in_retry, paid, paid after a renewal; merged and never-subscribed left out | PASS   | sub-canceled:canceled sub-expired:canceled sub-failed:failed sub-paid:paid sub-paused:paused sub-renewed:paid sub-retry:in_retry:6/2026-10-25/2
+ B5 the failed cycle renewed: paid; the next cycle failed: in_retry again; a missing subscription has no state                           | PASS   | paid in_retry:7 0
+ B6 events append-only: no update or delete by the application, no subscription deleted; an event sent again unchanged                   | PASS   | 42501 42501 42501 unchanged renew_failed/1
+ B7 row-level security: each Ingest user writes and sees its own tenant only; the reader views the reader's tenant                       | PASS   | inserted CMA02 CMA02 1/0 0 0 9 | 9/13/7 0
+ B8 refused: no store (store_not_configured), no token secret name, a CRM connection; a person writes nothing                            | PASS   | CMA04: store_not_configured | CMA04 CMA04 CMA04 CMA04 CMA06 CMA06
+ B9 items out of form refused: a status, an actor id of no staff, a raw key, an @, a free-text reason, twice, a space, 501               | PASS   | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 0
+ B10 the final step in slices marks what the full read did not return; out of range refused; the next read brings them back              | PASS   | 2 0 sub-merged,sub-never CMA04 CMA04 CMA04 CMA04 updated,updated 0
+ B11 the settings: the poll interval from 1 to 60 and the pace from 1 to 10 on a subscriptions connection                                | PASS   | ok CMA04 CMA04 ok {"subscriptions_max_per_second": 2, "subscriptions_poll_interval_minutes": 5}
+ B12 the kinds: a connection holding subscriptions is of kind subscriptions only                                                         | PASS   | CMA03 subscriptions ok
+ B13 the run: job subscriptions_poll with events_new, customers_unmatched and reason_dropped; another key refused                        | PASS   | ok subscriptions_poll/subscriptions/succeeded/11/1/2 CMA04
+ B14 audit rows for both tables: every insert and update, the inserts by the Ingest user                                                 | PASS   | subscription:insert:9 subscription:update:7 subscription_event:insert:13 true
+ B15 no column of either table, and no audit row of theirs, holding an email pattern after the fixtures                                  | PASS   | 0 0 0 10/13
+ Z1 every subscription and event row of the database: no column holding an email pattern                                                 | PASS   | 0 of 0 subscriptions, 0 of 0 events
+ verdict                                                                                                                                 | PASS   | 119_verify_subscriptions: 23 PASS, 0 FAIL
+(24 rows)
+
+RESET

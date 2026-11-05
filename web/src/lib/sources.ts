@@ -396,3 +396,38 @@ export function emailMarketSteps(value: string | null | undefined): ("contact" |
   const ok = parts.length > 0 && parts.every((p) => (all as readonly string[]).includes(p)) && new Set(parts).size === parts.length;
   return ok ? (parts as ("contact" | "form" | "record" | "inbox")[]) : [...all];
 }
+
+// ---- Sources: a connection's reads (addition 0008zq) --------------------------------------------------------
+
+/** What the Last read cell says about a connection: no read yet, read without a failure in 24 hours, or a failure to look at */
+export function readState(s: { lastReadAt: string | null; readsFailed24h: number }): "none" | "ok" | "attention" {
+  if (s.readsFailed24h > 0) return "attention";
+  return s.lastReadAt ? "ok" : "none";
+}
+
+/** A run's job as its label on screen (System health's job labels), the job's own word when the copy has none */
+export function jobLabel(job: string | null, labels: Partial<Record<string, string>>): string | null {
+  if (!job) return null;
+  return labels[`job_${job}`] ?? job;
+}
+
+/** The reads caption: one read, n reads (the copy's two forms), nothing for 0 */
+export function readsCaption(n: number, one: string, many: string): string | null {
+  if (n <= 0) return null;
+  return n === 1 ? one : many.replace("{n}", String(n));
+}
+
+/** A run's duration in whole seconds, null while it runs or when its instants cannot be read */
+export function readDurationSeconds(startedAt: string, finishedAt: string | null): number | null {
+  if (!finishedAt) return null;
+  const a = Date.parse(startedAt);
+  const b = Date.parse(finishedAt);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.max(0, Math.round((b - a) / 1000));
+}
+
+/** A run's counts as System health writes them: the keys above 0, "fetched 7, events_new 2"; null when none */
+export function readCountsText(counts: Record<string, number>): string | null {
+  const parts = Object.entries(counts).filter(([, v]) => typeof v === "number" && v > 0).map(([k, v]) => `${k} ${v}`);
+  return parts.length ? parts.join(", ") : null;
+}

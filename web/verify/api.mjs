@@ -1094,14 +1094,15 @@ async function sourceChecks() {
     call(s, path, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
   const cfgS = "/api/v1/configuration";
   const KNOWN = ["id", "key", "adapter", "name", "accountId", "kind", "heldKinds", "isActive", "signingSecretName", "tokenSecretName", "settings",
-    "events24h", "eventsWaiting", "eventsParked", "lastEventAt", "pipelines", "forms", "callOutcomes", "fields", "lines", "tags", "storeHandle"].sort();
+    "events24h", "eventsWaiting", "eventsParked", "lastEventAt", "pipelines", "forms", "callOutcomes", "fields", "lines", "tags", "storeHandle",
+    "lastReadAt", "lastReadJob", "reads24h", "readsFailed24h", "lastReadError"].sort();
 
   expect("sources: an agent cannot read the connections", (await get(AGENT, `${cfgS}/sources`)).status, 403, 200);
   expect("sources: the manager cannot read them either", (await get(MANAGER, `${cfgS}/sources`)).status, 403, 200);
   const list = await get(ADMIN, `${cfgS}/sources`);
   const sources = list.body?.data ?? [];
   expect("sources: the admin reads every connection with its kind",
-    [list.status, Array.isArray(list.body?.data), sources.every((c) => [null, "crm", "telephony", "commerce", "automation"].includes(c.kind) && Array.isArray(c.heldKinds))],
+    [list.status, Array.isArray(list.body?.data), sources.every((c) => [null, "crm", "telephony", "commerce", "automation", "reviews", "assets", "subscriptions"].includes(c.kind) && Array.isArray(c.heldKinds))],
     [200, true, true], [403, false, true]);
   expect("sources: no secret value, only names and non-secret settings",
     sources.every((c) => JSON.stringify(Object.keys(c).sort()) === JSON.stringify(KNOWN) && Object.keys(c.settings ?? {}).every((k) => !/(secret|token|password|key)/i.test(k))),
@@ -1119,6 +1120,14 @@ async function sourceChecks() {
     expect("sources: the admin opens one connection with its catalogs",
       [one.status, d?.connection?.id, ["pipelines", "forms", "callOutcomes", "lines", "tags", "fields", "writeback"].every((k) => Array.isArray(d?.[k]))],
       [200, src.id, true], [404, null, true]);
+    // the connection's reads (addition 0008zq): at most 20, newest first, codes and counts only
+    const READ_KEYS = ["runId", "job", "stream", "startedAt", "finishedAt", "status", "counts", "error"].sort();
+    const reads = Array.isArray(d?.reads) ? d.reads : null;
+    expect("sources: the connection carries its reads: at most 20 runs, newest first, each with its keys, a status of the three, counts as numbers and no value",
+      [reads !== null, (reads ?? []).length <= 20,
+        (reads ?? []).every((r, i, a) => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(READ_KEYS) && ["running", "succeeded", "failed"].includes(r.status)
+          && Object.values(r.counts ?? {}).every((v) => Number.isInteger(v)) && (r.error === null || /^[a-z0-9_]+$/.test(r.error)) && (i === 0 || a[i - 1].startedAt >= r.startedAt))],
+      [true, true, true], [false, false, false]);
     const settingsBefore = d?.connection?.settings ?? {};
     expect("sources: a settings write needs the request header", (await sj(ADMIN, "PUT", `${base}/settings`, { settings: settingsBefore }, {})).status, 400, 200);
     expect("sources: a cross-site settings write is refused",

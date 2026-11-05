@@ -1,0 +1,118 @@
+BEGIN
+SET
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+INSERT 0 3
+SET
+              set_config              |              set_config              | set_config 
+--------------------------------------+--------------------------------------+------------
+ 01a1a76d-4c67-7357-b379-a9e258d6a19d | 01a1a76d-4c89-7358-b61b-52eb53e7ccd6 | verify:n05
+(1 row)
+
+ upsert_market | upsert_market 
+---------------+---------------
+               | 
+(1 row)
+
+SELECT 2
+ set_connection_kind 
+---------------------
+ 
+ 
+(2 rows)
+
+ set_connection_settings 
+-------------------------
+ 
+ 
+(2 rows)
+
+ handle | cc |  name  | ok | store_handle | store_found 
+--------+----+--------+----+--------------+-------------
+ n05-gb | GB | Juo GB | t  | n05-gb       | t
+ n05-nl | NL | Juo NL | t  | n05-nl       | t
+(2 rows)
+
+ same_ids 
+----------
+        2
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a1a76d-4c87-79fa-9bab-aab37406618d
+(1 row)
+
+ outcome  | count 
+----------+-------
+ inserted |     3
+(1 row)
+
+ ingest_sync_run_finish 
+------------------------
+ 
+ 
+(2 rows)
+
+              set_config              
+--------------------------------------
+ 01a1a76d-4c89-7358-b61b-52eb53e7ccd6
+(1 row)
+
+=== flash_sources_of: subscriptions set_up and last_read_at
+                                   subscriptions_source                                    |                         commerce_source                         
+-------------------------------------------------------------------------------------------+-----------------------------------------------------------------
+ {"set_up": true, "adapters": ["juo"], "last_read_at": "2026-11-04T16:38:40.483999+00:00"} | {"set_up": true, "adapters": ["shopify"], "last_read_at": null}
+(1 row)
+
+=== flash_page: the market list and set_up per overview
+                                      markets                                      |                                                                                                      overviews                                                                                                      
+-----------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ [{"code": "GB", "name": "United Kingdom"}, {"code": "NL", "name": "Netherlands"}] | [{"key": "customers", "value": null, "set_up": true}, {"key": "subscriptions", "value": null, "set_up": true}, {"key": "churn", "value": null, "set_up": true}, {"key": "payments", "value": null, "set_up": true}]
+(1 row)
+
+=== flash_page(NL): set_up per overview for the empty market
+                                                                                                      overviews                                                                                                      
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ [{"key": "customers", "value": null, "set_up": true}, {"key": "subscriptions", "value": null, "set_up": true}, {"key": "churn", "value": null, "set_up": true}, {"key": "payments", "value": null, "set_up": true}]
+(1 row)
+
+=== flash_overview per overview and market: set_up, totals, rows
+   overview    | market | set_up |                                                     totals                                                     | rows 
+---------------+--------+--------+----------------------------------------------------------------------------------------------------------------+------
+ churn         | GB     | true   | {"churned": 0}                                                                                                 |    0
+ churn         | NL     | true   | {"churned": 0}                                                                                                 |    0
+ churn         |        | true   | {"churned": 0}                                                                                                 |    0
+ customers     | GB     | true   | {"customers_held": 2, "active_customers": 1, "paused_customers": 1, "linked_to_contact": 0}                    |    2
+ customers     | NL     | true   | {"customers_held": 1, "active_customers": 0, "paused_customers": 0, "linked_to_contact": 0}                    |    2
+ customers     |        | true   | {"customers_held": 3, "active_customers": 1, "paused_customers": 1, "linked_to_contact": 0}                    |    4
+ payments      | GB     | true   | {"amount": {}, "orders": 0, "renewals": 0, "failed_renewals": 0}                                               |    0
+ payments      | NL     | true   | {"amount": {}, "orders": 0, "renewals": 0, "failed_renewals": 0}                                               |    0
+ payments      |        | true   | {"amount": {}, "orders": 0, "renewals": 0, "failed_renewals": 0}                                               |    0
+ subscriptions | GB     | true   | {"subscriptions": 3, "amount_per_cycle": {"GBP": 29.95}, "active_subscriptions": 1, "paused_subscriptions": 1} |    4
+ subscriptions | NL     | true   | {"subscriptions": 0, "amount_per_cycle": {}, "active_subscriptions": 0, "paused_subscriptions": 0}             |    0
+ subscriptions |        | true   | {"subscriptions": 3, "amount_per_cycle": {"GBP": 29.95}, "active_subscriptions": 1, "paused_subscriptions": 1} |    4
+(12 rows)
+
+=== the subscriptions overview, all markets: every row
+                                          dims                                          |                                                    measures                                                    
+----------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------
+ {"market": "GB"}                                                                       | {"subscriptions": 3, "amount_per_cycle": {"GBP": 29.95}, "active_subscriptions": 1, "paused_subscriptions": 1}
+ {"store": "n05-gb", "market": "GB", "status": "active", "payment_state": "paid"}       | {"subscriptions": 1, "amount_per_cycle": {"GBP": 29.95}, "active_subscriptions": 1, "paused_subscriptions": 0}
+ {"store": "n05-gb", "market": "GB", "status": "canceled", "payment_state": "canceled"} | {"subscriptions": 1, "amount_per_cycle": {}, "active_subscriptions": 0, "paused_subscriptions": 0}
+ {"store": "n05-gb", "market": "GB", "status": "paused", "payment_state": "paused"}     | {"subscriptions": 1, "amount_per_cycle": {}, "active_subscriptions": 0, "paused_subscriptions": 1}
+(4 rows)
+
+=== the customers overview, all markets: the market rows
+                dims                 |                                          measures                                           
+-------------------------------------+---------------------------------------------------------------------------------------------
+ {"market": "GB"}                    | {"customers_held": 2, "active_customers": 1, "paused_customers": 1, "linked_to_contact": 0}
+ {"market": "NL"}                    | {"customers_held": 1, "active_customers": 0, "paused_customers": 0, "linked_to_contact": 0}
+ {"store": "n05-gb", "market": "GB"} | {"customers_held": 2, "active_customers": 1, "paused_customers": 1, "linked_to_contact": 0}
+ {"store": "n05-nl", "market": "NL"} | {"customers_held": 1, "active_customers": 0, "paused_customers": 0, "linked_to_contact": 0}
+(4 rows)
+
+ROLLBACK

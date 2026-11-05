@@ -1,0 +1,16 @@
+PASS  the fixture converts                                     got 0
+PASS  counts                                                   got {"rows":"30","mapped_columns":"21","ignored_columns":"31","date_parse_
+PASS  the staging header                                       got "batch_key,source_row,source_id,serial,model,status,country,warehouse_
+PASS  a row: the line, dates as YYYY-MM-DD, components and named ids as JSON got "verify-devices,2,recTESTFIX000001,TEST-SN-0001,HS1,Active/Customer,Un
+PASS  no ignored column, no address reaches the staging file; no value printed got [false,false]
+PASS  the fixture covers every data-quality case               got [1,2,1,1,2,1,2,1]
+PASS  an emptied kind an empty object; a kind whose expiry does not read left out; an @ in a component cell counted once got ["{\"pads\":{},\"battery\":{\"serial\":\"B-1\"}}","{\"battery\":{}}","
+PASS  the three formats, strictly                              got ["2024-11-15","2024-01-05","2024-11-15","2024-11-15","2024-11-15","202
+PASS  a wrong format: failures counted with line and column, never the value, the cell empty got [0,true,true,false,true]
+PASS  refused: an unknown header, a missing one, mapped and ignored, an unknown column, a kind, no source_id got [1,true,null,1,true,null,1,null,1,null,1,null,1,null]
+PASS  refused: a record id twice (its lines named), no record id, an id with an @, a cell over 500 characters got [1,true,null,1,true,null,1,true,false,null,1,null]
+PASS  usage: no or an unknown --date-format, a malformed batch key, a map that is no JSON got [2,null,2,2,2]
+PASS  the map's own checks                                     got [0,1,1,1,1]
+
+ALL 13 PASS
+exit 0

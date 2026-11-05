@@ -1,0 +1,19 @@
+PASS  frame does not scroll: /live/board at 1280x800, main scrolls
+PASS  frame does not scroll: /reports/speed-to-lead?range=month at 1280x800, main scrolls
+PASS  frame does not scroll: /reports/follow-up at 1280x800, main scrolls
+PASS  frame does not scroll: /live/board at 1920x1080, main scrolls
+PASS  frame does not scroll: /reports/speed-to-lead?range=month at 1920x1080, main scrolls
+PASS  frame does not scroll: /reports/follow-up at 1920x1080, main scrolls
+PASS  frame does not scroll: the rail at 1280x600 with reports open
+  manager /reports/funnel (week): funnel-by-market has no scroll container
+  manager /reports/funnel (day): funnel-by-source has no scroll container
+  supervisor /reports/funnel (week): funnel-by-market has no scroll container
+  supervisor /reports/funnel (day): funnel-by-source has no scroll container
+  admin /reports/funnel (week): funnel-by-market has no scroll container
+  admin /reports/funnel (day): funnel-by-source has no scroll container
+  analyst /reports/funnel (week): funnel-by-market has no scroll container
+  analyst /reports/funnel (day): funnel-by-source has no scroll container
+  reader /reports/funnel (week): funnel-by-market has no scroll container
+  reader /reports/funnel (day): funnel-by-source has no scroll container
+layout: FAIL (10 problems)
+exit 1

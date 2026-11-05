@@ -2309,6 +2309,17 @@ export interface SourceConnection {
   lines: number;
   tags: number;
   storeHandle: string | null;
+  /** The connection's reads (addition 0008zq): a polled source writes runs, never an event */
+  /** The finish of the latest succeeded run of any job, null while none succeeded */
+  lastReadAt: Instant | null;
+  /** That run's job, in the run vocabulary (reviews_poll, subscriptions_poll, assets_poll, reconcile, backfill, ...) */
+  lastReadJob: string | null;
+  /** Runs started in the last 24 hours, running ones included */
+  reads24h: number;
+  /** Of those, the failed ones */
+  readsFailed24h: number;
+  /** The latest failed run's code of the last 24 hours (a code, never a value), null without one */
+  lastReadError: string | null;
 }
 
 export interface SourcePipeline {
@@ -2496,9 +2507,28 @@ export interface SourceStore {
   timeZone: string;
 }
 
+
+/** One run of a connection as cma.source_reads answers it (addition 0008zq): the connection page's Reads panel */
+export interface SourceRead {
+  runId: string;
+  /** The job in cma.sync_run's own vocabulary (subscriptions_poll, reconcile, backfill, ...) */
+  job: string;
+  stream: string | null;
+  startedAt: Instant;
+  /** null while the run is still going */
+  finishedAt: Instant | null;
+  status: "running" | "succeeded" | "failed";
+  /** The counts the run recorded (whole numbers per key) */
+  counts: Record<string, number>;
+  /** A code the ingest writes, never a value */
+  error: string | null;
+}
+
 /** One connection with its catalogs, for its page */
 export interface SourceDetail {
   connection: SourceConnection;
+  /** The connection's last 20 runs, newest first (addition 0008zq) */
+  reads: SourceRead[];
   pipelines: SourcePipeline[];
   forms: SourceForm[];
   callOutcomes: SourceCallOutcome[];

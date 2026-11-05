@@ -8,7 +8,7 @@ import type {
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
-  AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
+  AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, InboundService, MissedReason,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
@@ -829,6 +829,7 @@ type SourceDbRow = {
   held_kinds: SourceKind[]; status: string; signing_secret_name: string | null; token_secret_name: string | null; settings: SourceSettings | null;
   events_24h: number; events_waiting: number; events_needs_review: number; last_event_at: Date | null;
   pipelines: number; forms: number; call_outcomes: number; fields: number; lines: number; tags: number; store_handle: string | null;
+  last_read_at: Date | null; last_read_job: string | null; reads_24h: number; reads_failed_24h: number; last_read_error: string | null;
 };
 
 function toSource(r: SourceDbRow): SourceConnection {
@@ -838,6 +839,8 @@ function toSource(r: SourceDbRow): SourceConnection {
     settings: r.settings ?? {}, events24h: r.events_24h, eventsWaiting: r.events_waiting, eventsParked: r.events_needs_review,
     lastEventAt: r.last_event_at ? r.last_event_at.toISOString() : null, pipelines: r.pipelines, forms: r.forms, callOutcomes: r.call_outcomes,
     fields: r.fields, lines: r.lines, tags: r.tags, storeHandle: r.store_handle,
+    lastReadAt: r.last_read_at ? r.last_read_at.toISOString() : null, lastReadJob: r.last_read_job, reads24h: r.reads_24h,
+    readsFailed24h: r.reads_failed_24h, lastReadError: r.last_read_error,
   };
 }
 
@@ -2196,8 +2199,13 @@ export const postgresData: CmaData = {
       const sla = await q.query<{ record_type: string; source_pipeline_id: string; sla_minutes: number | null }>(
         `select record_type, source_pipeline_id, sla_minutes from cma.connection_pipeline where connection_id = $1::uuid`, [id]);
       const slaOf = new Map(sla.rows.map((x) => [`${x.record_type}:${x.source_pipeline_id}`, x.sla_minutes]));
+      // the connection's last 20 runs, newest first (addition 0008zq)
+      const reads = await q.query<{ run_id: string; job: string; stream: string | null; started_at: Date; finished_at: Date | null; status: SourceRead["status"];
+        counts: Record<string, number> | null; error: string | null }>(`select * from cma.source_reads($1::uuid)`, [id]);
       return {
         connection,
+        reads: reads.rows.map((r) => ({ runId: r.run_id, job: r.job, stream: r.stream, startedAt: r.started_at.toISOString(),
+          finishedAt: r.finished_at ? r.finished_at.toISOString() : null, status: r.status, counts: r.counts ?? {}, error: r.error })),
         pipelines: config.pipelines.map((p) => toPipeline(p, slaOf.get(`${p.recordType}:${p.pipelineId}`) ?? null)),
         forms: cat.forms.map((f) => ({
           formId: f.formId, name: f.name, isCounted: f.isCounted, isPolled: f.isPolled, category: f.category, leadSource: f.leadSource, market: f.market,

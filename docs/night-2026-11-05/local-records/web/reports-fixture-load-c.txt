@@ -1,0 +1,10 @@
+SET
+psql:verify/reports-fixture.sql:54: ERROR:  permission denied for schema cma
+LINE 1: not exists (select 1 from cma.app_user where email = 'agent....
+                                  ^
+QUERY:  not exists (select 1 from cma.app_user where email = '<address>')
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at IF
+SET
+psql:verify/reports-fixture.sql:335: NOTICE:  fixture already present
+DO
+exit 0

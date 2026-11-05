@@ -24,7 +24,7 @@ import { DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_KEY, DQ_UNLINKED_SKIP_NONE, 
 import {
   POLL_PROBE_SETTING, POLL_SETTINGS, coerceSettingValue, emailMarketSteps, formCategoryChoices, formEditProblem, kindChoices, mailboxLabelProblem, parsePollSetting, pollCadenceOf,
   recordTypeOfSetting, recordUrlPreview, settingCodes, settingKeyProblem, settingsSize, settingText, sourceSections, TAG_MEANINGS, tagsWithoutNotReached,
-  type PollSettingName,
+  jobLabel, readCountsText, readDurationSeconds, type PollSettingName,
 } from "@/lib/sources";
 import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
@@ -395,6 +395,43 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
             </>
           ) : null}
         </dl>
+      </Card>
+
+      {/* ---- the reads (addition 0008zq): the last 20 runs of the jobs that read this connection ---- */}
+      <Card title={t.sectionReads}>
+        <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.readsHint}</p>
+        {detail.reads.length === 0 ? <p className="text-body text-p4a-muted" data-testid="source-reads-empty">{t.readsEmpty}</p> : (
+          <table className="w-full border-collapse text-body leading-table" data-testid="source-reads">
+            <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+              <tr>
+                <th className={th}>{t.readJob}</th>
+                <th className={th}>{t.readStarted}</th>
+                <th className={`${th} text-right`}>{t.readTook}</th>
+                <th className={th}>{t.readOutcome}</th>
+                <th className={th}>{t.readCounts}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.reads.map((r) => {
+                const took = readDurationSeconds(r.startedAt, r.finishedAt);
+                const tone = r.status === "succeeded" ? "success" : r.status === "failed" ? "error" : "info";
+                const outcome = r.status === "succeeded" ? t.readSucceeded : r.status === "failed" ? t.readFailed : t.readRunning;
+                return (
+                  <tr key={r.runId} className={tr} data-status={r.status}>
+                    <td className={`${td} font-semibold`}>{jobLabel(r.job, copy.configHealth)}{r.stream ? <span className="block text-caption font-normal text-p4a-muted">{r.stream}</span> : null}</td>
+                    <td className={`${td} text-small tabular-nums`}>{fmtWhen(r.startedAt, locale, timeZone)}</td>
+                    <td className={`${td} text-right text-small tabular-nums`}>{took === null ? "–" : took < 60 ? t.readSeconds.replace("{n}", String(took)) : t.readMinutes.replace("{n}", String(Math.round(took / 60)))}</td>
+                    <td className={td}>
+                      <span title={r.error ? t.readErrorTitle.replace("{code}", r.error) : undefined}><Badge tone={tone}>{outcome}</Badge></span>
+                      {r.error ? <span className="ml-2 text-caption text-p4a-muted">{r.error}</span> : null}
+                    </td>
+                    <td className={`${td} text-small text-p4a-muted`}>{readCountsText(r.counts) ?? "–"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </Card>
 
       {/* ---- settings ---- */}
