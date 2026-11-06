@@ -166,6 +166,7 @@ if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data
 if (ONLY_REPORTS) {
   await reportChecks();
   await flashChecks();
+  await reviewsAllChecks();
   verdict();
 }
 if (ONLY_SOURCES) {
@@ -1003,6 +1004,7 @@ expect("the stats keep it, marked withdrawn at that time", [!!wstat, wstat?.with
 
 await reportChecks();
 await flashChecks();
+await reviewsAllChecks();
 await inboundChecks();
 await callsChecks();
 await attemptsChecks();
@@ -1448,10 +1450,28 @@ async function flashChecks() {
   // since addition 0008zu: the subscriptions' headline is Total subscriptions, split per device-holding status in the
   // tenant's order (zeros included), the split adding up to it; no split for another overview
   const total = (await call(ANALYST, "/api/v1/reports/flash?overview=subscriptions&part=headline")).body?.data;
+  // since addition 0008zw the orders' headline is split per order kind too: first, renewal, repeat (zeros included), unknown
+  // only above 0, adding up to the figure; still no split for another overview
+  const others = (await call(ANALYST, "/api/v1/reports/flash?overview=churn&part=headline")).body?.data;
   expect("flash: Total subscriptions' live headline with its split per holding status, adding up; its definition; no split elsewhere",
     [total?.headline, total?.setUp === false || (Array.isArray(total?.split) && total.split.reduce((n, x) => n + x.value, 0) === total.value),
-      total?.definitionVersion, head?.split],
+      total?.definitionVersion, others?.split],
     ["holding_subscriptions", true, "0008zu", null], ["", false, "", []]);
+  const kinds = (head?.split ?? []).map((x) => x.key);
+  expect("flash: the Orders headline per order kind (0008zw): first, renewal, repeat, unknown only above 0, adding up; its definition still 0008zn",
+    [head?.setUp === false || (kinds.slice(0, 3).join(",") === "first,renewal,repeat"
+      && (head.split ?? []).slice(3).every((x) => x.key === "unknown" && x.value > 0) && head.split.reduce((n, x) => n + x.value, 0) === head.value),
+      head?.definitionVersion],
+    [true, "0008zn"], [false, "0008zw"]);
+  // Assets → Installed base (addition 0008zw): Flash's Installed base overview on its own page, the same document; an agent
+  // sees the no-permission card. Rendered pages: the totals' tiles or the not-set-up line, no overviews' strip
+  const base = (await call(ANALYST, "/api/v1/reports/flash?overview=installed_base")).body?.data;
+  const ib = await download(ANALYST, "/reports/installed-base");
+  const ibAgent = await download(AGENT, "/reports/installed-base");
+  expect("assets: the Installed base page renders Flash's overview (its totals or not set up) without Flash's strip; an agent sees none of it",
+    [ib.status, ib.text.includes(base?.setUp ? 'data-testid="flash-totals"' : 'data-testid="flash-not-set-up"'), ib.text.includes('data-testid="flash-strip"'),
+      ibAgent.status, ibAgent.text.includes('data-testid="flash-totals"')],
+    [200, true, false, 200, false], [200, false, true, 200, true]);
   const rows = (await call(ANALYST, "/api/v1/reports/flash/rows?overview=subscriptions&sort=amount_per_cycle&dir=desc&limit=50")).body?.data;
   const cur = (rows?.rows ?? []).map((r) => r.currency);
   expect("flash: amounts sorted within currency (currency first), the total before the limit",
@@ -1468,6 +1488,30 @@ async function flashChecks() {
   const invest = (await call(INVEST, "/api/v1/reports/flash?overview=orders")).body?.data;
   expect("flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop)", [invest?.setUp, invest?.totals ?? null, invest?.rows?.length ?? -1],
     [false, null, 0], [true, {}, 1]);
+}
+
+// Reports → Reviews' period All (addition 0008zw): range=all from the tenant's first counted review to &to, by month,
+// with no previous period and no 92 days' cap; its refusals; a period keeps the 92 days and day or week
+async function reviewsAllChecks() {
+  const tz = "Europe/Amsterdam";
+  const day = (offset) => dateKey(new Date(Date.now() + offset * 86_400_000), tz);
+  const all = await call(ANALYST, `/api/v1/reports/reviews?range=all&to=${day(0)}`);
+  const d = all.body?.data;
+  expect("reviews: All by month from the first counted review, every review in a month, no previous period",
+    [all.status, d?.all, d?.group, d?.previousFrom ?? null, d?.previousTo ?? null, d?.previous?.reviews,
+      (d?.byPeriod ?? []).reduce((n, g) => n + g.reviews, 0) === d?.current?.reviews, (d?.byPeriod ?? []).every((g) => /-01$/.test(g.key)),
+      d?.historyStart === null || d?.from === d?.historyStart, d?.to],
+    [200, true, "month", null, null, 0, true, true, true, day(0)], [200, false, "week", day(-1), day(0), 1, false, false, false, day(-1)]);
+  const refused = [`/api/v1/reports/reviews?range=all&from=${day(-10)}&to=${day(0)}`, `/api/v1/reports/reviews?range=all&to=${day(0)}&group=week`,
+    "/api/v1/reports/reviews?range=all", `/api/v1/reports/reviews?range=all&to=${day(0)}&pipeline=x`, `/api/v1/reports/reviews?from=${day(-199)}&to=${day(0)}`,
+    `/api/v1/reports/reviews?from=${day(-10)}&to=${day(0)}&group=month`, "/api/v1/reports/reviews?range=all&to=9999-12-31",
+    `/api/v1/reports/reviews?range=all&to=${day(3)}`];
+  expect("reviews: All with a from, by week, without an end or with a pipeline, 200 days, a period by month and All past tomorrow are 400s",
+    await Promise.all(refused.map(async (r) => (await call(ANALYST, r)).status)), refused.map(() => 400), refused.map(() => 200));
+  expect("reviews: an agent is refused All", (await call(AGENT, `/api/v1/reports/reviews?range=all&to=${day(0)}`)).status, 403, 200);
+  const page = await download(ANALYST, "/reports/reviews?range=all");
+  expect("reviews: the page with All: the month card, the fixed grouping, no previous columns",
+    [page.status, page.text.includes('data-testid="group-fixed"'), page.text.includes('data-testid="reviews-periods"')], [200, true, true], [200, false, false]);
 }
 
 async function inboundChecks() {

@@ -11,6 +11,11 @@ import { addDays, daysBetween, endOfMonth, isDateKey, startOfMonth, startOfWeek 
 export type Range = "yesterday" | "today" | "week" | "month" | "custom";
 export const RANGES: Range[] = ["yesterday", "today", "week", "month", "custom"];
 export const RANGE_KEYS: Record<Range, string> = { yesterday: "Y", today: "T", week: "W", month: "M", custom: "C" };
+/**
+ * The period All's key (addition 0008zw): offered by Reports → Reviews alone (range=all), which reads it itself; every
+ * other page's resolvePeriod reads range=all as today, so no other report runs past its 92 days
+ */
+export const ALL_RANGE_KEY = "A";
 
 type Query = Record<string, string | string[] | undefined>;
 

@@ -1,11 +1,12 @@
 /**
  * Yesterday, today, this week, this month and a custom range, with Y, T, W, M and C as shortcuts. A
- * server component: every choice is a plain link or a GET form, so the period lives in the URL.
+ * server component: every choice is a plain link or a GET form, so the period lives in the URL. Reports → Reviews
+ * alone adds All (addition 0008zw: range=all, key A) after this month, by passing its label.
  */
 import Link from "next/link";
 import type { Copy } from "@/lib/copy";
 import type { HoursRange } from "@/lib/data";
-import { RANGE_KEYS, RANGES, type Range } from "@/lib/period";
+import { ALL_RANGE_KEY, RANGE_KEYS, RANGES, type Range } from "@/lib/period";
 import { Keycap } from "./primitives";
 
 export function PeriodBar({
@@ -15,36 +16,44 @@ export function PeriodBar({
   today,
   copy,
   keep = {},
+  allLabel,
 }: {
   pathname: "/hours" | "/team/hours" | "/reports/dashboard" | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/forms"
     | "/reports/calls-per-agent" | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/attempts" | "/reports/attempts-per-agent"
     | "/reports/funnel" | "/reports/cancellations" | "/reports/reviews" | "/reports/lead-cohorts" | "/reports/flash";
-  range: Range;
+  /** The period chosen; "all" only where the bar offers All */
+  range: Range | "all";
   period: HoursRange;
   today: string;
   copy: Copy;
   /** Other query values to carry along, such as a person filter */
   keep?: Record<string, string>;
+  /** All's label (addition 0008zw): given by Reports → Reviews only, which offers the period All after this month */
+  allLabel?: string;
 }) {
-  const labels: Record<Range, string> = {
+  const labels: Record<Range | "all", string> = {
     yesterday: copy.myHours.yesterday,
     today: copy.myHours.today,
     week: copy.myHours.week,
     month: copy.myHours.month,
+    all: allLabel ?? "",
     custom: copy.myHours.custom,
   };
+  // All sits after this month, before the custom range, where the bar offers it
+  const choices: (Range | "all")[] = allLabel ? RANGES.flatMap((k) => (k === "custom" ? ["all", k] as const : [k])) : RANGES;
+  const keys: Record<Range | "all", string> = { ...RANGE_KEYS, all: ALL_RANGE_KEY };
   const field =
     "h-10 rounded-input border border-p4a-border bg-white px-3 font-normal text-p4a-body focus:border-p4a-deepblue";
 
   return (
     <>
       <nav aria-label={copy.myHours.title} className="mb-6 flex gap-2">
-        {RANGES.map((k) => (
+        {choices.map((k) => (
           <Link
             key={k}
             href={{ pathname, query: { ...keep, range: k } }}
             aria-current={k === range ? "page" : undefined}
-            data-shortcut={RANGE_KEYS[k].toLowerCase()}
+            data-shortcut={keys[k].toLowerCase()}
             className={[
               "inline-flex h-10 items-center gap-2 rounded-button border px-4 text-body font-semibold",
               k === range
@@ -53,7 +62,7 @@ export function PeriodBar({
             ].join(" ")}
           >
             {labels[k]}
-            <Keycap>{RANGE_KEYS[k]}</Keycap>
+            <Keycap>{keys[k]}</Keycap>
           </Link>
         ))}
       </nav>

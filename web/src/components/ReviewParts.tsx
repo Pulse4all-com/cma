@@ -1,15 +1,17 @@
 /**
  * Building blocks of Reports → Reviews (addition 0008ze, brief B18; KPI 3): the reviews per whole star, per market with
- * the previous period, the markets with their review-channel state, per day or week, per review channel, by link level
- * and by invite event. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7 as Reports → Cancellations: horizontal
+ * the previous period, the markets with their review-channel state, per day or week (per month for the period All, addition
+ * 0008zw, which has no previous period: its tables and bars name none), per review channel, by link level and by invite
+ * event. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7 as Reports → Cancellations: horizontal
  * bars in Deep Blue, the reviews without a link or an invite event in the neutral hue, never a red stack; every header
  * with its hint. Team figures only, never a person's; counts, ratings, codes and channel names only, never a reviewer or
  * a review's text.
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { FunnelGroup, ReviewFigures, ReviewMarketState, ReviewsReport } from "@/lib/data";
+import type { ReviewFigures, ReviewGroup, ReviewMarketState, ReviewsReport } from "@/lib/data";
 import { FUNNEL_BAR_CLASS, FUNNEL_NEUTRAL_CLASS } from "@/lib/funnel";
+import { fmtMonth } from "@/lib/maintenance";
 import { barShare, fmtCount } from "@/lib/reports";
 import { fmtRating } from "@/lib/reviews";
 import { fmtDate } from "@/lib/time";
@@ -53,26 +55,37 @@ function figureCols(copy: Copy, hints: Record<string, string>, locale: Locale): 
     [t.colNegative, hints.rvColNegative!, (f) => n(f.negative)]];
 }
 
-/** The reviews per whole star, 5 to 1, with the previous period's in the label's title */
-export function ReviewDistribution({ rows, copy, locale }: { rows: ReviewsReport["distribution"]; copy: Copy; locale: Locale }) {
+/** A bar's title: its reviews and the previous period's, or its reviews alone where there is no previous period (All) */
+function barTitle(label: string, reviews: number, previous: number, compare: boolean, copy: Copy, locale: Locale): string {
+  const n = (x: number) => fmtCount(x, locale);
+  return (compare ? copy.reviews.previousTitle : copy.reviews.allTitle).replace("{label}", label).replace("{reviews}", n(reviews)).replace("{previous}", n(previous));
+}
+
+/** The reviews per whole star, 5 to 1, with the previous period's in the label's title (none for All) */
+export function ReviewDistribution({ rows, copy, locale, compare = true }: { rows: ReviewsReport["distribution"]; copy: Copy; locale: Locale; compare?: boolean }) {
   const t = copy.reviews;
   const n = (x: number) => fmtCount(x, locale);
   const largest = Math.max(0, ...rows.map((r) => r.reviews));
   return (
     <BarList testId="reviews-distribution" label={t.distributionCard} className={FUNNEL_BAR_CLASS}
       bars={[...rows].reverse().map((r) => ({ key: String(r.stars), label: t.stars.replace("{n}", String(r.stars)), share: barShare(r.reviews, largest), value: n(r.reviews),
-        title: t.starsTitle.replace("{n}", String(r.stars)).replace("{reviews}", n(r.reviews)).replace("{previous}", n(r.previous)) }))} />
+        title: compare ? t.starsTitle.replace("{n}", String(r.stars)).replace("{reviews}", n(r.reviews)).replace("{previous}", n(r.previous))
+          : barTitle(t.stars.replace("{n}", String(r.stars)), r.reviews, r.previous, false, copy, locale) }))} />
   );
 }
 
-/** The reviews per market with the previous period's reviews and average rating */
-export function ReviewMarkets({ rows, hints, copy, locale }: { rows: ReviewsReport["byMarket"]; hints: Record<string, string>; copy: Copy; locale: Locale }) {
+/** The reviews per market with the previous period's reviews and average rating (none for All) */
+export function ReviewMarkets({ rows, hints, copy, locale, compare = true }: {
+  rows: ReviewsReport["byMarket"]; hints: Record<string, string>; copy: Copy; locale: Locale; compare?: boolean;
+}) {
   const t = copy.reviews;
   const n = (x: number) => fmtCount(x, locale);
   const cols: Col<ReviewsReport["byMarket"][number]>[] = [
     ...figureCols(copy, hints, locale).map(([a, b, f]): Col<ReviewsReport["byMarket"][number]> => [a, b, (r) => f(r.current)]),
-    [t.colPreviousReviews, hints.rvColPreviousReviews!, (r) => n(r.previous.reviews)],
-    [t.colPreviousAverage, hints.rvColPreviousAverage!, (r) => fmtRating(r.previous.averageRating, locale)],
+    ...(compare ? [
+      [t.colPreviousReviews, hints.rvColPreviousReviews!, (r) => n(r.previous.reviews)],
+      [t.colPreviousAverage, hints.rvColPreviousAverage!, (r) => fmtRating(r.previous.averageRating, locale)],
+    ] as Col<ReviewsReport["byMarket"][number]>[] : []),
   ];
   return (
     <Scroll testId="reviews-markets" label={t.marketCard}>
@@ -121,16 +134,23 @@ export function ReviewMarketStates({ rows, hints, copy, locale }: { rows: Review
   );
 }
 
-/** The reviews per day or week (every one of the period, empty ones too) */
-export function ReviewPeriods({ rows, group, hints, copy, locale }: { rows: ReviewsReport["byPeriod"]; group: FunnelGroup; hints: Record<string, string>; copy: Copy; locale: Locale }) {
+/** The title of the card per day, week or month (All, addition 0008zw) */
+export function reviewPeriodsTitle(group: ReviewGroup, copy: Copy): string {
+  const t = copy.reviews;
+  return group === "month" ? t.periodCardMonth : group === "week" ? t.periodCardWeek : t.periodCardDay;
+}
+
+/** The reviews per day, week or month (every one of the period, empty ones too) */
+export function ReviewPeriods({ rows, group, hints, copy, locale }: { rows: ReviewsReport["byPeriod"]; group: ReviewGroup; hints: Record<string, string>; copy: Copy; locale: Locale }) {
   const t = copy.reviews;
   const n = (x: number) => fmtCount(x, locale);
-  const first = group === "week" ? copy.funnel.week : copy.funnel.day;
-  const labelOf = (k: string) => (group === "week" ? copy.funnel.weekLabel.replace("{week}", fmtDate(k, locale, "short")) : fmtDate(k, locale, "compact"));
+  const first = group === "month" ? t.month : group === "week" ? copy.funnel.week : copy.funnel.day;
+  const labelOf = (k: string) => (group === "month" ? fmtMonth(k, locale)
+    : group === "week" ? copy.funnel.weekLabel.replace("{week}", fmtDate(k, locale, "short")) : fmtDate(k, locale, "compact"));
   const cols: Col<ReviewsReport["byPeriod"][number]>[] = [...figureCols(copy, hints, locale),
     [t.colLinked, hints.rvColLinked!, (f) => n(f.linkedOrder + f.linkedContact)]];
   return (
-    <Scroll testId="reviews-periods" label={group === "week" ? t.periodCardWeek : t.periodCardDay}>
+    <Scroll testId="reviews-periods" label={reviewPeriodsTitle(group, copy)}>
       <Head first={first} firstHint={hints.rvColPeriod!} cols={cols} copy={copy} />
       <tbody>
         {rows.map((r) => (
@@ -144,14 +164,16 @@ export function ReviewPeriods({ rows, group, hints, copy, locale }: { rows: Revi
   );
 }
 
-/** The reviews per review channel (the platform's name), with its market and the previous period's reviews */
-export function ReviewChannels({ rows, hints, copy, locale }: { rows: ReviewsReport["byChannel"]; hints: Record<string, string>; copy: Copy; locale: Locale }) {
+/** The reviews per review channel (the platform's name), with its market and the previous period's reviews (none for All) */
+export function ReviewChannels({ rows, hints, copy, locale, compare = true }: {
+  rows: ReviewsReport["byChannel"]; hints: Record<string, string>; copy: Copy; locale: Locale; compare?: boolean;
+}) {
   const t = copy.reviews;
   const n = (x: number) => fmtCount(x, locale);
   const cols: Col<ReviewsReport["byChannel"][number]>[] = [
     [t.colMarket, hints.rvColMarket!, (r) => marketName(r.market, copy)],
     ...figureCols(copy, hints, locale).map(([a, b, f]): Col<ReviewsReport["byChannel"][number]> => [a, b, (r) => f(r.current)]),
-    [t.colPreviousReviews, hints.rvColPreviousReviews!, (r) => n(r.previous.reviews)],
+    ...(compare ? [[t.colPreviousReviews, hints.rvColPreviousReviews!, (r) => n(r.previous.reviews)]] as Col<ReviewsReport["byChannel"][number]>[] : []),
   ];
   return (
     <Scroll testId="reviews-channels" label={t.channelCard}>
@@ -169,13 +191,13 @@ export function ReviewChannels({ rows, hints, copy, locale }: { rows: ReviewsRep
 }
 
 /** The reviews by link level: to an order, to a contact, none (in the neutral hue) */
-export function ReviewLinkLevels({ rows, copy, locale }: { rows: ReviewsReport["linkLevels"]; copy: Copy; locale: Locale }) {
+export function ReviewLinkLevels({ rows, copy, locale, compare = true }: { rows: ReviewsReport["linkLevels"]; copy: Copy; locale: Locale; compare?: boolean }) {
   const t = copy.reviews;
   const n = (x: number) => fmtCount(x, locale);
   const words = t as unknown as Record<string, string>;
   const largest = Math.max(0, ...rows.map((r) => r.reviews));
   const bar = (r: ReviewsReport["linkLevels"][number]) => ({ key: r.level, label: words[`level_${r.level}`] ?? r.level, share: barShare(r.reviews, largest), value: n(r.reviews),
-    title: t.previousTitle.replace("{label}", words[`level_${r.level}`] ?? r.level).replace("{reviews}", n(r.reviews)).replace("{previous}", n(r.previous)) });
+    title: barTitle(words[`level_${r.level}`] ?? r.level, r.reviews, r.previous, compare, copy, locale) });
   return (
     <div className="flex flex-col gap-4">
       <BarList testId="reviews-links" label={t.linkCard} className={FUNNEL_BAR_CLASS} bars={rows.filter((r) => r.level !== "none").map(bar)} />
@@ -185,14 +207,13 @@ export function ReviewLinkLevels({ rows, copy, locale }: { rows: ReviewsReport["
 }
 
 /** The reviews by the invite's event type (the platform's word, as it sends it); none in the neutral hue */
-export function ReviewInviteEvents({ rows, copy, locale }: { rows: ReviewsReport["inviteEvents"]; copy: Copy; locale: Locale }) {
+export function ReviewInviteEvents({ rows, copy, locale, compare = true }: { rows: ReviewsReport["inviteEvents"]; copy: Copy; locale: Locale; compare?: boolean }) {
   const t = copy.reviews;
   const n = (x: number) => fmtCount(x, locale);
   const largest = Math.max(0, ...rows.map((r) => r.reviews));
   const bar = (r: ReviewsReport["inviteEvents"][number]) => {
     const label = r.eventType ?? t.noEvent;
-    return { key: label, label, share: barShare(r.reviews, largest), value: n(r.reviews),
-      title: t.previousTitle.replace("{label}", label).replace("{reviews}", n(r.reviews)).replace("{previous}", n(r.previous)) };
+    return { key: label, label, share: barShare(r.reviews, largest), value: n(r.reviews), title: barTitle(label, r.reviews, r.previous, compare, copy, locale) };
   };
   const named = rows.filter((r) => r.eventType !== null);
   const none = rows.filter((r) => r.eventType === null);

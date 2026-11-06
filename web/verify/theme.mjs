@@ -208,6 +208,10 @@ const pages = [
   { path: "/reports/flash?o=subscriptions", subject: "manager", tables: true },
   { path: "/reports/flash?o=data_quality", subject: "reader", tables: true },
   { path: "/reports/flash", subject: "invest-analyst" },
+  // Assets → Installed base (addition 0008zw): Flash's Installed base overview on its own page; Reviews' period All
+  { path: "/reports/installed-base", subject: "manager", tables: true },
+  { path: "/reports/installed-base", subject: "invest-analyst" },
+  { path: "/reports/reviews?range=all", subject: "manager", tables: true },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
   { path: "/campaigns", subject: "manager" },

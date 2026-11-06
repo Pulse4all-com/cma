@@ -100,7 +100,7 @@ import {
   answerGroups, formsAnswersOf, formsByCategory, formsByMarket, formsFigures, formsFilterQuery, formsHistoryStart, formsLines, formsSeries, formsSum,
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
-import { fmtRating, marketsWithoutChannel, reviewMarketStates, reviewRecords, reviewShare, reviewsReport, starsOf } from "../src/lib/reviews.ts";
+import { fmtRating, marketsWithoutChannel, reviewGroupOf, reviewMarketStates, reviewRecords, reviewShare, reviewsReport, starsOf } from "../src/lib/reviews.ts";
 import {
   addMonths as mtAddMonths, bucketProblem, cellTitle, cellValue, fmtMonth, fromMonthChoices, maintenanceGrid, maintenanceItems, maintenanceQuery,
   maintenanceReport, maintenanceRows, nextView, parseBucket, parseMaintenanceFilter,
@@ -1602,6 +1602,21 @@ expect("reviews: by day and week (22:30 UTC on the 13th is the 14th), markets, c
   "14 2026-10-02=1,2026-10-05=1,2026-10-13=1,2026-10-14=1 week 2026-09-28=1,2026-10-05=1,2026-10-12=2 markets GB:2/2.75/1/0/1/1<1/2.00/1/0/0/1 NL:2/3.50/1/2/0/0<1/4.00/0/0/0/1 "
     + "channels chl-gb:Shop GB:GB:2 chl-nl:Shop NL renamed:NL:2 events checkout:2/1,klaviyo-integration:1/0,none:1/1 "
     + "states DE:no_channel:0 FR:channel_no_reviews:1 GB:has_reviews:1 NL:has_reviews:1 filter FR,GB,NL NL 2/3.50/1/2/0/0 unknown 0/-/0/0/0/0");
+// Reviews' period All (addition 0008zw), as 143's A2 and A3: from the first counted review of every market (old-1, 1 August)
+// to the end, by month, every counted review, no previous period; a market keeps the period and counts its own
+const rvAllPeriod = (market) => reviewsReport(RV_RECORDS, { from: null, to: "2026-10-14", group: "month", market, prev: null, zone: AMS_AT, negativeMaxRating: 2,
+  isSetUp: true, markets: RV_MARKETS, marketStates: RV_STATES, filterMarkets: ["FR", "GB", "NL"] });
+const rvA = rvAllPeriod(null);
+const rvAGb = rvAllPeriod("GB");
+expect("reviews: All from the first counted review by month, every counted review, the groups adding up, no previous period; a market's own counts",
+  `${rvA.from}..${rvA.to} ${rvA.all} ${rvA.group} ${rvFig(rvA.current)} groups ${rvA.byPeriod.map((g) => `${g.key}=${g.reviews}`).join(",")} `
+    + `sum ${rvA.byPeriod.reduce((n, g) => n + g.reviews, 0)} prev ${rvA.previousFrom}..${rvA.previousTo}:${rvA.previousPartial}:${rvA.previous.reviews} `
+    + `stars-prev ${rvA.distribution.reduce((n, d) => n + d.previous, 0)} | GB ${rvAGb.from} ${rvAGb.current.reviews} ${rvAGb.byPeriod.length} start ${rvAGb.historyStart} | `
+    + `groups ${reviewGroupOf(true, "day")} ${reviewGroupOf(false, "month")} ${reviewGroupOf(false, "day")} ${reviewGroupOf(false, undefined)} | period ${rvAll.all}`,
+  "2026-08-01..2026-10-14 true month 8/3.31/3/2/1/5 groups 2026-08-01=1,2026-09-01=3,2026-10-01=4 sum 8 prev null..null:false:0 stars-prev 0 | GB 2026-08-01 3 3 "
+    + "start 2026-09-30 | groups month week day week | period false",
+  "2026-10-01..2026-10-14 true month 8/3.31/3/2/1/5 groups 2026-10-01=4 sum 4 prev 2026-09-17..2026-09-30:true:3 stars-prev 3 | GB 2026-09-30 3 3 "
+    + "start 2026-09-30 | groups day month day week | period true");
 expect("reviews: a rating as a whole star (rounded up), the rating in both languages, a share, the markets without a channel",
   [[1, 1.2, 2, 4.5, 5].map(starsOf), fmtRating(3.125, "en"), fmtRating(3.13, "nl"), fmtRating(null, "en"), reviewShare(1, 4), reviewShare(0, 0), marketsWithoutChannel(RV_STATES)],
   [[1, 2, 2, 5, 5], "3.13", "3,13", "–", 0.25, null, ["DE"]],
@@ -1610,11 +1625,22 @@ expect("reviews: a rating as a whole star (rounded up), the rating in both langu
 // permissions, the read with its four parameters; the review channels' write a same-site PUT for tenant.configure
 const rvRoute = src("../src/app/api/v1/reports/reviews/route.ts");
 const rvWrite = src("../src/app/api/v1/configuration/sources/[id]/review-channels/route.ts");
+// since addition 0008zw the route reads its query through reviewsParams (lib/api/funnel): funnelParams' market only for a
+// period, range=all (no from, &to, by month) for All
+const rvApi = src("../src/lib/api/funnel.ts");
+const rvParams = rvApi.slice(rvApi.indexOf("export function reviewsParams"));
 expect("reviews routes: the market only, reports.view or performance.team, the read with its parameters; the channels' write for tenant.configure",
-  [rvRoute.includes("{ marketOnly: true }"), rvRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"),
+  [rvRoute.includes("reviewsParams(new URL(request.url).searchParams)") && rvParams.includes("funnelParams(sp, { marketOnly: true })"),
+    rvRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"),
     pgLayer.includes("cma.reviews_page($1::date, $2::date, $3, $4)"),
     /export async function PUT\(/.test(rvWrite) && rvWrite.includes("assertSameSiteWrite(request);") && rvWrite.includes('requireAnyPermission(me, ["tenant.configure"]);')],
   [true, true, true, true], [false, true, true, true]);
+expect("reviews routes: All is range=all without a from, to a date, by month (another group a 400), the market only; a period keeps the 92 days",
+  [rvParams.includes('if (sp.get("range") !== "all")'), rvParams.includes('if (sp.has("from")) throw new ApiError(400, "invalid_range"'),
+    rvParams.includes('dateParam(sp.get("to"), "to")'), rvParams.includes('sp.get("group") !== "month") throw new ApiError(400, "invalid_group"'),
+    rvParams.includes('return { range: { from: null, to }, market: filter.market, group: "month" }'),
+    pgLayer.includes("if (range.from === null) assertDate(range.to, \"to\");") && pgLayer.includes("else assertReportRange({ from: range.from, to: range.to });")],
+  [true, true, true, true, true, true], [false, false, false, false, false, false]);
 // no reviewer and no review text anywhere in the report's type, data layer, mirror, parts, page or copy keys
 const rvNoText = { "lib/reviews.ts": src("../src/lib/reviews.ts"), "components/ReviewParts.tsx": src("../src/components/ReviewParts.tsx"),
   "app/reports/reviews/page.tsx": src("../src/app/reports/reviews/page.tsx") };

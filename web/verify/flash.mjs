@@ -26,6 +26,7 @@ import {
   FLASH_FROZEN_LIST, listUnavailable, FLASH_CONDITIONAL_MEASURES, measureNotApplicable, measureKind, watchedMeasures, FLASH_RATIOS, ratioOf, setMeasures,
   FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
   statusHintPart, measureHint, cardStatusHint, statusSettingsOf, FLASH_SPLITS, splitOf, splitItemsOf, splitLine, definitionChanged,
+  FLASH_ORDER_KINDS, splitOrderOf, splitKeyLabel, splitLabelsOf, flashHref,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -349,9 +350,12 @@ expect("the mock refuses as the database does: never what the page sends, always
   [PROVOKE ? ["provoked"] : mockRefusedKept, PROVOKE ? ["provoked"] : mockTookDropped], [[], []], [["x"], ["x"]]);
 expect("a list's refusal is the page's not-available state (CMA02, CMA04), any other an error",
   [listUnavailable("CMA02"), listUnavailable("CMA04"), listUnavailable("CMA06"), listUnavailable(null)], [true, true, false, false], [false, false, true, true]);
-const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+// since addition 0008zw an overview renders through components/FlashOverview (Reports → Flash and Assets → Installed base):
+// the page's checks read the page and that module together
+const overviewSrc = readFileSync(path.join(here, "..", "src", "components", "FlashOverview.tsx"), "utf8");
+const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same",
-  [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: plan\.rowFilters/.test(pageSrc), /Object\.entries\(rowFilters\)/.test(pageSrc),
+  [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: got\.plan\.rowFilters/.test(pageSrc), /Object\.entries\(rowFilters\)/.test(pageSrc),
     /listUnavailable\(e\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters"),
     // a refused As of or period (a reader ahead of the tenant's zone): the tenant's today from the database, then read again
     /today = \(await data\(\)\.getFlashSnapshots\(me, null, null\)\)\.to;/.test(pageSrc) && (pageSrc.match(/adoptTenantToday\(\)/g) ?? []).length >= 2],
@@ -618,7 +622,7 @@ walk(srcDir);
 expect("no tenant's meaning in the web's code or copy: seed 02's ten texts appear in no file of src/",
   [seedMeanings.length, seedMeanings.filter((m) => srcTexts.some((t) => t.includes(m)))], [10, []], [0, ["x"]]);
 const partsSrc0008zt = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
-const pageSrc0008zt = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const pageSrc0008zt = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 const hintSrc = readFileSync(path.join(here, "..", "src", "components", "HeaderHint.tsx"), "utf8");
 expect("the page uses them: the tiles' and the headers' hints (MeasureLabel), the cards' and the heading's (cardStatusHint), the band tables, the hint on its lines",
   [(partsSrc0008zt.match(/<MeasureLabel measure=/g) ?? []).length >= 5, /title=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt), /text=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt),
@@ -645,7 +649,8 @@ const splitSrc = defOf("flash_split_dim_of").text;
 expect("Total subscriptions is the subscriptions' headline, split per status by the set [market, status] (its rows carry it alone); the database's split dim the page's",
   [subs0008zu.headline, subs0008zu.sets.some((x) => x.join("+") === "market+status"), setMeasures(subs0008zu, ["market", "status"]), FLASH_SPLITS,
     /when p_overview = 'subscriptions' then 'status'/.test(splitSrc), cust0008zu.headline, FLASH_SPLITS.customers ?? null],
-  ["holding_subscriptions", true, ["holding_subscriptions"], { subscriptions: { dim: "status", measure: "holding_subscriptions" } }, true, "active_customers", null],
+  ["holding_subscriptions", true, ["holding_subscriptions"], { subscriptions: { set: ["market", "status"], dim: "status", measure: "holding_subscriptions" },
+    orders: { set: ["market", "store", "kind"], dim: "kind", measure: "orders" } }, true, "active_customers", null],
   ["active_subscriptions", false, [], {}, false, "", "x"]);
 const splitRows = [
   { dims: {}, measures: { holding_subscriptions: 9 } }, { dims: { market: "GB" }, measures: { holding_subscriptions: 7 } },
@@ -681,12 +686,12 @@ expect("the copy: Total subscriptions (Totaal abonnementen), the overview Subscr
   ["Total subscriptions", "Totaal abonnementen", "Subscriptions", "Abonnementen", true, true], ["", "", "", "", false, false]);
 const controlsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
 const partsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
-const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page uses them: a live card's split and its definition's line, a stored card's split and note, the totals' split under the headline",
-  [/splitLine\(read\.split, n\)/.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
+  [/splitLine\(read\.split, n, /.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
     /previousDefinitionVersion=\{card\?\.previousDefinitionVersion \?\? null\}/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
     /note=\{asOf && card && definitionChanged\(card\.definitionVersion, card\.previousDefinitionVersion, card\.previous\)/.test(pageSrc0008zu),
-    /splitOf\(def, doc\.rows, null, doc\.statusSettings/.test(partsSrc0008zu)],
+    /splitOf\(def, doc\.rows, null, splitOrderOf\(def, doc\.statusSettings\)\)/.test(partsSrc0008zu)],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
 const mockCust0008zu = mockFlashOverview(reader, "customers", null, null, null, null);
 const mockRowsCust = (await import("../src/lib/data/mock-flash.ts")).mockFlashRows(reader, { overview: "customers", market: null, asOf: null, from: null, to: null,
@@ -701,6 +706,67 @@ expect("the mock answers as the database: the active customers on the holding st
     mockFlashHeadline(reader, "subscriptions", null, null, null).definitionVersion,
     mockAsOf ? [mockAsOf.definitionVersion, mockAsOf.previousDefinitionVersion, Array.isArray(mockAsOf.split)] : null],
   [true, true, true, ["active", "failed"], "0008zu", ["0008zu", "0008zt", true]], [false, false, false, [], "", null]);
+
+// ---- Since addition 0008zw: the Orders headline per order kind; Flash's Installed base on Assets → Installed base -----------
+const orders0008zw = overviewOf("orders");
+const kindRows = [
+  { dims: {}, measures: { orders: 9 } }, { dims: { market: "GB" }, measures: { orders: 6 } },
+  { dims: { market: "GB", store: "gb-1", kind: "first" }, measures: { orders: 2 } }, { dims: { market: "GB", store: "gb-2", kind: "first" }, measures: { orders: 1 } },
+  { dims: { market: "GB", store: "gb-1", kind: "renewal" }, measures: { orders: 2 } }, { dims: { market: "GB", store: "gb-2", kind: "repeat" }, measures: { orders: 1 } },
+  { dims: { market: "NL", store: "nl-1", kind: "first" }, measures: { orders: 1 } }, { dims: { market: "NL", store: "nl-1", kind: "unknown" }, measures: { orders: 2 } },
+  { dims: { market: "GB", sku: "A" }, measures: { orders: 50 } }, { dims: { market: "GB", kind: "first" }, measures: { orders: 60 } },
+  { dims: { market: "GB", store: "gb-1", kind: "first", status: "PAID" }, measures: { orders: 70 } },
+];
+const kindLine = (x, locale = "en") => splitLine(x, (n) => String(n), (k) => splitKeyLabel("orders", k, hintCopy[locale].flash));
+const kindOrder = splitOrderOf(orders0008zw, null);
+expect("the orders per kind as the database gives them (143 A1): summed over the stores, three kinds with zeros, Unknown only above 0, one market; other sets never counted",
+  [kindLine(splitOf(orders0008zw, kindRows, null, kindOrder)), kindLine(splitOf(orders0008zw, kindRows, "GB", kindOrder)), kindLine(splitOf(orders0008zw, kindRows, "FR", kindOrder)),
+    kindLine(splitOf(orders0008zw, kindRows, "NL", kindOrder), "nl"), splitOf(orders0008zw, kindRows.slice(0, 2), null, kindOrder),
+    kindLine(splitOf(orders0008zw, [...kindRows, { dims: { market: "DE", store: "de-1", kind: "unknown" }, measures: { orders: 0 } }], "DE", kindOrder))],
+  ["First 4 · Renewal 2 · Repeat 1 · Unknown 2", "First 3 · Renewal 2 · Repeat 1", "First 0 · Renewal 0 · Repeat 0", "Eerste 1 · Verlenging 0 · Herhaal 0 · Onbekend 2",
+    null, "First 0 · Renewal 0 · Repeat 0"],
+  ["", "", "", "", [], "First 0 · Renewal 0 · Repeat 0 · Unknown 0"]);
+expect("the parts add up to the Orders figure, in all and per market",
+  [["*", "GB", "NL"].map((m) => (splitOf(orders0008zw, kindRows, m === "*" ? null : m, kindOrder) ?? []).reduce((n, x) => n + x.value, 0)).join(" ")],
+  ["9 6 3"], ["9 6 2"]);
+const splitDimSrc = defOf("flash_split_dim_of");
+const splitSetSrc = defOf("flash_split_set_of").text.slice(0, 400);
+const splitOrderSrc = defOf("flash_split_order_of").text.slice(0, 500);
+expect("the database's split catalog is the page's (142): the orders by kind over [market, store, kind], first, renewal, repeat in that order",
+  [splitDimSrc.file, /when p_overview = 'orders' then 'kind'/.test(splitDimSrc.text.slice(0, 400)), /when p_overview = 'orders' then array\['market', 'store', 'kind'\]/.test(splitSetSrc),
+    /when p_overview = 'orders' then array\['first', 'renewal', 'repeat'\]/.test(splitOrderSrc), FLASH_ORDER_KINDS, splitOrderOf(overviewOf("subscriptions"), { deviceHoldingStatuses: ["active", "failed"] }),
+    splitOrderOf(overviewOf("customers"), { deviceHoldingStatuses: ["active"] })],
+  ["142_reviews_all_order_kinds.sql", true, true, true, ["first", "renewal", "repeat"], ["active", "failed"], []],
+  ["138_flash_totals.sql", false, false, false, ["first", "repeat", "renewal"], [], ["active"]]);
+expect("the kinds' words, en and nl, for a client too; a subscription status stays the app's word",
+  [splitLabelsOf("orders", hintCopy.en.flash), splitLabelsOf("orders", hintCopy.nl.flash), splitLabelsOf("subscriptions", hintCopy.en.flash), splitKeyLabel("subscriptions", "active", hintCopy.en.flash)],
+  [{ first: "First", renewal: "Renewal", repeat: "Repeat", unknown: "Unknown" }, { first: "Eerste", renewal: "Verlenging", repeat: "Herhaal", unknown: "Onbekend" }, {}, "active"],
+  [{}, {}, { active: "active" }, "Active"]);
+const mockOrders = mockFlashHeadline(reader, "orders", null, null, null);
+expect("the mock answers as the database: the Orders headline split per kind, adding up to the figure",
+  [mockOrders.split?.slice(0, 3).map((x) => x.key), (mockOrders.split ?? []).reduce((n, x) => n + x.value, 0) === mockOrders.value],
+  [["first", "renewal", "repeat"], true], [["first", "repeat", "renewal"], false]);
+const ibPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "installed-base", "page.tsx"), "utf8");
+const flashOnlySrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+expect("both pages render an overview through components/FlashOverview; Installed base its own overview on its own path, without Flash's strip and o",
+  [/<FlashOverview me=\{me\} copy=\{copy\} st=\{st\} def=\{def\} path="\/reports\/flash" active="flash"/.test(flashOnlySrc),
+    /flashState\(me, await searchParams, "installed_base"\)/.test(ibPageSrc) && /path="\/reports\/installed-base" active="installed-base"/.test(ibPageSrc),
+    /holdsAny\(me, REPORT_PERMISSIONS\)/.test(ibPageSrc), /\{own \? <FlashStrip /.test(overviewSrc), /path === "\/reports\/flash" && def \? \{ o: def\.key \} : \{\}/.test(overviewSrc),
+    flashHref("/reports/installed-base", { market: "GB", f_status: "field" }), flashHref("/reports/flash", {})],
+  [true, true, true, true, true, "/reports/installed-base?market=GB&f_status=field", "/reports/flash"],
+  [false, false, false, false, false, "/reports/flash?market=GB&f_status=field", "/reports/flash?"]);
+expect("every link and control of an overview keeps its page: the cells, the bands, the sort, the As of and the market",
+  [(partsSrc0008zu.match(/, path\)/g) ?? []).length >= 3, /router\.push\(flashHref\(path, q\) as Route\)/.test(controlsSrc0008zu),
+    (overviewSrc.match(/path=\{path\}/g) ?? []).length >= 5, /\/reports\/flash/.test(overviewSrc.replace(/"\/reports\/flash"/g, "").replace(/\/api\/v1\/reports\/flash/g, ""))],
+  [true, true, true, false], [false, false, false, true]);
+expect("the orders' kind is the split's word in the breakdown and the records too; the code stays in the files and on hover",
+  [/if \(def\.key === "orders" && dim === "kind"\) return splitKeyLabel\(def\.key, dims\[dim\] \?\? "", t\);/.test(partsSrc0008zu),
+    /def\.key === "orders" && c\.key === "kind"[\s\S]{0,120}<span title=\{String\(r\[c\.key\]\)\}>\{splitKeyLabel\(def\.key, String\(r\[c\.key\]\), t\)\}/.test(partsSrc0008zu)],
+  [true, true], [false, false]);
+expect("the landing labels the split: a stored card's kinds in the reader's language, a live card's as data",
+  [/splitLine\(card\?\.split \?\? null, \(x\) => fmtNumber\(x, locale, 0\), \(k\) => splitKeyLabel\(o\.key, k, t\)\)/.test(flashOnlySrc),
+    /splitLabels: splitLabelsOf\(o\.key, t\)/.test(flashOnlySrc), /labels\.splitLabels\?\.\[k\] \?\? k/.test(controlsSrc0008zu)],
+  [true, true, true], [false, false, false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

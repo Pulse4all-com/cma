@@ -1,4 +1,4 @@
-import { funnelParams } from "@/lib/api/funnel";
+import { reviewsParams } from "@/lib/api/funnel";
 import { forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
 import { data } from "@/lib/data";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Reviews (cma.reviews_page, addition 0008ze) for ?from&to (at most 92 days), &group=week|day (week when left out) and the
- * optional &market (a market code or unknown; a &pipeline or &source is a 400): the review platform's published reviews of
+ * optional &market (a market code or unknown; a &pipeline or &source is a 400), or for the period All (addition 0008zw):
+ * ?range=all&to, from the tenant's first counted review to &to, exempt from the 92 days, grouped by month, with no previous
+ * period (previousFrom and previousTo null; `from`, `to` and `all` say which period was read): the review platform's published reviews of
  * counted channels, by the submission's date in the tenant's zone. `current` and `previous` (reviews, averageRating,
  * negative, linkedOrder, linkedContact, unlinked; the previous period like for like); `distribution` (per whole star);
  * `byPeriod`; `byMarket`; `byChannel`; `linkLevels`; `inviteEvents`; `marketStates` (every active market: no_channel,
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, REPORT_PERMISSIONS);
-    const { range, filter, group } = funnelParams(new URL(request.url).searchParams, { marketOnly: true });
-    return ok(await data().getReviews(me, range, group, filter.market));
+    const { range, market, group } = reviewsParams(new URL(request.url).searchParams);
+    return ok(await data().getReviews(me, range, group, market));
   });
 }

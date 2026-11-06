@@ -51,7 +51,7 @@ The CMA's assignment, accept click and 5-minute rule (see Speed to lead) are the
 - Score and number of reviews per country per week.
 - Reviews following deal stage 4.4 Completed Happy.
 - Negative review flagged within one day (live alert).
-- **As built (addition 0008ze, brief B18):** Customers → Reviews shows the count, the average rating, the negative reviews and the linked reviews, each with the previous period like for like; per rating, link level, market, day or week, review channel and invitation event; every active market in its review-channel state. The alert rule "Negative review" exists and is switched off.
+- **As built (addition 0008ze, brief B18):** Customers → Reviews shows the count, the average rating, the negative reviews and the linked reviews, each with the previous period like for like (none for the period All, since addition 0008zw: from the first counted review, by month); per rating, link level, market, day or week, review channel and invitation event; every active market in its review-channel state. The alert rule "Negative review" exists and is switched off.
 - **Needs:** a channel per active market (the Trusted Shops connection is live in prod since 25 October 2026, its six channels with reviews mapped and counted; `records/reviews-prod-2026-10-25`); Kira's threshold and audience before the alert rule is switched on. Reviews after 4.4 Completed Happy need the HubSpot-triggered invite (open: Open decisions).
 
 ### 4. Churn and contract length

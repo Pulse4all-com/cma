@@ -2050,19 +2050,36 @@ export type ReviewLinkLevel = "order" | "contact" | "none";
 export type ReviewMarketState = "no_channel" | "channel_no_reviews" | "has_reviews";
 
 /** Reports → Reviews (addition 0008ze, cma.reviews_page): team figures only, never per person; no review text or reviewer */
+/** Reviews' grouping (addition 0008zw): day or week for a period, month for the period All alone */
+export type ReviewGroup = FunnelGroup | "month";
+
+/**
+ * Reviews' period (addition 0008zw): a period of at most 92 days, or All (from null): from the tenant's first counted
+ * review to `to`, exempt from the 92 days, grouped by month, with no previous period
+ */
+export interface ReviewsRange {
+  from: DateKey | null;
+  to: DateKey;
+}
+
 export interface ReviewsReport {
+  /** The period shown: a period's own dates, or All's from the tenant's first counted review (to when none) */
   from: DateKey;
   to: DateKey;
-  group: FunnelGroup;
+  /** The period All (addition 0008zw): no previous period, grouped by month */
+  all: boolean;
+  group: ReviewGroup;
   market: string | null;
   current: ReviewFigures;
+  /** The previous period's figures; zeros for All, which has none */
   previous: ReviewFigures;
-  previousFrom: DateKey;
-  previousTo: DateKey;
+  /** The previous period's dates; null for All, which compares with nothing */
+  previousFrom: DateKey | null;
+  previousTo: DateKey | null;
   previousPartial: boolean;
   /** Per whole star (a rating rounded up: 4.5 is a 5), 1 to 5, with the previous period */
   distribution: { stars: number; reviews: number; previous: number }[];
-  /** Every day or ISO week of the period, empty ones too */
+  /** Every day, ISO week or month (All) of the period, empty ones too */
   byPeriod: (ReviewFigures & { key: DateKey })[];
   byMarket: { market: string; name: string | null; current: ReviewFigures; previous: ReviewFigures }[];
   byChannel: { channel: string; name: string; market: string; current: ReviewFigures; previous: ReviewFigures }[];
@@ -3728,7 +3745,7 @@ export interface CmaData {
   /** Reports → Cancellations: the requests of reports.cancellation_kind (cma.cancellations_page). Needs reports.view or performance.team */
   getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
   /** Reports → Reviews (cma.reviews_page, addition 0008ze; reports.view or performance.team; at most 92 days) */
-  getReviews(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<ReviewsReport>;
+  getReviews(me: Principal, range: ReviewsRange, group: ReviewGroup, market: string | null): Promise<ReviewsReport>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
   getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;

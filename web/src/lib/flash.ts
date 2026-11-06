@@ -104,6 +104,18 @@ export const FLASH_ADDRESS = {
   check: "check", filterPrefix: "f_",
 } as const;
 
+/**
+ * The pages that render a Flash overview (addition 0008zw): Reports → Flash (every overview, chosen by o) and Assets →
+ * Installed base (the installed base's overview alone, so its address carries no o); a link of the overview stays on its page
+ */
+export type FlashPath = "/reports/flash" | "/reports/installed-base";
+
+/** A link to a Flash page with its address keys */
+export function flashHref(path: FlashPath, query: Record<string, string>): string {
+  const qs = new URLSearchParams(query).toString();
+  return `${path}${qs ? `?${qs}` : ""}`;
+}
+
 /** Rows a list page shows; a file holds up to the tenant's flash.file_max_rows */
 export const FLASH_PAGE_ROWS = 500;
 /** The most rows one file holds when the tenant's setting is not known (decision 7: 50,000) */
@@ -876,26 +888,42 @@ export function statusSettingsOf(j: Record<string, unknown> | null | undefined):
 
 // ---- Since addition 0008zu (brief B30) ------------------------------------------------------------------------------
 
-/** One part of a headline's split: a status (the subscription app's own word) and its figure */
+/** One part of a headline's split: a status (the subscription app's own word) or an order kind, and its figure */
 export interface FlashSplitItem {
   key: string;
   value: number;
 }
 
 /**
- * The overviews whose headline is split, by which dim and which measure (cma.flash_split_dim_of): Total subscriptions per
- * device-holding status, the rows of the set [market, status]
+ * The overviews whose headline is split: the grouping set whose rows the split reads, its dim and its measure
+ * (cma.flash_split_set_of, cma.flash_split_dim_of): Total subscriptions per device-holding status, the rows of the set
+ * [market, status] (addition 0008zu); the orders per order kind, the rows of the set [market, store, kind] summed over the
+ * stores (addition 0008zw)
  */
-export const FLASH_SPLITS: Partial<Record<FlashKey, { dim: string; measure: string }>> = {
-  subscriptions: { dim: "status", measure: "holding_subscriptions" },
+export const FLASH_SPLITS: Partial<Record<FlashKey, { set: readonly string[]; dim: string; measure: string }>> = {
+  subscriptions: { set: ["market", "status"], dim: "status", measure: "holding_subscriptions" },
+  orders: { set: ["market", "store", "kind"], dim: "kind", measure: "orders" },
 };
 
 /**
- * A headline's split from an overview's rows, as cma.flash_split_of: the rows whose dims are a market and the split dim,
- * of one market or summed over every market; every key of the order (the tenant's device-holding statuses, in the
- * setting's order) with 0 where no row holds it, then any other key a row holds, by name. None for an overview without a
- * split, and none when the rows hold no split row at all (a snapshot taken before addition 0008zu), so zeros never stand
- * in for a split that was not stored
+ * The order kinds the Orders headline's split always shows, in order (cma.flash_split_order_of; a store order's order_kind as the CMA classifies it,
+ * addition 0008zw); the fourth kind, unknown, follows them only where an order has it
+ */
+export const FLASH_ORDER_KINDS: readonly string[] = ["first", "renewal", "repeat"];
+
+/** The keys a headline's split shows first, in order: the tenant's device-holding statuses (subscriptions), the order kinds */
+export function splitOrderOf(def: FlashOverviewDef, settings: Pick<FlashStatusSettings, "deviceHoldingStatuses"> | null | undefined): readonly string[] {
+  if (def.key === "orders") return FLASH_ORDER_KINDS;
+  if (def.key === "subscriptions") return settings?.deviceHoldingStatuses ?? [];
+  return [];
+}
+
+/**
+ * A headline's split from an overview's rows, as cma.flash_headline_split_of: the rows whose dims are exactly the split's
+ * set, of one market or summed over every market (and over the stores); every key of the order (the tenant's
+ * device-holding statuses in the setting's order, the order kinds) with 0 where no row holds it, then any other key a row
+ * holds with a figure above 0, by name. None for an overview without a split, and none when the rows hold no row of the
+ * set at all (a snapshot taken before the split was stored), so zeros never stand in for a split that was not stored
  */
 export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], market: string | null, order: readonly string[]): FlashSplitItem[] | null {
   const split = FLASH_SPLITS[def.key];
@@ -904,7 +932,7 @@ export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], mar
   let any = false;
   for (const r of rows) {
     const keys = Object.keys(r.dims);
-    if (keys.length !== 2 || !("market" in r.dims) || !(split.dim in r.dims)) continue;
+    if (keys.length !== split.set.length || !split.set.every((d) => d in r.dims)) continue;
     any = true;
     if (market !== null && r.dims.market !== market) continue;
     const v = r.measures[split.measure];
@@ -913,8 +941,23 @@ export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], mar
     sums.set(k, (sums.get(k) ?? 0) + v);
   }
   if (!any) return null;
-  const extra = [...sums.keys()].filter((k) => !order.includes(k)).sort();
+  const extra = [...sums.keys()].filter((k) => !order.includes(k) && (sums.get(k) ?? 0) > 0).sort();
   return [...order, ...extra].map((key) => ({ key, value: sums.get(key) ?? 0 }));
+}
+
+/**
+ * A split's key as the line shows it: a subscription status in the subscription app's own word; an order kind in the
+ * reader's language (the copy's kind_<key>: First, Renewal, Repeat, Unknown), the key itself where the copy has none
+ */
+export function splitKeyLabel(overview: FlashKey, key: string, words: Readonly<Record<string, unknown>>): string {
+  if (overview !== "orders") return key;
+  const w = words[`kind_${key}`];
+  return typeof w === "string" ? w : key;
+}
+
+/** The labels of a split's keys for a client component, which gets them as data: the order kinds' words (orders only) */
+export function splitLabelsOf(overview: FlashKey, words: Readonly<Record<string, unknown>>): Record<string, string> {
+  return overview === "orders" ? Object.fromEntries([...FLASH_ORDER_KINDS, "unknown"].map((k) => [k, splitKeyLabel(overview, k, words)])) : {};
 }
 
 /** A split as the database's JSON gives it ([{key, value}]), kept to a key and a number each; none when it is not a list */
@@ -930,10 +973,14 @@ export function splitItemsOf(j: unknown): FlashSplitItem[] | null {
   return out;
 }
 
-/** A split as one line under its headline: each status in the subscription app's word and its figure ("active 7 · failed 1") */
-export function splitLine(split: readonly FlashSplitItem[] | null | undefined, fmt: (n: number) => string): string | null {
+/**
+ * A split as one line under its headline: each part's label and its figure ("active 7 · failed 1"; the orders "First 4 ·
+ * Renewal 1 · Repeat 1", with "Unknown 1" only above 0). The label is the key itself unless one is given
+ */
+export function splitLine(split: readonly FlashSplitItem[] | null | undefined, fmt: (n: number) => string,
+  label: (key: string) => string = (k) => k): string | null {
   if (!split || split.length === 0) return null;
-  return split.map((x) => `${x.key} ${fmt(x.value)}`).join(" · ");
+  return split.map((x) => `${label(x.key)} ${fmt(x.value)}`).join(" · ");
 }
 
 /**

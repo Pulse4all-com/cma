@@ -9,7 +9,8 @@
 -- read-only subtransaction that is rolled back (its rows kept in variables), so the script runs alike as one transaction
 -- (Cloud SQL Studio) and statement by statement (psql), in any database, at any time, as often as wanted. Run as your
 -- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
--- cma.organisation.is_contact_center), after 140_live_per_organisation.sql. Prod is the proof; dev's shared core is for information.
+-- cma.organisation.is_contact_center), after 140_live_per_organisation.sql; since addition 0008zw (Reviews' period All),
+-- after 142_reviews_all_order_kinds.sql. Prod is the proof; dev's shared core is for information.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -50,6 +51,10 @@ begin
   -- the identity read names cma.organisation.is_contact_center since addition 0008zv
   if not exists (select 1 from cma.schema_migration where version = '0008zv') then
     raise exception 'addition 0008zv (140_live_per_organisation.sql) has not run in this database';
+  end if;
+  -- Reviews' period All (the read without a start, by month) since addition 0008zw
+  if not exists (select 1 from cma.schema_migration where version = '0008zw') then
+    raise exception 'addition 0008zw (142_reviews_all_order_kinds.sql) has not run in this database';
   end if;
 end
 $$;
@@ -210,6 +215,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- Flash
 ('a', 'flash', 'landing', $q$select cma.flash_page(null, null, '{from}', '{to}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'flash', 'snapshots', $q$select cma.flash_snapshots(null, null)$q$, 'agent', array['reports.view', 'performance.team']),
+-- Reviews' period All (addition 0008zw): every counted review from the tenant's first to today by month, no cap and no
+-- previous period; the same read whatever the report period, so it is timed once, in part a
+('a', 'reviews all', 'reviews all by month', $q$select cma.reviews_page(null, '{today}', null, 'month')$q$, 'overview', array['reports.view', 'performance.team']),
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)

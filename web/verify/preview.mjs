@@ -103,39 +103,57 @@ const REPORTS = ["/reports/flash", "/reports/dashboard", "/reports/calls", "/rep
   "/reports/email-per-agent", "/reports/intake", "/reports/forms"];
 const SALES = ["/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent",
   "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person"];
-const CUSTOMERS = ["/reports/cancellations", "/reports/reviews", "/reports/maintenance"];
+// since addition 0008zw Maintenance is Assets', after Installed base
+const CUSTOMERS = ["/reports/cancellations", "/reports/reviews"];
+const ASSETS = ["/reports/installed-base", "/reports/maintenance"];
 const digits = (n) => Array.from({ length: n }, (_, i) => (i < 9 ? String(i + 1) : null));
 
 expect("the agent: Welcome, Messages and Time, keys 1 to 5",
   [hrefs(AGENT), keys(AGENT)], [["/", "/messages", "/day", "/hours", "/schedule"], digits(5)], [["/", "/messages", "/day", "/hours"], digits(4)]);
-expect("the agent sees none of Reports, Sales and Customers", groups(AGENT), ["time"], ["time", "reports"]);
-expect("the supervisor: the Live board of Newco, Time, Reports, Sales, Customers, Campaigns",
-  hrefs(SUPERVISOR), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, "/campaigns"],
-  ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, "/campaigns"]);
+expect("the agent sees none of Reports, Sales, Customers and Assets", groups(AGENT), ["time"], ["time", "assets"]);
+expect("the supervisor: the Live board of Newco, Time, Reports, Sales, Customers, Assets, Campaigns",
+  hrefs(SUPERVISOR), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, ...ASSETS, "/campaigns"],
+  ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, "/reports/maintenance", "/campaigns"]);
 expect("the supervisor's keys: 1 to 9 without gaps, none from the tenth",
   keys(SUPERVISOR), digits(hrefs(SUPERVISOR).length), digits(hrefs(SUPERVISOR).length).map((k, i) => (i === 3 ? "5" : k)));
-expect("the admin: Live, Team, Time, Reports with Data quality, Sales, Customers, Campaigns",
-  hrefs(ADMIN_MOCK), ["/", "/messages", "/live/newco", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours",
-    ...REPORTS, "/reports/data-quality", ...SALES, ...CUSTOMERS, "/campaigns", ...hrefs(ADMIN_MOCK).filter((h) => h.startsWith("/configuration/"))],
+// since addition 0008zw Time comes before Team (Martin, 5 November 2026)
+expect("the admin: Live, Time, Team, Reports with Data quality, Sales, Customers, Assets, Campaigns",
+  hrefs(ADMIN_MOCK), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/roster/planner",
+    ...REPORTS, "/reports/data-quality", ...SALES, ...CUSTOMERS, ...ASSETS, "/campaigns", ...hrefs(ADMIN_MOCK).filter((h) => h.startsWith("/configuration/"))],
   []);
 expect("the admin's keys: 1 to 9 without gaps; the Configuration pages none",
   keys(ADMIN_MOCK), [...digits(hrefs(ADMIN_MOCK).filter((h) => !h.startsWith("/configuration/")).length), ...hrefs(ADMIN_MOCK).filter((h) => h.startsWith("/configuration/")).map(() => null)],
   digits(hrefs(ADMIN_MOCK).length).map((k, i) => (i === 9 ? "10" : k)));
-expect("the rail's groups in order: Live, Team, Time, Reports, Sales, Customers, Campaigns, Configuration",
-  groups(ADMIN_MOCK), ["live", "team", "time", "reports", "sales", "customers", "campaigns", "configuration"],
-  ["live", "team", "time", "reports", "campaigns", "configuration"]);
+expect("the rail's groups in order: Live, Time, Team, Reports, Sales, Customers, Assets, Campaigns, Configuration",
+  groups(ADMIN_MOCK), ["live", "time", "team", "reports", "sales", "customers", "assets", "campaigns", "configuration"],
+  ["live", "team", "time", "reports", "sales", "customers", "assets", "campaigns", "configuration"]);
 const salesOf = (me) => visibleNav(me, copy).find((e) => e.kind === "group" && e.id === "sales")?.items.map((i) => i.href) ?? [];
 expect("Sales: Funnel comes before Attempts per deal",
   salesOf(SUPERVISOR).indexOf("/reports/funnel") < salesOf(SUPERVISOR).indexOf("/reports/attempts"), true, false);
 expect("a reports reader: each group's pages for reports.view alone",
   hrefs(READER), ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
     "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
-    "/reports/first-orders", ...CUSTOMERS, "/campaigns"],
+    "/reports/first-orders", ...CUSTOMERS, ...ASSETS, "/campaigns"],
   ["/", "/messages", "/reports/flash", "/reports/speed-to-lead"]);
 const labels = (me, id) => visibleNav(me, copy).find((e) => e.kind === "group" && e.id === id)?.items.map((i) => i.label) ?? null;
-expect("the groups' labels: Reports, Sales, Customers (Verkoop, Klanten in Dutch)",
+expect("the groups' labels: Reports, Sales, Customers, Assets (Verkoop, Klanten, Assets in Dutch)",
   [...visibleNav(READER, copy).flatMap((e) => (e.kind === "group" ? [e.label] : [])), ...visibleNav(READER, t("nl")).flatMap((e) => (e.kind === "group" ? [e.label] : []))],
-  ["Reports", "Sales", "Customers", "Campaigns", "Rapportages", "Verkoop", "Klanten", "Campagnes"], ["Reports", "Campaigns"]);
+  ["Reports", "Sales", "Customers", "Assets", "Campaigns", "Rapportages", "Verkoop", "Klanten", "Assets", "Campagnes"], ["Reports", "Campaigns"]);
+// Assets (addition 0008zw): Installed base and Maintenance, in en and nl, with the box icon; Customers keeps Cancellations and Reviews
+expect("Assets: Installed base then Maintenance (Geïnstalleerde basis, Onderhoud), the box icon; Customers: Cancellations and Reviews",
+  [labels(READER, "assets"), visibleNav(READER, t("nl")).find((e) => e.kind === "group" && e.id === "assets")?.items.map((i) => i.label) ?? null,
+    visibleNav(READER, copy).find((e) => e.kind === "group" && e.id === "assets")?.icon ?? null, labels(READER, "customers")],
+  [["Installed base", "Maintenance"], ["Geïnstalleerde basis", "Onderhoud"], "box", ["Cancellations", "Reviews"]],
+  [["Maintenance"], ["Onderhoud"], "person", ["Cancellations", "Reviews", "Maintenance"]]);
+expect("the Assets pages' breadcrumbs: Welcome › Assets › Installed base, Welcome › Assets › Maintenance, the group to Installed base",
+  [breadcrumbs(READER, copy, "installed-base"), breadcrumbs(READER, copy, "maintenance")],
+  [[{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Installed base" }],
+    [{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Maintenance" }]],
+  [[{ label: "Welcome", href: "/" }, { label: "Reports", href: "/reports/flash" }, { label: "Installed base" }],
+    [{ label: "Welcome", href: "/" }, { label: "Customers", href: "/reports/cancellations" }, { label: "Maintenance" }]]);
+expect("an agent sees no Assets page, and their crumbs give no link to the group",
+  [hrefs(AGENT).filter((h) => ASSETS.includes(h)), breadcrumbs(AGENT, copy, "installed-base")[1]],
+  [[], { label: "Assets", href: undefined }], [ASSETS, { label: "Assets", href: "/reports/installed-base" }]);
 const two = mock(SUPERVISOR.permissions, "supervisor", [{ key: "atlas", name: "Atlas" }, { key: "newco", name: "Newco" }]);
 expect("two contact centers: two Live boards, labelled with their names, each with a key",
   [labels(two, "live"), visiblePages(two, copy).filter((p) => p.page === "live-board").map((p) => [p.href, p.key])],

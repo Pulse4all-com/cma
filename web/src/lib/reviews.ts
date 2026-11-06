@@ -18,12 +18,23 @@
  * Team figures only: no figure per person exists. Ids, codes, counts and times only: never a reviewer or a review's text.
  */
 import type {
-  DateKey, FunnelGroup, Instant, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport,
+  DateKey, Instant, ReviewFigures, ReviewGroup, ReviewLinkLevel, ReviewMarketState, ReviewsReport,
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
 import { inPeriod, type FunnelPrevious } from "./funnel.ts";
+import { addMonths, monthOf } from "./maintenance.ts";
 import { timeInZone } from "./reports.ts";
 import { addDays, dateKeyInZone, startOfWeek } from "./time.ts";
+
+/**
+ * Reviews' group from the address. The period All (addition 0008zw: Reports → Reviews only, range=all, key A; from the
+ * tenant's first counted review to today, with no previous period, exempt from the 92 days every other report keeps) is
+ * grouped by month; a period by day or week (week when left out or unknown)
+ */
+export function reviewGroupOf(all: boolean, value: unknown): ReviewGroup {
+  if (all) return "month";
+  return value === "day" || value === "week" ? value : "week";
+}
 
 export const REVIEW_LINK_LEVELS: readonly ReviewLinkLevel[] = ["order", "contact", "none"];
 export const REVIEW_MARKET_STATES: readonly ReviewMarketState[] = ["no_channel", "channel_no_reviews", "has_reviews"];
@@ -106,33 +117,41 @@ export function reviewMarketStates(markets: readonly ReviewMarket[], channels: r
   });
 }
 
-/** The page as cma.reviews_page_of answers it; `records` every counted review up to now, for the history start */
+/**
+ * The page as cma.reviews_page_of answers it; `records` every counted review up to now, for the history start. from null
+ * is All (addition 0008zw): from the first counted review of every market (to when none), no previous period (prev null)
+ */
 export function reviewsReport(records: readonly ReviewRecord[], opts: {
-  from: DateKey; to: DateKey; group: FunnelGroup; market: string | null; prev: FunnelPrevious; zone: string; negativeMaxRating: number;
+  from: DateKey | null; to: DateKey; group: ReviewGroup; market: string | null; prev: FunnelPrevious | null; zone: string; negativeMaxRating: number;
   isSetUp: boolean; markets: readonly ReviewMarket[]; marketStates: ReviewsReport["marketStates"]; filterMarkets: string[];
 }): ReviewsReport {
-  const { from, to, group, market, prev, zone } = opts;
-  const until = prev.until === null ? null : timeInZone(prev.until, zone);
+  const { to, group, market, prev, zone } = opts;
+  const isAll = opts.from === null;
+  const first = records.reduce<DateKey | null>((m, r) => (m === null || r.date < m ? r.date : m), null);
+  const from = opts.from ?? (first === null || first > to ? to : first);
+  const until = prev === null || prev.until === null ? null : timeInZone(prev.until, zone);
   const all = records.filter((r) => market === null || r.market === market);
   const cur = all.filter((r) => inPeriod(r.date, r.time, from, to, null));
-  const pre = all.filter((r) => inPeriod(r.date, r.time, prev.from, prev.to, until));
+  const pre = prev === null ? [] : all.filter((r) => inPeriod(r.date, r.time, prev.from, prev.to, until));
   const sortOf = new Map(opts.markets.map((m) => [m.code, m.sortOrder]));
   const nameOf = new Map(opts.markets.map((m) => [m.code, m.name]));
   const marketOrder = (a: string, b: string) => (a === "unknown" ? 1 : 0) - (b === "unknown" ? 1 : 0)
     || (sortOf.get(a) ?? Number.MAX_SAFE_INTEGER) - (sortOf.get(b) ?? Number.MAX_SAFE_INTEGER) || a.localeCompare(b);
   const keys: DateKey[] = [];
-  for (let d = group === "week" ? startOfWeek(from) : from; d <= to; d = addDays(d, group === "week" ? 7 : 1)) keys.push(d);
+  const keyOf = (r: ReviewRecord) => (group === "week" ? r.week : group === "month" ? monthOf(r.date) : r.date);
+  const start = group === "week" ? startOfWeek(from) : group === "month" ? monthOf(from) : from;
+  for (let d = start; d <= to; d = group === "month" ? addMonths(d, 1) : addDays(d, group === "week" ? 7 : 1)) keys.push(d);
   const channels = [...new Map([...cur, ...pre].map((r) => [r.channel, { channel: r.channel, name: r.channelName, market: r.market }])).values()]
     .sort((a, b) => a.name.localeCompare(b.name) || a.channel.localeCompare(b.channel));
   const events = [...new Set([...cur, ...pre].map((r) => r.inviteEventType))].map((eventType) => ({
     eventType, reviews: cur.filter((r) => r.inviteEventType === eventType).length, previous: pre.filter((r) => r.inviteEventType === eventType).length,
   })).sort((a, b) => b.reviews - a.reviews || (a.eventType === null ? 1 : 0) - (b.eventType === null ? 1 : 0) || (a.eventType ?? "").localeCompare(b.eventType ?? ""));
   return {
-    from, to, group, market,
+    from, to, all: isAll, group, market,
     current: reviewFigures(cur), previous: reviewFigures(pre),
-    previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.until !== null,
+    previousFrom: prev?.from ?? null, previousTo: prev?.to ?? null, previousPartial: prev !== null && prev.until !== null,
     distribution: [1, 2, 3, 4, 5].map((stars) => ({ stars, reviews: cur.filter((r) => r.stars === stars).length, previous: pre.filter((r) => r.stars === stars).length })),
-    byPeriod: keys.map((key) => ({ key, ...reviewFigures(cur.filter((r) => (group === "week" ? r.week : r.date) === key)) })),
+    byPeriod: keys.map((key) => ({ key, ...reviewFigures(cur.filter((r) => keyOf(r) === key)) })),
     byMarket: [...new Set([...cur, ...pre].map((r) => r.market))].sort(marketOrder).map((m) => ({
       market: m, name: nameOf.get(m) ?? null, current: reviewFigures(cur.filter((r) => r.market === m)), previous: reviewFigures(pre.filter((r) => r.market === m)),
     })),

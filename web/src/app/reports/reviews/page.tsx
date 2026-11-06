@@ -5,16 +5,16 @@ import { FunnelDateLine, FunnelGroupSwitch, FunnelIntro } from "@/components/Fun
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission } from "@/components/ReportParts";
 import {
-  ReviewChannels, ReviewDistribution, ReviewInviteEvents, ReviewLinkLevels, ReviewMarkets, ReviewMarketStates, ReviewPeriods,
+  ReviewChannels, ReviewDistribution, ReviewInviteEvents, ReviewLinkLevels, ReviewMarkets, ReviewMarketStates, ReviewPeriods, reviewPeriodsTitle,
 } from "@/components/ReviewParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
-import { data, dataIsMock, type FunnelGroup } from "@/lib/data";
-import { funnelClientCopy, parseFunnelFilter, parseFunnelGroup } from "@/lib/funnel";
+import { data, dataIsMock } from "@/lib/data";
+import { funnelClientCopy, parseFunnelFilter } from "@/lib/funnel";
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { fmtCount, fmtShare, MAX_REPORT_DAYS, REPORT_PERMISSIONS } from "@/lib/reports";
-import { fmtRating, marketsWithoutChannel, reviewShare } from "@/lib/reviews";
+import { fmtRating, marketsWithoutChannel, reviewGroupOf, reviewShare } from "@/lib/reviews";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
@@ -27,7 +27,9 @@ import { resolve } from "../../access";
  * reviews, each with its change against the previous period like for like; the reviews per whole star, per market, per day
  * or week (G), per channel, by link level (an order, a CRM contact found by email, none) and by invite event; and every
  * active market with its review-channel state (KPI 11: a market without a channel has no reviews to show). Narrowed by
- * market (K); the address keys are market and group. Team figures only: no figure per person exists. Shown to people
+ * market (K); the address keys are market and group. The period All (A, range=all; addition 0008zw, Reviews only): from
+ * the tenant's first counted review to today, grouped by month, with no previous period (the tiles say so as at the
+ * history's start, the tables and bars name no previous figures), exempt from the 92 days. Team figures only: no figure per person exists. Shown to people
  * holding reports.view or performance.team, as every report's team figures; the database checks again on every read.
  * Counts, ratings, codes and channel names only, never a reviewer or a review's text.
  */
@@ -48,14 +50,22 @@ export default async function ReviewsPage({ searchParams }: PageProps<"/reports/
 
   const sp = await searchParams;
   const today = dateKeyInZone(new Date(), me.timeZone);
-  const { range, period, invalid } = resolvePeriod(sp, today, MAX_REPORT_DAYS);
-  const group: FunnelGroup = parseFunnelGroup(sp.group) ?? "week";
+  // the period All (addition 0008zw): read from the tenant's first counted review; every other period as every report
+  const isAll = sp.range === "all";
+  const resolved = resolvePeriod(sp, today, MAX_REPORT_DAYS);
+  const range = isAll ? "all" : resolved.range;
+  const invalid = isAll ? null : resolved.invalid;
+  const group = reviewGroupOf(isAll, sp.group);
   const { filter, problem } = parseFunnelFilter(sp.market, null, null);
-  const report = await data().getReviews(me, period, group, filter.market);
+  const report = await data().getReviews(me, isAll ? { from: null, to: today } : resolved.period, group, filter.market);
+  const period = { from: report.from, to: report.to };
   const periodQuery: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
   const marketQuery: Record<string, string> = filter.market ? { market: filter.market } : {};
-  const prevLabel = previousLabel(report.previousFrom, report.previousTo, report.previousPartial, copy, me.locale);
+  // All compares with nothing: no previous period
+  const prevLabel = report.previousFrom !== null && report.previousTo !== null
+    ? previousLabel(report.previousFrom, report.previousTo, report.previousPartial, copy, me.locale) : { text: "", dates: null, partial: false };
+  const compare = !report.all;
 
   const h = copy.hints;
   const n = (x: number) => fmtCount(x, me.locale);
@@ -82,11 +92,12 @@ export default async function ReviewsPage({ searchParams }: PageProps<"/reports/
 
       <div className="flex flex-wrap items-start justify-between gap-x-6">
         <div>
-          <PeriodBar pathname="/reports/reviews" range={range} period={period} today={today} copy={copy} keep={{ group, ...marketQuery }} />
+          <PeriodBar pathname="/reports/reviews" range={range} period={period} today={today} copy={copy}
+            keep={{ ...(group === "month" ? {} : { group }), ...marketQuery }} allLabel={t.periodAll} />
         </div>
         <div className="mb-6">
           <FunnelFilters pathname="/reports/reviews" markets={report.markets} pipelines={[]} sourceChannels={[]} filter={filter}
-            query={{ ...periodQuery, group }} copy={funnelClientCopy(copy)} marketOnly />
+            query={{ ...periodQuery, ...(group === "month" ? {} : { group }) }} copy={funnelClientCopy(copy)} marketOnly />
         </div>
       </div>
 
@@ -114,7 +125,8 @@ export default async function ReviewsPage({ searchParams }: PageProps<"/reports/
       ) : null}
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <FunnelGroupSwitch pathname="/reports/reviews" group={group} query={{ ...periodQuery, ...marketQuery }} copy={copy} />
+        <FunnelGroupSwitch pathname="/reports/reviews" group={group === "month" ? "week" : group} query={{ ...periodQuery, ...marketQuery }} copy={copy}
+          fixed={group === "month" ? t.month : undefined} />
         <FunnelDateLine from={period.from} to={period.to} parts={parts} history={history} copy={copy} locale={me.locale} testId="reviews" />
       </div>
 
@@ -134,34 +146,34 @@ export default async function ReviewsPage({ searchParams }: PageProps<"/reports/
         <div className="grid gap-6 xl:grid-cols-2">
           <Card title={t.distributionCard}>
             <FunnelIntro text={t.distributionIntro} label={t.distributionCard} hint={h.rvDistribution} copy={copy} />
-            {cur.reviews === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <ReviewDistribution rows={report.distribution} copy={copy} locale={me.locale} />}
+            {cur.reviews === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <ReviewDistribution rows={report.distribution} copy={copy} locale={me.locale} compare={compare} />}
           </Card>
           <Card title={t.linkCard}>
             <FunnelIntro text={t.linkIntro} label={t.linkCard} hint={h.rvLinks} copy={copy} />
-            {cur.reviews === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <ReviewLinkLevels rows={report.linkLevels} copy={copy} locale={me.locale} />}
+            {cur.reviews === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <ReviewLinkLevels rows={report.linkLevels} copy={copy} locale={me.locale} compare={compare} />}
           </Card>
         </div>
 
         <Card title={t.marketCard}>
           <FunnelIntro text={t.marketIntro} label={t.marketCard} hint={h.rvMarkets} copy={copy} />
           {report.byMarket.length === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p>
-            : <ReviewMarkets rows={report.byMarket} hints={hints} copy={copy} locale={me.locale} />}
+            : <ReviewMarkets rows={report.byMarket} hints={hints} copy={copy} locale={me.locale} compare={compare} />}
         </Card>
 
-        <Card title={group === "week" ? t.periodCardWeek : t.periodCardDay}>
+        <Card title={reviewPeriodsTitle(group, copy)}>
           <ReviewPeriods rows={report.byPeriod} group={group} hints={hints} copy={copy} locale={me.locale} />
         </Card>
 
         <Card title={t.channelCard}>
           <FunnelIntro text={t.channelIntro} label={t.channelCard} hint={h.rvChannels} copy={copy} />
           {report.byChannel.length === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p>
-            : <ReviewChannels rows={report.byChannel} hints={hints} copy={copy} locale={me.locale} />}
+            : <ReviewChannels rows={report.byChannel} hints={hints} copy={copy} locale={me.locale} compare={compare} />}
         </Card>
 
         <div className="grid gap-6 xl:grid-cols-2">
           <Card title={t.eventCard}>
             <FunnelIntro text={t.eventIntro} label={t.eventCard} hint={h.rvEvents} copy={copy} />
-            {cur.reviews === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <ReviewInviteEvents rows={report.inviteEvents} copy={copy} locale={me.locale} />}
+            {cur.reviews === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <ReviewInviteEvents rows={report.inviteEvents} copy={copy} locale={me.locale} compare={compare} />}
           </Card>
           <Card title={t.statesCard}>
             <FunnelIntro text={t.statesIntro} label={t.statesCard} hint={h.rvStates} copy={copy} />

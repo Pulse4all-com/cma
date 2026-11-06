@@ -198,6 +198,18 @@
     "rt": 9
   },
   {
+    "path": "/reports/reviews?range=all",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/installed-base",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
     "path": "/api/v1/reports/funnel?from=2026-10-01&to=2026-10-20",
     "subject": "manager",
     "tx": 2,

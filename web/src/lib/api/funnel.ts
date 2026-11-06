@@ -1,6 +1,6 @@
-import { ApiError, teamRangeParams } from "@/lib/api/respond";
+import { ApiError, dateParam, teamRangeParams } from "@/lib/api/respond";
 import { parseFunnelFilter, parseFunnelGroup } from "@/lib/funnel";
-import type { FunnelFilter, FunnelGroup, HoursRange } from "@/lib/data";
+import type { FunnelFilter, FunnelGroup, HoursRange, ReviewGroup, ReviewsRange } from "@/lib/data";
 import { MAX_REPORT_DAYS } from "@/lib/reports";
 
 /**
@@ -22,4 +22,23 @@ export function funnelParams(sp: URLSearchParams, o: { marketOnly?: boolean } = 
   const group = sp.has("group") ? parseFunnelGroup(sp.get("group")) : "week";
   if (!group) throw new ApiError(400, "invalid_group", "group must be week or day");
   return { range: { from, to }, filter, group };
+}
+
+/**
+ * The query of the Reviews route (addition 0008zw): funnelParams' period, group and market, or the period All:
+ * ?range=all&to (from the tenant's first counted review to &to, no from, exempt from the 92 days), grouped by month
+ * (&group=month or left out; another group is a 400). The market only, as before
+ */
+export function reviewsParams(sp: URLSearchParams): { range: ReviewsRange; market: string | null; group: ReviewGroup } {
+  if (sp.get("range") !== "all") {
+    const { range, filter, group } = funnelParams(sp, { marketOnly: true });
+    return { range, market: filter.market, group };
+  }
+  if (sp.has("from")) throw new ApiError(400, "invalid_range", "range=all takes no from: it starts at the first review");
+  const to = dateParam(sp.get("to"), "to");
+  if (sp.has("pipeline") || sp.has("source")) throw new ApiError(400, "invalid_filter", "cancellations and reviews take the market filter only");
+  const { filter, problem } = parseFunnelFilter(sp.get("market"), null, null);
+  if (problem === "market") throw new ApiError(400, "invalid_market", "market must be a market code or unknown");
+  if (sp.has("group") && sp.get("group") !== "month") throw new ApiError(400, "invalid_group", "range=all is grouped by month");
+  return { range: { from: null, to }, market: filter.market, group: "month" };
 }
