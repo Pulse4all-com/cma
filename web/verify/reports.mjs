@@ -1993,6 +1993,60 @@ expect("courtesy: the address (G, O, K, the segment, S) and the settings as the 
    { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }]);
 // the route and the data layer, from their source: the report's permissions, the read with its eight parameters, the filters
 // refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
+// ---- Courtesy's two bases (addition 0009c, brief B33) on 155's own scenario --------------------------------------
+// Tenant one of 155's block B as the mirror holds it, as of Friday 20 November 2026 12:00 UTC: per market the period's orders
+// by order date beside the calls completed in the period by call date, each once, in the market of the earliest courtesy
+// order it completed among the filtered orders; the strings are the ones 155 proves in the database (B1 to B3)
+const CB_NOW = "2026-11-20T12:00:00.000Z";
+const CB_ZONE = { NL: "Europe/Amsterdam", BE: "Europe/Brussels", GB: "Europe/London" };
+const cbOrder = (orderId, contact, market, at) => ({ orderId, orderName: orderId, store: `v-${market.toLowerCase()}`, storeName: `Verify ${market}`, market,
+  zone: CB_ZONE[market], createdAt: `2026-${at}:00.000Z`, kind: "first", isTest: false, deleted: false, cancelled: false, contact,
+  contactSegment: contact === null ? null : contact === "kS" ? "B2B" : "B2C" });
+const CB_ORDERS = [
+  cbOrder("oS", "kS", "GB", "09-14T10:00"), cbOrder("oN", "kN", "NL", "10-01T10:00"), cbOrder("oR", "kR", "NL", "10-02T10:00"),
+  cbOrder("oXbe", "kX", "BE", "10-05T10:00"), cbOrder("oXnl", "kX", "NL", "10-10T10:00"), cbOrder("oO", "kO", "NL", "10-20T10:00"),
+  cbOrder("oNc", null, "NL", "11-11T10:00"), cbOrder("oN1", "kN1", "NL", "11-12T10:00"),
+];
+const CB_CALLS = [
+  ctCall("cS", "kS", "11-04T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("cN", "kN", "10-12T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("cO", "kO", "11-03T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("cX", "kX", "10-22T10:00", "outbound", 90, "tu-1", ["courtesy_completed_neutral"]),
+  ctCall("cR1", "kR", "10-13T10:00", "outbound", null, "tu-1"), ctCall("cR2", "kR", "10-14T10:00", "outbound", null, "tu-1"),
+  ctCall("cR3", "kR", "10-15T10:00", "outbound", null, "tu-1"),
+];
+const cbRows = courtesyOrders(CB_ORDERS, CB_CALLS, CT_PEOPLE, ctSettings("2026-09-07"), CB_NOW);
+const cbPage = (from, to, filter = {}) => courtesyReport(cbRows, {
+  from, to, period: "week", group: "week", filter: { market: null, segment: null, state: null, ...filter }, rows: 100, perPerson: true, now: CB_NOW,
+  prev: { from: "2026-08-31", to: "2026-09-30", until: null }, settings: ctSettings("2026-09-07"), hasStore: true,
+  markets: ["BE", "GB", "NL"].map((code) => ({ code, name: code, sortOrder: 100 })), people: CT_PEOPLE.map((x) => ({ userId: x.userId, name: x.name })) });
+const cbMarkets = (p) => [p.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.calls}/${m.notReached}/${m.noContact}`).join(" "),
+  `total ${p.marketsTotal.orders}/${p.marketsTotal.completed}/${p.marketsTotal.calls}/${p.marketsTotal.notReached}/${p.marketsTotal.noContact}`,
+  `tile ${p.completed.calls}`].filter((x) => x !== "").join(" | ");
+const CB_OCT = ["2026-10-01", "2026-10-31"];
+const CB_NOV = ["2026-11-01", "2026-11-30"];
+const cbAddsUp = (p) => {
+  const sum = (k) => p.byMarket.reduce((a, m) => a + m[k], 0);
+  return ["orders", "completed", "calls", "notReached", "noContact"].every((k) => sum(k) === p.marketsTotal[k]) && p.marketsTotal.calls === p.completed.calls;
+};
+expect("courtesy bases: per market the calls add up to the tile and the total row holds the sums, every filter, as 155's B1 (and 151's scenario)",
+  [...[CB_OCT, CB_NOV].flatMap(([from, to]) => [{}, { market: "NL" }, { market: "BE" }, { market: "GB" }, { segment: "B2C" }, { state: "not_reached" }]
+    .map((f) => cbAddsUp(cbPage(from, to, f)))), cbAddsUp(ctP), ctPage({ market: "GB" }).marketsTotal.calls, ctP.marketsTotal.calls],
+  [...Array(12).fill(true), true, 0, 4],
+  [...Array(12).fill(false), false, 1, 5]);
+expect("courtesy bases: a call completing orders in two markets counts once, in the earlier order's market; NL's filter keeps it in NL, as 155's B2",
+  [cbMarkets(cbPage(...CB_OCT)), cbMarkets(cbPage(...CB_OCT, { market: "NL" })), cbMarkets(cbPage(...CB_OCT, { market: "BE" }))],
+  ["BE:1/1/1/0/0 NL:4/3/1/1/0 | total 5/4/2/1/0 | tile 2", "NL:4/3/2/1/0 | total 4/3/2/1/0 | tile 2", "BE:1/1/1/0/0 | total 1/1/1/0/0 | tile 1"],
+  ["BE:1/1/0/0/0 NL:4/3/2/1/0 | total 5/4/2/1/0 | tile 2", "NL:4/3/1/1/0 | total 4/3/1/1/0 | tile 1", "BE:1/1/1/0/0 | total 1/1/1/0/0 | tile 1"]);
+const cbNov = cbPage(...CB_NOV);
+expect("courtesy bases: a November call of an October order counts in November's market column, not in its Orders; Per week has no calls, as 155's B3",
+  [cbMarkets(cbNov), cbMarkets(cbPage(...CB_NOV, { segment: "B2C" })), cbNov.byMarket.every((m) => m.completed === 0),
+   cbNov.byGroup.some((g) => "calls" in g || g.markets.some((m) => "calls" in m)), cbPage(...CB_OCT).byMarket.find((m) => m.market === "NL")?.orders],
+  ["GB:0/0/1/0/0 NL:1/0/1/0/1 | total 1/0/2/0/1 | tile 2", "NL:1/0/1/0/0 | total 1/0/1/0/0 | tile 1", true, false, 4],
+  ["NL:1/1/2/0/1 | total 1/1/2/0/1 | tile 2", "NL:1/0/1/0/0 | total 1/0/1/0/0 | tile 1", false, false, 3]);
+expect("courtesy bases: not set up has no market row and no total row",
+  [ctPage({}, 100, true, null).byMarket, ctPage({}, 100, true, null).marketsTotal], [[], null], [[], { orders: 0 }]);
+
 const ctRoute = src("../src/app/api/v1/reports/courtesy/route.ts");
 const ctApi = src("../src/lib/api/courtesy.ts");
 const ctPageSrc = src("../src/app/reports/courtesy/page.tsx");

@@ -25,9 +25,12 @@ import { resolve } from "../../access";
  * Repeat store order (courtesy.order_kinds) from courtesy.start_date gets a courtesy call from day courtesy.due_days. Two kinds of
  * figure, each saying which in its hint: now (every courtesy order since the start date: the orders due without completion, Not
  * reached, the flag after courtesy.alert_attempts attempts without a Conversation, No contact, and the order list with each
- * order's state and the contact's record link) and the period (the completed courtesy calls by their completion date with the
- * previous period like for like and their outcomes; per market and per day, week or month (G); the order cohorts per week or
- * month (O) at the ages of courtesy.ages_days; per person, for performance.team only, by name, never ranked). Narrowed by
+ * order's state and the contact's record link) and the period, on two bases each block names (addition 0009c, brief B33): by
+ * call date the courtesy calls completed in the period, for orders of any date (the tile, with the previous period like for
+ * like, and their outcomes; per person, for performance.team only, by name, never ranked); by order date the orders placed in
+ * the period with their state now (per market and per day, week or month (G); the order cohorts per week or month (O) at the
+ * ages of courtesy.ages_days). Per market also counts the calls completed in the period, each in the market of the earliest
+ * courtesy order it completed, with a total row, so its calls add up to the tile; Per week has no call column. Narrowed by
  * market (K), segment and state (S), in the database. Not set up (no start date): the page says so and shows no count; a tenant
  * without a store says "No store connected", never 0. Shown to people holding reports.view or performance.team, as Reviews; the
  * database checks again on every read. Ids, codes, counts, dates and links only: never a customer's name, email, phone or address.
@@ -136,9 +139,7 @@ export default async function CourtesyPage({ searchParams }: PageProps<"/reports
           <div className="flex flex-col gap-6">
             <section className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label={t.title} data-testid="courtesy-tiles">
               <CallsTile testId="courtesy-completed" label={t.completedCalls} value={n(report.completed!.calls)}
-                info={info(t.completedCalls, hints.ctCompletedCalls!, "courtesy.completed_calls")}
-                detail={t.completedDetail.replace("{positive}", n(report.completed!.positive)).replace("{neutral}", n(report.completed!.neutral))
-                  .replace("{negative}", n(report.completed!.negative))}
+                info={info(t.completedCalls, hints.ctCompletedCalls!, "courtesy.completed_calls")} detail={t.completedDetail}
                 delta={<DeltaLine current={report.completed!.calls} previous={report.previous!.calls} compared={prevLabel} previousFrom={report.previousFrom}
                   historyStart={report.startDate} copy={copy} locale={me.locale} historyText={t.historyFrom} better="up" />} />
               <CallsTile testId="courtesy-due-open" label={t.dueOpen} value={n(now!.dueOpen)} info={info(t.dueOpen, hints.ctDueOpen!, "courtesy.due_open")}
@@ -157,9 +158,9 @@ export default async function CourtesyPage({ searchParams }: PageProps<"/reports
             </Card>
 
             <Card title={t.marketCard}>
-              <FunnelIntro text={t.marketIntro} label={t.marketCard} hint={hints.ctColMarket!} copy={copy} />
+              <FunnelIntro text={t.marketIntro} label={t.marketCard} hint={hints.ctMarkets!} copy={copy} />
               {report.byMarket.length === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p>
-                : <CourtesyMarkets rows={report.byMarket} hints={hints} copy={copy} locale={me.locale} />}
+                : <CourtesyMarkets rows={report.byMarket} total={report.marketsTotal} hints={hints} copy={copy} locale={me.locale} />}
             </Card>
 
             <Card title={group === "day" ? t.periodCardDay : group === "week" ? t.periodCardWeek : t.periodCardMonth}>

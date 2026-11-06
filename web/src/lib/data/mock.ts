@@ -2542,8 +2542,9 @@ const MOCK_COURTESY_CONTACT = new Map<string, string>();
  * (a First and a Repeat order completed positive and negative, an inbound completion, the kinds and flags left out, an order
  * before the start date, No contact, a London and an Amsterdam order at 23:30 UTC, a completion before the due date, a call
  * before it, one call completing two orders and a later third open, Not reached after three attempts, Attempted with two and
- * with a conversation, an untagged connected call), and a spread of orders over the last sixty days in NL, GB and DE.
- * Invented ids and codes only; the people are the mock team's. Tenant two holds no store
+ * with a conversation, an untagged connected call), and a spread of orders over the last sixty days in NL, GB and DE; no
+ * order of this month completed while calls of this month complete older ones (addition 0009c: This month's tile above 0
+ * with every Of which completed 0). Invented ids and codes only; the people are the mock team's. Tenant two holds no store
  */
 function mockCourtesy(me: Principal, nowMs: number): [CourtesyOrderSource[], CourtesyCallSource[], { userRef: string; userId: string; name: string }[]] {
   if (me.tenantId === MOCK_TENANT_2) return [[], [], []];
@@ -2581,19 +2582,29 @@ function mockCourtesy(me: Principal, nowMs: number): [CourtesyOrderSource[], Cou
   order("conversation", "k7c", day(-36)); call("k7c", day(-25), "outbound", null, "tu-3"); call("k7c", day(-24), "outbound", 40, "tu-3", ["courtesy_attempt"]);
   call("k7c", day(-23), "outbound", null, "tu-3");
   order("untagged", "k8u", day(-36)); call("k8u", day(-25), "outbound", 60, "tu-1");
+  // the two bases apart (addition 0009c, brief B33): no order placed this month (Amsterdam) is completed yet, while calls made
+  // this month complete older orders, so This month shows the tile above 0 and every Of which completed 0, as prod's first
+  // November did; one such call on the 1st (07:00 or 08:00 in Amsterdam) completes an order of the 20th or so of last month
+  const monthStart = `${dateKeyInZone(new Date(nowMs), "Europe/Amsterdam").slice(0, 8)}01`;
+  const placedThisMonth = (at: string, market: string) => dateKeyInZone(new Date(at), zones[market]!) >= monthStart;
+  order("last-month", "kLm", new Date(Date.parse(`${monthStart}T10:00:00Z`) - 12 * 86_400_000).toISOString());
+  call("kLm", `${monthStart}T06:00:00.000Z`, "outbound", 90, "tu-2", ["courtesy_completed_positive"]);
   // a spread over the last sixty days: about two orders a day in NL, GB and DE, most completed a few days after their due date
+  // (none of this month's: above)
   for (let n = 58; n >= 1; n -= 1) {
     for (const [i, market] of ["NL", "GB", "DE"].entries()) {
       if (hashOf(`ct-${n}-${market}`) < 0.35) continue;
       const contact = `k-${n}-${market}`;
       const linked = hashOf(`ct-link-${n}-${i}`) > 0.08;
-      order(`${n}-${market}`, linked ? contact : null, day(-n, `${String(8 + i * 3).padStart(2, "0")}:15`), hashOf(`ct-kind-${n}-${i}`) < 0.7 ? "first" : "repeat", { market });
+      const at = day(-n, `${String(8 + i * 3).padStart(2, "0")}:15`);
+      order(`${n}-${market}`, linked ? contact : null, at, hashOf(`ct-kind-${n}-${i}`) < 0.7 ? "first" : "repeat", { market });
       if (!linked) continue;
       const h = hashOf(`ct-done-${n}-${i}`);
       const attempts = n > 12 ? 1 + Math.floor(h * 4) : 0;
       for (let a = 0; a < attempts; a += 1) {
         const last = a === attempts - 1;
-        const outcome = h < 0.55 ? "courtesy_completed_positive" : h < 0.75 ? "courtesy_completed_neutral" : h < 0.85 ? "courtesy_completed_negative" : null;
+        const outcome = placedThisMonth(at, market) ? null
+          : h < 0.55 ? "courtesy_completed_positive" : h < 0.75 ? "courtesy_completed_neutral" : h < 0.85 ? "courtesy_completed_negative" : null;
         call(contact, day(-n + 11 + a, "11:00"), "outbound", last && outcome ? 120 : null, `tu-${1 + (n + a) % 5}`, last && outcome ? [outcome] : []);
       }
     }

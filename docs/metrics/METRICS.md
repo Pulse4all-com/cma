@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-607 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 114 · cadence_unconfirmed 68.
+608 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 115 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -35843,9 +35843,9 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 #### `courtesy.completed_calls`
 
-**Completed courtesy calls** on /reports/courtesy · Completed courtesy calls (Afgeronde courtesy-gesprekken)
+**Courtesy calls completed in the period** on /reports/courtesy · Courtesy calls completed in the period (Courtesy-gesprekken afgerond in de periode)
 
-Courtesy calls completed in the period: calls on an order's contact tagged with a completed meaning (positive, neutral or negative), by the day they were made. One call counts once, also when it completed several orders; the detail line splits them by outcome.
+By call date, for orders of any date: the courtesy calls completed in the period, calls on a courtesy order's contact tagged with a completed meaning (positive, neutral or negative), by the day they were made. One call counts once, also when it completed several orders. The tile's line says its basis ("By call date, for orders of any date"); Completed calls by outcome splits them; Per market counts each in the market of the earliest courtesy order it completed (courtesy.by_market.calls), so its rows add up to this figure.
 
 **Formula as computed**
 
@@ -35894,7 +35894,7 @@ calls = count(distinct completed_call_id) over the courtesy orders (every one si
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -35925,7 +35925,7 @@ select count(*) from o
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 **Notes**
 
@@ -35982,7 +35982,7 @@ due_open = count(courtesy orders since courtesy.start_date with a contact and a 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36070,7 +36070,7 @@ not_reached = count(courtesy orders with a contact, not completed, attempts sinc
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36157,7 +36157,7 @@ no_contact = count(courtesy orders since courtesy.start_date whose commerce_cust
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36193,7 +36193,7 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 
 **Completed calls by outcome** on /reports/courtesy · Completed calls by outcome (Afgeronde gesprekken per uitkomst)
 
-The period's completed courtesy calls split by outcome, each call once.
+By call date: the courtesy calls completed in the period split by outcome, each call once.
 
 **Formula as computed**
 
@@ -36240,7 +36240,7 @@ per outcome in (positive, neutral, negative): count(distinct completed_call_id) 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36270,7 +36270,7 @@ select count(*) from o
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 **Notes**
 
@@ -36278,14 +36278,97 @@ Colours: positive Leaf Green, neutral Light Blue, negative Soft Rose with a Deep
 
 #### `courtesy.by_market`
 
-**Per market** on /reports/courtesy · Courtesy orders per market (Per markt)
+**Per market: orders placed in the period, state now** on /reports/courtesy · Per market: orders placed in the period, state now (Per markt: orders geplaatst in de periode, stand nu)
 
-The courtesy orders placed in the period per market, with their state now: orders with a contact, completed, completion share, not reached and no contact.
+Two bases, each column saying which. By order date: the courtesy orders placed in the period per market, with their state now (orders with a contact, of which completed, completion share, not reached and no contact). By call date, set apart as the last column: the courtesy calls completed in the period, each in the market of the earliest courtesy order it completed (courtesy.by_market.calls). A total row under the markets; its calls equal courtesy.completed_calls.
 
 **Formula as computed**
 
 ```
-group by the store's market (unknown last) over the courtesy orders with a business date in the period; each column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.not_reached and courtesy.no_contact define it, per market
+group by the store's market (unknown last) over the courtesy orders with a business date in the period; each order column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.not_reached and courtesy.no_contact define it, per market; calls as courtesy.by_market.calls; a market with calls of the period and no order of it has a row with its order columns 0; markets_total = each column's sum over the rows (null while courtesy is not set up)
+```
+
+**Unit** count · **Grain** period, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
+
+#### `courtesy.by_market.calls`
+
+**Calls completed in the period** on /reports/courtesy · Calls completed in the period (Gesprekken afgerond in de periode)
+
+By call date, for orders of any date: per market the courtesy calls completed in the period, each call once, in the market of the earliest courtesy order it completed. Every call is in exactly one market, so the rows add up to courtesy.completed_calls (the total row shows it). A November call that completes an October order counts here in November, while that order is in October's Orders, not November's.
+
+**Formula as computed**
+
+```
+calls(market) = count of the period's completing calls (as courtesy.completed_calls: distinct completed_call_id whose completion, in the order's zone, falls in the period) whose earliest completed courtesy order among the filtered orders (by created_at, then order id) is in that market; with the market filter only that market's orders are kept, so a call counts there when one of its orders is; sum over the markets = courtesy.completed_calls
 ```
 
 **Unit** count · **Grain** period, per_market · **Status** prerequisite_missing
@@ -36332,23 +36415,14 @@ group by the store's market (unknown last) over the courtesy orders with a busin
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
-o as (
-  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
-         cu.crm_connection_id, cu.crm_contact_source_id
-  from cma.commerce_order co
-  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
-  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
-  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
-                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
-  cross join s
-  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
-    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
-    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
-select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+-- as the application (app.tenant_id and app.user_id set): per market the calls of the period, the total row and the tile
+select m ->> 'market' as market, (m ->> 'calls')::int as calls, (p.j -> 'markets_total' ->> 'calls')::int as total_calls,
+       (p.j -> 'completed' ->> 'calls')::int as tile
+from (select cma.courtesy_page(:from, :to) as j) p
+cross join lateral jsonb_array_elements(p.j -> 'markets') m
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/155_verify_courtesy_bases.sql checks it on a fixed scenario (the calls add up to the tile with every filter, a call of two markets once in the earlier order's, a November call of an October order) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -36357,18 +36431,22 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009c; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
+
+**Notes**
+
+Added by addition 0009c (brief B33, Martin, 6 November 2026), so Per market's rows add up to the tile: the tile and the order columns count on different bases (call date and order date) and read as a contradiction side by side. Per week has no such column: its rows are order dates.
 
 #### `courtesy.by_period`
 
-**Per day / Per week / Per month** on /reports/courtesy · Courtesy orders per day, week or month (Per dag, week of maand)
+**Per day / Per week / Per month: orders placed in the period, state now** on /reports/courtesy · Per day, week or month: orders placed in the period, state now (Per dag, week of maand: orders geplaatst in de periode, stand nu)
 
-The courtesy orders placed on each day, ISO week or month of the period (G), empty ones too, with the markets below each line.
+By order date: the courtesy orders placed on each day, ISO week or month of the period (G), empty ones too, with their state now and the markets below each line. No call column: its rows are order dates, so the calls completed in the period are counted in the tile and per market only.
 
 **Formula as computed**
 
 ```
-group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the columns as courtesy.by_market
+group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the order columns as courtesy.by_market (orders, of which completed, completion share, not reached, no contact), without its calls
 ```
 
 **Unit** count · **Grain** period, per_day, per_iso_week, per_month, per_market · **Status** prerequisite_missing
@@ -36410,7 +36488,7 @@ group by the business date's day, ISO week (Monday) or month over the period's c
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36440,13 +36518,13 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 #### `courtesy.orders`
 
 **Orders** on /reports/courtesy · Orders (Bestellingen)
 
-Courtesy orders placed in the span with a linked contact.
+By order date: courtesy orders placed in the span with a linked contact.
 
 **Formula as computed**
 
@@ -36493,7 +36571,7 @@ orders = count(courtesy orders with a business date in the span and a contact)
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36523,13 +36601,13 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 #### `courtesy.completed`
 
-**Completed** on /reports/courtesy · Completed (Afgerond)
+**Of which completed** on /reports/courtesy · Of which completed (Waarvan afgerond)
 
-Of those orders, the ones completed by a courtesy call now.
+By order date: of the orders placed in the span, the ones completed by a courtesy call now, whenever the call was made (also after the period).
 
 **Formula as computed**
 
@@ -36576,7 +36654,7 @@ completed = count(the span's courtesy orders whose state is completed as of now)
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36606,18 +36684,18 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 #### `courtesy.completion_share`
 
 **Completion share** on /reports/courtesy · Completion share (Aandeel afgerond)
 
-Completed divided by orders.
+By order date: of which completed divided by orders.
 
 **Formula as computed**
 
 ```
-completion_share = completed / orders (null without orders), shown as a percentage
+completion_share = completed (of which completed) / orders (null without orders), shown as a percentage
 ```
 
 **Unit** share · **Grain** period · **Status** prerequisite_missing
@@ -36659,7 +36737,7 @@ completion_share = completed / orders (null without orders), shown as a percenta
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36689,7 +36767,7 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 #### `courtesy.cohorts`
 
@@ -36743,7 +36821,7 @@ per cohort and age n: completed = count(orders with completed_at <= created_at +
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36783,7 +36861,7 @@ Calendar days of the creation instant, as Cohort age (definitions.md).
 
 **Per person** on /reports/courtesy · Completed courtesy calls per person (Per persoon)
 
-The period's completed courtesy calls per person who made them, by name, never ranked; the calls of a telephony user linked to nobody together, last. For performance.team only.
+By call date: the courtesy calls completed in the period per person who made them, by name, never ranked; the calls of a telephony user linked to nobody together, last. For performance.team only.
 
 **Formula as computed**
 
@@ -36830,7 +36908,7 @@ group the period's completing calls by completed_by (the CMA person of the call'
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36860,7 +36938,7 @@ select count(*) from o
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period)
 
 **Notes**
 
@@ -36918,7 +36996,7 @@ rows ordered by state rank (not_reached, due_no_attempt, attempted, not_due, no 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37005,7 +37083,7 @@ days_past_due = today in the order's zone - due_date, for the states due_no_atte
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37088,7 +37166,7 @@ attempts since due = count(outbound linked calls on the contact with started_at 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37172,7 +37250,7 @@ state = completed when a completing call exists; else not_due before due_at; els
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

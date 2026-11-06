@@ -2141,12 +2141,21 @@ export interface CourtesyNow {
   noContact: number;
 }
 
-/** The courtesy orders created in a span: with a contact, completed now, Not reached now, and those without a contact */
+/** The courtesy orders created in a span (by order date): with a contact, of which completed now, Not reached now, and those without a contact */
 export interface CourtesyCounts {
   orders: number;
   completed: number;
   notReached: number;
   noContact: number;
+}
+
+/**
+ * Per market (addition 0009c): the period's orders by order date beside the courtesy calls completed in the period by call
+ * date, each call once, in the market of the earliest courtesy order it completed among the filtered orders; the calls of
+ * every row add up to the tile
+ */
+export interface CourtesyMarketCounts extends CourtesyCounts {
+  calls: number;
 }
 
 /** One order cohort: the orders with a contact of an ISO week or month, at each age of courtesy.ages_days */
@@ -2203,16 +2212,18 @@ export interface CourtesyReport {
   startDate: DateKey | null;
   settings: { dueDays: number; alertAttempts: number; ages: number[]; orderKinds: string[] };
   now: CourtesyNow | null;
-  /** Completed courtesy calls of the period by their completion date */
+  /** Courtesy calls completed in the period, by call date, for orders of any date (the tile) */
   completed: CourtesyCalls | null;
   /** The previous period's like for like */
   previous: CourtesyCalls | null;
   previousFrom: DateKey | null;
   previousTo: DateKey | null;
   previousPartial: boolean;
-  /** The period's orders per market (unknown last) */
-  byMarket: (CourtesyCounts & { market: string; name: string | null })[];
-  /** Every day, ISO week or month of the period, empty ones too, each with its markets */
+  /** Per market (unknown last): the period's orders by order date and the calls completed in the period by call date (0009c) */
+  byMarket: (CourtesyMarketCounts & { market: string; name: string | null })[];
+  /** Per market's total row (0009c): its calls equal the tile's; null while courtesy is not set up */
+  marketsTotal: CourtesyMarketCounts | null;
+  /** Every day, ISO week or month of the period by order date, empty ones too, each with its markets (no calls: its rows are order dates) */
   byGroup: (CourtesyCounts & { key: DateKey; markets: (CourtesyCounts & { market: string })[] })[];
   /** Newest first */
   cohorts: CourtesyCohort[];

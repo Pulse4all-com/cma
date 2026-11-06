@@ -1063,7 +1063,8 @@ type CourtesyPageDb = {
   settings: { due_days: number; alert_attempts: number; ages: number[]; order_kinds: string[] };
   now: { orders: number; due_open: number; not_due: number; due_no_attempt: number; attempted: number; not_reached: number; completed: number; no_contact: number } | null;
   completed: CourtesyCallsDb | null; previous: CourtesyCallsDb | null; previous_from: string | null; previous_to: string | null; previous_partial: boolean;
-  markets: (CourtesyCountsDb & { market: string; name: string | null })[];
+  markets: (CourtesyCountsDb & { market: string; name: string | null; calls: number })[];
+  markets_total: (CourtesyCountsDb & { calls: number }) | null;
   groups: (CourtesyCountsDb & { key: string; markets: (CourtesyCountsDb & { market: string })[] })[];
   cohorts: { key: string; label: string; start: string; end: string; partial: boolean; orders: number; ages: { age: number; mature: boolean; completed: number | null }[] }[];
   per_person: (CourtesyCallsDb & { user_id: string | null; name: string | null })[] | null;
@@ -2632,7 +2633,9 @@ export const postgresData: CmaData = {
           completed: n.completed, noContact: n.no_contact } : null,
         completed: j.completed ? toCourtesyCalls(j.completed) : null, previous: j.previous ? toCourtesyCalls(j.previous) : null,
         previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial,
-        byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, ...toCourtesyCounts(m) })),
+        // per market the period's orders (by order date) and the calls completed in the period (by call date; addition 0009c)
+        byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, ...toCourtesyCounts(m), calls: m.calls })),
+        marketsTotal: j.markets_total ? { ...toCourtesyCounts(j.markets_total), calls: j.markets_total.calls } : null,
         byGroup: j.groups.map((g) => ({ key: g.key, ...toCourtesyCounts(g), markets: g.markets.map((m) => ({ market: m.market, ...toCourtesyCounts(m) })) })),
         cohorts: j.cohorts, perPerson: j.per_person ? j.per_person.map((x) => ({ userId: x.user_id, name: x.name, ...toCourtesyCalls(x) })) : null,
         list: {
