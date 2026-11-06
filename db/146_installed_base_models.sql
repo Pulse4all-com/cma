@@ -8,10 +8,13 @@
 -- your own IAM login, away from minute 20 (the hourly snapshot job): dev first, then 147_verify_installed_base_models.sql
 -- there, then 123_verify_flash.sql, 137_verify_flash_insights.sql, 139_verify_flash_totals.sql and
 -- 143_verify_reviews_all_order_kinds.sql again (137, 139 and 143 accept the new set and split since this change, the edits
--- of this PR, Decision log); then prod in the same order, before the merge. The web of main runs unchanged on it: its
--- installed base breakdown shows the subscription-status set with the model as one more column, the landing's In the
--- field card gains a split main shows under the figure, and the document's split_order key is extra. No table, view or
--- column changes and no setting: seed 02 need not run again, and the data map's schema does not change.
+-- of this PR, Decision log); then the merge; then prod in the same order once the merge's build has deployed, not before
+-- it. The web of main does not run unchanged on it: its breakdown takes a set's rows by their keys exactly, so its live
+-- subscription-status breakdown would show its total row alone, and its landing card would show the split by model key.
+-- The web of this PR runs on both: before this script its subscription-status breakdown shows the rows as the functions
+-- give them (as for a snapshot stored before it), a Model filter names that breakdown not available, the tile's split
+-- follows the keys and the landing card shows none. No table, view or column changes and no setting: seed 02 need not
+-- run again, and the data map's schema does not change.
 --
 -- Why (Martin, 6 November 2026; Decision log): Reports → Flash's Installed base and Assets → Installed base split In the
 -- field per model and take a Model filter that narrows every tile, bar, breakdown and record:

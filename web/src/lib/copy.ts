@@ -7168,7 +7168,7 @@ const nl: Copy = {
     allModels: "Alle modellen",
     unknownModel: "Onbekend model",
     modelUnavailable: "Niet beschikbaar met een modelfilter",
-    modelUnavailableSet: "Deze snapshot bewaart deze cijfers zonder model, dus ze zijn niet beschikbaar met een modelfilter.",
+    modelUnavailableSet: "Deze momentopname bewaart deze cijfers zonder model, dus ze zijn niet beschikbaar met een modelfilter.",
     d_sku: "Productcode",
     d_pipeline: "Pijplijn",
     d_stage: "Fase",

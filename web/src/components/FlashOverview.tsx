@@ -23,7 +23,7 @@ import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { CmaDbError, data, dataIsMock, requestDbTrace, type FlashDocumentView, type FlashRowsView, type HoursRange } from "@/lib/data";
 import {
-  bandDimOf, breakdownSets, documentFilterOf, FLASH_DOCUMENT_FILTERS, FLASH_FROZEN_LIST, FLASH_PAGE_ROWS, filterDocument, filtersShown, filtersText, flashHref,
+  bandDimOf, breakdownSets, documentFilterOf, FLASH_DOCUMENT_FILTERS, FLASH_FROZEN_LIST, FLASH_PAGE_ROWS, filterDocument, filtersShown, filtersText, flashHref, shownSetOf,
   frozenFilters, listUnavailable, metricKey, modelChoicesOf, overviewOf, parseAsOf, parseFilters, parseMarket, parseSort, type FlashKey, type FlashOverviewDef,
   type FlashPath,
 } from "@/lib/flash";
@@ -292,6 +292,8 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
                     </Card>
                   );
                 }
+                // without a page filter, a snapshot stored before the set held the dim shows its rows as stored (shownSetOf)
+                const stored = shownSetOf(def, shown.rows, set);
                 // a band set (addition 0008zt): one row per band, of the market or summed over every market
                 const band = bandDimOf(def, set);
                 return band ? (
@@ -299,8 +301,8 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
                     <BandTable def={def} doc={shown} set={set} query={query} locale={locale} t={t} path={path} />
                   </Card>
                 ) : (
-                  <Card key={set.join("+")} title={cardTitle(set)}>
-                    <BreakdownTable def={def} doc={shown} set={set} query={query} locale={locale} t={t} path={path} />
+                  <Card key={set.join("+")} title={cardTitle(stored)}>
+                    <BreakdownTable def={def} doc={shown} set={stored} query={query} locale={locale} t={t} path={path} />
                   </Card>
                 );
               })}

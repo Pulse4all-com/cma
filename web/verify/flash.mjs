@@ -27,7 +27,7 @@ import {
   FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
   statusHintPart, measureHint, cardStatusHint, statusSettingsOf, FLASH_SPLITS, splitOf, splitItemsOf, splitLine, definitionChanged,
   FLASH_ORDER_KINDS, splitOrderOf, splitKeyLabel, splitLabelsOf, flashHref,
-  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf,
+  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf, shownSetOf,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -801,6 +801,15 @@ expect("a snapshot stored before 0008zy: the subscription-status breakdown not a
   [fOld.unavailableSets, JSON.stringify(fOld.totals), fBefore.unavailableMeasures, Object.keys(fBefore.totals ?? {}).includes("in_field_on_holding")],
   [["market+model+subscription_status"], '{"devices":6,"in_field":5,"in_stock":1,"components_past_due":1,"items_due_3m":1,"in_field_on_holding":3}', ["in_field_on_holding"], false],
   [[], "{}", [], true]);
+// without a Model filter (reviewer C1): a snapshot stored before 0008zy shows its subscription-status rows as stored
+const oldRows0008zy = ibRows.filter((r) => !("subscription_status" in r.dims)).concat([mRow({ market: "GB", subscription_status: "active" }, 4, 4, 0, 2, 0, 3)]);
+const ibSet = ["market", "model", "subscription_status"];
+expect("without a Model filter, a snapshot stored before 0008zy shows its subscription-status rows under the set it stored; the page draws each breakdown from that set",
+  [shownSetOf(base0008zy, oldRows0008zy, ibSet), shownSetOf(base0008zy, ibRows, ibSet), shownSetOf(base0008zy, [], ibSet),
+    shownSetOf(overviewOf("orders"), [mRow({ market: "GB", kind: "first" }, 1, 1, 0, 0, 0, 0)], ["market", "store", "kind"]),
+    /const stored = shownSetOf\(def, shown\.rows, set\);[\s\S]{0,600}title=\{cardTitle\(stored\)\}>\s*<BreakdownTable def=\{def\} doc=\{shown\} set=\{stored\}/.test(overviewSrc)],
+  [["market", "subscription_status"], ibSet, ibSet, ["market", "store", "kind"], true],
+  [ibSet, ["market", "subscription_status"], ["market", "subscription_status"], ["market", "kind"], false]);
 const labels0008zy = { model: { ma: "Model A", mb: "Model B", mc: "Model C" } };
 expect("the Model filter is the installed base's alone, read from f_model; its choices: the database's order, then by name, unknown last",
   [FLASH_DOCUMENT_FILTERS, documentFilterOf(base0008zy, { model: "ma", market: "GB" }), documentFilterOf(overviewOf("orders"), { kind: "first" }),

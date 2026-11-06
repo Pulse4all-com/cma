@@ -1068,10 +1068,21 @@ export function filterDocument(def: FlashOverviewDef, totals: Readonly<Record<st
     dims: { market },
     measures: Object.fromEntries(summed.map((m) => [m, sumOver(of(sourceOf(m)).filter((r) => r.dims.market === market), m)])),
   }));
-  const unavailableSets = breakdownSets(def).filter((set) => !set.includes(dim)
-    || (rowsOfSet(rows, set).length === 0 && rows.some((r) => exactly(r, set.filter((d) => d !== dim))))).map((set) => set.join("+"));
+  const unavailableSets = breakdownSets(def).filter((set) => !set.includes(dim) || shownSetOf(def, rows, set) !== set).map((set) => set.join("+"));
   const breakdown = kept.filter((r) => breakdownSets(def).some((set) => exactly(r, set) && !unavailableSets.includes(set.join("+"))));
   return { totals: filteredTotals, rows: [...marketRows, ...breakdown], unavailableMeasures, unavailableSets };
+}
+
+/**
+ * The set a breakdown shows its rows under: the set itself, or, when the document holds no row of it but rows of the set
+ * without the overview's page-filter dim, that smaller set, as a snapshot stored before the set held the dim (the installed
+ * base's [market, subscription_status] before addition 0008zy): its rows shown as stored, never an empty card
+ */
+export function shownSetOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], set: readonly string[]): readonly string[] {
+  const dim = FLASH_DOCUMENT_FILTERS[def.key];
+  if (!dim || !set.includes(dim) || rowsOfSet(rows, set).length > 0) return set;
+  const without = set.filter((d) => d !== dim);
+  return rowsOfSet(rows, without).length > 0 ? without : set;
 }
 
 /** The model filter's choices from the document's labels and rows: the database's order first, the rest by name; unknown last */
