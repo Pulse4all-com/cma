@@ -1160,7 +1160,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: the register's `model_key` |
 | Not to use | A model name typed into a label |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "In the field on Installed base is split by model" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #237) |
+| Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "In the field on Installed base is split by model" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #238) |
 | Used by | `flash.installed_base.in_field`; Assets → Installed base and Reports → Flash (Installed base), the landing card |
 | As built today | `db/146` (0008zy), proved by `147`; the definition version of Installed base stays 0008zt. Matches the definition |
 
@@ -1179,7 +1179,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | A model key typed into a label |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "The Installed base gets a Model filter" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #237) |
+| Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "The Installed base gets a Model filter" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #238) |
 | Used by | `flash.installed_base.*` (every tile), Assets → Installed base and Reports → Flash (Installed base), their files and the Flash API |
 | As built today | `db/146` (0008zy), `147`; the web narrows the stored document. Matches the definition |
 
