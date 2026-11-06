@@ -43,7 +43,8 @@
     "verify:jobs": "node verify/jobs.mjs",
     "verify:refresh-follow-up": "node verify/refresh-follow-up.mjs",
     "verify:perf": "node verify/perf.mjs",
-    "verify:cache": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/cache.mjs"
+    "verify:cache": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/cache.mjs",
+    "verify:function-bases": "node ../tools/verify-function-bases.mjs"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.1",
