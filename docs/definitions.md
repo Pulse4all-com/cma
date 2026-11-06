@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026 the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -80,13 +80,13 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Counts / does not count | Counts every outbound call (Call) an agent places. Does not count inbound calls, internal calls, calls on a line that does not count, or a call logged in the CRM without an Aircall call (R1) |
 | Unit and display | A count |
 | Time rule | Day, by the call's start |
-| Scope | As Call. Which attempts a figure counts (a deal's, a person's, a period's) is the figure's rule in the metric catalog |
+| Scope | As Call. Which attempts a figure counts (a deal's, a person's, a period's, a courtesy order's: Attempt since due) is the figure's rule in the metric catalog |
 | Equivalent in the source system | Aircall Analytics' outbound calls: any call a user places to an external recipient, connected or not; internal calls excluded (Analytics: Terms) |
 | Not to use | "CRM call" or "logged call" as an attempt (R1); "Call attempt" and, in Dutch, "belpoging" next to "poging" (proposed; both appear today, see Gaps) |
 | Status | Decided |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Attempt" |
-| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Sales → Attempts per deal, Attempts per agent, Speed to lead |
-| As built today | Attempts per deal (`cma.deal_attempts_of`, `94`): under `attempts.source` `telephony` (the default, and Pulse4all's) an outbound telephony call on a counted line, not deleted, with a start, linked to a CRM call associated with the deal or its contacts; under `crm` every outbound CRM call so associated (R1 gap). Attempts per agent counts the attempts on the deals a person owns in the CRM, by whoever placed them. Reports → Calls counts every outbound call as Outbound, which matches. Speed to lead takes the first outbound CRM call, linked or not (`cma.speed_to_lead_of`, `40`). First orders' evidence "attempt" is an outbound telephony call linked to a CRM call with the contact (`100`), which matches |
+| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Sales → Attempts per deal, Attempts per agent, Speed to lead; Customers → Courtesy through `courtesy.list.attempts` and `courtesy.not_reached` (Attempt since due) |
+| As built today | Attempts per deal (`cma.deal_attempts_of`, `94`): under `attempts.source` `telephony` (the default, and Pulse4all's) an outbound telephony call on a counted line, not deleted, with a start, linked to a CRM call associated with the deal or its contacts; under `crm` every outbound CRM call so associated (R1 gap). Attempts per agent counts the attempts on the deals a person owns in the CRM, by whoever placed them. Reports → Calls counts every outbound call as Outbound, which matches. Speed to lead takes the first outbound CRM call, linked or not (`cma.speed_to_lead_of`, `40`). First orders' evidence "attempt" is an outbound telephony call linked to a CRM call with the contact (`100`), which matches. Courtesy counts the same Aircall attempts per courtesy order from the start of its due date (`cma.courtesy_orders_of`; Attempt since due) |
 
 ### Connected
 
@@ -161,8 +161,8 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | reached (0008z); "spoken to lead"; "in contact" ("talk time in contact"); "Conversation" for an email thread (Gaps) |
 | Status | Decided, for outbound and inbound calls; built in addition 0008zc, incorrect data in addition 0008zd |
 | Decided | 24 October 2026 (Martin); docs/decisions.md, 24 Oct 2026, "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*"; incorrect data 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning". Evidence: the outbound connected calls of 1 to 23 October 2026 by talk-time band against the agents' "Not Reached" tags. The share of tagged connected calls tagged "Not Reached" per band: 0–9 s 98 %, 10–19 s 85 %, 20–29 s 72 %, 30–44 s 71 %, 45–59 s 42 %, 60–89 s 27 %, 90 s and more 4 %. Talk time alone at 30 s would count 35 % voicemails; the tag rule removes them while keeping 84 % of the real conversations. Inbound: decided the same day (Martin), under the same rule. Built in addition 0008zc ("Definitions: Connected and Conversation built, step 1") |
-| Used by | `calls.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.conversations`, `calls_per_agent.tag_split`, `calls_per_agent.total_row`, `attempts.conversation_share`, `attempts.outcomes.conversation_share`, `attempts.outcomes.avg_talk_conversation`, `attempts.first_conversation_per_attempt`, `attempts.list.conversations`, `attempts.list.first_conversation`, `attempts.list.talk_conversation`, `attempts.deal.conversation`, `attempts_per_agent.conversation_share`, `attempts_per_agent.talk_conversation`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`; Reports → Calls, Calls per agent, Email; Sales → Attempts per deal, Attempts per agent, First orders, Orders per person |
-| As built today | One helper, `cma.is_conversation` (`100`): connected outbound (`cma.is_connected`) or answered inbound, talk time of at least `calls.conversation_min_talk_seconds` (0 to 600; 30 by default and for Pulse4all, the value `attempts.reached_min_talk_seconds` held, which `100` retires), and no current tag whose meaning is `not_reached` or `incorrect_data` (`cma.call_not_reached_of`, `102`, which reads `cma.tag_meaning_excludes_conversation`, the one place that names the meanings that exclude a call; a tag that does not count still excludes). Read by `cma.calls_of` (Reports → Calls and Calls per agent), `cma.crm_call_conversation_of` (in place of 0008t's `cma.crm_call_connected_of`, which `100` drops: a CRM call is a conversation only through its linked telephony call; Email's not-responding deals, `cma.email_not_responding_of`), first orders (`cma.first_orders_of`, evidence `conversation`) and Attempts per deal and per agent (`cma.deal_attempts_of`, `cma.attempt_deal`, `cma_read.attempts_per_deal`: `conversation_attempts`, `first_conversation_attempt`, `talk_seconds_conversation`). No CRM call outcome decides it (R1). Until a tag of the connection has the meaning not reached, Conversation counts on talk time alone, and Configuration → Sources, Tags says so (that notice looks at not reached only). Matches the definition |
+| Used by | `calls.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.conversations`, `calls_per_agent.tag_split`, `calls_per_agent.total_row`, `attempts.conversation_share`, `attempts.outcomes.conversation_share`, `attempts.outcomes.avg_talk_conversation`, `attempts.first_conversation_per_attempt`, `attempts.list.conversations`, `attempts.list.first_conversation`, `attempts.list.talk_conversation`, `attempts.deal.conversation`, `attempts_per_agent.conversation_share`, `attempts_per_agent.talk_conversation`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`; Reports → Calls, Calls per agent, Email; Sales → Attempts per deal, Attempts per agent, First orders, Orders per person; `courtesy.not_reached`, `courtesy.list.state`; Customers → Courtesy |
+| As built today | One helper, `cma.is_conversation` (`100`): connected outbound (`cma.is_connected`) or answered inbound, talk time of at least `calls.conversation_min_talk_seconds` (0 to 600; 30 by default and for Pulse4all, the value `attempts.reached_min_talk_seconds` held, which `100` retires), and no current tag whose meaning is `not_reached` or `incorrect_data` (`cma.call_not_reached_of`, `102`, which reads `cma.tag_meaning_excludes_conversation`, the one place that names the meanings that exclude a call; a tag that does not count still excludes). Read by `cma.calls_of` (Reports → Calls and Calls per agent), `cma.crm_call_conversation_of` (in place of 0008t's `cma.crm_call_connected_of`, which `100` drops: a CRM call is a conversation only through its linked telephony call; Email's not-responding deals, `cma.email_not_responding_of`), first orders (`cma.first_orders_of`, evidence `conversation`) and Attempts per deal and per agent (`cma.deal_attempts_of`, `cma.attempt_deal`, `cma_read.attempts_per_deal`: `conversation_attempts`, `first_conversation_attempt`, `talk_seconds_conversation`). No CRM call outcome decides it (R1). Until a tag of the connection has the meaning not reached, Conversation counts on talk time alone, and Configuration → Sources, Tags says so (that notice looks at not reached only). Matches the definition. Courtesy reads it for the courtesy state: an attempt since due that is a Conversation keeps an order Attempted however many attempts it has |
 
 ### Talk time
 
@@ -256,8 +256,8 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "call outcome" or "disposition" for an Aircall tag; a HubSpot call outcome in its place (R1) |
 | Status | Decided; the tag-meaning mapping built in addition 0008zc, incorrect data in addition 0008zd |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1", "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*" and "Definitions: tag meanings, one per tag, configuration only"; 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning"; the courtesy tags of the Subscriptions connection, docs/decisions.md, 25 Oct 2026, "The courtesy tags of the Subscriptions Aircall connection got their meanings in prod" |
-| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
-| As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`). Since `100` each tag has one `meaning` (null or one of the seven keys; `incorrect_data` since `102`), set in Configuration → Sources, Tags by `cma.set_telephony_tag_meaning` (`tenant.configure`, audited, the same gate as `is_counted`); ingest never writes it and a catalog refresh keeps it. Only `not_reached` and `incorrect_data` are read, by Conversation (`cma.tag_meaning_excludes_conversation`, `102`), and `is_counted` has no effect on them; no figure counts the calls tagged incorrect data apart yet (Gaps, D32); the courtesy meanings and call type wait for their figures. The labels (Configuration → Sources, Tags, Meaning): None (Geen), Not reached (Niet bereikt), Incorrect data (Onjuiste gegevens), Call type (Gesprekstype), Courtesy attempt (Courtesy-poging), Courtesy completed, positive / neutral / negative (Courtesy afgerond, positief / neutraal / negatief; the Dutch proposed). Matches the definition |
+| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; through the courtesy completed meanings `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
+| As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`). Since `100` each tag has one `meaning` (null or one of the seven keys; `incorrect_data` since `102`), set in Configuration → Sources, Tags by `cma.set_telephony_tag_meaning` (`tenant.configure`, audited, the same gate as `is_counted`); ingest never writes it and a catalog refresh keeps it. Only `not_reached` and `incorrect_data` are read, by Conversation (`cma.tag_meaning_excludes_conversation`, `102`), and `is_counted` has no effect on them; no figure counts the calls tagged incorrect data apart yet (Gaps, D32); the three courtesy completed meanings are read by Courtesy through `cma.courtesy_outcome_of` (Completed courtesy call), `courtesy_attempt` has no effect beyond the meaning, and call type waits for its figure. The labels (Configuration → Sources, Tags, Meaning): None (Geen), Not reached (Niet bereikt), Incorrect data (Onjuiste gegevens), Call type (Gesprekstype), Courtesy attempt (Courtesy-poging), Courtesy completed, positive / neutral / negative (Courtesy afgerond, positief / neutraal / negatief; the Dutch proposed). Matches the definition |
 
 **Pulse4all Subscriptions mapping.** The tag meanings of the Subscriptions Aircall connection, set on Configuration → Sources, Tags (configuration, never code); a tag name with `*` stands for every tag whose name starts with it. Every other tag has the meaning None until a figure needs it. The meaning of the Data Issue Escalate tags is an Open decision (docs/open-decisions.md, the courtesy definitions).
 
@@ -404,9 +404,9 @@ Decided with addition 0008zg (25 October 2026). The calls a former telephony sys
 | Scope | Per tenant and the batch's CRM connection; one live batch per file |
 | Equivalent in the source system | The former system's tag on the call (Steam: the tag text); none in Aircall |
 | Not to use | "call outcome" alone or "disposition": a HubSpot call outcome is the retired word of R1 and its Retired words row stays as it is; "tag" for the former system's text (Tag is Aircall's label); "call" for a legacy call outcome (Call is Aircall's) |
-| Status | Decided; the courtesy figures built on it wait for the courtesy definitions (docs/open-decisions.md) |
+| Status | Decided; Courtesy does not count legacy call outcomes (they end 31 August 2026, before `courtesy.start_date`) |
 | Decided | 25 October 2026 (Martin); docs/decisions.md, 25 Oct 2026, "Steam's courtesy history is imported as legacy call outcomes", "A legacy call outcome is matched to a HubSpot contact by email and phone first", "Legacy call outcomes that match no contact are imported without one" (superseded for Pulse4all on 26 October 2026 by the row "Pulse4all imports only the legacy call outcomes matched to exactly one HubSpot contact") and "Definitions: Legacy call outcome is a new term" |
-| Used by | No figure yet: the courtesy definitions are open (docs/open-decisions.md). No catalog key and no page; the tables `cma.legacy_call_batch` and `cma.legacy_call_outcome` and their `cma_read` views |
+| Used by | No figure: Courtesy (Completed courtesy call) does not count them. No catalog key and no page; the tables `cma.legacy_call_batch` and `cma.legacy_call_outcome` and their `cma_read` views |
 | As built today | Addition 0008zg (`108`): `cma.legacy_call_outcome` holds per row its batch, the file's row number, `occurred_on`, `meaning` (one of the seven keys of `cma.telephony_tag.meaning`), `source_label` (the former system's tag text, at most 100 characters, never an @), the batch's CRM connection, `crm_contact_source_id`, `match_method` and `matched_at` (set exactly with a contact). The job matches each former-system row to at most one contact (the email, the primary then the additional emails; the phone, E.164 only, confirmed by its full number; then the customer id of at least `--min-customer-id-digits` digits, 10 by default) and writes it through `cma.legacy_call_outcomes_upsert`; a rerun never changes a stored row's date, meaning or label and never refills a forgotten row. The CRM's privacy deletion of a contact sets its rows to `forgotten`. No email, phone, name or customer id is stored or logged. Nothing reads the rows yet: no screen, API field or catalog entry. Matches the definition |
 
 **Match methods** (`match_method`; a stored row has exactly one, and a contact exactly when it is one of the first four):
@@ -831,7 +831,7 @@ Decided with addition 0008zm (30 October 2026, Martin): Sales → Lead cohorts f
 | Counts / does not count | Counts calendar days of the creation instant, never business days. An attempt in the pre-window (before the creation) counts at every age |
 | Unit and display | Days; a column per age, "1 day", "7 days" |
 | Time rule | From the creation instant, as `lead_to_order.max_days` counts its days (`created_at + make_interval(days => n)` in the database's session zone, UTC on Cloud SQL) |
-| Scope | Lead cohort |
+| Scope | Lead cohort and Order cohort (Order cohort's ages are `courtesy.ages_days`, calendar days after the order's creation) |
 | Equivalent in the source system | None |
 | Not to use | business days for a Cohort age |
 | Status | Decided |
@@ -850,13 +850,131 @@ Decided with addition 0008zm (30 October 2026, Martin): Sales → Lead cohorts f
 | Counts / does not count | Each row on its own: a market of a cohort can be mature at an age where the whole cohort is not. A cohort whose week or month is still running can be mature at an age while later deals may still join it |
 | Unit and display | A flag; a dash with "Not every deal is {n} days old yet" |
 | Time rule | As of now (the read's time) |
-| Scope | Lead cohort |
+| Scope | Lead cohort and Order cohort (an order cohort is mature at an age once every order in it is that old) |
 | Equivalent in the source system | None |
 | Not to use | None yet |
 | Status | Decided |
 | Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Definitions: Lead cohort, Cohort age and Mature" |
 | Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Sales → Lead cohorts |
 | As built today | `cma.lead_cohort_figures_from` (`120`): a row with deals whose every `created_at + n days` lies at or before now. Matches the definition |
+
+## Courtesy terms
+
+Decided on 6 November 2026 (Martin), addition 0009a, brief B31: Customers → Courtesy follows every store order of the courtesy kinds to its courtesy call, per order, in the order's market zone. Settings (Configuration → Exports, Courtesy): `courtesy.start_date` (a date, empty by default = not set up; Pulse4all 2026-09-07, set by hand in prod because Shopify serves the orders of the last 60 days without read_all_orders, so 1 to 6 September is incomplete), `courtesy.order_kinds` (`first,repeat`; a subset of first, repeat, renewal), `courtesy.due_days` (10; 1 to 60), `courtesy.alert_attempts` (3; 1 to 20) and `courtesy.ages_days` (`10,14,21,30`; one to six increasing whole numbers, each at most 90).
+
+### Courtesy order
+
+| Field | Value |
+|---|---|
+| Term | Courtesy order (nl: Courtesy-bestelling; `courtesy.title` "Courtesy") |
+| Key | `courtesy_order`; settings `courtesy.start_date`, `courtesy.order_kinds`; catalog `courtesy.orders`, `courtesy.no_contact`, `courtesy.list`; SQL `cma.courtesy_orders_of`, `cma_read.courtesy_order`; API `GET /api/v1/reports/courtesy` (`list.rows`) |
+| Definition | A store order (`cma.commerce_order`) that is not a test, not deleted, not cancelled, whose `order_kind` is in `courtesy.order_kinds`, created on or after `courtesy.start_date` by its business date. Its market is its store's market; its contact is the CRM contact its store customer is linked to (`commerce_customer.crm_contact_source_id`). An order whose customer has no linked contact is counted apart as "No contact" (nl "Geen contact", a data-quality count) and has no state. |
+| Source | The store's orders and customers (Shopify, through `cma.commerce_order` and `cma.commerce_customer`); the contact from the CRM (HubSpot); the settings (CMA) |
+| Counts / does not count | Counts every order above, one row per order. Does not count a test, deleted or cancelled order, an order of another kind (Order kind), or an order before the start date. A No contact order is counted apart, with no state and no call from here |
+| Unit and display | A count of orders; the list shows the store, order, placed day, due day, days past due, attempts since due, last attempt, state and a link to the contact in the customer records, never a name, email, phone or address |
+| Time rule | The order's business date in the order's zone: its market's, else its store's, else the tenant's |
+| Scope | The tenant; per market, segment and state |
+| Equivalent in the source system | None: the CMA's own derivation from the store's orders and the CRM link |
+| Not to use | "Courtesy call" for the order; "customer" for the order's contact (Customers and orders is pending) |
+| Status | Decided |
+| Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Courtesy per order" and "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, Attempt since due, Courtesy state (with Not reached) and Order cohort are new terms, and Customers (rail group) gains Courtesy" |
+| Used by | `courtesy.orders`, `courtesy.no_contact`, `courtesy.by_market`, `courtesy.by_period`, `courtesy.list`; Customers → Courtesy (`/reports/courtesy`) |
+| As built today | `cma.courtesy_orders_of` (`150`). The "now" figures (Due, not completed; Not reached; No contact; the order list) cover every courtesy order since `courtesy.start_date`, whatever the period; the period figures (per market, per day, week and month, order cohorts) use the period. `cma_read.courtesy_order` shows the order without a contact id. Matches the definition |
+
+### Courtesy due date
+
+| Field | Value |
+|---|---|
+| Term | Courtesy due date (nl: Vervaldatum; `courtesy.colDue` "Vervalt"), beside the Asset term "Due date" |
+| Key | `courtesy.due_days`; list column `courtesy.list.days_past_due`; API `list.rows[].dueDate` |
+| Definition | The order's business date in its market's zone plus `courtesy.due_days` calendar days. |
+| Source | The order's creation (Shopify) and the setting (CMA) |
+| Counts / does not count | Calendar days, never business days. An order is due from the start of that day |
+| Unit and display | A date; "days past due" as a count of days |
+| Time rule | The order's zone: its market's, else its store's, else the tenant's |
+| Scope | Courtesy order |
+| Equivalent in the source system | None |
+| Not to use | "Due date" alone for a courtesy order (it is the Asset term's); business days |
+| Status | Decided |
+| Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, ..." |
+| Used by | `courtesy.due_open`, `courtesy.list.days_past_due`, `courtesy.list.state`; Customers → Courtesy |
+| As built today | `cma.courtesy_orders_of` (`150`). `cma.check_tenant_setting()` takes a whole number from 1 to 60. Matches the definition |
+
+### Completed courtesy call
+
+| Field | Value |
+|---|---|
+| Term | Completed courtesy call (nl: Afgerond courtesy-gesprek; `courtesy.completedCalls` "Afgeronde courtesy-gesprekken") |
+| Key | `completed_courtesy_call`; catalog `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.per_person`; SQL `cma.courtesy_outcome_of`; API `now`, `outcomes` |
+| Definition | A call on the order's contact, at or after the order's creation, with a tag meaning `courtesy_completed_positive`, `courtesy_completed_neutral` or `courtesy_completed_negative`. The order's completion is the first such call and its outcome is that call's meaning. One completed call completes every not-yet-completed courtesy order of that contact created at or before it. |
+| Source | Aircall, the call and its current tags; the meanings from the tag-meaning mapping (Tag); the call link and attribution as Attempts per deal reads them (R1) |
+| Counts / does not count | Counts an Aircall call on a counted line, either direction, attributed to the contact through the call link. Does not count a Legacy call outcome (they end 31 August 2026, before the start), a HubSpot call outcome (R1) or a call before the order's creation. A call before the due date still completes the order |
+| Unit and display | A count of calls, each call once, also when it completed several orders; by outcome Positive, Neutral, Negative (nl Positief, Neutraal, Negatief); orders completed show as "Completed" (nl "Afgerond") |
+| Time rule | The call's start, by its day in the order's zone for the period figures (completed courtesy calls by completion date) |
+| Scope | Courtesy order; per market and per person who made the call (by name, never ranked; calls by an unlinked telephony user together, last) |
+| Equivalent in the source system | Aircall's tags `4.4`, `4.5` and `4.6` (Tag, Pulse4all Subscriptions mapping) |
+| Not to use | "Reached" for a completion; "outcome" or "disposition" for a tag (R1) |
+| Status | Decided |
+| Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Courtesy per order" and "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, ..." |
+| Used by | `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; Customers → Courtesy |
+| As built today | `cma.courtesy_outcome_of` (`150`): the first call with a courtesy completed meaning on the order's contact at or after the order's creation; a call carrying two completed meanings takes the tag set last. Calls are Aircall calls only (Attempt is Aircall's, R1) |
+
+### Attempt since due
+
+| Field | Value |
+|---|---|
+| Term | Attempt since due (nl: Poging sinds vervaldatum; the column `courtesy.colAttempts` "Attempts since due", "Pogingen sinds vervaldatum") |
+| Key | `attempt_since_due`, `attempts_since_due`; API `list.rows[].attempts`; catalog `courtesy.list.attempts`, `courtesy.not_reached`; setting `courtesy.alert_attempts` |
+| Definition | An Attempt (definitions.md) on the order's contact at or after the start of the order's due date (in the market's zone) and up to and including the completion. Calls before the due date are not attempts, but a completion before the due date still completes the order. |
+| Source | Aircall, the outbound calls (Attempt), attributed to the contact through the call link |
+| Counts / does not count | As Attempt: an outbound call on a counted line. Does not count a call before the due date or after the completion |
+| Unit and display | A count per order; "last attempt" as a date |
+| Time rule | From the start of the due date in the order's zone to the completion |
+| Scope | Courtesy order |
+| Equivalent in the source system | None |
+| Not to use | "Courtesy attempt" (nl "Courtesy-poging"): the label of the tag meaning `courtesy_attempt` (Tag), a meaning of a tag and never this count; the tag meaning as the measure (an attempt since due is every Attempt from the due date, whatever its tags) |
+| Status | Decided |
+| Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, Attempt since due, ..." |
+| Used by | `courtesy.list.attempts`, `courtesy.not_reached`; Customers → Courtesy |
+| As built today | `cma.courtesy_orders_of` (`150`) counts the attempts as `cma.deal_attempts_of` reads them (Aircall, a counted line). Matches the definition |
+
+### Courtesy state
+
+| Field | Value |
+|---|---|
+| Term | Courtesy state (nl: Staat; `courtesy.colState`), one of Not due yet (Nog niet vervallen), Due, no attempt (Vervallen, geen poging), Attempted (Geprobeerd), Not reached (Niet bereikt) and Completed (Afgerond); and the count Due, not completed (Vervallen, niet afgerond) |
+| Key | `state` (`not_due`, `due_no_attempt`, `attempted`, `not_reached`, `completed`); API `now.notReached`, `list.rows[].state`; settings `courtesy.alert_attempts`; catalog `courtesy.due_open`, `courtesy.not_reached`, `courtesy.list.state`, `welcome.needs_attention.courtesy_not_reached`; SQL `cma.courtesy_page`, `cma.courtesy_not_reached_of` |
+| Definition | A courtesy order's state as of now. **Not due yet:** before the due date, not completed. **Due, no attempt:** due, no attempt since due, not completed. **Attempted:** at least one and fewer than `courtesy.alert_attempts` attempts since due, not completed. **Not reached:** at least `courtesy.alert_attempts` attempts since due, none a Conversation, not completed; this is the flag. **Completed:** a Completed courtesy call, positive, neutral or negative. An order with a Conversation among its attempts but not completed stays Attempted, however many attempts it has. **Due, not completed** counts the orders due and not completed: due without an attempt, Attempted and Not reached together. |
+| Source | The courtesy order, its Attempts since due, Conversation and its Completed courtesy call; the settings (CMA) |
+| Counts / does not count | One state per order. A No contact order has no state |
+| Unit and display | A label per order and a count per state; the list puts Not reached first, then by due date |
+| Time rule | As of now, whatever the period |
+| Scope | Courtesy order |
+| Equivalent in the source system | None |
+| Not to use | "reached" alone and "Reached" as a term (a retired word, 0008z; the column is `conversation`); "Not reached" for a call (that is the tag meaning `not_reached`, a call's tag) |
+| Status | Decided |
+| Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Courtesy per order" and "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, Attempt since due, Courtesy state (with Not reached) and Order cohort are new terms, and Customers (rail group) gains Courtesy". Martin named "Not reached" (nl "Niet bereikt") as the courtesy state beside the tag meaning; "reached" stays retired |
+| Used by | `courtesy.due_open`, `courtesy.not_reached`, `courtesy.list.state`, `welcome.needs_attention.courtesy_not_reached`; Customers → Courtesy, Welcome (Needs attention) |
+| As built today | `cma.courtesy_page` (`150`) for the page; `cma.courtesy_not_reached_of` for the Not reached count; `cma_read.courtesy_order` with the column `conversation` and no contact id. The follow-up snapshot keeps the count for Welcome (`cma.follow_up_summary` `courtesy_not_reached` and `courtesy_alert_attempts`). Matches the definition |
+
+### Order cohort
+
+| Field | Value |
+|---|---|
+| Term | Order cohort (nl: Ordercohort; `courtesy.cohortBy` "Ordercohort", `courtesy.cohortCard` "Ordercohorten") |
+| Key | `order_cohort`; catalog `courtesy.cohorts`, `courtesy.completion_share`; setting `courtesy.ages_days`; API `cohorts` |
+| Definition | Courtesy orders grouped by the ISO week or calendar month of their business date. At each age in `courtesy.ages_days` (calendar days after creation, as in Cohort age) it shows the share completed by then. |
+| Source | The courtesy orders and their completions; the ages from the tenant's setting (CMA) |
+| Counts / does not count | Counts every courtesy order of the period with a contact; a No contact order is not in it. A completion counts at an age when it happened at or before the order's creation plus that many days |
+| Unit and display | Per cohort the orders; per age a share completed; a dash at an age the cohort is not Mature at, with the hint "Not every order is that old yet" |
+| Time rule | The order's business date in its zone places it in its ISO week (Monday) or month; the figures as of now |
+| Scope | Courtesy order, in the chosen period; the markets within each cohort |
+| Equivalent in the source system | None |
+| Not to use | "cohort" for a group of a period report; "Lead cohort" for it (that follows lead deals) |
+| Status | Decided |
+| Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Courtesy per order" and "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, Attempt since due, Courtesy state (with Not reached) and Order cohort are new terms, ..." |
+| Used by | `courtesy.cohorts`, `courtesy.completion_share`; Customers → Courtesy |
+| As built today | `cma.courtesy_page` (`150`). A cohort is Mature at an age once every order in it is that old. `cma.check_tenant_setting()` takes one to six increasing whole numbers, each at most 90 |
 
 ## Flash terms
 
@@ -1385,7 +1503,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "First" or "First order" for Sales → First orders' attributed first order (pending, Customers and orders: that is the CRM's attribution, this is the store-order count); "New" or "Reorder" for Repeat |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed, Martin's brief); docs/decisions.md, 5 Nov 2026, "Flash's Orders headline is split by order kind" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
-| Used by | `flash.orders.orders` (the split), `cma.flash_split_set_of`, `cma.flash_split_order_of`, `cma.flash_headline_split_of`, `cma.flash_headline`, `cma.flash_stored_split_of`; Reports → Flash (Orders: the landing card, the overview's totals, the [market, store, kind] breakdown and the records' kind column) |
+| Used by | `courtesy.orders` and the rest of `courtesy.*` (setting `courtesy.order_kinds` selects the courtesy population among first, repeat and renewal; Courtesy order); `flash.orders.orders` (the split), `cma.flash_split_set_of`, `cma.flash_split_order_of`, `cma.flash_headline_split_of`, `cma.flash_headline`, `cma.flash_stored_split_of`; Reports → Flash (Orders: the landing card, the overview's totals, the [market, store, kind] breakdown and the records' kind column) |
 | As built today | `db/142` (0008zw): the split read from the set [market, store, kind] summed over stores, live and as of a date; the definition version of Orders stays 0008zn. Matches the definition |
 
 ### Renewal (order)
@@ -1474,7 +1592,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations and Reviews (Maintenance moved to Assets, addition 0008zw, #236). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations, Reviews and Courtesy (Maintenance moved to Assets, addition 0008zw, #236; Courtesy added in addition 0009a). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
 | Unit and display | A group with a person icon, after Sales and before Assets |
@@ -1484,7 +1602,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Not to use | "Customers" or "Klanten" for a count of people or as the term "customer" (see Active customer: Store customer, Webwinkelklant) |
 | Status | Decided (the label only; the term "customer" stays pending) |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zv, #235) |
-| Used by | `cancellations.*`, `reviews.*`; Customers → Cancellations, Reviews |
+| Used by | `cancellations.*`, `reviews.*`, `courtesy.*`; Customers → Cancellations, Reviews, Courtesy (`/reports/courtesy`) |
 | As built today | Matches the definition |
 
 ### Assets (rail group)
@@ -1574,7 +1692,7 @@ Status: Retired. A retired word is never introduced again; where it still appear
 | Retired | Use instead | Note | Where it appears today |
 |---|---|---|---|
 | connected (≥ 10 s talk, 0008j) | Connected (Aircall) | The 10 s threshold goes | Nowhere since addition 0008zc; `telephony.connected_min_seconds` stays as an optional talk condition, 0 by default and for Pulse4all |
-| reached (0008z) | Conversation | Dutch "bereikt" goes with it. The tag meaning "not reached" (the agents' Aircall tag "Not Reached") is a defined meaning of Tag and stays | Nowhere as a call term since addition 0008zc; Sales → Funnel's "Reached won" is another word with its own row (W20, D16, C17) |
+| reached (0008z) | Conversation | Dutch "bereikt" goes with it. The tag meaning "not reached" (the agents' Aircall tag "Not Reached") is a defined meaning of Tag and stays. The courtesy state "Not reached" (nl "Niet bereikt"; Martin, 6 Nov 2026, addition 0009a) is a defined state of Courtesy state and stays, as the tag meaning does; "reached" alone stays retired | Nowhere as a call term since addition 0008zc; Sales → Funnel's "Reached won" is another word with its own row (W20, D16, C17) |
 | spoken to lead | Conversation | | Not found in the repository (searched on 24 October 2026); the nearest wording is the catalog's "spoke with (or called)" in `follow_up.leads.last_call_days` and `callbacks.week.kept` |
 | answered (for outbound calls) | Connected | "Answered" stays for inbound calls only | The data-quality skip value `outbound_unanswered_untagged` of a telephony connection's `dq_unlinked_skip` setting (`72`, `100`; `web/src/lib/follow-up.ts`), a stored value (Gaps, D30); nowhere else since addition 0008zc (one deal's attempts say Connected, API `connected`) |
 | CRM call / HubSpot call as a call fact | Attempt / Call (telephony) | R1 | `attempts.source` `crm` (`94`); `cma.lead_calls_of` and `cma.speed_to_lead_of` (`40`); callbacks kept (`88`); copy `attempts.noteCrm`; catalog `speed_to_lead.*`, `follow_up.leads*`, `callbacks.*`. Since addition 0008zc Conversation, Connected and first orders' evidence come from the linked telephony call only |

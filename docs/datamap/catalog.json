@@ -734,6 +734,10 @@
     {
       "name": "subscription_payment_state",
       "what": "Per subscription the latest full read still returns: its payment state from the two subscription tables only: failed, paused, canceled (canceled or expired), in_retry (active with a failed renewal of a cycle no renewal of that cycle or a later one follows; its cycle, first failure and highest attempt), paid (active otherwise); merged and never-subscribed left out; awaiting payment not built (0008zl)"
+    },
+    {
+      "name": "courtesy_order",
+      "what": "One row per courtesy order since each tenant's courtesy.start_date as of now: order, store, market, segment, business and due dates, has_contact (never which contact), attempts, conversation, last attempt, completion, outcome, the completing person and state (0009a). Computed when read by cma.courtesy_orders_of from cma.commerce_order, cma.commerce_customer, cma.commerce_store (Shopify's webhooks and read-back, the nightly reconcile, the backfill) and cma.telephony_call, cma.telephony_call_tag, cma.call_link, cma.crm_call, cma.crm_association (Aircall's and HubSpot's webhooks, the call link each minute by ingest-sweep)"
     }
   ],
   "flows": {

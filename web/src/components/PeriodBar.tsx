@@ -20,7 +20,7 @@ export function PeriodBar({
 }: {
   pathname: "/hours" | "/team/hours" | "/reports/dashboard" | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/forms"
     | "/reports/calls-per-agent" | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/attempts" | "/reports/attempts-per-agent"
-    | "/reports/funnel" | "/reports/cancellations" | "/reports/reviews" | "/reports/lead-cohorts" | "/reports/flash";
+    | "/reports/funnel" | "/reports/cancellations" | "/reports/reviews" | "/reports/courtesy" | "/reports/lead-cohorts" | "/reports/flash";
   /** The period chosen; "all" only where the bar offers All */
   range: Range | "all";
   period: HoursRange;

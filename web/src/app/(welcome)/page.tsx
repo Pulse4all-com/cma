@@ -6,10 +6,11 @@ import { Swatch } from "@/components/DashboardCharts";
 import { Shell } from "@/components/Shell";
 import { Badge, Card, Notice } from "@/components/primitives";
 import { agentGroupOf } from "@/lib/dashboard";
+import { courtesyAttention } from "@/lib/courtesy";
 import { attentionLines, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, type AttentionLine } from "@/lib/follow-up";
 import { workedSeconds } from "@/lib/live";
 import {
-  data, dataIsMock, requestDbTrace, type AppLink, type FollowUpSummary, type InboundNow, type MyFollowUp, type MyMessages, type MyRosterDay, type TeamHours,
+  data, dataIsMock, requestDbTrace, type AppLink, type FollowUpSummaryAt, type InboundNow, type MyFollowUp, type MyMessages, type MyRosterDay, type TeamHours,
   type WorkStatus, type Workday,
 } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
@@ -92,7 +93,7 @@ export default async function WelcomePage() {
           </Suspense>
           {hasAttention ? (
             <Suspense fallback={<CardSkeleton title={t.attention} lines={4} />}>
-              <AttentionBlockLoader read={reads.attention} copy={copy} />
+              <AttentionBlockLoader read={reads.attention} permissions={me.permissions} copy={copy} />
             </Suspense>
           ) : null}
           {hasReports ? (
@@ -170,10 +171,12 @@ async function UpdatesBlockLoader({ read, me, copy }: { read: Promise<MyMessages
 }
 
 /** Needs attention (addition 0008o): the counts for the team, the days not clocked out and the missed callers */
-async function AttentionBlockLoader({ read, copy }: { read: Promise<[FollowUpSummary, TeamHours | null, InboundNow | null]> | null; copy: Copy }) {
+async function AttentionBlockLoader({ read, permissions, copy }: {
+  read: Promise<[FollowUpSummaryAt, TeamHours | null, InboundNow | null]> | null; permissions: readonly string[]; copy: Copy;
+}) {
   if (!read) return null;
   const [summary, team, inbound] = await read;
-  return <AttentionBlock summary={summary} team={team} inbound={inbound} copy={copy} />;
+  return <AttentionBlock summary={summary} team={team} inbound={inbound} permissions={permissions} copy={copy} />;
 }
 
 /** The person's own day and the statuses it needs */
@@ -321,11 +324,16 @@ function UpdatesBlock({ inbox, timeZone, locale, copy }: { inbox: MyMessages; ti
  * response time and the tasks overdue from cma.follow_up_summary; the missed callers not called back from
  * the Live board's read (monitoring.live, a tenant with telephony). Counts only, no name.
  */
-function AttentionBlock({ summary, team, inbound, copy }: { summary: FollowUpSummary; team: TeamHours | null; inbound: InboundNow | null; copy: Copy }) {
+function AttentionBlock({ summary, team, inbound, permissions, copy }: {
+  summary: FollowUpSummaryAt; team: TeamHours | null; inbound: InboundNow | null; permissions: readonly string[]; copy: Copy;
+}) {
   const t = copy.welcome;
   const lines = attentionLines(summary,
     team ? team.days.filter((d) => d.needsCorrection).length : null,
     inbound && inbound.telephony ? inbound.callbacks.length + inbound.anonymousCount : null);
+  // the courtesy orders Not reached (addition 0009a), from the same snapshot read: only while courtesy is set up and the count
+  // is above 0, for monitoring.live or performance.team
+  const courtesy = courtesyAttention(summary, permissions);
   const text = (l: AttentionLine): string => {
     const one = l.count === 1;
     const n = String(l.count);
@@ -347,6 +355,15 @@ function AttentionBlock({ summary, team, inbound, copy }: { summary: FollowUpSum
             <Link href={l.href} className="font-semibold text-p4a-deepblue hover:underline">{text(l)}</Link>
           </li>
         ))}
+        {courtesy ? (
+          <li key="courtesy" className="flex items-center gap-3 text-body" data-testid="needs-attention-courtesy">
+            <Badge tone="warning">{courtesy.count}</Badge>
+            <Link href={courtesy.href} className="font-semibold text-p4a-deepblue hover:underline">
+              {(courtesy.count === 1 ? t.attentionCourtesyOne : t.attentionCourtesy).replace("{n}", String(courtesy.count))
+                .replace("{attempts}", String(courtesy.alertAttempts))}
+            </Link>
+          </li>
+        ) : null}
       </ul>
     </Card>
   );

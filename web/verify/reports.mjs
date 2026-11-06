@@ -102,6 +102,10 @@ import {
 } from "../src/lib/reports.ts";
 import { fmtRating, marketsWithoutChannel, reviewGroupOf, reviewMarketStates, reviewRecords, reviewShare, reviewsReport, starsOf } from "../src/lib/reviews.ts";
 import {
+  courtesyAttention, courtesyGroupOf, courtesyOrders, courtesyPeriodOf, courtesyReport, courtesyStateMatches, fillCourtesyHint, parseCourtesyFilter,
+  parseCourtesySetting,
+} from "../src/lib/courtesy.ts";
+import {
   addMonths as mtAddMonths, bucketProblem, cellTitle, cellValue, fmtMonth, fromMonthChoices, maintenanceGrid, maintenanceItems, maintenanceQuery,
   maintenanceReport, maintenanceRows, nextView, parseBucket, parseMaintenanceFilter,
 } from "../src/lib/maintenance.ts";
@@ -1890,6 +1894,119 @@ const lcNoPersonal = { "lib/cohorts.ts": src("../src/lib/cohorts.ts"), "componen
 expect("lead cohorts: no customer's name, email, phone or address in the type, the mirror, the parts or the page",
   Object.entries(lcNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),
   [], ["lib/cohorts.ts"]);
+
+// ---- Courtesy (addition 0009a, brief B31) on 151's own scenario ------------------------------------------------
+// Tenant one of 151's block B as the TypeScript mirror holds it (lib/courtesy), as of Friday 6 November 2026 12:00 UTC: the
+// strings are the ones 151 proves in the database (B1 to B9, B13, B14), so the mock and the page say what the database says
+const CT_NOW = "2026-11-06T12:00:00.000Z";
+const CT_ZONE = { NL: "Europe/Amsterdam", GB: "Europe/London" };
+const ctOrder = (orderId, contact, at, kind = "first", o = {}) => ({ orderId, orderName: o.name ?? orderId, store: o.market === "GB" ? "v-gb" : "v-nl",
+  storeName: o.market === "GB" ? "Verify GB" : "Verify NL", market: o.market ?? "NL", zone: CT_ZONE[o.market ?? "NL"], createdAt: `2026-${at}:00.000Z`, kind,
+  isTest: o.isTest ?? false, deleted: o.deleted ?? false, cancelled: o.cancelled ?? false, contact, contactSegment: { k1: "B2B", k2: "B2C" }[contact] ?? null });
+const CT_ORDERS = [
+  ctOrder("oF", "k1", "10-01T10:00", "first", { name: "#1001" }), ctOrder("oR", "k2", "10-02T10:00", "repeat", { name: "#1002" }),
+  ctOrder("oRen", "k3", "10-02T10:00", "renewal"), ctOrder("oUnk", "k3", "10-02T10:00", "unknown"), ctOrder("oTest", "k3", "10-02T10:00", "first", { isTest: true }),
+  ctOrder("oDel", "k3", "10-02T10:00", "first", { deleted: true }), ctOrder("oCan", "k3", "10-02T10:00", "first", { cancelled: true }),
+  ctOrder("oBefore", "k3", "09-05T10:00"), ctOrder("oNo", null, "10-03T10:00"), ctOrder("oAms", "kA", "10-27T23:30"),
+  ctOrder("oE", "k5", "10-05T10:00"), ctOrder("oP", "k5b", "10-05T10:00"), ctOrder("o6a", "k6", "10-01T10:00"), ctOrder("o6b", "k6", "10-03T10:00", "repeat"),
+  ctOrder("o6c", "k6", "10-25T10:00", "repeat"), ctOrder("o7a", "k7a", "10-01T10:00"), ctOrder("o7b", "k7b", "10-01T10:00"), ctOrder("o7c", "k7c", "10-01T10:00"),
+  ctOrder("o8u", "k8u", "10-01T10:00"), ctOrder("oLdn", "kL", "10-27T23:30", "first", { market: "GB" }),
+];
+// the telephony call starts 10 seconds before the CRM call's time; its tags are set an hour after the call
+const ctCall = (callId, contact, at, direction, talk, userRef, meanings = []) => {
+  const start = new Date(Date.parse(`2026-${at}:00Z`) - 10_000).toISOString();
+  return { callId, contact, direction, startedAt: start, answered: talk !== null, talkSeconds: talk, lineCounted: true, deleted: false, userRef,
+    tags: meanings.map((meaning) => ({ meaning, taggedAt: new Date(Date.parse(`2026-${at}:00Z`) + 3_600_000).toISOString() })) };
+};
+const CT_CALLS = [
+  ctCall("c1", "k1", "10-14T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("c2", "k2", "10-15T10:00", "inbound", 90, "tu-2", ["courtesy_completed_negative"]),
+  ctCall("c5pre", "k5", "10-08T10:00", "outbound", null, "tu-1"), ctCall("c5", "k5", "10-12T10:00", "outbound", 50, "tu-x", ["courtesy_completed_positive"]),
+  ctCall("c5b1", "k5b", "10-08T10:00", "outbound", null, "tu-1"), ctCall("c5b2", "k5b", "10-16T10:00", "outbound", null, "tu-1"),
+  ctCall("c6", "k6", "10-20T10:00", "outbound", 120, "tu-1", ["courtesy_completed_neutral"]),
+  ctCall("c7a1", "k7a", "10-12T10:00", "outbound", null, "tu-1"), ctCall("c7a2", "k7a", "10-13T10:00", "outbound", null, "tu-1"),
+  ctCall("c7a3", "k7a", "10-14T10:00", "outbound", 45, "tu-1", ["not_reached"]),
+  ctCall("c7b1", "k7b", "10-12T10:00", "outbound", null, "tu-1"), ctCall("c7b2", "k7b", "10-13T10:00", "outbound", null, "tu-1"),
+  ctCall("c7c1", "k7c", "10-12T10:00", "outbound", null, "tu-1"), ctCall("c7c2", "k7c", "10-13T10:00", "outbound", 40, "tu-1", ["courtesy_attempt"]),
+  ctCall("c7c3", "k7c", "10-14T10:00", "outbound", null, "tu-1"), ctCall("c8u", "k8u", "10-12T10:00", "outbound", 60, "tu-1"),
+];
+const CT_PEOPLE = [{ userRef: "tu-1", userId: "u-zed", name: "Zed" }, { userRef: "tu-2", userId: "u-anna", name: "Anna" }];
+const ctSettings = (startDate) => ({ startDate, orderKinds: ["first", "repeat"], dueDays: 10, alertAttempts: 3, ages: [10, 14, 21, 30], connectedMinSeconds: 0,
+  conversationMinSeconds: 30, segments: ["B2B", "B2C"] });
+const ctRows = (startDate = "2026-09-07") => courtesyOrders(CT_ORDERS, CT_CALLS, CT_PEOPLE, ctSettings(startDate), CT_NOW);
+const ctPage = (filter = {}, rows = 100, perPerson = true, startDate = "2026-09-07") => courtesyReport(ctRows(startDate), {
+  from: "2026-10-01", to: "2026-10-31", period: "week", group: "week", filter: { market: null, segment: null, state: null, ...filter }, rows, perPerson, now: CT_NOW,
+  prev: { from: "2026-08-31", to: "2026-09-30", until: null }, settings: ctSettings(startDate), hasStore: true,
+  markets: [{ code: "GB", name: "United Kingdom", sortOrder: 100 }, { code: "NL", name: "Netherlands", sortOrder: 100 }],
+  people: CT_PEOPLE.map((x) => ({ userId: x.userId, name: x.name })) });
+const ctFact = (r) => `${r.orderId}:${r.businessDate.slice(5).replace("-", "")}/${r.dueDate.slice(5).replace("-", "")}/${r.state ?? "-"}/${r.attempts ?? "-"}/${r.conversation ?? "-"}/${r.outcome ?? "-"}`;
+const ctFacts = ctRows().map(ctFact).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "variant" })).join(" ");
+expect("courtesy: First and Repeat count; Renewal, Unknown, test, deleted, cancelled and before the start do not; unset none, as 151's B1, B2",
+  `${ctRows().map((r) => r.orderId).sort().join(" ")} | unset ${ctRows(null).length} ${ctPage({}, 100, true, null).setUp} ${ctPage({}, 100, true, null).now}`,
+  "o6a o6b o6c o7a o7b o7c o8u oAms oE oF oLdn oNo oP oR | unset 0 false null",
+  "o6a o6b o6c o7a o7b o7c o8u oAms oE oF oLdn oNo oP oR | unset 0 false 0");
+expect("courtesy: every order's dates, state, attempts, conversation and outcome (due day 10, the zones, before the due date, one call two orders), as 151's B3 to B8",
+  ctFacts,
+  "o6a:1001/1011/completed/1/true/neutral o6b:1003/1013/completed/1/true/neutral o6c:1025/1104/due_no_attempt/0/false/- o7a:1001/1011/not_reached/3/false/- "
+    + "o7b:1001/1011/attempted/2/false/- o7c:1001/1011/attempted/3/true/- o8u:1001/1011/attempted/1/true/- oAms:1028/1107/not_due/0/false/- "
+    + "oE:1005/1015/completed/0/false/positive oF:1001/1011/completed/1/true/positive oLdn:1027/1106/due_no_attempt/0/false/- oNo:1003/1013/-/-/-/- "
+    + "oP:1005/1015/attempted/1/false/- oR:1002/1012/completed/0/false/negative",
+  "o6a:1001/1011/completed/1/true/neutral");
+const ctP = ctPage();
+expect("courtesy: the tiles, the completed calls split, per person by name with the not-linked row last, as 151's B8, B9, B13",
+  [ctP.now, ctP.completed, ctP.previous, (ctP.perPerson ?? []).map((x) => `${x.name ?? "none"}:${x.calls}/${x.positive}/${x.neutral}/${x.negative}`).join(" ")],
+  [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, notReached: 1, completed: 5, noContact: 1 },
+   { calls: 4, positive: 2, neutral: 1, negative: 1 }, { calls: 0, positive: 0, neutral: 0, negative: 0 }, "Anna:1/0/0/1 Zed:2/1/1/0 none:1/1/0/0"],
+  [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, notReached: 1, completed: 5, noContact: 1 },
+   { calls: 5, positive: 2, neutral: 2, negative: 1 }, { calls: 0, positive: 0, neutral: 0, negative: 0 }, "Zed:2/1/1/0 Anna:1/0/0/1 none:1/1/0/0"]);
+expect("courtesy: per market, per ISO week, the order cohorts by week at 10, 14, 21 and 30 days, as 151's B13",
+  `${ctP.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.notReached}/${m.noContact}`).join(" ")} | `
+    + `${ctP.byGroup.map((g) => `${g.key.slice(5).replace("-", "")}:${g.orders}/${g.completed}/${g.notReached}`).join(" ")} | `
+    + ctP.cohorts.map((c) => `${c.label}${c.partial ? "*" : ""} ${c.orders} ${c.ages.map((a) => `${a.age}:${a.completed ?? "-"}`).join(",")}`).join(" "),
+  "GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1 1005:2/1/0 1012:0/0/0 1019:1/0/0 1026:2/0/0 | 2026-W44* 2 10:-,14:-,21:-,30:- 2026-W43 1 10:0,14:-,21:-,30:- "
+    + "2026-W41 2 10:1,14:1,21:1,30:1 2026-W40* 8 10:0,14:2,21:4,30:4",
+  "GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1");
+const ctList = (filter, rows = 100) => ctPage(filter, rows).list;
+expect("courtesy: the filters, the list's order, cap and total, days past due; per person absent without performance.team, as 151's B11 and B14",
+  [ctList({ market: "GB" }).total, ctList({ market: "GB" }).rows[0]?.orderName, ctPage({ segment: "B2B" }).list.total, ctPage({ segment: "B2B" }).completed.calls,
+   ctList({ state: "not_reached" }).total, ctList({ state: "due" }).total, ctList({ state: "no_contact" }).total,
+   ctList({}, 3).total, ctList({}, 3).rows.map((r) => `${r.orderName}/${r.state}/${r.daysPastDue ?? "-"}`).join(" "), ctPage({}, 100, false).perPerson],
+  [1, "oLdn", 1, 1, 1, 7, 1, 14, "o7a/not_reached/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0", null],
+  [1, "oLdn", 1, 1, 1, 7, 1, 14, "oLdn/due_no_attempt/0 o6c/due_no_attempt/2 o7a/not_reached/26", null]);
+expect("courtesy: the address (G, O, K, the segment, S) and the settings as the database checks them; the hints filled; Needs attention",
+  [courtesyGroupOf("month"), courtesyGroupOf("year"), courtesyPeriodOf("month"), courtesyPeriodOf(undefined),
+   parseCourtesyFilter("GB", "B2B", "not_reached").problem, parseCourtesyFilter("nl", null, null).problem, parseCourtesyFilter(null, "B2B,B2C", null).problem,
+   parseCourtesyFilter(null, null, "open").problem, courtesyStateMatches(null, "no_contact"), courtesyStateMatches("attempted", "due"), courtesyStateMatches("not_due", "due"),
+   parseCourtesySetting("courtesy.due_days", "0"), parseCourtesySetting("courtesy.due_days", "61"), parseCourtesySetting("courtesy.alert_attempts", "21"),
+   parseCourtesySetting("courtesy.ages_days", "10,5"), parseCourtesySetting("courtesy.ages_days", "10,91"), parseCourtesySetting("courtesy.ages_days", " 7, 90 "),
+   parseCourtesySetting("courtesy.order_kinds", "first,first"), parseCourtesySetting("courtesy.order_kinds", "first, repeat, renewal"),
+   parseCourtesySetting("courtesy.start_date", "7 Sep 2026"), parseCourtesySetting("courtesy.start_date", "2026-09-07"), parseCourtesySetting("courtesy.start_date", ""),
+   fillCourtesyHint("day {dueDays}, {alertAttempts} attempts, ages {ages}, kinds {orderKinds}", ctP.settings),
+   courtesyAttention({ courtesyNotReached: 3, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
+   courtesyAttention({ courtesyNotReached: 0, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
+   courtesyAttention({ courtesyNotReached: null, courtesyAlertAttempts: null }, ["performance.team"]),
+   courtesyAttention({ courtesyNotReached: 3, courtesyAlertAttempts: 3 }, ["workday.team"])],
+  ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
+   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null, null],
+  ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
+   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null,
+   { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }]);
+// the route and the data layer, from their source: the report's permissions, the read with its eight parameters, the filters
+// refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
+const ctRoute = src("../src/app/api/v1/reports/courtesy/route.ts");
+const ctApi = src("../src/lib/api/courtesy.ts");
+const ctPageSrc = src("../src/app/reports/courtesy/page.tsx");
+expect("courtesy route: reports.view or performance.team, the period, group and filters refused with a 400, the read with its parameters",
+  [ctRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"), /throw new ApiError\(400, "invalid_period"/.test(ctApi), /throw new ApiError\(400, "invalid_group"/.test(ctApi),
+   /throw new ApiError\(400, "invalid_state"/.test(ctApi),
+   pgLayer.includes("cma.courtesy_page($1::date, $2::date, $3, $4, $5, $6, $7)") && pgLayer.includes("[range.from, range.to, period, group, filter.market, filter.segment, filter.state]"),
+   ctPageSrc.includes("holdsAny(me, REPORT_PERMISSIONS)")],
+  [true, true, true, true, true, true], [false, true, true, true, true, true]);
+const ctNoPersonal = { "lib/courtesy.ts": src("../src/lib/courtesy.ts"), "components/CourtesyParts.tsx": src("../src/components/CourtesyParts.tsx"), "app/reports/courtesy/page.tsx": ctPageSrc,
+  "lib/data/types.ts (CourtesyListRow)": (src("../src/lib/data/types.ts").split("export interface CourtesyListRow {")[1] ?? "").split("\n}\n")[0] ?? "" };
+expect("courtesy: no customer's name, email, phone or address in the type, the mirror, the parts or the page",
+  Object.entries(ctNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),
+  [], ["lib/courtesy.ts"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

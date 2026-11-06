@@ -2097,6 +2097,134 @@ export interface ReviewsReport {
   markets: string[];
 }
 
+/**
+ * Customers → Courtesy (addition 0009a, brief B31; docs/definitions.md, Courtesy terms): a courtesy call per First or
+ * Repeat store order from its due day. A courtesy order's state as of now; null for an order without a linked contact (No
+ * contact), which has none
+ */
+export type CourtesyState = "not_due" | "due_no_attempt" | "attempted" | "not_reached" | "completed";
+/** A completed courtesy call's outcome: its tag's meaning courtesy_completed_positive, _neutral or _negative */
+export type CourtesyOutcome = "positive" | "neutral" | "negative";
+/** The state filter (S): a state, due (the three states of an order due without completion) or no_contact */
+export type CourtesyStateFilter = CourtesyState | "due" | "no_contact";
+/** The grouping per market and period (G) */
+export type CourtesyGroup = "day" | "week" | "month";
+/** The order cohorts' period */
+export type CourtesyPeriod = "week" | "month";
+
+/** The filters, run in the database: a market's code or unknown (K), a segment's code or unknown, a state filter (S) */
+export interface CourtesyFilter {
+  market: string | null;
+  segment: string | null;
+  state: CourtesyStateFilter | null;
+}
+
+/** Completed courtesy calls: distinct calls, split by outcome */
+export interface CourtesyCalls {
+  calls: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+
+/** Every courtesy order since courtesy.start_date as of now, after the market and segment filters */
+export interface CourtesyNow {
+  /** With a linked contact */
+  orders: number;
+  /** Due without completion: due, no attempt + attempted + not reached */
+  dueOpen: number;
+  notDue: number;
+  dueNoAttempt: number;
+  attempted: number;
+  notReached: number;
+  completed: number;
+  noContact: number;
+}
+
+/** The courtesy orders created in a span: with a contact, completed now, Not reached now, and those without a contact */
+export interface CourtesyCounts {
+  orders: number;
+  completed: number;
+  notReached: number;
+  noContact: number;
+}
+
+/** One order cohort: the orders with a contact of an ISO week or month, at each age of courtesy.ages_days */
+export interface CourtesyCohort {
+  key: DateKey;
+  /** IYYY-Www or YYYY-MM */
+  label: string;
+  start: DateKey;
+  end: DateKey;
+  /** The period cuts the week or month */
+  partial: boolean;
+  orders: number;
+  /** Per age: mature once every order is that old; completed by then (null while not mature) */
+  ages: { age: number; mature: boolean; completed: number | null }[];
+}
+
+/** One row of the order list: ids, codes, dates and counts only, and the contact's record link; never a name, email, phone or address */
+export interface CourtesyListRow {
+  orderId: string;
+  orderName: string;
+  store: string;
+  storeName: string | null;
+  market: string;
+  segment: string;
+  createdAt: Instant;
+  businessDate: DateKey;
+  dueDate: DateKey;
+  /** Days since the due date for an order due without completion; null otherwise */
+  daysPastDue: number | null;
+  /** Null for No contact */
+  attempts: number | null;
+  lastAttemptAt: Instant | null;
+  /** Null for No contact */
+  state: CourtesyState | null;
+  outcome: CourtesyOutcome | null;
+  completedAt: Instant | null;
+  /** The CRM connection's contact link (record_url_contact); null without a contact or a template */
+  recordUrl: string | null;
+}
+
+/** Customers → Courtesy in one read (cma.courtesy_page): reports.view or performance.team; per person for performance.team only */
+export interface CourtesyReport {
+  from: DateKey;
+  to: DateKey;
+  period: CourtesyPeriod;
+  group: CourtesyGroup;
+  filter: CourtesyFilter;
+  /** The list's rows at most (follow_up.list_rows) */
+  rows: number;
+  /** courtesy.start_date is set; without it every figure is null ("Courtesy not set up") */
+  setUp: boolean;
+  /** The tenant has a store ("No store connected" otherwise, never 0) */
+  hasStore: boolean;
+  startDate: DateKey | null;
+  settings: { dueDays: number; alertAttempts: number; ages: number[]; orderKinds: string[] };
+  now: CourtesyNow | null;
+  /** Completed courtesy calls of the period by their completion date */
+  completed: CourtesyCalls | null;
+  /** The previous period's like for like */
+  previous: CourtesyCalls | null;
+  previousFrom: DateKey | null;
+  previousTo: DateKey | null;
+  previousPartial: boolean;
+  /** The period's orders per market (unknown last) */
+  byMarket: (CourtesyCounts & { market: string; name: string | null })[];
+  /** Every day, ISO week or month of the period, empty ones too, each with its markets */
+  byGroup: (CourtesyCounts & { key: DateKey; markets: (CourtesyCounts & { market: string })[] })[];
+  /** Newest first */
+  cohorts: CourtesyCohort[];
+  /** Completed courtesy calls of the period per person, by name, the calls without a person last; null without performance.team */
+  perPerson: ({ userId: string | null; name: string | null } & CourtesyCalls)[] | null;
+  /** The filtered total and its first rows */
+  list: { total: number; rows: CourtesyListRow[] };
+  /** The filter choices: every courtesy order's market (unknown last); the tenant's segments and unknown */
+  markets: string[];
+  segments: string[];
+}
+
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
 export type MaintenanceScope = "field" | "stock";
 /** Reports → Maintenance's grid: the planned exchanges per cell, or the due components and devices at end of life */
@@ -3028,8 +3156,17 @@ export interface MyFollowUp {
   computedAt: Instant;
 }
 
-/** The summary as the snapshot computed it, and when (addition 0008s) */
-export type FollowUpSummaryAt = FollowUpSummary & { computedAt: Instant };
+/**
+ * The courtesy flag the follow-up snapshot keeps (addition 0009a): the courtesy orders Not reached now and the attempts
+ * that flag one (courtesy.alert_attempts); both null while courtesy.start_date is unset
+ */
+export interface CourtesyFlag {
+  courtesyNotReached: number | null;
+  courtesyAlertAttempts: number | null;
+}
+
+/** The summary as the snapshot computed it, and when (addition 0008s); with the courtesy flag (addition 0009a) */
+export type FollowUpSummaryAt = FollowUpSummary & CourtesyFlag & { computedAt: Instant };
 
 /**
  * The Live board in one read (addition 0008zr's web, night N06; the IT audit's 5.6-01): the team now, the current team
@@ -3752,6 +3889,8 @@ export interface CmaData {
   getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
   /** Reports → Reviews (cma.reviews_page, addition 0008ze; reports.view or performance.team; at most 92 days) */
   getReviews(me: Principal, range: ReviewsRange, group: ReviewGroup, market: string | null): Promise<ReviewsReport>;
+  /** Customers → Courtesy (cma.courtesy_page, addition 0009a; reports.view or performance.team; at most 92 days) */
+  getCourtesy(me: Principal, range: HoursRange, period: CourtesyPeriod, group: CourtesyGroup, filter: CourtesyFilter): Promise<CourtesyReport>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
   getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;

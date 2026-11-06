@@ -209,18 +209,18 @@ async function expectNavigation() {
     ["analyst", ["/", "/messages", "/live/newco", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
       "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
       "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
+      "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
       "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
-      "/reports/first-orders", "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
+      "/reports/first-orders", "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/calls",
       "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms",
       "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts",
-      "/reports/first-orders", "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin), since 0008zw
     // between Time and Reports; the supervisor and the agent see no Team group, so their keys do not move. The planner
     // (0005) joins it.
@@ -228,12 +228,12 @@ async function expectNavigation() {
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+      "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/roster/planner", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+      "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -394,7 +394,7 @@ async function expectReports() {
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
     "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
-    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/installed-base",
+    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/courtesy", "/reports/maintenance", "/reports/installed-base",
     "/reports/data-quality", "/reports/flash"]) {
     await p.goto(BASE + path);
     await settle(p);
