@@ -1991,8 +1991,6 @@ expect("courtesy: the address (G, O, K, the segment, S) and the settings as the 
   ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
    "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null,
    { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }]);
-// the route and the data layer, from their source: the report's permissions, the read with its eight parameters, the filters
-// refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
 // ---- Courtesy's two bases (addition 0009c, brief B33) on 155's own scenario --------------------------------------
 // Tenant one of 155's block B as the mirror holds it, as of Friday 20 November 2026 12:00 UTC: per market the period's orders
 // by order date beside the calls completed in the period by call date, each once, in the market of the earliest courtesy
@@ -2047,6 +2045,8 @@ expect("courtesy bases: a November call of an October order counts in November's
 expect("courtesy bases: not set up has no market row and no total row",
   [ctPage({}, 100, true, null).byMarket, ctPage({}, 100, true, null).marketsTotal], [[], null], [[], { orders: 0 }]);
 
+// the route and the data layer, from their source: the report's permissions, the read with its eight parameters, the filters
+// refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
 const ctRoute = src("../src/app/api/v1/reports/courtesy/route.ts");
 const ctApi = src("../src/lib/api/courtesy.ts");
 const ctPageSrc = src("../src/app/reports/courtesy/page.tsx");

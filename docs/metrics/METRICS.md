@@ -36410,7 +36410,7 @@ calls(market) = count of the period's completing calls (as courtesy.completed_ca
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

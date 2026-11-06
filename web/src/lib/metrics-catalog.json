@@ -89573,7 +89573,7 @@
           },
           {
             "object": "cma.courtesy_page_of",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_orders_of",

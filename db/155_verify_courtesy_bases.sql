@@ -19,7 +19,7 @@
 --        kX   one contact with an order in BE (5 October) and one in NL (10 October), both completed by one call of 22
 --             October (neutral): it counts once, in BE's row (the earlier order)
 --        kR   NL, an order of 2 October, three unanswered attempts since due: Not reached
---        kN1  NL, an order of 10 November, not due yet; nc an NL order of 11 November without a contact
+--        kN1  NL, an order of 12 November, not due yet; nc an NL order of 11 November without a contact
 --      B1  per market the calls add up to the tile, and markets_total holds the rows' sums, for October and November,
 --          unfiltered and with each filter (market NL, BE, GB, segment B2C, state not_reached)
 --      B2  a call completing orders in two markets counts once, in the earlier order's market (BE); with the market

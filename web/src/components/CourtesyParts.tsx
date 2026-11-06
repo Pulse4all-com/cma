@@ -147,7 +147,7 @@ export function CourtesyMarkets({ rows, total, hints, copy, locale }: {
       </tbody>
       {total ? (
         <tfoot>
-          <tr className="border-t-2 border-p4a-border text-p4a-body" data-testid="courtesy-markets-total">
+          <tr className="text-p4a-body" data-testid="courtesy-markets-total">
             <td className="h-10 whitespace-nowrap px-2 font-semibold">{copy.reports.total}</td>
             {cols.map(([label, , value, apart]) => <td key={label} className={`${td} font-semibold${apart ? ` ${apart}` : ""}`}>{value(total)}</td>)}
           </tr>

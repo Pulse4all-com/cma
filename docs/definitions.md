@@ -866,7 +866,7 @@ Decided on 6 November 2026 (Martin), addition 0009a, brief B31: Customers → Co
 
 | Field | Value |
 |---|---|
-| Term | Courtesy order (nl: Courtesy-bestelling; `courtesy.title` "Courtesy") |
+| Term | Courtesy order (nl: Courtesy-bestelling; `courtesy.title` "Courtesy"). The order blocks (Per market, Per day, Per week, Per month) are titled "Orders placed in the period, state now" (nl "Orders geplaatst in de periode, stand nu": Martin's own words, kept beside "Courtesy-bestelling" and "Staat"), by order date (addition 0009c) |
 | Key | `courtesy_order`; settings `courtesy.start_date`, `courtesy.order_kinds`; catalog `courtesy.orders`, `courtesy.no_contact`, `courtesy.list`; SQL `cma.courtesy_orders_of`, `cma_read.courtesy_order`; API `GET /api/v1/reports/courtesy` (`list.rows`) |
 | Definition | A store order (`cma.commerce_order`) that is not a test, not deleted, not cancelled, whose `order_kind` is in `courtesy.order_kinds`, created on or after `courtesy.start_date` by its business date. Its market is its store's market; its contact is the CRM contact its store customer is linked to (`commerce_customer.crm_contact_source_id`). An order whose customer has no linked contact is counted apart as "No contact" (nl "Geen contact", a data-quality count) and has no state. |
 | Source | The store's orders and customers (Shopify, through `cma.commerce_order` and `cma.commerce_customer`); the contact from the CRM (HubSpot); the settings (CMA) |
@@ -879,7 +879,7 @@ Decided on 6 November 2026 (Martin), addition 0009a, brief B31: Customers → Co
 | Status | Decided |
 | Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Courtesy per order" and "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, Attempt since due, Courtesy state (with Not reached) and Order cohort are new terms, and Customers (rail group) gains Courtesy" |
 | Used by | `courtesy.orders`, `courtesy.no_contact`, `courtesy.by_market`, `courtesy.by_period`, `courtesy.list`; Customers → Courtesy (`/reports/courtesy`) |
-| As built today | `cma.courtesy_orders_of` (`150`). The "now" figures (Due, not completed; Not reached; No contact; the order list) cover every courtesy order since `courtesy.start_date`, whatever the period; the period figures (per market, per day, week and month, order cohorts) use the period. `cma_read.courtesy_order` shows the order without a contact id. Matches the definition |
+| As built today | `cma.courtesy_orders_of` (`150`). The "now" figures (Due, not completed; Not reached; No contact; the order list) cover every courtesy order since `courtesy.start_date`, whatever the period; the period figures (per market, per day, week and month, order cohorts) use the period. `cma_read.courtesy_order` shows the order without a contact id. Since `154` (addition 0009c) each block says its basis in its first hint sentence. By order date: per market's order columns (orders, of which completed, completion share, not reached, no contact), per day, week and month, and the cohorts. By call date: the tile, Completed calls by outcome, per market's "Calls completed in the period" and per person. Matches the definition |
 
 ### Courtesy due date
 
@@ -904,20 +904,20 @@ Decided on 6 November 2026 (Martin), addition 0009a, brief B31: Customers → Co
 
 | Field | Value |
 |---|---|
-| Term | Completed courtesy call (nl: Afgerond courtesy-gesprek; `courtesy.completedCalls` "Afgeronde courtesy-gesprekken") |
+| Term | Completed courtesy call (nl: Afgerond courtesy-gesprek). Labels (addition 0009c): the tile "Courtesy calls completed in the period" (nl "Courtesy-gesprekken afgerond in de periode"; `courtesy.completedCalls`), its line "By call date, for orders of any date" (nl "Op gespreksdatum, voor bestellingen van elke datum"), and Per market's column "Calls completed in the period" (nl "Gesprekken afgerond in de periode") |
 | Key | `completed_courtesy_call`; catalog `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.per_person`; SQL `cma.courtesy_outcome_of`; API `now`, `outcomes` |
 | Definition | A call on the order's contact, at or after the order's creation, with a tag meaning `courtesy_completed_positive`, `courtesy_completed_neutral` or `courtesy_completed_negative`. The order's completion is the first such call and its outcome is that call's meaning. One completed call completes every not-yet-completed courtesy order of that contact created at or before it. |
 | Source | Aircall, the call and its current tags; the meanings from the tag-meaning mapping (Tag); the call link and attribution as Attempts per deal reads them (R1) |
 | Counts / does not count | Counts an Aircall call on a counted line, either direction, attributed to the contact through the call link. Does not count a Legacy call outcome (they end 31 August 2026, before the start), a HubSpot call outcome (R1) or a call before the order's creation. A call before the due date still completes the order |
-| Unit and display | A count of calls, each call once, also when it completed several orders; by outcome Positive, Neutral, Negative (nl Positief, Neutraal, Negatief); orders completed show as "Completed" (nl "Afgerond") |
+| Unit and display | A count of calls, each call once, also when it completed several orders; by outcome Positive, Neutral, Negative (nl Positief, Neutraal, Negatief); a completed order's state shows as "Completed" (nl "Afgerond"), and the order blocks' column counting them reads "Of which completed" (nl "Waarvan afgerond") |
 | Time rule | The call's start, by its day in the order's zone for the period figures (completed courtesy calls by completion date) |
-| Scope | Courtesy order; per market and per person who made the call (by name, never ranked; calls by an unlinked telephony user together, last) |
+| Scope | Courtesy order; per market and per person who made the call (by name, never ranked; calls by an unlinked telephony user together, last). Per market, each call counts once, in the market of the earliest courtesy order it completed among the orders the filters keep (by creation, then id), so the column adds up to the tile |
 | Equivalent in the source system | Aircall's tags `4.4`, `4.5` and `4.6` (Tag, Pulse4all Subscriptions mapping) |
 | Not to use | "Reached" for a completion; "outcome" or "disposition" for a tag (R1) |
 | Status | Decided |
 | Decided | 6 November 2026 (Martin); docs/decisions.md, 6 Nov 2026, "Courtesy per order" and "Definitions: Courtesy order, Courtesy due date, Completed courtesy call, ..." |
-| Used by | `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; Customers → Courtesy |
-| As built today | `cma.courtesy_outcome_of` (`150`): the first call with a courtesy completed meaning on the order's contact at or after the order's creation; a call carrying two completed meanings takes the tag set last. Calls are Aircall calls only (Attempt is Aircall's, R1) |
+| Used by | `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`, `courtesy.by_market.calls`; Customers → Courtesy |
+| As built today | `cma.courtesy_outcome_of` (`150`): the first call with a courtesy completed meaning on the order's contact at or after the order's creation; a call carrying two completed meanings takes the tag set last. Calls are Aircall calls only (Attempt is Aircall's, R1). Per market's calls and the total row: `cma.courtesy_page_of` (`154`, addition 0009c) |
 
 ### Attempt since due
 
