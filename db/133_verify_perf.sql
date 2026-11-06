@@ -8,9 +8,13 @@
 -- first person holding tenant.configure (a tenant without one reads skip); block A works on a throwaway tenant inside a
 -- subtransaction that is always rolled back, so nothing stays and the script runs in dev and in prod. Every check writes
 -- one row, ok or FAIL, and the last row is the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM
--- login after 132_perf.sql, dev first, then prod. The previous definitions are those of 70 (connection_held_kinds_of),
+-- login after 132_perf.sql, dev first, then prod. The previous definitions are those of 118 (connection_held_kinds_of),
 -- 78 (system_health_runs), 60 (missed_callbacks_of), 76 (calls_of, inbound_calls_of), 74 (intake_per_day_of), 72
 -- (open_tickets_of, open_tasks_of) and 122 (flash_findings_of), copied verbatim with pg_temp.old_ in place of cma.
+-- Since 144_held_kinds_restore.sql (0008zx) E1 compares with 118's definition (0008zl), the latest before 0008zr: until
+-- 0008zx this script kept 70's (0008n), the one 132 had been rebuilt from, so the two agreed and the kinds 132 lost
+-- (reviews, assets, subscriptions) went unseen; on 0008zr alone E1 reads FAIL wherever a connection holds those rows.
+-- 145_verify_held_kinds_restore.sql is 0008zx's own check.
 -- Block E's data-quality check refreshes the current tenant's stored result inside its subtransaction and compares it
 -- with the live computation; the subtransaction is rolled back, so the stored result is as it was.
 -- Expected verdict, in dev and in prod: "0008zr verified | 133_verify_perf: <n> ok, 0 FAIL, <k> skip" (the skips are
@@ -44,7 +48,7 @@ create temporary table verify_0008zr (ord integer, check_name text, result text,
 grant select, insert on pg_temp.verify_0008zr to cma_app;
 
 -- The previous definitions, verbatim, under pg_temp.old_
--- connection_held_kinds_of as 70 defined it
+-- connection_held_kinds_of as 118 (0008zl) defined it
 create function pg_temp.old_connection_held_kinds_of(p_tenant_id uuid, p_connection_id uuid)
 returns text[]
 language sql stable
@@ -56,7 +60,8 @@ as $$
            or exists (select 1 from cma.connection_pipeline x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.connection_form x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.connection_call_outcome x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
-           or exists (select 1 from cma.connection_field x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
+           or exists (select 1 from cma.connection_field x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id
+                        and x.entity not in ('device', 'device_component'))
            or exists (select 1 from cma.writeback_field x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.connection_inbox x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.connection_inbox_channel x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
@@ -74,7 +79,17 @@ as $$
     case when exists (select 1 from cma.commerce_store x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.commerce_customer x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.commerce_order x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
-         then 'commerce' end], null)
+         then 'commerce' end,
+    case when exists (select 1 from cma.review_channel x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
+           or exists (select 1 from cma.review x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
+         then 'reviews' end,
+    case when exists (select 1 from cma.device x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
+           or exists (select 1 from cma.connection_field x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id
+                        and x.entity in ('device', 'device_component'))
+         then 'assets' end,
+    case when exists (select 1 from cma.subscription x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
+           or exists (select 1 from cma.subscription_event x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
+         then 'subscriptions' end], null)
 $$;
 
 -- system_health_runs as 78 defined it
