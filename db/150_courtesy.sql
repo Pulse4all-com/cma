@@ -581,7 +581,10 @@ begin
     order by ord.source_created_at, ord.id;
 end
 $$;
+-- JIT off as the other large reads (132); custom plans always: after five calls on a connection a plpgsql statement turns to
+-- its generic plan (CLAUDE.md, Performance), which at three times prod's volume took the page from 1.2 to 1.7 s
 alter function cma.courtesy_orders_of(uuid, date, date, timestamptz) set jit = off;
+alter function cma.courtesy_orders_of(uuid, date, date, timestamptz) set plan_cache_mode = force_custom_plan;
 
 -- The courtesy orders Not reached as of p_now, over every courtesy order since courtesy.start_date; null while it is empty.
 -- The follow-up snapshot keeps it, so Welcome's Needs attention reads it without a read of its own
@@ -768,6 +771,7 @@ begin
 end
 $$;
 alter function cma.courtesy_page_of(uuid, date, date, text, text, text, text, text, integer, boolean, timestamptz) set jit = off;
+alter function cma.courtesy_page_of(uuid, date, date, text, text, text, text, text, integer, boolean, timestamptz) set plan_cache_mode = force_custom_plan;
 
 -- Customers → Courtesy in one read (reports.view or performance.team, CMA06; a period of at most 92 days, cma.report_range).
 -- p_period week or month (the order cohorts), p_group day, week or month (per market and period), p_market a market's code
@@ -933,6 +937,7 @@ returns table (tenant_id uuid, order_id uuid, connection_id uuid, order_source_i
                created_at timestamptz, business_date date, due_date date, has_contact boolean, attempts integer, conversation boolean,
                last_attempt_at timestamptz, completed_at timestamptz, outcome text, completed_by uuid, state text)
 language sql stable security definer
+rows 1000   -- every tenant's courtesy orders since its start date (CLAUDE.md, Performance: a set-returning function says its rows)
 set search_path = pg_catalog, cma, pg_temp
 as $$
   select t.id, r.order_id, r.connection_id, r.order_source_id, r.store, r.market, r.segment, r.created_at, r.business_date, r.due_date,

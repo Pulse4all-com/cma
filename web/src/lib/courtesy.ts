@@ -404,10 +404,13 @@ export function courtesyShare(part: number, whole: number): number | null {
   return whole === 0 ? null : part / whole;
 }
 
-/** A hint with the tenant's settings filled in: {dueDays}, {alertAttempts}, {ages} */
-export function fillCourtesyHint(text: string, settings: CourtesyReport["settings"]): string {
+/**
+ * A hint with the tenant's settings filled in: {dueDays}, {alertAttempts}, {ages} and {orderKinds} (courtesy.order_kinds, named
+ * by `kindNames`, the order kinds' labels in the reader's language joined; the codes joined when left out)
+ */
+export function fillCourtesyHint(text: string, settings: CourtesyReport["settings"], kindNames?: string): string {
   return text.replace(/\{dueDays\}/g, String(settings.dueDays)).replace(/\{alertAttempts\}/g, String(settings.alertAttempts))
-    .replace(/\{ages\}/g, settings.ages.join(", "));
+    .replace(/\{ages\}/g, settings.ages.join(", ")).replace(/\{orderKinds\}/g, kindNames ?? settings.orderKinds.join(", "));
 }
 
 /**

@@ -4693,7 +4693,7 @@ export const mockData: CmaData = {
     });
     // the contact's record link from the CRM connection's template, as the database builds it (record_url_contact)
     return { ...report, list: { ...report.list, rows: report.list.rows.map((r) => ({ ...r,
-      recordUrl: r.state === null ? null : `https://app.hubspot.example/contacts/mock/record/0-1/${MOCK_COURTESY_CONTACT.get(r.orderId) ?? "0"}` })) } };
+      recordUrl: r.state === null ? null : `https://example.com/crm/contact/${MOCK_COURTESY_CONTACT.get(r.orderId) ?? "0"}` })) } };
   },
 
   async getLeadCohorts(me, range, period, split, filter): Promise<LeadCohortsReport> {

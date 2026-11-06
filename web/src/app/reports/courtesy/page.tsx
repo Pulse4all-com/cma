@@ -61,9 +61,13 @@ export default async function CourtesyPage({ searchParams }: PageProps<"/reports
 
   const h = copy.hints;
   const n = (x: number) => fmtCount(x, me.locale);
-  // every hint with the tenant's settings filled in (day 10, 3 attempts, the ages)
-  const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("ct")).map(([k, v]) => [k, fillCourtesyHint(v, report.settings)]));
-  const fill = (text: string) => fillCourtesyHint(text, report.settings);
+  // every hint with the tenant's settings filled in (day 10, 3 attempts, the ages, the order kinds by their labels)
+  const kindLabel: Record<string, string> = { first: copy.flash.kind_first, repeat: copy.flash.kind_repeat, renewal: copy.flash.kind_renewal };
+  const kindNames = new Intl.ListFormat(me.locale === "nl" ? "nl-NL" : "en-GB", { type: "conjunction" })
+    .format(report.settings.orderKinds.map((k) => kindLabel[k] ?? k));
+  const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("ct"))
+    .map(([k, v]) => [k, fillCourtesyHint(v, report.settings, kindNames)]));
+  const fill = (text: string) => fillCourtesyHint(text, report.settings, kindNames);
   const info = (label: string, text: string, key?: string) =>
     ({ about: h.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const prevLabel = report.previousFrom !== null && report.previousTo !== null
@@ -159,7 +163,8 @@ export default async function CourtesyPage({ searchParams }: PageProps<"/reports
             </Card>
 
             <Card title={group === "day" ? t.periodCardDay : group === "week" ? t.periodCardWeek : t.periodCardMonth}>
-              <FunnelIntro text={t.periodIntro} label={t.periodCardWeek} hint={hints.ctColPeriod!} copy={copy} />
+              <FunnelIntro text={t.periodIntro} label={group === "day" ? t.periodCardDay : group === "week" ? t.periodCardWeek : t.periodCardMonth}
+                hint={hints.ctColPeriod!} copy={copy} />
               <CourtesyPeriods rows={report.byGroup} group={group} hints={hints} copy={copy} locale={me.locale} />
             </Card>
 

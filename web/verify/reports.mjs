@@ -1981,15 +1981,15 @@ expect("courtesy: the address (G, O, K, the segment, S) and the settings as the 
    parseCourtesySetting("courtesy.ages_days", "10,5"), parseCourtesySetting("courtesy.ages_days", "10,91"), parseCourtesySetting("courtesy.ages_days", " 7, 90 "),
    parseCourtesySetting("courtesy.order_kinds", "first,first"), parseCourtesySetting("courtesy.order_kinds", "first, repeat, renewal"),
    parseCourtesySetting("courtesy.start_date", "7 Sep 2026"), parseCourtesySetting("courtesy.start_date", "2026-09-07"), parseCourtesySetting("courtesy.start_date", ""),
-   fillCourtesyHint("day {dueDays}, {alertAttempts} attempts, ages {ages}", ctP.settings),
+   fillCourtesyHint("day {dueDays}, {alertAttempts} attempts, ages {ages}, kinds {orderKinds}", ctP.settings),
    courtesyAttention({ courtesyNotReached: 3, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
    courtesyAttention({ courtesyNotReached: 0, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
    courtesyAttention({ courtesyNotReached: null, courtesyAlertAttempts: null }, ["performance.team"]),
    courtesyAttention({ courtesyNotReached: 3, courtesyAlertAttempts: 3 }, ["workday.team"])],
   ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
-   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null, null],
+   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null, null],
   ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
-   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null,
+   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null,
    { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }]);
 // the route and the data layer, from their source: the report's permissions, the read with its eight parameters, the filters
 // refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page

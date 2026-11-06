@@ -1241,10 +1241,10 @@ const en = {
     colChannel: "Review channel",
   },
 
-  /** Courtesy (addition 0009a, brief B31): a courtesy call per First or Repeat store order; counts, states and links only */
+  /** Courtesy (addition 0009a, brief B31): a courtesy call per store order of courtesy.order_kinds; counts, states and links only */
   courtesy: {
     title: "Courtesy",
-    intro: "Every first and repeat store order gets a courtesy call from day {dueDays} after it was placed. The store holds the orders and the telephony system the calls and their tags; the Workspace counts them and shows counts, states and links only, never a customer's name, email, phone or address. Each order's day in its market's time zone.",
+    intro: "Every store order of the kinds {orderKinds} gets a courtesy call from day {dueDays} after it was placed. The store holds the orders and the telephony system the calls and their tags; the Workspace counts them and shows counts, states and links only, never a customer's name, email, phone or address. Each order's day in its market's time zone.",
     note: "An order is completed by the first call on its contact from the order on with a tag meaning completed, positive, neutral or negative. Calls from the due day are attempts; after {alertAttempts} attempts without a conversation an order is flagged Not reached.",
     notSetUp: "Courtesy not set up: set the date from which store orders get a courtesy call on Configuration, Exports.",
     configureLink: "Open Exports",
@@ -2028,7 +2028,7 @@ const en = {
     ctNoContact: "Courtesy orders whose store customer is not linked to a contact, now. They have no state and are not called from here: a data issue.",
     ctOutcomes: "The completed courtesy calls of the period by their tag's meaning.",
     ctColMarket: "The order's market: its store's market; unknown without one.",
-    ctColOrders: "Courtesy orders placed in the period with a contact: first and repeat orders, not tests, not cancelled.",
+    ctColOrders: "Courtesy orders placed in the period with a contact: orders of the kinds {orderKinds}, not tests, not cancelled.",
     ctColCompleted: "Of those orders, the ones completed by a courtesy call now.",
     ctColShare: "Completed divided by orders, as a percentage",
     ctColNotReached: "Of those orders, the ones with {alertAttempts} attempts or more and no conversation now.",
@@ -5022,7 +5022,7 @@ const nl: Copy = {
 
   courtesy: {
     title: "Courtesy",
-    intro: "Elke eerste en herhaalbestelling in de winkel krijgt een courtesy-gesprek vanaf dag {dueDays} na de bestelling. De winkel houdt de bestellingen bij en het telefoniesysteem de gesprekken en hun tags; de Workspace telt ze en toont alleen aantallen, staten en links, nooit de naam, het e-mailadres, het telefoonnummer of het adres van een klant. De dag van elke bestelling in de tijdzone van haar markt.",
+    intro: "Elke winkelbestelling van de soorten {orderKinds} krijgt een courtesy-gesprek vanaf dag {dueDays} na de bestelling. De winkel houdt de bestellingen bij en het telefoniesysteem de gesprekken en hun tags; de Workspace telt ze en toont alleen aantallen, staten en links, nooit de naam, het e-mailadres, het telefoonnummer of het adres van een klant. De dag van elke bestelling in de tijdzone van haar markt.",
     note: "Een bestelling is afgerond door het eerste gesprek met haar contact vanaf de bestelling met een tag die afgerond betekent, positief, neutraal of negatief. Gesprekken vanaf de vervaldag zijn pogingen; na {alertAttempts} pogingen zonder gevoerd gesprek krijgt een bestelling de vlag Niet bereikt.",
     notSetUp: "Courtesy is niet ingesteld: stel op Configuratie, Exports de datum in vanaf wanneer winkelbestellingen een courtesy-gesprek krijgen.",
     configureLink: "Open Exports",
@@ -5800,7 +5800,7 @@ const nl: Copy = {
     ctNoContact: "Courtesy-bestellingen waarvan de winkelklant niet aan een contact is gekoppeld, nu. Ze hebben geen staat en worden niet van hieruit gebeld: een datakwestie.",
     ctOutcomes: "De afgeronde courtesy-gesprekken van de periode naar de betekenis van hun tag.",
     ctColMarket: "De markt van de bestelling: de markt van haar winkel; onbekend zonder.",
-    ctColOrders: "Courtesy-bestellingen van de periode met een contact: eerste en herhaalbestellingen, geen tests, niet geannuleerd.",
+    ctColOrders: "Courtesy-bestellingen van de periode met een contact: bestellingen van de soorten {orderKinds}, geen tests, niet geannuleerd.",
     ctColCompleted: "Van die bestellingen de bestellingen die nu met een courtesy-gesprek zijn afgerond.",
     ctColShare: "Afgerond gedeeld door bestellingen, als percentage",
     ctColNotReached: "Van die bestellingen de bestellingen met nu {alertAttempts} pogingen of meer en geen gevoerd gesprek.",
