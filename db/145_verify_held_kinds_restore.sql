@@ -563,8 +563,10 @@ begin
   cross join lateral unnest(p.proargnames, p.proargmodes) a(name, mode)
   where n.nspname in ('cma', 'cma_read') and p.proargmodes is not null and p.proargnames is not null
     and a.mode in ('o', 't', 'b') and a.name ilike '%counterpart%';
-  v_txt := concat_ws('; ', v_txt, (select string_agg(c.table_schema || '.' || c.table_name, ', ') from information_schema.columns c
-                                   where c.table_schema = 'cma_read' and c.column_name ilike '%counterpart%'));
+  v_txt := concat_ws('; ', v_txt, (select string_agg(distinct 'cma_read.' || c.relname, ', ')
+                                   from pg_attribute a join pg_class c on c.oid = a.attrelid
+                                   where c.relnamespace = 'cma_read'::regnamespace and a.attnum > 0 and not a.attisdropped
+                                     and a.attname ilike '%counterpart%'));
   insert into verify_0008zx values (7, 'S7 no function of cma or cma_read returns the caller''s hash, no reader view shows it',
     case when coalesce(v_txt, '') = '' and not v_provoke then 'ok' else 'FAIL' end, coalesce(nullif(v_txt, ''), 'none'));
 end

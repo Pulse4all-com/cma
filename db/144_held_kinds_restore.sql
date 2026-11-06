@@ -56,8 +56,8 @@
 -- as a loop over every pair (434 ms for the join back to the missed calls, 2.3 s for the callbacks against the callers,
 -- both found while timing and removed). 131 part a's four statements locally at three times prod's volume, best of
 -- five (the lower figure with a fresh plan, the higher with the plans cached for the other tenant first, as 145 runs):
--- inbound today 46 to 3 ms, the summary 87 to 15-28 ms, the missed callbacks with their record links 125 to 29-46 ms,
--- cma.inbound_now() 247 to 54-66 ms. What remains of the list and inbound_now is the about 1,960 listed callers
+-- inbound today 46 to 3-4 ms, the summary 87 to 15-34 ms, the missed callbacks with their record links 125 to 29-54 ms,
+-- cma.inbound_now() 247 to 54-67 ms. What remains of the list and inbound_now is the about 1,960 listed callers
 -- themselves: a record link per row through cma.record_url (about 9 ms), the office seconds per row (about 10 ms) and
 -- the list's JSON (about 18 ms); 20 ms at that size would need the poll to return less. At prod's own volume the ratio
 -- of 132's prod times to its local ones puts all four at about 10 ms or under; 131 part a in prod is the proof.
