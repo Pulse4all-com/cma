@@ -804,12 +804,13 @@ expect("a snapshot stored before 0008zy: the subscription-status breakdown not a
 // without a Model filter (reviewer C1): a snapshot stored before 0008zy shows its subscription-status rows as stored
 const oldRows0008zy = ibRows.filter((r) => !("subscription_status" in r.dims)).concat([mRow({ market: "GB", subscription_status: "active" }, 4, 4, 0, 2, 0, 3)]);
 const ibSet = ["market", "model", "subscription_status"];
-expect("without a Model filter, a snapshot stored before 0008zy shows its subscription-status rows under the set it stored; the page draws each breakdown from that set",
+expect("without a Model filter, a snapshot stored before 0008zy shows its subscription-status rows under the set it stored, never [market] or another dim's; the page draws each breakdown from that set",
   [shownSetOf(base0008zy, oldRows0008zy, ibSet), shownSetOf(base0008zy, ibRows, ibSet), shownSetOf(base0008zy, [], ibSet),
     shownSetOf(overviewOf("orders"), [mRow({ market: "GB", kind: "first" }, 1, 1, 0, 0, 0, 0)], ["market", "store", "kind"]),
+    shownSetOf(base0008zy, ibRows, ["market", "model"]), shownSetOf(base0008zy, oldRows0008zy, ibSet, "status"),
     /const stored = shownSetOf\(def, shown\.rows, set\);[\s\S]{0,600}title=\{cardTitle\(stored\)\}>\s*<BreakdownTable def=\{def\} doc=\{shown\} set=\{stored\}/.test(overviewSrc)],
-  [["market", "subscription_status"], ibSet, ibSet, ["market", "store", "kind"], true],
-  [ibSet, ["market", "subscription_status"], ["market", "subscription_status"], ["market", "kind"], false]);
+  [["market", "subscription_status"], ibSet, ibSet, ["market", "store", "kind"], ["market", "model"], ibSet, true],
+  [ibSet, ["market", "subscription_status"], ["market", "subscription_status"], ["market", "kind"], ["market"], ["market", "subscription_status"], false]);
 const labels0008zy = { model: { ma: "Model A", mb: "Model B", mc: "Model C" } };
 expect("the Model filter is the installed base's alone, read from f_model; its choices: the database's order, then by name, unknown last",
   [FLASH_DOCUMENT_FILTERS, documentFilterOf(base0008zy, { model: "ma", market: "GB" }), documentFilterOf(overviewOf("orders"), { kind: "first" }),
