@@ -14,7 +14,7 @@
  *   completed call    a call on the contact (either direction, a counted line, linked through the call link), at or after
  *                     the order's creation, with a current tag meaning courtesy_completed_positive, _neutral or _negative;
  *                     the order's completion is the first such call
- *   attempt           an Attempt (outbound) on the contact from the start of the due date up to and including the completion
+ *   attempt since due an Attempt (outbound) on the contact from the start of the due date up to and including the completion
  *   state, now        not_due, due_no_attempt, attempted, not_reached (courtesy.alert_attempts attempts, none a
  *                     Conversation: the flag), completed
  * Ids, codes, counts and times only: never a customer's name, email, phone or address.
@@ -107,7 +107,7 @@ export function courtesyStateMatches(state: CourtesyState | null, f: CourtesySta
 
 /**
  * A setting's value as the database keeps it, or null when it would be refused: the start date YYYY-MM-DD or empty (not set
- * up); one to three of first, repeat and renewal, each once (spaces dropped); 1 to 60 days; 1 to 20 attempts; one to six
+ * up); one to three of first, repeat and renewal, each once (spaces dropped); 1 to 60 days; 1 to 20 attempts since due; one to six
  * increasing whole numbers of days, each at most 90 (spaces dropped)
  */
 export function parseCourtesySetting(key: CourtesySettingKey, text: string): string | null {

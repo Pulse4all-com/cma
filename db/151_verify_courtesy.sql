@@ -15,7 +15,7 @@
 --   B  courtesy on two throwaway tenants (Europe/Amsterdam). Tenant one: markets NL (Europe/Amsterdam) and GB
 --      (Europe/London); courtesy.start_date 7 September 2026, the other settings at their defaults (first,repeat; day 10;
 --      3 attempts; ages 10,14,21,30); a CRM connection with a contact record link, a telephony connection with a counted
---      line and the five tags (completed positive, neutral and negative, courtesy attempt, not reached), a shop per
+--      line and the five tags (the meanings courtesy_completed_positive, _neutral and _negative, courtesy_attempt, not_reached), a shop per
 --      market. As of Friday 6 November 2026 12:00 UTC, the brief's twelve checks:
 --      B1  a First and a Repeat order count; Renewal, Unknown, test, deleted and cancelled orders do not
 --      B2  an order before courtesy.start_date does not count; an unset start date gives not set up (no store: has_store
@@ -23,10 +23,10 @@
 --      B3  an order without a linked contact counts as No contact only
 --      B4  the due date is 10 calendar days from the business date; a London and an Amsterdam order at 23:30 UTC fall on
 --          their own market's dates (one due, one not due yet)
---      B5  a call before the due date is not an attempt; a completed call before the due date still completes the order
+--      B5  a call before the due date is not an attempt since due; a completed call before the due date still completes the order
 --      B6  one completed call completes two open orders of the same contact; a later third order stays open
---      B7  three attempts without a Conversation give Not reached (the third tagged not reached at 45 seconds); two give
---          Attempted; three with one Conversation (tagged with the courtesy attempt meaning) give Attempted
+--      B7  three attempts since due without a Conversation give Not reached (the third tagged not reached at 45 seconds);
+--          two give Attempted; three with one Conversation (its tag's meaning courtesy_attempt) give Attempted
 --      B8  positive, neutral and negative completions are split (an inbound call completes too); an untagged connected
 --          call never completes
 --      B9  per person sorts by name (not by count); a call whose user is linked to nobody is in the not-linked row, last
@@ -275,14 +275,14 @@ begin
       from unnest(array['k1', 'k2', 'k3', 'kL', 'kA', 'k5', 'k5b', 'k6', 'k7a', 'k7b', 'k7c', 'k8u']) k));
 
     -- the calls: each a CRM call on its contact logged by a telephony call with the same hash, 10 seconds earlier
-    --   k1  outbound 14 Oct by tu-1, 60 s, tagged completed positive: completes oF (an attempt too: after its due date)
-    --   k2  inbound 15 Oct by tu-2, 90 s, tagged completed negative: completes oR (inbound: no attempt)
+    --   k1  outbound 14 Oct by tu-1, 60 s, tagged completed positive: completes oF (an attempt since due too: after its due date)
+    --   k2  inbound 15 Oct by tu-2, 90 s, tagged completed negative: completes oR (inbound: no attempt since due)
     --   k5  outbound 8 Oct not answered (before the due date), outbound 12 Oct by tu-x, 50 s, completed positive (before it)
-    --   k5b outbound 8 Oct (before the due date) and 16 Oct, neither answered: one attempt
+    --   k5b outbound 8 Oct (before the due date) and 16 Oct, neither answered: one attempt since due
     --   k6  outbound 20 Oct by tu-1, 120 s, completed neutral: completes o6a and o6b; o6c of 25 Oct stays open
-    --   k7a 12, 13 Oct not answered, 14 Oct answered 45 s tagged not reached: three attempts, no conversation
-    --   k7b 12, 13 Oct not answered: two attempts
-    --   k7c 12 Oct not answered, 13 Oct answered 40 s tagged courtesy attempt (a conversation), 14 Oct not answered
+    --   k7a 12, 13 Oct not answered, 14 Oct answered 45 s tagged not reached: three attempts since due, no conversation
+    --   k7b 12, 13 Oct not answered: two attempts since due
+    --   k7c 12 Oct not answered, 13 Oct answered 40 s with the tag meaning courtesy_attempt (a conversation), 14 Oct not answered
     --   k8u 12 Oct answered 60 s, untagged: a conversation, never a completion
     create temp table v0009a_calls (id text, contact text, at timestamptz, dir text, talk integer, usr text, tags text[]) on commit drop;
     insert into v0009a_calls values
@@ -360,7 +360,7 @@ begin
     select string_agg(pg_temp.v0009a_order(o), ' ' order by o.order_source_id) into v_txt
     from cma.courtesy_orders_of(v_t1, null, null, v_now) o;
 
-    -- B3. an order without a linked contact counts as No contact only: no state, no attempts, segment unknown; in the No
+    -- B3. an order without a linked contact counts as No contact only: no state, no attempts since due, segment unknown; in the No
     --     contact tile and in no other count
     j := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, null, 100, true, v_now);
     select format('%s/%s/%s/%s', o.has_contact, coalesce(o.state, '-'), coalesce(o.attempts::text, '-'), o.segment) into v_txt2
@@ -380,9 +380,9 @@ begin
       case when v_txt2 = 'oAms:NL/1028/1107/not_due oF:NL/1001/1011/completed oLdn:GB/1027/1106/due_no_attempt'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt2, 'null')];
 
-    -- B5. a call before the due date is not an attempt (oP: 8 October not counted, 16 October one attempt); a completed call
-    --     before the due date still completes the order (oE: 12 October, due the 15th, no attempt)
-    v_rows := v_rows || array['15', 'B5 a call before the due date is no attempt; a completed call before it still completes',
+    -- B5. a call before the due date is not an attempt since due (oP: 8 October not counted, 16 October one); a completed call
+    --     before the due date still completes the order (oE: 12 October, due the 15th, no attempt since due)
+    v_rows := v_rows || array['15', 'B5 a call before the due date is no attempt since due; a completed call before it still completes',
       case when v_txt like '%oE:1005/1015/completed/0/false/positive%' and v_txt like '%oP:1005/1015/attempted/1/false/-%'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -395,9 +395,9 @@ begin
                 and v_txt like '%o6a:1001/1011/completed/1/true/neutral%' and v_txt like '%o6c:1025/1104/due_no_attempt/0/false/-%'
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s; %s completing call', v_txt2, v_n)];
 
-    -- B7. three attempts without a Conversation: Not reached; two: Attempted; three with one Conversation (tagged with the
-    --     courtesy attempt meaning): Attempted
-    v_rows := v_rows || array['17', 'B7 three attempts without a conversation Not reached; two Attempted; three with one conversation Attempted',
+    -- B7. three attempts since due without a Conversation: Not reached; two: Attempted; three with one Conversation (its tag's
+    --     meaning courtesy_attempt): Attempted
+    v_rows := v_rows || array['17', 'B7 three attempts since due without a conversation Not reached; two Attempted; three with one conversation Attempted',
       case when v_txt like '%o7a:1001/1011/not_reached/3/false/-%' and v_txt like '%o7b:1001/1011/attempted/2/false/-%'
                 and v_txt like '%o7c:1001/1011/attempted/3/true/-%'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -421,7 +421,7 @@ begin
     perform cma.refresh_follow_up_of(v_t1);
     select format('%s/%s', s.courtesy_not_reached, s.courtesy_alert_attempts) into v_txt2 from cma.follow_up_summary() s;
     j2 := cma.courtesy_page(date '2026-10-01', date '2026-10-31');
-    v_rows := v_rows || array['20', 'B10 the follow-up summary''s Not reached equals the page''s tile, with the attempts that flag it',
+    v_rows := v_rows || array['20', 'B10 the follow-up summary''s Not reached equals the page''s tile, with the attempts since due that flag it',
       case when v_txt2 = (j2 -> 'now' ->> 'not_reached') || '/3' and (j2 -> 'now' ->> 'not_reached')::int >= 1
                 and not v_provoke then 'PASS' else 'FAIL' end, format('summary %s, page %s', v_txt2, j2 -> 'now' ->> 'not_reached')];
 

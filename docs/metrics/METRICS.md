@@ -36022,12 +36022,12 @@ A now figure: the period does not narrow it (the hint says so). The market and s
 
 **Not reached** on /reports/courtesy · Not reached (Niet bereikt)
 
-The flag: courtesy orders with at least courtesy.alert_attempts attempts from the due day, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.
+The flag: courtesy orders with at least courtesy.alert_attempts attempts since due, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.
 
 **Formula as computed**
 
 ```
-not_reached = count(courtesy orders with a contact, not completed, attempts >= courtesy.alert_attempts and no attempt a Conversation (cma.is_conversation)); an attempt = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted
+not_reached = count(courtesy orders with a contact, not completed, attempts since due >= courtesy.alert_attempts and none a Conversation (cma.is_conversation)); an attempt since due = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted
 ```
 
 **Unit** count · **Grain** now · **Status** prerequisite_missing
@@ -37039,14 +37039,14 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 
 #### `courtesy.list.attempts`
 
-**Attempts** on /reports/courtesy · Courtesy attempts (Pogingen)
+**Attempts since due** on /reports/courtesy · Attempts since due (Pogingen sinds vervaldatum)
 
-Outbound calls on the order's contact from the due date up to and including the completed call.
+Attempts since due (definitions.md, Attempt since due): the outbound calls on the order's contact from the due date up to and including the completed call.
 
 **Formula as computed**
 
 ```
-attempts = count(outbound linked calls on the contact with started_at >= due_at and <= coalesce(completed_at, now)); null for No contact; calls before the due date are not attempts
+attempts since due = count(outbound linked calls on the contact with started_at >= due_at and <= coalesce(completed_at, now)); null for No contact; calls before the due date are not attempts since due
 ```
 
 **Unit** count · **Grain** now, per_record · **Status** prerequisite_missing
@@ -37129,7 +37129,7 @@ The order's state now: not due yet, due with no attempt, attempted, not reached 
 **Formula as computed**
 
 ```
-state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt; else not_reached with attempts >= courtesy.alert_attempts and none a Conversation; else attempted
+state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt since due; else not_reached with attempts since due >= courtesy.alert_attempts and none a Conversation; else attempted
 ```
 
 **Unit** text · **Grain** now, per_record · **Status** prerequisite_missing

@@ -88509,8 +88509,8 @@
         "en": "Not reached",
         "nl": "Niet bereikt"
       },
-      "definition": "The flag: courtesy orders with at least courtesy.alert_attempts attempts from the due day, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.",
-      "formula": "not_reached = count(courtesy orders with a contact, not completed, attempts >= courtesy.alert_attempts and no attempt a Conversation (cma.is_conversation)); an attempt = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted",
+      "definition": "The flag: courtesy orders with at least courtesy.alert_attempts attempts since due, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.",
+      "formula": "not_reached = count(courtesy orders with a contact, not completed, attempts since due >= courtesy.alert_attempts and none a Conversation (cma.is_conversation)); an attempt since due = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted",
       "unit": "count",
       "grain": [
         "now"
@@ -91201,13 +91201,13 @@
       "key": "courtesy.list.attempts",
       "surface": "report",
       "page": "/reports/courtesy",
-      "tile": "Attempts",
+      "tile": "Attempts since due",
       "title": {
-        "en": "Courtesy attempts",
-        "nl": "Pogingen"
+        "en": "Attempts since due",
+        "nl": "Pogingen sinds vervaldatum"
       },
-      "definition": "Outbound calls on the order's contact from the due date up to and including the completed call.",
-      "formula": "attempts = count(outbound linked calls on the contact with started_at >= due_at and <= coalesce(completed_at, now)); null for No contact; calls before the due date are not attempts",
+      "definition": "Attempts since due (definitions.md, Attempt since due): the outbound calls on the order's contact from the due date up to and including the completed call.",
+      "formula": "attempts since due = count(outbound linked calls on the contact with started_at >= due_at and <= coalesce(completed_at, now)); null for No contact; calls before the due date are not attempts since due",
       "unit": "count",
       "grain": [
         "now",
@@ -91431,7 +91431,7 @@
         "nl": "Staat"
       },
       "definition": "The order's state now: not due yet, due with no attempt, attempted, not reached or completed (with its outcome); none for No contact.",
-      "formula": "state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt; else not_reached with attempts >= courtesy.alert_attempts and none a Conversation; else attempted",
+      "formula": "state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt since due; else not_reached with attempts since due >= courtesy.alert_attempts and none a Conversation; else attempted",
       "unit": "text",
       "grain": [
         "now",

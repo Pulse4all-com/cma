@@ -31,9 +31,9 @@
 --                     The order's completion is the first such call (its outcome the call's meaning; a call carrying two
 --                     completed meanings takes the tag set last); so one completed call completes every courtesy order of
 --                     the contact created at or before it and not completed yet
---   attempt           an Attempt on the contact from the start of the due date up to and including the completion
---   conversation      one of those attempts is a Conversation (the column is never named reached, a call word retired in 0008zc)
---   state, as of now  not_due (before the due date, not completed), due_no_attempt, attempted (attempts below
+--   attempt since due an Attempt on the contact from the start of the due date up to and including the completion
+--   conversation      one of those attempts since due is a Conversation (the column is never named reached, a call word retired in 0008zc)
+--   state, as of now  not_due (before the due date, not completed), due_no_attempt, attempted (attempts since due below
 --                     courtesy.alert_attempts, or at least that many with a Conversation), not_reached (at least
 --                     courtesy.alert_attempts attempts, none a Conversation: the flag), completed (outcome positive,
 --                     neutral or negative); null for No contact
@@ -94,7 +94,7 @@ insert into cma.setting (key, value_type, allowed_values, default_value, descrip
   ('courtesy.due_days', 'integer', null, '10',
      'The calendar days after an order''s business date on which its courtesy call falls due, 1 to 60'),
   ('courtesy.alert_attempts', 'integer', null, '3',
-     'The attempts after which a courtesy order without a conversation is flagged Not reached, 1 to 20'),
+     'The attempts since due after which a courtesy order without a conversation is flagged Not reached, 1 to 20'),
   ('courtesy.ages_days', 'text', null, '10,14,21,30',
      'The ages in days at which Customers → Courtesy follows each order cohort: one to six increasing whole numbers, each at most 90')
 on conflict (key) do update
@@ -348,7 +348,7 @@ begin
         using errcode = 'CMA04';
     end if;
     new.value := (new.value::jsonb)::text;
-  -- courtesy (0009a): the order kinds that get a courtesy call, the day it falls due, the attempts after which an order
+  -- courtesy (0009a): the order kinds that get a courtesy call, the day it falls due, the attempts since due after which an order
   -- without a conversation is flagged Not reached, and the ages of the order cohorts (each at most 90 days)
   elsif new.key = 'courtesy.order_kinds' and not cma.flash_list_ok(new.value, '^(first|repeat|renewal)$', 3, false) then
     raise exception 'Setting % takes one to three of first, repeat and renewal, each once, comma-separated without spaces, such as first,repeat', new.key
@@ -358,7 +358,7 @@ begin
     raise exception 'Setting % takes a whole number of days from 1 to 60', new.key using errcode = 'CMA04';
   elsif new.key = 'courtesy.alert_attempts'
         and (case when length(new.value) > 2 then true else new.value::integer not between 1 and 20 end) then
-    raise exception 'Setting % takes a whole number of attempts from 1 to 20', new.key using errcode = 'CMA04';
+    raise exception 'Setting % takes a whole number of attempts since due from 1 to 20', new.key using errcode = 'CMA04';
   elsif new.key = 'courtesy.ages_days'
         and (case when not cma.is_bucket_list(new.value, 6) then true
                  else (select max(x::integer) from unnest(string_to_array(new.value, ',')) x) > 90 end) then
@@ -447,7 +447,7 @@ begin
 end
 $$;
 comment on type cma.courtesy_order_row is
-  'One courtesy order as of an instant (0009a): the order, its store, market, zone and segment, its business and due dates, its contact (ids only), its courtesy attempts, whether one was a Conversation, its completion (call, outcome, the person of the call''s user) and its state; docs/definitions.md, Courtesy terms';
+  'One courtesy order as of an instant (0009a): the order, its store, market, zone and segment, its business and due dates, its contact (ids only), its attempts since due, whether one was a Conversation, its completion (call, outcome, the person of the call''s user) and its state; docs/definitions.md, Courtesy terms';
 
 -- The courtesy orders of a tenant created on the business dates [p_from, p_to) (each in its market's zone), as of p_now.
 -- p_from and p_to given: at most 92 days (cma.report_range); null: from courtesy.start_date, up to any date. None while
@@ -548,7 +548,7 @@ begin
       where j.outcome is not null and j.started_at >= j.source_created_at
       order by j.order_id, j.started_at, j.call_id
     ), att as (
-      -- the courtesy attempts: outbound, from the start of the due date up to and including the completion
+      -- the attempts since due: outbound, from the start of the due date up to and including the completion
       select j.order_id, count(*)::integer as attempts, bool_or(j.conversation) as conversation, max(j.started_at) as last_at
       from j
       left join done d on d.order_id = j.order_id
@@ -872,7 +872,7 @@ begin
            'tasks_unmapped_owner', count(*) filter (where i.kind = 'task' and i.row ->> 'owner_ref' is not null and i.owner_user_id is null))
     into v_summary
   from cma.follow_up_item i where i.tenant_id = p_tenant_id;
-  -- the courtesy flag (0009a): the courtesy orders Not reached now and the attempts that flag one, both null while
+  -- the courtesy flag (0009a): the courtesy orders Not reached now and the attempts since due that flag one, both null while
   -- courtesy.start_date is unset, so Welcome's Needs attention reads them with the summary
   v_courtesy := cma.courtesy_not_reached_of(p_tenant_id, now());
   v_summary := v_summary || jsonb_build_object(
@@ -902,7 +902,7 @@ begin
 end
 $$;
 
--- The counts, when they were computed, and (0009a) the courtesy orders Not reached with the attempts that flag one: two new
+-- The counts, when they were computed, and (0009a) the courtesy orders Not reached with the attempts since due that flag one: two new
 -- columns at the end, so the function is dropped and created again
 drop function if exists cma.follow_up_summary();
 create function cma.follow_up_summary()
@@ -952,7 +952,7 @@ grant execute on function cma_read.courtesy_order_rows() to cma_readonly;
 create or replace view cma_read.courtesy_order as
   select * from cma_read.courtesy_order_rows();
 comment on view cma_read.courtesy_order is
-  'One row per courtesy order since each tenant''s courtesy.start_date, as of now (0009a): the order, store, market, segment, business and due dates, whether it has a contact (never which), its courtesy attempts, whether one was a Conversation, its completion, outcome, the completing person and its state';
+  'One row per courtesy order since each tenant''s courtesy.start_date, as of now (0009a): the order, store, market, segment, business and due dates, whether it has a contact (never which), its attempts since due, whether one was a Conversation, its completion, outcome, the completing person and its state';
 
 -- ---------------------------------------------------------------------------------------------
 -- 7. Grants: the application only (a function made again keeps its grants)
@@ -979,7 +979,7 @@ $$;
 -- 8. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009a', 'Customers → Courtesy: the settings courtesy.start_date (empty: not set up), courtesy.order_kinds (first,repeat), courtesy.due_days (10), courtesy.alert_attempts (3) and courtesy.ages_days (10,14,21,30), checked by cma.check_tenant_setting(); cma.courtesy_orders_of (per courtesy order: store, market, segment, due date, the courtesy attempts on its contact from the due date, whether one was a Conversation, the first completed call at or after it with its outcome and person, the state as of now; calls attributed as Attempts per deal''s, the completed tag meanings decided on 25 October 2026); cma.courtesy_page (tiles, per market and period, order cohorts, per person for performance.team, the order list with the contact''s record link); the follow-up snapshot keeps the courtesy orders Not reached and cma.follow_up_summary() returns them; cma_read.courtesy_order without the contact')
+values ('0009a', 'Customers → Courtesy: the settings courtesy.start_date (empty: not set up), courtesy.order_kinds (first,repeat), courtesy.due_days (10), courtesy.alert_attempts (3) and courtesy.ages_days (10,14,21,30), checked by cma.check_tenant_setting(); cma.courtesy_orders_of (per courtesy order: store, market, segment, due date, the attempts since due on its contact, whether one was a Conversation, the first completed call at or after it with its outcome and person, the state as of now; calls attributed as Attempts per deal''s, the completed tag meanings decided on 25 October 2026); cma.courtesy_page (tiles, per market and period, order cohorts, per person for performance.team, the order list with the contact''s record link); the follow-up snapshot keeps the courtesy orders Not reached and cma.follow_up_summary() returns them; cma_read.courtesy_order without the contact')
 on conflict (version) do nothing;
 
 commit;
