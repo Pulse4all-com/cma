@@ -238,7 +238,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Status | Decided (R2) |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
 | Used by | `inbound.unanswered_share`, `live.inbound.unanswered_share`, `live.inbound.unanswered_count`, `live.missed.*`, `welcome.needs_attention.missed_callbacks`; Reports → Inbound; Live board; Welcome |
-| As built today | `cma.inbound_calls_of` (`60`, `76`): unanswered is inbound, not answered and not waiting (not ended and at most `telephony.waiting_max_minutes` old); the reason is Aircall's `missed_call_reason` (`unknown` without one), with labels and switches in `cma.telephony_missed_reason`. Reports → Inbound says "Unanswered" ("Niet aangenomen"), the Live board's list says "Missed" ("Gemist") |
+| As built today | `cma.inbound_calls_of` (`60`, `76`): unanswered is inbound, not answered and not waiting (not ended and at most `telephony.waiting_max_minutes` old); the reason is Aircall's `missed_call_reason` (`unknown` without one), with labels and switches in `cma.telephony_missed_reason`. Reports → Inbound says "Unanswered" ("Niet aangenomen"), the Live board's list says "Missed" ("Gemist") Since 0008zx the Live board's list reads the missed calls through `telephony_call_missed_inbound_idx` in `cma.missed_callbacks_of` and counts anonymous ones with `cma.anonymous_missed_calls_of` (`144`); the meaning is unchanged. |
 
 ### Tag
 

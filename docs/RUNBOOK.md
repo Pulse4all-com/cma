@@ -386,6 +386,17 @@ Four rules every addition's runbook follows (since 20 October 2026, `docs/attemp
   an unchanged `newest_change` is the migration's: stop. A differing hash with a later `newest_change` means new data
   arrived between the runs.
 
+### A concurrent index on a busy table
+
+A new index on a busy table (CLAUDE.md, Performance) is built from the Terminal, never from Studio, which wraps a script in a transaction. Pattern as verified on a local database on 6 November 2026 (addition 0008zx): psql with separate `-c` commands, because several statements in one `-c` run as one transaction, which a concurrent build refuses ("CREATE INDEX CONCURRENTLY cannot run inside a transaction block"), and the build needs `set role cma_owner` (the table's owner builds its indexes; without it the build is refused).
+
+**Terminal** (the pattern, with a made-up name)
+```bash
+cd ~/cma && cma_db dev && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set lock_timeout = '5s'" -c "set statement_timeout = '10min'" -c "create index concurrently if not exists <name> on cma.<table> (<columns>) where <predicate>" \
+  -c "select c.relname, i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = '<name>'"
+```
+Expected: `CREATE INDEX`, then one row `<name> | t`. An `f`: `drop index concurrently cma.<name>` and run it again. One index per statement; dev first, then prod (`cma_db prod`).
+
 ## 7b. Drift between dev and prod
 
 `tools/drift/functions.sql` (addition 0008z) lists every function of `cma` and `cma_read` with an md5 of its definition,
