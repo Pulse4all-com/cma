@@ -9,12 +9,17 @@
 -- subtransaction that is always rolled back, so nothing stays and the script runs in dev and in prod. Every check writes
 -- one row, ok or FAIL, and the last row is the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM
 -- login after 132_perf.sql, dev first, then prod. The previous definitions are those of 118 (connection_held_kinds_of),
--- 78 (system_health_runs), 60 (missed_callbacks_of), 76 (calls_of, inbound_calls_of), 74 (intake_per_day_of), 72
+-- 78 (system_health_runs), 60 (missed_callbacks_of), 100 (calls_of), 76 (inbound_calls_of), 74 (intake_per_day_of), 72
 -- (open_tickets_of, open_tasks_of) and 122 (flash_findings_of), copied verbatim with pg_temp.old_ in place of cma.
 -- Since 144_held_kinds_restore.sql (0008zx) E1 compares with 118's definition (0008zl), the latest before 0008zr: until
 -- 0008zx this script kept 70's (0008n), the one 132 had been rebuilt from, so the two agreed and the kinds 132 lost
 -- (reviews, assets, subscriptions) went unseen; on 0008zr alone E1 reads FAIL wherever a connection holds those rows.
 -- 145_verify_held_kinds_restore.sql is 0008zx's own check.
+-- Since 152_calls_of_restore.sql (0009b) E4 compares with 100's definition (0008zc), the latest before 0008zr, for the
+-- same reason: until 0009b this script kept 76's (0008q), the one 132 had been rebuilt from, so the two agreed and the
+-- rule 132 lost (Connected and Conversation by cma.is_connected, cma.is_conversation and cma.call_not_reached_of) went
+-- unseen; before 0009b E4 reads FAIL wherever the 92 days hold a call the two rules count differently.
+-- 153_verify_calls_of_restore.sql is 0009b's own check.
 -- Block E's data-quality check refreshes the current tenant's stored result inside its subtransaction and compares it
 -- with the live computation; the subtransaction is rolled back, so the stored result is as it was.
 -- Expected verdict, in dev and in prod: "0008zr verified | 133_verify_perf: <n> ok, 0 FAIL, <k> skip" (the skips are
@@ -188,7 +193,7 @@ as $$
   order by k.started_at, k.source_id
 $$;
 
--- calls_of as 76 defined it
+-- calls_of as 100 (0008zc) defined it
 create function pg_temp.old_calls_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz, p_market text, p_line text)
 returns table(connection_id uuid, source_system text, direction text, line_key text, line_name text, market text, zone text,
               started_at timestamptz, business_date date, week_start date, local_time time, user_ref text,
@@ -198,14 +203,15 @@ language sql stable
 as $$
   with s as (
     select t.timezone as tenant_zone,
-           greatest(0, cma.setting_of(t.id, 'telephony.connected_min_seconds')::integer) as connected_min
+           greatest(0, cma.setting_of(t.id, 'telephony.connected_min_seconds')::integer) as connected_min,
+           greatest(0, cma.setting_of(t.id, 'calls.conversation_min_talk_seconds')::integer) as conversation_min
     from cma.tenant t where t.id = p_tenant_id
   ),
   c as (
     select tc.connection_id, tc.source_system, tc.direction, tc.source_id, tc.started_at, tc.answered_at, tc.talk_seconds,
            tc.user_ref, tc.connection_id::text || ':' || coalesce(tc.number_ref, '') as lk,
            coalesce(n.name, tc.number_ref) as ln, coalesce(m.code, 'unknown') as mk, coalesce(m.time_zone, s.tenant_zone) as z,
-           s.connected_min
+           s.connected_min, s.conversation_min
     from cma.telephony_call tc
     cross join s
     left join cma.telephony_number n
@@ -223,13 +229,15 @@ as $$
          date_trunc('week', (c.started_at at time zone c.z)::date::timestamp)::date,
          (c.started_at at time zone c.z)::time,
          c.user_ref,
-         k.answered_in, k.connected_out, k.answered_in or k.connected_out,
+         k.answered_in, k.connected_out,
+         cma.is_conversation(c.direction, c.answered_at is not null, c.talk_seconds, c.connected_min, c.conversation_min, nr.not_reached),
          c.talk_seconds,
          coalesce(tg.refs, '{}'::text[]), tg.refs is not null
   from c
   cross join lateral (
     select c.direction = 'inbound' and c.answered_at is not null as answered_in,
-           c.direction = 'outbound' and coalesce(c.talk_seconds >= c.connected_min, false) as connected_out) k
+           cma.is_connected(c.direction, c.answered_at is not null, c.talk_seconds, c.connected_min) as connected_out) k
+  cross join lateral cma.call_not_reached_of(p_tenant_id, c.connection_id, c.source_id) nr
   left join lateral (
     select array_agg(ct.tag_ref order by ct.tag_ref) as refs
     from cma.telephony_call_tag ct
