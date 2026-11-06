@@ -2,7 +2,7 @@
 
 /**
  * Reports → Flash's controls in the browser (addition 0008zn): As of (A: a business date with a snapshot, or Now), the
- * market (K) and a landing card's live headline. Each control keeps the rest of the address; the figure reads its one
+ * market (K), the Installed base's model (D, addition 0008zy) and a landing card's live headline. Each control keeps the rest of the address; the figure reads its one
  * overview's headline (GET /api/v1/reports/flash?part=headline) after the page has painted, so the landing answers at
  * once from the stored figures whatever the volume. Ids, codes and counts only.
  */
@@ -76,6 +76,32 @@ export function FlashMarket({ market, markets, query, labels, path = "/reports/f
 }
 
 /**
+ * The Installed base's Model filter (addition 0008zy; D, as on Reports → Maintenance): every tile, per-market bar,
+ * breakdown and record of one model, kept in the address as f_model (and in the files); "All models" first, the
+ * register's models in its order, unknown last. A model the address names that the document does not is kept as a choice
+ */
+export function FlashModel({ model, models, query, labels, path = "/reports/flash" }: {
+  model: string | null;
+  models: { key: string; name: string | null }[];
+  query: Record<string, string>;
+  labels: { model: string; allModels: string; unknownModel: string };
+  path?: FlashPath;
+}) {
+  const router = useRouter();
+  const list = model && !models.some((m) => m.key === model) ? [...models, { key: model, name: null }] : models;
+  return (
+    <label className="flex flex-col gap-2 text-small font-semibold">
+      <span className="flex items-center gap-2">{labels.model} <Keycap>D</Keycap></span>
+      <select value={model ?? ""} data-shortcut="d" data-testid="flash-model" onChange={(e) => go(router, path, query, { f_model: e.target.value || null })}
+        className="h-10 min-w-48 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue">
+        <option value="">{labels.allModels}</option>
+        {list.map((m) => <option key={m.key} value={m.key}>{m.key === "unknown" ? labels.unknownModel : m.name ?? m.key}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/**
  * A landing card's live figure: its overview's headline read once after the page painted. While it reads, a calm line;
  * a failed read shows the dash, never an error code. The change against the figure to compare with is written here too,
  * since it needs the live value; a flow whose period is open (open: lib/flash periodComplete) says "so far" instead
@@ -119,7 +145,8 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
   const change = changeLineOf(shown, previous, labels.previousOnText, open, labels, n);
   // the headline's split: per device-holding status, each in the subscription app's word (addition 0008zu); the orders per
   // order kind in the reader's language (addition 0008zw)
-  const split = read === "failed" ? null : splitLine(read.split, n, (k) => labels.splitLabels?.[k] ?? k);
+  // the installed base per model, each by the register's name the database gives with it (addition 0008zy)
+  const split = read === "failed" ? null : splitLine(read.split, n, (k, x) => x.label ?? labels.splitLabels?.[k] ?? k);
   // a figure compared with one counted by an earlier definition is marked, never read as a change in the business
   const earlier = !open && read !== "failed" && labels.definitionEarlier && definitionChanged(read.version, previousDefinitionVersion, previous)
     ? labels.definitionEarlier : null;

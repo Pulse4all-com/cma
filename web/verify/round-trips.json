@@ -164,17 +164,27 @@
   {
     "path": "/reports/flash?o=customers",
     "subject": "manager",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
   },
   {
     "path": "/reports/flash?o=data_quality",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/api/v1/reports/flash?overview=orders&part=headline",
     "subject": "manager",
     "tx": 2,
     "rt": 9
   },
   {
-    "path": "/api/v1/reports/flash?overview=orders&part=headline",
+    "path": "/api/v1/reports/flash?overview=installed_base&f_model=hs1",
     "subject": "manager",
     "tx": 2,
     "rt": 9
@@ -206,8 +216,18 @@
   {
     "path": "/reports/installed-base",
     "subject": "manager",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/installed-base?f_model=hs1",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
   },
   {
     "path": "/api/v1/reports/funnel?from=2026-10-01&to=2026-10-20",

@@ -3324,6 +3324,12 @@ export interface FlashDocumentView {
   activeAtEnd: number | null;
   /** Data quality: each check's findings per snapshot date (30 dates) */
   history: { date: string; check: string; findings: number }[];
+  /**
+   * The keys the headline's split shows first, in the database's order (cma.flash_split_order_of, addition 0008zy): the
+   * device-holding statuses, the order kinds, the register's models; null for an overview without a split, or a
+   * database before 0008zy
+   */
+  splitOrder: string[] | null;
 }
 
 /** The records behind a figure (cma.flash_rows), live or a past month end's frozen list */

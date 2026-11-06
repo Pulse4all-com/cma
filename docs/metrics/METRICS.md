@@ -34419,7 +34419,7 @@ Of the devices, those in a device status flagged as in the field (Device status:
 **Formula as computed**
 
 ```
-count(*) where the device status's is_in_field. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where the device status's is_in_field. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of). The headline is split by model (addition 0008zy): one part per model of the asset register in its order (sort_order, then key), zeros shown, an unknown model only above 0, read from the set [market, status, model, warehouse, link] (cma.flash_split_dim_of, _set_of, _order_of; labels from the document's model labels), live and as of a date, none for a snapshot without those rows. A Model filter (f_model) narrows the figure and hides the split.
 ```
 
 **Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing
@@ -34659,7 +34659,7 @@ Of the devices in the field, those linked to a subscription (matched within the 
 **Formula as computed**
 
 ```
-count(*) where the device status's is_in_field and the linked subscription's status = any(flash.device_holding_statuses) (cma.flash_devices_of's subscription_status). Grouping sets: the totals, per market, the breakdown and [market, subscription_status], where in_field adds up over the statuses (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
+count(*) where the device status's is_in_field and the linked subscription's status = any(flash.device_holding_statuses) (cma.flash_devices_of's subscription_status). Grouping sets: the totals, per market, the breakdown and [market, model, subscription_status], where in_field adds up over the statuses (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).
 ```
 
 **Unit** count · **Grain** now, per_market, per_status, per_model · **Status** prerequisite_missing

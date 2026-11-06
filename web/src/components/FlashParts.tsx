@@ -200,14 +200,21 @@ export function changeText(value: number | null, previous: number | null, previo
 }
 
 /** The totals: one tile per measure, the headline first */
-export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc: FlashDocumentView; locale: "en" | "nl"; t: T }) {
+export function TotalsRow({ def, doc, locale, t, unavailable = [], filtered = false }: {
+  def: FlashOverviewDef; doc: FlashDocumentView; locale: "en" | "nl"; t: T;
+  /** The measures a page filter cannot narrow (addition 0008zy): "Not available with a Model filter", never a figure */
+  unavailable?: readonly string[];
+  /** A page filter narrows the document (the Model filter): the headline's split, of one model, is left out */
+  filtered?: boolean;
+}) {
   const totals = doc.totals ?? {};
   const order = [def.headline, ...def.measures.filter((m) => m !== def.headline)];
   // the headline's split: Total subscriptions per device-holding status, each in the subscription app's word (addition
-  // 0008zu); the orders per order kind in the reader's language, Unknown only above 0 (addition 0008zw). The document's
+  // 0008zu); the orders per order kind in the reader's language, Unknown only above 0 (addition 0008zw); In the field per
+  // model by the register's names, in the register's order (the document's splitOrder, addition 0008zy). The document's
   // rows are the market's when one is chosen; none for a snapshot taken before the split's rows were stored
-  const split = splitLine(splitOf(def, doc.rows, null, splitOrderOf(def, doc.statusSettings)),
-    (x) => fmtNumber(x, locale, 0), (k) => splitKeyLabel(def.key, k, t));
+  const split = filtered ? null : splitLine(splitOf(def, doc.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder)),
+    (x) => fmtNumber(x, locale, 0), (k) => splitKeyLabel(def.key, k, t, doc.labels));
   return (
     <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5" data-testid="flash-totals">
       {order.map((m) => (
@@ -216,7 +223,9 @@ export function TotalsRow({ def, doc, locale, t }: { def: FlashOverviewDef; doc:
             <MeasureLabel measure={m} label={String(t[`m_${m}` as keyof T])} settings={doc.statusSettings} locale={locale} t={t} />
           </p>
           <p className="tabular mt-1 text-title font-bold text-p4a-heading">
-            {measureNotApplicable(def.key, doc.totals, m)
+            {unavailable.includes(m)
+              ? <span className="text-small font-normal text-p4a-muted" data-testid={`flash-unavailable-${m}`}>{t.modelUnavailable}</span>
+              : measureNotApplicable(def.key, doc.totals, m)
               ? <NotApplicable measure={m} t={t} />
               : <MeasureValue measure={m} value={totals[m]} reviews={totals.reviews} locale={locale} />}
           </p>
@@ -240,6 +249,8 @@ function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, di
   if (dim === "subscription_status" && dims[dim] === "none") return t.noLink;
   // an order's kind in the reader's language, as the headline's split names it (addition 0008zw)
   if (def.key === "orders" && dim === "kind") return splitKeyLabel(def.key, dims[dim] ?? "", t);
+  // a device's model by its name in the register, as the headline's split names it (addition 0008zy)
+  if (def.key === "installed_base" && dim === "model") return splitKeyLabel(def.key, dims[dim] ?? "", t, doc.labels);
   return dimText(def.key, doc.labels, dim, dims);
 }
 
@@ -448,10 +459,12 @@ function cellOf(key: string, kind: string, value: unknown, row: Record<string, u
 }
 
 /** The records: the overview's columns (the links on the ids), sortable on the whitelist, 500 a page */
-export function RowsTable({ def, rows, sort, descending, query, locale, timeZone, t, path }: {
+export function RowsTable({ def, rows, sort, descending, query, locale, timeZone, t, path, labels }: {
   def: FlashOverviewDef; rows: FlashRowsView; sort: string | null; descending: boolean; query: Query; locale: "en" | "nl"; timeZone: string; t: T;
   /** The page the overview is rendered on (0008zw); Reports → Flash when left out */
   path?: FlashPath;
+  /** The document's labels: a device's model by its register name (addition 0008zy) */
+  labels?: FlashDocumentView["labels"];
 }) {
   const frozen = rows.mode === "snapshot";
   const columns = (frozen ? FLASH_FROZEN_COLUMNS : FLASH_LIST_COLUMNS[def.key])
@@ -489,9 +502,11 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
             <tr key={i} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
               {columns.map((c) => (
                 <td key={c.key} className={`px-3 py-2 ${c.kind === "number" ? "tabular text-right" : ""}`}>
-                  {/* an order's kind in the reader's language, as the breakdown and the headline's split (addition 0008zw) */}
-                  {def.key === "orders" && c.key === "kind" && typeof r[c.key] === "string" && r[c.key] !== ""
-                    ? <span title={String(r[c.key])}>{splitKeyLabel(def.key, String(r[c.key]), t)}</span>
+                  {/* an order's kind in the reader's language (addition 0008zw), a device's model by its register name (addition
+                      0008zy): as the breakdown and the headline's split name them, the code on hover */}
+                  {((def.key === "orders" && c.key === "kind") || (def.key === "installed_base" && c.key === "model" && !frozen))
+                    && typeof r[c.key] === "string" && r[c.key] !== ""
+                    ? <span title={String(r[c.key])}>{splitKeyLabel(def.key, String(r[c.key]), t, labels)}</span>
                     : cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t, !frozen && FLASH_LABELLED_DIMS[def.key]?.[c.key] !== undefined)}
                 </td>
               ))}

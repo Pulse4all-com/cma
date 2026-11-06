@@ -3,8 +3,8 @@ import { flashRowsParams } from "@/lib/api/flash";
 import { exportSettingsFrom, flashCsv, type FlashFileColumn } from "@/lib/csv";
 import { data } from "@/lib/data";
 import {
-  asOfStamp, breakdownColumns, breakdownRows, dataQualityRowShown, FLASH_FROZEN_COLUMNS, FLASH_LIST_COLUMNS, filtersText, flashFileName, overviewOf,
-  withLabelColumns,
+  asOfStamp, breakdownColumns, breakdownRows, dataQualityRowShown, documentFilterOf, FLASH_FROZEN_COLUMNS, FLASH_LIST_COLUMNS, filterDocument, filtersText,
+  flashFileName, overviewOf, withLabelColumns,
 } from "@/lib/flash";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
 
@@ -20,7 +20,9 @@ export const dynamic = "force-dynamic";
  * phone or address exists to write. A source not set up gives no file (409 not_set_up); a file cut at the row limit says
  * "rows <n> of <total>" in its filters cell; its instants and its name follow the tenant's time zone. On open deals and
  * open tickets a pipeline's (queue's) and a stage's label is a column beside its id, in both parts (pipeline_label,
- * queue_label, stage_label; the id where the CMA holds no label; Decision log, 4 Nov 2026).
+ * queue_label, stage_label; the id where the CMA holds no label; Decision log, 4 Nov 2026). The Installed base's Model filter
+ * (f_model, addition 0008zy) narrows the breakdown as the page does (lib/flash filterDocument) and the rows as a list
+ * filter; the filters cell names it, and what the filter cannot narrow (not available with it, never unfiltered).
  */
 export async function GET(request: Request) {
   return forPrincipal(async (me) => {
@@ -36,7 +38,10 @@ export async function GET(request: Request) {
     // the market the file was read for: the address's (market wins over f_market: lib/api/flash), else the records'
     // market filter; a breakdown is read for the address's market alone, so its name and filters cell say that one
     const market = part === "breakdown" ? q.market : q.market ?? q.filters.market ?? null;
-    let filters = filtersText(market, def.kind === "flow" ? q.from : null, def.kind === "flow" ? q.to : null, part === "rows" ? q.filters : {});
+    // the page filter (the Installed base's model, addition 0008zy): a breakdown is narrowed by it alone of the filters
+    const pageFilter = documentFilterOf(def, q.filters);
+    const breakdownFilters: Record<string, string> = pageFilter ? { [pageFilter.dim]: pageFilter.value } : {};
+    let filters = filtersText(market, def.kind === "flow" ? q.from : null, def.kind === "flow" ? q.to : null, part === "rows" ? q.filters : breakdownFilters);
     let text: string;
     let rows: number;
     let asOf: string;
@@ -48,8 +53,15 @@ export async function GET(request: Request) {
       // a source not set up has no figures, never zeros: no file either
       if (!doc.setUp) throw new ApiError(409, "not_set_up", "this overview's source is not set up, so it has no figures");
       zone = doc.timeZone || me.timeZone;
+      // narrowed by the page filter as the page does; what it cannot narrow is named in the filters cell, its cells left empty
+      const narrowed = pageFilter ? filterDocument(def, doc.totals, doc.rows, pageFilter.dim, pageFilter.value) : null;
+      if (narrowed && narrowed.unavailableMeasures.length + narrowed.unavailableSets.length > 0) {
+        filters = `${filters}; not available with the filter: ${[...narrowed.unavailableMeasures, ...narrowed.unavailableSets].join(", ")}`;
+      }
+      const totals = narrowed ? narrowed.totals : doc.totals;
+      const setRows = narrowed ? narrowed.rows : doc.rows;
       // the totals first (the document holds them apart: the market's own when one is chosen), then every set's rows
-      const all = doc.totals ? [{ dims: {}, measures: doc.totals }, ...doc.rows] : doc.rows;
+      const all = totals ? [{ dims: {}, measures: totals }, ...setRows] : setRows;
       const columns: FlashFileColumn[] = breakdownColumns(def, all);
       // a pipeline's and a stage's label beside its id, from the document's labels (the id where the CMA holds none)
       const lines = breakdownRows(def, all, doc.labels);
@@ -71,8 +83,9 @@ export async function GET(request: Request) {
       text = flashCsv(asOf, filters, [...columns], shown, settings, zone);
       rows = list.rows.length;
     }
-    // what was applied, no more: a breakdown takes no list filters; a flow's As of reads its period's snapshots, a stock's its date
-    await data().recordFlashFile(me, { overview: def.key, part, filters: part === "rows" ? q.filters : {}, market: q.market,
+    // what was applied, no more: a breakdown takes the page filter alone of the filters; a flow's As of reads its period's
+    // snapshots, a stock's its date
+    await data().recordFlashFile(me, { overview: def.key, part, filters: part === "rows" ? q.filters : breakdownFilters, market: q.market,
       asOf: part === "rows" && def.kind === "flow" ? null : q.asOf, from: def.kind === "flow" ? q.from : null, to: def.kind === "flow" ? q.to : null, rows });
     const stamp = /^\d{4}-\d{2}-\d{2}$/.test(asOf) ? asOf : asOfStamp(null, new Date(asOf), zone);
     return csvFile(text, flashFileName(def.key, market, stamp, part));

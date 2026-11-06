@@ -11,13 +11,17 @@ import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
 import {
   bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_SPLITS, frozenFilters, overviewOf, ratioOf, splitOf, splitOrderOf, withLabels, type FlashKey, type FlashOverviewDef,
-  type FlashSplitItem, type FlashStatusSettings,
+  type FlashDocRow, type FlashSplitItem, type FlashStatusSettings,
 } from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
   DataQualityRowsView, FlashCardView, FlashDocRowView, FlashDocumentView, FlashFileRead, FlashHeadlineView, FlashPageView, FlashRowsRequest,
   FlashRowsView, FlashSnapshotsView, FlashSourceKey, FlashSourcesView, FlashWatchItem,
 } from "./types";
+
+/** The fixture's register of models: its names and its order (sort order, then key), as cma.device_model holds them */
+const MOCK_MODEL_NAMES: Record<string, string> = { aed_plus: "AED Plus", aed_3: "AED 3" };
+const MOCK_MODEL_ORDER: readonly string[] = ["aed_plus", "aed_3"];
 
 const MOCK_TENANT_2 = "00000000-0000-7000-8000-000000000002";
 const REPORT = ["reports.view", "performance.team"];
@@ -440,7 +444,7 @@ function labelsOf(def: FlashOverviewDef): Record<string, Record<string, string>>
     stage: def.key === "open_tickets"
       ? { "tp-service:ts-new": "New", "tp-service:ts-waiting": "Waiting on us", "tp-support:ts-new": "New", "tp-support:ts-waiting": "Waiting on contact" }
       : { "pl-sales:st-new": "New", "pl-sales:st-quote": "Quote sent", "pl-sales:st-negotiation": "Negotiation", "pl-invest:st-new": "New", "pl-invest:st-quote": "Quote sent" },
-    queue: { "tp-service": "Service", "tp-support": "Support" }, model: { aed_plus: "AED Plus", aed_3: "AED 3" },
+    queue: { "tp-service": "Service", "tp-support": "Support" }, model: MOCK_MODEL_NAMES,
     status: { installed: "Installed", in_stock: "In stock", NOT_STARTED: "Not started", WAITING: "Waiting" }, type: { CALL: "Call", EMAIL: "Email" },
     warehouse: { "wh-utrecht": "Utrecht" },
     check: {
@@ -485,7 +489,7 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
       if (asOf) {
         const rows = rowsOf(def, recordsOf(me, today, def, asOf, def.kind === "flow" ? f : null, def.kind === "flow" ? t : null));
         value = headlineOf(def, rows, market);
-        split = splitOf(def, rows, market, splitOrderOf(def, statusSettingsMock(me)));
+        split = mockSplitOf(me, def, rows, market);
       }
       if (def.kind === "stock") {
         previousOn = [...dates].reverse().find((d) => d < (asOf ?? today)) ?? null;
@@ -562,7 +566,19 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
       endedSubscriptionStatuses: ENDED, deviceBands: [1, 2, 3], subscriptionAgeMonths: [12, 24, 36, 48, 60], customerSegments: [...SEGMENTS] },
     statusSettings: statusSettingsMock(me),
     definitionVersion: versionOf(def, today, asOf), firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
+    splitOrder: FLASH_SPLITS[def.key] ? [...mockSplitOrderOf(me, def)] : null,
   };
+}
+
+/** A headline's split as cma.flash_headline_split_of answers it: the installed base's parts with the register's names */
+function mockSplitOf(me: Principal, def: FlashOverviewDef, rows: FlashDocRow[], market: string | null): FlashSplitItem[] | null {
+  const split = splitOf(def, rows, market, mockSplitOrderOf(me, def));
+  return split && def.key === "installed_base" ? split.map((x) => (MOCK_MODEL_NAMES[x.key] ? { ...x, label: MOCK_MODEL_NAMES[x.key] } : x)) : split;
+}
+
+/** The split's first keys as cma.flash_split_order_of answers them: the holding statuses, the order kinds, the register's models */
+function mockSplitOrderOf(me: Principal, def: FlashOverviewDef): readonly string[] {
+  return def.key === "installed_base" ? MOCK_MODEL_ORDER : splitOrderOf(def, statusSettingsMock(me));
 }
 
 /** The fixture's own fields, which no list answers: its key, its date, its flags and the bands and segment it is filtered by */
@@ -664,7 +680,7 @@ export function mockFlashHeadline(me: Principal, overview: string, market: strin
   const t = def.kind === "flow" ? to ?? today : null;
   const rows = up ? rowsOf(def, recordsOf(me, today, def, null, f, t)) : [];
   return { overview: def.key, headline: def.headline, market, asOf: new Date().toISOString(), from: f, to: t, setUp: up,
-    value: up ? headlineOf(def, rows, market) : null, split: up ? splitOf(def, rows, market, splitOrderOf(def, statusSettingsMock(me))) : null,
+    value: up ? headlineOf(def, rows, market) : null, split: up ? mockSplitOf(me, def, rows, market) : null,
     definitionVersion: versionOf(def, today, null) };
 }
 

@@ -1145,6 +1145,44 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Used by | `cma.flash_devices_of`, `flash.installed_base.in_field_on_holding`; Assets → Installed base and Reports → Flash (Installed base) and their files |
 | As built today | `cma.flash_devices_of` and `cma.flash_compute_of` (`136`); `137` reconciles the parts to in the field. Matches the definition |
 
+### In the field, split by model
+
+| Field | Value |
+|---|---|
+| Term | In the field, split by model (nl: In het veld, per model) |
+| Key | `installed_base.in_field` headline split: dim `model`, set [market, status, model, warehouse, link]; `split_order` in `cma.flash_overview`; copy `flash.unknownModel` |
+| Definition | The In the field tile's figure divided over the models of the asset register: "HS1 n · FRx n", one part per active model in the register's order (`sort_order`, then key), zeros shown, "Unknown model" (nl Onbekend model) only above 0, so the parts add up to In the field, per market too. The names are the register's own, read from the document's labels, never typed in code. |
+| Source | `cma.flash_split_dim_of`, `cma.flash_split_set_of`, `cma.flash_split_order_of`, `cma.flash_headline_split_of` over the stored rows of the set |
+| Counts / does not count | Live and as of a date; none for a snapshot stored without those rows. Hidden while a Model filter is set |
+| Unit and display | A count per model on the tile |
+| Time rule | As In the field |
+| Scope | The tenant; per market |
+| Equivalent in the source system | None: the register's `model_key` |
+| Not to use | A model name typed into a label |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "In the field on Installed base is split by model" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #238) |
+| Used by | `flash.installed_base.in_field`; Assets → Installed base and Reports → Flash (Installed base), the landing card |
+| As built today | `db/146` (0008zy), proved by `147`; the definition version of Installed base stays 0008zt. Matches the definition |
+
+### Model (filter)
+
+| Field | Value |
+|---|---|
+| Term | Model (nl: Model), the Installed base's page filter; "All models" (nl Alle modellen) first, "Unknown model" (nl Onbekend model) last |
+| Key | URL parameter `f_model` (`data-testid` `flash-model`); API `GET /api/v1/reports/flash?overview=installed_base&f_model=<key>`; copy `flash.modelFilter`, `allModels`, `unknownModel`, `modelUnavailable`, `modelUnavailableSet` |
+| Definition | A select next to Market, as on Maintenance, whose options are the models of the document's labels and rows. One model narrows the tiles, per-market bars, breakdowns, records and the breakdown file; the file's filters cell names `model=`. A measure or breakdown that a stored snapshot holds without the model reads "Not available with a Model filter" (nl "Niet beschikbaar met een modelfilter"). |
+| Source | `cma.flash_overviews()`'s Installed base set [market, model, subscription_status]; `filterDocument` in `src/lib/flash.ts` |
+| Counts / does not count | The month-end frozen list cannot filter by model: As of a month end its records are not narrowed and the dropped-filters notice names Model. The split by model is hidden while it is set |
+| Unit and display | A select; the URL keeps it |
+| Time rule | As the page |
+| Scope | The tenant |
+| Equivalent in the source system | None |
+| Not to use | A model key typed into a label |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "The Installed base gets a Model filter" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #238) |
+| Used by | `flash.installed_base.*` (every tile), Assets → Installed base and Reports → Flash (Installed base), their files and the Flash API |
+| As built today | `db/146` (0008zy), `147`; the web narrows the stored document. Matches the definition |
+
 ### Devices on holding subscriptions
 
 | Field | Value |
@@ -1311,7 +1349,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval; nl: Bedrag per cyclus) |
 | | `devices_on_holding`, `devices_per_holding_subscription` | Device-holding status, Devices on holding subscriptions, Devices per holding subscription (a ratio); by dim `device_band`; `active_subscriptions` by dim `age_band` (Subscription age) |
 | Installed base (`installed_base`) | `devices` | Devices the asset register holds, in any status (the installed base) |
-| | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) |
+| | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) ; the In the field tile is split by model (In the field, split by model) and the page takes a Model filter (Model (filter)) |
 | | `in_field_on_holding` | Of those in the field, on a Holding subscription (by dim `subscription_status`; In the field on a holding subscription) |
 | | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms; nl: Items achterstallig) |
 | | `items_due_3m` | Their items not past due whose due date falls within three months of today (live) or of the snapshot's date |

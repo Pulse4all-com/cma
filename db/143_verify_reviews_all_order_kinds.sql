@@ -256,7 +256,10 @@ begin
     into v_txt
   from cma.flash_overviews() o;
   insert into verify_0008zw values (3, 'S3 the split catalog: subscriptions per status by [market, status], orders per kind by [market, store, kind] (first, renewal, repeat), no other; orders still 0008zn',
-    case when v_txt = 'customers:-:-,subscriptions:status:market/status,installed_base:-:-,churn:-:-,orders:kind:market/store/kind,payments:-:-,'
+    -- since 0008zy (146) In the field is split by model over [market, status, model, warehouse, link]
+    case when v_txt = 'customers:-:-,subscriptions:status:market/status,installed_base:'
+                      || (case when exists (select 1 from cma.schema_migration where version = '0008zy') then 'model:market/status/model/warehouse/link' else '-:-' end)
+                      || ',churn:-:-,orders:kind:market/store/kind,payments:-:-,'
                       || 'open_deals:-:-,open_tickets:-:-,open_tasks:-:-,reviews:-:-,data_quality:-:- first/renewal/repeat none 0008zn'
               and not current_setting('verify.provoke')::boolean then 'ok' else 'FAIL' end, v_txt);
 end

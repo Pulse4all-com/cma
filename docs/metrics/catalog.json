@@ -85466,7 +85466,7 @@
         "nl": "In het veld"
       },
       "definition": "Of the devices, those in a device status flagged as in the field (Device status: is_in_field) (Installed base; docs/definitions.md, Flash overview measures). The overview's headline on its card. Also shown on Assets \u2192 Installed base (/reports/installed-base, addition 0008zw), the same read.",
-      "formula": "count(*) where the device status's is_in_field. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
+      "formula": "count(*) where the device status's is_in_field. Grouping sets: the totals, per market and the overview's breakdown (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of). The headline is split by model (addition 0008zy): one part per model of the asset register in its order (sort_order, then key), zeros shown, an unknown model only above 0, read from the set [market, status, model, warehouse, link] (cma.flash_split_dim_of, _set_of, _order_of; labels from the document's model labels), live and as of a date, none for a snapshot without those rows. A Model filter (f_model) narrows the figure and hides the split.",
       "unit": "count",
       "grain": [
         "now",
@@ -86066,7 +86066,7 @@
         "nl": "In het veld op een apparaathoudend abonnement"
       },
       "definition": "Of the devices in the field, those linked to a subscription (matched within the device's market) whose status is one of `flash.device_holding_statuses` (Installed base; docs/definitions.md, Flash overview measures and Device-holding status). A device in stock is never counted, whatever its reference. Also shown on Assets \u2192 Installed base (/reports/installed-base, addition 0008zw), the same read.",
-      "formula": "count(*) where the device status's is_in_field and the linked subscription's status = any(flash.device_holding_statuses) (cma.flash_devices_of's subscription_status). Grouping sets: the totals, per market, the breakdown and [market, subscription_status], where in_field adds up over the statuses (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
+      "formula": "count(*) where the device status's is_in_field and the linked subscription's status = any(flash.device_holding_statuses) (cma.flash_devices_of's subscription_status). Grouping sets: the totals, per market, the breakdown and [market, model, subscription_status], where in_field adds up over the statuses (cma.flash_overviews()); one code path live and in the snapshot (cma.flash_compute_of).",
       "unit": "count",
       "grain": [
         "now",

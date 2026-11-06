@@ -211,6 +211,8 @@ const pages = [
   // Assets → Installed base (addition 0008zw): Flash's Installed base overview on its own page; Reviews' period All
   { path: "/reports/installed-base", subject: "manager", tables: true },
   { path: "/reports/installed-base", subject: "invest-analyst" },
+  // the Model filter (addition 0008zy): every table of one model
+  { path: "/reports/installed-base?f_model=aed_plus", subject: "manager", tables: true },
   { path: "/reports/reviews?range=all", subject: "manager", tables: true },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys

@@ -218,6 +218,13 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- Reviews' period All (addition 0008zw): every counted review from the tenant's first to today by month, no cap and no
 -- previous period; the same read whatever the report period, so it is timed once, in part a
 ('a', 'reviews all', 'reviews all by month', $q$select cma.reviews_page(null, '{today}', null, 'month')$q$, 'overview', array['reports.view', 'performance.team']),
+-- Installed base (addition 0008zy; Flash's overview and Assets -> Installed base): the page's two reads apart, the document
+-- (totals, per market, the breakdown sets) and the first page of records, live and as of the previous month end (the
+-- stored document and the month end's frozen list; CMA02 where that date has no snapshot)
+('a', 'installed base', 'document live', $q$select cma.flash_overview('installed_base', null, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+('a', 'installed base', 'records first page live', $q$select cma.flash_rows('installed_base', '{}', 'serial', false, 500, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base as of month end', 'document as of the month end', $q$select cma.flash_overview('installed_base', null, '{to}', null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+('a', 'installed base as of month end', 'frozen list first page', $q$select cma.flash_rows('installed_base', '{}', null, false, 500, 0, '{to}', null, null)$q$, 'list', array['reports.view', 'performance.team']),
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)

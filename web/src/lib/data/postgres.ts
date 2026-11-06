@@ -1398,6 +1398,8 @@ interface FlashDocumentDb {
     status_meanings?: unknown };
   definition_version: string; first_snapshot_date: string | null; today: string; time_zone: string; days?: { covered: number; missing: string[] }; active_at_end?: number | string | null;
   history?: { date: string; check: string; findings: number | string }[];
+  /** The headline's split's first keys in order (addition 0008zy); absent before it */
+  split_order?: string[] | null;
 }
 interface FlashRowsDb {
   overview: string; mode: "live" | "snapshot"; as_of: string; from: string | null; to: string | null; sort: string | null; descending: boolean;
@@ -1462,6 +1464,7 @@ function toFlashDocument(j: FlashDocumentDb): FlashDocumentView {
     statusSettings: statusSettingsOf(j.settings as Record<string, unknown> | null | undefined),
     definitionVersion: j.definition_version, firstSnapshotDate: j.first_snapshot_date, today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "", days: j.days ?? null, activeAtEnd: flashNumber(j.active_at_end),
     history: (j.history ?? []).map((h) => ({ date: h.date, check: h.check, findings: flashNumber(h.findings) ?? 0 })),
+    splitOrder: Array.isArray(j.split_order) ? j.split_order.filter((k): k is string => typeof k === "string") : null,
   };
 }
 
