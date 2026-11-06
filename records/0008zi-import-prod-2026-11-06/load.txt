@@ -1,0 +1,40 @@
+Device import in prod, the CSV fallback of addition 0008zi (docs/import/devices.md), 6 November 2026
+
+Written down by Claude Code at Martin's request from his report of his runs on 6 November 2026; the results below
+are his. No key, device id, customer id, tenant id or connection id appears here.
+
+The connection
+prod  connection    Airtable 2.0 assets, active, no token secret name: the ingest does not read it through the API
+                    (PROD_RUNBOOK phase 14 not finished); this CSV is the mirror's only update today
+
+The export
+prod  source        base Airtable 2.0, table "2.0 Installed Base" (the live table), Grid view, 9,677 rows;
+                    21 headers, exactly the mapped ones, none personal (Grid view showed 35 on 27 Oct 2026)
+prod  date format   dmy
+prod  tool          rows 9677, mapped 21, ignored 0, date failures 0, values with @ 0
+
+The load (full snapshot, batch assets-2026-11-06, about 09:41 Europe/Amsterdam)
+prod  copy          COPY 9677; batch rows 9677, record ids 9677
+prod  load          rows 9677, inserted 0, updated 1130, unchanged 8547, missing_now 0, components_replaced 50,
+                    components_closed 0, unmapped_model 0, unmapped_status 0, unmapped_market 8,
+                    customer_ref_invalid 33, refs_dropped 2 (the two pads serials of 27 Oct)
+prod  times (ms)    stage 38, map 1418, upsert 1385, components 1037, missing 31, cleanup 7979 (total about 11.9 s;
+                    cleanup, the delete of the staged rows, is two thirds of it and above db/117 C3's one-call
+                    budget of 10,000 ms in total; to investigate)
+
+Assets, Installed base (version ed79e8d, as of now)
+prod  page          devices 9677; in the field 6889 (HS1 4168, FRx 2721); in stock 2679; items past due 451;
+                    items due within 3 months 220; in the field on a holding subscription 6378;
+                    unknown market in the field 0
+
+Data quality (the asset and subscription checks)
+prod  checks        device_serial_missing 2, device_serial_duplicate 13, device_model_unmapped 0,
+                    device_status_unmapped 0, device_market_unmapped 8, device_customer_ref_invalid 33,
+                    component_due_unknown 2296, field_device_without_subscription_ref 218;
+                    devices in the field whose subscription reference names no subscription the CMA holds 228;
+                    holding subscriptions no device's subscription reference names 199;
+                    subscriptions whose customer id no customer of their store holds 6
+
+The files
+prod  ~/import      the export, the map and the staging file deleted after the load; the duplicate download
+                    deleted too
