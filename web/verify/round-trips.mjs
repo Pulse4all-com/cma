@@ -15,6 +15,9 @@
  *   BASE=http://localhost:8080 node verify/round-trips.mjs --provoke   every budget is 0: expect FAIL
  *   BASE=http://localhost:8080 node verify/round-trips.mjs --observed  prints the observed costs as JSON rows
  *
+ * A page that streams a part after its first paint (addition 0008zy: a Flash overview's records) may carry firstTx and
+ * firstRt too: the Shell's meta, written before the streamed part reads, is the first paint's cost, held to those budgets,
+ * and the last meta is the request's total, held to tx and rt.
  * Locally the budget is observed on the dev seed plus verify/round-trips-fixture.sql (two CRM connections, so the
  * alert-rules row proves its cost does not grow with the number of connections; 18 October 2026).
  * Against dev: CMA_DB_TRACE=1 set on cma-web for the run and removed after it (docs/RUNBOOK.md, 5. Verifiers).
@@ -40,21 +43,33 @@ for (const row of budget) {
   const res = await fetch(BASE + row.path, { headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json" }, redirect: "manual" });
   const type = res.headers.get("content-type") ?? "";
   let cost = null;
+  let first = null;
   if (type.includes("text/html")) {
     const html = await res.text();
-    const m = [...html.matchAll(/<meta name="cma-db" content="([^"]+)"/g)].at(-1);
-    cost = parse(m?.[1]);
+    const metas = [...html.matchAll(/<meta name="cma-db" content="([^"]+)"/g)];
+    cost = parse(metas.at(-1)?.[1]);
+    first = parse(metas[0]?.[1]);
   } else {
     await res.arrayBuffer();
     cost = parse(res.headers.get("x-cma-db"));
   }
   if (!(row.status ?? [200]).includes(res.status)) { problems.push(`${row.subject} ${row.path}: status ${res.status}`); continue; }
   if (!cost) { problems.push(`${row.subject} ${row.path}: no database cost reported (the server needs CMA_DATA_MODE=api, CMA_AUTH_MODE=mock and CMA_DB_TRACE=1)`); continue; }
-  observed.push({ path: row.path, subject: row.subject, tx: cost.tx, rt: cost.rt });
+  observed.push({ path: row.path, subject: row.subject, tx: cost.tx, rt: cost.rt, ...(first && row.firstTx !== undefined ? { firstTx: first.tx, firstRt: first.rt } : {}) });
   const maxTx = provoke ? 0 : row.tx;
   const maxRt = provoke ? 0 : row.rt;
   if (cost.tx > maxTx) problems.push(`${row.subject} ${row.path}: ${cost.tx} transactions, budget ${maxTx}`);
   if (cost.rt > maxRt) problems.push(`${row.subject} ${row.path}: ${cost.rt} statements, budget ${maxRt}`);
+  // the first paint (a page that streams a part after it): the Shell's meta, before the streamed part's reads
+  if (row.firstTx !== undefined) {
+    if (!first) problems.push(`${row.subject} ${row.path}: no first-paint cost reported`);
+    else {
+      const maxFirstTx = provoke ? 0 : row.firstTx;
+      const maxFirstRt = provoke ? 0 : row.firstRt;
+      if (first.tx > maxFirstTx) problems.push(`${row.subject} ${row.path}: first paint ${first.tx} transactions, budget ${maxFirstTx}`);
+      if (first.rt > maxFirstRt) problems.push(`${row.subject} ${row.path}: first paint ${first.rt} statements, budget ${maxFirstRt}`);
+    }
+  }
 }
 
 if (observedOnly) {

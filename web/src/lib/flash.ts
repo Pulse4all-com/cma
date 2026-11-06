@@ -64,7 +64,8 @@ export const FLASH_OVERVIEWS: readonly FlashOverviewDef[] = [
     sorts: ["subscription_id", "store", "market", "status", "payment_state", "amount_per_cycle", "next_billing_at", "retry_since", "devices"],
     defaultDescending: false },
   { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link", "subscription_status"],
-    sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "subscription_status"]],
+    // the subscription-status set holds the model since 0008zy, so it follows a Model filter
+    sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"]],
     measures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding"],
     countMeasures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding"], amountMeasures: [], ratioMeasures: [],
     headline: "in_field", sorts: ["serial", "model", "market", "status", "warehouse", "past_due_items", "next_due_on"], defaultDescending: false },
@@ -888,21 +889,25 @@ export function statusSettingsOf(j: Record<string, unknown> | null | undefined):
 
 // ---- Since addition 0008zu (brief B30) ------------------------------------------------------------------------------
 
-/** One part of a headline's split: a status (the subscription app's own word) or an order kind, and its figure */
+/** One part of a headline's split: a status (the subscription app's own word), an order kind or a model, and its figure */
 export interface FlashSplitItem {
   key: string;
   value: number;
+  /** A model's name in the register (addition 0008zy: the database gives it, the landing's card has no labels of its own) */
+  label?: string;
 }
 
 /**
  * The overviews whose headline is split: the grouping set whose rows the split reads, its dim and its measure
  * (cma.flash_split_set_of, cma.flash_split_dim_of): Total subscriptions per device-holding status, the rows of the set
  * [market, status] (addition 0008zu); the orders per order kind, the rows of the set [market, store, kind] summed over the
- * stores (addition 0008zw)
+ * stores (addition 0008zw); In the field per model, the rows of [market, status, model, warehouse, link] summed over the
+ * other dims (addition 0008zy)
  */
 export const FLASH_SPLITS: Partial<Record<FlashKey, { set: readonly string[]; dim: string; measure: string }>> = {
   subscriptions: { set: ["market", "status"], dim: "status", measure: "holding_subscriptions" },
   orders: { set: ["market", "store", "kind"], dim: "kind", measure: "orders" },
+  installed_base: { set: ["market", "status", "model", "warehouse", "link"], dim: "model", measure: "in_field" },
 };
 
 /**
@@ -911,8 +916,14 @@ export const FLASH_SPLITS: Partial<Record<FlashKey, { set: readonly string[]; di
  */
 export const FLASH_ORDER_KINDS: readonly string[] = ["first", "renewal", "repeat"];
 
-/** The keys a headline's split shows first, in order: the tenant's device-holding statuses (subscriptions), the order kinds */
-export function splitOrderOf(def: FlashOverviewDef, settings: Pick<FlashStatusSettings, "deviceHoldingStatuses"> | null | undefined): readonly string[] {
+/**
+ * The keys a headline's split shows first, in order: the database's (the document's splitOrder, addition 0008zy: the
+ * holding statuses, the order kinds, the register's models) when it gives one; else the tenant's device-holding statuses
+ * (subscriptions) or the order kinds; none else (the installed base's models are the register's, which only the database knows)
+ */
+export function splitOrderOf(def: FlashOverviewDef, settings: Pick<FlashStatusSettings, "deviceHoldingStatuses"> | null | undefined,
+  documentOrder?: readonly string[] | null): readonly string[] {
+  if (documentOrder) return documentOrder;
   if (def.key === "orders") return FLASH_ORDER_KINDS;
   if (def.key === "subscriptions") return settings?.deviceHoldingStatuses ?? [];
   return [];
@@ -947,9 +958,18 @@ export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], mar
 
 /**
  * A split's key as the line shows it: a subscription status in the subscription app's own word; an order kind in the
- * reader's language (the copy's kind_<key>: First, Renewal, Repeat, Unknown), the key itself where the copy has none
+ * reader's language (the copy's kind_<key>: First, Renewal, Repeat, Unknown), the key itself where the copy has none; a
+ * model by its name in the register (the document's labels, addition 0008zy), unknown as the copy's Unknown model, a key
+ * the register no longer names as itself
  */
-export function splitKeyLabel(overview: FlashKey, key: string, words: Readonly<Record<string, unknown>>): string {
+export function splitKeyLabel(overview: FlashKey, key: string, words: Readonly<Record<string, unknown>>,
+  labels?: Readonly<Record<string, Readonly<Record<string, string>>>> | null): string {
+  if (overview === "installed_base") {
+    const name = labels?.model?.[key];
+    if (typeof name === "string" && name !== "") return name;
+    const w = words.unknownModel;
+    return key === "unknown" && typeof w === "string" ? w : key;
+  }
   if (overview !== "orders") return key;
   const w = words[`kind_${key}`];
   return typeof w === "string" ? w : key;
@@ -960,7 +980,10 @@ export function splitLabelsOf(overview: FlashKey, words: Readonly<Record<string,
   return overview === "orders" ? Object.fromEntries([...FLASH_ORDER_KINDS, "unknown"].map((k) => [k, splitKeyLabel(overview, k, words)])) : {};
 }
 
-/** A split as the database's JSON gives it ([{key, value}]), kept to a key and a number each; none when it is not a list */
+/**
+ * A split as the database's JSON gives it ([{key, value, label?}]), kept to a key, a number and, where the database gives
+ * one, a label (a model's name, addition 0008zy); none when it is not a list
+ */
 export function splitItemsOf(j: unknown): FlashSplitItem[] | null {
   if (!Array.isArray(j)) return null;
   const out: FlashSplitItem[] = [];
@@ -968,7 +991,7 @@ export function splitItemsOf(j: unknown): FlashSplitItem[] | null {
     if (!x || typeof x !== "object") continue;
     const o = x as Record<string, unknown>;
     const value = typeof o.value === "number" ? o.value : typeof o.value === "string" && /^-?\d+(\.\d+)?$/.test(o.value) ? Number(o.value) : null;
-    if (typeof o.key === "string" && value !== null) out.push({ key: o.key, value });
+    if (typeof o.key === "string" && value !== null) out.push({ key: o.key, value, ...(typeof o.label === "string" && o.label !== "" ? { label: o.label } : {}) });
   }
   return out;
 }
@@ -978,9 +1001,9 @@ export function splitItemsOf(j: unknown): FlashSplitItem[] | null {
  * Renewal 1 · Repeat 1", with "Unknown 1" only above 0). The label is the key itself unless one is given
  */
 export function splitLine(split: readonly FlashSplitItem[] | null | undefined, fmt: (n: number) => string,
-  label: (key: string) => string = (k) => k): string | null {
+  label: (key: string, item: FlashSplitItem) => string = (k, x) => x.label ?? k): string | null {
   if (!split || split.length === 0) return null;
-  return split.map((x) => `${label(x.key)} ${fmt(x.value)}`).join(" · ");
+  return split.map((x) => `${label(x.key, x)} ${fmt(x.value)}`).join(" · ");
 }
 
 /**
@@ -991,4 +1014,74 @@ export function splitLine(split: readonly FlashSplitItem[] | null | undefined, f
 export function definitionChanged(version: string | null | undefined, previousVersion: string | null | undefined,
   previous: number | null | undefined): boolean {
   return typeof previous === "number" && Boolean(version) && Boolean(previousVersion) && version !== previousVersion;
+}
+
+// ---- Since addition 0008zy: the Installed base's Model filter --------------------------------------------------------
+
+/**
+ * The dims a page filter narrows a whole overview by (tiles, per-market bars, breakdowns and records), kept in the address
+ * as f_<dim> like a list filter: the installed base's model (Martin, 6 November 2026). The market is the page's own (K)
+ */
+export const FLASH_DOCUMENT_FILTERS: Partial<Record<FlashKey, string>> = { installed_base: "model" };
+
+/** The page filter of an overview from its list filters: the dim and its value, or none */
+export function documentFilterOf(def: FlashOverviewDef, filters: Readonly<Record<string, string>>): { dim: string; value: string } | null {
+  const dim = FLASH_DOCUMENT_FILTERS[def.key];
+  const value = dim ? filters[dim] : undefined;
+  return dim && value ? { dim, value } : null;
+}
+
+/** A document narrowed by a page filter: its totals and rows, and what the filter cannot narrow */
+export interface FlashDocumentFiltered {
+  totals: Record<string, number> | null;
+  rows: FlashDocRow[];
+  /** The measures no set holding the dim carries (a snapshot stored before them): not available with the filter */
+  unavailableMeasures: string[];
+  /** The breakdown sets whose rows lack the dim (a snapshot stored before the set held it, 0008zy): not available */
+  unavailableSets: string[];
+}
+
+const exactly = (r: FlashDocRow, set: readonly string[]) => Object.keys(r.dims).length === set.length && set.every((d) => d in r.dims);
+
+/**
+ * A document narrowed to one value of a page filter's dim (the installed base's model), from the rows of the sets that
+ * hold the dim: each grouping set's rows partition the records, so a measure summed over a set's rows of that value is
+ * that value's exact figure. Each measure comes from the first set holding the dim whose rows carry it as a count
+ * ([market, status, model, warehouse, link] carries every installed base measure); the [market] rows are those sums per
+ * market (the markets with a row of the value); the breakdowns keep their rows of the value. A measure no such set
+ * carries, and a breakdown set whose rows lack the dim (stored before the set held it), are not available with the
+ * filter: never 0, never the unfiltered figure. The document's rows are already the market's when one is chosen
+ */
+export function filterDocument(def: FlashOverviewDef, totals: Readonly<Record<string, unknown>> | null, rows: readonly FlashDocRow[], dim: string,
+  value: string): FlashDocumentFiltered {
+  const withDim = def.sets.filter((set) => set.includes(dim));
+  const sourceOf = (m: string) => withDim.find((set) => rows.some((r) => exactly(r, set) && typeof r.measures[m] === "number"));
+  const kept = rows.filter((r) => withDim.some((set) => exactly(r, set)) && r.dims[dim] === value);
+  const measures = def.measures.filter((m) => totals === null || m in totals);
+  const unavailableMeasures = measures.filter((m) => sourceOf(m) === undefined || measureKind(def, m) !== "count");
+  const summed = measures.filter((m) => !unavailableMeasures.includes(m));
+  const sumOver = (list: readonly FlashDocRow[], m: string) => list.reduce((n, r) => n + (typeof r.measures[m] === "number" ? (r.measures[m] as number) : 0), 0);
+  const of = (set: readonly string[] | undefined) => (set ? kept.filter((r) => exactly(r, set)) : []);
+  const filteredTotals = totals === null ? null : Object.fromEntries(summed.map((m) => [m, sumOver(of(sourceOf(m)), m)]));
+  const markets = [...new Set(kept.map((r) => r.dims.market).filter((x): x is string => typeof x === "string"))].sort();
+  const marketRows: FlashDocRow[] = markets.map((market) => ({
+    dims: { market },
+    measures: Object.fromEntries(summed.map((m) => [m, sumOver(of(sourceOf(m)).filter((r) => r.dims.market === market), m)])),
+  }));
+  const unavailableSets = breakdownSets(def).filter((set) => !set.includes(dim)
+    || (rowsOfSet(rows, set).length === 0 && rows.some((r) => exactly(r, set.filter((d) => d !== dim))))).map((set) => set.join("+"));
+  const breakdown = kept.filter((r) => breakdownSets(def).some((set) => exactly(r, set) && !unavailableSets.includes(set.join("+"))));
+  return { totals: filteredTotals, rows: [...marketRows, ...breakdown], unavailableMeasures, unavailableSets };
+}
+
+/** The model filter's choices from the document's labels and rows: the database's order first, the rest by name; unknown last */
+export function modelChoicesOf(labels: Readonly<Record<string, Readonly<Record<string, string>>>> | null | undefined, rows: readonly FlashDocRow[],
+  order: readonly string[] | null | undefined): { key: string; name: string | null }[] {
+  const names = labels?.model ?? {};
+  const keys = new Set<string>(Object.keys(names));
+  for (const r of rows) if (typeof r.dims.model === "string") keys.add(r.dims.model);
+  const rank = (k: string) => { const i = (order ?? []).indexOf(k); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
+  return [...keys].sort((a, b) => (a === "unknown" ? 1 : 0) - (b === "unknown" ? 1 : 0) || rank(a) - rank(b)
+    || (names[a] ?? a).localeCompare(names[b] ?? b) || a.localeCompare(b))
+    .map((key) => ({ key, name: key === "unknown" ? null : names[key] ?? null }));
 }

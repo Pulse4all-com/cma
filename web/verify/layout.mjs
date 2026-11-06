@@ -2133,6 +2133,47 @@ async function expectAttempts() {
 // switch); the page never scrolls sideways, by week and by day; the keycaps K, P, S, G and X on Funnel, K, G and X on
 // Cancellations, next to the period bar's; ten tiles and four; the tables end inside their cards. --provoke lets the
 // lost deals per period spill out of their card
+// Installed base by model (addition 0008zy), on Assets -> Installed base as the manager: the In the field tile's split per
+// model under the figure; the Model select with D and "All models" first; choosing a model puts f_model in the address and
+// the tile becomes that model's part of the split, the split goes; the records come in their own card after the tiles
+async function expectInstalledBaseModels() {
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/installed-base");
+  await settle(p);
+  await p.waitForLoadState("networkidle");
+  const before = await p.evaluate(() => ({
+    split: document.querySelector('[data-testid="flash-split-installed_base"]')?.textContent?.trim() ?? null,
+    inField: document.querySelector('[data-testid="flash-total-in_field"] p.tabular')?.textContent?.trim() ?? null,
+    options: [...document.querySelectorAll('[data-testid="flash-model"] option')].map((o) => [o.value, o.textContent?.trim()]),
+    key: document.querySelector('[data-testid="flash-model"]')?.getAttribute("data-shortcut") ?? null,
+    rows: !!document.querySelector('[data-testid="flash-rows"]'),
+  }));
+  if (!before.split || !/ · /.test(before.split)) problems.push(`installed base: no split per model under In the field (${JSON.stringify(before.split)})`);
+  if (before.key !== (provoke ? "x" : "d")) problems.push(`installed base: the Model select answers to ${before.key}, expected D`);
+  if (before.options[0]?.[0] !== "" || before.options.length < 2) problems.push(`installed base: the Model select's choices ${JSON.stringify(before.options)}, expected All models first`);
+  if (!before.rows) problems.push("installed base: the records did not arrive in their card");
+  const [value, name] = before.options[1] ?? ["", ""];
+  const part = (before.split ?? "").split(" · ").find((x) => x.startsWith(`${name} `))?.slice(name.length + 1) ?? null;
+  await p.locator('[data-testid="flash-model"]').selectOption(value);
+  await p.waitForURL(new RegExp(`f_model=${value}`)).catch(() => undefined);
+  await settle(p);
+  await p.waitForLoadState("networkidle");
+  const after = await p.evaluate(() => ({
+    url: location.search,
+    split: document.querySelector('[data-testid="flash-split-installed_base"]')?.textContent?.trim() ?? null,
+    inField: document.querySelector('[data-testid="flash-total-in_field"] p.tabular')?.textContent?.trim() ?? null,
+    chosen: document.querySelector('[data-testid="flash-model"]')?.value ?? null,
+    rows: !!document.querySelector('[data-testid="flash-rows"]'),
+  }));
+  if (!after.url.includes(`f_model=${value}`) || after.chosen !== value) problems.push(`installed base: choosing ${value} gave ${after.url} with ${after.chosen} chosen`);
+  if (after.inField !== (provoke ? before.inField : part)) problems.push(`installed base: In the field with ${name} is ${after.inField}, the split's part ${part}`);
+  if (after.split !== null) problems.push("installed base: the split per model still shows with a Model filter");
+  if (!after.rows) problems.push("installed base: no records with a Model filter");
+  await p.screenshot({ path: `${outDir}/manager-installed-base-model.png` });
+  await ctx.close();
+}
+
 async function expectFunnel() {
   // [subject, sees the pages, sees deals per person]
   const cases = [
@@ -2281,6 +2322,7 @@ await expectEmail();
 await expectFirstOrders();
 await expectAttempts();
 await expectFunnel();
+await expectInstalledBaseModels();
 await expectWelcomeOnOpen();
 await expectCampaigns();
 await expectCallbacks();

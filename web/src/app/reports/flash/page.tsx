@@ -102,8 +102,9 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
             // the figure compared with was counted by an earlier definition (addition 0008zu): marked under the change
             const definitionEarlier = previousOnText ? t.definitionEarlier.replace("{date}", previousOnText) : null;
             // As of a date, the stored headline's split: per device-holding status (none for a snapshot before 0008zu), the
-            // orders per order kind in the reader's language (none for a snapshot without those rows, 0008zw)
-            const storedSplit = splitLine(card?.split ?? null, (x) => fmtNumber(x, locale, 0), (k) => splitKeyLabel(o.key, k, t));
+            // orders per order kind in the reader's language (none for a snapshot without those rows, 0008zw), In the field
+            // per model by the register's name the database gives with it (0008zy)
+            const storedSplit = splitLine(card?.split ?? null, (x) => fmtNumber(x, locale, 0), (k, x) => x.label ?? splitKeyLabel(o.key, k, t));
             const figure = asOf ? (
               <>
                 <span className="tabular text-title font-bold text-p4a-heading" data-testid={`flash-value-${o.key}`}>

@@ -27,6 +27,7 @@ import {
   FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
   statusHintPart, measureHint, cardStatusHint, statusSettingsOf, FLASH_SPLITS, splitOf, splitItemsOf, splitLine, definitionChanged,
   FLASH_ORDER_KINDS, splitOrderOf, splitKeyLabel, splitLabelsOf, flashHref,
+  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -63,7 +64,7 @@ const fromSql = tuples.map((t) => ({ key: t[1], kind: t[3], source: t[5] ?? null
   countMeasures: arr(t[9]), headline: t[10], sorts: arr(t[11]) }));
 const fromTs = FLASH_OVERVIEWS.map((o) => ({ key: o.key, kind: o.kind, source: o.source, dims: [...o.dims], sets: o.sets.map((s) => [...s]),
   measures: [...o.measures], countMeasures: [...o.countMeasures], headline: o.headline, sorts: [...o.sorts] }));
-expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "138_flash_totals.sql"], [0, ""]);
+expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "146_installed_base_models.sql"], [0, ""]);
 expect("the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts",
   JSON.stringify(fromTs) === JSON.stringify(fromSql), true, false);
 expect("the keys 1 to 9, 0 and Q in the page's order, each once",
@@ -355,7 +356,7 @@ expect("a list's refusal is the page's not-available state (CMA02, CMA04), any o
 const overviewSrc = readFileSync(path.join(here, "..", "src", "components", "FlashOverview.tsx"), "utf8");
 const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same",
-  [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: got\.plan\.rowFilters/.test(pageSrc), /Object\.entries\(rowFilters\)/.test(pageSrc),
+  [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: plan\.rowFilters/.test(pageSrc), /Object\.entries\(plan\.rowFilters\)/.test(pageSrc),
     /listUnavailable\(e\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters"),
     // a refused As of or period (a reader ahead of the tenant's zone): the tenant's today from the database, then read again
     /today = \(await data\(\)\.getFlashSnapshots\(me, null, null\)\)\.to;/.test(pageSrc) && (pageSrc.match(/adoptTenantToday\(\)/g) ?? []).length >= 2],
@@ -626,7 +627,7 @@ const pageSrc0008zt = readFileSync(path.join(here, "..", "src", "app", "reports"
 const hintSrc = readFileSync(path.join(here, "..", "src", "components", "HeaderHint.tsx"), "utf8");
 expect("the page uses them: the tiles' and the headers' hints (MeasureLabel), the cards' and the heading's (cardStatusHint), the band tables, the hint on its lines",
   [(partsSrc0008zt.match(/<MeasureLabel measure=/g) ?? []).length >= 5, /title=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt), /text=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt),
-    /statusSettings=\{page\.statusSettings\}/.test(pageSrc0008zt), /statusSettings=\{doc\.statusSettings\}/.test(pageSrc0008zt), /<BandTable def=\{def\}/.test(pageSrc0008zt),
+    /statusSettings=\{page\.statusSettings\}/.test(pageSrc0008zt), /statusSettings=\{shown\.statusSettings\}/.test(pageSrc0008zt), /<BandTable def=\{def\}/.test(pageSrc0008zt),
     /moreThanRows\(rows, dim, cumulativeMeasure\)/.test(partsSrc0008zt), /whitespace-pre-line/.test(hintSrc), /FLASH_RATIOS\[measure\] \? 2/.test(partsSrc0008zt)],
   [true, true, true, true, true, true, true, true, true], [false, false, false, false, false, false, false, false, false]);
 const { mockFlashOverview, mockFlashPage, mockFlashHeadline } = await import("../src/lib/data/mock-flash.ts");
@@ -650,7 +651,8 @@ expect("Total subscriptions is the subscriptions' headline, split per status by 
   [subs0008zu.headline, subs0008zu.sets.some((x) => x.join("+") === "market+status"), setMeasures(subs0008zu, ["market", "status"]), FLASH_SPLITS,
     /when p_overview = 'subscriptions' then 'status'/.test(splitSrc), cust0008zu.headline, FLASH_SPLITS.customers ?? null],
   ["holding_subscriptions", true, ["holding_subscriptions"], { subscriptions: { set: ["market", "status"], dim: "status", measure: "holding_subscriptions" },
-    orders: { set: ["market", "store", "kind"], dim: "kind", measure: "orders" } }, true, "active_customers", null],
+    orders: { set: ["market", "store", "kind"], dim: "kind", measure: "orders" },
+    installed_base: { set: ["market", "status", "model", "warehouse", "link"], dim: "model", measure: "in_field" } }, true, "active_customers", null],
   ["active_subscriptions", false, [], {}, false, "", "x"]);
 const splitRows = [
   { dims: {}, measures: { holding_subscriptions: 9 } }, { dims: { market: "GB" }, measures: { holding_subscriptions: 7 } },
@@ -691,7 +693,7 @@ expect("the page uses them: a live card's split and its definition's line, a sto
   [/splitLine\(read\.split, n, /.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
     /previousDefinitionVersion=\{card\?\.previousDefinitionVersion \?\? null\}/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
     /note=\{asOf && card && definitionChanged\(card\.definitionVersion, card\.previousDefinitionVersion, card\.previous\)/.test(pageSrc0008zu),
-    /splitOf\(def, doc\.rows, null, splitOrderOf\(def, doc\.statusSettings\)\)/.test(partsSrc0008zu)],
+    /splitOf\(def, doc\.rows, null, splitOrderOf\(def, doc\.statusSettings, doc\.splitOrder\)\)/.test(partsSrc0008zu)],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
 const mockCust0008zu = mockFlashOverview(reader, "customers", null, null, null, null);
 const mockRowsCust = (await import("../src/lib/data/mock-flash.ts")).mockFlashRows(reader, { overview: "customers", market: null, asOf: null, from: null, to: null,
@@ -736,7 +738,7 @@ expect("the database's split catalog is the page's (142): the orders by kind ove
   [splitDimSrc.file, /when p_overview = 'orders' then 'kind'/.test(splitDimSrc.text.slice(0, 400)), /when p_overview = 'orders' then array\['market', 'store', 'kind'\]/.test(splitSetSrc),
     /when p_overview = 'orders' then array\['first', 'renewal', 'repeat'\]/.test(splitOrderSrc), FLASH_ORDER_KINDS, splitOrderOf(overviewOf("subscriptions"), { deviceHoldingStatuses: ["active", "failed"] }),
     splitOrderOf(overviewOf("customers"), { deviceHoldingStatuses: ["active"] })],
-  ["142_reviews_all_order_kinds.sql", true, true, true, ["first", "renewal", "repeat"], ["active", "failed"], []],
+  ["146_installed_base_models.sql", true, true, true, ["first", "renewal", "repeat"], ["active", "failed"], []],
   ["138_flash_totals.sql", false, false, false, ["first", "repeat", "renewal"], [], ["active"]]);
 expect("the kinds' words, en and nl, for a client too; a subscription status stays the app's word",
   [splitLabelsOf("orders", hintCopy.en.flash), splitLabelsOf("orders", hintCopy.nl.flash), splitLabelsOf("subscriptions", hintCopy.en.flash), splitKeyLabel("subscriptions", "active", hintCopy.en.flash)],
@@ -761,12 +763,88 @@ expect("every link and control of an overview keeps its page: the cells, the ban
   [true, true, true, false], [false, false, false, true]);
 expect("the orders' kind is the split's word in the breakdown and the records too; the code stays in the files and on hover",
   [/if \(def\.key === "orders" && dim === "kind"\) return splitKeyLabel\(def\.key, dims\[dim\] \?\? "", t\);/.test(partsSrc0008zu),
-    /def\.key === "orders" && c\.key === "kind"[\s\S]{0,120}<span title=\{String\(r\[c\.key\]\)\}>\{splitKeyLabel\(def\.key, String\(r\[c\.key\]\), t\)\}/.test(partsSrc0008zu)],
+    /\(def\.key === "orders" && c\.key === "kind"\)[\s\S]{0,200}<span title=\{String\(r\[c\.key\]\)\}>\{splitKeyLabel\(def\.key, String\(r\[c\.key\]\), t, labels\)\}/.test(partsSrc0008zu)],
   [true, true], [false, false]);
 expect("the landing labels the split: a stored card's kinds in the reader's language, a live card's as data",
-  [/splitLine\(card\?\.split \?\? null, \(x\) => fmtNumber\(x, locale, 0\), \(k\) => splitKeyLabel\(o\.key, k, t\)\)/.test(flashOnlySrc),
+  [/splitLine\(card\?\.split \?\? null, \(x\) => fmtNumber\(x, locale, 0\), \(k, x\) => x\.label \?\? splitKeyLabel\(o\.key, k, t\)\)/.test(flashOnlySrc),
     /splitLabels: splitLabelsOf\(o\.key, t\)/.test(flashOnlySrc), /labels\.splitLabels\?\.\[k\] \?\? k/.test(controlsSrc0008zu)],
   [true, true, true], [false, false, false]);
+
+// ---- Since addition 0008zy: Installed base by model (the In the field split, the Model filter, the two-part load) ----------
+const base0008zy = overviewOf("installed_base");
+const mRow = (dims, devices, inField, inStock, pastDue, due3m, onHolding) => ({ dims, measures: { devices, in_field: inField, in_stock: inStock,
+  components_past_due: pastDue, items_due_3m: due3m, in_field_on_holding: onHolding } });
+const big = (market, status, model, warehouse, link) => ({ market, status, model, warehouse, link });
+const ibRows = [
+  mRow({ market: "GB" }, 6, 5, 1, 2, 1, 3), mRow({ market: "NL" }, 4, 2, 2, 0, 0, 1),
+  mRow(big("GB", "field", "ma", "none", "linked"), 3, 3, 0, 1, 0, 2), mRow(big("GB", "stock", "ma", "WH-A", "none"), 1, 0, 1, 0, 1, 0),
+  mRow(big("GB", "field", "mb", "none", "none"), 2, 2, 0, 1, 0, 1), mRow(big("NL", "field", "ma", "none", "linked"), 2, 2, 0, 0, 0, 1),
+  mRow(big("NL", "stock", "unknown", "WH-B", "none"), 2, 0, 2, 0, 0, 0),
+  mRow({ market: "GB", model: "ma", subscription_status: "active" }, 2, 2, 0, 1, 0, 2), mRow({ market: "GB", model: "ma", subscription_status: "none" }, 2, 1, 1, 0, 1, 0),
+  mRow({ market: "GB", model: "mb", subscription_status: "active" }, 2, 2, 0, 1, 0, 1), mRow({ market: "NL", model: "ma", subscription_status: "failed" }, 2, 2, 0, 0, 0, 1),
+  mRow({ market: "NL", model: "unknown", subscription_status: "none" }, 2, 0, 2, 0, 0, 0),
+];
+const ibTotals = { devices: 10, in_field: 7, in_stock: 3, components_past_due: 2, items_due_3m: 1, in_field_on_holding: 4 };
+const fA = filterDocument(base0008zy, ibTotals, ibRows, "model", "ma");
+const fOld = filterDocument(base0008zy, ibTotals, ibRows.filter((r) => !("subscription_status" in r.dims))
+  .concat([mRow({ market: "GB", subscription_status: "active" }, 4, 4, 0, 2, 0, 3)]), "model", "ma");
+const fBefore = filterDocument(base0008zy, ibTotals, ibRows.map((r) => ({ dims: r.dims, measures: Object.fromEntries(Object.entries(r.measures)
+  .filter(([k]) => k !== "in_field_on_holding")) })), "model", "ma");
+const line0008zy = (r) => `${Object.values(r.dims).join("/")}:${r.measures.devices},${r.measures.in_field},${r.measures.in_field_on_holding ?? "-"}`;
+expect("the Model filter narrows the document from the sets holding the model: the totals and the [market] rows summed, the breakdowns' rows of the model",
+  [JSON.stringify(fA.totals), fA.rows.filter((r) => Object.keys(r.dims).length === 1).map(line0008zy).join(" "),
+    fA.rows.filter((r) => Object.keys(r.dims).length > 1).map(line0008zy).join(" "), fA.unavailableMeasures, fA.unavailableSets],
+  ['{"devices":6,"in_field":5,"in_stock":1,"components_past_due":1,"items_due_3m":1,"in_field_on_holding":3}', "GB:4,3,2 NL:2,2,1",
+    "GB/field/ma/none/linked:3,3,2 GB/stock/ma/WH-A/none:1,0,0 NL/field/ma/none/linked:2,2,1 GB/ma/active:2,2,2 GB/ma/none:2,1,0 NL/ma/failed:2,2,1", [], []],
+  ['{"devices":10,"in_field":7,"in_stock":3,"components_past_due":2,"items_due_3m":1,"in_field_on_holding":4}', "GB:6,5,3 NL:4,2,1", "", ["devices"], ["x"]]);
+expect("a snapshot stored before 0008zy: the subscription-status breakdown not available with the filter (its rows lack the model), the tiles still exact; before 0008zt's measure, that tile not available",
+  [fOld.unavailableSets, JSON.stringify(fOld.totals), fBefore.unavailableMeasures, Object.keys(fBefore.totals ?? {}).includes("in_field_on_holding")],
+  [["market+model+subscription_status"], '{"devices":6,"in_field":5,"in_stock":1,"components_past_due":1,"items_due_3m":1,"in_field_on_holding":3}', ["in_field_on_holding"], false],
+  [[], "{}", [], true]);
+const labels0008zy = { model: { ma: "Model A", mb: "Model B", mc: "Model C" } };
+expect("the Model filter is the installed base's alone, read from f_model; its choices: the database's order, then by name, unknown last",
+  [FLASH_DOCUMENT_FILTERS, documentFilterOf(base0008zy, { model: "ma", market: "GB" }), documentFilterOf(overviewOf("orders"), { kind: "first" }),
+    documentFilterOf(base0008zy, { status: "field" }), modelChoicesOf(labels0008zy, ibRows.concat([mRow({ market: "NL", model: "zz", subscription_status: "none" }, 1, 1, 0, 0, 0, 0)]), ["mb", "ma"])],
+  [{ installed_base: "model" }, { dim: "model", value: "ma" }, null, null,
+    [{ key: "mb", name: "Model B" }, { key: "ma", name: "Model A" }, { key: "mc", name: "Model C" }, { key: "zz", name: null }, { key: "unknown", name: null }]],
+  [{}, null, { dim: "kind", value: "first" }, { dim: "status", value: "field" }, []]);
+const ibLine = (split, locale = "en") => splitLine(split, (n) => String(n), (k) => splitKeyLabel("installed_base", k, hintCopy[locale].flash, labels0008zy));
+expect("In the field per model: the database's order with zeros, an unknown model only above 0, by the register's names (Unknown model in the copy), one market",
+  [ibLine(splitOf(base0008zy, ibRows, null, ["mb", "ma", "mc"])), ibLine(splitOf(base0008zy, ibRows, "NL", ["mb", "ma"]), "nl"),
+    ibLine(splitOf(base0008zy, ibRows.concat([mRow(big("NL", "field", "unknown", "none", "none"), 1, 1, 0, 0, 0, 0)]), null, ["mb", "ma"])),
+    splitOrderOf(base0008zy, null, ["mb", "ma"]), splitOrderOf(base0008zy, null)],
+  ["Model B 2 · Model A 5 · Model C 0", "Model B 0 · Model A 2", "Model B 2 · Model A 5 · Unknown model 1", ["mb", "ma"], []],
+  ["", "", "Model B 2 · Model A 5", [], ["mb"]]);
+const zyDefs = ["flash_split_dim_of", "flash_split_set_of", "flash_split_order_of"].map((fn) => defOf(fn));
+const computeOf = (file) => { const text = readFileSync(path.join(dbDir, file), "utf8"); const at = text.indexOf("create or replace function cma.flash_compute_of(");
+  return text.slice(at, text.indexOf("\n$$;", at)); };
+const compute146 = computeOf("146_installed_base_models.sql")
+  .replace(/                  -- the model beside the subscription status since 0008zy, so the set follows a Model filter\n                  when grouping\(b\.subscription_status\) = 0\n                  then jsonb_build_object\('market', b\.market, 'model', b\.model, 'subscription_status', b\.subscription_status\)/,
+    "                  when grouping(b.subscription_status) = 0 then jsonb_build_object('market', b.market, 'subscription_status', b.subscription_status)")
+  .replace("(b.market, b.model, b.subscription_status));", "(b.market, b.subscription_status));");
+expect("the database's split by model is the page's (146), and 146's computation is 138's but for the installed base's subscription-status set",
+  [zyDefs.map((d) => d.file), /when p_overview = 'installed_base' then 'model'/.test(zyDefs[0].text.slice(0, 400)),
+    /when p_overview = 'installed_base' then array\['market', 'status', 'model', 'warehouse', 'link'\]/.test(zyDefs[1].text.slice(0, 500)),
+    /array_agg\(dm\.key order by dm\.sort_order, dm\.key\)[\s\S]{0,120}dm\.status = 'active'/.test(zyDefs[2].text.slice(0, 900)),
+    compute146 === computeOf("138_flash_totals.sql")],
+  [["146_installed_base_models.sql", "146_installed_base_models.sql", "146_installed_base_models.sql"], true, true, true, true],
+  [[], false, false, false, false]);
+const mockIb = mockFlashHeadline(reader, "installed_base", null, null, null);
+const mockIbDoc = mockFlashOverview(reader, "installed_base", null, null, null, null);
+expect("the mock answers as the database: In the field per model with the register's names, adding up; the document's split order; none for an overview without a split",
+  [mockIb.split?.map((x) => `${x.key}:${x.label ?? "-"}`), (mockIb.split ?? []).reduce((n, x) => n + x.value, 0) === mockIb.value, mockIbDoc.splitOrder,
+    mockFlashOverview(reader, "customers", null, null, null, null).splitOrder, base0008zy.sets.some((x) => x.join("+") === "market+model+subscription_status")],
+  [["aed_plus:AED Plus", "aed_3:AED 3"], true, ["aed_plus", "aed_3"], null, true], [[], false, [], [], false]);
+const fileRouteSrc = routeSrc(["flash", "file"]);
+const docRouteSrc = routeSrc(["flash"]);
+const tripsSrc = readFileSync(path.join(here, "round-trips.mjs"), "utf8");
+expect("the page in two parts: the document first (no list in its read), the records in a boundary of their own from their own read, their cost after it; the filter on the document, the files and the API",
+  [/withRows: false, rowsAsOf: null/.test(overviewSrc), /<Suspense fallback=\{<RecordsPlaceholder label=\{t\.loading\} \/>\}>/.test(overviewSrc),
+    /rows = await data\(\)\.getFlashRows\(me, \{/.test(overviewSrc) && /const dbTrace = requestDbTrace\(\);/.test(overviewSrc),
+    /const pageFilter = documentFilterOf\(def, filters\);/.test(overviewSrc) && /filterDocument\(def, doc\.totals, doc\.rows, pageFilter\.dim, pageFilter\.value\)/.test(overviewSrc),
+    /filterDocument\(def, doc\.totals, doc\.rows, pageFilter\.dim, pageFilter\.value\)/.test(fileRouteSrc) && /part === "rows" \? q\.filters : breakdownFilters/.test(fileRouteSrc),
+    /filterDocument\(def, doc\.totals, doc\.rows, dim, value\)/.test(docRouteSrc), /row\.firstTx !== undefined/.test(tripsSrc)],
+  [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

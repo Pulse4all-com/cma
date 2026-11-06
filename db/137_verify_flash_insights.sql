@@ -91,12 +91,39 @@ end
 $$;
 
 -- An overview's rows as one json array (dims, measures), live or measured against a business date
-create or replace function pg_temp.v0008zt_rows(p_tenant uuid, p_overview text, p_on date)
+-- An overview's rows exactly as computed, for the comparison with a snapshot's stored rows
+create or replace function pg_temp.v0008zt_raw_rows(p_tenant uuid, p_overview text, p_on date)
 returns jsonb
 language sql
 as $$
   select coalesce(jsonb_agg(jsonb_build_object('dims', c.dims, 'measures', c.measures) order by c.dims::text collate "C"), '[]'::jsonb)
   from cma.flash_compute_of(p_tenant, p_overview, null, null, p_on) c
+$$;
+
+create or replace function pg_temp.v0008zt_rows(p_tenant uuid, p_overview text, p_on date)
+returns jsonb
+language sql
+as $$
+  -- since 0008zy (146) the installed base's subscription-status rows carry the model too ([market, model,
+  -- subscription_status]): summed over the models they are 0008zt's [market, subscription_status] rows, which the checks
+  -- below read (147 checks the new rows)
+  with c as (
+    select c.dims, c.measures from cma.flash_compute_of(p_tenant, p_overview, null, null, p_on) c
+    where not (p_overview = 'installed_base' and c.dims ? 'model' and c.dims ? 'subscription_status')
+    union all
+    select jsonb_build_object('market', c.dims ->> 'market', 'subscription_status', c.dims ->> 'subscription_status'),
+           (select jsonb_object_agg(m.key, m.v) from (select e.key, sum((e.value #>> '{}')::numeric) as v
+                                                      from cma.flash_compute_of(p_tenant, p_overview, null, null, p_on) x
+                                                      cross join lateral jsonb_each(x.measures) e
+                                                      where x.dims ? 'model' and x.dims ? 'subscription_status'
+                                                        and x.dims ->> 'market' = c.dims ->> 'market'
+                                                        and x.dims ->> 'subscription_status' = c.dims ->> 'subscription_status'
+                                                      group by e.key) m)
+    from (select distinct x.dims - 'model' as dims from cma.flash_compute_of(p_tenant, p_overview, null, null, p_on) x
+          where p_overview = 'installed_base' and x.dims ? 'model' and x.dims ? 'subscription_status') c
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('dims', c.dims, 'measures', c.measures) order by c.dims::text collate "C"), '[]'::jsonb)
+  from c
 $$;
 
 -- The rows of one breakdown set (exactly its keys) as one line: each row's dim value and measures in a fixed order
@@ -245,7 +272,11 @@ begin
      'customers|market,store,segment|[[], ["market"], ["market", "store"], ["market", "segment"]]|customers_held,active_customers,paused_customers,linked_to_contact,with_required_refs|customers_held,active_customers,paused_customers,linked_to_contact,with_required_refs '
      -- since 0008zu (138): the subscriptions' split set [market, status]
      || 'subscriptions|market,store,status,payment_state,device_band,age_band|[[], ["market"], ["market", "status"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]]|subscriptions,active_subscriptions,paused_subscriptions,amount_per_cycle,holding_subscriptions,devices_on_holding,devices_per_holding_subscription|subscriptions,active_subscriptions,paused_subscriptions,holding_subscriptions,devices_on_holding '
-     || 'installed_base|market,status,model,warehouse,link,subscription_status|[[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "subscription_status"]]|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding' then
+     -- since 0008zy (146) the subscription-status set holds the model too
+     || 'installed_base|market,status,model,warehouse,link,subscription_status|[[], ["market"], ["market", "status", "model", "warehouse", "link"], '
+     || (case when exists (select 1 from cma.schema_migration where version = '0008zy') then '["market", "model", "subscription_status"]'
+              else '["market", "subscription_status"]' end)
+     || ']|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding' then
     v_bad := v_bad || 'the catalog; ';
   end if;
   if exists (select 1 from cma.flash_overviews() o where 'devices_per_holding_subscription' = any (o.count_measures))
@@ -602,7 +633,9 @@ begin
     for o in select x.key from cma.flash_overviews() x where x.key in ('customers', 'subscriptions', 'installed_base') order by x.sort_order loop
       v_a := (select coalesce(jsonb_agg(jsonb_build_object('dims', s.dims, 'measures', s.measures) order by s.dims::text collate "C"), '[]'::jsonb)::text
               from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = v_d and s.overview = o.key);
-      v_b := pg_temp.v0008zt_rows(v_t1, o.key, v_d)::text;
+      -- the computation as it is (the snapshot stores its rows as they are, the model in the installed base's
+      -- subscription-status rows too since 0008zy), never the helper's sums
+      v_b := pg_temp.v0008zt_raw_rows(v_t1, o.key, v_d)::text;
       v_txt := v_txt || ' ' || o.key || ':' || (v_a = v_b)::text || ':'
                || (select string_agg(distinct s.definition_version, ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = v_d and s.overview = o.key);
     end loop;
@@ -963,6 +996,7 @@ $$;
 -- The helpers are dropped first, so the verdict is the last thing the script prints
 drop function if exists pg_temp.v0008zt_code(text);
 drop function if exists pg_temp.v0008zt_rows(uuid, text, date);
+drop function if exists pg_temp.v0008zt_raw_rows(uuid, text, date);
 drop function if exists pg_temp.v0008zt_set(jsonb, text[], text[]);
 drop function if exists pg_temp.v0008zt_unbalanced(jsonb, text, text);
 drop function if exists pg_temp.v0008zt_ratio_bad(jsonb);

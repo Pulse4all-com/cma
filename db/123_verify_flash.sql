@@ -634,6 +634,9 @@ begin
                         || 'GB/paused/paused/shop-gb:active_subscriptions=0,amount_per_cycle={},devices_on_holding=0,holding_subscriptions=0,paused_subscriptions=2,subscriptions=2'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := pg_temp.v0008zn_figs(v_t1, 'installed_base', null, null);
+    -- since 0008zy (146) the subscription-status rows carry the model too (m1 here): taken out, so the figures compare as
+    -- 0008zt stored them (the set's sums are the same; 147 checks the new rows)
+    v_txt := regexp_replace(v_txt, '(^| )(GB|NL)/m1/(active|canceled|none|not_found|paused|failed):', '\1\2/\3:', 'g');
     v_rows := v_rows || array['14', 'B2 installed base: devices, in the field, in stock, past due, due within three months; the subscription link',
       -- since 0008zt (136): in_field_on_holding (active is the only holding status here) and each device's linked subscription's status
       case when v_txt = '*:components_past_due=1,devices=5,in_field=4,in_field_on_holding=1,in_stock=1,items_due_3m=1 '

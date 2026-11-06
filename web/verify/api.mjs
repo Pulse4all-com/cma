@@ -1463,6 +1463,29 @@ async function flashChecks() {
       && (head.split ?? []).slice(3).every((x) => x.key === "unknown" && x.value > 0) && head.split.reduce((n, x) => n + x.value, 0) === head.value),
       head?.definitionVersion],
     [true, "0008zn"], [false, "0008zw"]);
+  // Installed base by model (addition 0008zy): In the field split per model in the document's order, each part with its
+  // name, adding up; the document narrowed to a model (its In the field that model's part); the page's first paint (the
+  // tiles) before the records' placeholder, the records after it in the stream; the breakdown file names the model
+  const ibHead = (await call(ANALYST, "/api/v1/reports/flash?overview=installed_base&part=headline")).body?.data;
+  const ibDoc = (await call(ANALYST, "/api/v1/reports/flash?overview=installed_base")).body?.data;
+  const firstModel = (ibHead?.split ?? []).find((x) => x.value > 0);
+  expect("flash: In the field per model (0008zy): the document's order first, each with its name, adding up; the document's split order",
+    [ibHead?.setUp === false || (Array.isArray(ibHead?.split) && ibHead.split.reduce((n, x) => n + x.value, 0) === ibHead.value
+      && (ibDoc?.splitOrder ?? []).every((k, i) => ibHead.split[i]?.key === k) && ibHead.split.every((x) => x.key === "unknown" || typeof x.label === "string")),
+      Array.isArray(ibDoc?.splitOrder)],
+    [true, true], [false, false]);
+  if (firstModel) {
+    const narrowed = (await call(ANALYST, `/api/v1/reports/flash?overview=installed_base&f_model=${encodeURIComponent(firstModel.key)}`)).body?.data;
+    const page = await download(ANALYST, `/reports/installed-base?f_model=${encodeURIComponent(firstModel.key)}`);
+    const at = (s) => page.text.indexOf(s);
+    const file = await download(ANALYST, `/api/v1/reports/flash/file?overview=installed_base&part=breakdown&f_model=${encodeURIComponent(firstModel.key)}`);
+    expect("flash: the Model filter: the document's In the field that model's part; the page's tiles before the records' placeholder, the records after it; the file names the model",
+      [narrowed?.totals?.in_field === firstModel.value, narrowed?.filter?.model === firstModel.key, page.status,
+        at('data-testid="flash-totals"') >= 0 && at('data-testid="flash-totals"') < at('data-testid="flash-rows-loading"')
+          && at('data-testid="flash-rows-loading"') < at('data-testid="flash-rows-count"'),
+        file.status, file.text.split(/\r?\n/)[1]?.includes(`model=${firstModel.key}`) ?? false],
+      [true, true, 200, true, 200, true], [false, false, 200, false, 200, false]);
+  }
   // Assets → Installed base (addition 0008zw): Flash's Installed base overview on its own page, the same document; an agent
   // sees the no-permission card. Rendered pages: the totals' tiles or the not-set-up line, no overviews' strip
   const base = (await call(ANALYST, "/api/v1/reports/flash?overview=installed_base")).body?.data;
