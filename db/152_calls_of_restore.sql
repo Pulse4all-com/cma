@@ -6,7 +6,9 @@
 -- transaction with a lock timeout. Run as your own IAM login: dev first (this script, then 153_verify_calls_of_restore.sql,
 -- then the verifies that read cma.calls_of again: 101_verify_definitions_calls.sql, 103_verify_tag_meaning_incorrect_data.sql,
 -- 63_verify_calls_overview.sql, 65_verify_calls_history_start.sql, 77_verify_audit_hardening.sql (those five in dev only)
--- and 133_verify_perf.sql as edited by this change), then prod in the same order without the five dev-only verifies.
+-- and 133_verify_perf.sql as edited by this change), then prod in the same order without the five dev-only verifies,
+-- then 131_time_all.sql parts b and c in prod (the Calls and Calls per agent reads over the previous month and 92 days,
+-- against the 500 ms report budget: 0008zr's figures were taken on the cheaper, wrong rule).
 -- No table, view, column or setting changes, no seed need run again, and nothing stored needs computing again: every
 -- reader of cma.calls_of computes when read. The web and the ingest of main run unchanged on it (the function keeps its
 -- name, arguments and columns).
@@ -44,7 +46,7 @@
 -- incorrect_data), in 0008zr's form: the tenant's current tags grouped per call once and joined, the tenant's zone and
 -- settings as scalar subqueries. Two choices for speed, each giving 0008zc's answer (153 compares it with 100's text,
 -- kept inside it, row for row):
---   - the call set is kept apart (offset 0): pulled up into the outer query, the settings' scalar subqueries reached
+--   - the call set is kept apart (offset 0): pulled up into the outer query, the settings' scalar subqueries arrived at
 --     cma.is_connected as arguments still unplanned, and a helper whose argument is one is not inlined, so the helper
 --     ran as a function call twice per call (990 ms against 610 for 30 days at three times prod's volume)
 --   - cma.call_not_reached_of is asked only for a call with a current tag (a call without one carries none that keeps it

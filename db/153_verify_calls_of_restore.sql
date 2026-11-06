@@ -27,9 +27,9 @@
 --      same rows as 0008zc's definition under each setting and with the market and line filters; B4 the tags per call
 -- Expected verdict, in dev and in prod: "PASS | 153_verify_calls_of_restore: <n> PASS, 0 FAIL, <k> skip" (the skips are
 -- tenants without a person holding reports.view); on 0008zr alone (before 152) S1, S3, E (wherever the 92 days hold a
--- call the two rules count differently), B1, B2 and B3 read FAIL. Provoked (verify.provoke true at the top): every row reads
--- FAIL (E and B3: 0008zc's side loses its first row before the comparison, or the row says the set was empty) and the
--- verdict PROVOKED, NOT A PASS.
+-- call the two rules count differently), B1, B2 and B3 read FAIL. Provoked (verify.provoke true at the top): every row that
+-- reads PASS reads FAIL (E and B3: 0008zc's side loses its first row before the comparison, or the row says the set was
+-- empty; a skip stays skip) and the verdict PROVOKED, NOT A PASS.
 -- =============================================================================================
 
 do $$

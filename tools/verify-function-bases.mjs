@@ -6,22 +6,32 @@
  *   node tools/verify-function-bases.mjs --provoke   every check must FAIL
  * (from web/: npm run verify:function-bases)
  *
- * The rule: a `create [or replace] function` (or procedure) in a script numbered FROM (152) or later that defines a
- * function already defined earlier in run order (the scripts by their number; the same schema, name and argument
- * types, whether or not it was dropped in between) carries, on the line directly above it,
+ * The rule: a `create [or replace] function` (or procedure) in a script numbered FROM (152) or later carries, on the
+ * line directly above it,
  *   -- based on: <file>.sql
- * naming the script that holds that function's latest earlier definition (the same script when it was defined earlier
- * in it). Scripts before FROM are exempt. A new function may carry the line too (a rewrite under a new name); its file
- * must then exist and come no later in run order. pg_temp functions (the verify scripts' own) are no definitions.
- * Comments, quoted strings and dollar-quoted bodies are skipped, so a `create function` inside a DO block's or a
- * function's body, or in a comment, is no definition. Argument types are compared after the usual spellings are made
- * one (timestamptz and timestamp with time zone, int and integer, ...); names, defaults and OUT arguments are not part
- * of a function's identity, as in PostgreSQL.
+ * when it redefines a function, naming the script that holds the latest earlier definition (the same script when it
+ * was defined earlier in it). It redefines one when
+ *   - the same schema, name and argument types were defined earlier in run order (the scripts by their number), whether
+ *     or not the function was dropped in between; the base is that signature's latest definition; or
+ *   - the same script drops a signature of the same schema and name before it and creates it with other argument types
+ *     (a rebuild with a changed signature); the base is the dropped signature's latest definition (for a drop without
+ *     argument types, the latest definition of any signature of that name).
+ * Scripts before FROM are exempt. A new function may carry the line too (a rewrite under a new name); its file must
+ * then exist and come no later in run order. A new overload beside an existing one, without a drop, needs no line.
+ * pg_temp functions (the verify scripts' own) are no definitions. Comments, quoted strings and dollar-quoted bodies are
+ * skipped, so a `create function` inside a DO block's or a function's body, or in a comment, is no definition. Argument
+ * types are compared after the usual spellings are made one (timestamptz and timestamp with time zone, int and integer,
+ * float and double precision, a precision such as (3) dropped, ...); names, defaults and OUT arguments are not part of a
+ * function's identity, as in PostgreSQL. An unqualified name is taken as cma's (the database's search path).
+ * Not followed: a function created by EXECUTE (inside a DO block it is masked out), alter function ... rename to or set
+ * schema. The line proves which text the author named, not that the body started from it: the verify that compares the
+ * new definition with the right earlier one stays the real check.
  *
  * Checks: the repository's db/ (every redefinition from FROM on, each named); synthetic scripts for each way the rule
  * can be broken (no line, an earlier but not the latest definition named, a file that does not define it, a line not
- * directly above, a later file) and for what it must not flag (an overload, another spelling of the same types, a
- * script before FROM, text in a comment or a body, the same script, a drop and create). Provoked, the repository is
+ * directly above, a later file, a drop and create of the same or of another signature without the line) and for what
+ * it must not flag (an overload, another spelling of the same types, a script before FROM, text in a comment or a body,
+ * the same script, a rebuild that names its base, pg_temp). Provoked, the repository is
  * checked with its first redefinition's line removed and again with that line naming an earlier, not the latest,
  * definition (as 0008zr's rebuild of cma.calls_of from 76 instead of 100), and every synthetic check expects the
  * opposite: each check must FAIL.
@@ -101,6 +111,7 @@ const ALIASES = new Map(Object.entries({
   timestamptz: "timestamp with time zone", timestamp: "timestamp without time zone", "timestamp without time zone": "timestamp without time zone",
   timetz: "time with time zone", time: "time without time zone", int: "integer", int4: "integer", int8: "bigint", int2: "smallint",
   bool: "boolean", varchar: "character varying", char: "character", float8: "double precision", float4: "real", decimal: "numeric",
+  float: "double precision",
 }));
 
 /** One argument's type in one spelling, or null for an OUT argument (not part of the identity) */
@@ -112,9 +123,10 @@ export function argType(raw) {
     if (mode[1].toLowerCase() === "out") return null;
     a = a.slice(mode[0].length);
   }
+  a = a.replace(/\s*\([\d\s,]*\)/g, "");
   const lower = a.toLowerCase();
   if (/\s/.test(a) && !MULTIWORD.some((p) => lower.startsWith(p))) a = a.slice(a.indexOf(" ") + 1);
-  let t = a.toLowerCase().replace(/"/g, "").replace(/^pg_catalog\./, "").replace(/\s*\(.*?\)/g, "").replace(/\s+/g, " ").trim();
+  let t = a.toLowerCase().replace(/"/g, "").replace(/^pg_catalog\./, "").replace(/\s+/g, " ").trim();
   let dims = "";
   const arr = /(\s*\[\s*\d*\s*\])+$/.exec(t);
   if (arr) { dims = "[]".repeat((arr[0].match(/\[/g) ?? []).length); t = t.slice(0, -arr[0].length).trim(); }
@@ -123,6 +135,43 @@ export function argType(raw) {
 
 function identName(s) {
   return s.split(".").map((p) => { p = p.trim(); return p.startsWith('"') ? p.slice(1, -1) : p.toLowerCase(); });
+}
+
+/** A function's identity (schema.name(types)) from its written name and argument list; null for pg_temp */
+function identity(written, args) {
+  const parts = identName(written);
+  const [schema, name] = parts.length === 2 ? parts : ["cma", parts[0]];
+  if (schema === "pg_temp") return null;
+  return { name: `${schema}.${name}`, key: args === null ? null : `${schema}.${name}(${splitTop(args).map(argType).filter((t) => t !== null).join(",")})` };
+}
+
+const NAME = '(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\\s*\\.\\s*(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))?';
+
+/** The signatures one script drops (drop function|procedure [if exists] a(...), b, ...), with their offsets */
+export function drops(text, masked = mask(text)) {
+  const found = [];
+  const re = /\bdrop\s+(?:function|procedure)\s+(?:if\s+exists\s+)?/gi;
+  let m;
+  while ((m = re.exec(masked)) !== null) {
+    let j = re.lastIndex;
+    for (;;) {
+      const nm = new RegExp(`^\\s*(${NAME})\\s*`).exec(masked.slice(j));
+      if (!nm) break;
+      j += nm[0].length;
+      let args = null;
+      if (masked[j] === "(") {
+        let depth = 1; let k = j + 1;
+        while (k < masked.length && depth > 0) { if (masked[k] === "(") depth++; if (masked[k] === ")") depth--; k++; }
+        args = masked.slice(j + 1, k - 1); j = k;
+      }
+      const id = identity(nm[1], args);
+      if (id) found.push({ at: m.index, ...id });
+      const comma = /^\s*,/.exec(masked.slice(j));
+      if (!comma) break;
+      j += comma[0].length;
+    }
+  }
+  return found;
 }
 
 /** The function definitions of one script: identity, the line of `create`, and the line directly above it */
@@ -135,13 +184,10 @@ export function definitions(file, text) {
   while ((m = re.exec(masked)) !== null) {
     let depth = 1; let j = re.lastIndex;
     while (j < masked.length && depth > 0) { if (masked[j] === "(") depth++; if (masked[j] === ")") depth--; j++; }
-    const args = masked.slice(re.lastIndex, j - 1);
-    const parts = identName(m[1]);
-    const [schema, name] = parts.length === 2 ? parts : ["cma", parts[0]];
-    if (schema === "pg_temp") continue;
-    const types = splitTop(args).map(argType).filter((t) => t !== null);
+    const id = identity(m[1], masked.slice(re.lastIndex, j - 1));
+    if (!id) continue;
     const line = masked.slice(0, m.index).split("\n").length;
-    found.push({ file, line, key: `${schema}.${name}(${types.join(",")})`, above: line >= 2 ? lines[line - 2] : "" });
+    found.push({ file, line, at: m.index, name: id.name, key: id.key, above: line >= 2 ? lines[line - 2] : "" });
   }
   return found;
 }
@@ -149,8 +195,8 @@ export function definitions(file, text) {
 const BASED_ON = /^\s*--\s*based on:\s*(\S+)\s*$/i;
 
 /**
- * Checks a set of scripts ([{ file, text }], any order): the problems (strings) of every definition from FROM on,
- * and the redefinitions checked
+ * Checks a set of scripts ([{ file, text }], any order): the problems ({ kind: missing | wrong | unknown, text }) of
+ * every definition from FROM on, and the redefinitions checked
  */
 export function check(scripts, from = FROM) {
   const ordered = scripts
@@ -158,23 +204,35 @@ export function check(scripts, from = FROM) {
     .sort((a, b) => scriptNumber(a.file) - scriptNumber(b.file) || (a.file < b.file ? -1 : 1));
   const order = new Map(ordered.map((s, i) => [s.file, i]));
   const latest = new Map();
+  const latestByName = new Map();
   const problems = [];
   const checked = [];
   for (const s of ordered) {
+    const dropped = drops(s.text);
     for (const d of definitions(s.file, s.text)) {
-      const prev = latest.get(d.key);
+      let prev = latest.get(d.key);
+      let how = "";
+      if (!prev) {
+        // a rebuild with another signature: this script dropped a signature of the same name before this create
+        const drop = dropped.filter((x) => x.at < d.at && x.name === d.name && x.key !== d.key).at(-1);
+        if (drop) {
+          prev = drop.key === null ? latestByName.get(d.name) : latest.get(drop.key);
+          if (prev) how = ` (a rebuild of ${prev.key}, dropped above)`;
+        }
+      }
       if (scriptNumber(s.file) >= from) {
         const named = BASED_ON.exec(d.above)?.[1] ?? null;
         const where = `${d.file}:${d.line} ${d.key}`;
         if (prev) {
           checked.push({ where, base: prev.file });
-          if (named === null) problems.push(`${where} redefines a function without "-- based on: ${prev.file}" directly above it`);
-          else if (named !== prev.file) problems.push(`${where} names ${named}, but its latest earlier definition is in ${prev.file} (line ${prev.line})`);
+          if (named === null) problems.push({ kind: "missing", text: `${where} redefines a function${how} without "-- based on: ${prev.file}" directly above it` });
+          else if (named !== prev.file) problems.push({ kind: "wrong", text: `${where}${how} names ${named}, but its latest earlier definition is in ${prev.file} (line ${prev.line})` });
         } else if (named !== null && !(order.has(named) && order.get(named) <= order.get(s.file))) {
-          problems.push(`${where} names ${named}, which is no db/ script before it`);
+          problems.push({ kind: "unknown", text: `${where} names ${named}, which is no db/ script before it` });
         }
       }
       latest.set(d.key, d);
+      latestByName.set(d.name, d);
     }
   }
   return { problems, checked };
@@ -215,9 +273,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     wrong = edit(() => `-- based on: ${earlier}`);
   }
   expect(`db/: every redefinition from ${FROM} on carries "-- based on: <file>.sql" directly above it (${base.checked.length} checked)`,
-    check(missing).problems.filter((p) => p.includes("without")), [], []);
+    check(missing).problems.filter((p) => p.kind === "missing").map((p) => p.text), [], []);
   expect(`db/: each names the script of the function's latest earlier definition`,
-    check(wrong).problems.filter((p) => !p.includes("without")), [], []);
+    check(wrong).problems.filter((p) => p.kind !== "missing").map((p) => p.text), [], []);
   if (base.checked.length === 0 && PROVOKE) {
     expect("db/: nothing to provoke (no redefinition from FROM on)", true, true, false);
   }
@@ -256,6 +314,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     res(S([late, fn("cma.f", "p uuid") + "\n" + based(late) + fn("cma.f", "p uuid")])), 0, 1);
   expect("a drop and create of the same signature is a redefinition",
     res(S([one, fn("cma.f", "p uuid")], [late, "drop function if exists cma.f(uuid);\n" + fn("cma.f", "p uuid")])), 1, 0);
+  expect("a rebuild with another signature (a drop, then a create) without the line is reported",
+    res(S([one, fn("cma.f", "p uuid")], [two, fn("cma.f", "p uuid")],
+          [late, "drop function if exists cma.g(text), cma.f(uuid);\n" + fn("cma.f", "p uuid, q integer")])), 1, 0);
+  expect("a rebuild with another signature naming the dropped signature's latest definition passes",
+    res(S([one, fn("cma.f", "p uuid")], [two, fn("cma.f", "p uuid")],
+          [late, "drop function cma.f(uuid);\n" + based(two) + fn("cma.f", "p uuid, q integer")])), 0, 1);
+  expect("a precision and float spell the same types",
+    res(S([one, fn("cma.f", "p timestamp(3) with time zone, q float")], [late, fn("cma.f", "timestamptz, double precision")])), 1, 0);
   expect("pg_temp functions are no definitions", res(S([one, fn("pg_temp.f", "p uuid")], [late, fn("pg_temp.f", "p uuid")])), 0, 1);
 
   if (PROVOKE) {
