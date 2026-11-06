@@ -1,5 +1,8 @@
 import { config } from "@/lib/config";
 import { DB_TRACE, dbStats, formatDbStats } from "@/lib/db/client";
+
+/** A read started as a streamed part of a request (lib/db/client): its cost left out of the first paint's */
+export { streamed } from "@/lib/db/client";
 import { mockData } from "./mock";
 import { postgresData } from "./postgres";
 import type { CmaData } from "./types";
@@ -23,8 +26,9 @@ export const dataIsMock = config.dataMode === "mock";
 /**
  * The current request's database cost as "tx=…;rt=…;ms=…" for verify/round-trips.mjs, or null when the trace is
  * off: it is on only with CMA_DB_TRACE=1 and mock sign-in (lib/db/client DB_TRACE), never in iap mode. Read it
- * after the request's reads have completed (the Shell's meta, the API's x-cma-db header).
+ * after the request's reads have completed (the Shell's meta, the API's x-cma-db header). firstPaint (the Shell's
+ * meta): the reads but those started under streamed(), which a page awaits after its first paint (addition 0008zz)
  */
-export function requestDbTrace(): string | null {
-  return DB_TRACE ? formatDbStats(dbStats()) : null;
+export function requestDbTrace(opts: { firstPaint?: boolean } = {}): string | null {
+  return DB_TRACE ? formatDbStats(dbStats(), opts.firstPaint === true) : null;
 }

@@ -1,4 +1,5 @@
 import 'server-only';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import { trace } from '@opentelemetry/api';
 import { AuthTypes, Connector, IpAddressTypes } from '@google-cloud/cloud-sql-connector';
@@ -91,7 +92,15 @@ type DbState = { connector: Connector | null; pool: pg.Pool };
 // identities. With CMA_DB_TRACE=1 and mock sign-in (local verification or dev, never set in cloudbuild.yaml) the
 // API routes also answer with an x-cma-db header and the Shell renders a cma-db meta, for verify/round-trips.mjs
 // (requestDbTrace() in @/lib/data).
-export interface DbStats { tx: number; rt: number; dbMs: number }
+export interface DbStats {
+  tx: number; rt: number; dbMs: number;
+  /**
+   * The part of those counts read under streamed() (addition 0008zz): a read a page starts with its first paint's and
+   * awaits after it, in a boundary of its own (a Flash overview's records). Included in tx, rt and dbMs; the Shell's
+   * meta leaves it out, so the first paint's cost stays its own
+   */
+  streamed?: { tx: number; rt: number; dbMs: number };
+}
 // On globalThis, as the pool is: Next bundles the instrumentation file apart from the server chunks, so this module
 // is instantiated twice and a module-level map would never be shared between the writer and the reader
 const gs = globalThis as unknown as { __cmaDbStats?: Map<string, DbStats> };
@@ -99,6 +108,17 @@ const stats = (gs.__cmaDbStats ??= new Map<string, DbStats>());
 // Only with mock sign-in: in iap mode (prod) the trace is off whatever the environment says, so a stray
 // variable never puts the database cost of a real user's request on the wire
 export const DB_TRACE = process.env.CMA_DB_TRACE === '1' && process.env.CMA_AUTH_MODE === 'mock';
+// Marks the reads started under streamed(); on globalThis as the record is
+const gsc = globalThis as unknown as { __cmaDbStreamed?: AsyncLocalStorage<true> };
+const streamedScope = (gsc.__cmaDbStreamed ??= new AsyncLocalStorage<true>());
+
+/**
+ * Runs a read as a streamed part of the request (addition 0008zz): counted in the request's totals and apart in its
+ * streamed part, which the first paint's cost leaves out. Nothing else changes: the same transaction, context and errors
+ */
+export function streamed<T>(fn: () => Promise<T>): Promise<T> {
+  return streamedScope.run(true, fn);
+}
 
 /** The current request's record, created on first use; undefined outside a traced request */
 export function dbStats(): DbStats | undefined {
@@ -118,8 +138,11 @@ export function takeDbStats(traceId: string): DbStats | undefined {
   stats.delete(traceId);
   return s;
 }
-export function formatDbStats(s: DbStats | undefined): string {
-  return s ? `tx=${s.tx};rt=${s.rt};ms=${s.dbMs.toFixed(1)}` : 'tx=0;rt=0;ms=0';
+/** The record as "tx=…;rt=…;ms=…": the whole request, or with firstPaint its reads but the streamed ones */
+export function formatDbStats(s: DbStats | undefined, firstPaint = false): string {
+  if (!s) return 'tx=0;rt=0;ms=0';
+  const p = firstPaint && s.streamed ? s.streamed : { tx: 0, rt: 0, dbMs: 0 };
+  return `tx=${s.tx - p.tx};rt=${s.rt - p.rt};ms=${(s.dbMs - p.dbMs).toFixed(1)}`;
 }
 
 const g = globalThis as unknown as { __cmaDb?: Promise<DbState> | undefined };
@@ -246,8 +269,11 @@ async function transaction<T>(
 ): Promise<T> {
   const { pool } = await db();
   const s = dbStats();
+  // a read under streamed() counts in the request's totals and in its streamed part
+  const part = s && streamedScope.getStore() ? (s.streamed ??= { tx: 0, rt: 0, dbMs: 0 }) : undefined;
   const t0 = performance.now();
   if (s) s.tx += 1;
+  if (part) part.tx += 1;
   const client = await pool.connect().catch((err) => { throw translateDbError(err); });
   // A checked-out client has no error listener of its own (pg-pool removes its idle one on acquire), so a FATAL the
   // server sends between two statements (the idle-in-transaction timeout above, a restart) would be an unhandled
@@ -256,7 +282,7 @@ async function transaction<T>(
   const onError = (err: Error) => { fatal ??= err; console.error('[cma-db] connection lost inside a transaction', err.message); };
   client.on('error', onError);
   const q: Querier = {
-    query: (text, values) => { if (s) s.rt += 1; return client.query(text, values); },
+    query: (text, values) => { if (s) s.rt += 1; if (part) part.rt += 1; return client.query(text, values); },
   };
   try {
     await q.query('begin');
@@ -268,7 +294,9 @@ async function transaction<T>(
     await client.query('rollback').catch(() => undefined);
     throw translateDbError(fatal ?? err);
   } finally {
-    if (s) s.dbMs += performance.now() - t0;
+    const ms = performance.now() - t0;
+    if (s) s.dbMs += ms;
+    if (part) part.dbMs += ms;
     client.off('error', onError);
     client.release(fatal);
   }

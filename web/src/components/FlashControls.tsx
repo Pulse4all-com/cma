@@ -8,8 +8,8 @@
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
+import { useEffect, useRef, useState } from "react";
+import { appliedAsOf, changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
 
 function go(router: ReturnType<typeof useRouter>, path: FlashPath, query: Record<string, string>, change: Record<string, string | null>) {
@@ -36,13 +36,29 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
   path?: FlashPath;
 }) {
   const router = useRouter();
+  // the navigation last asked for, from which date to which: Enter and the blur that may follow it ask once
+  const sent = useRef<{ from: string | null; to: string | null } | null>(null);
+  // applied on Enter or blur only, when complete and in range (lib/flash appliedAsOf); typing never navigates. The field
+  // keeps what is typed (uncontrolled) and starts again from the address's date when that changes (its key)
+  const apply = (input: HTMLInputElement, leaving: boolean) => {
+    const next = appliedAsOf(input.value, min, max);
+    if (next === false) {
+      if (leaving) input.value = asOf ?? "";
+      return;
+    }
+    if (next === asOf || (sent.current?.from === asOf && sent.current?.to === next)) return;
+    sent.current = { from: asOf, to: next };
+    go(router, path, query, { asOf: next });
+  };
   return (
     <div className="flex flex-col gap-2 text-small font-semibold">
       <label htmlFor="flash-as-of" className="flex items-center gap-2">{labels.asOf} <Keycap>A</Keycap></label>
       <div className="flex items-center gap-2">
-        <input id="flash-as-of" type="date" data-shortcut="a" data-testid="flash-as-of" value={asOf ?? ""} min={min ?? undefined} max={max}
+        <input id="flash-as-of" key={asOf ?? "now"} type="date" data-shortcut="a" data-testid="flash-as-of" defaultValue={asOf ?? ""}
+          min={min ?? undefined} max={max}
           className="h-10 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue"
-          onChange={(e) => go(router, path, query, { asOf: e.target.value || null })} />
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); apply(e.currentTarget, false); } }}
+          onBlur={(e) => apply(e.currentTarget, true)} />
         <button type="button" data-testid="flash-now" aria-pressed={asOf === null}
           className={`h-10 rounded-button border px-4 font-semibold ${asOf === null ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-deepblue bg-white text-p4a-deepblue"}`}
           onClick={() => go(router, path, query, { asOf: null })}>

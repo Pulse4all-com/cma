@@ -27,7 +27,7 @@ import {
   FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
   statusHintPart, measureHint, cardStatusHint, statusSettingsOf, FLASH_SPLITS, splitOf, splitItemsOf, splitLine, definitionChanged,
   FLASH_ORDER_KINDS, splitOrderOf, splitKeyLabel, splitLabelsOf, flashHref,
-  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf, shownSetOf,
+  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf, shownSetOf, appliedAsOf,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -357,7 +357,7 @@ const overviewSrc = readFileSync(path.join(here, "..", "src", "components", "Fla
 const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same",
   [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: plan\.rowFilters/.test(pageSrc), /Object\.entries\(plan\.rowFilters\)/.test(pageSrc),
-    /listUnavailable\(e\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters"),
+    /listUnavailable\(read\.error\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters"),
     // a refused As of or period (a reader ahead of the tenant's zone): the tenant's today from the database, then read again
     /today = \(await data\(\)\.getFlashSnapshots\(me, null, null\)\)\.to;/.test(pageSrc) && (pageSrc.match(/adoptTenantToday\(\)/g) ?? []).length >= 2],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
@@ -850,11 +850,57 @@ const docRouteSrc = routeSrc(["flash"]);
 const tripsSrc = readFileSync(path.join(here, "round-trips.mjs"), "utf8");
 expect("the page in two parts: the document first (no list in its read), the records in a boundary of their own from their own read, their cost after it; the filter on the document, the files and the API",
   [/withRows: false, rowsAsOf: null/.test(overviewSrc), /<Suspense fallback=\{<RecordsPlaceholder label=\{t\.loading\} \/>\}>/.test(overviewSrc),
-    /rows = await data\(\)\.getFlashRows\(me, \{/.test(overviewSrc) && /const dbTrace = requestDbTrace\(\);/.test(overviewSrc),
+    /return streamed\(\(\) => data\(\)\.getFlashRows\(me, \{/.test(overviewSrc) && /const read = await rowsRead;[\s\S]{0,600}const dbTrace = requestDbTrace\(\);/.test(overviewSrc),
     /const pageFilter = documentFilterOf\(def, filters\);/.test(overviewSrc) && /filterDocument\(def, doc\.totals, doc\.rows, pageFilter\.dim, pageFilter\.value\)/.test(overviewSrc),
     /filterDocument\(def, doc\.totals, doc\.rows, pageFilter\.dim, pageFilter\.value\)/.test(fileRouteSrc) && /part === "rows" \? q\.filters : breakdownFilters/.test(fileRouteSrc),
     /filterDocument\(def, doc\.totals, doc\.rows, dim, value\)/.test(docRouteSrc), /row\.firstTx !== undefined/.test(tripsSrc)],
   [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
+
+
+// ---- Since addition 0008zz: the records' read started with the document's, the As of field applied on Enter or blur ----
+const shellSrc = readFileSync(path.join(here, "..", "src", "components", "Shell.tsx"), "utf8");
+const clientSrc = readFileSync(path.join(here, "..", "src", "lib", "db", "client.ts"), "utf8");
+expect("the records' read starts before the document is awaited (again after the tenant's today is adopted), as a streamed part; the boundary awaits it",
+  [/let rowsRead = readRows\(\);[\s\S]{0,900}await readDocument\(\);/.test(overviewSrc),
+    /await st\.adoptTenantToday\(\);\s*\/\/[^\n]*\n\s*rowsRead = readRows\(\);\s*try \{\s*await readDocument\(\);/.test(overviewSrc),
+    /rowsRead=\{rowsRead\}/.test(overviewSrc) && !/await data\(\)\.getFlashRows/.test(overviewSrc),
+    /\.then\(\(rows\) => \(\{ rows, error: null \}\), \(error: unknown\) => \(\{ rows: null, error \}\)\)/.test(overviewSrc)],
+  [true, true, true, true], [false, false, false, false]);
+expect("the first paint's cost leaves the streamed read out (the Shell's meta); the records' meta and the request log count it",
+  [/requestDbTrace\(\{ firstPaint: true \}\)/.test(shellSrc), /export function streamed<T>\(fn: \(\) => Promise<T>\): Promise<T> \{\s*return streamedScope\.run\(true, fn\);/.test(clientSrc),
+    /if \(s\) s\.tx \+= 1;\s*if \(part\) part\.tx \+= 1;/.test(clientSrc) && /if \(s\) s\.rt \+= 1; if \(part\) part\.rt \+= 1;/.test(clientSrc),
+    /const p = firstPaint && s\.streamed \? s\.streamed : \{ tx: 0, rt: 0, dbMs: 0 \};/.test(clientSrc)],
+  [true, true, true, true], [false, false, false, false]);
+const asOfCases = [["", "2026-10-16", "2026-11-05"], ["2026-10-31", "2026-10-16", "2026-11-05"], ["0002-10-31", "2026-10-16", "2026-11-05"],
+  ["0020-10-31", null, "2026-11-05"], ["0202-10-31", null, "2026-11-05"], ["0999-12-31", null, "2026-11-05"], ["1999-01-01", null, "2026-11-05"],
+  ["2026-02-30", null, "2026-11-05"], ["2026-11-06", null, "2026-11-05"], ["2026-10-15", "2026-10-16", "2026-11-05"], ["2026-10-16", "2026-10-16", "2026-11-05"],
+  ["2026-11-05", "2026-10-16", "2026-11-05"], ["31-10-2026", null, "2026-11-05"]];
+expect("As of applies a complete date within its range only: empty is now; a year before 1000 (0002, 0020, 0202 on the way to 2026), no calendar day, before the first snapshot or after the last possible one applies nothing",
+  [asOfCases.map(([v, min, max]) => appliedAsOf(v, min, max))],
+  [[null, "2026-10-31", false, false, false, false, "1999-01-01", false, false, false, "2026-10-16", "2026-11-05", false]],
+  [[]]);
+expect("the As of field navigates on Enter or blur only, through appliedAsOf, once per date; typing never navigates",
+  [/onKeyDown=\{\(e\) => \{ if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); apply\(e\.currentTarget, false\); \} \}\}/.test(controlsSrc0008zu),
+    /onBlur=\{\(e\) => apply\(e\.currentTarget, true\)\}/.test(controlsSrc0008zu), /const next = appliedAsOf\(input\.value, min, max\);/.test(controlsSrc0008zu),
+    /onChange=\{\(e\) => go\(router, path, query, \{ asOf/.test(controlsSrc0008zu),
+    /if \(next === asOf \|\| \(sent\.current\?\.from === asOf && sent\.current\?\.to === next\)\) return;/.test(controlsSrc0008zu),
+    /key=\{asOf \?\? "now"\}[^>]*defaultValue=\{asOf \?\? ""\}/.test(controlsSrc0008zu)],
+  [true, true, true, false, true, true], [false, false, false, true, false, false]);
+const zzRows = defOf("flash_rows_of");
+const zzList = defOf("flash_rows");
+const zzSources = defOf("flash_sources_of");
+const time131 = readFileSync(path.join(dbDir, "131_time_all.sql"), "utf8");
+expect("the database's list (148): the installed base's devices filtered and paged before the payment state of the page's subscriptions; one source's set-up; 131's CMA02 a skip, the page's set the document",
+  [[zzRows.file, zzList.file, zzSources.file], /v_base := 'cma\.flash_devices_of\(\$2, \$7\)';/.test(zzRows.text.slice(0, 9000)),
+    /cma\.subscription_payment_state_of\(\$2, array\(select y\.subscription_id from p y where y\.subscription_id is not null\)\) ps/.test(zzRows.text.slice(0, 9000)),
+    /n as \(select x\.\*%s, row_number\(\) over \(order by %s\) as ord from %s\)/.test(zzRows.text.slice(0, zzRows.text.indexOf('\n$$;'))),
+    /cma\.flash_source_set_up_of\(p_tenant_id, v_src\)/.test(zzRows.text.slice(0, 2000)) && /cma\.flash_source_set_up_of\(v_tenant, o\.source\)/.test(zzList.text.slice(0, 4000))
+      && /'set_up', cma\.flash_source_set_up_of\(p_tenant_id, k\.kind\)/.test(zzSources.text.slice(0, 2000)),
+    /update pg_temp\.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'\s*where page = 'installed base as of month end';/.test(time131)
+      && /update pg_temp\.reads_0131 set in_set = false\s*where page in \('installed base', 'installed base as of month end'\) and cls = 'list';/.test(time131)
+      && /v_skipped := v_err is not null and v_err = rd\.skip_state;/.test(time131)],
+  [["148_installed_base_list.sql", "148_installed_base_list.sql", "148_installed_base_list.sql"], true, true, true, true, true],
+  [[], false, false, false, false, false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

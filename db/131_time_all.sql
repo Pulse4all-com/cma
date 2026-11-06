@@ -30,7 +30,11 @@
 -- pages, the Live board, Team, Roster, Follow-up, Sources, System health, Data quality, the Flash landing, Campaigns),
 -- 'b' (the report cores over the previous month), 'c' (the report cores over the last 92 days); 'all' runs the three
 -- in one go where the window allows it. The morning runbook runs a, b and c as three Studio runs.
--- A read that raises an error reads FAIL with its SQLSTATE and the others still run.
+-- A read that raises an error reads FAIL with its SQLSTATE and the others still run, except an error a read names as
+-- nothing to time: an as-of read whose date has no snapshot (CMA02) reads skip with that reason, and its page's set too
+-- (Martin, 6 November 2026; Decision log). A page's set sums the reads the reader waits for first: a Flash overview loads
+-- in two parts since addition 0008zy (the document, then its records streamed after the first paint), so the Installed
+-- base pages' sets are the document against verify.max_overview_ms, and their records read keeps its own list row.
 -- Provoke: set verify.provoke below to true; every budget is then 0 ms, every timed read FAILs, and the verdict says
 -- PROVOKED, NOT A PASS.
 -- =============================================================================================
@@ -117,7 +121,8 @@ $$;
 -- the last 92 days, {today}, {monday} this week's Monday, {month} this month's first day, {conn} the tenant's first
 -- active connection, {sys} and {ext} the acting person's first external id), the budget class, the permissions
 drop table if exists pg_temp.reads_0131;
-create temporary table reads_0131 (ord serial, part text, page text, name text, sql text, cls text, perms text[]);
+create temporary table reads_0131 (ord serial, part text, page text, name text, sql text, cls text, perms text[],
+                                   skip_state text, skip_why text, in_set boolean not null default true);
 insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- polls
 ('a', 'polls', 'identity principal', $q$select u.id, u.display_name, t.name, coalesce(o.name, ''), cma.user_timezone(u.id),
@@ -220,7 +225,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'reviews all', 'reviews all by month', $q$select cma.reviews_page(null, '{today}', null, 'month')$q$, 'overview', array['reports.view', 'performance.team']),
 -- Installed base (addition 0008zy; Flash's overview and Assets -> Installed base): the page's two reads apart, the document
 -- (totals, per market, the breakdown sets) and the first page of records, live and as of the previous month end (the
--- stored document and the month end's frozen list; CMA02 where that date has no snapshot)
+-- stored document and the month end's frozen list; where that date has no snapshot both raise CMA02 and read skip, below).
+-- The set is the document alone, the first paint; the records stream after it and keep their list row (below)
 ('a', 'installed base', 'document live', $q$select cma.flash_overview('installed_base', null, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base', 'records first page live', $q$select cma.flash_rows('installed_base', '{}', 'serial', false, 500, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'document as of the month end', $q$select cma.flash_overview('installed_base', null, '{to}', null, null)$q$, 'overview', array['reports.view', 'performance.team']),
@@ -262,6 +268,13 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']);
 
+-- An as-of read of a date without a snapshot has nothing to time (CMA02): skip with that reason, never a FAIL
+update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'
+where page = 'installed base as of month end';
+-- A page that loads in two parts: its set is the first paint's reads; the records read keeps its own list row
+update pg_temp.reads_0131 set in_set = false
+where page in ('installed base', 'installed base as of month end') and cls = 'list';
+
 do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
@@ -272,6 +285,8 @@ declare
   v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint;
   -- per page and tenant: the sum of its reads and whether one failed
   v_pages text[]; v_sums numeric[]; v_bad boolean[]; p integer;
+  -- per page: a read in its set had nothing to time (and why); a read outside its set (a page that loads in two parts)
+  v_skip text[]; v_out boolean[]; v_err text; v_skipped boolean;
   r_name text[] := '{}'; r_result text[] := '{}'; r_detail text[] := '{}'; r_ms numeric[] := '{}';
 begin
   if v_part not in ('a', 'b', 'c', 'all') then
@@ -290,16 +305,18 @@ begin
       v_to := (date_trunc('month', v_today) - interval '1 day')::date;
       v_from92 := v_today - 91;
       select c.id into v_conn from cma.integration_connection c where c.tenant_id = t.id order by (c.status = 'active') desc, c.created_at, c.id limit 1;
-      v_pages := '{}'; v_sums := '{}'; v_bad := '{}';
+      v_pages := '{}'; v_sums := '{}'; v_bad := '{}'; v_skip := '{}'; v_out := '{}';
       r_name := r_name || (t.slug || ' periods'); r_result := r_result || 'info'::text;
       r_detail := r_detail || format('previous month %s to %s; 92 days %s to %s; today %s; connection %s', v_from, v_to, v_from92, v_today, v_today, coalesce(v_conn::text, 'none'));
       r_ms := r_ms || null::numeric;
       for rd in
-        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, 1 as period from pg_temp.reads_0131 x where x.part = 'a' and v_part in ('a', 'all')
+        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, 1 as period
+        from pg_temp.reads_0131 x where x.part = 'a' and v_part in ('a', 'all')
         union all
-        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, k.period from pg_temp.reads_0131 x cross join (values (1), (2)) k(period)
+        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, k.period
+        from pg_temp.reads_0131 x cross join (values (1), (2)) k(period)
         where x.part = 'b' and ((k.period = 1 and v_part in ('b', 'all')) or (k.period = 2 and v_part in ('c', 'all')))
-        order by 7, 1
+        order by 10, 1
       loop
         perform set_config('role', 'cma_owner', true);
         perform set_config('app.user_id', '', true);
@@ -307,7 +324,8 @@ begin
         v_page := replace(rd.page, '{P}', case when rd.period = 1 then 'previous month' else '92 days' end);
         p := array_position(v_pages, v_page);
         if p is null then
-          v_pages := v_pages || v_page; v_sums := v_sums || 0::numeric; v_bad := v_bad || false; p := cardinality(v_pages);
+          v_pages := v_pages || v_page; v_sums := v_sums || 0::numeric; v_bad := v_bad || false; v_skip := v_skip || null::text;
+          v_out := v_out || false; p := cardinality(v_pages);
         end if;
         if v_user is null then
           r_name := r_name || (t.slug || ' ' || v_page || ': ' || rd.name); r_result := r_result || 'skip'::text;
@@ -325,14 +343,23 @@ begin
         perform set_config('role', 'cma_app', true);
         perform set_config('app.user_id', v_user::text, true);
         v_ms := case when clock_timestamp() > v_stop then null else pg_temp.t0131_best_ms(v_sql, 2) end;
+        v_err := case when v_ms = -1 then current_setting('t0131.error') end;
+        -- an error the read names as nothing to time (CMA02: no snapshot for the as-of date) is a skip; any other a FAIL
+        v_skipped := v_err is not null and v_err = rd.skip_state;
         r_name := r_name || (t.slug || ' ' || v_page || ': ' || rd.name);
-        r_result := r_result || case when v_ms is not null and v_ms >= 0 and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_result := r_result || case when v_skipped then 'skip' when v_ms is not null and v_ms >= 0 and v_ms < v_max then 'ok' else 'FAIL' end;
         r_detail := r_detail || case when v_ms is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
-                                     when v_ms = -1 then 'error ' || current_setting('t0131.error')
+                                     when v_skipped then rd.skip_why || ' (' || v_err || '): nothing to time'
+                                     when v_ms = -1 then 'error ' || v_err
                                      else v_ms || ' ms (best of 2) against ' || v_max || ' ms' end;
         r_ms := r_ms || case when v_ms >= 0 then v_ms end;
-        v_sums[p] := v_sums[p] + coalesce(nullif(v_ms, -1), 0);
-        v_bad[p] := v_bad[p] or v_ms is null or v_ms < 0;
+        if rd.in_set then
+          v_sums[p] := v_sums[p] + coalesce(nullif(v_ms, -1), 0);
+          v_bad[p] := v_bad[p] or v_ms is null or (v_ms < 0 and not v_skipped);
+          v_skip[p] := coalesce(v_skip[p], case when v_skipped then rd.skip_why end);
+        else
+          v_out[p] := true;
+        end if;
       end loop;
       -- one row per page: its reads together against the set's budget
       perform set_config('role', 'cma_owner', true);
@@ -343,9 +370,12 @@ begin
                           else current_setting('verify.max_overview_ms')::numeric end;
         if v_pages[p] in ('polls', 'campaigns') then continue; end if;
         r_name := r_name || (t.slug || ' ' || v_pages[p] || ' (set)');
-        r_result := r_result || case when not v_bad[p] and v_sums[p] < v_set_max then 'ok' else 'FAIL' end;
-        r_detail := r_detail || case when v_bad[p] then 'a read of the page failed or was not timed' else v_sums[p] || ' ms, the reads summed, against ' || v_set_max || ' ms' end;
-        r_ms := r_ms || case when v_bad[p] then null else v_sums[p] end;
+        r_result := r_result || case when v_bad[p] then 'FAIL' when v_skip[p] is not null then 'skip' when v_sums[p] < v_set_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when v_bad[p] then 'a read of the page failed or was not timed'
+                                     when v_skip[p] is not null then v_skip[p] || ': nothing to time'
+                                     else v_sums[p] || ' ms, ' || case when v_out[p] then 'the first paint''s reads (the records stream after it, on their own row)'
+                                                                      else 'the reads summed' end || ', against ' || v_set_max || ' ms' end;
+        r_ms := r_ms || case when v_bad[p] or v_skip[p] is not null then null else v_sums[p] end;
       end loop;
     end loop;
     raise exception using errcode = 'CMAOK', message = 'the timed part ends: rolled back';

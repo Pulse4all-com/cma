@@ -2174,6 +2174,50 @@ async function expectInstalledBaseModels() {
   await ctx.close();
 }
 
+// As of applies on Enter or blur only, when complete and in range (addition 0008zz, Martin, 6 November 2026): typing a
+// date digit by digit (its year passes 0002, 0020 and 0202) never navigates; Enter, or leaving the field, loads it once
+async function expectAsOfTyping() {
+  // a browser of its own whose date fields read day, month, year (en-GB): the order the brief types the date in
+  const gb = await chromium.launch({ env: { ...process.env, LANG: "en_GB.UTF-8", LANGUAGE: "en_GB:en" } });
+  const ctx = await gb.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-GB", extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  // every client navigation (the router pushes the address), counted in the page
+  await ctx.addInitScript(() => {
+    const push = history.pushState.bind(history);
+    window.__cmaPushes = [];
+    history.pushState = (state, unused, url) => { window.__cmaPushes.push(String(url)); return push(state, unused, url); };
+  });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on("pageerror", (e) => errors.push(e.message));
+  // Enter on one page; leaving the field (its blur) on the other
+  for (const [path, key] of [["/reports/installed-base", "Enter"], ["/reports/flash?o=installed_base", "blur"]]) {
+    await p.goto(BASE + path);
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    await p.evaluate(() => { window.__cmaPushes = []; });
+    await p.locator('[data-testid="flash-as-of"]').focus();
+    await p.keyboard.type("31102026", { delay: 40 });
+    await p.waitForTimeout(400);
+    const typing = await p.evaluate(() => window.__cmaPushes.slice());
+    if (key === "Enter") await p.keyboard.press("Enter");
+    else await p.locator('[data-testid="flash-as-of"]').blur();
+    await p.waitForURL(/asOf=2026-10-31/, { timeout: 15_000 }).catch(() => undefined);
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    await p.waitForTimeout(400);
+    const after = await p.evaluate(() => ({ pushes: window.__cmaPushes.slice(), search: location.search,
+      error: !!document.querySelector('[data-testid="error-page"]'), value: document.querySelector('[data-testid="flash-as-of"]')?.value ?? null }));
+    if (typing.length !== (provoke ? -1 : 0)) problems.push(`${path}: typing 31102026 in As of navigated ${typing.length} time(s) before ${key} (${typing.join(", ")})`);
+    if (after.pushes.length !== 1 || !after.pushes[0].includes("asOf=2026-10-31")) problems.push(`${path}: ${key} after typing As of navigated ${after.pushes.length} time(s): ${after.pushes.join(", ")}`);
+    if (!after.search.includes("asOf=2026-10-31") || after.value !== "2026-10-31") problems.push(`${path}: As of shows ${after.value} at ${after.search}, expected 31 October`);
+    if (after.error) problems.push(`${path}: the error page after typing As of`);
+    await p.screenshot({ path: `${outDir}/manager-as-of-typed-${key.toLowerCase()}.png` });
+  }
+  if (errors.length > 0) problems.push(`As of typing: page errors: ${errors.join("; ")}`);
+  await ctx.close();
+  await gb.close();
+}
+
 async function expectFunnel() {
   // [subject, sees the pages, sees deals per person]
   const cases = [
@@ -2323,6 +2367,7 @@ await expectFirstOrders();
 await expectAttempts();
 await expectFunnel();
 await expectInstalledBaseModels();
+await expectAsOfTyping();
 await expectWelcomeOnOpen();
 await expectCampaigns();
 await expectCallbacks();

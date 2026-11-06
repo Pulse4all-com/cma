@@ -86,8 +86,9 @@ export async function Shell({
   const roles = access?.kind === "granted" ? await rolesOf(access.real).catch(() => []) : [];
   const ownRoleName = roles.find((r) => r.key === me.roleKey)?.name ?? me.roleKey;
   // Verification only (CMA_DB_TRACE=1 with mock sign-in): the request's database count after every read of the
-  // page and the Shell has completed, for verify/round-trips.mjs; never rendered in iap mode
-  const dbTrace = requestDbTrace();
+  // page and the Shell has completed, for verify/round-trips.mjs; never rendered in iap mode. The first paint's: a read
+  // the page streams after it (a Flash overview's records, started alongside since addition 0008zz) counts on its own meta
+  const dbTrace = requestDbTrace({ firstPaint: true });
 
   return (
     <div
