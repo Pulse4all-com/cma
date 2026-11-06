@@ -23735,12 +23735,12 @@ reviews = count(published reviews of a counted channel with the submission's bus
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -23810,12 +23810,12 @@ average_rating = round(avg(rating), 2) over the period's counted reviews; null (
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -23885,12 +23885,12 @@ negative = count(*) filter (where rating <= reviews.negative_max_rating); share 
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -23960,12 +23960,12 @@ linked = count(*) filter (where link_level in ('order', 'contact')); share = lin
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -24035,12 +24035,12 @@ group by ceil(rating) over the period's counted reviews, 1 to 5, empty ratings s
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -24106,12 +24106,12 @@ group by the channel's market over the period's counted reviews; each figure as 
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -24153,17 +24153,17 @@ select r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating,
 
 #### `reviews.by_period`
 
-**Reviews per week** on /reports/reviews · Reviews per day or week (Reviews per week)
+**Reviews per week** on /reports/reviews · Reviews per day, week or month (Reviews per week)
 
-Table of the period's reviews per day or ISO week (G switches), every day or week of the period, empty ones too: reviews, average rating, negative and linked.
+Table of the period's reviews per day or ISO week (G switches), or per month for the period All (addition 0008zw; Month fixed), every day, week or month of the period, empty ones too: reviews, average rating, negative and linked.
 
 **Formula as computed**
 
 ```
-group by the submission's business date or its ISO week (Monday) over the period's counted reviews
+group by the submission's business date or its ISO week (Monday), or its month for the period All, over the period's counted reviews
 ```
 
-**Unit** count · **Grain** period, per_day, per_iso_week · **Status** prerequisite_missing
+**Unit** count · **Grain** period, per_day, per_iso_week, per_month · **Status** prerequisite_missing
 
 **Sources**
 
@@ -24177,7 +24177,7 @@ group by the submission's business date or its ISO week (Monday) over the period
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
@@ -24246,12 +24246,12 @@ group by link_level (order, contact, none) over the period's counted reviews
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -24317,12 +24317,12 @@ group by invite_event_type over the period's counted reviews; null as No invitat
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -24392,12 +24392,12 @@ group by review_channel over the period's counted reviews
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
 
-**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review. The period All has no previous period (the history-start case): the previous figures are 0 and the tile shows "No history to compare yet".
 
 **Settings**
 
@@ -24463,7 +24463,7 @@ per active market: channels = count(counted, not gone channels with that market)
 
 - tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
 - population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
-- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days; the period All (Reviews alone, addition 0008zw) runs from the first counted review to today with no cap
 - market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
 
 **Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
@@ -34354,7 +34354,7 @@ Definition status: Proposed (docs/definitions.md, Flash overview measures and De
 
 **Devices** on /reports/flash · Devices (Apparaten)
 
-Devices the asset register holds, in any status (the installed base) (Installed base; docs/definitions.md, Flash overview measures).
+Devices the asset register holds, in any status (the installed base) (Installed base; docs/definitions.md, Flash overview measures). Also shown on Assets → Installed base (/reports/installed-base, addition 0008zw), the same read.
 
 **Formula as computed**
 
@@ -34414,7 +34414,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **In the field** on /reports/flash · In the field (In het veld)
 
-Of the devices, those in a device status flagged as in the field (Device status: is_in_field) (Installed base; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+Of the devices, those in a device status flagged as in the field (Device status: is_in_field) (Installed base; docs/definitions.md, Flash overview measures). The overview's headline on its card. Also shown on Assets → Installed base (/reports/installed-base, addition 0008zw), the same read.
 
 **Formula as computed**
 
@@ -34474,7 +34474,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **In stock** on /reports/flash · In stock (Op voorraad)
 
-Of the devices, those in a device status flagged as in stock (Device status: is_in_stock) (Installed base; docs/definitions.md, Flash overview measures).
+Of the devices, those in a device status flagged as in stock (Device status: is_in_stock) (Installed base; docs/definitions.md, Flash overview measures). Also shown on Assets → Installed base (/reports/installed-base, addition 0008zw), the same read.
 
 **Formula as computed**
 
@@ -34534,7 +34534,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Items past due** on /reports/flash · Items past due (Items achterstallig)
 
-The maintenance items past due of those in a tracked status (Past due, Asset terms) (Installed base; docs/definitions.md, Flash overview measures).
+The maintenance items past due of those in a tracked status (Past due, Asset terms) (Installed base; docs/definitions.md, Flash overview measures). Also shown on Assets → Installed base (/reports/installed-base, addition 0008zw), the same read.
 
 **Formula as computed**
 
@@ -34594,7 +34594,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Items due within 3 months** on /reports/flash · Items due within 3 months (Items binnen 3 maanden)
 
-Their items not past due whose due date falls within three months of today (Installed base; docs/definitions.md, Flash overview measures).
+Their items not past due whose due date falls within three months of today (Installed base; docs/definitions.md, Flash overview measures). Also shown on Assets → Installed base (/reports/installed-base, addition 0008zw), the same read.
 
 **Formula as computed**
 
@@ -34654,7 +34654,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **In the field on a holding subscription** on /reports/flash · In the field on a holding subscription (In het veld op een apparaathoudend abonnement)
 
-Of the devices in the field, those linked to a subscription (matched within the device's market) whose status is one of `flash.device_holding_statuses` (Installed base; docs/definitions.md, Flash overview measures and Device-holding status). A device in stock is never counted, whatever its reference.
+Of the devices in the field, those linked to a subscription (matched within the device's market) whose status is one of `flash.device_holding_statuses` (Installed base; docs/definitions.md, Flash overview measures and Device-holding status). A device in stock is never counted, whatever its reference. Also shown on Assets → Installed base (/reports/installed-base, addition 0008zw), the same read.
 
 **Formula as computed**
 
@@ -34767,7 +34767,7 @@ Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview
 
 **Orders** on /reports/flash · Orders (Bestellingen)
 
-Store orders created in the period, test and deleted orders left out (Orders; docs/definitions.md, Flash overview measures). The overview's headline on its card.
+Store orders created in the period, test and deleted orders left out (Orders; docs/definitions.md, Flash overview measures). The overview's headline on its card, split by order kind (addition 0008zw): First, Renewal and Repeat always and Unknown only above 0, from the rows of the set [market, store, kind] summed over the stores, so the parts sum to Orders; per market when one is chosen; none for a snapshot without those rows (docs/definitions.md, Order kind).
 
 **Formula as computed**
 

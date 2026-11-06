@@ -6,7 +6,7 @@
 import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
 import { instantsForLocal } from "@/lib/corrections";
-import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
+import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import type {
   LiveBoardData, DataQualityReport,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
@@ -4549,7 +4549,16 @@ export const mockData: CmaData = {
   },
 
   async getReviews(me, range, group, market): Promise<ReviewsReport> {
-    assertFunnel(me, range, { market, pipeline: null, sourceChannel: null }, group, ["reports.view", "performance.team"]);
+    // as cma.reviews_page (0008zw): All (from null) runs to a date by month, with no cap; a period keeps 92 days and day or week
+    if (range.from === null) {
+      assertAny(me, ["reports.view", "performance.team"]);
+      if (!isDateKey(range.to) || range.to > addDays(mockToday(me), 1)) throw new CmaDbError("CMA04", "the period All runs to a date, today at the latest");
+      if (parseFunnelFilter(market ?? "", "", "").problem) throw new CmaDbError("CMA04", "invalid filter");
+      if (group !== "month") throw new CmaDbError("CMA04", "the period All is grouped by month");
+    } else {
+      if (group === "month") throw new CmaDbError("CMA04", "group by day or week");
+      assertFunnel(me, { from: range.from, to: range.to }, { market, pipeline: null, sourceChannel: null }, group, ["reports.view", "performance.team"]);
+    }
     const c = seedIntakeConfig(me);
     const negative = Number(mockSetting("reviews.negative_max_rating"));
     const records = reviewRecords(mockReviewSources(me), MOCK_TENANT_ZONE, negative);
@@ -4557,7 +4566,7 @@ export const mockData: CmaData = {
     const channels = c.sources.flatMap((x) => x.reviewChannels);
     const states = reviewMarketStates(markets, channels.map((ch) => ({ market: ch.market, isCounted: ch.isCounted, deleted: ch.deletedAt !== null,
       publishedReviews: mockReviewSources(me).filter((r) => r.channel === ch.channelId && r.isPublished).length })));
-    const prev = funnelPrevious(previousPeriod(range, mockToday(me)), new Date().toISOString());
+    const prev = range.from === null ? null : funnelPrevious(previousPeriod({ from: range.from, to: range.to }, mockToday(me)), new Date().toISOString());
     return reviewsReport(records, { from: range.from, to: range.to, group, market, prev, zone: MOCK_TENANT_ZONE, negativeMaxRating: negative,
       isSetUp: channels.length > 0, markets, marketStates: states,
       filterMarkets: [...new Set(channels.filter((ch) => ch.isCounted).map((ch) => ch.market ?? "unknown"))]

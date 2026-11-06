@@ -10,7 +10,7 @@
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
 import {
-  bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_SPLITS, frozenFilters, overviewOf, ratioOf, splitOf, withLabels, type FlashKey, type FlashOverviewDef,
+  bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_SPLITS, frozenFilters, overviewOf, ratioOf, splitOf, splitOrderOf, withLabels, type FlashKey, type FlashOverviewDef,
   type FlashSplitItem, type FlashStatusSettings,
 } from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
@@ -332,9 +332,10 @@ function rowsOf(def: FlashOverviewDef, rs: readonly Rec[]): FlashDocRowView[] {
       continue;
     }
     // Total subscriptions' split (addition 0008zu): every device-holding status per market with a holding subscription,
-    // zeros included, carrying holding_subscriptions only, as cma.flash_compute_of
+    // zeros included, carrying holding_subscriptions only, as cma.flash_compute_of (the orders' split, 0008zw, reads the
+    // set [market, store, kind] the grouping below gives)
     const split = FLASH_SPLITS[def.key];
-    if (split && set.length === 2 && set[0] === "market" && set[1] === split.dim) {
+    if (def.key === "subscriptions" && split && set.length === 2 && set[0] === "market" && set[1] === split.dim) {
       const holding = rs.filter((r) => r.is_holding === true);
       for (const m of [...new Set(holding.map((r) => r.market))].sort()) {
         for (const st of HOLDING) {
@@ -484,7 +485,7 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
       if (asOf) {
         const rows = rowsOf(def, recordsOf(me, today, def, asOf, def.kind === "flow" ? f : null, def.kind === "flow" ? t : null));
         value = headlineOf(def, rows, market);
-        split = splitOf(def, rows, market, statusSettingsMock(me).deviceHoldingStatuses);
+        split = splitOf(def, rows, market, splitOrderOf(def, statusSettingsMock(me)));
       }
       if (def.kind === "stock") {
         previousOn = [...dates].reverse().find((d) => d < (asOf ?? today)) ?? null;
@@ -663,7 +664,7 @@ export function mockFlashHeadline(me: Principal, overview: string, market: strin
   const t = def.kind === "flow" ? to ?? today : null;
   const rows = up ? rowsOf(def, recordsOf(me, today, def, null, f, t)) : [];
   return { overview: def.key, headline: def.headline, market, asOf: new Date().toISOString(), from: f, to: t, setUp: up,
-    value: up ? headlineOf(def, rows, market) : null, split: up ? splitOf(def, rows, market, statusSettingsMock(me).deviceHoldingStatuses) : null,
+    value: up ? headlineOf(def, rows, market) : null, split: up ? splitOf(def, rows, market, splitOrderOf(def, statusSettingsMock(me))) : null,
     definitionVersion: versionOf(def, today, null) };
 }
 

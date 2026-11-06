@@ -562,7 +562,7 @@ Facts about the review platform's own figures, recorded so nobody mistakes them 
 
 ## Asset terms
 
-Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl: Assetregister; docs/decisions.md, 2 Nov 2026, "Definitions: Flash's labels after the second review") owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Customers → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl: Assetregister; docs/decisions.md, 2 Nov 2026, "Definitions: Flash's labels after the second review") owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Assets → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
 
 ### Device
 
@@ -572,7 +572,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Key | `device`; API `devices`, `deviceId`; SQL `cma.device`, `cma_read.device` |
 | Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
 | Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0", read through its API by the ingest (addition 0008zj: the changed records by the poll, the full snapshot nightly) and loaded in chunks by `cma.ingest_load_device_chunk`, a full snapshot reading the whole table, never a view, and ending with `cma.ingest_mark_devices_missing` in slices (addition 0008zk), or through its CSV export by a person with `cma.load_device_snapshot` (the fallback); both run the one load, `cma.device_rows_apply`, into `cma.device` (one row per register record id and connection) |
-| Counts / does not count | Customers → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
+| Counts / does not count | Assets → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
 | Unit and display | A count (`maintenance.devices`, "{n} tracked devices"); the list shows a device by its serial number and its register record id, never a customer's name |
 | Time rule | None of its own; a device's dates are dates as the register writes them |
 | Scope | The tenant's asset register connections; the filters market, model and scope (in the field, in stock, every tracked device) |
@@ -580,7 +580,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Asset" for one unit in a label (the asset register is the system); "AED" in a label or a key (the model is configuration) |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register", "The asset register is read by scheduled API polling" (addition 0008zj), 28 Oct 2026, "The asset sync reads no view", "A full snapshot's final step runs in slices" and "The Airtable adapter's chunks adapt to the database" (addition 0008zk) and "Definitions: Device" |
-| Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Customers → Maintenance (`/reports/maintenance`) |
+| Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Assets → Maintenance (`/reports/maintenance`) |
 | As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`; filled by `cma.device_rows_apply` (`116`, set-based) from the API in chunks, from `assets_load_chunk` rows and halved while a call is slow (`cma.ingest_load_device_chunk`, then `cma.ingest_mark_devices_missing` in slices for a full snapshot, which reads the whole table: `cma.set_connection_settings` refuses `view_id` on an asset register) or, through `cma.device_snapshot_apply`, from a file. Matches the definition |
 
 ### Component
@@ -599,7 +599,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Part" or "consumable" in a label; a vendor's own component word in a key |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A component serial that differs from the previous snapshot's is an observed replacement" and "Definitions: Component"; 28 Oct 2026, "The Airtable adapter maps by field id", "A component kind whose serial and expiry the register both empties closes the device's current component", "A kind the register holds again after emptying it" and "Definitions: Due date and Component" (addition 0008zk) |
-| Used by | `maintenance.components`, `maintenance.by_month`, `maintenance.list.components`; `component_due_unknown`; `cma_read.device_component`, `cma_read.maintenance_due`; Customers → Maintenance |
+| Used by | `maintenance.components`, `maintenance.by_month`, `maintenance.list.components`; `component_due_unknown`; `cma_read.device_component`, `cma_read.maintenance_due`; Assets → Maintenance |
 | As built today | `cma.device_component` (`112`): at most one current row per device and kind; a serial that differs from the stored one closes the old row (`replaced_at`) and inserts a new one (counted in `components_replaced`). A kind the register emptied (serial and expiry both empty) closes the current row with no new one (`cma.device_rows_apply`, `116`; counted in `components_closed`, which counts these closures only); when the register holds the kind again with none current, the same serial (or a missing one on either side) reopens that row (`replaced_at` cleared, the same row) and a different serial inserts a new one; a kind the source does not stage is left as it is. `cma.maintenance_items_of` builds the due items. Matches the definition |
 
 ### Device status
@@ -618,7 +618,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | A status name in SQL or code; "connected" or "active" for a device's state |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Device status is a catalog with the flags" and "Definitions: Device status" |
-| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Customers → Maintenance |
+| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Assets → Maintenance |
 | As built today | `cma.device_status` (`112`), its flags read by `cma.maintenance_items_of` and `cma.maintenance_bucketed_of`. Matches the definition |
 
 ### Due date
@@ -637,7 +637,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Expiry" for a date the rule worked out; "deadline" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Due date"; 28 Oct 2026, "A component kind whose serial and expiry the register both empties closes the device's current component", "A kind the register holds again after emptying it" and "Definitions: Due date and Component" (addition 0008zk) |
-| Used by | `maintenance.list.due_date`, `maintenance.list.basis`, `maintenance.unknown_items`; `component_due_unknown`; `cma_read.maintenance_due`; Customers → Maintenance |
+| Used by | `maintenance.list.due_date`, `maintenance.list.basis`, `maintenance.unknown_items`; `component_due_unknown`; `cma_read.maintenance_due`; Assets → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`): the anchor is `first_seen_at` in the tenant's zone for a current component with a replaced row of the same device and kind, else the shipment. Components of the first load keep the shipment. A kind with a closed component and none current is an item of basis `unknown` (`116`; its model's rule or none); a reopened component keeps its `first_seen_at`, so it keeps its anchor. Matches the definition |
 
 ### Action date
@@ -646,7 +646,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 |---|---|
 | Term | Action date (nl: Actiedatum) |
 | Key | `action_on`; API `actionOn` |
-| Definition | The due date less the maintenance rule's lead days for the model and kind: the day to act on a due item. A due item without a rule, and a device's end of life, have no lead days. The month of a due item on Customers → Maintenance is its action date's month. |
+| Definition | The due date less the maintenance rule's lead days for the model and kind: the day to act on a due item. A due item without a rule, and a device's end of life, have no lead days. The month of a due item on Assets → Maintenance is its action date's month. |
 | Source | The due date and `cma.maintenance_rule.lead_days` (tenant configuration; 60 for Pulse4all, to confirm, docs/open-decisions.md) |
 | Counts / does not count | Every due item with a due date has one; an item of basis `unknown` has none |
 | Unit and display | A date in the tenant's date format |
@@ -656,7 +656,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Due date" for the action date; "reminder date" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Action date" |
-| Used by | `maintenance.by_month`, `maintenance.list.action_date`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Customers → Maintenance |
+| Used by | `maintenance.by_month`, `maintenance.list.action_date`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Assets → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`). Matches the definition |
 
 ### Past due
@@ -665,7 +665,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 |---|---|
 | Term | Past due (nl: Achterstallig; Reports → Flash's count of its items: Items achterstallig; "achterstallig" in every Dutch hint) |
 | Key | `past_due`; API bucket `past_due` |
-| Definition | A due item whose action date lies before the first day of the tenant's current month. On Customers → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
+| Definition | A due item whose action date lies before the first day of the tenant's current month. On Assets → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
 | Counts / does not count | Counts every past-due item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays past due until a later read (the poll, the nightly snapshot or a loaded file) gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule |
 | Unit and display | A count in the Past due column (`maintenance.past_due`) |
@@ -675,7 +675,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Overdue" (undefined: it is still to define for tasks and tickets, Domains still to define); "late" or "expired" for a past-due item |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Past due"; 2 November 2026, "Definitions: Flash's labels after the second review" (addition 0008zn, #214) |
-| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); `flash.installed_base.components_past_due`; Customers → Maintenance; Reports → Flash (Installed base: `components_past_due` and the list's `past_due_items`) |
+| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); `flash.installed_base.components_past_due`; Assets → Maintenance; Assets → Installed base and Reports → Flash (Installed base: `components_past_due` and the list's `past_due_items`) |
 | As built today | `cma.maintenance_items_of` (`112`): `past_due` when the action date is before the month of the tenant's today. Matches the definition |
 
 ### Exchange (planned)
@@ -694,7 +694,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Exchange" alone for this term: the exchange form is service intake (docs/decisions.md, 12 Oct 2026) and Exchange is a journey of Campaign monitoring (docs/open-decisions.md); "swap", "visit" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Exchange (planned)" |
-| Used by | `maintenance.exchanges`, `maintenance.by_month`, `maintenance.total`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Customers → Maintenance |
+| Used by | `maintenance.exchanges`, `maintenance.by_month`, `maintenance.total`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Assets → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`): one ordered pass per device in action-date order. Matches the definition |
 
 ### Bundling window
@@ -713,7 +713,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Not to use | "Grace period" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Bundling window" |
-| Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Customers → Maintenance |
+| Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Assets → Maintenance |
 | As built today | `cma.check_tenant_setting` and `cma.maintenance_items_of` (`112`). Matches the definition |
 
 ## Subscription terms
@@ -1142,7 +1142,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Active devices" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Device measures count devices in the field only" (addition 0008zt, #233) |
-| Used by | `cma.flash_devices_of`, `flash.installed_base.in_field_on_holding`; Reports → Flash (Installed base) and its files |
+| Used by | `cma.flash_devices_of`, `flash.installed_base.in_field_on_holding`; Assets → Installed base and Reports → Flash (Installed base) and their files |
 | As built today | `cma.flash_devices_of` and `cma.flash_compute_of` (`136`); `137` reconciles the parts to in the field. Matches the definition |
 
 ### Devices on holding subscriptions
@@ -1316,7 +1316,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms; nl: Items achterstallig) |
 | | `items_due_3m` | Their items not past due whose due date falls within three months of today (live) or of the snapshot's date |
 | Churn (`churn`) | `churned` | Churn (subscription) (nl: Uitgevallen) |
-| Orders (`orders`) | `orders` | Store orders created in the period, test and deleted orders left out |
+| Orders (`orders`) | `orders` | Store orders created in the period, test and deleted orders left out; split by Order kind (First, Renewal, Repeat, Unknown only above 0), which add up to it |
 | | `units` | The quantities of their lines |
 | | `amount` | Their totals less refunded, per currency |
 | Payments (`payments`) | `orders` | Kind order: those store orders, each with its financial status as the store states it (Financial status, nl: Financiële status; never "Payment status", Payment state) |
@@ -1331,9 +1331,47 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `rating_sum` | The sum of their ratings; the average is `rating_sum` / `reviews` |
 | Data quality (`data_quality`) | `findings` | Data-quality findings: the records a check of `cma.data_quality_catalog()` finds, `field_device_on_ended_subscription` flags a device in the field on a subscription in a status of `flash.ended_subscription_statuses`, and `customer_required_ref_missing` says `contact_deleted` for a contact the CRM deleted; per check and market ("data quality" itself stays under Domains still to define) |
 
+### Order kind
+
+| Field | Value |
+|---|---|
+| Term | Order kind (nl: Ordersoort), one of First (nl: Eerste), Renewal (nl: Verlenging), Repeat (nl: Herhaal) and Unknown (nl: Onbekend) |
+| Key | `order_kind` (`cma.commerce_order.order_kind`: `first`, `renewal`, `repeat`, `unknown`); dim `kind`; copy `flash.kind_first`, `kind_renewal`, `kind_repeat`, `kind_unknown` |
+| Definition | What kind of order a store order is, computed when the order is stored (migration 0007b): Renewal when its source name or app id is named in `commerce.renewal_source_names` or `commerce.renewal_app_ids`, else First when the store holds no earlier order of that store customer, Repeat when it holds one, and Unknown when that count is missing. |
+| Source | `cma.commerce_order.order_kind`, computed in the order's upsert and reclassified when either setting changes (`cma.reclassify_orders()`) |
+| Counts / does not count | Flash's Orders headline is split by it: First, Renewal and Repeat always (zeros included) and Unknown only above 0, so the parts add up to Orders; per market when one is chosen; none for a snapshot without the rows of the set [market, store, kind]. Test and deleted orders never count |
+| Unit and display | "First n · Renewal n · Repeat n", plus "Unknown n" only when above 0, on the landing card and in the overview's totals; the kind dim and the records' kind column show the same words (the code on hover), files keep the codes |
+| Time rule | As Orders: the order's business date in the tenant's zone |
+| Scope | The tenant; per market |
+| Equivalent in the source system | None: the CMA's own derivation from the store's orders and the two settings |
+| Not to use | "First" or "First order" for Sales → First orders' attributed first order (pending, Customers and orders: that is the CRM's attribution, this is the store-order count); "New" or "Reorder" for Repeat |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed, Martin's brief); docs/decisions.md, 5 Nov 2026, "Flash's Orders headline is split by order kind" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
+| Used by | `flash.orders.orders` (the split), `cma.flash_split_set_of`, `cma.flash_split_order_of`, `cma.flash_headline_split_of`, `cma.flash_headline`, `cma.flash_stored_split_of`; Reports → Flash (Orders: the landing card, the overview's totals, the [market, store, kind] breakdown and the records' kind column) |
+| As built today | `db/142` (0008zw): the split read from the set [market, store, kind] summed over stores, live and as of a date; the definition version of Orders stays 0008zn. Matches the definition |
+
+### Renewal (order)
+
+| Field | Value |
+|---|---|
+| Term | Renewal (nl: Verlenging), an order kind |
+| Key | `order_kind` value `renewal`; copy `flash.kind_renewal` |
+| Definition | A store order of the kind Renewal: an order whose source name or app id is named as the subscription app's in the two settings of Order kind. |
+| Source | `cma.commerce_order.order_kind` `renewal` |
+| Counts / does not count | A count of store orders, one of the parts of Orders' split. It is not Payments' renewals (the subscription app's renewed events, Flash's Payments, kind renewal) and not a Failed renewal (Juo's failed attempt); the three come from different systems and are never added |
+| Unit and display | "Renewal n" in the split of Orders; Payments keeps "Renewals" (nl: Verlengingen) |
+| Time rule | As Orders |
+| Scope | The tenant; per market |
+| Equivalent in the source system | None: the CMA's classification (Order kind) |
+| Not to use | "Renewal" alone for Payments' renewals or a failed renewal |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
+| Used by | `flash.orders.orders` (the Renewal part); Reports → Flash (Orders) |
+| As built today | As Order kind. Matches the definition |
+
 ## Rail terms
 
-Decided by Martin on 5 November 2026 (addition 0008zv, #235): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
+Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
 
 ### Contact-center organisation
 
@@ -1382,7 +1420,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235): the left rail's gr
 | Definition | The rail group of the pages about leads and orders: Speed to lead, Follow-up, Funnel, Attempts per deal, Attempts per agent, Lead cohorts, First orders and Orders per person. |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href (`/reports/...`), its permission and its per-person key; a group with no page the person may see is absent |
-| Unit and display | A group with a trend icon, in the rail order Time, Reports, Sales, Customers, Campaigns, Configuration |
+| Unit and display | A group with a trend icon, in the rail order Welcome, Messages, Live, Time, Team, Reports, Sales, Customers, Assets, Campaigns, Configuration (Time before Team and Assets after Customers since addition 0008zw, #236) |
 | Time rule | None |
 | Scope | The rail of every tenant |
 | Equivalent in the source system | None |
@@ -1398,18 +1436,37 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235): the left rail's gr
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations, Reviews and Maintenance. The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations and Reviews (Maintenance moved to Assets, addition 0008zw, #236). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
-| Unit and display | A group with a person icon, after Sales |
+| Unit and display | A group with a person icon, after Sales and before Assets |
 | Time rule | None |
 | Scope | The rail of every tenant |
 | Equivalent in the source system | None |
 | Not to use | "Customers" or "Klanten" for a count of people or as the term "customer" (see Active customer: Store customer, Webwinkelklant) |
 | Status | Decided (the label only; the term "customer" stays pending) |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zv, #235) |
-| Used by | `cancellations.*`, `reviews.*`, `maintenance.*`; Customers → Cancellations, Reviews, Maintenance |
+| Used by | `cancellations.*`, `reviews.*`; Customers → Cancellations, Reviews |
 | As built today | Matches the definition |
+
+### Assets (rail group)
+
+| Field | Value |
+|---|---|
+| Term | Assets (nl: Assets), a rail group label |
+| Key | Copy key `nav.assets`; group id `assets` |
+| Definition | The rail group of the pages about the devices the asset register holds: Installed base and Maintenance. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/maintenance`) and its permission (`reports.view` or `performance.team`); a group with no page the person may see is absent |
+| Unit and display | A group with a box icon, after Customers. Installed base renders Flash's Installed base overview (the same read, filters, As of and files; no overviews' strip and no back link to Flash); Flash keeps its own Installed base overview |
+| Time rule | None |
+| Scope | The rail of every tenant |
+| Equivalent in the source system | None |
+| Not to use | "Assets" for one device or a count of devices (Device); "Customers → Maintenance" (Maintenance moved here) |
+| Status | Decided |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
+| Used by | `flash.installed_base.*`, `maintenance.*`; Assets → Installed base, Maintenance |
+| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/FlashOverview.tsx`, shared with Flash) |
 
 ## Time terms
 
@@ -1493,7 +1550,7 @@ Status: Pending for every term below; none is defined yet. Each is added term by
 Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
 
 ### Customers and orders
-Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
+Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Order kind (First, Renewal, Repeat, Unknown) and Renewal (order) are defined under Flash terms (addition 0008zw, #236); the store's First is not the attributed first order below. Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
 
 ### Tickets and tasks
 Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zn).
@@ -1505,7 +1562,7 @@ Email sent, mailbox, inbox, first reply.
 Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp).
 
 ### Periods
-Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like.
+Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like. All (nl: Alles) is a period of Reviews alone (addition 0008zw, Martin): from the tenant's first counted review to today, grouped by month, with no previous period (the history-start case) and exempt from the 92-day cap every other report keeps; its end is the tenant's today at the latest, or the day after it for a reader whose zone is ahead.
 
 ### Other
 Forms, data quality. Maintenance is defined under Asset terms (addition 0008zi).

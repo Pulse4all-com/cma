@@ -203,33 +203,37 @@ async function expectNavigation() {
     // Inbound, Email, Email per agent, Intake, Forms, Data quality), Sales (Speed to lead, Follow-up, Funnel, Attempts per
     // deal, Attempts per agent, Lead cohorts, First orders, Orders per person) and Customers (Cancellations, Reviews,
     // Maintenance), then Campaigns; every page keeps its permission, and the digit keys follow the new order
+    // Since 0008zw (Martin, 5 November 2026) Assets follows Customers: Installed base (Flash's Installed base overview on a
+    // page of its own) and Maintenance, which leaves Customers; Time comes before Team, so a manager's and an admin's Time
+    // pages take the keys after Live and Team's follow them
     ["analyst", ["/", "/messages", "/live/newco", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
       "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
       "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], false],
+      "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
       "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
-      "/reports/first-orders", "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], false],
+      "/reports/first-orders", "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/calls",
       "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms",
       "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts",
-      "/reports/first-orders", "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
-    // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
-    // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/newco", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash",
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+    // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin), since 0008zw
+    // between Time and Reports; the supervisor and the agent see no Team group, so their keys do not move. The planner
+    // (0005) joins it.
+    ["manager", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/roster/planner", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
-    ["admin", ["/", "/messages", "/live/newco", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash",
+      "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+    ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/roster/planner", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/cancellations", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
+      "/reports/cancellations", "/reports/reviews", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -390,7 +394,8 @@ async function expectReports() {
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
     "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
-    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/reports/flash"]) {
+    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/installed-base",
+    "/reports/data-quality", "/reports/flash"]) {
     await p.goto(BASE + path);
     await settle(p);
     await p.waitForLoadState("networkidle");
@@ -1719,6 +1724,9 @@ async function expectFrame() {
     // A contact center's Live board (addition 0008zv): Live › the organisation's name; Reviews in Customers
     ["supervisor", "/live/newco", ["Welcome", "Live", "Newco"], ["/", "/live/newco", null]],
     ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/cancellations", null]],
+    // Assets (addition 0008zw): Installed base and Maintenance, the group linking to Installed base, its first page
+    ["manager", "/reports/installed-base", ["Welcome", "Assets", "Installed base"], ["/", "/reports/installed-base", null]],
+    ["reader", "/reports/maintenance", ["Welcome", "Assets", "Maintenance"], ["/", "/reports/installed-base", null]],
   ]) {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
@@ -1789,8 +1797,9 @@ async function expectFrame() {
   // orders and Orders per person (0008u), Attempts per deal and Attempts per agent (0008y) joined the Reports group and
   // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
   // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
-  // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it
-  for (const [subject, pages] of [["manager", 31], ["agent-one", 5]]) {
+  // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it; since
+  // 0008zw Installed base (Assets)
+  for (const [subject, pages] of [["manager", 32], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -1881,11 +1890,12 @@ async function expectAccordion() {
     const after = await jarOf(ctx);
     if (after["cma-nav-open"] !== "") problems.push(`accordion: with none open the cookie is ${JSON.stringify(after["cma-nav-open"])}, expected empty`);
     if ((await serverOpen(ctx, "/")).length !== 0) problems.push("accordion: with the cookie empty the server still renders a group open");
-    // the manager's sixth page is My day, in the closed Time group
-    await p.keyboard.press("6");
+    // the manager's fourth page is My day, in the closed Time group (since 0008zw Time comes before Team: Welcome,
+    // Messages, Newco's Live board, My day; the sixth before)
+    await p.keyboard.press("4");
     await p.waitForURL("**/day").catch(() => undefined);
     await settle(p);
-    if (new URL(p.url()).pathname !== "/day") problems.push(`accordion: key 6 opened ${new URL(p.url()).pathname} with every group closed, expected /day`);
+    if (new URL(p.url()).pathname !== "/day") problems.push(`accordion: key 4 opened ${new URL(p.url()).pathname} with every group closed, expected /day`);
     await p.waitForLoadState("networkidle");
     const pill = (await groupsOf(p)).find((x) => x.id === "time");
     if (!pill?.pill || pill.expanded !== "false") problems.push(`accordion: the closed Time group holding My day is ${JSON.stringify(pill)}, expected closed with its white pill`);

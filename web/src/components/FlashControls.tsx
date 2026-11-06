@@ -9,10 +9,10 @@
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { changeLineOf, definitionChanged, splitItemsOf, splitLine, type FlashSplitItem } from "@/lib/flash";
+import { changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
 
-function go(router: ReturnType<typeof useRouter>, query: Record<string, string>, change: Record<string, string | null>) {
+function go(router: ReturnType<typeof useRouter>, path: FlashPath, query: Record<string, string>, change: Record<string, string | null>) {
   const q: Record<string, string> = { ...query };
   for (const [k, v] of Object.entries(change)) {
     if (v === null || v === "") delete q[k];
@@ -20,11 +20,10 @@ function go(router: ReturnType<typeof useRouter>, query: Record<string, string>,
   }
   // a new As of or market starts the list at its first page
   delete q.page;
-  const qs = new URLSearchParams(q).toString();
-  router.push(`/reports/flash${qs ? `?${qs}` : ""}` as Route);
+  router.push(flashHref(path, q) as Route);
 }
 
-export function FlashAsOf({ asOf, min, max, query, labels }: {
+export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flash" }: {
   /** The snapshot date shown, or null for now */
   asOf: string | null;
   /** The first snapshot's date, null before the first */
@@ -33,6 +32,8 @@ export function FlashAsOf({ asOf, min, max, query, labels }: {
   max: string;
   query: Record<string, string>;
   labels: { asOf: string; now: string };
+  /** The page whose address the control changes (Reports → Flash, or Assets → Installed base, 0008zw) */
+  path?: FlashPath;
 }) {
   const router = useRouter();
   return (
@@ -41,10 +42,10 @@ export function FlashAsOf({ asOf, min, max, query, labels }: {
       <div className="flex items-center gap-2">
         <input id="flash-as-of" type="date" data-shortcut="a" data-testid="flash-as-of" value={asOf ?? ""} min={min ?? undefined} max={max}
           className="h-10 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue"
-          onChange={(e) => go(router, query, { asOf: e.target.value || null })} />
+          onChange={(e) => go(router, path, query, { asOf: e.target.value || null })} />
         <button type="button" data-testid="flash-now" aria-pressed={asOf === null}
           className={`h-10 rounded-button border px-4 font-semibold ${asOf === null ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-deepblue bg-white text-p4a-deepblue"}`}
-          onClick={() => go(router, query, { asOf: null })}>
+          onClick={() => go(router, path, query, { asOf: null })}>
           {labels.now}
         </button>
       </div>
@@ -52,17 +53,19 @@ export function FlashAsOf({ asOf, min, max, query, labels }: {
   );
 }
 
-export function FlashMarket({ market, markets, query, labels }: {
+export function FlashMarket({ market, markets, query, labels, path = "/reports/flash" }: {
   market: string | null;
   markets: { code: string; name: string }[];
   query: Record<string, string>;
   labels: { market: string; allMarkets: string; unknownMarket: string };
+  /** The page whose address the control changes (0008zw) */
+  path?: FlashPath;
 }) {
   const router = useRouter();
   return (
     <label className="flex flex-col gap-2 text-small font-semibold">
       <span className="flex items-center gap-2">{labels.market} <Keycap>K</Keycap></span>
-      <select value={market ?? ""} data-shortcut="k" data-testid="flash-market" onChange={(e) => go(router, query, { market: e.target.value || null })}
+      <select value={market ?? ""} data-shortcut="k" data-testid="flash-market" onChange={(e) => go(router, path, query, { market: e.target.value || null })}
         className="h-10 min-w-48 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue">
         <option value="">{labels.allMarkets}</option>
         {markets.map((m) => <option key={m.code} value={m.code}>{m.name === m.code ? m.code : `${m.name} (${m.code})`}</option>)}
@@ -90,7 +93,9 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
   locale: string;
   labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; openPeriod: string; previousOnText: string | null;
     /** "The figure of <date> was counted by an earlier definition", its date filled in; none without a date */
-    definitionEarlier?: string | null };
+    definitionEarlier?: string | null;
+    /** The words of the split's keys (the order kinds, addition 0008zw: lib/flash splitLabelsOf); a key without one shows itself */
+    splitLabels?: Record<string, string> };
 }) {
   const [read, setRead] = useState<{ value: number | null; split: FlashSplitItem[] | null; version: string | null } | "loading" | "failed">("loading");
   useEffect(() => {
@@ -112,8 +117,9 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
   const shown = read === "failed" ? null : read.value;
   // the change as the stored cards write it (lib/flash's changeLineOf, which verify:flash tests)
   const change = changeLineOf(shown, previous, labels.previousOnText, open, labels, n);
-  // the headline's split per device-holding status, each in the subscription app's word (addition 0008zu)
-  const split = read === "failed" ? null : splitLine(read.split, n);
+  // the headline's split: per device-holding status, each in the subscription app's word (addition 0008zu); the orders per
+  // order kind in the reader's language (addition 0008zw)
+  const split = read === "failed" ? null : splitLine(read.split, n, (k) => labels.splitLabels?.[k] ?? k);
   // a figure compared with one counted by an earlier definition is marked, never read as a change in the business
   const earlier = !open && read !== "failed" && labels.definitionEarlier && definitionChanged(read.version, previousDefinitionVersion, previous)
     ? labels.definitionEarlier : null;

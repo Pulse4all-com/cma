@@ -282,6 +282,24 @@ export function NavIconMark({ name }: { name: NavIcon }) {
           <path d="M12.5 7h4v4" />
         </svg>
       );
+    case "box":
+      // Assets (addition 0008zw): a box, the devices the asset register holds
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M10 2.75l6.5 3.5v7.5L10 17.25l-6.5-3.5v-7.5z" />
+          <path d="M3.5 6.25L10 9.75l6.5-3.5" />
+          <path d="M10 9.75v7.5" />
+        </svg>
+      );
     case "person":
       // Customers (addition 0008zv): one person, apart from Team's two
       return (

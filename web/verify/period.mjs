@@ -17,7 +17,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { copy } from "../src/lib/copy.ts";
 import { MAX_DIGIT_KEYS, navEntries } from "../src/lib/nav.ts";
-import { RANGE_KEYS, RANGES, resolvePeriod } from "../src/lib/period.ts";
+import { ALL_RANGE_KEY, RANGE_KEYS, RANGES, resolvePeriod } from "../src/lib/period.ts";
 import { callRecords, callRules, callsFigures, fmtShare, MAX_REPORT_DAYS, previousCalls, previousLabel, previousPeriod } from "../src/lib/reports.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -59,14 +59,26 @@ expect("RANGE_KEYS: one capital letter per choice, no letter twice, every choice
 const barSource = src("../src/components/PeriodBar.tsx");
 expect("the bar labels Yesterday from the copy, in both languages, and binds each letter",
   [copy.en.myHours.yesterday, copy.nl.myHours.yesterday, barSource.includes("yesterday: copy.myHours.yesterday"),
-    barSource.includes("data-shortcut={RANGE_KEYS[k].toLowerCase()}") && barSource.includes("<Keycap>{RANGE_KEYS[k]}</Keycap>")],
+    barSource.includes("{ ...RANGE_KEYS, all: ALL_RANGE_KEY }") && barSource.includes("data-shortcut={keys[k].toLowerCase()}") && barSource.includes("<Keycap>{keys[k]}</Keycap>")],
   ["Yesterday", "Gisteren", true, true], ["Today", "Vandaag", false, false]);
+// Reviews' period All (addition 0008zw): its own letter, offered by the bar only where a page passes its label (Reviews
+// alone), and range=all resolves to today on every other page, so no other report runs past its 92 days
+const withAll = (dir = new URL("../src/app/", import.meta.url).pathname) => readdirSync(dir).flatMap((f) => {
+  const p = join(dir, f);
+  return statSync(p).isDirectory() ? withAll(p) : /\.tsx$/.test(f) && /<PeriodBar[^>]*allLabel=/s.test(readFileSync(p, "utf8")) ? [p.slice(p.indexOf("/app/") + 5)] : [];
+});
+expect("All: its own letter A, offered by Reviews alone; range=all is today everywhere else",
+  [ALL_RANGE_KEY, Object.values(RANGE_KEYS).includes(ALL_RANGE_KEY), withAll(), at("all", "2026-11-01").range, at("all", "2026-11-01").period,
+    barSource.includes("allLabel ? RANGES.flatMap((k) => (k === \"custom\" ? [\"all\", k] as const : [k])) : RANGES")],
+  ["A", false, ["reports/reviews/page.tsx"], "today", { from: "2026-11-01", to: "2026-11-01" }, true],
+  ["M", true, [], "all", { from: "2026-01-01", to: "2026-11-01" }, false]);
 
 // ---- every page with the period bar ------------------------------------------------------------
 const pathnames = [...barSource.match(/pathname:\s*([^;]+);/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
 const pageFile = (p) => `../src/app${p}/page.tsx`;
 const rendering = pathnames.filter((p) => {
-  const page = src(pageFile(p));
+  // Reports → Flash resolves its period and renders its bar through components/FlashOverview (flashState, FlashTop) since 0008zw
+  const page = src(pageFile(p)) + (p === "/reports/flash" ? src("../src/components/FlashOverview.tsx") : "");
   return page.includes("resolvePeriod(sp, today") && new RegExp(`<PeriodBar\\s+pathname="${p}"`).test(page);
 });
 // since addition 0008zn Reports → Flash (its flows' period) is the 20th
@@ -166,6 +178,10 @@ expect("Forms: the filters, grouping and download clear of the shell's letters",
 // the Configuration group (C) are known and yield to the page; Yesterday's Y meets nothing in the shell
 expect("Forms: the period bar meets the shell only on W and C, which the page wins",
   barLetters.filter((k) => shellLetters.includes(k)).sort(), ["c", "w"], ["c", "w", "y"]);
+// Reviews' All (addition 0008zw): A meets no letter of the shell, nor one of Reviews' own controls (the market K, the group G)
+const reviewsLetters = lettersIn(src("../src/app/reports/reviews/page.tsx") + src("../src/components/FunnelFilters.tsx"));
+expect("Reviews: All's A meets no letter of the shell nor of the page's own controls",
+  [shellLetters.includes(ALL_RANGE_KEY.toLowerCase()), reviewsLetters.includes(ALL_RANGE_KEY.toLowerCase())], [false, false], [true, true]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
