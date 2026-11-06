@@ -94,6 +94,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "welcome.needs_attention.tickets_at_risk_or_breached",
     "welcome.needs_attention.tasks_overdue",
     "welcome.needs_attention.missed_callbacks",
+    "welcome.needs_attention.courtesy_not_reached",
     "welcome.waiting_for_you.total",
     "welcome.waiting_for_you.counts",
   ],
@@ -391,6 +392,25 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "reviews.invite_events",
     "reviews.by_channel",
     "reviews.market_states",
+  ],
+  // Customers → Courtesy (addition 0009a): the tiles, the outcome bar, the tables, the cohorts, per person and the list's columns
+  "/reports/courtesy": [
+    "courtesy.completed_calls",
+    "courtesy.due_open",
+    "courtesy.not_reached",
+    "courtesy.no_contact",
+    "courtesy.outcomes",
+    "courtesy.by_market",
+    "courtesy.by_period",
+    "courtesy.orders",
+    "courtesy.completed",
+    "courtesy.completion_share",
+    "courtesy.cohorts",
+    "courtesy.per_person",
+    "courtesy.list",
+    "courtesy.list.days_past_due",
+    "courtesy.list.attempts",
+    "courtesy.list.state",
   ],
   // Reports → Flash (addition 0008zn): every overview's measures, headline and breakdown alike
   "/reports/flash": [

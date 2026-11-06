@@ -214,6 +214,12 @@
     "rt": 9
   },
   {
+    "path": "/reports/courtesy",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
     "path": "/reports/installed-base",
     "subject": "manager",
     "tx": 3,

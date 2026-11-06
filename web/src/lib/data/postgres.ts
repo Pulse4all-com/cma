@@ -22,6 +22,7 @@ import type {
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
   DealAttempt, LineStoredCalls, TagMeaning,
   CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
+  CourtesyCalls, CourtesyCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
   CohortAge, LeadCohortRow, LeadCohortsReport,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
@@ -1054,6 +1055,26 @@ type ReviewsPageDb = {
   history_start: string | null; negative_max_rating: number; is_set_up: boolean; filter_markets: string[];
 };
 
+/** cma.courtesy_page's JSON (addition 0009a): snake_case as the database answers it; every figure null while not set up */
+type CourtesyCallsDb = { calls: number; positive: number; neutral: number; negative: number };
+type CourtesyCountsDb = { orders: number; completed: number; not_reached: number; no_contact: number };
+type CourtesyPageDb = {
+  from: string; to: string; rows: number; set_up: boolean; has_store: boolean; start_date: string | null;
+  settings: { due_days: number; alert_attempts: number; ages: number[]; order_kinds: string[] };
+  now: { orders: number; due_open: number; not_due: number; due_no_attempt: number; attempted: number; not_reached: number; completed: number; no_contact: number } | null;
+  completed: CourtesyCallsDb | null; previous: CourtesyCallsDb | null; previous_from: string | null; previous_to: string | null; previous_partial: boolean;
+  markets: (CourtesyCountsDb & { market: string; name: string | null })[];
+  groups: (CourtesyCountsDb & { key: string; markets: (CourtesyCountsDb & { market: string })[] })[];
+  cohorts: { key: string; label: string; start: string; end: string; partial: boolean; orders: number; ages: { age: number; mature: boolean; completed: number | null }[] }[];
+  per_person: (CourtesyCallsDb & { user_id: string | null; name: string | null })[] | null;
+  list: { total: number; rows: { order_id: string; order_name: string; store: string; store_name: string | null; market: string; segment: string; created_at: string;
+    business_date: string; due_date: string; days_past_due: number | null; attempts: number | null; last_attempt_at: string | null; state: CourtesyState | null;
+    outcome: CourtesyOutcome | null; completed_at: string | null; record_url: string | null }[] };
+  filter_markets: string[]; filter_segments: string[];
+};
+const toCourtesyCalls = (c: CourtesyCallsDb): CourtesyCalls => ({ calls: c.calls, positive: c.positive, neutral: c.neutral, negative: c.negative });
+const toCourtesyCounts = (c: CourtesyCountsDb): CourtesyCounts => ({ orders: c.orders, completed: c.completed, notReached: c.not_reached, noContact: c.no_contact });
+
 function toReviewFigures(f: ReviewFiguresDb): ReviewFigures {
   return { reviews: f.reviews, averageRating: f.average_rating === null ? null : Number(f.average_rating), negative: f.negative, linkedOrder: f.linked_order,
     linkedContact: f.linked_contact, unlinked: f.unlinked };
@@ -1514,8 +1535,11 @@ async function readRosterToday(q: Querier): Promise<TodayShift[]> {
 }
 
 async function readFollowUpSummary(q: Querier): Promise<FollowUpSummaryAt> {
-  const s = one((await q.query<SummaryDb & { computed_at: Date }>(`select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
-  return { ...toSummary(s), computedAt: s.computed_at.toISOString() };
+  // since addition 0009a with the courtesy flag (null while courtesy is not set up, and before 150 has run)
+  const s = one((await q.query<SummaryDb & { computed_at: Date; courtesy_not_reached?: number | null; courtesy_alert_attempts?: number | null }>(
+    `select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
+  return { ...toSummary(s), courtesyNotReached: s.courtesy_not_reached ?? null, courtesyAlertAttempts: s.courtesy_alert_attempts ?? null,
+    computedAt: s.computed_at.toISOString() };
 }
 
 /** cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives them */
@@ -2589,6 +2613,35 @@ export const postgresData: CmaData = {
         byChannel: j.channels.map((c) => ({ channel: c.channel, name: c.name, market: c.market, current: toReviewFigures(c.current), previous: toReviewFigures(c.previous) })),
         linkLevels: j.link_levels, inviteEvents: j.invite_events.map((e) => ({ eventType: e.event_type, reviews: e.reviews, previous: e.previous })),
         marketStates: j.market_states, historyStart: j.history_start, negativeMaxRating: j.negative_max_rating, isSetUp: j.is_set_up, markets: j.filter_markets,
+      };
+    });
+  },
+
+  async getCourtesy(me, range, period, group, filter): Promise<CourtesyReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the 92 days, the period, the group and the filters first, and answers the list's rows
+      // with the contact's record link from the CRM connection's record_url_contact template (addition 0009a)
+      const j = one((await q.query<{ j: CourtesyPageDb }>(`select cma.courtesy_page($1::date, $2::date, $3, $4, $5, $6, $7) as j`,
+        [range.from, range.to, period, group, filter.market, filter.segment, filter.state])).rows, "courtesy_page").j;
+      const n = j.now;
+      return {
+        from: j.from, to: j.to, period, group, filter, rows: j.rows, setUp: j.set_up, hasStore: j.has_store, startDate: j.start_date,
+        settings: { dueDays: j.settings.due_days, alertAttempts: j.settings.alert_attempts, ages: j.settings.ages, orderKinds: j.settings.order_kinds },
+        now: n ? { orders: n.orders, dueOpen: n.due_open, notDue: n.not_due, dueNoAttempt: n.due_no_attempt, attempted: n.attempted, notReached: n.not_reached,
+          completed: n.completed, noContact: n.no_contact } : null,
+        completed: j.completed ? toCourtesyCalls(j.completed) : null, previous: j.previous ? toCourtesyCalls(j.previous) : null,
+        previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial,
+        byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, ...toCourtesyCounts(m) })),
+        byGroup: j.groups.map((g) => ({ key: g.key, ...toCourtesyCounts(g), markets: g.markets.map((m) => ({ market: m.market, ...toCourtesyCounts(m) })) })),
+        cohorts: j.cohorts, perPerson: j.per_person ? j.per_person.map((x) => ({ userId: x.user_id, name: x.name, ...toCourtesyCalls(x) })) : null,
+        list: {
+          total: j.list.total,
+          rows: j.list.rows.map((r) => ({ orderId: r.order_id, orderName: r.order_name, store: r.store, storeName: r.store_name, market: r.market, segment: r.segment,
+            createdAt: isoOf(r.created_at)!, businessDate: r.business_date, dueDate: r.due_date, daysPastDue: r.days_past_due, attempts: r.attempts,
+            lastAttemptAt: isoOf(r.last_attempt_at), state: r.state, outcome: r.outcome, completedAt: isoOf(r.completed_at), recordUrl: r.record_url })),
+        },
+        markets: j.filter_markets, segments: j.filter_segments,
       };
     });
   },

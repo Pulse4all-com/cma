@@ -295,8 +295,10 @@ begin
       case when v_n = 0 and v_m = 1 and v_res ->> 'computed_at' is not null and (v_res -> 'leads' ->> 'total')::integer = 5 and not v_provoke then 'PASS' else 'FAIL' end,
       format('%s snapshots before, %s after; %s leads', v_n, v_m, v_res -> 'leads' ->> 'total')];
 
-    -- B2. the summary and the order of the ids equal to the live functions' (the same transaction, so the same now())
-    select (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x) = s.summary into v_ok from cma.follow_up_snapshot s where s.tenant_id = v_t1;
+    -- B2. the summary and the order of the ids equal to the live functions' (the same transaction, so the same now()); the
+    --     courtesy keys of 0009a (150) are left out of the comparison: the live summary has none, and 151 proves them
+    select (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x) = s.summary - 'courtesy_not_reached' - 'courtesy_alert_attempts'
+      into v_ok from cma.follow_up_snapshot s where s.tenant_id = v_t1;
     select string_agg(i.kind || ':' || i.item_id, ',' order by i.kind, i.sort_key) into v_txt from cma.follow_up_item i where i.tenant_id = v_t1;
     select string_agg(k || ':' || id, ',' order by k, n) into v_txt2 from (
       select 'lead' as k, l.deal_id as id, l.n from cma.open_leads_of(v_t1) with ordinality l(tenant_id, deal_id, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, n)
@@ -446,9 +448,11 @@ begin
                 and v_res -> 'leads' -> 0 ->> 'record_url' like 'https://crm.example.invalid/portal-1/deal/%' and not v_provoke then 'PASS' else 'FAIL' end,
       format('%s | live %s', v_txt, v_txt2)];
 
-    -- B11. 0008o's reads from the snapshot: the summary with computed_at, every list row equal to the live set
+    -- B11. 0008o's reads from the snapshot: the summary with computed_at, every list row equal to the live set (the
+    --      courtesy columns of 0009a left out, as in B2)
     perform set_config('app.user_id', v_manager1::text, true);
-    select (to_jsonb(s) - 'tenant_id' - 'computed_at') = (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x)
+    select (to_jsonb(s) - 'tenant_id' - 'computed_at' - 'courtesy_not_reached' - 'courtesy_alert_attempts')
+             = (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x)
            and s.computed_at = (select computed_at from cma.follow_up_snapshot where tenant_id = v_t1)
       into v_ok from cma.follow_up_summary() s;
     select (select count(*) from ((select * from cma.open_leads() except all select * from cma.open_leads_of(v_t1))

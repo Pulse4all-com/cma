@@ -27,6 +27,7 @@ import type {
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
   ReviewsReport, MaintenanceFilter, MaintenanceReport, MaintenanceRows, MaintenanceView, LeadCohortsReport,
+  CourtesyReport,
 } from "./types";
 import {
   ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptOutcomes,
@@ -65,6 +66,10 @@ import {
   type FunnelDealFixture, type FunnelOptions, type FunnelPipelineFixture, type FunnelReasonOption, type KindRuleFixture,
 } from "@/lib/funnel";
 import { reviewMarketStates, reviewRecords, reviewsReport, type ReviewSource } from "@/lib/reviews";
+import {
+  COURTESY_GROUPS, COURTESY_PERIODS, COURTESY_SETTING_KEYS, courtesyOrders, courtesyReport, parseCourtesyFilter, parseCourtesySetting,
+  type CourtesyCallSource, type CourtesyOrderSource, type CourtesySettingKey, type CourtesySettings,
+} from "@/lib/courtesy";
 import { COHORT_PERIODS, COHORT_SPLITS, LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, leadAgesOf, leadCohortsReport, parseLeadAges, type LeadCohortDeal } from "@/lib/cohorts";
 import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
 import { mockDataQualityRows, mockFlashHeadline, mockFlashOverview, mockFlashPage, mockFlashRows, mockFlashSnapshots, mockRecordFlashFile } from "./mock-flash";
@@ -1393,6 +1398,12 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "lead_to_order.max_days", value: "90", isDefault: true },
   // split shifts (addition 0008zp): on, as Pulse4all Subscriptions has it (seed 02); the catalog default is off
   { key: "workday.clock_in_again", value: "true", isDefault: false },
+  // courtesy (addition 0009a): set up sixty days back, so the mock's page has orders in every state; the rest at the catalog defaults
+  { key: "courtesy.start_date", value: dateKeyInZone(new Date(Date.now() - 60 * 86_400_000), "Europe/Amsterdam"), isDefault: false },
+  { key: "courtesy.order_kinds", value: "first,repeat", isDefault: true },
+  { key: "courtesy.due_days", value: "10", isDefault: true },
+  { key: "courtesy.alert_attempts", value: "3", isDefault: true },
+  { key: "courtesy.ages_days", value: "10,14,21,30", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1987,6 +1998,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "calls.conversation_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
   "cohorts.lead_ages_days": "1,7,30,60,90", "lead_to_order.max_days": "90",
   "workday.clock_in_again": "false",
+  "courtesy.start_date": "", "courtesy.order_kinds": "first,repeat", "courtesy.due_days": "10", "courtesy.alert_attempts": "3", "courtesy.ages_days": "10,14,21,30",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -2510,6 +2522,85 @@ const MOCK_REVIEW_CHANNELS = [
   { channelId: "chl-test-x", name: "shop-x.example", locale: "de_DE", market: null, isCounted: false },
 ];
 const MOCK_INVITE_EVENTS = ["checkout", "klaviyo-integration", "order_status_from_woocommerce", null];
+
+/** The courtesy settings as the mock holds them (addition 0009a) */
+function mockCourtesySettings(): CourtesySettings {
+  const list = (v: string) => v.split(",").filter((x) => x !== "");
+  return {
+    startDate: mockSetting("courtesy.start_date") || null, orderKinds: list(mockSetting("courtesy.order_kinds")),
+    dueDays: Number(mockSetting("courtesy.due_days")), alertAttempts: Number(mockSetting("courtesy.alert_attempts")),
+    ages: list(mockSetting("courtesy.ages_days")).map(Number), connectedMinSeconds: Number(mockSetting("telephony.connected_min_seconds")),
+    conversationMinSeconds: Number(mockSetting("calls.conversation_min_talk_seconds")), segments: ["B2B", "B2C"],
+  };
+}
+
+/** Each mock courtesy order's contact id, for its record link (an invented CRM id) */
+const MOCK_COURTESY_CONTACT = new Map<string, string>();
+
+/**
+ * The courtesy fixture (addition 0009a): every case of 151's scenario placed relative to today, so the page shows each state
+ * (a First and a Repeat order completed positive and negative, an inbound completion, the kinds and flags left out, an order
+ * before the start date, No contact, a London and an Amsterdam order at 23:30 UTC, a completion before the due date, a call
+ * before it, one call completing two orders and a later third open, Not reached after three attempts, Attempted with two and
+ * with a conversation, an untagged connected call), and a spread of orders over the last sixty days in NL, GB and DE.
+ * Invented ids and codes only; the people are the mock team's. Tenant two holds no store
+ */
+function mockCourtesy(me: Principal, nowMs: number): [CourtesyOrderSource[], CourtesyCallSource[], { userRef: string; userId: string; name: string }[]] {
+  if (me.tenantId === MOCK_TENANT_2) return [[], [], []];
+  const day = (n: number, time = "10:00") => new Date(Date.parse(`${dateKeyInZone(new Date(nowMs), "UTC")}T${time}:00Z`) + n * 86_400_000).toISOString();
+  const zones: Record<string, string> = { NL: "Europe/Amsterdam", GB: "Europe/London", DE: "Europe/Berlin" };
+  const orders: CourtesyOrderSource[] = [];
+  const calls: CourtesyCallSource[] = [];
+  let seq = 4100;
+  const order = (id: string, contact: string | null, at: string, kind: CourtesyOrderSource["kind"] = "first", o: Partial<CourtesyOrderSource> = {}) => {
+    const market = o.market ?? "NL";
+    orders.push({ orderId: `mock-${id}`, orderName: `#${seq++}`, store: `mock-${market.toLowerCase()}`, storeName: `Shop ${market}`, market, zone: zones[market]!, createdAt: at, kind,
+      isTest: false, deleted: false, cancelled: false, contact, contactSegment: contact === null ? null : hashOf(contact) < 0.3 ? "B2B" : "B2C", ...o });
+    if (contact !== null) MOCK_COURTESY_CONTACT.set(`mock-${id}`, String(70_000 + Math.floor(hashOf(contact) * 20_000)));
+  };
+  const call = (contact: string, at: string, direction: "inbound" | "outbound", talk: number | null, userRef: string | null, meanings: string[] = []) => {
+    if (Date.parse(at) > nowMs) return;
+    calls.push({ callId: `mock-call-${calls.length + 1}`, contact, direction, startedAt: at, answered: talk !== null, talkSeconds: talk, lineCounted: true, deleted: false,
+      userRef, tags: meanings.map((meaning) => ({ meaning, taggedAt: new Date(Date.parse(at) + 3_600_000).toISOString() })) });
+  };
+  // 151's cases
+  order("first", "k1", day(-36)); call("k1", day(-23), "outbound", 60, "tu-1", ["courtesy_completed_positive"]);
+  order("repeat", "k2", day(-35), "repeat"); call("k2", day(-22), "inbound", 90, "tu-2", ["courtesy_completed_negative"]);
+  order("renewal", "k3", day(-35), "renewal"); order("unknown", "k3", day(-35), "unknown");
+  order("test", "k3", day(-35), "first", { isTest: true }); order("deleted", "k3", day(-35), "first", { deleted: true });
+  order("cancelled", "k3", day(-35), "first", { cancelled: true }); order("before", "k3", day(-62));
+  order("no-contact", null, day(-34));
+  order("london", "kL", day(-10, "23:30"), "first", { market: "GB" }); order("amsterdam", "kA", day(-10, "23:30"));
+  order("early", "k5", day(-32)); call("k5", day(-29), "outbound", null, "tu-1"); call("k5", day(-25), "outbound", 50, "tu-x", ["courtesy_completed_positive"]);
+  order("pre-due", "k5b", day(-32)); call("k5b", day(-29), "outbound", null, "tu-1"); call("k5b", day(-21), "outbound", null, "tu-1");
+  order("two-a", "k6", day(-36)); order("two-b", "k6", day(-34), "repeat"); call("k6", day(-17), "outbound", 120, "tu-1", ["courtesy_completed_neutral"]);
+  order("third", "k6", day(-12), "repeat");
+  order("not-reached", "k7a", day(-36)); call("k7a", day(-25), "outbound", null, "tu-3"); call("k7a", day(-24), "outbound", null, "tu-3");
+  call("k7a", day(-23), "outbound", 45, "tu-3", ["not_reached"]);
+  order("two-attempts", "k7b", day(-36)); call("k7b", day(-25), "outbound", null, "tu-3"); call("k7b", day(-24), "outbound", null, "tu-3");
+  order("conversation", "k7c", day(-36)); call("k7c", day(-25), "outbound", null, "tu-3"); call("k7c", day(-24), "outbound", 40, "tu-3", ["courtesy_attempt"]);
+  call("k7c", day(-23), "outbound", null, "tu-3");
+  order("untagged", "k8u", day(-36)); call("k8u", day(-25), "outbound", 60, "tu-1");
+  // a spread over the last sixty days: about two orders a day in NL, GB and DE, most completed a few days after their due date
+  for (let n = 58; n >= 1; n -= 1) {
+    for (const [i, market] of ["NL", "GB", "DE"].entries()) {
+      if (hashOf(`ct-${n}-${market}`) < 0.35) continue;
+      const contact = `k-${n}-${market}`;
+      const linked = hashOf(`ct-link-${n}-${i}`) > 0.08;
+      order(`${n}-${market}`, linked ? contact : null, day(-n, `${String(8 + i * 3).padStart(2, "0")}:15`), hashOf(`ct-kind-${n}-${i}`) < 0.7 ? "first" : "repeat", { market });
+      if (!linked) continue;
+      const h = hashOf(`ct-done-${n}-${i}`);
+      const attempts = n > 12 ? 1 + Math.floor(h * 4) : 0;
+      for (let a = 0; a < attempts; a += 1) {
+        const last = a === attempts - 1;
+        const outcome = h < 0.55 ? "courtesy_completed_positive" : h < 0.75 ? "courtesy_completed_neutral" : h < 0.85 ? "courtesy_completed_negative" : null;
+        call(contact, day(-n + 11 + a, "11:00"), "outbound", last && outcome ? 120 : null, `tu-${1 + (n + a) % 5}`, last && outcome ? [outcome] : []);
+      }
+    }
+  }
+  const people = TEAM.map((p, i) => ({ userRef: `tu-${i + 1}`, userId: p.userId, name: p.displayName }));
+  return [orders, calls, people];
+}
 
 function mockReviewSources(me: Principal): ReviewSource[] {
   if (me.tenantId === MOCK_TENANT_2) return [];
@@ -3599,6 +3690,12 @@ export const mockData: CmaData = {
     if (value !== null && key === LEAD_TO_ORDER_SETTING && Number(value) < Math.max(0, ...leadAgesOf(mockSetting(LEAD_AGES_SETTING)))) {
       throw new CmaDbError("CMA04", `Setting ${key} takes at least the largest age of ${LEAD_AGES_SETTING}`);
     }
+    // as cma.check_tenant_setting (addition 0009a): the five courtesy settings, kept as the database keeps them
+    if (value !== null && (COURTESY_SETTING_KEYS as readonly string[]).includes(key)) {
+      const v = parseCourtesySetting(key as CourtesySettingKey, value);
+      if (v === null) throw new CmaDbError("CMA04", `Setting ${key} is out of range`);
+      value = v;
+    }
     const next: TenantSetting = value === null
       ? { key, value: fallback ?? cur!.value, isDefault: true }
       : { key, value, isDefault: value === fallback };
@@ -4316,7 +4413,12 @@ export const mockData: CmaData = {
     assertAny(me, [...FOLLOW_UP_SUMMARY_PERMISSIONS]);
     const now = Date.now();
     const { leads, tickets, tasks } = mockFollowUpRows(me, now);
-    return { ...summarise(leads, tickets, tasks), computedAt: new Date(now).toISOString() };
+    // the courtesy flag the snapshot keeps (addition 0009a): null while courtesy is not set up
+    const settings = mockCourtesySettings();
+    const notReached = settings.startDate === null ? null
+      : courtesyOrders(...mockCourtesy(me, now), settings, new Date(now).toISOString()).filter((r) => r.state === "not_reached").length;
+    return { ...summarise(leads, tickets, tasks), courtesyNotReached: notReached, courtesyAlertAttempts: notReached === null ? null : settings.alertAttempts,
+      computedAt: new Date(now).toISOString() };
   },
 
   async getFollowUpByOwner(me): Promise<FollowUpRowsAt<FollowUpOwner>> {
@@ -4571,6 +4673,27 @@ export const mockData: CmaData = {
       isSetUp: channels.length > 0, markets, marketStates: states,
       filterMarkets: [...new Set(channels.filter((ch) => ch.isCounted).map((ch) => ch.market ?? "unknown"))]
         .sort((a, b) => (a === "unknown" ? 1 : 0) - (b === "unknown" ? 1 : 0) || a.localeCompare(b)) });
+  },
+
+  async getCourtesy(me, range, period, group, filter): Promise<CourtesyReport> {
+    // as cma.courtesy_page (addition 0009a): the permission, the 92 days, the period, the group and the filters checked first
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    if (!COURTESY_PERIODS.includes(period)) throw new CmaDbError("CMA04", "period is week or month");
+    if (!COURTESY_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week or month");
+    if (parseCourtesyFilter(filter.market ?? "", filter.segment ?? "", filter.state ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+    const now = new Date().toISOString();
+    const settings = mockCourtesySettings();
+    const c = seedIntakeConfig(me);
+    const report = courtesyReport(courtesyOrders(...mockCourtesy(me, Date.parse(now)), settings, now), {
+      from: range.from, to: range.to, period, group, filter, rows: listRowsOf(mockSetting("follow_up.list_rows")), perPerson: me.permissions.includes("performance.team"),
+      now, prev: funnelPrevious(previousPeriod(range, mockToday(me)), now), settings, hasStore: me.tenantId !== MOCK_TENANT_2,
+      markets: c.markets.filter((m) => m.isActive).map((m) => ({ code: m.code, name: m.name, sortOrder: m.sortOrder })),
+      people: TEAM.map((p) => ({ userId: p.userId, name: p.displayName })),
+    });
+    // the contact's record link from the CRM connection's template, as the database builds it (record_url_contact)
+    return { ...report, list: { ...report.list, rows: report.list.rows.map((r) => ({ ...r,
+      recordUrl: r.state === null ? null : `https://example.com/crm/contact/${MOCK_COURTESY_CONTACT.get(r.orderId) ?? "0"}` })) } };
   },
 
   async getLeadCohorts(me, range, period, split, filter): Promise<LeadCohortsReport> {

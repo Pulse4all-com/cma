@@ -122,6 +122,11 @@
       "class": "report"
     },
     {
+      "path": "/reports/courtesy",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
       "path": "/reports/data-quality",
       "subject": "manager",
       "class": "report"
@@ -191,6 +196,7 @@
     "/reports/flash": 48,
     "/reports/installed-base": 92,
     "/reports/reviews": 22,
+    "/reports/courtesy": 30,
     "/reports/data-quality": 16,
     "/configuration/sources": 78,
     "/configuration/health": 21
@@ -214,6 +220,7 @@
     "/reports/flash": 169,
     "/reports/installed-base": 169,
     "/reports/reviews": 169,
+    "/reports/courtesy": 169,
     "/reports/data-quality": 167,
     "/configuration/sources": 173,
     "/configuration/health": 167
