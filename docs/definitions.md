@@ -866,7 +866,7 @@ Decided on 6 November 2026 (Martin), addition 0009a, brief B31: Customers → Co
 
 | Field | Value |
 |---|---|
-| Term | Courtesy order (nl: Courtesy-bestelling; `courtesy.title` "Courtesy"). The order blocks (Per market, Per day, Per week, Per month) are titled "Orders placed in the period, state now" (nl "Orders geplaatst in de periode, stand nu": Martin's own words, kept beside "Courtesy-bestelling" and "Staat"), by order date (addition 0009c) |
+| Term | Courtesy order (nl: Courtesy-bestelling; `courtesy.title` "Courtesy"). The order blocks (Per market, Per day, Per week, Per month) are titled "Orders placed in the period, state now" (nl "Bestellingen geplaatst in de periode, stand nu": bestelling as above, and "stand nu" Martin's own words beside the state "Staat"), by order date (addition 0009c) |
 | Key | `courtesy_order`; settings `courtesy.start_date`, `courtesy.order_kinds`; catalog `courtesy.orders`, `courtesy.no_contact`, `courtesy.list`; SQL `cma.courtesy_orders_of`, `cma_read.courtesy_order`; API `GET /api/v1/reports/courtesy` (`list.rows`) |
 | Definition | A store order (`cma.commerce_order`) that is not a test, not deleted, not cancelled, whose `order_kind` is in `courtesy.order_kinds`, created on or after `courtesy.start_date` by its business date. Its market is its store's market; its contact is the CRM contact its store customer is linked to (`commerce_customer.crm_contact_source_id`). An order whose customer has no linked contact is counted apart as "No contact" (nl "Geen contact", a data-quality count) and has no state. |
 | Source | The store's orders and customers (Shopify, through `cma.commerce_order` and `cma.commerce_customer`); the contact from the CRM (HubSpot); the settings (CMA) |

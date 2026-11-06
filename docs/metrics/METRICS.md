@@ -36278,7 +36278,7 @@ Colours: positive Leaf Green, neutral Light Blue, negative Soft Rose with a Deep
 
 #### `courtesy.by_market`
 
-**Per market: orders placed in the period, state now** on /reports/courtesy · Per market: orders placed in the period, state now (Per markt: orders geplaatst in de periode, stand nu)
+**Per market: orders placed in the period, state now** on /reports/courtesy · Per market: orders placed in the period, state now (Per markt: bestellingen geplaatst in de periode, stand nu)
 
 Two bases, each column saying which. By order date: the courtesy orders placed in the period per market, with their state now (orders with a contact, of which completed, completion share, not reached and no contact). By call date, set apart as the last column: the courtesy calls completed in the period, each in the market of the earliest courtesy order it completed (courtesy.by_market.calls). A total row under the markets; its calls equal courtesy.completed_calls.
 
@@ -36439,7 +36439,7 @@ Added by addition 0009c (brief B33, Martin, 6 November 2026), so Per market's ro
 
 #### `courtesy.by_period`
 
-**Per day / Per week / Per month: orders placed in the period, state now** on /reports/courtesy · Per day, week or month: orders placed in the period, state now (Per dag, week of maand: orders geplaatst in de periode, stand nu)
+**Per day / Per week / Per month: orders placed in the period, state now** on /reports/courtesy · Per day, week or month: orders placed in the period, state now (Per dag, week of maand: bestellingen geplaatst in de periode, stand nu)
 
 By order date: the courtesy orders placed on each day, ISO week or month of the period (G), empty ones too, with their state now and the markets below each line. No call column: its rows are order dates, so the calls completed in the period are counted in the tile and per market only.
 

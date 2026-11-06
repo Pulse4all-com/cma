@@ -215,3 +215,22 @@ Part of the CMA documentation (README.md, Documentation map). Moved verbatim fro
   - B4 "tag use and tags per person count conversations, no untagged row; per person connected, conversations, untagged": got `2026-10-05:Not Reached=2,2026-10-05:Not Reached off=1,2026-10-05:Type=1,all:Not Reached=2,all:Not Reached off=1,all:Type=1 | Not Reached=1,Type=1,Not Reached=1 | Anna Verify:0/9/7/7/6 Bram Verify:3/0/0/3/2 total:3/9/7/10/8`, expected `2026-10-05:Type=1,all:Type=1 | Type=1 | Anna Verify:0/9/8/3/6 Bram Verify:3/0/0/1/2 total:3/9/8/4/8`.
 
   All five read `cma.calls_of`, which `132_perf.sql` (addition 0008zr) re-created from 76's text rather than 100's. Since then a call is connected at `telephony.connected_min_seconds` of talk, and every answered inbound or connected outbound call is a conversation, whatever its talk time or tags. That is the rule 0008zc retired (docs/definitions.md, Connected and Conversation). Where 132 has run, Reports → Calls and Calls per agent count Connected and Conversation by that older rule. To confirm by running 101 in dev; the fix (`cma.calls_of` with 100's helpers, as a new addition) is not in PR #241.
+
+- verify:hints fails 10 header-count minimums on main (6 November 2026, found while building addition 0009c, PR #243), for Martin. Against the mock (`CMA_AUTH_MODE=mock`, `CMA_DATA_MODE=mock`), main's own build and PR #243's both end `hints: FAIL (10 problems)`, and the same 10. Each is a page's header count below the minimum `web/verify/hints.mjs` sets for it:
+  - manager `/reports/calls?range=month&group=day`: 14 headers, expected at least 16.
+  - manager `/reports/calls?range=month&group=week`: 14 headers, expected at least 16.
+  - manager `/reports/calls?range=month&group=market`: 14 headers, expected at least 16.
+  - manager `/reports/calls?range=month&group=line`: 14 headers, expected at least 16.
+  - manager `/reports/attempts?range=month&group=day`: 25 headers, expected at least 33.
+  - manager `/reports/attempts?range=month&group=week&outcome=won`: 0 headers, expected at least 25.
+  - manager `/reports/attempts?range=month&group=market&attempted=some`: 25 headers, expected at least 33.
+  - reader `/reports/attempts?range=month&group=pipeline`: 25 headers, expected at least 33.
+  - manager `/reports/funnel?range=month&group=week`: 32 headers, expected at least 50.
+  - reader `/reports/funnel?range=month&group=day`: 27 headers, expected at least 45.
+
+  Every one is a `range=month` case, and on 6 November the month holds six days of the mock's data. Attempts per deal says "No deal won or lost in this period" and Funnel "No lost deals in this period", so the tables built on those deals are not drawn and their headers are missing. Over October (`range=custom&from=2026-10-01&to=2026-10-31`) the same pages reach their minimums:
+  - Calls by day: 16.
+  - Attempts by day: 33, and 33 with `outcome=won`.
+  - Funnel: 53 (manager, by week) and 48 (reader, by day).
+
+  No hint is missing; the minimums depend on the date. Two ways to fix it: give these cases a fixed span (as Courtesy's cases use last month since 0009c), or have the mock hold won and lost deals early in every month. Neither is in PR #243.
