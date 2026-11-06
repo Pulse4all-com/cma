@@ -11,15 +11,23 @@
 -- No table, view, column or setting changes, and no seed need run again; the web and the ingest of main run unchanged on
 -- it (every function keeps its name, arguments and columns; one function is added).
 --
--- First, from the Terminal (never Studio: a concurrent build refuses a transaction), one statement each, on cma.telephony_call
--- (a busy table: CLAUDE.md, Performance), dev then prod, each followed by its indisvalid check (an f: drop index
--- concurrently and create it again); the script refuses to run until both exist and are valid:
+-- First, from the Terminal (never Studio: Studio wraps a script in a transaction, which a concurrent build refuses), on
+-- cma.telephony_call, a busy table (CLAUDE.md, Performance): dev, then prod, each index its own statement with
+-- set role cma_owner, lock_timeout '5s' and statement_timeout '10min' given as separate commands of the same session (one
+-- command holding several statements runs them in one transaction, which the build refuses), then pg_index.indisvalid
+-- checked (t; an f: drop index concurrently, then create it again). The PR's Terminal blocks give them ready to run. The
+-- script refuses to run until both exist and are valid:
 --   create index concurrently if not exists telephony_call_missed_inbound_idx on cma.telephony_call (tenant_id, started_at)
 --     where direction = 'inbound' and answered_at is null and source_deleted_at is null;
 --   create index concurrently if not exists telephony_call_callback_idx on cma.telephony_call (tenant_id, counterpart_hash, started_at)
 --     where counterpart_hash is not null and source_deleted_at is null and (direction = 'outbound' or (direction = 'inbound' and answered_at is not null));
--- The first holds the inbound calls not answered (the missed inbound calls, and those still waiting until they end); the
--- second each caller's callbacks in time order (an outbound call, or an answered inbound one).
+-- The first holds the inbound calls not answered (the missed inbound calls, and those still waiting until they end): the
+-- lookback's missed calls without reading its answered and outbound ones (2,000 rows instead of 10,000 at three times
+-- prod's volume). The second holds each caller's callbacks (an outbound call, or an answered inbound one) in time order:
+-- telephony_call_hash_idx (34) has no time, so a caller's lookback was read through the whole history from the table
+-- (25,000 buffers at three times prod's volume); here the lookback's callbacks of a caller are one index range. Their
+-- cost: an index entry per inbound call not answered and per outbound or answered
+-- call with a caller; at prod's 1,100 calls a day, a write the ingest does not notice.
 --
 -- Why, the kinds (Decision log, 6 November 2026): 132_perf.sql (0008zr) made the function again from the definition of
 -- 70_crm_tasks.sql (0008n), not from the latest one before it, 118_subscriptions.sql's (0008zl). It lost what 104 (0008ze:
@@ -43,14 +51,16 @@
 -- the same answer (145 proves it against 0008zr's definitions, kept inside it): the bounds as scalar subqueries; the
 -- missed calls from their own index; the callbacks from theirs, within the lookback only; per caller the newest missed
 -- call needing a callback, whether one followed and how many missed calls since the one before, in one sorted pass
--- that carries each call's columns (no join of two list-sized sets, which a plan cached for another tenant's few rows
--- ran as a loop over every pair: 434 ms); the office seconds from each market's open windows, computed once. 131 part
--- a's four statements locally at three times prod's volume, best of five, the plans cached for the other tenant first
--- (145's order): inbound today 46 to 4 ms, the missed callbacks with their record links 125 to 41 ms, the summary 87 to
--- 19 ms, cma.inbound_now() 247 to 67 ms. What remains of the list and inbound_now is the 1,961 listed callers themselves:
--- a record link per row through cma.record_url (about 9 ms), the office seconds per row (about 10 ms) and the list's
--- JSON (about 18 ms). At prod's own volume the same ratios (132's prod times against its local ones) put all four
--- well under 20 ms; 131 part a in prod is the proof.
+-- that carries each call's columns; the callbacks probed per caller; the office seconds from each market's open windows,
+-- computed once. No step joins two sets of the list's size: a plan cached for another tenant's few rows ran such a join
+-- as a loop over every pair (434 ms for the join back to the missed calls, 2.3 s for the callbacks against the callers,
+-- both found while timing and removed). 131 part a's four statements locally at three times prod's volume, best of
+-- five (the lower figure with a fresh plan, the higher with the plans cached for the other tenant first, as 145 runs):
+-- inbound today 46 to 3 ms, the summary 87 to 15-28 ms, the missed callbacks with their record links 125 to 29-46 ms,
+-- cma.inbound_now() 247 to 54-66 ms. What remains of the list and inbound_now is the about 1,960 listed callers
+-- themselves: a record link per row through cma.record_url (about 9 ms), the office seconds per row (about 10 ms) and
+-- the list's JSON (about 18 ms); 20 ms at that size would need the poll to return less. At prod's own volume the ratio
+-- of 132's prod times to its local ones puts all four at about 10 ms or under; 131 part a in prod is the proof.
 --
 -- What it changes (functions only, and the two indexes above):
 --   cma.connection_held_kinds_of(tenant, connection)  the six kinds of 0008zl, in its order (crm, telephony, commerce,
@@ -63,12 +73,11 @@
 --                      connection_field are catalogs. Same signature, owner (cma_owner), security (invoker, no setting)
 --                      and grants as 0008zr's
 --   cma.inbound_calls_of(tenant, from, to)  0008zr's, its bounds as scalar subqueries; jit off kept
---   cma.missed_inbound_calls_of(tenant, from)  new: the inbound calls not answered and not waiting from p_from on, as
---                      cma.inbound_calls_of answers them where reason_code is set, with the caller's hash (never shown);
---                      the application's only
---   cma.missed_callbacks_of(tenant)  0008zr's rows, columns and order, as above
---   cma.missed_callbacks_summary_of(tenant), cma.inbound_now()  0008i's and 0008zr's answers; the anonymous missed calls
---                      from cma.missed_inbound_calls_of
+--   cma.missed_callbacks_of(tenant)  0008zr's rows, columns and order, as above; the caller's hash stays inside it
+--   cma.anonymous_missed_calls_of(tenant, from)  new: how many missed inbound calls needing a callback from p_from on
+--                      came from an anonymous caller (an integer); the application's only
+--   cma.missed_callbacks_summary_of(tenant), cma.inbound_now()  0008i's and 0008zr's answers; the anonymous count from
+--                      cma.anonymous_missed_calls_of
 -- The rule this restores (Decision log): a rewrite for speed starts from the latest definition before it, and its verify
 -- compares against that same definition.
 -- SQLSTATEs: none raised but the guards'.
@@ -206,32 +215,28 @@ as $$
 $$;
 alter function cma.inbound_calls_of(uuid, timestamptz, timestamptz) set jit = off;
 
--- The missed inbound calls (docs/definitions.md) from p_from on, each as cma.inbound_calls_of answers it where its
--- reason_code is set (not answered and not waiting: the call ended, or started longer ago than
--- telephony.waiting_max_minutes), with the caller's hash (null for an anonymous caller). Read by
--- telephony_call_missed_inbound_idx, which holds the inbound calls not answered alone; the missed callers, their count and
--- the anonymous ones are all drawn from these rows. Its answer never leaves the database: the hash is the caller's key,
--- never shown (0008i)
-create or replace function cma.missed_inbound_calls_of(p_tenant_id uuid, p_from timestamptz)
-returns table (call_id uuid, connection_id uuid, source_id text, line_ref text, line_name text, market text,
-               reason_code text, reason_label text, needs_callback boolean, started_at timestamptz, counterpart_hash text)
+-- The missed inbound calls (docs/definitions.md) needing a callback from p_from on whose caller is anonymous (no hash),
+-- counted: the summary's anonymous_count and inbound_now()'s, as 0008i counts them over cma.inbound_calls_of (reason_code
+-- set: not answered and not waiting; needs_callback; no counterpart_hash). Read by telephony_call_missed_inbound_idx.
+-- A count only: the caller's hash is never returned by any function (Decision log, 14 October 2026)
+create or replace function cma.anonymous_missed_calls_of(p_tenant_id uuid, p_from timestamptz)
+returns integer
 language sql stable
 as $$
-  select tc.id, tc.connection_id, tc.source_id, tc.number_ref, coalesce(n.name, tc.number_ref), coalesce(m.code, 'unknown'),
-         r.code, coalesce(mr.label, r.code), coalesce(mr.needs_callback, true), tc.started_at, tc.counterpart_hash
+  select count(*)::integer
   from cma.telephony_call tc
   left join cma.telephony_number n
     on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref
-  left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market
-  cross join lateral (select coalesce(nullif(btrim(tc.missed_reason), ''), 'unknown') as code) r
   left join cma.telephony_missed_reason mr
-    on mr.tenant_id = tc.tenant_id and mr.source_system = tc.source_system and mr.code = r.code
+    on mr.tenant_id = tc.tenant_id and mr.source_system = tc.source_system and mr.code = coalesce(nullif(btrim(tc.missed_reason), ''), 'unknown')
   where tc.tenant_id = p_tenant_id
     and tc.direction = 'inbound'
     and tc.answered_at is null
     and tc.source_deleted_at is null
     and tc.started_at is not null
+    and tc.counterpart_hash is null
     and coalesce(n.is_counted, true)
+    and coalesce(mr.needs_callback, true)
     and tc.started_at >= (select coalesce(p_from, '-infinity'::timestamptz))
     and tc.started_at < 'infinity'::timestamptz
     and not (tc.ended_at is null
@@ -269,19 +274,49 @@ as $$
     select now() - make_interval(days => greatest(0, cma.setting_of(t.id, 'telephony.callback_lookback_days')::integer)) as w_from
     from cma.tenant t where t.id = p_tenant_id
   ),
-  -- the lookback's missed calls of a known caller (cma.inbound_calls_of's reason_code set, a hash)
+  -- the lookback's missed calls of a known caller, as cma.inbound_calls_of answers them where reason_code is set (not
+  -- answered and not waiting: the call ended, or started longer ago than telephony.waiting_max_minutes), read by
+  -- telephony_call_missed_inbound_idx; the hash stays inside this function (never returned: Decision log, 14 October 2026)
   m as materialized (
-    select x.* from cma.missed_inbound_calls_of(p_tenant_id, (select s.w_from from s)) x where x.counterpart_hash is not null
+    select tc.id as call_id, tc.connection_id, tc.source_id, tc.number_ref as line_ref, coalesce(n.name, tc.number_ref) as line_name,
+           coalesce(mk.code, 'unknown') as market, r.code as reason_code, coalesce(mr.label, r.code) as reason_label,
+           coalesce(mr.needs_callback, true) as needs_callback, tc.started_at, tc.counterpart_hash
+    from cma.telephony_call tc
+    left join cma.telephony_number n
+      on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref
+    left join cma.market mk on mk.tenant_id = tc.tenant_id and mk.code = n.market
+    cross join lateral (select coalesce(nullif(btrim(tc.missed_reason), ''), 'unknown') as code) r
+    left join cma.telephony_missed_reason mr
+      on mr.tenant_id = tc.tenant_id and mr.source_system = tc.source_system and mr.code = r.code
+    where tc.tenant_id = p_tenant_id
+      and tc.direction = 'inbound'
+      and tc.answered_at is null
+      and tc.source_deleted_at is null
+      and tc.started_at is not null
+      and tc.counterpart_hash is not null
+      and coalesce(n.is_counted, true)
+      and tc.started_at >= (select s.w_from from s)
+      and tc.started_at < 'infinity'::timestamptz
+      and not (tc.ended_at is null
+               and tc.started_at >= now() - make_interval(mins => (select greatest(0, cma.setting_of(t.id, 'telephony.waiting_max_minutes')::integer)
+                                                                   from cma.tenant t where t.id = p_tenant_id)))
   ),
-  -- the lookback's callbacks of the callers with a missed call needing one: an outbound call, or an answered inbound one
+  -- the lookback's callbacks of the callers with a missed call needing one: an outbound call, or an answered inbound one;
+  -- one range of telephony_call_callback_idx per caller (offset 0 keeps the lateral a probe per caller: pulled up into a
+  -- join, a plan made for another tenant's few rows compared every callback of the lookback with every caller)
   cb as materialized (
-    select o.counterpart_hash, o.started_at
-    from cma.telephony_call o
-    where o.tenant_id = p_tenant_id
-      and o.counterpart_hash in (select m.counterpart_hash from m where m.needs_callback)
-      and o.source_deleted_at is null
-      and (o.direction = 'outbound' or (o.direction = 'inbound' and o.answered_at is not null))
-      and o.started_at >= (select s.w_from from s)
+    select mh.counterpart_hash, o.started_at
+    from (select distinct m.counterpart_hash from m where m.needs_callback) mh
+    cross join lateral (
+      select o.started_at
+      from cma.telephony_call o
+      where o.tenant_id = p_tenant_id
+        and o.counterpart_hash = mh.counterpart_hash
+        and o.source_deleted_at is null
+        and (o.direction = 'outbound' or (o.direction = 'inbound' and o.answered_at is not null))
+        and o.started_at >= (select s.w_from from s)
+      offset 0
+    ) o
   ),
   -- both per caller in time order (a callback after a missed call of the same instant: neither before nor after it); a
   -- missed call carries its own columns, so the list needs no join back to m (a join a plan made for another tenant's
@@ -354,7 +389,7 @@ as $$
   order by k.started_at, k.source_id
 $$;
 
--- As 0008i (60): the same row. The anonymous missed calls from the same rows the list reads
+-- As 0008i (60): the same row; the anonymous missed calls counted by cma.anonymous_missed_calls_of
 create or replace function cma.missed_callbacks_summary_of(p_tenant_id uuid)
 returns table (listed integer, anonymous_count integer, lookback_days integer)
 language sql stable
@@ -364,14 +399,12 @@ as $$
     from cma.tenant t where t.id = p_tenant_id
   )
   select (select count(*)::integer from cma.missed_callbacks_of(p_tenant_id)),
-         (select count(*)::integer
-          from cma.missed_inbound_calls_of(p_tenant_id, now() - make_interval(days => s.lookback)) x
-          where x.needs_callback and x.counterpart_hash is null),
+         cma.anonymous_missed_calls_of(p_tenant_id, now() - make_interval(days => s.lookback)),
          s.lookback
   from s
 $$;
 
--- As 0008zr (132): the same answer; the anonymous missed calls from the rows the list reads
+-- As 0008zr (132): the same answer; the anonymous missed calls counted by cma.anonymous_missed_calls_of
 create or replace function cma.inbound_now()
 returns jsonb
 language plpgsql stable
@@ -388,9 +421,7 @@ begin
     'today', (select to_jsonb(x) from cma.inbound_today_of(v_tenant) x),
     'callbacks', v_list,
     'summary', (select jsonb_build_object('listed', jsonb_array_length(v_list),
-                                          'anonymous_count', (select count(*)::integer
-                                                              from cma.missed_inbound_calls_of(v_tenant, now() - make_interval(days => s.lookback)) x
-                                                              where x.needs_callback and x.counterpart_hash is null),
+                                          'anonymous_count', cma.anonymous_missed_calls_of(v_tenant, now() - make_interval(days => s.lookback)),
                                           'lookback_days', s.lookback)
                 from (select greatest(0, cma.setting_of(t.id, 'telephony.callback_lookback_days')::integer) as lookback
                       from cma.tenant t where t.id = v_tenant) s));
@@ -406,7 +437,7 @@ declare
   f text;
 begin
   foreach f in array array[
-    'cma.connection_held_kinds_of(uuid,uuid)', 'cma.inbound_calls_of(uuid,timestamptz,timestamptz)', 'cma.missed_inbound_calls_of(uuid,timestamptz)',
+    'cma.connection_held_kinds_of(uuid,uuid)', 'cma.inbound_calls_of(uuid,timestamptz,timestamptz)', 'cma.anonymous_missed_calls_of(uuid,timestamptz)',
     'cma.missed_callbacks_of(uuid)', 'cma.missed_callbacks_summary_of(uuid)', 'cma.inbound_now()'
   ] loop
     execute format('revoke execute on function %s from public', f);
@@ -416,7 +447,7 @@ end
 $$;
 
 insert into cma.schema_migration (version, description)
-values ('0008zx', 'The kinds a connection holds restored and the Live board''s inbound poll at volume: cma.connection_held_kinds_of answers 0008zl''s six kinds again (crm, telephony, commerce, reviews, assets, subscriptions; the connection fields of entity device or device_component as assets, not crm), which 0008zr had rebuilt from 0008n''s definition and lost, in 0008zr''s form; cma.inbound_calls_of with its bounds as scalar subqueries (an index under row-level security in a generic plan too), cma.missed_callbacks_of from the missed inbound calls and the callers'' callbacks by two partial indexes on cma.telephony_call (telephony_call_missed_inbound_idx, telephony_call_callback_idx, created concurrently first) in one sorted pass with the office seconds computed once, the summary and cma.inbound_now() reading the anonymous missed calls from the new cma.missed_inbound_calls_of; every answer as before (145 proves it)')
+values ('0008zx', 'The kinds a connection holds restored and the Live board''s inbound poll at volume: cma.connection_held_kinds_of answers 0008zl''s six kinds again (crm, telephony, commerce, reviews, assets, subscriptions; the connection fields of entity device or device_component as assets, not crm), which 0008zr had rebuilt from 0008n''s definition and lost, in 0008zr''s form; cma.inbound_calls_of with its bounds as scalar subqueries (an index under row-level security in a generic plan too), cma.missed_callbacks_of from the missed inbound calls and the callers'' callbacks by two partial indexes on cma.telephony_call (telephony_call_missed_inbound_idx, telephony_call_callback_idx, created concurrently first) in one sorted pass with the office seconds computed once, the summary and cma.inbound_now() counting the anonymous missed calls with the new cma.anonymous_missed_calls_of (a count; the caller''s hash is returned by no function); every answer as before (145 proves it)')
 on conflict (version) do nothing;
 
 commit;

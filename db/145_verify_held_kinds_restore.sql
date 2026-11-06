@@ -14,15 +14,15 @@
 -- Expected verdict, in dev and in prod: "0008zx verified | 145_verify_held_kinds_restore: <n> ok, 0 FAIL, <k> skip" (the
 -- skips are active tenants without a person holding tenant.configure, or monitoring.live, whose E rows cannot run as the
 -- application); provoked (verify.provoke true at the top): every row reads FAIL (block E's comparisons lose the previous
--- definition's first row, or say the set was empty) and the verdict PROVOKED, NOT A PASS. E7's times are the database's
+-- definition's first row, or say the set was empty; skip rows stay skip) and the verdict PROVOKED, NOT A PASS. E7's times are the database's
 -- own: in prod they are 131 part a's four inbound polls; locally on web/verify/perf-volume-fixture.sql at three times
 -- prod's volume they are the measure of 144's header.
 --   S  S1 the addition row after 0008zw; S2 one held-kinds function, its signature, result, language, volatility,
 --      invoker, no setting, owner; S3 execute for the application only; S4 the body reads every table 0008zl's reads,
 --      answers the six kinds in 0008zl's order, splits the connection fields by entity, and asks no big table with
 --      exists(); S5 the two indexes on cma.telephony_call valid, with their columns and conditions; S6 the poll's
---      functions with their results as before, jit off on cma.inbound_calls_of, the new cma.missed_inbound_calls_of the
---      application's only
+--      functions with their results as before, jit off on cma.inbound_calls_of, the new cma.anonymous_missed_calls_of (a
+--      count) the application's only; S7 no function returns the caller's hash, no reader view shows it
 --   A  a throwaway tenant, its connections' kind not set: A1 per kind, a connection holding only that kind's rows answers
 --      exactly it; A2 each table of the three kinds 0008zr lost answers its kind alone, a contact field answers crm; A3 a
 --      connection holding none answers {}; A4 a connection holding all six answers them in 0008zl's order; A5 0008zl's
@@ -33,10 +33,12 @@
 --      a second throwaway tenant, its callers made for every edge of the list (missed twice; called back; called back and
 --      missed again; a callback before the lookback; a callback at the same instant; a deleted callback; an answered
 --      inbound call as the callback; a reason that needs no callback, alone and before one that does; waiting; ringing
---      past the waiting time; an uncounted line; a line without a market; a market on '*''s hours, one with split hours
---      and a holiday; older than the lookback; two missed calls at one instant; anonymous): A8 the list, A9 the
+--      past the waiting time; an uncounted line; a line without a market; waits of about 65 hours over a market on '*''s
+--      hours and one with split hours and a holiday; older than the lookback; two missed calls at one instant; two
+--      callbacks before the listed call; a missed call at a callback's instant; anonymous): A8 the list, A9 the
 --      summary, A10 cma.inbound_now() and A11 cma.inbound_calls_of answer exactly what the previous definitions answer;
---      A12 the list is the one expected (who, how many missed, the market, the record link)
+--      A12 the list is the one expected (who, how many missed, the market, office seconds equal to
+--      cma.business_seconds_of's, the record link)
 --   E  E1 every connection in the database (every tenant, as the owner): the same answer as 0008zl's definition, row for
 --      row, and how many 0008zr's definition answered differently; E2 per active tenant, as the application acting as
 --      the tenant's first person holding tenant.configure (133's E check): the same answer as 0008zl's, and no slower
@@ -538,7 +540,10 @@ begin
      or not 'jit=off' = any (coalesce((select p.proconfig from pg_proc p where p.oid = 'cma.inbound_calls_of(uuid,timestamptz,timestamptz)'::regprocedure), '{}'::text[])) then
     v_bad := v_bad || 'inbound_calls_of''s result or its jit off; ';
   end if;
-  foreach t in array array['cma.missed_inbound_calls_of(uuid,timestamptz)', 'cma.missed_callbacks_of(uuid)', 'cma.missed_callbacks_summary_of(uuid)',
+  if pg_get_function_result('cma.anonymous_missed_calls_of(uuid,timestamptz)'::regprocedure) <> 'integer' then
+    v_bad := v_bad || 'anonymous_missed_calls_of''s result; ';
+  end if;
+  foreach t in array array['cma.anonymous_missed_calls_of(uuid,timestamptz)', 'cma.missed_callbacks_of(uuid)', 'cma.missed_callbacks_summary_of(uuid)',
                            'cma.inbound_now()', 'cma.inbound_calls_of(uuid,timestamptz,timestamptz)'] loop
     if to_regprocedure(t) is null
        or not has_function_privilege('cma_app', to_regprocedure(t), 'execute')
@@ -550,7 +555,18 @@ begin
     end if;
   end loop;
   insert into verify_0008zx values (6, 'S6 the poll''s functions answer the same columns as before, inbound_calls_of keeps jit off, all five the application''s only and invoker',
-    case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, case when v_bad = '' then 'missed_inbound_calls_of new; the four others as before' else v_bad end);
+    case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, case when v_bad = '' then 'anonymous_missed_calls_of new (an integer); the four others as before' else v_bad end);
+
+  -- S7 the caller's hash is returned by no function and shown by no reader view (Decision log, 14 October 2026)
+  select string_agg(distinct n.nspname || '.' || p.proname, ', ') into v_txt
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  cross join lateral unnest(p.proargnames, p.proargmodes) a(name, mode)
+  where n.nspname in ('cma', 'cma_read') and p.proargmodes is not null and p.proargnames is not null
+    and a.mode in ('o', 't', 'b') and a.name ilike '%counterpart%';
+  v_txt := concat_ws('; ', v_txt, (select string_agg(c.table_schema || '.' || c.table_name, ', ') from information_schema.columns c
+                                   where c.table_schema = 'cma_read' and c.column_name ilike '%counterpart%'));
+  insert into verify_0008zx values (7, 'S7 no function of cma or cma_read returns the caller''s hash, no reader view shows it',
+    case when coalesce(v_txt, '') = '' and not v_provoke then 'ok' else 'FAIL' end, coalesce(nullif(v_txt, ''), 'none'));
 end
 $$;
 
@@ -700,9 +716,9 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- Each caller (an invented 64-hex hash, never made from a number) in minutes before now; NL on split hours with a
 -- holiday yesterday, GB on '*''s hours; lookback 3 days and waiting 30 minutes (the defaults):
---   c01 c02  missed twice                                           listed, 2 missed
+--   c01 c02  missed twice, about 65 hours ago (NL: the wait spans the split hours and the holiday)  listed, 2 missed
 --   c03 c04  missed, then called back                               not listed
---   c05-c07  missed, called back, missed again (GB)                  listed, 1 missed (the call back resets the count)
+--   c05-c07  missed, called back, missed again, about 65 hours ago (GB: '*''s hours)  listed, 1 missed
 --   c08      anonymous, missed                                      the summary's anonymous count
 --   c09      ringing now                                            not listed (waiting)
 --   c10      missed with a reason that needs no callback            not listed
@@ -717,6 +733,10 @@ $$;
 --   c25-c27  missed, called back, then missed with a no-callback reason  not listed
 --   c28 c29  missed twice at one instant                            listed once (the greater id), 2 missed
 --   c30      not answered, not ended, past the waiting time (GB)    listed, 1 missed
+--   c31-c34  called back twice, missed between and after            listed, 1 missed (since the latest callback before it)
+--   c35-c37  called back and missed at one instant, missed again     listed, 1 missed (the missed call of the callback's
+--            instant is neither before nor after it)
+-- A12 checks each listed caller's office seconds against cma.business_seconds_of itself
 do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
@@ -756,13 +776,13 @@ begin
            c.line, case when c.caller is not null then encode(sha256(('verify-0008zx-' || c.caller)::bytea), 'hex') end,
            now() - make_interval(mins => c.ago), case when c.deleted then now() end
     from (values
-      ('c01', 'inbound',  120,  false, true,  'line-nl',  'h1',  'no_answer', false, null::uuid),
-      ('c02', 'inbound',  60,   false, true,  'line-nl',  'h1',  'no_answer', false, null),
+      ('c01', 'inbound',  4000, false, true,  'line-nl',  'h1',  'no_answer', false, null::uuid),
+      ('c02', 'inbound',  3900, false, true,  'line-nl',  'h1',  'no_answer', false, null),
       ('c03', 'inbound',  120,  false, true,  'line-nl',  'h2',  'no_answer', false, null),
       ('c04', 'outbound', 90,   true,  true,  'line-nl',  'h2',  null,        false, null),
-      ('c05', 'inbound',  300,  false, true,  'line-gb',  'h3',  'no_answer', false, null),
-      ('c06', 'outbound', 240,  true,  true,  'line-gb',  'h3',  null,        false, null),
-      ('c07', 'inbound',  60,   false, true,  'line-gb',  'h3',  'no_answer', false, null),
+      ('c05', 'inbound',  4100, false, true,  'line-gb',  'h3',  'no_answer', false, null),
+      ('c06', 'outbound', 4000, true,  true,  'line-gb',  'h3',  null,        false, null),
+      ('c07', 'inbound',  3900, false, true,  'line-gb',  'h3',  'no_answer', false, null),
       ('c08', 'inbound',  60,   false, true,  'line-nl',  null,  'no_answer', false, null),
       ('c09', 'inbound',  2,    false, false, 'line-nl',  'h5',  null,        false, null),
       ('c10', 'inbound',  60,   false, true,  'line-nl',  'h6',  'ivr',       false, null),
@@ -785,7 +805,14 @@ begin
       ('c27', 'inbound',  30,   false, true,  'line-nl',  'h15', 'ivr',       false, null),
       ('c28', 'inbound',  90,   false, true,  'line-nl',  'h16', 'no_answer', false, '00000000-0000-7000-8000-000000000028'::uuid),
       ('c29', 'inbound',  90,   false, true,  'line-nl',  'h16', 'no_answer', false, '00000000-0000-7000-8000-000000000029'::uuid),
-      ('c30', 'inbound',  40,   false, false, 'line-gb',  'h19', null,        false, null)
+      ('c30', 'inbound',  40,   false, false, 'line-gb',  'h19', null,        false, null),
+      ('c31', 'outbound', 300,  true,  true,  'line-nl',  'h20', null,        false, null),
+      ('c32', 'outbound', 200,  true,  true,  'line-nl',  'h20', null,        false, null),
+      ('c33', 'inbound',  250,  false, true,  'line-nl',  'h20', 'no_answer', false, null),
+      ('c34', 'inbound',  100,  false, true,  'line-nl',  'h20', 'no_answer', false, null),
+      ('c35', 'outbound', 150,  true,  true,  'line-nl',  'h21', null,        false, null),
+      ('c36', 'inbound',  150,  false, true,  'line-nl',  'h21', 'no_answer', false, null),
+      ('c37', 'inbound',  60,   false, true,  'line-nl',  'h21', 'no_answer', false, null)
     ) c(src, dir, ago, ans, ended, line, caller, reason, deleted, id);
 
     perform set_config('role', 'cma_app', true);
@@ -812,18 +839,26 @@ begin
                                             format('select * from pg_temp.inbound_calls_of_0008zr(%L, now() - interval ''3 days'', now())', v_t)));
     rows_ := rows_ || pg_temp.v0008zx_row(254, 'A11 inbound_calls_of for the made calls over 92 days and over the lookback: the same as 0008zr''s',
       case when v_diff is null and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_diff, 'the same rows'));
-    -- A12 the list expected: who, how many missed, the market, office seconds or none, the record link
+    -- A12 the list expected: who, how many missed, the market, the office seconds (= when they equal
+    --     cma.business_seconds_of's own answer, - when there are none), the record link; the two long waits have office
+    --     seconds (NL over the split hours and the holiday, GB over '*''s hours)
     select string_agg(e ->> 'source_id' || ':' || (e ->> 'missed_count') || ':' || (e ->> 'market') || ':'
-                      || case when e ->> 'waiting_business_seconds' is null then '-' else 'n' end || ':'
+                      || case when e ->> 'waiting_business_seconds' is null
+                                   and cma.business_seconds_of(v_t, nullif(e ->> 'market', 'unknown'), (e ->> 'started_at')::timestamptz, now()) is null then '-'
+                              when (e ->> 'waiting_business_seconds')::integer
+                                   = cma.business_seconds_of(v_t, nullif(e ->> 'market', 'unknown'), (e ->> 'started_at')::timestamptz, now()) then '='
+                              else 'x' end || ':'
                       || case when e ->> 'record_url' = 'https://example.invalid/acct-zx/call/' || (e ->> 'source_id') then 'u' else '-' end,
                       ' ' order by e ->> 'source_id')
            || ' | ' || (j -> 'summary' ->> 'listed') || '/' || (j -> 'summary' ->> 'anonymous_count') || '/' || (j -> 'summary' ->> 'lookback_days')
+           || ' | ' || coalesce((bool_and((e ->> 'waiting_business_seconds')::integer > 0) filter (where e ->> 'source_id' in ('c02', 'c07')))::text, 'none')
       into v_txt
     from (select cma.inbound_now() as j) q
     cross join lateral jsonb_array_elements(q.j -> 'callbacks') e
     group by q.j;
-    rows_ := rows_ || pg_temp.v0008zx_row(255, 'A12 the list is the one expected: nine callers, their missed counts, markets, office seconds and record links; one anonymous',
-      case when v_txt = 'c02:2:NL:n:u c07:1:GB:n:u c12:2:NL:n:u c18:2:NL:n:u c19:1:NL:n:u c21:1:NL:n:u c23:1:unknown:-:u c29:2:NL:n:u c30:1:GB:n:u | 9/1/3'
+    rows_ := rows_ || pg_temp.v0008zx_row(255, 'A12 the list is the one expected: eleven callers, their missed counts, markets, office seconds as business_seconds_of''s and record links; one anonymous',
+      case when v_txt = 'c02:2:NL:=:u c07:1:GB:=:u c12:2:NL:=:u c18:2:NL:=:u c19:1:NL:=:u c21:1:NL:=:u c23:1:unknown:-:u c29:2:NL:=:u c30:1:GB:=:u '
+                        || 'c34:1:NL:=:u c37:1:NL:=:u | 11/1/3 | true'
                 and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_txt, 'no list'));
 
     raise exception using errcode = 'CMAOK';
