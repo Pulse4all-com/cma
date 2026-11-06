@@ -365,6 +365,9 @@ Database `cma`, IAM database authentication. You log in as yourself (reader by d
 - see exactly what the app sees: `set role cma_app;` plus `select set_config('app.tenant_id', '<uuid>', false);`
 - a new migration: the next free number in `db/`, rerunnable, forward-only, with its verify script; run in
   dev, verify, records, then prod (README, Release flow)
+  The usual order is prod's migration just before the merge, which assumes main's web runs unchanged on the new
+  functions; the order flips (merge first, then the migration in prod once the build has deployed) when main's web does
+  not (Decision log, 6 Nov 2026, addition 0008zy)
 
 Four rules every addition's runbook follows (since 20 October 2026, `docs/attempts-2026-10/RUNBOOK-0008z.md`):
 - **Whose user.** A block that acts as a person names the email next to it, with the reason. Dev blocks use the dev
