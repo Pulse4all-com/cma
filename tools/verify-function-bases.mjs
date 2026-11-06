@@ -23,8 +23,9 @@
  * types are compared after the usual spellings are made one (timestamptz and timestamp with time zone, int and integer,
  * float and double precision, a precision such as (3) dropped, ...); names, defaults and OUT arguments are not part of a
  * function's identity, as in PostgreSQL. An unqualified name is taken as cma's (the database's search path).
- * Not followed: a function created by EXECUTE (inside a DO block it is masked out), alter function ... rename to or set
- * schema. The line proves which text the author named, not that the body started from it: the verify that compares the
+ * A drop is followed at the top level and inside a DO block's body (the repository's conditional drops before a rebuild).
+ * Not followed: a function created by EXECUTE (inside a DO block it is masked out), a drop by EXECUTE, alter function
+ * ... rename to or set schema. The line proves which text the author named, not that the body started from it: the verify that compares the
  * new definition with the right earlier one stays the real check.
  *
  * Checks: the repository's db/ (every redefinition from FROM on, each named); synthetic scripts for each way the rule
@@ -50,8 +51,11 @@ export function scriptNumber(file) {
   return m ? Number(m[1]) : null;
 }
 
-/** The text with comments, single-quoted strings and dollar-quoted bodies blanked (newlines kept, so offsets and lines hold) */
-export function mask(text) {
+/**
+ * The text with comments, single-quoted strings and dollar-quoted bodies blanked (newlines kept, so offsets and lines
+ * hold). With keepDo, a DO block's body stays readable (itself masked the same way), so a drop written in it is seen
+ */
+export function mask(text, keepDo = false) {
   const out = text.split("");
   const blank = (from, to) => { for (let i = from; i < to; i++) if (out[i] !== "\n") out[i] = " "; };
   let i = 0;
@@ -88,7 +92,11 @@ export function mask(text) {
       const tag = m[0];
       const end = text.indexOf(tag, i + tag.length);
       const j = end < 0 ? text.length : end + tag.length;
-      blank(i + tag.length, end < 0 ? text.length : end); i = j;
+      if (keepDo && /(?:^|[^A-Za-z0-9_$])do(?:\s+language\s+[A-Za-z_]+)?\s*$/i.test(text.slice(Math.max(0, i - 40), i))) {
+        const inner = mask(text.slice(i + tag.length, end < 0 ? text.length : end), true);
+        for (let k = 0; k < inner.length; k++) out[i + tag.length + k] = inner[k];
+      } else blank(i + tag.length, end < 0 ? text.length : end);
+      i = j;
     } else i++;
   }
   return out.join("");
@@ -117,13 +125,13 @@ const ALIASES = new Map(Object.entries({
 /** One argument's type in one spelling, or null for an OUT argument (not part of the identity) */
 export function argType(raw) {
   let a = raw.replace(/\s+/g, " ").trim();
-  a = a.replace(/\s+(default\b|=).*$/i, "").trim();
+  a = a.replace(/(\s+default\b|\s*=).*$/i, "").trim();
   const mode = /^(in|out|inout|variadic)\s+/i.exec(a);
   if (mode) {
     if (mode[1].toLowerCase() === "out") return null;
     a = a.slice(mode[0].length);
   }
-  a = a.replace(/\s*\([\d\s,]*\)/g, "");
+  a = a.replace(/\bfloat\s*\(\s*([1-9]|1\d|2[0-4])\s*\)/i, "real").replace(/\s*\([\d\s,]*\)/g, "");
   const lower = a.toLowerCase();
   if (/\s/.test(a) && !MULTIWORD.some((p) => lower.startsWith(p))) a = a.slice(a.indexOf(" ") + 1);
   let t = a.toLowerCase().replace(/"/g, "").replace(/^pg_catalog\./, "").replace(/\s+/g, " ").trim();
@@ -147,8 +155,8 @@ function identity(written, args) {
 
 const NAME = '(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)(?:\\s*\\.\\s*(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*))?';
 
-/** The signatures one script drops (drop function|procedure [if exists] a(...), b, ...), with their offsets */
-export function drops(text, masked = mask(text)) {
+/** The signatures one script drops (drop function|procedure [if exists] a(...), b, ...), DO blocks included, with their offsets */
+export function drops(text, masked = mask(text, true)) {
   const found = [];
   const re = /\bdrop\s+(?:function|procedure)\s+(?:if\s+exists\s+)?/gi;
   let m;
@@ -320,8 +328,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   expect("a rebuild with another signature naming the dropped signature's latest definition passes",
     res(S([one, fn("cma.f", "p uuid")], [two, fn("cma.f", "p uuid")],
           [late, "drop function cma.f(uuid);\n" + based(two) + fn("cma.f", "p uuid, q integer")])), 0, 1);
+  expect("a drop inside a DO block, then a create with other argument types, is a rebuild",
+    res(S([one, fn("cma.f", "p uuid")],
+          [late, "do $$\nbegin\n  if to_regprocedure('cma.f(uuid)') is not null then\n    drop function cma.f(uuid);\n  end if;\nend\n$$;\n" +
+                 fn("cma.f", "p uuid, q integer")])), 1, 0);
+  expect("a drop without argument types, then a create, names the name's latest definition",
+    res(S([one, fn("cma.f", "p uuid")], [two, fn("cma.f", "p text")],
+          [late, "drop function cma.f;\n" + based(two) + fn("cma.f", "p uuid, q integer")])), 0, 1);
   expect("a precision and float spell the same types",
-    res(S([one, fn("cma.f", "p timestamp(3) with time zone, q float")], [late, fn("cma.f", "timestamptz, double precision")])), 1, 0);
+    res(S([one, fn("cma.f", "p timestamp(3) with time zone, q float, r float(8), s int=3")],
+          [late, fn("cma.f", "timestamptz, double precision, real, integer")])), 1, 0);
   expect("pg_temp functions are no definitions", res(S([one, fn("pg_temp.f", "p uuid")], [late, fn("pg_temp.f", "p uuid")])), 0, 1);
 
   if (PROVOKE) {
