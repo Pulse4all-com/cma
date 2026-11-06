@@ -883,7 +883,8 @@ expect("the As of field navigates on Enter or blur only, through appliedAsOf, on
   [/onKeyDown=\{\(e\) => \{ if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); apply\(e\.currentTarget, false\); \} \}\}/.test(controlsSrc0008zu),
     /onBlur=\{\(e\) => apply\(e\.currentTarget, true\)\}/.test(controlsSrc0008zu), /const next = appliedAsOf\(input\.value, min, max\);/.test(controlsSrc0008zu),
     /onChange=\{\(e\) => go\(router, path, query, \{ asOf/.test(controlsSrc0008zu),
-    /if \(next === asOf \|\| \(sent\.current\?\.from === asOf && sent\.current\?\.to === next\)\) return;/.test(controlsSrc0008zu),
+    /if \(next === asOf \|\| input\.dataset\.applied === String\(next\)\) return;\s*input\.dataset\.applied = String\(next\);/.test(controlsSrc0008zu)
+      && !/useRef/.test(controlsSrc0008zu),
     /key=\{asOf \?\? "now"\}[^>]*defaultValue=\{asOf \?\? ""\}/.test(controlsSrc0008zu)],
   [true, true, true, false, true, true], [false, false, false, true, false, false]);
 const zzRows = defOf("flash_rows_of");
@@ -898,7 +899,7 @@ expect("the database's list (148): the installed base's devices filtered and pag
       && /'set_up', cma\.flash_source_set_up_of\(p_tenant_id, k\.kind\)/.test(zzSources.text.slice(0, 2000)),
     /update pg_temp\.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'\s*where page = 'installed base as of month end';/.test(time131)
       && /update pg_temp\.reads_0131 set in_set = false\s*where page in \('installed base', 'installed base as of month end'\) and cls = 'list';/.test(time131)
-      && /v_skipped := v_err is not null and v_err = rd\.skip_state;/.test(time131)],
+      && /v_skipped := not v_provoke and v_err is not null and v_err = rd\.skip_state;/.test(time131)],
   [["148_installed_base_list.sql", "148_installed_base_list.sql", "148_installed_base_list.sql"], true, true, true, true, true],
   [[], false, false, false, false, false]);
 

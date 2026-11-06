@@ -86,6 +86,7 @@ declare
   v_t0 timestamptz; v_ms numeric; v_best numeric; r record;
 begin
   perform set_config('t0131.error', '', true);
+  perform set_config('t0131.error_message', '', true);
   begin
     for i in 1 .. p_runs loop
       v_t0 := clock_timestamp();
@@ -97,6 +98,7 @@ begin
     end loop;
   exception when others then
     perform set_config('t0131.error', sqlstate, true);
+    perform set_config('t0131.error_message', left(sqlerrm, 80), true);
     return -1;
   end;
   return v_best;
@@ -344,12 +346,13 @@ begin
         perform set_config('app.user_id', v_user::text, true);
         v_ms := case when clock_timestamp() > v_stop then null else pg_temp.t0131_best_ms(v_sql, 2) end;
         v_err := case when v_ms = -1 then current_setting('t0131.error') end;
-        -- an error the read names as nothing to time (CMA02: no snapshot for the as-of date) is a skip; any other a FAIL
-        v_skipped := v_err is not null and v_err = rd.skip_state;
+        -- an error the read names as nothing to time (CMA02: no snapshot, or no frozen list, for the as-of date) is a skip
+        -- with the database's own words; any other a FAIL, and under provoke every read FAILs
+        v_skipped := not v_provoke and v_err is not null and v_err = rd.skip_state;
         r_name := r_name || (t.slug || ' ' || v_page || ': ' || rd.name);
         r_result := r_result || case when v_skipped then 'skip' when v_ms is not null and v_ms >= 0 and v_ms < v_max then 'ok' else 'FAIL' end;
         r_detail := r_detail || case when v_ms is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
-                                     when v_skipped then rd.skip_why || ' (' || v_err || '): nothing to time'
+                                     when v_skipped then rd.skip_why || ' (' || v_err || ': ' || current_setting('t0131.error_message') || '): nothing to time'
                                      when v_ms = -1 then 'error ' || v_err
                                      else v_ms || ' ms (best of 2) against ' || v_max || ' ms' end;
         r_ms := r_ms || case when v_ms >= 0 then v_ms end;

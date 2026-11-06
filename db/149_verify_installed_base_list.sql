@@ -595,7 +595,7 @@ begin
     (32, 'D2 every tenant: the payment state of all its subscriptions, and of its first 500, is the one-argument function''s',
      case when v_bad2 = '' and not v_provoke then 'ok' else 'FAIL' end, case when v_bad2 = '' then v_tenants || ' tenant(s)' else left(v_bad2, 600) end),
     (33, 'D3 every tenant with an asset register: the installed base''s list is 0008zu''s for a grid of filters, sorts and pages',
-     case when v_assets = 0 then 'skip' when v_bad3 = '' and not v_provoke then 'ok' else 'FAIL' end,
+     case when v_provoke then 'FAIL' when v_assets = 0 then 'skip' when v_bad3 = '' then 'ok' else 'FAIL' end,
      case when v_assets = 0 then 'no tenant with an asset register set up' when v_bad3 = '' then v_assets || ' tenant(s), ' || v_lists || ' lists equal'
           else left(v_bad3, 600) end);
 end

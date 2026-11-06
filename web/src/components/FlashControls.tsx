@@ -8,7 +8,7 @@
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { appliedAsOf, changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
 
@@ -36,8 +36,6 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
   path?: FlashPath;
 }) {
   const router = useRouter();
-  // the navigation last asked for, from which date to which: Enter and the blur that may follow it ask once
-  const sent = useRef<{ from: string | null; to: string | null } | null>(null);
   // applied on Enter or blur only, when complete and in range (lib/flash appliedAsOf); typing never navigates. The field
   // keeps what is typed (uncontrolled) and starts again from the address's date when that changes (its key)
   const apply = (input: HTMLInputElement, leaving: boolean) => {
@@ -46,8 +44,10 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
       if (leaving) input.value = asOf ?? "";
       return;
     }
-    if (next === asOf || (sent.current?.from === asOf && sent.current?.to === next)) return;
-    sent.current = { from: asOf, to: next };
+    // asked once per field: the blur that may follow Enter asks nothing more. The mark lives on this input, which the
+    // next address's date replaces (its key), so Now, Back or another date never meet an old mark
+    if (next === asOf || input.dataset.applied === String(next)) return;
+    input.dataset.applied = String(next);
     go(router, path, query, { asOf: next });
   };
   return (

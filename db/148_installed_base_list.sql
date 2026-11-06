@@ -70,6 +70,7 @@ create or replace function cma.subscription_payment_state_of(p_tenant_id uuid, p
 returns table (subscription_id uuid, connection_id uuid, source_id text, customer_source_id text, status text, payment_state text,
                retry_cycle integer, retry_since timestamptz, last_attempt integer)
 language sql stable
+rows 500   -- a list's page of subscriptions (CLAUDE.md, Performance: a set-returning function says its rows)
 as $$
   with s as (
     select s.id, s.connection_id, s.source_id, s.customer_source_id, s.status
