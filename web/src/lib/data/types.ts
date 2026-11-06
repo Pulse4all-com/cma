@@ -2102,7 +2102,7 @@ export interface ReviewsReport {
  * Repeat store order from its due day. A courtesy order's state as of now; null for an order without a linked contact (No
  * contact), which has none
  */
-export type CourtesyState = "not_due" | "due_no_attempt" | "attempted" | "not_reached" | "completed";
+export type CourtesyState = "not_due" | "due_no_attempt" | "attempted" | "unreachable" | "completed";
 /** A completed courtesy call's outcome: its tag's meaning courtesy_completed_positive, _neutral or _negative */
 export type CourtesyOutcome = "positive" | "neutral" | "negative";
 /** The state filter (S): a state, due (the three states of an order due without completion) or no_contact */
@@ -2131,22 +2131,31 @@ export interface CourtesyCalls {
 export interface CourtesyNow {
   /** With a linked contact */
   orders: number;
-  /** Due without completion: due, no attempt + attempted + not reached */
+  /** Due without completion: due, no attempt + attempted + unreachable */
   dueOpen: number;
   notDue: number;
   dueNoAttempt: number;
   attempted: number;
-  notReached: number;
+  unreachable: number;
   completed: number;
   noContact: number;
 }
 
-/** The courtesy orders created in a span: with a contact, completed now, Not reached now, and those without a contact */
+/** The courtesy orders created in a span (by order date): with a contact, of which completed now, Unreachable now, and those without a contact */
 export interface CourtesyCounts {
   orders: number;
   completed: number;
-  notReached: number;
+  unreachable: number;
   noContact: number;
+}
+
+/**
+ * Per market (addition 0009c): the period's orders by order date beside the courtesy calls completed in the period by call
+ * date, each call once, in the market of the earliest courtesy order it completed among the filtered orders; the calls of
+ * every row add up to the tile
+ */
+export interface CourtesyMarketCounts extends CourtesyCounts {
+  calls: number;
 }
 
 /** One order cohort: the orders with a contact of an ISO week or month, at each age of courtesy.ages_days */
@@ -2203,16 +2212,18 @@ export interface CourtesyReport {
   startDate: DateKey | null;
   settings: { dueDays: number; alertAttempts: number; ages: number[]; orderKinds: string[] };
   now: CourtesyNow | null;
-  /** Completed courtesy calls of the period by their completion date */
+  /** Courtesy calls completed in the period, by call date, for orders of any date (the tile) */
   completed: CourtesyCalls | null;
   /** The previous period's like for like */
   previous: CourtesyCalls | null;
   previousFrom: DateKey | null;
   previousTo: DateKey | null;
   previousPartial: boolean;
-  /** The period's orders per market (unknown last) */
-  byMarket: (CourtesyCounts & { market: string; name: string | null })[];
-  /** Every day, ISO week or month of the period, empty ones too, each with its markets */
+  /** Per market (unknown last): the period's orders by order date and the calls completed in the period by call date (0009c) */
+  byMarket: (CourtesyMarketCounts & { market: string; name: string | null })[];
+  /** Per market's total row (0009c): its calls equal the tile's; null while courtesy is not set up */
+  marketsTotal: CourtesyMarketCounts | null;
+  /** Every day, ISO week or month of the period by order date, empty ones too, each with its markets (no calls: its rows are order dates) */
   byGroup: (CourtesyCounts & { key: DateKey; markets: (CourtesyCounts & { market: string })[] })[];
   /** Newest first */
   cohorts: CourtesyCohort[];
@@ -3157,11 +3168,11 @@ export interface MyFollowUp {
 }
 
 /**
- * The courtesy flag the follow-up snapshot keeps (addition 0009a): the courtesy orders Not reached now and the attempts
+ * The courtesy flag the follow-up snapshot keeps (addition 0009a; Unreachable since 0009c): the courtesy orders Unreachable now and the attempts
  * that flag one (courtesy.alert_attempts); both null while courtesy.start_date is unset
  */
 export interface CourtesyFlag {
-  courtesyNotReached: number | null;
+  courtesyUnreachable: number | null;
   courtesyAlertAttempts: number | null;
 }
 

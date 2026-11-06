@@ -87,7 +87,7 @@ Built 14 October 2026 (brief B16, addition 0008j; not yet in prod): Reports → 
 ### 8. Effectiveness per agent
 - % conversations per campaign (docs/definitions.md, Conversation).
 - Results: quotes, orders, CCL confirmed, OPC agreements, courtesy happy.
-- Courtesy: since addition 0009a measured on Customers → Courtesy (docs/product/features.md): every First or Repeat store order from `courtesy.start_date`, due on day 10, completed by the Aircall completed courtesy tag meanings (positive, neutral, negative), flagged Not reached after 3 attempts without a Conversation.
+- Courtesy: since addition 0009a measured on Customers → Courtesy (docs/product/features.md): every First or Repeat store order from `courtesy.start_date`, due on day 10, completed by the Aircall completed courtesy tag meanings (positive, neutral, negative), flagged Unreachable after 3 attempts without a Conversation.
 - Speed to lead, callbacks within 4 hours.
 - Calls without outcome, calls without contact.
 
