@@ -474,8 +474,8 @@ begin
                 and (j -> 'settings') = '{"ages": [10, 14, 21, 30], "due_days": 10, "order_kinds": ["first", "repeat"], "alert_attempts": 3}'::jsonb
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s | now %s', coalesce(v_txt2, 'null'), j -> 'now')];
 
-    -- B14. the filters run in the database: market GB, segment B2B, state unreachable, due and no_contact; the list Unreachable
-    --      reached first then by due date, capped at rows with the total, the contact's link, days past due for an open order
+    -- B14. the filters run in the database: market GB, segment B2B, state unreachable, due and no_contact; the list
+    --      Unreachable first, then by due date, capped at rows with the total, the contact's link, days past due for an open order
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', 'GB', null, null, 100, true, v_now);
     v_txt2 := format('GB %s %s;', j2 -> 'list' ->> 'total', j2 -> 'list' -> 'rows' -> 0 ->> 'order_name');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, 'B2B', null, 100, true, v_now);
