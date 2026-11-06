@@ -1,5 +1,6 @@
 -- =============================================================================================
--- 155_verify_courtesy_bases.sql: verifies addition 0009c, Courtesy per market with the calls completed in the period
+-- 155_verify_courtesy_bases.sql: verifies addition 0009c, Courtesy per market with the calls completed in the period,
+-- and the courtesy state Unreachable
 -- =============================================================================================
 -- Dev only: the script refuses a database that does not hold the dev seed's active test person
 -- (agent.two@example.com, db/03); prod never holds example.com people. Block A checks structure and privileges; block B
@@ -7,9 +8,14 @@
 -- otherwise: nothing of the seed is used; adapters, contacts, calls, lines, tags, stores, orders and people are invented
 -- data values, and no row carries a name of a customer, an address or a phone number. Every check writes one row, PASS
 -- or FAIL, and the last row is the verdict (OK when every check passes), because Cloud SQL Studio shows no notices. Run as
--- your own IAM login in dev, after 154_courtesy_bases.sql; then 151_verify_courtesy.sql again (it reads the remade page).
---   A  structure and privileges: the addition row after 0009a; cma.courtesy_page_of the application's only, in the
---      caller's rights, with JIT off and custom plans (a create or replace drops a function's settings)
+-- your own IAM login in dev, after 154_courtesy_bases.sql; then 151, 103, 81 and 73 again (154's header says why).
+--   A  structure and privileges: the addition row after 0009a (A1); every function 154 makes again the application's
+--      only and in the caller's rights, cma.courtesy_orders_of and cma.courtesy_page_of with JIT off and custom plans
+--      (a create or replace drops a function's settings) (A2); the state renamed (A3): cma.courtesy_not_reached_of
+--      gone and cma.courtesy_unreachable_of there, no function of cma or cma_read naming the tag meaning key
+--      'not_reached' but the setter and the helper (as 103's A3), cma.follow_up_summary() ending with
+--      courtesy_unreachable and courtesy_alert_attempts, no follow-up snapshot keeping courtesy_not_reached, and the
+--      setting's description naming Unreachable
 --   B  on a throwaway tenant (Europe/Amsterdam) with markets BE (Europe/Brussels), GB (Europe/London) and NL
 --      (Europe/Amsterdam), a shop each, courtesy.start_date 7 September 2026 and the other settings at their defaults, as
 --      of Friday 20 November 2026 12:00 UTC:
@@ -18,17 +24,21 @@
 --        kO   NL, an order of 20 October, completed by a call of 3 November (positive): a November call, an October order
 --        kX   one contact with an order in BE (5 October) and one in NL (10 October), both completed by one call of 22
 --             October (neutral): it counts once, in BE's row (the earlier order)
---        kR   NL, an order of 2 October, three unanswered attempts since due: Not reached
+--        kR   NL, an order of 2 October, three unanswered attempts since due: Unreachable
 --        kN1  NL, an order of 12 November, not due yet; nc an NL order of 11 November without a contact
 --      B1  per market the calls add up to the tile, and markets_total holds the rows' sums, for October and November,
---          unfiltered and with each filter (market NL, BE, GB, segment B2C, state not_reached)
+--          unfiltered and with each filter (market NL, BE, GB, segment B2C, state unreachable)
 --      B2  a call completing orders in two markets counts once, in the earlier order's market (BE); with the market
 --          filter NL it counts in NL, the only one of its orders kept, so the row still equals the tile
 --      B3  a November call completing an October order counts in November's market column, while that order is not in
 --          November's Orders; November: the tile 2, every Of which completed 0, GB a row with calls and no order
---      B4  every other field equals 0009a's definition (150's text, kept below), for every period, group, cohort and filter
---          tried, here and in every tenant of the database for the last 30 days
+--      B4  every other field equals 0009a's definition (150's text of the page, the orders and the state filter, kept
+--          below, with 0009a's state not_reached read as unreachable), for every period, group, cohort and filter tried,
+--          here and in every tenant of the database for the last 30 days
 --      B5  not set up: no market row and markets_total null
+--      B6  the state unreachable: the filter takes unreachable and refuses not_reached (CMA04); kR's order is the one
+--          Unreachable order, in the list, the tile and cma.courtesy_unreachable_of; the follow-up refresh keeps it as
+--          courtesy_unreachable, which cma.follow_up_summary() returns
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of OK.
 -- =============================================================================================
 
@@ -57,7 +67,146 @@ $$;
 drop table if exists pg_temp.verify_0009c;
 create temp table verify_0009c (ord int, check_name text, result text, detail text);
 
--- The previous definition, 0009a's (150_courtesy.sql), verbatim under pg_temp.old_
+-- The previous definitions, 0009a's (150_courtesy.sql), verbatim under pg_temp.old_: the page and the two functions it reads,
+-- whose state 0009c renames (the page calls them under their pg_temp names, the only change)
+create function pg_temp.old_courtesy_orders_of(p_tenant_id uuid, p_from date, p_to date, p_now timestamptz default now())
+returns setof cma.courtesy_order_row
+language plpgsql stable
+rows 500   -- a tenant's courtesy orders of a period (CLAUDE.md, Performance: a set-returning function says its rows)
+as $$
+declare
+  v_start     date := cma.courtesy_start_of(p_tenant_id);
+  v_kinds     text[] := cma.courtesy_kinds_of(p_tenant_id);
+  v_due       integer := cma.setting_of(p_tenant_id, 'courtesy.due_days')::integer;
+  v_alert     integer := cma.setting_of(p_tenant_id, 'courtesy.alert_attempts')::integer;
+  v_connected integer := coalesce(cma.setting_of(p_tenant_id, 'telephony.connected_min_seconds')::integer, 0);
+  v_conv      integer := coalesce(cma.setting_of(p_tenant_id, 'calls.conversation_min_talk_seconds')::integer, 0);
+  v_segments  text[] := cma.flash_list_of(cma.setting_of(p_tenant_id, 'crm.customer_segments'));
+  v_lower     text[];
+  v_zone      text;
+  v_from      date;
+begin
+  if v_start is null then
+    return;
+  end if;
+  if p_from is not null and p_to is not null then
+    perform cma.report_range(p_tenant_id, p_from, p_to - 1);
+  end if;
+  v_from := greatest(v_start, coalesce(p_from, v_start));
+  if p_to is not null and p_to <= v_from then
+    return;
+  end if;
+  select array_agg(lower(x) order by o) into v_lower from unnest(v_segments) with ordinality u(x, o);
+  select t.timezone into v_zone from cma.tenant t where t.id = p_tenant_id;
+  return query
+    with ord as materialized (
+      -- the orders by their creation instant, a day wider than any zone each side, then by their business date in their
+      -- market's zone; with the store customer's contact
+      select co.id, co.connection_id, co.source_id, coalesce(co.order_name, co.source_id) as order_name, co.source_created_at,
+             coalesce(st.handle, 'unknown') as store, st.name as store_name, coalesce(st.market, 'unknown') as market, z.zone, d.bdate,
+             d.bdate + v_due as due_date, ((d.bdate + v_due)::timestamp at time zone z.zone) as due_at,
+             cu.crm_connection_id, cu.crm_contact_source_id
+      from cma.commerce_order co
+      left join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+      left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+      cross join lateral (select coalesce(mk.time_zone, st.time_zone, v_zone) as zone) z
+      cross join lateral (select (co.source_created_at at time zone z.zone)::date as bdate) d
+      left join cma.commerce_customer cu
+        on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id and cu.source_id = co.customer_source_id
+       and cu.source_deleted_at is null
+      where co.tenant_id = p_tenant_id
+        and co.source_created_at >= (v_from::timestamp at time zone 'UTC') - interval '1 day'
+        and (p_to is null or co.source_created_at < (p_to::timestamp at time zone 'UTC') + interval '1 day')
+        and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+        and co.order_kind = any (v_kinds)
+        and d.bdate >= v_from and (p_to is null or d.bdate < p_to)
+    ), k as materialized (
+      select distinct ord.crm_connection_id as conn, ord.crm_contact_source_id as contact
+      from ord where ord.crm_contact_source_id is not null
+    ), c as materialized (
+      -- the contacts' calls from the first possible creation up to p_now, each with whether it is an Attempt, a Conversation
+      -- and the courtesy outcome of its current tags. Read per contact (the lateral read is kept apart by offset 0), so
+      -- each contact's calls come from crm_association_to_idx, never from a scan of every call since the start date
+      select k.conn, k.contact, x.*
+      from k
+      cross join lateral (
+        select tc.id as call_id, tc.source_system as tel_system, tc.user_ref, tc.direction, tc.started_at,
+               cma.is_conversation(tc.direction, tc.answered_at is not null, tc.talk_seconds, v_connected, v_conv,
+                                   (select nr.not_reached from cma.call_not_reached_of(p_tenant_id, tc.connection_id, tc.source_id) nr)) as conversation,
+               (select cma.courtesy_outcome_of(tg.meaning)
+                from cma.telephony_call_tag ct
+                join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref
+                where ct.tenant_id = p_tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id
+                  and ct.untagged_at is null and cma.courtesy_outcome_of(tg.meaning) is not null
+                order by ct.tagged_at desc, tg.meaning
+                limit 1) as outcome
+        from cma.crm_association a
+        join cma.crm_call cc
+          on cc.tenant_id = p_tenant_id and cc.connection_id = a.connection_id and cc.source_id = a.from_id and cc.source_deleted_at is null
+        join cma.call_link l on l.tenant_id = p_tenant_id and l.crm_call_id = cc.id and l.unlinked_at is null
+        join cma.telephony_call tc on tc.tenant_id = p_tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null
+        left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref
+        where a.tenant_id = p_tenant_id and a.connection_id = k.conn and a.to_type = 'contact' and a.to_id = k.contact
+          and a.from_type = 'crm_call' and a.removed_at is null
+          and tc.started_at is not null and tc.started_at <= p_now
+          and tc.started_at >= (v_from::timestamp at time zone 'UTC') - interval '1 day'
+          and tc.direction in ('inbound', 'outbound') and coalesce(n.is_counted, true)
+        offset 0
+      ) x
+    ), j as materialized (
+      select ord.id as order_id, ord.source_created_at, ord.due_at, c.*
+      from ord join c on c.conn = ord.crm_connection_id and c.contact = ord.crm_contact_source_id
+    ), done as (
+      -- the completion: the contact's first call with a completed meaning at or after the order's creation
+      select distinct on (j.order_id) j.order_id, j.call_id, j.started_at, j.outcome, j.tel_system, j.user_ref
+      from j
+      where j.outcome is not null and j.started_at >= j.source_created_at
+      order by j.order_id, j.started_at, j.call_id
+    ), att as (
+      -- the attempts since due: outbound, from the start of the due date up to and including the completion
+      select j.order_id, count(*)::integer as attempts, bool_or(j.conversation) as conversation, max(j.started_at) as last_at
+      from j
+      left join done d on d.order_id = j.order_id
+      where j.direction = 'outbound' and j.started_at >= j.due_at and j.started_at <= coalesce(d.started_at, p_now)
+      group by j.order_id
+    )
+    select ord.id, ord.connection_id, ord.source_id, ord.order_name, ord.store, ord.store_name, ord.market, ord.zone,
+           case when ord.crm_contact_source_id is null then 'unknown'
+                else cma.flash_segment_of(kc.segment, v_segments, v_lower) end,
+           ord.source_created_at, ord.bdate, ord.due_date, ord.due_at,
+           ord.crm_contact_source_id is not null, ord.crm_connection_id, ord.crm_contact_source_id,
+           case when ord.crm_contact_source_id is not null then coalesce(att.attempts, 0) end,
+           case when ord.crm_contact_source_id is not null then coalesce(att.conversation, false) end,
+           att.last_at,
+           d.started_at, (d.started_at at time zone ord.zone)::date, (d.started_at at time zone ord.zone)::time, d.call_id, d.outcome,
+           case when d.call_id is not null then
+             (select x.user_id from cma.app_user_external_id x
+              where x.tenant_id = p_tenant_id and x.system = d.tel_system || '_user' and x.external_id = d.user_ref) end,
+           case when ord.crm_contact_source_id is null then null
+                when d.call_id is not null then 'completed'
+                when p_now < ord.due_at then 'not_due'
+                when coalesce(att.attempts, 0) = 0 then 'due_no_attempt'
+                when att.attempts >= v_alert and not att.conversation then 'not_reached'
+                else 'attempted' end
+    from ord
+    left join done d on d.order_id = ord.id
+    left join att on att.order_id = ord.id
+    left join cma.crm_contact kc
+      on kc.tenant_id = p_tenant_id and kc.connection_id = ord.crm_connection_id and kc.source_id = ord.crm_contact_source_id
+    order by ord.source_created_at, ord.id;
+end
+$$;
+
+create function pg_temp.old_courtesy_state_matches(p_state text, p_filter text)
+returns boolean
+language sql immutable
+as $$
+  select case when p_filter is null then true
+              when p_filter = 'no_contact' then p_state is null
+              when p_filter = 'due' then p_state in ('due_no_attempt', 'attempted', 'not_reached')
+              else p_state = p_filter end
+$$;
+
 create function pg_temp.old_courtesy_page_of(p_tenant_id uuid, p_from date, p_to date, p_period text, p_group text, p_market text,
                                               p_segment text, p_state text, p_rows integer, p_per_person boolean, p_now timestamptz)
 returns jsonb
@@ -99,7 +248,7 @@ begin
                   else date_trunc('week', x.business_date)::date end as group_key,
              case p_period when 'month' then date_trunc('month', x.business_date)::date
                   else date_trunc('week', x.business_date)::date end as cohort_key
-      from cma.courtesy_orders_of(p_tenant_id, null, null, p_now) x
+      from pg_temp.old_courtesy_orders_of(p_tenant_id, null, null, p_now) x
     ), f as materialized (
       select * from a
       where (p_market is null or a.market = p_market) and (p_segment is null or a.segment = p_segment)
@@ -110,7 +259,7 @@ begin
       select f.order_id, row_number() over (order by case f.state when 'not_reached' then 1 when 'due_no_attempt' then 2 when 'attempted' then 3
                                                                   when 'not_due' then 4 when 'completed' then 6 else 5 end,
                                                      f.due_date, f.created_at, f.order_id) as n
-      from f where cma.courtesy_state_matches(f.state, p_state)
+      from f where pg_temp.old_courtesy_state_matches(f.state, p_state)
     )
     select jsonb_build_object(
       'now', (select jsonb_build_object(
@@ -206,17 +355,17 @@ begin
 end
 $$;
 
--- Per market as text: market:orders/completed/calls/not reached/no contact per row, the total and the tile's calls
+-- Per market as text: market:orders/completed/calls/unreachable/no contact per row, the total and the tile's calls
 create or replace function pg_temp.v0009c_markets(j jsonb)
 returns text
 language sql immutable
 as $$
   select concat_ws(' | ',
            nullif((select string_agg(format('%s:%s/%s/%s/%s/%s', m ->> 'market', m ->> 'orders', m ->> 'completed', m ->> 'calls',
-                                            m ->> 'not_reached', m ->> 'no_contact'), ' ' order by o)
+                                            m ->> 'unreachable', m ->> 'no_contact'), ' ' order by o)
                    from jsonb_array_elements(j -> 'markets') with ordinality as x(m, o)), ''),
            format('total %s/%s/%s/%s/%s', j -> 'markets_total' ->> 'orders', j -> 'markets_total' ->> 'completed',
-                  j -> 'markets_total' ->> 'calls', j -> 'markets_total' ->> 'not_reached', j -> 'markets_total' ->> 'no_contact'),
+                  j -> 'markets_total' ->> 'calls', j -> 'markets_total' ->> 'unreachable', j -> 'markets_total' ->> 'no_contact'),
            format('tile %s', j -> 'completed' ->> 'calls'))
 $$;
 
@@ -226,33 +375,36 @@ returns text
 language sql immutable
 as $$
   select case when s.o = (j -> 'markets_total' ->> 'orders')::int and s.c = (j -> 'markets_total' ->> 'completed')::int
-                   and s.k = (j -> 'markets_total' ->> 'calls')::int and s.r = (j -> 'markets_total' ->> 'not_reached')::int
+                   and s.k = (j -> 'markets_total' ->> 'calls')::int and s.r = (j -> 'markets_total' ->> 'unreachable')::int
                    and s.n = (j -> 'markets_total' ->> 'no_contact')::int
                    and (j -> 'markets_total' ->> 'calls')::int = (j -> 'completed' ->> 'calls')::int
               then '' else pg_temp.v0009c_markets(j) end
   from (select coalesce(sum((m ->> 'orders')::int), 0) as o, coalesce(sum((m ->> 'completed')::int), 0) as c,
-               coalesce(sum((m ->> 'calls')::int), 0) as k, coalesce(sum((m ->> 'not_reached')::int), 0) as r,
+               coalesce(sum((m ->> 'calls')::int), 0) as k, coalesce(sum((m ->> 'unreachable')::int), 0) as r,
                coalesce(sum((m ->> 'no_contact')::int), 0) as n
         from jsonb_array_elements(j -> 'markets') m) s
 $$;
 
--- 0009c's page equals 0009a's but for its two additions: without markets_total, and with the market rows that hold an
--- order of the period (0009a's rows) without their calls, the pages are equal
+-- 0009c's page equals 0009a's but for its two additions and the state's name: 0009a's "not_reached" (a key and a state
+-- value, the page holds no other) read as "unreachable"; then without markets_total, and with the market rows that hold
+-- an order of the period (0009a's rows) without their calls, the pages are equal
 create or replace function pg_temp.v0009c_same(p_new jsonb, p_old jsonb)
 returns boolean
 language sql immutable
 as $$
-  select (p_new - 'markets' - 'markets_total') = (p_old - 'markets')
-     and coalesce((select jsonb_agg(m - 'calls' order by o) from jsonb_array_elements(p_new -> 'markets') with ordinality as x(m, o)
-                   where (m ->> 'orders')::int + (m ->> 'no_contact')::int > 0), '[]'::jsonb) = p_old -> 'markets'
+  select (p_new - 'markets' - 'markets_total') = (o.j - 'markets')
+     and coalesce((select jsonb_agg(m - 'calls' order by n) from jsonb_array_elements(p_new -> 'markets') with ordinality as x(m, n)
+                   where (m ->> 'orders')::int + (m ->> 'no_contact')::int > 0), '[]'::jsonb) = o.j -> 'markets'
+  from (select replace(p_old::text, '"not_reached"', '"unreachable"')::jsonb as j) o
 $$;
 
 -- A. Structure and privileges (universal)
 do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
-  v_fn      text := 'cma.courtesy_page_of(uuid,date,date,text,text,text,text,text,integer,boolean,timestamptz)';
+  v_fn      text;
   v_cfg     text;
+  v_bad     text;
 begin
   if not current_setting('verify.is_dev')::boolean then
     return;
@@ -263,16 +415,55 @@ begin
               and exists (select 1 from cma.schema_migration where version = '0009a') and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
-  -- A2. the remade function the application's only, in the caller's rights, with JIT off and custom plans again
-  select array_to_string(proconfig, ',') into v_cfg from pg_proc where oid = to_regprocedure(v_fn);
-  insert into verify_0009c values (2, 'A2 cma.courtesy_page_of the application''s only and invoker, JIT off and custom plans',
-    case when to_regprocedure(v_fn) is not null
-              and has_function_privilege('cma_app', v_fn, 'execute') and not has_function_privilege('cma_readonly', v_fn, 'execute')
-              and not has_function_privilege('public', v_fn, 'execute')
-              and not (select prosecdef from pg_proc where oid = to_regprocedure(v_fn))
-              and v_cfg like '%jit=off%' and v_cfg like '%plan_cache_mode=force_custom_plan%'
-              and not v_provoke then 'PASS' else 'FAIL' end,
-    coalesce(v_cfg, 'null'));
+  -- A2. every function 154 makes again the application's only and in the caller's rights; the two large reads with JIT
+  --     off and custom plans again
+  v_bad := '';
+  foreach v_fn in array array[
+    'cma.courtesy_orders_of(uuid,date,date,timestamptz)', 'cma.courtesy_unreachable_of(uuid,timestamptz)',
+    'cma.courtesy_state_matches(text,text)', 'cma.courtesy_page_of(uuid,date,date,text,text,text,text,text,integer,boolean,timestamptz)',
+    'cma.courtesy_page(date,date,text,text,text,text,text,integer)', 'cma.refresh_follow_up_of(uuid,boolean)', 'cma.follow_up_summary()'] loop
+    if to_regprocedure(v_fn) is null then
+      v_bad := v_bad || v_fn || ' missing; ';
+    elsif not has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
+          or has_function_privilege('public', v_fn, 'execute') or (select prosecdef from pg_proc where oid = to_regprocedure(v_fn)) then
+      v_bad := v_bad || v_fn || ' not the application''s only or not in the caller''s rights; ';
+    end if;
+  end loop;
+  foreach v_fn in array array['cma.courtesy_orders_of(uuid,date,date,timestamptz)',
+                              'cma.courtesy_page_of(uuid,date,date,text,text,text,text,text,integer,boolean,timestamptz)'] loop
+    select array_to_string(proconfig, ',') into v_cfg from pg_proc where oid = to_regprocedure(v_fn);
+    if coalesce(v_cfg, '') not like '%jit=off%' or coalesce(v_cfg, '') not like '%plan_cache_mode=force_custom_plan%' then
+      v_bad := v_bad || v_fn || ' settings ' || coalesce(v_cfg, 'none') || '; ';
+    end if;
+  end loop;
+  insert into verify_0009c values (2, 'A2 every remade function the application''s only and invoker; the two reads with JIT off and custom plans',
+    case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
+
+  -- A3. the state renamed: 0009a's count function gone and its new name there; no function of cma or cma_read names the
+  --     tag meaning key 'not_reached' but the setter and the helper (as 103's A3); the follow-up summary's columns; no
+  --     snapshot keeping the old key; the setting's description
+  v_bad := '';
+  if to_regprocedure('cma.courtesy_not_reached_of(uuid,timestamptz)') is not null then
+    v_bad := v_bad || 'cma.courtesy_not_reached_of still there; ';
+  end if;
+  select string_agg(p.proname, ',' order by p.proname) into v_cfg
+  from pg_proc p
+  where p.pronamespace in ('cma'::regnamespace, 'cma_read'::regnamespace) and p.prosrc ~ '''not_reached''';
+  if v_cfg is distinct from 'set_telephony_tag_meaning,tag_meaning_excludes_conversation' then
+    v_bad := v_bad || 'functions naming not_reached: ' || coalesce(v_cfg, 'none') || '; ';
+  end if;
+  if (select array_to_string((proargnames)[array_length(proargnames, 1) - 2:], ',') from pg_proc
+      where oid = to_regprocedure('cma.follow_up_summary()')) is distinct from 'computed_at,courtesy_unreachable,courtesy_alert_attempts' then
+    v_bad := v_bad || 'cma.follow_up_summary() does not end with courtesy_unreachable; ';
+  end if;
+  if exists (select 1 from cma.follow_up_snapshot s where s.summary ? 'courtesy_not_reached') then
+    v_bad := v_bad || 'a snapshot keeps courtesy_not_reached; ';
+  end if;
+  if (select s.description from cma.setting s where s.key = 'courtesy.alert_attempts') not like '%flagged Unreachable%' then
+    v_bad := v_bad || 'courtesy.alert_attempts does not name Unreachable; ';
+  end if;
+  insert into verify_0009c values (3, 'A3 the state renamed: the count function, no function naming not_reached but the two, the summary, the snapshots, the setting',
+    case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 end
 $$;
 
@@ -419,7 +610,7 @@ begin
     v_txt2 := '';
     v_n := 0;
     for f in select * from (values (null::text, null::text, null::text), ('NL', null, null), ('BE', null, null), ('GB', null, null),
-                                   (null, 'B2C', null), (null, null, 'not_reached')) as x(market, segment, state) loop
+                                   (null, 'B2C', null), (null, null, 'unreachable')) as x(market, segment, state) loop
       for t in select * from (values (v_oct_from, v_oct_to), (v_nov_from, v_nov_to)) as y(pfrom, pto) loop
         j := cma.courtesy_page_of(v_t1, t.pfrom, t.pto, 'week', 'week', f.market, f.segment, f.state, 100, true, v_now);
         v_n := v_n + 1;
@@ -477,9 +668,11 @@ begin
                cross join unnest(array['week', 'month']) c(coh)
                cross join (values (null::text, null::text, null::text, true, 100), ('NL', null, null, true, 3), ('BE', null, 'completed', false, 100),
                                   ('GB', null, null, true, 100), (null, 'B2C', null, false, 100), (null, 'unknown', 'no_contact', true, 100),
-                                  (null, null, 'due', true, 100), (null, null, 'not_reached', true, 3)) as x(market, segment, state, per_person, lim) loop
+                                  (null, null, 'due', true, 100), (null, null, 'unreachable', true, 3)) as x(market, segment, state, per_person, lim) loop
         j := cma.courtesy_page_of(v_t1, t.pfrom, t.pto, f.coh, f.grp, f.market, f.segment, f.state, f.lim, f.per_person, v_now);
-        j2 := pg_temp.old_courtesy_page_of(v_t1, t.pfrom, t.pto, f.coh, f.grp, f.market, f.segment, f.state, f.lim, f.per_person, v_now);
+        -- 0009a's filter value for the state is not_reached
+        j2 := pg_temp.old_courtesy_page_of(v_t1, t.pfrom, t.pto, f.coh, f.grp, f.market, f.segment,
+                                           case when f.state = 'unreachable' then 'not_reached' else f.state end, f.lim, f.per_person, v_now);
         v_n := v_n + 1;
         if not pg_temp.v0009c_same(j, j2) then
           v_txt2 := v_txt2 || format('%s..%s %s/%s %s/%s/%s; ', t.pfrom, t.pto, f.grp, f.coh, coalesce(f.market, '-'), coalesce(f.segment, '-'),
@@ -502,6 +695,29 @@ begin
     v_rows := v_rows || array['14', 'B4 every other field as 0009a''s definition, for every period, group, cohort and filter tried and in every tenant',
       case when v_txt2 = '' and v_n = 144 and v_m >= 1 and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_txt2 = '' then format('%s pages here and %s tenants equal', v_n, v_m) else v_txt2 end];
+
+    -- B6. the state unreachable: the filter takes unreachable and refuses 0009a's not_reached (CMA04); kR's order oR is the one
+    --     Unreachable order, first in the list, in the tile and in cma.courtesy_unreachable_of; the follow-up refresh keeps
+    --     the count as courtesy_unreachable (never courtesy_not_reached), which cma.follow_up_summary() returns
+    begin
+      perform cma.courtesy_page(v_oct_from, v_oct_to, 'week', 'week', null, null, 'not_reached');
+      v_txt := 'ok';
+    exception when others then
+      v_txt := sqlstate;
+    end;
+    j := cma.courtesy_page(v_oct_from, v_oct_to, 'week', 'week', null, null, 'unreachable');
+    v_txt := format('not_reached %s; unreachable %s %s %s; tile %s; of %s', v_txt, j -> 'list' ->> 'total', j -> 'list' -> 'rows' -> 0 ->> 'order_name',
+                    j -> 'list' -> 'rows' -> 0 ->> 'state', j -> 'now' ->> 'unreachable', cma.courtesy_unreachable_of(v_t1, v_now));
+    perform set_config('app.user_id', v_admin1::text, true);
+    perform cma.refresh_follow_up_of(v_t1);
+    select v_txt || format('; summary %s/%s; keys %s', s.courtesy_unreachable, s.courtesy_alert_attempts,
+                           (select string_agg(k, ',' order by k) from cma.follow_up_snapshot fs, jsonb_object_keys(fs.summary) k
+                            where fs.tenant_id = v_t1 and k like 'courtesy%'))
+      into v_txt from cma.follow_up_summary() s;
+    perform set_config('app.user_id', v_analyst1::text, true);
+    v_rows := v_rows || array['16', 'B6 the state unreachable: the filter, the list, the tile, the count and the follow-up summary',
+      case when v_txt = 'not_reached CMA04; unreachable 1 oR unreachable; tile 1; of 1; summary 1/3; keys courtesy_alert_attempts,courtesy_unreachable'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B5. not set up (tenant one before its start date, above; tenant two, no store and no start date): no market row,
     --     markets_total null, and 0009a's page otherwise
@@ -535,15 +751,17 @@ drop function if exists pg_temp.v0009c_same(jsonb, jsonb);
 drop function if exists pg_temp.v0009c_sums(jsonb);
 drop function if exists pg_temp.v0009c_markets(jsonb);
 drop function if exists pg_temp.old_courtesy_page_of(uuid, date, date, text, text, text, text, text, integer, boolean, timestamptz);
+drop function if exists pg_temp.old_courtesy_state_matches(text, text);
+drop function if exists pg_temp.old_courtesy_orders_of(uuid, date, date, timestamptz);
 
--- Verdict: one row per check, then the verdict: OK when all 8 checks pass
+-- Verdict: one row per check, then the verdict: OK when all 10 checks pass
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0009c
       union all
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT OK'
-                  when (select count(*) from verify_0009c where result = 'PASS') = 8
+                  when (select count(*) from verify_0009c where result = 'PASS') = 10
                        and not exists (select 1 from verify_0009c where result <> 'PASS') then 'OK'
                   else 'FAIL' end,
              format('155_verify_courtesy_bases: %s PASS, %s FAIL', (select count(*) from verify_0009c where result = 'PASS'),

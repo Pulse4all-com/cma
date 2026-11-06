@@ -2102,7 +2102,7 @@ export interface ReviewsReport {
  * Repeat store order from its due day. A courtesy order's state as of now; null for an order without a linked contact (No
  * contact), which has none
  */
-export type CourtesyState = "not_due" | "due_no_attempt" | "attempted" | "not_reached" | "completed";
+export type CourtesyState = "not_due" | "due_no_attempt" | "attempted" | "unreachable" | "completed";
 /** A completed courtesy call's outcome: its tag's meaning courtesy_completed_positive, _neutral or _negative */
 export type CourtesyOutcome = "positive" | "neutral" | "negative";
 /** The state filter (S): a state, due (the three states of an order due without completion) or no_contact */
@@ -2131,21 +2131,21 @@ export interface CourtesyCalls {
 export interface CourtesyNow {
   /** With a linked contact */
   orders: number;
-  /** Due without completion: due, no attempt + attempted + not reached */
+  /** Due without completion: due, no attempt + attempted + unreachable */
   dueOpen: number;
   notDue: number;
   dueNoAttempt: number;
   attempted: number;
-  notReached: number;
+  unreachable: number;
   completed: number;
   noContact: number;
 }
 
-/** The courtesy orders created in a span (by order date): with a contact, of which completed now, Not reached now, and those without a contact */
+/** The courtesy orders created in a span (by order date): with a contact, of which completed now, Unreachable now, and those without a contact */
 export interface CourtesyCounts {
   orders: number;
   completed: number;
-  notReached: number;
+  unreachable: number;
   noContact: number;
 }
 
@@ -3168,11 +3168,11 @@ export interface MyFollowUp {
 }
 
 /**
- * The courtesy flag the follow-up snapshot keeps (addition 0009a): the courtesy orders Not reached now and the attempts
+ * The courtesy flag the follow-up snapshot keeps (addition 0009a; Unreachable since 0009c): the courtesy orders Unreachable now and the attempts
  * that flag one (courtesy.alert_attempts); both null while courtesy.start_date is unset
  */
 export interface CourtesyFlag {
-  courtesyNotReached: number | null;
+  courtesyUnreachable: number | null;
   courtesyAlertAttempts: number | null;
 }
 

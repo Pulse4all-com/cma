@@ -7,7 +7,8 @@
 -- otherwise: nothing of the seed is used; adapters, contacts, calls, lines, tags, stores, orders and people are invented
 -- data values, and no row carries a name of a customer, an address or a phone number. Every check writes one row, PASS
 -- or FAIL, and the last row is the verdict (OK when every check passes), because Cloud SQL Studio shows no notices. Run as
--- your own IAM login in dev, after 150_courtesy.sql; then 81 and 73 again.
+-- your own IAM login in dev, after 150_courtesy.sql; then 81 and 73 again. Edited by 0009c (154_courtesy_bases.sql): the courtesy
+-- state not_reached is unreachable and the follow-up summary's column courtesy_unreachable, so since 0009c it runs after 154.
 --   A  structure and privileges: the addition row after 0008zz; every function the application's only and in the caller's
 --      rights, the readers' function definer, the owner's, pinned, the readers' only; the five settings with their
 --      defaults; the setting check's refusals and normalisation; cma.follow_up_summary()'s columns; the reader view's
@@ -25,12 +26,12 @@
 --          their own market's dates (one due, one not due yet)
 --      B5  a call before the due date is not an attempt since due; a completed call before the due date still completes the order
 --      B6  one completed call completes two open orders of the same contact; a later third order stays open
---      B7  three attempts since due without a Conversation give Not reached (the third tagged not reached at 45 seconds);
+--      B7  three attempts since due without a Conversation give Unreachable (the third tagged not reached at 45 seconds);
 --          two give Attempted; three with one Conversation (its tag's meaning courtesy_attempt) give Attempted
 --      B8  positive, neutral and negative completions are split (an inbound call completes too); an untagged connected
 --          call never completes
 --      B9  per person sorts by name (not by count); a call whose user is linked to nobody is in the not-linked row, last
---      B10 the follow-up summary's new count equals the page's Not reached tile
+--      B10 the follow-up summary's new count equals the page's Unreachable tile
 --      B11 permissions: no reports.view or performance.team gives CMA06; the per-person block is absent without
 --          performance.team
 --      B12 cma_read.courtesy_order holds no contact id, and equals the application's rows for its tenant
@@ -108,7 +109,7 @@ begin
   v_bad := '';
   foreach v_fn in array array[
     'cma.courtesy_start_of(uuid)', 'cma.courtesy_kinds_of(uuid)', 'cma.courtesy_ages_of(uuid)', 'cma.courtesy_outcome_of(text)',
-    'cma.courtesy_orders_of(uuid,date,date,timestamptz)', 'cma.courtesy_not_reached_of(uuid,timestamptz)',
+    'cma.courtesy_orders_of(uuid,date,date,timestamptz)', 'cma.courtesy_unreachable_of(uuid,timestamptz)',
     'cma.courtesy_state_matches(text,text)',
     'cma.courtesy_page_of(uuid,date,date,text,text,text,text,text,integer,boolean,timestamptz)',
     'cma.courtesy_page(date,date,text,text,text,text,text,integer)',
@@ -151,7 +152,7 @@ begin
   from pg_attribute a where a.attrelid = 'cma_read.courtesy_order'::regclass and a.attnum > 0 and not a.attisdropped;
   insert into verify_0009a values (4, 'A4 cma.follow_up_summary() ends with the courtesy columns; the reader view''s columns without a contact',
     case when (select array_to_string((proargnames)[array_length(proargnames, 1) - 2:], ',') from pg_proc
-               where oid = to_regprocedure('cma.follow_up_summary()')) = 'computed_at,courtesy_not_reached,courtesy_alert_attempts'
+               where oid = to_regprocedure('cma.follow_up_summary()')) = 'computed_at,courtesy_unreachable,courtesy_alert_attempts'
               and v_txt = 'tenant_id,order_id,connection_id,order_source_id,store,market,segment,created_at,business_date,due_date,'
                           || 'has_contact,attempts,conversation,last_attempt_at,completed_at,outcome,completed_by,state'
               and v_txt !~ '(contact_source|crm_|name|email|phone|hash|raw|reached)'
@@ -328,8 +329,8 @@ begin
     perform set_config('app.user_id', v_analyst1::text, true);
     select count(*) into v_n from cma.courtesy_orders_of(v_t1, null, null, v_now);
     j := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, null, 100, true, v_now);
-    v_txt := format('%s rows; set_up %s; now %s; has_store %s; not reached %s', v_n, j ->> 'set_up', coalesce(j ->> 'now', 'null'),
-                    j ->> 'has_store', coalesce(cma.courtesy_not_reached_of(v_t1, v_now)::text, 'null'));
+    v_txt := format('%s rows; set_up %s; now %s; has_store %s; unreachable %s', v_n, j ->> 'set_up', coalesce(j ->> 'now', 'null'),
+                    j ->> 'has_store', coalesce(cma.courtesy_unreachable_of(v_t1, v_now)::text, 'null'));
     -- tenant two: no store, no start date
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_analyst2::text, true);
@@ -352,7 +353,7 @@ begin
     -- B2. an order before the start date does not count (oBefore of 5 September); unset, nothing counts and the page and the
     --     snapshot's count say not set up; a tenant without a store says so; the start date is kept trimmed
     v_rows := v_rows || array['12', 'B2 before the start date nothing counts; an unset start date gives not set up, no store has_store false',
-      case when v_txt = '0 rows; set_up false; now null; has_store true; not reached null | two: set_up false, has_store false'
+      case when v_txt = '0 rows; set_up false; now null; has_store true; unreachable null | two: set_up false, has_store false'
                 and v_txt2 not like '%oBefore%' and cma.courtesy_start_of(v_t1) = date '2026-09-07'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -395,10 +396,10 @@ begin
                 and v_txt like '%o6a:1001/1011/completed/1/true/neutral%' and v_txt like '%o6c:1025/1104/due_no_attempt/0/false/-%'
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s; %s completing call', v_txt2, v_n)];
 
-    -- B7. three attempts since due without a Conversation: Not reached; two: Attempted; three with one Conversation (its tag's
+    -- B7. three attempts since due without a Conversation: Unreachable; two: Attempted; three with one Conversation (its tag's
     --     meaning courtesy_attempt): Attempted
-    v_rows := v_rows || array['17', 'B7 three attempts since due without a conversation Not reached; two Attempted; three with one conversation Attempted',
-      case when v_txt like '%o7a:1001/1011/not_reached/3/false/-%' and v_txt like '%o7b:1001/1011/attempted/2/false/-%'
+    v_rows := v_rows || array['17', 'B7 three attempts since due without a conversation Unreachable; two Attempted; three with one conversation Attempted',
+      case when v_txt like '%o7a:1001/1011/unreachable/3/false/-%' and v_txt like '%o7b:1001/1011/attempted/2/false/-%'
                 and v_txt like '%o7c:1001/1011/attempted/3/true/-%'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -416,14 +417,14 @@ begin
     v_rows := v_rows || array['19', 'B9 per person by name, not by count; the user linked to nobody in the not-linked row, last',
       case when v_txt2 = 'Anna:1/0/0/1 Zed:2/1/1/0 none:1/1/0/0' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt2, 'null')];
 
-    -- B10. the follow-up summary's new count equals the page's Not reached tile (both as of now, in one transaction)
+    -- B10. the follow-up summary's new count equals the page's Unreachable tile (both as of now, in one transaction)
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.refresh_follow_up_of(v_t1);
-    select format('%s/%s', s.courtesy_not_reached, s.courtesy_alert_attempts) into v_txt2 from cma.follow_up_summary() s;
+    select format('%s/%s', s.courtesy_unreachable, s.courtesy_alert_attempts) into v_txt2 from cma.follow_up_summary() s;
     j2 := cma.courtesy_page(date '2026-10-01', date '2026-10-31');
-    v_rows := v_rows || array['20', 'B10 the follow-up summary''s Not reached equals the page''s tile, with the attempts since due that flag it',
-      case when v_txt2 = (j2 -> 'now' ->> 'not_reached') || '/3' and (j2 -> 'now' ->> 'not_reached')::int >= 1
-                and not v_provoke then 'PASS' else 'FAIL' end, format('summary %s, page %s', v_txt2, j2 -> 'now' ->> 'not_reached')];
+    v_rows := v_rows || array['20', 'B10 the follow-up summary''s Unreachable equals the page''s tile, with the attempts since due that flag it',
+      case when v_txt2 = (j2 -> 'now' ->> 'unreachable') || '/3' and (j2 -> 'now' ->> 'unreachable')::int >= 1
+                and not v_provoke then 'PASS' else 'FAIL' end, format('summary %s, page %s', v_txt2, j2 -> 'now' ->> 'unreachable')];
 
     -- B11. permissions: an agent (neither reports.view nor performance.team) is refused (CMA06); reports.view alone gets
     --      the page without the per-person block; performance.team gets it
@@ -454,10 +455,10 @@ begin
 
     -- B13. the page's figures (October 2026, by week, cohorts by week): the tiles now; per market; per ISO week; the cohorts
     --      at 10, 14, 21 and 30 days (the week of 26 October not 10 days old yet); nothing compared before the start
-    select string_agg(format('%s:%s/%s/%s/%s', m ->> 'market', m ->> 'orders', m ->> 'completed', m ->> 'not_reached', m ->> 'no_contact'), ' '
+    select string_agg(format('%s:%s/%s/%s/%s', m ->> 'market', m ->> 'orders', m ->> 'completed', m ->> 'unreachable', m ->> 'no_contact'), ' '
                       order by o) into v_txt2
     from jsonb_array_elements(j -> 'markets') with ordinality as x(m, o);
-    select v_txt2 || ' | ' || string_agg(format('%s:%s/%s/%s', to_char((g ->> 'key')::date, 'MMDD'), g ->> 'orders', g ->> 'completed', g ->> 'not_reached'), ' '
+    select v_txt2 || ' | ' || string_agg(format('%s:%s/%s/%s', to_char((g ->> 'key')::date, 'MMDD'), g ->> 'orders', g ->> 'completed', g ->> 'unreachable'), ' '
                                          order by o) into v_txt2
     from jsonb_array_elements(j -> 'groups') with ordinality as x(g, o);
     select v_txt2 || ' | ' || string_agg(format('%s%s %s %s', c ->> 'label', case when (c ->> 'partial')::boolean then '*' else '' end, c ->> 'orders',
@@ -465,7 +466,7 @@ begin
                                                  from jsonb_array_elements(c -> 'ages') with ordinality as y(a, ao))), ' ' order by o) into v_txt2
     from jsonb_array_elements(j -> 'cohorts') with ordinality as x(c, o);
     v_rows := v_rows || array['23', 'B13 the tiles, per market, per week and the order cohorts with their ages',
-      case when j -> 'now' = '{"orders": 13, "not_due": 1, "due_open": 7, "attempted": 4, "completed": 5, "no_contact": 1, "not_reached": 1, "due_no_attempt": 2}'::jsonb
+      case when j -> 'now' = '{"orders": 13, "not_due": 1, "due_open": 7, "attempted": 4, "completed": 5, "no_contact": 1, "unreachable": 1, "due_no_attempt": 2}'::jsonb
                 and v_txt2 = 'GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1 1005:2/1/0 1012:0/0/0 1019:1/0/0 1026:2/0/0 | '
                              || '2026-W44* 2 10:-,14:-,21:-,30:- 2026-W43 1 10:0,14:-,21:-,30:- 2026-W41 2 10:1,14:1,21:1,30:1 '
                              || '2026-W40* 8 10:0,14:2,21:4,30:4'
@@ -473,14 +474,14 @@ begin
                 and (j -> 'settings') = '{"ages": [10, 14, 21, 30], "due_days": 10, "order_kinds": ["first", "repeat"], "alert_attempts": 3}'::jsonb
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s | now %s', coalesce(v_txt2, 'null'), j -> 'now')];
 
-    -- B14. the filters run in the database: market GB, segment B2B, state not_reached, due and no_contact; the list Not
+    -- B14. the filters run in the database: market GB, segment B2B, state unreachable, due and no_contact; the list Unreachable
     --      reached first then by due date, capped at rows with the total, the contact's link, days past due for an open order
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', 'GB', null, null, 100, true, v_now);
     v_txt2 := format('GB %s %s;', j2 -> 'list' ->> 'total', j2 -> 'list' -> 'rows' -> 0 ->> 'order_name');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, 'B2B', null, 100, true, v_now);
     v_txt2 := v_txt2 || format(' B2B %s %s;', j2 -> 'list' ->> 'total', j2 -> 'completed' ->> 'calls');
-    j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, 'not_reached', 100, true, v_now);
-    v_txt2 := v_txt2 || format(' not_reached %s %s;', j2 -> 'list' ->> 'total', j2 -> 'list' -> 'rows' -> 0 ->> 'order_name');
+    j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, 'unreachable', 100, true, v_now);
+    v_txt2 := v_txt2 || format(' unreachable %s %s;', j2 -> 'list' ->> 'total', j2 -> 'list' -> 'rows' -> 0 ->> 'order_name');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, 'due', 100, true, v_now);
     v_txt2 := v_txt2 || format(' due %s;', j2 -> 'list' ->> 'total');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, 'no_contact', 100, true, v_now);
@@ -491,7 +492,7 @@ begin
       into v_txt2
     from jsonb_array_elements(j2 -> 'list' -> 'rows') with ordinality as y(x, o);
     v_rows := v_rows || array['24', 'B14 the filters in the database; the list''s order, cap and total, link and days past due',
-      case when v_txt2 = 'GB 1 oLdn; B2B 1 1; not_reached 1 o7a; due 7; no_contact 1 nolink; first 3 of 14: o7a/not_reached/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0'
+      case when v_txt2 = 'GB 1 oLdn; B2B 1 1; unreachable 1 o7a; due 7; no_contact 1 nolink; first 3 of 14: o7a/unreachable/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0'
                 and j -> 'list' -> 'rows' -> 0 ->> 'record_url' = 'https://crm.example.invalid/portal-1/contact/k7a'
                 and j -> 'list' -> 'rows' -> 0 ->> 'store_name' = 'Verify NL'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt2];

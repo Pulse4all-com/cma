@@ -1947,7 +1947,7 @@ expect("courtesy: First and Repeat count; Renewal, Unknown, test, deleted, cance
   "o6a o6b o6c o7a o7b o7c o8u oAms oE oF oLdn oNo oP oR | unset 0 false 0");
 expect("courtesy: every order's dates, state, attempts, conversation and outcome (due day 10, the zones, before the due date, one call two orders), as 151's B3 to B8",
   ctFacts,
-  "o6a:1001/1011/completed/1/true/neutral o6b:1003/1013/completed/1/true/neutral o6c:1025/1104/due_no_attempt/0/false/- o7a:1001/1011/not_reached/3/false/- "
+  "o6a:1001/1011/completed/1/true/neutral o6b:1003/1013/completed/1/true/neutral o6c:1025/1104/due_no_attempt/0/false/- o7a:1001/1011/unreachable/3/false/- "
     + "o7b:1001/1011/attempted/2/false/- o7c:1001/1011/attempted/3/true/- o8u:1001/1011/attempted/1/true/- oAms:1028/1107/not_due/0/false/- "
     + "oE:1005/1015/completed/0/false/positive oF:1001/1011/completed/1/true/positive oLdn:1027/1106/due_no_attempt/0/false/- oNo:1003/1013/-/-/-/- "
     + "oP:1005/1015/attempted/1/false/- oR:1002/1012/completed/0/false/negative",
@@ -1955,13 +1955,13 @@ expect("courtesy: every order's dates, state, attempts, conversation and outcome
 const ctP = ctPage();
 expect("courtesy: the tiles, the completed calls split, per person by name with the not-linked row last, as 151's B8, B9, B13",
   [ctP.now, ctP.completed, ctP.previous, (ctP.perPerson ?? []).map((x) => `${x.name ?? "none"}:${x.calls}/${x.positive}/${x.neutral}/${x.negative}`).join(" ")],
-  [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, notReached: 1, completed: 5, noContact: 1 },
+  [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, unreachable: 1, completed: 5, noContact: 1 },
    { calls: 4, positive: 2, neutral: 1, negative: 1 }, { calls: 0, positive: 0, neutral: 0, negative: 0 }, "Anna:1/0/0/1 Zed:2/1/1/0 none:1/1/0/0"],
-  [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, notReached: 1, completed: 5, noContact: 1 },
+  [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, unreachable: 1, completed: 5, noContact: 1 },
    { calls: 5, positive: 2, neutral: 2, negative: 1 }, { calls: 0, positive: 0, neutral: 0, negative: 0 }, "Zed:2/1/1/0 Anna:1/0/0/1 none:1/1/0/0"]);
 expect("courtesy: per market, per ISO week, the order cohorts by week at 10, 14, 21 and 30 days, as 151's B13",
-  `${ctP.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.notReached}/${m.noContact}`).join(" ")} | `
-    + `${ctP.byGroup.map((g) => `${g.key.slice(5).replace("-", "")}:${g.orders}/${g.completed}/${g.notReached}`).join(" ")} | `
+  `${ctP.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.unreachable}/${m.noContact}`).join(" ")} | `
+    + `${ctP.byGroup.map((g) => `${g.key.slice(5).replace("-", "")}:${g.orders}/${g.completed}/${g.unreachable}`).join(" ")} | `
     + ctP.cohorts.map((c) => `${c.label}${c.partial ? "*" : ""} ${c.orders} ${c.ages.map((a) => `${a.age}:${a.completed ?? "-"}`).join(",")}`).join(" "),
   "GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1 1005:2/1/0 1012:0/0/0 1019:1/0/0 1026:2/0/0 | 2026-W44* 2 10:-,14:-,21:-,30:- 2026-W43 1 10:0,14:-,21:-,30:- "
     + "2026-W41 2 10:1,14:1,21:1,30:1 2026-W40* 8 10:0,14:2,21:4,30:4",
@@ -1969,28 +1969,28 @@ expect("courtesy: per market, per ISO week, the order cohorts by week at 10, 14,
 const ctList = (filter, rows = 100) => ctPage(filter, rows).list;
 expect("courtesy: the filters, the list's order, cap and total, days past due; per person absent without performance.team, as 151's B11 and B14",
   [ctList({ market: "GB" }).total, ctList({ market: "GB" }).rows[0]?.orderName, ctPage({ segment: "B2B" }).list.total, ctPage({ segment: "B2B" }).completed.calls,
-   ctList({ state: "not_reached" }).total, ctList({ state: "due" }).total, ctList({ state: "no_contact" }).total,
+   ctList({ state: "unreachable" }).total, ctList({ state: "due" }).total, ctList({ state: "no_contact" }).total,
    ctList({}, 3).total, ctList({}, 3).rows.map((r) => `${r.orderName}/${r.state}/${r.daysPastDue ?? "-"}`).join(" "), ctPage({}, 100, false).perPerson],
-  [1, "oLdn", 1, 1, 1, 7, 1, 14, "o7a/not_reached/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0", null],
-  [1, "oLdn", 1, 1, 1, 7, 1, 14, "oLdn/due_no_attempt/0 o6c/due_no_attempt/2 o7a/not_reached/26", null]);
+  [1, "oLdn", 1, 1, 1, 7, 1, 14, "o7a/unreachable/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0", null],
+  [1, "oLdn", 1, 1, 1, 7, 1, 14, "oLdn/due_no_attempt/0 o6c/due_no_attempt/2 o7a/unreachable/26", null]);
 expect("courtesy: the address (G, O, K, the segment, S) and the settings as the database checks them; the hints filled; Needs attention",
   [courtesyGroupOf("month"), courtesyGroupOf("year"), courtesyPeriodOf("month"), courtesyPeriodOf(undefined),
-   parseCourtesyFilter("GB", "B2B", "not_reached").problem, parseCourtesyFilter("nl", null, null).problem, parseCourtesyFilter(null, "B2B,B2C", null).problem,
-   parseCourtesyFilter(null, null, "open").problem, courtesyStateMatches(null, "no_contact"), courtesyStateMatches("attempted", "due"), courtesyStateMatches("not_due", "due"),
+   parseCourtesyFilter("GB", "B2B", "unreachable").problem, parseCourtesyFilter("nl", null, null).problem, parseCourtesyFilter(null, "B2B,B2C", null).problem,
+   parseCourtesyFilter(null, null, "not_reached").problem, courtesyStateMatches(null, "no_contact"), courtesyStateMatches("attempted", "due"), courtesyStateMatches("not_due", "due"),
    parseCourtesySetting("courtesy.due_days", "0"), parseCourtesySetting("courtesy.due_days", "61"), parseCourtesySetting("courtesy.alert_attempts", "21"),
    parseCourtesySetting("courtesy.ages_days", "10,5"), parseCourtesySetting("courtesy.ages_days", "10,91"), parseCourtesySetting("courtesy.ages_days", " 7, 90 "),
    parseCourtesySetting("courtesy.order_kinds", "first,first"), parseCourtesySetting("courtesy.order_kinds", "first, repeat, renewal"),
    parseCourtesySetting("courtesy.start_date", "7 Sep 2026"), parseCourtesySetting("courtesy.start_date", "2026-09-07"), parseCourtesySetting("courtesy.start_date", ""),
    fillCourtesyHint("day {dueDays}, {alertAttempts} attempts, ages {ages}, kinds {orderKinds}", ctP.settings),
-   courtesyAttention({ courtesyNotReached: 3, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
-   courtesyAttention({ courtesyNotReached: 0, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
-   courtesyAttention({ courtesyNotReached: null, courtesyAlertAttempts: null }, ["performance.team"]),
-   courtesyAttention({ courtesyNotReached: 3, courtesyAlertAttempts: 3 }, ["workday.team"])],
+   courtesyAttention({ courtesyUnreachable: 3, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
+   courtesyAttention({ courtesyUnreachable: 0, courtesyAlertAttempts: 3 }, ["monitoring.live"]),
+   courtesyAttention({ courtesyUnreachable: null, courtesyAlertAttempts: null }, ["performance.team"]),
+   courtesyAttention({ courtesyUnreachable: 3, courtesyAlertAttempts: 3 }, ["workday.team"])],
   ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
-   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null, null],
+   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=unreachable" }, null, null, null],
   ["month", "week", "month", "week", null, "market", "segment", "state", true, true, false, null, null, null, null, null, "7,90", null, "first,repeat,renewal", null,
-   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }, null, null,
-   { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=not_reached" }]);
+   "2026-09-07", "", "day 10, 3 attempts, ages 10, 14, 21, 30, kinds first, repeat", { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=unreachable" }, null, null,
+   { count: 3, alertAttempts: 3, href: "/reports/courtesy?state=unreachable" }]);
 // ---- Courtesy's two bases (addition 0009c, brief B33) on 155's own scenario --------------------------------------
 // Tenant one of 155's block B as the mirror holds it, as of Friday 20 November 2026 12:00 UTC: per market the period's orders
 // by order date beside the calls completed in the period by call date, each once, in the market of the earliest courtesy
@@ -2018,17 +2018,17 @@ const cbPage = (from, to, filter = {}) => courtesyReport(cbRows, {
   from, to, period: "week", group: "week", filter: { market: null, segment: null, state: null, ...filter }, rows: 100, perPerson: true, now: CB_NOW,
   prev: { from: "2026-08-31", to: "2026-09-30", until: null }, settings: ctSettings("2026-09-07"), hasStore: true,
   markets: ["BE", "GB", "NL"].map((code) => ({ code, name: code, sortOrder: 100 })), people: CT_PEOPLE.map((x) => ({ userId: x.userId, name: x.name })) });
-const cbMarkets = (p) => [p.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.calls}/${m.notReached}/${m.noContact}`).join(" "),
-  `total ${p.marketsTotal.orders}/${p.marketsTotal.completed}/${p.marketsTotal.calls}/${p.marketsTotal.notReached}/${p.marketsTotal.noContact}`,
+const cbMarkets = (p) => [p.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.calls}/${m.unreachable}/${m.noContact}`).join(" "),
+  `total ${p.marketsTotal.orders}/${p.marketsTotal.completed}/${p.marketsTotal.calls}/${p.marketsTotal.unreachable}/${p.marketsTotal.noContact}`,
   `tile ${p.completed.calls}`].filter((x) => x !== "").join(" | ");
 const CB_OCT = ["2026-10-01", "2026-10-31"];
 const CB_NOV = ["2026-11-01", "2026-11-30"];
 const cbAddsUp = (p) => {
   const sum = (k) => p.byMarket.reduce((a, m) => a + m[k], 0);
-  return ["orders", "completed", "calls", "notReached", "noContact"].every((k) => sum(k) === p.marketsTotal[k]) && p.marketsTotal.calls === p.completed.calls;
+  return ["orders", "completed", "calls", "unreachable", "noContact"].every((k) => sum(k) === p.marketsTotal[k]) && p.marketsTotal.calls === p.completed.calls;
 };
 expect("courtesy bases: per market the calls add up to the tile and the total row holds the sums, every filter, as 155's B1 (and 151's scenario)",
-  [...[CB_OCT, CB_NOV].flatMap(([from, to]) => [{}, { market: "NL" }, { market: "BE" }, { market: "GB" }, { segment: "B2C" }, { state: "not_reached" }]
+  [...[CB_OCT, CB_NOV].flatMap(([from, to]) => [{}, { market: "NL" }, { market: "BE" }, { market: "GB" }, { segment: "B2C" }, { state: "unreachable" }]
     .map((f) => cbAddsUp(cbPage(from, to, f)))), cbAddsUp(ctP), ctPage({ market: "GB" }).marketsTotal.calls, ctP.marketsTotal.calls],
   [...Array(12).fill(true), true, 0, 4],
   [...Array(12).fill(false), false, 1, 5]);

@@ -4,7 +4,7 @@
  * list. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7: tables with numbers right-aligned in tabular figures and every
  * header with its hint; the outcomes in Leaf Green (positive), Light Blue (neutral) and Soft Rose with a Deep Blue edge
  * (negative), never with text on Light Blue or Soft Rose: the colour is a swatch or a bar segment and the words stand beside
- * it on white; Not reached is the warning badge, never red. Ids, codes, counts, dates and links only: never a customer's name,
+ * it on white; Unreachable is the warning badge, never red. Ids, codes, counts, dates and links only: never a customer's name,
  * email, phone or address.
  */
 import type { ReactNode } from "react";
@@ -96,11 +96,11 @@ export function CourtesyOutcomes({ calls, copy, locale }: { calls: CourtesyCalls
   );
 }
 
-/** An order's state: Not reached as the warning badge; Completed with its outcome's swatch; the others as quiet badges */
+/** An order's state: Unreachable as the warning badge; Completed with its outcome's swatch; the others as quiet badges */
 export function CourtesyStateLabel({ state, outcome, copy }: { state: CourtesyState | null; outcome: CourtesyOutcome | null; copy: Copy }) {
   const t = copy.courtesy;
   if (state === null) return <Badge tone="neutral">{t.state_no_contact}</Badge>;
-  if (state === "not_reached") return <Badge tone="warning">{t.state_not_reached}</Badge>;
+  if (state === "unreachable") return <Badge tone="warning">{t.state_unreachable}</Badge>;
   if (state === "completed" && outcome) {
     return (
       <span className="inline-flex items-center gap-2 text-caption font-semibold">
@@ -112,13 +112,13 @@ export function CourtesyStateLabel({ state, outcome, copy }: { state: CourtesySt
   return <Badge tone={state === "attempted" ? "info" : "neutral"}>{t[`state_${state}`]}</Badge>;
 }
 
-/** The counts' columns every table of orders shares, by order date: orders, of which completed, completion share, not reached, no contact */
+/** The counts' columns every table of orders shares, by order date: orders, of which completed, completion share, unreachable, no contact */
 function countCols<T extends CourtesyCounts>(copy: Copy, hints: Record<string, string>, locale: Locale): Col<T>[] {
   const t = copy.courtesy;
   const n = (x: number) => fmtCount(x, locale);
   return [[t.colOrders, hints.ctColOrders!, (r) => n(r.orders)], [t.colCompleted, hints.ctColCompleted!, (r) => n(r.completed)],
     [t.colShare, hints.ctColShare!, (r) => fmtShare(courtesyShare(r.completed, r.orders), locale)],
-    [t.colNotReached, hints.ctColNotReached!, (r) => (r.notReached > 0 ? <Badge tone="warning">{n(r.notReached)}</Badge> : n(r.notReached))],
+    [t.colUnreachable, hints.ctColUnreachable!, (r) => (r.unreachable > 0 ? <Badge tone="warning">{n(r.unreachable)}</Badge> : n(r.unreachable))],
     [t.colNoContact, hints.ctColNoContact!, (r) => n(r.noContact)]];
 }
 

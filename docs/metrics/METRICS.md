@@ -655,16 +655,16 @@ select i.kind, count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id
 
 Same three arrays /me/follow-up renders as tables; counts therefore always agree with that page.
 
-#### `welcome.needs_attention.courtesy_not_reached`
+#### `welcome.needs_attention.courtesy_unreachable`
 
-**Courtesy: {n} not reached after {alert_attempts} attempts** on / · Courtesy: {n} not reached after {alert_attempts} attempts (Courtesy: {n} niet bereikt na {attempts} pogingen)
+**Courtesy: {n} unreachable after {alert_attempts} attempts** on / · Courtesy: {n} unreachable after {alert_attempts} attempts (Courtesy: {n} onbereikbaar na {attempts} pogingen)
 
-Across the business line: courtesy orders flagged Not reached now. Shown only while courtesy.start_date is set and the count is above 0; links to the page filtered to Not reached.
+Across the business line: courtesy orders flagged Unreachable now. Shown only while courtesy.start_date is set and the count is above 0; links to the page filtered to Unreachable.
 
 **Formula as computed**
 
 ```
-= summary.courtesy_not_reached from the follow-up snapshot (cma.refresh_follow_up_of: cma.courtesy_not_reached_of over every courtesy order since courtesy.start_date), with summary.courtesy_alert_attempts; both null while courtesy is not set up. Links to /reports/courtesy?state=not_reached
+= summary.courtesy_unreachable from the follow-up snapshot (cma.refresh_follow_up_of: cma.courtesy_unreachable_of over every courtesy order since courtesy.start_date), with summary.courtesy_alert_attempts; both null while courtesy is not set up. Links to /reports/courtesy?state=unreachable
 ```
 
 **Unit** count · **Grain** now · **Status** prerequisite_missing
@@ -706,12 +706,12 @@ Across the business line: courtesy orders flagged Not reached now. Shown only wh
 
 **Refresh** follow-up snapshot once a minute; read on page load only
 
-**Computed in** `cma.follow_up_summary` (0009a); `cma.refresh_follow_up_of` (0009a); `cma.courtesy_not_reached_of` (0009a); `courtesyAttention` in src/lib/courtesy.ts; `AttentionBlock` in src/app/(welcome)/page.tsx
+**Computed in** `cma.follow_up_summary` (0009c); `cma.refresh_follow_up_of` (0009c); `cma.courtesy_unreachable_of` (0009c); `courtesyAttention` in src/lib/courtesy.ts; `AttentionBlock` in src/app/(welcome)/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select (summary->>'courtesy_not_reached')::integer, (summary->>'courtesy_alert_attempts')::integer from cma.follow_up_snapshot where tenant_id = :tenant_id
+select (summary->>'courtesy_unreachable')::integer, (summary->>'courtesy_alert_attempts')::integer from cma.follow_up_snapshot where tenant_id = :tenant_id
 ```
 
 **Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
@@ -723,11 +723,11 @@ select (summary->>'courtesy_not_reached')::integer, (summary->>'courtesy_alert_a
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)
 
 **Notes**
 
-The Needs attention block is shown to monitoring.live, performance.team or workday.team; this line to monitoring.live or performance.team only. It equals the page's Not reached tile after the snapshot's next refresh (151's B10).
+The Needs attention block is shown to monitoring.live, performance.team or workday.team; this line to monitoring.live or performance.team only. It equals the page's Unreachable tile after the snapshot's next refresh (151's B10).
 
 ## Live board
 
@@ -35894,7 +35894,7 @@ calls = count(distinct completed_call_id) over the courtesy orders (every one si
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -35940,7 +35940,7 @@ Courtesy orders due without a completed call now: from day courtesy.due_days aft
 **Formula as computed**
 
 ```
-due_open = count(courtesy orders since courtesy.start_date with a contact and a state of due_no_attempt, attempted or not_reached as of now)
+due_open = count(courtesy orders since courtesy.start_date with a contact and a state of due_no_attempt, attempted or unreachable as of now)
 ```
 
 **Unit** count · **Grain** now · **Status** prerequisite_missing
@@ -35982,7 +35982,7 @@ due_open = count(courtesy orders since courtesy.start_date with a contact and a 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36018,16 +36018,16 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 
 A now figure: the period does not narrow it (the hint says so). The market and segment filters do.
 
-#### `courtesy.not_reached`
+#### `courtesy.unreachable`
 
-**Not reached** on /reports/courtesy · Not reached (Niet bereikt)
+**Unreachable** on /reports/courtesy · Unreachable (Onbereikbaar)
 
 The flag: courtesy orders with at least courtesy.alert_attempts attempts since due, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.
 
 **Formula as computed**
 
 ```
-not_reached = count(courtesy orders with a contact, not completed, attempts since due >= courtesy.alert_attempts and none a Conversation (cma.is_conversation)); an attempt since due = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted
+unreachable = count(courtesy orders with a contact, not completed, attempts since due >= courtesy.alert_attempts and none a Conversation (cma.is_conversation)); an attempt since due = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted
 ```
 
 **Unit** count · **Grain** now · **Status** prerequisite_missing
@@ -36070,7 +36070,7 @@ not_reached = count(courtesy orders with a contact, not completed, attempts sinc
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36100,11 +36100,11 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)
 
 **Notes**
 
-Equals the follow-up snapshot's courtesy_not_reached (cma.follow_up_summary) after the next refresh (151's B10). Until the Data Issue Escalate meaning is settled (open-decisions.md, the courtesy definitions), its tag counts as an attempt, so a wrong number can end up Not reached.
+Equals the follow-up snapshot's courtesy_unreachable (cma.follow_up_summary) after the next refresh (151's B10). Until the Data Issue Escalate meaning is settled (open-decisions.md, the courtesy definitions), its tag counts as an attempt, so a wrong number can end up Unreachable.
 
 #### `courtesy.no_contact`
 
@@ -36157,7 +36157,7 @@ no_contact = count(courtesy orders since courtesy.start_date whose commerce_cust
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36240,7 +36240,7 @@ per outcome in (positive, neutral, negative): count(distinct completed_call_id) 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36280,12 +36280,12 @@ Colours: positive Leaf Green, neutral Light Blue, negative Soft Rose with a Deep
 
 **Per market: orders placed in the period, state now** on /reports/courtesy · Per market: orders placed in the period, state now (Per markt: bestellingen geplaatst in de periode, stand nu)
 
-Two bases, each column saying which. By order date: the courtesy orders placed in the period per market, with their state now (orders with a contact, of which completed, completion share, not reached and no contact). By call date, set apart as the last column: the courtesy calls completed in the period, each in the market of the earliest courtesy order it completed (courtesy.by_market.calls). A total row under the markets; its calls equal courtesy.completed_calls.
+Two bases, each column saying which. By order date: the courtesy orders placed in the period per market, with their state now (orders with a contact, of which completed, completion share, unreachable and no contact). By call date, set apart as the last column: the courtesy calls completed in the period, each in the market of the earliest courtesy order it completed (courtesy.by_market.calls). A total row under the markets; its calls equal courtesy.completed_calls.
 
 **Formula as computed**
 
 ```
-group by the store's market (unknown last) over the courtesy orders with a business date in the period; each order column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.not_reached and courtesy.no_contact define it, per market; calls as courtesy.by_market.calls; a market with calls of the period and no order of it has a row with its order columns 0; markets_total = each column's sum over the rows (null while courtesy is not set up)
+group by the store's market (unknown last) over the courtesy orders with a business date in the period; each order column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.unreachable and courtesy.no_contact define it, per market; calls as courtesy.by_market.calls; a market with calls of the period and no order of it has a row with its order columns 0; markets_total = each column's sum over the rows (null while courtesy is not set up)
 ```
 
 **Unit** count · **Grain** period, per_market · **Status** prerequisite_missing
@@ -36327,7 +36327,7 @@ group by the store's market (unknown last) over the courtesy orders with a busin
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36410,7 +36410,7 @@ calls(market) = count of the period's completing calls (as courtesy.completed_ca
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36446,7 +36446,7 @@ By order date: the courtesy orders placed on each day, ISO week or month of the 
 **Formula as computed**
 
 ```
-group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the order columns as courtesy.by_market (orders, of which completed, completion share, not reached, no contact), without its calls
+group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the order columns as courtesy.by_market (orders, of which completed, completion share, unreachable, no contact), without its calls
 ```
 
 **Unit** count · **Grain** period, per_day, per_iso_week, per_month, per_market · **Status** prerequisite_missing
@@ -36488,7 +36488,7 @@ group by the business date's day, ISO week (Monday) or month over the period's c
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36571,7 +36571,7 @@ orders = count(courtesy orders with a business date in the span and a contact)
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36654,7 +36654,7 @@ completed = count(the span's courtesy orders whose state is completed as of now)
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36737,7 +36737,7 @@ completion_share = completed (of which completed) / orders (null without orders)
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36821,7 +36821,7 @@ per cohort and age n: completed = count(orders with completed_at <= created_at +
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36908,7 +36908,7 @@ group the period's completing calls by completed_by (the CMA person of the call'
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -36948,12 +36948,12 @@ Not under reports.per_person: performance.team alone, as Follow-up's and the cal
 
 **Orders** on /reports/courtesy · Courtesy orders list (Bestellingen)
 
-Every courtesy order since courtesy.start_date with its state now, whatever the period, after the market, segment and state filters: Not reached first, then by due date; at most follow_up.list_rows rows with Showing n of total. Ids, dates, counts and the contact's record link only.
+Every courtesy order since courtesy.start_date with its state now, whatever the period, after the market, segment and state filters: Unreachable first, then by due date; at most follow_up.list_rows rows with Showing n of total. Ids, dates, counts and the contact's record link only.
 
 **Formula as computed**
 
 ```
-rows ordered by state rank (not_reached, due_no_attempt, attempted, not_due, no contact, completed), due_date, created_at, order id; the first follow_up.list_rows; total = the filtered count; record_url = cma.record_url(crm connection, 'contact', contact id) from the connection's record_url_contact template
+rows ordered by state rank (unreachable, due_no_attempt, attempted, not_due, no contact, completed), due_date, created_at, order id; the first follow_up.list_rows; total = the filtered count; record_url = cma.record_url(crm connection, 'contact', contact id) from the connection's record_url_contact template
 ```
 
 **Unit** count · **Grain** now, per_record · **Status** prerequisite_missing
@@ -36996,7 +36996,7 @@ rows ordered by state rank (not_reached, due_no_attempt, attempted, not_due, no 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37041,7 +37041,7 @@ Days since the due date for an order due without a completed call.
 **Formula as computed**
 
 ```
-days_past_due = today in the order's zone - due_date, for the states due_no_attempt, attempted and not_reached; null otherwise
+days_past_due = today in the order's zone - due_date, for the states due_no_attempt, attempted and unreachable; null otherwise
 ```
 
 **Unit** days · **Grain** now, per_record · **Status** prerequisite_missing
@@ -37083,7 +37083,7 @@ days_past_due = today in the order's zone - due_date, for the states due_no_atte
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37166,7 +37166,7 @@ attempts since due = count(outbound linked calls on the contact with started_at 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37202,12 +37202,12 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 
 **State** on /reports/courtesy · Courtesy state (Staat)
 
-The order's state now: not due yet, due with no attempt, attempted, not reached or completed (with its outcome); none for No contact.
+The order's state now: not due yet, due with no attempt, attempted, unreachable or completed (with its outcome); none for No contact.
 
 **Formula as computed**
 
 ```
-state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt since due; else not_reached with attempts since due >= courtesy.alert_attempts and none a Conversation; else attempted
+state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt since due; else unreachable with attempts since due >= courtesy.alert_attempts and none a Conversation; else attempted
 ```
 
 **Unit** text · **Grain** now, per_record · **Status** prerequisite_missing
@@ -37250,7 +37250,7 @@ state = completed when a completing call exists; else not_due before due_at; els
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -37280,7 +37280,7 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)
 
 ## Configuration
 

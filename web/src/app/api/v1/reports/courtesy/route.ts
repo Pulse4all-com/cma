@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * &group=day|week|month and the optional &market, &segment and &state filters: a courtesy call per First or Repeat store order
  * (courtesy.order_kinds) from its due day (courtesy.due_days). `setUp` false (courtesy.start_date unset) answers every figure
  * null; `hasStore` false says no store is connected. `now` (every courtesy order since the start date as of now: `orders` with a
- * contact, `dueOpen`, `notDue`, `dueNoAttempt`, `attempted`, `notReached`, `completed`, `noContact`); `completed` and `previous`
+ * contact, `dueOpen`, `notDue`, `dueNoAttempt`, `attempted`, `unreachable`, `completed`, `noContact`); `completed` and `previous`
  * (the courtesy calls completed in the period by call date, for orders of any date, and the previous period like for like,
  * distinct calls, per outcome); `byMarket` (the period's orders by order date, and since addition 0009c `calls`, the calls
  * completed in the period, each in the market of the earliest courtesy order it completed) with `marketsTotal` (its total row,

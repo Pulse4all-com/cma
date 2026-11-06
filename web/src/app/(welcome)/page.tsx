@@ -331,7 +331,7 @@ function AttentionBlock({ summary, team, inbound, permissions, copy }: {
   const lines = attentionLines(summary,
     team ? team.days.filter((d) => d.needsCorrection).length : null,
     inbound && inbound.telephony ? inbound.callbacks.length + inbound.anonymousCount : null);
-  // the courtesy orders Not reached (addition 0009a), from the same snapshot read: only while courtesy is set up and the count
+  // the courtesy orders Unreachable (addition 0009a; renamed in 0009c), from the same snapshot read: only while courtesy is set up and the count
   // is above 0, for monitoring.live or performance.team
   const courtesy = courtesyAttention(summary, permissions);
   const text = (l: AttentionLine): string => {

@@ -2541,7 +2541,7 @@ const MOCK_COURTESY_CONTACT = new Map<string, string>();
  * The courtesy fixture (addition 0009a): every case of 151's scenario placed relative to today, so the page shows each state
  * (a First and a Repeat order completed positive and negative, an inbound completion, the kinds and flags left out, an order
  * before the start date, No contact, a London and an Amsterdam order at 23:30 UTC, a completion before the due date, a call
- * before it, one call completing two orders and a later third open, Not reached after three attempts, Attempted with two and
+ * before it, one call completing two orders and a later third open, Unreachable after three attempts, Attempted with two and
  * with a conversation, an untagged connected call), and a spread of orders over the last sixty days in NL, GB and DE; no
  * order of this month completed while calls of this month complete older ones (addition 0009c: This month's tile above 0
  * with every Of which completed 0). Invented ids and codes only; the people are the mock team's. Tenant two holds no store
@@ -2576,7 +2576,7 @@ function mockCourtesy(me: Principal, nowMs: number): [CourtesyOrderSource[], Cou
   order("pre-due", "k5b", day(-32)); call("k5b", day(-29), "outbound", null, "tu-1"); call("k5b", day(-21), "outbound", null, "tu-1");
   order("two-a", "k6", day(-36)); order("two-b", "k6", day(-34), "repeat"); call("k6", day(-17), "outbound", 120, "tu-1", ["courtesy_completed_neutral"]);
   order("third", "k6", day(-12), "repeat");
-  order("not-reached", "k7a", day(-36)); call("k7a", day(-25), "outbound", null, "tu-3"); call("k7a", day(-24), "outbound", null, "tu-3");
+  order("unreachable", "k7a", day(-36)); call("k7a", day(-25), "outbound", null, "tu-3"); call("k7a", day(-24), "outbound", null, "tu-3");
   call("k7a", day(-23), "outbound", 45, "tu-3", ["not_reached"]);
   order("two-attempts", "k7b", day(-36)); call("k7b", day(-25), "outbound", null, "tu-3"); call("k7b", day(-24), "outbound", null, "tu-3");
   order("conversation", "k7c", day(-36)); call("k7c", day(-25), "outbound", null, "tu-3"); call("k7c", day(-24), "outbound", 40, "tu-3", ["courtesy_attempt"]);
@@ -4426,9 +4426,9 @@ export const mockData: CmaData = {
     const { leads, tickets, tasks } = mockFollowUpRows(me, now);
     // the courtesy flag the snapshot keeps (addition 0009a): null while courtesy is not set up
     const settings = mockCourtesySettings();
-    const notReached = settings.startDate === null ? null
-      : courtesyOrders(...mockCourtesy(me, now), settings, new Date(now).toISOString()).filter((r) => r.state === "not_reached").length;
-    return { ...summarise(leads, tickets, tasks), courtesyNotReached: notReached, courtesyAlertAttempts: notReached === null ? null : settings.alertAttempts,
+    const unreachable = settings.startDate === null ? null
+      : courtesyOrders(...mockCourtesy(me, now), settings, new Date(now).toISOString()).filter((r) => r.state === "unreachable").length;
+    return { ...summarise(leads, tickets, tasks), courtesyUnreachable: unreachable, courtesyAlertAttempts: unreachable === null ? null : settings.alertAttempts,
       computedAt: new Date(now).toISOString() };
   },
 

@@ -88222,7 +88222,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -88230,7 +88230,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -88288,7 +88288,7 @@
         "nl": "Vervallen, niet afgerond"
       },
       "definition": "Courtesy orders due without a completed call now: from day courtesy.due_days after the order, whatever the period.",
-      "formula": "due_open = count(courtesy orders since courtesy.start_date with a contact and a state of due_no_attempt, attempted or not_reached as of now)",
+      "formula": "due_open = count(courtesy orders since courtesy.start_date with a contact and a state of due_no_attempt, attempted or unreachable as of now)",
       "unit": "count",
       "grain": [
         "now"
@@ -88446,7 +88446,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -88454,7 +88454,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -88502,16 +88502,16 @@
       "notes": "A now figure: the period does not narrow it (the hint says so). The market and segment filters do."
     },
     {
-      "key": "courtesy.not_reached",
+      "key": "courtesy.unreachable",
       "surface": "report",
       "page": "/reports/courtesy",
-      "tile": "Not reached",
+      "tile": "Unreachable",
       "title": {
-        "en": "Not reached",
-        "nl": "Niet bereikt"
+        "en": "Unreachable",
+        "nl": "Onbereikbaar"
       },
       "definition": "The flag: courtesy orders with at least courtesy.alert_attempts attempts since due, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.",
-      "formula": "not_reached = count(courtesy orders with a contact, not completed, attempts since due >= courtesy.alert_attempts and none a Conversation (cma.is_conversation)); an attempt since due = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted",
+      "formula": "unreachable = count(courtesy orders with a contact, not completed, attempts since due >= courtesy.alert_attempts and none a Conversation (cma.is_conversation)); an attempt since due = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted",
       "unit": "count",
       "grain": [
         "now"
@@ -88673,7 +88673,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -88681,7 +88681,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -88721,12 +88721,13 @@
         "api.md, GET /api/v1/reports/courtesy",
         "data-model/0008.md, 0009a",
         "definitions.md, Courtesy terms",
-        "decisions.md, 6 Nov 2026 (Courtesy per order)"
+        "decisions.md, 6 Nov 2026 (Courtesy per order)",
+        "decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)"
       ],
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Equals the follow-up snapshot's courtesy_not_reached (cma.follow_up_summary) after the next refresh (151's B10). Until the Data Issue Escalate meaning is settled (open-decisions.md, the courtesy definitions), its tag counts as an attempt, so a wrong number can end up Not reached."
+      "notes": "Equals the follow-up snapshot's courtesy_unreachable (cma.follow_up_summary) after the next refresh (151's B10). Until the Data Issue Escalate meaning is settled (open-decisions.md, the courtesy definitions), its tag counts as an attempt, so a wrong number can end up Unreachable."
     },
     {
       "key": "courtesy.no_contact",
@@ -88896,7 +88897,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -88904,7 +88905,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -89119,7 +89120,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -89127,7 +89128,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -89184,8 +89185,8 @@
         "en": "Per market: orders placed in the period, state now",
         "nl": "Per markt: bestellingen geplaatst in de periode, stand nu"
       },
-      "definition": "Two bases, each column saying which. By order date: the courtesy orders placed in the period per market, with their state now (orders with a contact, of which completed, completion share, not reached and no contact). By call date, set apart as the last column: the courtesy calls completed in the period, each in the market of the earliest courtesy order it completed (courtesy.by_market.calls). A total row under the markets; its calls equal courtesy.completed_calls.",
-      "formula": "group by the store's market (unknown last) over the courtesy orders with a business date in the period; each order column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.not_reached and courtesy.no_contact define it, per market; calls as courtesy.by_market.calls; a market with calls of the period and no order of it has a row with its order columns 0; markets_total = each column's sum over the rows (null while courtesy is not set up)",
+      "definition": "Two bases, each column saying which. By order date: the courtesy orders placed in the period per market, with their state now (orders with a contact, of which completed, completion share, unreachable and no contact). By call date, set apart as the last column: the courtesy calls completed in the period, each in the market of the earliest courtesy order it completed (courtesy.by_market.calls). A total row under the markets; its calls equal courtesy.completed_calls.",
+      "formula": "group by the store's market (unknown last) over the courtesy orders with a business date in the period; each order column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.unreachable and courtesy.no_contact define it, per market; calls as courtesy.by_market.calls; a market with calls of the period and no order of it has a row with its order columns 0; markets_total = each column's sum over the rows (null while courtesy is not set up)",
       "unit": "count",
       "grain": [
         "period",
@@ -89344,7 +89345,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -89352,7 +89353,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -89569,7 +89570,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -89577,7 +89578,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -89633,7 +89634,7 @@
         "nl": "Per dag, week of maand: bestellingen geplaatst in de periode, stand nu"
       },
       "definition": "By order date: the courtesy orders placed on each day, ISO week or month of the period (G), empty ones too, with their state now and the markets below each line. No call column: its rows are order dates, so the calls completed in the period are counted in the tile and per market only.",
-      "formula": "group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the order columns as courtesy.by_market (orders, of which completed, completion share, not reached, no contact), without its calls",
+      "formula": "group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the order columns as courtesy.by_market (orders, of which completed, completion share, unreachable, no contact), without its calls",
       "unit": "count",
       "grain": [
         "period",
@@ -89795,7 +89796,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -89803,7 +89804,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -90019,7 +90020,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -90027,7 +90028,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -90243,7 +90244,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -90251,7 +90252,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -90467,7 +90468,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -90475,7 +90476,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -90697,7 +90698,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -90705,7 +90706,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -90920,7 +90921,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -90928,7 +90929,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -90985,8 +90986,8 @@
         "en": "Courtesy orders list",
         "nl": "Bestellingen"
       },
-      "definition": "Every courtesy order since courtesy.start_date with its state now, whatever the period, after the market, segment and state filters: Not reached first, then by due date; at most follow_up.list_rows rows with Showing n of total. Ids, dates, counts and the contact's record link only.",
-      "formula": "rows ordered by state rank (not_reached, due_no_attempt, attempted, not_due, no contact, completed), due_date, created_at, order id; the first follow_up.list_rows; total = the filtered count; record_url = cma.record_url(crm connection, 'contact', contact id) from the connection's record_url_contact template",
+      "definition": "Every courtesy order since courtesy.start_date with its state now, whatever the period, after the market, segment and state filters: Unreachable first, then by due date; at most follow_up.list_rows rows with Showing n of total. Ids, dates, counts and the contact's record link only.",
+      "formula": "rows ordered by state rank (unreachable, due_no_attempt, attempted, not_due, no contact, completed), due_date, created_at, order id; the first follow_up.list_rows; total = the filtered count; record_url = cma.record_url(crm connection, 'contact', contact id) from the connection's record_url_contact template",
       "unit": "count",
       "grain": [
         "now",
@@ -91149,7 +91150,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -91157,7 +91158,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -91214,7 +91215,7 @@
         "nl": "Dagen over de vervaldag"
       },
       "definition": "Days since the due date for an order due without a completed call.",
-      "formula": "days_past_due = today in the order's zone - due_date, for the states due_no_attempt, attempted and not_reached; null otherwise",
+      "formula": "days_past_due = today in the order's zone - due_date, for the states due_no_attempt, attempted and unreachable; null otherwise",
       "unit": "days",
       "grain": [
         "now",
@@ -91373,7 +91374,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -91381,7 +91382,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -91597,7 +91598,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -91605,7 +91606,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -91661,8 +91662,8 @@
         "en": "Courtesy state",
         "nl": "Staat"
       },
-      "definition": "The order's state now: not due yet, due with no attempt, attempted, not reached or completed (with its outcome); none for No contact.",
-      "formula": "state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt since due; else not_reached with attempts since due >= courtesy.alert_attempts and none a Conversation; else attempted",
+      "definition": "The order's state now: not due yet, due with no attempt, attempted, unreachable or completed (with its outcome); none for No contact.",
+      "formula": "state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt since due; else unreachable with attempts since due >= courtesy.alert_attempts and none a Conversation; else attempted",
       "unit": "text",
       "grain": [
         "now",
@@ -91825,7 +91826,7 @@
         "sql": [
           {
             "object": "cma.courtesy_page",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.courtesy_page_of",
@@ -91833,7 +91834,7 @@
           },
           {
             "object": "cma.courtesy_orders_of",
-            "migration": "0009a"
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -91873,7 +91874,8 @@
         "api.md, GET /api/v1/reports/courtesy",
         "data-model/0008.md, 0009a",
         "definitions.md, Courtesy terms",
-        "decisions.md, 6 Nov 2026 (Courtesy per order)"
+        "decisions.md, 6 Nov 2026 (Courtesy per order)",
+        "decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)"
       ],
       "status": [
         "prerequisite_missing"
@@ -91881,16 +91883,16 @@
       "notes": ""
     },
     {
-      "key": "welcome.needs_attention.courtesy_not_reached",
+      "key": "welcome.needs_attention.courtesy_unreachable",
       "surface": "welcome",
       "page": "/",
-      "tile": "Courtesy: {n} not reached after {alert_attempts} attempts",
+      "tile": "Courtesy: {n} unreachable after {alert_attempts} attempts",
       "title": {
-        "en": "Courtesy: {n} not reached after {alert_attempts} attempts",
-        "nl": "Courtesy: {n} niet bereikt na {attempts} pogingen"
+        "en": "Courtesy: {n} unreachable after {alert_attempts} attempts",
+        "nl": "Courtesy: {n} onbereikbaar na {attempts} pogingen"
       },
-      "definition": "Across the business line: courtesy orders flagged Not reached now. Shown only while courtesy.start_date is set and the count is above 0; links to the page filtered to Not reached.",
-      "formula": "= summary.courtesy_not_reached from the follow-up snapshot (cma.refresh_follow_up_of: cma.courtesy_not_reached_of over every courtesy order since courtesy.start_date), with summary.courtesy_alert_attempts; both null while courtesy is not set up. Links to /reports/courtesy?state=not_reached",
+      "definition": "Across the business line: courtesy orders flagged Unreachable now. Shown only while courtesy.start_date is set and the count is above 0; links to the page filtered to Unreachable.",
+      "formula": "= summary.courtesy_unreachable from the follow-up snapshot (cma.refresh_follow_up_of: cma.courtesy_unreachable_of over every courtesy order since courtesy.start_date), with summary.courtesy_alert_attempts; both null while courtesy is not set up. Links to /reports/courtesy?state=unreachable",
       "unit": "count",
       "grain": [
         "now"
@@ -92048,15 +92050,15 @@
         "sql": [
           {
             "object": "cma.follow_up_summary",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
             "object": "cma.refresh_follow_up_of",
-            "migration": "0009a"
+            "migration": "0009c"
           },
           {
-            "object": "cma.courtesy_not_reached_of",
-            "migration": "0009a"
+            "object": "cma.courtesy_unreachable_of",
+            "migration": "0009c"
           }
         ],
         "ts": [
@@ -92070,7 +92072,7 @@
           }
         ]
       },
-      "verify_sql": "select (summary->>'courtesy_not_reached')::integer, (summary->>'courtesy_alert_attempts')::integer from cma.follow_up_snapshot where tenant_id = :tenant_id",
+      "verify_sql": "select (summary->>'courtesy_unreachable')::integer, (summary->>'courtesy_alert_attempts')::integer from cma.follow_up_snapshot where tenant_id = :tenant_id",
       "fixture_check": "Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.",
       "prerequisites": [
         {
@@ -92096,12 +92098,13 @@
         "api.md, GET /api/v1/reports/courtesy",
         "data-model/0008.md, 0009a",
         "definitions.md, Courtesy terms",
-        "decisions.md, 6 Nov 2026 (Courtesy per order)"
+        "decisions.md, 6 Nov 2026 (Courtesy per order)",
+        "decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)"
       ],
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "The Needs attention block is shown to monitoring.live, performance.team or workday.team; this line to monitoring.live or performance.team only. It equals the page's Not reached tile after the snapshot's next refresh (151's B10)."
+      "notes": "The Needs attention block is shown to monitoring.live, performance.team or workday.team; this line to monitoring.live or performance.team only. It equals the page's Unreachable tile after the snapshot's next refresh (151's B10)."
     }
   ]
 }

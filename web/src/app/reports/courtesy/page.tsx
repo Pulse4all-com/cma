@@ -144,8 +144,8 @@ export default async function CourtesyPage({ searchParams }: PageProps<"/reports
                   historyStart={report.startDate} copy={copy} locale={me.locale} historyText={t.historyFrom} better="up" />} />
               <CallsTile testId="courtesy-due-open" label={t.dueOpen} value={n(now!.dueOpen)} info={info(t.dueOpen, hints.ctDueOpen!, "courtesy.due_open")}
                 detail={fill(t.dueOpenDetail)} />
-              <CallsTile testId="courtesy-not-reached" label={t.notReached} value={n(now!.notReached)} info={info(t.notReached, hints.ctNotReached!, "courtesy.not_reached")}
-                detail={fill(t.notReachedDetail)} />
+              <CallsTile testId="courtesy-unreachable" label={t.unreachable} value={n(now!.unreachable)} info={info(t.unreachable, hints.ctUnreachable!, "courtesy.unreachable")}
+                detail={fill(t.unreachableDetail)} />
               <CallsTile testId="courtesy-no-contact" label={t.noContact} value={n(now!.noContact)} info={info(t.noContact, hints.ctNoContact!, "courtesy.no_contact")}
                 detail={t.noContactDetail} />
             </section>

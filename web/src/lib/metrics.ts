@@ -94,7 +94,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "welcome.needs_attention.tickets_at_risk_or_breached",
     "welcome.needs_attention.tasks_overdue",
     "welcome.needs_attention.missed_callbacks",
-    "welcome.needs_attention.courtesy_not_reached",
+    "welcome.needs_attention.courtesy_unreachable",
     "welcome.waiting_for_you.total",
     "welcome.waiting_for_you.counts",
   ],
@@ -398,7 +398,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
   "/reports/courtesy": [
     "courtesy.completed_calls",
     "courtesy.due_open",
-    "courtesy.not_reached",
+    "courtesy.unreachable",
     "courtesy.no_contact",
     "courtesy.outcomes",
     "courtesy.by_market",

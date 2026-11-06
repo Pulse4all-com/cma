@@ -8,6 +8,8 @@
 -- Every check writes one row, PASS or FAIL, and the last result lists them with the verdict, because
 -- Cloud SQL Studio shows no notices. Run as your own IAM login in dev, after 80_follow_up_snapshot.sql;
 -- then 73 and 79 again (unchanged).
+-- Edited by 0009a (150) and 0009c (154): B2 and B11 leave the summary's courtesy keys out (courtesy_unreachable and
+-- courtesy_alert_attempts since 0009c), so since 0009c it runs after 154.
 --   A  structure and privileges: the addition row after 0008r; the setting with its default; the
 --      permission on every scheduler role and no other; the two tables' columns, row-level security,
 --      grants (the application's only), indexes and no audit trigger; the functions the application's
@@ -296,8 +298,9 @@ begin
       format('%s snapshots before, %s after; %s leads', v_n, v_m, v_res -> 'leads' ->> 'total')];
 
     -- B2. the summary and the order of the ids equal to the live functions' (the same transaction, so the same now()); the
-    --     courtesy keys of 0009a (150) are left out of the comparison: the live summary has none, and 151 proves them
-    select (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x) = s.summary - 'courtesy_not_reached' - 'courtesy_alert_attempts'
+    --     courtesy keys of 0009a (150; courtesy_unreachable since 0009c, 154) are left out of the comparison: the live summary
+    --     has none, and 151 proves them
+    select (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x) = s.summary - 'courtesy_unreachable' - 'courtesy_alert_attempts'
       into v_ok from cma.follow_up_snapshot s where s.tenant_id = v_t1;
     select string_agg(i.kind || ':' || i.item_id, ',' order by i.kind, i.sort_key) into v_txt from cma.follow_up_item i where i.tenant_id = v_t1;
     select string_agg(k || ':' || id, ',' order by k, n) into v_txt2 from (
@@ -449,9 +452,9 @@ begin
       format('%s | live %s', v_txt, v_txt2)];
 
     -- B11. 0008o's reads from the snapshot: the summary with computed_at, every list row equal to the live set (the
-    --      courtesy columns of 0009a left out, as in B2)
+    --      courtesy columns of 0009a and 0009c left out, as in B2)
     perform set_config('app.user_id', v_manager1::text, true);
-    select (to_jsonb(s) - 'tenant_id' - 'computed_at' - 'courtesy_not_reached' - 'courtesy_alert_attempts')
+    select (to_jsonb(s) - 'tenant_id' - 'computed_at' - 'courtesy_unreachable' - 'courtesy_alert_attempts')
              = (select to_jsonb(x) - 'tenant_id' from cma.follow_up_summary_of(v_t1) x)
            and s.computed_at = (select computed_at from cma.follow_up_snapshot where tenant_id = v_t1)
       into v_ok from cma.follow_up_summary() s;
