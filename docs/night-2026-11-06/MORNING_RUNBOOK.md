@@ -166,12 +166,12 @@ reset role;
 ```
 Expected: `ALTER TABLE` per statement, then the options per table. Write what you ran into `records/n06-prod-2026-11-06/README.md` and I add the decision row. Not run when 0b showed nothing.
 
-**3c. The concurrent index pattern, for the day one is needed (none tonight).** From the Terminal, never Studio (Studio wraps a script in a transaction and `concurrently` refuses it); one statement per index with its own timeouts; `indisvalid` checked after; an invalid index is dropped and created again:
+**3c. The concurrent index pattern, for the day one is needed (none tonight).** From the Terminal, never Studio (Studio wraps a script in a transaction and `concurrently` refuses it); one statement per index, each its own `-c` (several in one `-c` run as one transaction, which `concurrently` refuses) with `set role cma_owner` and its own timeouts (this block was corrected on 6 November 2026, addition 0008zx: it had one `-c` and no `set role`, and would have failed); `indisvalid` checked after; an invalid index is dropped and created again:
 
 **Terminal** (the pattern, with a made-up name; nothing to run today)
 ```bash
-cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=0 -c "set lock_timeout = '5s'; set statement_timeout = '10min'; create index concurrently if not exists <name> on cma.<table> (<columns>) where <predicate>;" \
-  -c "select c.relname, i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = '<name>';"
+cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=0 -c "set role cma_owner" -c "set lock_timeout = '5s'" -c "set statement_timeout = '10min'" -c "create index concurrently if not exists <name> on cma.<table> (<columns>) where <predicate>" \
+  -c "select c.relname, i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = '<name>'"
 ```
 Expected: `CREATE INDEX`, then one row `<name> | t`. An `f`: `drop index concurrently cma.<name>;` and run it again, outside office hours or between 12:00 and 13:00; at prod's `ingest_event` size (about 500,000 rows) an index builds in under a minute.
 
