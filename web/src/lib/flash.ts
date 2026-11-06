@@ -144,6 +144,19 @@ export function isDate(value: unknown): value is string {
 }
 
 /**
+ * What the As of field applies (addition 0008zz), on Enter or blur only, never while typing: an empty field is now (null);
+ * a complete date (a year of four digits, 1000 on, and a real calendar day) within the field's range (from the first
+ * snapshot, when there is one, to the last date that can have one) is that date; anything else applies nothing (false).
+ * A date field reports a value as soon as its year's digits make one: typing 2026 passes 0002, 0020 and 0202 first
+ */
+export function appliedAsOf(value: string, min: string | null, max: string): string | null | false {
+  if (value === "") return null;
+  if (!isDate(value) || value < "1000-01-01") return false;
+  if ((min !== null && value < min) || value > max) return false;
+  return value;
+}
+
+/**
  * As of from the address: absent, empty or "now" is now (null); a business date before the tenant's today is a snapshot's
  * date; anything else (today, a future date, no date) is a problem and reads as now
  */

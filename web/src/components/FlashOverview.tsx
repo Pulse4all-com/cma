@@ -4,7 +4,7 @@
  * period), the state the reads may correct (the tenant's today adopted on a refusal), the top line's controls, the
  * notices, and the overview's document (getFlashView without its list: the first paint) with the per-market bars and the
  * breakdowns, then its first page of records with their file and pager, read on their own and streamed in a boundary of
- * their own (addition 0008zy). The Installed base's Model filter narrows the document and the records (addition 0008zy). Moved out of the Flash page so both pages render the
+ * their own (addition 0008zy), the read started with the document's (addition 0008zz). The Installed base's Model filter narrows the document and the records (addition 0008zy). Moved out of the Flash page so both pages render the
  * same data path, filters, As of and files; every link and control keeps the page it is rendered on (lib/flash
  * FlashPath). Team figures only, for reports.view or performance.team (the pages check it; the database again on every
  * read). Ids, statuses, codes, amounts and the CRM's links only: never a name, email, phone or address.
@@ -21,7 +21,7 @@ import { Shell } from "@/components/Shell";
 import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
-import { CmaDbError, data, dataIsMock, requestDbTrace, type FlashDocumentView, type FlashRowsView, type HoursRange } from "@/lib/data";
+import { CmaDbError, data, dataIsMock, requestDbTrace, streamed, type FlashDocumentView, type FlashRowsView, type HoursRange } from "@/lib/data";
 import {
   bandDimOf, breakdownSets, documentFilterOf, FLASH_DOCUMENT_FILTERS, FLASH_FROZEN_LIST, FLASH_PAGE_ROWS, filterDocument, filtersShown, filtersText, flashHref, shownSetOf,
   frozenFilters, listUnavailable, metricKey, modelChoicesOf, overviewOf, parseAsOf, parseFilters, parseMarket, parseSort, type FlashKey, type FlashOverviewDef,
@@ -157,11 +157,19 @@ interface RowsPlan {
   dropped: string[];
 }
 
+/** The records' read as it ended: its list, or the error it raised (never a rejected promise: the boundary decides) */
+interface RowsRead {
+  rows: FlashRowsView | null;
+  error: unknown;
+}
+
 /**
  * An overview's page in two parts (addition 0008zy): the document first (the heading, the tiles, the per-market bars
  * and the breakdowns: what the first paint shows), now from the sources or as of a business date with a snapshot, per
  * market, the flows over the period bar; then the first page of records, with its file and its pager, streamed in a
- * boundary of its own (FlashRecords) under a placeholder, from a read of its own. The Installed base's Model filter
+ * boundary of its own (FlashRecords) under a placeholder, from a read of its own. The records' read starts with the
+ * document's, not after it (addition 0008zz), as a streamed part of the request: the first paint waits for the document
+ * alone and its cost stays the document's (the Shell's meta); the boundary awaits the records. The Installed base's Model filter
  * (f_model) narrows the document (lib/flash filterDocument) and the records alike. On Reports → Flash with the overviews'
  * strip and the way back to the landing, on a page of one overview (Assets → Installed base) under that page's own title
  */
@@ -189,6 +197,17 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
     return { withRows: def.kind === "flow" || st.asOf === null || frozen, rowsAsOf: def.kind === "stock" && st.asOf !== null ? st.asOf : null,
       rowFilters: split.kept, dropped: split.dropped };
   };
+  // the records' read, started now, alongside the document's (addition 0008zz): a streamed part of the request, its
+  // answer or its error held for the boundary. Read again with the document after the tenant's today is adopted
+  const readRows = (): Promise<RowsRead> => {
+    const plan = rowsPlan();
+    if (!plan.withRows) return Promise.resolve({ rows: null, error: null });
+    return streamed(() => data().getFlashRows(me, {
+      overview: def.key, market: st.market, asOf: plan.rowsAsOf, from: def.kind === "flow" ? st.from : null, to: def.kind === "flow" ? st.to : null,
+      filters: plan.rowFilters, sort: plan.rowsAsOf ? null : sort, descending, limit: FLASH_PAGE_ROWS, offset: (pageNo - 1) * FLASH_PAGE_ROWS,
+    })).then((rows) => ({ rows, error: null }), (error: unknown) => ({ rows: null, error }));
+  };
+  let rowsRead = readRows();
   // the document alone (an object: the read fills it from its closure). Its refusals: no snapshot for the date (CMA02:
   // "missing"); As of or the period past the tenant's today (CMA04): the tenant's today adopted and read again
   const got: { doc: FlashDocumentView | null } = { doc: null };
@@ -206,6 +225,8 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
     else if (!tenantTodayRefused(e)) throw e;
     else {
       await st.adoptTenantToday();
+      // the records were asked for the refused date too: asked again for the adopted one, with the document
+      rowsRead = readRows();
       try {
         await readDocument();
       } catch (e2) {
@@ -319,7 +340,7 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
                 <Notice tone="info">{t.listsAtMonthEnd}</Notice>
               ) : (
                 <Suspense fallback={<RecordsPlaceholder label={t.loading} />}>
-                  <FlashRecords me={me} copy={copy} st={st} def={def} plan={plan} filters={filters} pageFilterDim={pageFilter?.dim ?? null}
+                  <FlashRecords me={me} copy={copy} st={st} def={def} plan={plan} rowsRead={rowsRead} filters={filters} pageFilterDim={pageFilter?.dim ?? null}
                     sort={sort} descending={descending} pageNo={pageNo} path={path} query={query} hasFilters={hasFilters} labels={shown.labels}
                     fileMaxRows={shown.settings.fileMaxRows} />
                 </Suspense>
@@ -352,24 +373,20 @@ function RecordsPlaceholder({ label }: { label: string }) {
  * CMA_DB_TRACE (mock sign-in only) it writes the request's database count after its read, so verify/round-trips.mjs
  * reads the total from the last meta and the first paint's from the Shell's
  */
-async function FlashRecords({ me, copy, st, def, plan, filters, pageFilterDim, sort, descending, pageNo, path, query, hasFilters, labels, fileMaxRows }: {
-  me: Principal; copy: Copy; st: FlashState; def: FlashOverviewDef; plan: RowsPlan; filters: Record<string, string>; pageFilterDim: string | null;
+async function FlashRecords({ me, copy, st, def, plan, rowsRead, filters, pageFilterDim, sort, descending, pageNo, path, query, hasFilters, labels, fileMaxRows }: {
+  me: Principal; copy: Copy; st: FlashState; def: FlashOverviewDef; plan: RowsPlan; rowsRead: Promise<RowsRead>; filters: Record<string, string>; pageFilterDim: string | null;
   sort: string; descending: boolean; pageNo: number; path: FlashPath; query: Record<string, string>; hasFilters: boolean;
   labels: FlashDocumentView["labels"]; fileMaxRows: number;
 }) {
   const t = copy.flash;
   const locale = me.locale;
-  let rows: FlashRowsView | null = null;
-  let unavailable = false;
-  try {
-    rows = await data().getFlashRows(me, {
-      overview: def.key, market: st.market, asOf: plan.rowsAsOf, from: def.kind === "flow" ? st.from : null, to: def.kind === "flow" ? st.to : null,
-      filters: plan.rowFilters, sort: plan.rowsAsOf ? null : sort, descending, limit: FLASH_PAGE_ROWS, offset: (pageNo - 1) * FLASH_PAGE_ROWS,
-    });
-  } catch (e) {
-    if (e instanceof CmaDbError && listUnavailable(e.sqlState)) unavailable = true;
-    else throw e;
-  }
+  // the read started with the document's (FlashOverview): its list, or its refusal (a list the database cannot give
+  // reads "not available"; any other error is the page's)
+  const read = await rowsRead;
+  const rows = read.rows;
+  const unavailable = read.error !== null && read.error instanceof CmaDbError && listUnavailable(read.error.sqlState);
+  if (read.error !== null && !unavailable) throw read.error;
+  // the whole request's cost, the streamed records' read included (the Shell's meta holds the first paint's)
   const dbTrace = requestDbTrace();
   const trace = dbTrace ? <meta name="cma-db" content={dbTrace} /> : null;
   if (unavailable || !rows) {
