@@ -167,6 +167,7 @@ if (ONLY_REPORTS) {
   await reportChecks();
   await flashChecks();
   await reviewsAllChecks();
+  await courtesyChecks();
   verdict();
 }
 if (ONLY_SOURCES) {
@@ -1005,6 +1006,7 @@ expect("the stats keep it, marked withdrawn at that time", [!!wstat, wstat?.with
 await reportChecks();
 await flashChecks();
 await reviewsAllChecks();
+await courtesyChecks();
 await inboundChecks();
 await callsChecks();
 await attemptsChecks();
@@ -1031,10 +1033,14 @@ async function followUpChecks() {
     [(await get(AGENT, `${fu}/leads`)).status, (await get(AGENT, `${fu}/tickets`)).status, (await get(AGENT, `${fu}/tasks`)).status, (await get(AGENT, `${fu}/summary`)).status, (await get(AGENT, `${fu}/by-owner`)).status],
     [403, 403, 403, 403, 403], [200, 403, 403, 403, 403]);
   const summary = await get(SUPERVISOR, `${fu}/summary`);
-  expect("follow-up: the supervisor (monitoring.live) reads the summary's eight counts and computedAt",
-    [summary.status, JSON.stringify(Object.keys(summary.body?.data ?? {}).sort()) === JSON.stringify([...SUMMARY_KEYS, "computedAt"].sort()), SUMMARY_KEYS.every((k) => Number.isInteger(summary.body?.data?.[k])),
-      isTime(summary.body?.data?.computedAt)],
-    [200, true, true, true], [403, true, true, true]);
+  // since addition 0009a with the courtesy flag: the courtesy orders Not reached and the attempts that flag one, both null while
+  // courtesy is not set up
+  const COURTESY_FLAG = ["courtesyNotReached", "courtesyAlertAttempts"];
+  expect("follow-up: the supervisor (monitoring.live) reads the summary's eight counts, the courtesy flag and computedAt",
+    [summary.status, JSON.stringify(Object.keys(summary.body?.data ?? {}).sort()) === JSON.stringify([...SUMMARY_KEYS, ...COURTESY_FLAG, "computedAt"].sort()),
+      SUMMARY_KEYS.every((k) => Number.isInteger(summary.body?.data?.[k])),
+      COURTESY_FLAG.every((k) => summary.body?.data?.[k] === null || Number.isInteger(summary.body?.data?.[k])), isTime(summary.body?.data?.computedAt)],
+    [200, true, true, true, true], [403, true, true, true, true]);
   // the reader (reports.view alone) is a mock identity; a database without it answers every call 403, which says nothing
   if ((await get(READER, "/api/v1/me")).status === 200) {
     expect("follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures",
@@ -1511,6 +1517,31 @@ async function flashChecks() {
   const invest = (await call(INVEST, "/api/v1/reports/flash?overview=orders")).body?.data;
   expect("flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop)", [invest?.setUp, invest?.totals ?? null, invest?.rows?.length ?? -1],
     [false, null, 0], [true, {}, 1]);
+}
+
+// Customers → Courtesy (addition 0009a): the report for reports.view or performance.team (an agent 403), the period, group and
+// filters refused with a 400, the per-person block only for performance.team, and no customer data in the list's rows
+async function courtesyChecks() {
+  const tz = "Europe/Amsterdam";
+  const day = (offset) => dateKey(new Date(Date.now() + offset * 86_400_000), tz);
+  const q = `from=${day(-30)}&to=${day(0)}`;
+  const r = await call(ANALYST, `/api/v1/reports/courtesy?${q}`);
+  const d = r.body?.data;
+  const rows = d?.list?.rows ?? [];
+  expect("courtesy: the analyst reads the page; not set up answers no figure, never 0; the rows hold no customer data",
+    [r.status, typeof d?.setUp, typeof d?.hasStore, d?.setUp === false ? d?.now === null && d?.completed === null : d?.now !== null,
+      rows.every((x) => Object.keys(x).every((k) => !/(email|phone|address|firstName|lastName|customerName|contactName)/i.test(k)))],
+    [200, "boolean", "boolean", true, true], [200, "string", "boolean", true, true]);
+  const refused = [`/api/v1/reports/courtesy?${q}&period=day`, `/api/v1/reports/courtesy?${q}&group=year`, `/api/v1/reports/courtesy?${q}&market=nl`,
+    `/api/v1/reports/courtesy?${q}&segment=B2B,B2C`, `/api/v1/reports/courtesy?${q}&state=open`, `/api/v1/reports/courtesy?from=${day(-199)}&to=${day(0)}`];
+  expect("courtesy: a period, group, market, segment or state not known and 200 days are 400s; an agent is refused",
+    [...await Promise.all(refused.map(async (u) => (await call(ANALYST, u)).status)), (await call(AGENT, `/api/v1/reports/courtesy?${q}`)).status],
+    [...refused.map(() => 400), 403], [...refused.map(() => 200), 403]);
+  // the reader (reports.view alone) is a mock identity; a database without it answers every call 403, which says nothing
+  if ((await get("reader", "/api/v1/me")).status === 200) {
+    const reader = await call("reader", `/api/v1/reports/courtesy?${q}`);
+    expect("courtesy: the reader (reports.view alone) gets no per-person block", [reader.status, reader.body?.data?.perPerson ?? null], [200, null], [200, []]);
+  }
 }
 
 // Reports → Reviews' period All (addition 0008zw): range=all from the tenant's first counted review to &to, by month,

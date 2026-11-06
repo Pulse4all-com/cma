@@ -81,9 +81,9 @@ const rendering = pathnames.filter((p) => {
   const page = src(pageFile(p)) + (p === "/reports/flash" ? src("../src/components/FlashOverview.tsx") : "");
   return page.includes("resolvePeriod(sp, today") && new RegExp(`<PeriodBar\\s+pathname="${p}"`).test(page);
 });
-// since addition 0008zn Reports → Flash (its flows' period) is the 20th
-expect("all 20 pages with the period bar resolve their period and render the shared bar",
-  [pathnames.length, rendering.length], [20, 20], [19, 19]);
+// since addition 0008zn Reports → Flash (its flows' period) is the 20th; since addition 0009a Customers → Courtesy the 21st
+expect("all 21 pages with the period bar resolve their period and render the shared bar",
+  [pathnames.length, rendering.length], [21, 21], [20, 20]);
 // The like-for-like path follows the dates (previousPeriod: to >= today), never the range: a page or component that
 // compared range with "yesterday", "today", "week" or "month" would put Yesterday on the wrong path
 function files(dir) {

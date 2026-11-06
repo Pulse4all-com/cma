@@ -6,7 +6,9 @@
  * grace); since addition 0008j also the seconds of talk time from which an outbound call is connected,
  * which the telephony connection's Sources page links to; since addition 0008l the two invitation settings
  * (how many days a link works, the email domains invitations may go to); since addition 0008zm the ages at which Reports, Lead
- * cohorts follows each cohort, at most the days lead to order counts. Use default resets a value to the catalog's.
+ * cohorts follows each cohort, at most the days lead to order counts; since addition 0009a, next to the follow-up settings, the five
+ * courtesy settings (the start date, empty while courtesy is not set up; the order kinds; the due day; the attempts that flag Not
+ * reached; the order cohorts' ages). Use default resets a value to the catalog's.
  * Every value goes through /api/v1/configuration/settings and is validated by the database against
  * its catalog.
  */
@@ -18,6 +20,7 @@ import {
   type ExportSettingKey, type MinuteSettingKey, type SecondSettingKey,
 } from "@/lib/configuration";
 import { LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, parseLeadAges } from "@/lib/cohorts";
+import { COURTESY_SETTING_KEYS, parseCourtesySetting, type CourtesySettingKey } from "@/lib/courtesy";
 import { FOLLOW_UP_SETTING_KEYS, parseFollowUpSetting, type FollowUpSettingKey } from "@/lib/follow-up";
 import { normaliseDomains, parseValidDays } from "@/lib/invitations";
 import { Button } from "../primitives";
@@ -34,6 +37,16 @@ const FOLLOW_UP_HINTS: Record<FollowUpSettingKey, keyof Copy["configExports"]> =
   "follow_up.list_rows": "rowsHint",
 };
 
+/** The courtesy settings (addition 0009a): their labels and hints in copy.configExports */
+const COURTESY_KEYS: Record<CourtesySettingKey, keyof Copy["configExports"]> = {
+  "courtesy.start_date": "courtesy_start_date", "courtesy.order_kinds": "courtesy_order_kinds", "courtesy.due_days": "courtesy_due_days",
+  "courtesy.alert_attempts": "courtesy_alert_attempts", "courtesy.ages_days": "courtesy_ages_days",
+};
+const COURTESY_HINTS: Record<CourtesySettingKey, keyof Copy["configExports"]> = {
+  "courtesy.start_date": "courtesyStartHint", "courtesy.order_kinds": "courtesyKindsHint", "courtesy.due_days": "courtesyDueHint",
+  "courtesy.alert_attempts": "courtesyAlertHint", "courtesy.ages_days": "courtesyAgesHint",
+};
+
 export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; copy: Copy }) {
   const c = copy.configuration;
   const t = copy.configExports;
@@ -45,6 +58,17 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   const [followUp, setFollowUp] = useState<Partial<Record<FollowUpSettingKey, string>>>({});
   // the lead cohorts' ages (0008zm), saved on blur once they parse, as the follow-up settings
   const [ages, setAges] = useState<string | undefined>(undefined);
+  // the courtesy settings (0009a), saved on blur once they parse; an empty start date resets it (not set up)
+  const [courtesy, setCourtesy] = useState<Partial<Record<CourtesySettingKey, string>>>({});
+
+  async function saveCourtesy(key: CourtesySettingKey) {
+    const text = courtesy[key];
+    if (text === undefined) return;
+    const v = parseCourtesySetting(key, text);
+    if (v === null) return;
+    if (v !== (valueOf(key)?.value ?? "")) await save(() => send("PUT", "/api/v1/configuration/settings", { key, value: v === "" ? null : v }));
+    setCourtesy((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  }
 
   async function saveFollowUp(key: FollowUpSettingKey) {
     const text = followUp[key];
@@ -254,6 +278,44 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
                   ) : null}
                 </span>
                 <span className={`font-normal text-caption ${bad ? "text-p4a-error" : "text-p4a-muted"}`}>{bad ? t.followUpProblem : t[FOLLOW_UP_HINTS[key]]}</span>
+              </label>
+            );
+          })}
+        </div>
+      </section>
+
+      <section data-testid="courtesy-settings">
+        <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.courtesy}</h2>
+        <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.courtesyIntro}</p>
+        <div className="grid grid-cols-2 gap-6">
+          {COURTESY_SETTING_KEYS.map((key) => {
+            const s = valueOf(key);
+            const text = courtesy[key] ?? s?.value ?? "";
+            const bad = courtesy[key] !== undefined && parseCourtesySetting(key, courtesy[key] ?? "") === null;
+            const wide = key === "courtesy.start_date" || key === "courtesy.order_kinds" || key === "courtesy.ages_days";
+            return (
+              <label key={key} id={settingAnchor(key)} className={`${label} scroll-mt-24`}>
+                <span>
+                  {t[COURTESY_KEYS[key]]}
+                  {s?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
+                </span>
+                <span className="flex gap-2">
+                  <input
+                    className={`${field} ${wide ? "w-48" : "w-32"} tabular-nums ${bad ? "border-p4a-error" : ""}`}
+                    inputMode={wide ? "text" : "numeric"}
+                    maxLength={wide ? 40 : 3}
+                    value={text}
+                    onChange={(e) => setCourtesy({ ...courtesy, [key]: e.target.value })}
+                    onBlur={() => saveCourtesy(key)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  />
+                  {s && !s.isDefault ? (
+                    <Button variant="text" size="md" onClick={() => save(() => send("PUT", "/api/v1/configuration/settings", { key, value: null }))}>
+                      {t.resetToDefault}
+                    </Button>
+                  ) : null}
+                </span>
+                <span className={`font-normal text-caption ${bad ? "text-p4a-error" : "text-p4a-muted"}`}>{bad ? t.followUpProblem : t[COURTESY_HINTS[key]]}</span>
               </label>
             );
           })}

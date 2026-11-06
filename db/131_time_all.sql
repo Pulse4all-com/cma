@@ -10,7 +10,8 @@
 -- (Cloud SQL Studio) and statement by statement (psql), in any database, at any time, as often as wanted. Run as your
 -- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
 -- cma.organisation.is_contact_center), after 140_live_per_organisation.sql; since addition 0008zw (Reviews' period All),
--- after 142_reviews_all_order_kinds.sql. Prod is the proof; dev's shared core is for information.
+-- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql. Prod is the
+-- proof; dev's shared core is for information.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -59,6 +60,10 @@ begin
   -- Reviews' period All (the read without a start, by month) since addition 0008zw
   if not exists (select 1 from cma.schema_migration where version = '0008zw') then
     raise exception 'addition 0008zw (142_reviews_all_order_kinds.sql) has not run in this database';
+  end if;
+  -- Customers → Courtesy (cma.courtesy_page) since addition 0009a
+  if not exists (select 1 from cma.schema_migration where version = '0009a') then
+    raise exception 'addition 0009a (150_courtesy.sql) has not run in this database';
   end if;
 end
 $$;
@@ -265,6 +270,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'cancellations {P}', 'cancellations', $q$select cma.cancellations_page('{f}', '{t}', null, 'week')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'reviews {P}', 'reviews', $q$select cma.reviews_page('{f}', '{t}', null, 'week')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'lead cohorts {P}', 'lead cohorts', $q$select cma.lead_cohorts_report('{f}', '{t}', 'week', null, null, 'none', null)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'courtesy {P}', 'courtesy', $q$select cma.courtesy_page('{f}', '{t}', 'week', 'week', null, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms report', $q$select * from cma.forms_report('{f}', '{t}', 'day', null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms whole period', $q$select * from cma.forms_report('{f}', '{t}', 'week', null, null, null) where period = 'current' and group_key is null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),

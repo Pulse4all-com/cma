@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-590 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 97 · cadence_unconfirmed 68.
+607 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 114 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -654,6 +654,80 @@ select i.kind, count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id
 **Notes**
 
 Same three arrays /me/follow-up renders as tables; counts therefore always agree with that page.
+
+#### `welcome.needs_attention.courtesy_not_reached`
+
+**Courtesy: {n} not reached after {alert_attempts} attempts** on / · Courtesy: {n} not reached after {alert_attempts} attempts (Courtesy: {n} niet bereikt na {attempts} pogingen)
+
+Across the business line: courtesy orders flagged Not reached now. Shown only while courtesy.start_date is set and the count is above 0; links to the page filtered to Not reached.
+
+**Formula as computed**
+
+```
+= summary.courtesy_not_reached from the follow-up snapshot (cma.refresh_follow_up_of: cma.courtesy_not_reached_of over every courtesy order since courtesy.start_date), with summary.courtesy_alert_attempts; both null while courtesy is not set up. Links to /reports/courtesy?state=not_reached
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `monitoring.live` or `performance.team`
+
+**Refresh** follow-up snapshot once a minute; read on page load only
+
+**Computed in** `cma.follow_up_summary` (0009a); `cma.refresh_follow_up_of` (0009a); `cma.courtesy_not_reached_of` (0009a); `courtesyAttention` in src/lib/courtesy.ts; `AttentionBlock` in src/app/(welcome)/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select (summary->>'courtesy_not_reached')::integer, (summary->>'courtesy_alert_attempts')::integer from cma.follow_up_snapshot where tenant_id = :tenant_id
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+The Needs attention block is shown to monitoring.live, performance.team or workday.team; this line to monitoring.live or performance.team only. It equals the page's Not reached tile after the snapshot's next refresh (151's B10).
 
 ## Live board
 
@@ -35764,6 +35838,1371 @@ count(*) of cma.flash_findings_of(tenant): every finding of cma.data_quality_of 
 **Notes**
 
 Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_findings_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+
+### /reports/courtesy
+
+#### `courtesy.completed_calls`
+
+**Completed courtesy calls** on /reports/courtesy · Completed courtesy calls (Afgeronde courtesy-gesprekken)
+
+Courtesy calls completed in the period: calls on an order's contact tagged with a completed meaning (positive, neutral or negative), by the day they were made. One call counts once, also when it completed several orders; the detail line splits them by outcome.
+
+**Formula as computed**
+
+```
+calls = count(distinct completed_call_id) over the courtesy orders (every one since courtesy.start_date) whose completion (the contact's first call at or after the order's creation with a current tag whose meaning is courtesy_completed_positive, _neutral or _negative; cma.courtesy_outcome_of) has a business date in the period (cma.in_period); positive, neutral and negative the same per outcome (a call carrying two completed meanings takes the tag set last)
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), the last day cut at now's time of day in each order's zone while the period runs; history start = courtesy.start_date (No history to compare yet before it)
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+-- the completing calls of the period: see cma.courtesy_orders_of's done step; count distinct completing call ids whose start, in the order's zone, is between :from and :to
+select count(*) from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+Delta: up is better. Legacy call outcomes (the former telephony system's courtesy history, addition 0008zg) never count: they end on 31 August 2026, before any start date. HubSpot's courtesy contact properties are not a source (a repeat order overwrites them).
+
+#### `courtesy.due_open`
+
+**Due, not completed** on /reports/courtesy · Due, not completed (Vervallen, niet afgerond)
+
+Courtesy orders due without a completed call now: from day courtesy.due_days after the order, whatever the period.
+
+**Formula as computed**
+
+```
+due_open = count(courtesy orders since courtesy.start_date with a contact and a state of due_no_attempt, attempted or not_reached as of now)
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+A now figure: the period does not narrow it (the hint says so). The market and segment filters do.
+
+#### `courtesy.not_reached`
+
+**Not reached** on /reports/courtesy · Not reached (Niet bereikt)
+
+The flag: courtesy orders with at least courtesy.alert_attempts attempts from the due day, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.
+
+**Formula as computed**
+
+```
+not_reached = count(courtesy orders with a contact, not completed, attempts >= courtesy.alert_attempts and no attempt a Conversation (cma.is_conversation)); an attempt = an outbound linked call on the contact from the start of the due date up to and including the completion; an order with a Conversation stays Attempted
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+| `calls.conversation_min_talk_seconds` | 30 | 30 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+Equals the follow-up snapshot's courtesy_not_reached (cma.follow_up_summary) after the next refresh (151's B10). Until the Data Issue Escalate meaning is settled (open-decisions.md, the courtesy definitions), its tag counts as an attempt, so a wrong number can end up Not reached.
+
+#### `courtesy.no_contact`
+
+**No contact** on /reports/courtesy · No contact (Geen contact)
+
+Courtesy orders whose store customer is not linked to a CRM contact, now: they have no state and cannot be called from here, a data issue.
+
+**Formula as computed**
+
+```
+no_contact = count(courtesy orders since courtesy.start_date whose commerce_customer has no crm_contact_source_id, or no live customer row)
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.outcomes`
+
+**Completed calls by outcome** on /reports/courtesy · Completed calls by outcome (Afgeronde gesprekken per uitkomst)
+
+The period's completed courtesy calls split by outcome, each call once.
+
+**Formula as computed**
+
+```
+per outcome in (positive, neutral, negative): count(distinct completed_call_id) as courtesy.completed_calls; the share of the period's completed calls
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+Colours: positive Leaf Green, neutral Light Blue, negative Soft Rose with a Deep Blue edge; no text on Light Blue or Soft Rose.
+
+#### `courtesy.by_market`
+
+**Per market** on /reports/courtesy · Courtesy orders per market (Per markt)
+
+The courtesy orders placed in the period per market, with their state now: orders with a contact, completed, completion share, not reached and no contact.
+
+**Formula as computed**
+
+```
+group by the store's market (unknown last) over the courtesy orders with a business date in the period; each column as courtesy.orders, courtesy.completed, courtesy.completion_share, courtesy.not_reached and courtesy.no_contact define it, per market
+```
+
+**Unit** count · **Grain** period, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.by_period`
+
+**Per day / Per week / Per month** on /reports/courtesy · Courtesy orders per day, week or month (Per dag, week of maand)
+
+The courtesy orders placed on each day, ISO week or month of the period (G), empty ones too, with the markets below each line.
+
+**Formula as computed**
+
+```
+group by the business date's day, ISO week (Monday) or month over the period's courtesy orders, then by market; the columns as courtesy.by_market
+```
+
+**Unit** count · **Grain** period, per_day, per_iso_week, per_month, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.orders`
+
+**Orders** on /reports/courtesy · Orders (Bestellingen)
+
+Courtesy orders placed in the span with a linked contact.
+
+**Formula as computed**
+
+```
+orders = count(courtesy orders with a business date in the span and a contact)
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.completed`
+
+**Completed** on /reports/courtesy · Completed (Afgerond)
+
+Of those orders, the ones completed by a courtesy call now.
+
+**Formula as computed**
+
+```
+completed = count(the span's courtesy orders whose state is completed as of now)
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.completion_share`
+
+**Completion share** on /reports/courtesy · Completion share (Aandeel afgerond)
+
+Completed divided by orders.
+
+**Formula as computed**
+
+```
+completion_share = completed / orders (null without orders), shown as a percentage
+```
+
+**Unit** share · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.cohorts`
+
+**Order cohorts** on /reports/courtesy · Order cohort: share completed by age (Ordercohort)
+
+The courtesy orders of each ISO week or month (O) with a contact, followed over time: per age of courtesy.ages_days the share completed within that many days after each order. A dash until every order of the cohort is that old (Mature).
+
+**Formula as computed**
+
+```
+per cohort and age n: completed = count(orders with completed_at <= created_at + n days); mature = every order's created_at + n days <= now; shown as completed / orders, null while not mature; Part when the period cuts the week or month
+```
+
+**Unit** share · **Grain** period, per_iso_week, per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+| `courtesy.ages_days` | 10,14,21,30 | 10,14,21,30 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+Calendar days of the creation instant, as Cohort age (definitions.md).
+
+#### `courtesy.per_person`
+
+**Per person** on /reports/courtesy · Completed courtesy calls per person (Per persoon)
+
+The period's completed courtesy calls per person who made them, by name, never ranked; the calls of a telephony user linked to nobody together, last. For performance.team only.
+
+**Formula as computed**
+
+```
+group the period's completing calls by completed_by (the CMA person of the call's user: app_user_external_id, system <adapter>_user); count(distinct call) per outcome; sorted by display name, the null person last
+```
+
+**Unit** count · **Grain** period, per_person · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+Not under reports.per_person: performance.team alone, as Follow-up's and the callbacks kept's per-person tables. Absent (null in the API) without performance.team.
+
+#### `courtesy.list`
+
+**Orders** on /reports/courtesy · Courtesy orders list (Bestellingen)
+
+Every courtesy order since courtesy.start_date with its state now, whatever the period, after the market, segment and state filters: Not reached first, then by due date; at most follow_up.list_rows rows with Showing n of total. Ids, dates, counts and the contact's record link only.
+
+**Formula as computed**
+
+```
+rows ordered by state rank (not_reached, due_no_attempt, attempted, not_due, no contact, completed), due_date, created_at, order id; the first follow_up.list_rows; total = the filtered count; record_url = cma.record_url(crm connection, 'contact', contact id) from the connection's record_url_contact template
+```
+
+**Unit** count · **Grain** now, per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+| `follow_up.list_rows` | 100 | 100 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+**Notes**
+
+Never a name, email, phone or address. The contact link needs record_url_contact on the CRM connection (Configuration -> Sources); without it the column shows a dash.
+
+#### `courtesy.list.days_past_due`
+
+**Days past due** on /reports/courtesy · Days past due (Dagen over de vervaldag)
+
+Days since the due date for an order due without a completed call.
+
+**Formula as computed**
+
+```
+days_past_due = today in the order's zone - due_date, for the states due_no_attempt, attempted and not_reached; null otherwise
+```
+
+**Unit** days · **Grain** now, per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.list.attempts`
+
+**Attempts** on /reports/courtesy · Courtesy attempts (Pogingen)
+
+Outbound calls on the order's contact from the due date up to and including the completed call.
+
+**Formula as computed**
+
+```
+attempts = count(outbound linked calls on the contact with started_at >= due_at and <= coalesce(completed_at, now)); null for No contact; calls before the due date are not attempts
+```
+
+**Unit** count · **Grain** now, per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
+
+#### `courtesy.list.state`
+
+**State** on /reports/courtesy · Courtesy state (Staat)
+
+The order's state now: not due yet, due with no attempt, attempted, not reached or completed (with its outcome); none for No contact.
+
+**Formula as computed**
+
+```
+state = completed when a completing call exists; else not_due before due_at; else due_no_attempt with no attempt; else not_reached with attempts >= courtesy.alert_attempts and none a Conversation; else attempted
+```
+
+**Unit** text · **Grain** now, per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_order` | source_id, order_name, customer_source_id, source_created_at, cancelled_at, is_test, order_kind, source_deleted_at | Shopify | Shopify webhooks POST /shopify/<key> with the Admin GraphQL read-back -> cma.ingest_upsert_commerce_orders(); the sweep, the nightly reconcile and ingest-backfill --adapter shopify | on the webhook (seconds); the nightly reconcile at 03:30 Europe/Amsterdam |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | on the webhook; the link when the customer is matched |
+| `cma.commerce_store` | connection_id, handle, name, market, time_zone | CMA | Configuration (cma.upsert_commerce_store) | on change |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, user_ref, number_ref, source_deleted_at | Aircall | Aircall webhooks POST /aircall/<key> with GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); the call link by cma.link_calls() in ingest-sweep | on the webhook; the link every minute (ingest-sweep) |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, tagged_at, untagged_at | Aircall | the call's read-back (its current tags) | on the webhook |
+| `cma.telephony_tag` | tag_ref, meaning | CMA | Configuration -> Sources, Tags (cma.set_telephony_tag_meaning); the tags themselves are Aircall's | on change |
+| `cma.call_link` | telephony_call_id, crm_call_id, unlinked_at | CMA | cma.link_calls() (hash_time) | every minute (ingest-sweep) |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | HubSpot webhooks and the read-back of the logged call's associations | on the webhook; the nightly reconcile |
+| `cma.tenant_setting` | key, value | CMA | Configuration -> Exports (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.courtesy_page under RLS + the current tenant (cma.courtesy_page_of and cma.courtesy_orders_of with the tenant passed explicitly)
+- population: courtesy orders (docs/definitions.md, Courtesy order): store orders not a test, not deleted, not cancelled, of an order kind in courtesy.order_kinds, with a business date (the creation in the market's zone) on or after courtesy.start_date; none while courtesy.start_date is empty (set_up false, every figure null)
+- contact: the CRM contact the order's store customer is linked to (commerce_customer.crm_contact_source_id); without one the order is No contact only
+- calls: attributed to the contact as Attempts per deal attributes them (cma.deal_calls_of): a CRM call of the contact's connection, not deleted, currently associated with the contact, its current call link, the linked telephony call not deleted, with a start, on a counted line
+- market and segment filters (K and the segment select) narrow every figure; the state filter (S) narrows the order list only
+
+**Time** Business date = the order's creation in its market's zone (the market's, else the store's, else the tenant's); the due date is the business date + courtesy.due_days calendar days, due from that date's 00:00 in the zone; ISO week = Monday; a completion's date in the order's zone. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `courtesy.start_date` |  | 2026-09-07, set by hand in prod (Shopify's 60-day window: orders are complete from 7 September 2026) |
+| `courtesy.order_kinds` | first,repeat | first,repeat (default) |
+| `courtesy.due_days` | 10 | 10 (default) |
+| `courtesy.alert_attempts` | 3 | 3 (default) |
+| `calls.conversation_min_talk_seconds` | 30 | 30 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.courtesy_page` (0009a); `cma.courtesy_page_of` (0009a); `cma.courtesy_orders_of` (0009a); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
+o as (
+  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
+         cu.crm_connection_id, cu.crm_contact_source_id
+  from cma.commerce_order co
+  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
+  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
+  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
+                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
+  cross join s
+  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
+    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
+    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
+select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+```
+
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+
+**Data prerequisites**
+
+- Every store connected and its orders backfilled from courtesy.start_date (Pulse4all: 2026-09-01, complete from 7 September 2026)
+- Store customers linked to their CRM contact (addition 0008h); an unlinked one is No contact
+- The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
+- Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
+
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order)
 
 ## Configuration
 

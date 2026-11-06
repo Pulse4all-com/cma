@@ -59,6 +59,8 @@ export type ShellPage =
   | "funnel" | "cancellations"
   /** Reviews (addition 0008ze, brief B18): the review platform's reviews per market, channel and week */
   | "reviews"
+  /** Courtesy (addition 0009a, brief B31): a courtesy call per First or Repeat store order, from its due day */
+  | "courtesy"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
   /** Installed base (addition 0008zw): Flash's Installed base overview as a page of the Assets group, the same read and files */
@@ -81,7 +83,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | `/live/${string}` | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/maintenance"
   | "/reports/installed-base" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
@@ -261,6 +263,10 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
         // average rating, the negative reviews and how they link to an order or a contact
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
+        // Courtesy (addition 0009a, brief B31, Martin, 6 November 2026): a courtesy call per First or Repeat store order from
+        // its due day, completed by the telephony tags' completed meanings; team figures for the report permissions, per
+        // person on the page for performance.team (as Follow-up's, not under reports.per_person)
+        { page: "courtesy", href: "/reports/courtesy", label: copy.nav.courtesy, permission: ["reports.view", "performance.team"] },
       ],
     },
     {
