@@ -4737,8 +4737,10 @@ export const mockData: CmaData = {
 
   async getFlashView(me, request) {
     const document = mockFlashOverview(me, request.overview, request.market, request.asOf, request.from, request.to);
-    // data quality's Refreshed at (addition 0008zr): the stored result's instant, in the mock the minute's start
-    return { document: { ...document, refreshedAt: request.overview === "data_quality" ? mockRefreshedAt() : null },
+    // data quality's Refreshed at (addition 0008zr) and now's current take of the installed base (addition 0009e, the
+    // default flash.current_overviews): the stored instant, in the mock the minute's start; null as of a date
+    const stored = request.overview === "data_quality" || (request.overview === "installed_base" && request.asOf === null);
+    return { document: { ...document, refreshedAt: stored ? mockRefreshedAt() : null },
       rows: request.withRows ? mockFlashRows(me, { ...request, asOf: request.rowsAsOf }) : null };
   },
 

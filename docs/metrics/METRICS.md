@@ -33724,7 +33724,7 @@ count(*) of cma.flash_customers_of(tenant): store customers not deleted, per sto
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
 | `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -33745,7 +33745,7 @@ count(*) of cma.flash_customers_of(tenant): store customers not deleted, per sto
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -33787,7 +33787,7 @@ count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu)
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
 | `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -33808,7 +33808,7 @@ count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu)
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -33850,7 +33850,7 @@ count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; b
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
 | `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -33871,7 +33871,7 @@ count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; b
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -33913,7 +33913,7 @@ count(*) where the customer is linked to a CRM contact (commerce_customer.crm_co
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
 | `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -33934,7 +33934,7 @@ count(*) where the customer is linked to a CRM contact (commerce_customer.crm_co
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -33976,7 +33976,7 @@ count(*) where linked, the contact held, and every ref of commerce.required_cont
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
 | `cma.crm_contact_ref` | contact_id, system, slot, external_id | HubSpot | the held contact's ref properties (the netsuite ref from contact_netsuite_id) → cma.ingest_upsert_contacts | seconds (webhooks) |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -33997,7 +33997,7 @@ count(*) where linked, the contact held, and every ref of commerce.required_cont
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34036,7 +34036,7 @@ count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full re
 |---|---|---|---|---|
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34056,7 +34056,7 @@ count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full re
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34094,7 +34094,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 |---|---|---|---|---|
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34114,7 +34114,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34152,7 +34152,7 @@ count(*) where status = 'paused'. Grouping sets: the totals, per market and the 
 |---|---|---|---|---|
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34172,7 +34172,7 @@ count(*) where status = 'paused'. Grouping sets: the totals, per market and the 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34210,7 +34210,7 @@ sum(amount_per_cycle) per currency (an object of currency codes; never summed ac
 |---|---|---|---|---|
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34230,7 +34230,7 @@ sum(amount_per_cycle) per currency (an object of currency codes; never summed ac
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34267,7 +34267,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34288,7 +34288,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `cma.flash_headline` (0008zu); `cma.flash_split_of` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34327,7 +34327,7 @@ sum(devices_in_field) over the subscriptions where status = any(flash.device_hol
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34347,7 +34347,7 @@ sum(devices_in_field) over the subscriptions where status = any(flash.device_hol
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34386,7 +34386,7 @@ round(devices_on_holding::numeric / holding_subscriptions, 2), left out when hol
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34406,7 +34406,7 @@ round(devices_on_holding::numeric / holding_subscriptions, 2), left out when hol
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_ratio_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34445,7 +34445,7 @@ count(*) of cma.flash_devices_of(tenant, today): devices not deleted, any status
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
 | `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34465,7 +34465,7 @@ count(*) of cma.flash_devices_of(tenant, today): devices not deleted, any status
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34505,7 +34505,7 @@ count(*) where the device status's is_in_field. Grouping sets: the totals, per m
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
 | `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34525,7 +34525,7 @@ count(*) where the device status's is_in_field. Grouping sets: the totals, per m
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34565,7 +34565,7 @@ count(*) where the device status's is_in_stock. Grouping sets: the totals, per m
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
 | `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34585,7 +34585,7 @@ count(*) where the device status's is_in_stock. Grouping sets: the totals, per m
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34625,7 +34625,7 @@ sum(past_due_items): per device the maintenance items of 0008zk's forecast (cma.
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
 | `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34645,7 +34645,7 @@ sum(past_due_items): per device the maintenance items of 0008zk's forecast (cma.
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34685,7 +34685,7 @@ sum(items_due_3m): items not past due whose due date falls within three months o
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
 | `cma.device_component` | device_id, component_key, expires_on, replaced_at | Airtable | the register, as cma.device | changed records every 15 minutes |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34705,7 +34705,7 @@ sum(items_due_3m): items not past due whose due date falls within three months o
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_devices_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34745,7 +34745,7 @@ count(*) where the device status's is_in_field and the linked subscription's sta
 | `cma.device` | source_id, serial, model_key, market, device_status_key, warehouse_ref, customer_ref, subscription_ref, external_refs, source_deleted_at | Airtable | the register through the Airtable API: ingest-poll-assets and ingest-reconcile → cma.ingest_load_device_chunk (additions 0008zj, 0008zk) | changed records every 15 minutes, a full snapshot nightly |
 | `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34765,7 +34765,7 @@ count(*) where the device status's is_in_field and the linked subscription's sta
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_devices_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34805,7 +34805,7 @@ count(*) of cma.flash_churn_of(tenant, from, to): per business date a subscripti
 | `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34819,7 +34819,7 @@ count(*) of cma.flash_churn_of(tenant, from, to): per business date a subscripti
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_churn_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34858,7 +34858,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.commerce_order_line` | order_source_id, sku, quantity | Shopify | with its order | seconds (webhooks) |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34872,7 +34872,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34911,7 +34911,7 @@ sum(quantity) of the orders' lines (commerce_order_line), per set; the SKU rows 
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.commerce_order_line` | order_source_id, sku, quantity | Shopify | with its order | seconds (webhooks) |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34925,7 +34925,7 @@ sum(quantity) of the orders' lines (commerce_order_line), per set; the SKU rows 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34964,7 +34964,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.commerce_order_line` | order_source_id, sku, quantity | Shopify | with its order | seconds (webhooks) |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -34978,7 +34978,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35017,7 +35017,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35031,7 +35031,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35070,7 +35070,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35084,7 +35084,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35123,7 +35123,7 @@ count(*) of subscription events renewed in the period (kind renewal). Grouping s
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35137,7 +35137,7 @@ count(*) of subscription events renewed in the period (kind renewal). Grouping s
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35176,7 +35176,7 @@ count(*) of subscription events renew_failed in the period (kind renewal); never
 | `cma.commerce_order` | source_id, order_name, connection_id, source_created_at, is_test, total_amount, refunded_amount, currency, financial_status, fulfillment_status, order_kind, source_deleted_at | Shopify | Shopify webhooks orders/create and orders/updated → ingest service → cma.ingest_upsert_commerce_orders (0007b) | seconds (webhooks) |
 | `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, reason_code, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
 | `cma.commerce_store` | connection_id, handle, market, currency | CMA | Configuration → Sources (the store's market and currency, tenant configuration) | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35190,7 +35190,7 @@ count(*) of subscription events renew_failed in the period (kind renewal); never
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35229,7 +35229,7 @@ count(*) of cma.flash_deals_of(tenant): 0008y's counted deals, not deleted, is_c
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
 | `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35243,7 +35243,7 @@ count(*) of cma.flash_deals_of(tenant): 0008y's counted deals, not deleted, is_c
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35282,7 +35282,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
 | `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35296,7 +35296,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35335,7 +35335,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
 | `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35349,7 +35349,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35388,7 +35388,7 @@ count(*) of cma.flash_tickets_of(tenant): 0008o's open tickets of counted pipeli
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
 | `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35402,7 +35402,7 @@ count(*) of cma.flash_tickets_of(tenant): 0008o's open tickets of counted pipeli
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35437,7 +35437,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
 | `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35451,7 +35451,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35486,7 +35486,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
 | `cma.connection_pipeline` | source_pipeline_id, record_type, is_counted, label | CMA | the pipelines read hourly, counted per Configuration → Sources | hourly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35500,7 +35500,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35535,7 +35535,7 @@ count(*) of cma.flash_tasks_of(tenant): 0008o's open tasks (status not done in t
 | `cma.crm_task` | source_id, status_ref, type_ref, due_at, owner_ref, deal_source_id, ticket_source_id, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_tasks (0008n) | seconds (webhooks) |
 | `cma.connection_task_status` | status_ref, is_done | CMA | filled from the tasks, done per Configuration → Sources | on change |
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35549,7 +35549,7 @@ count(*) of cma.flash_tasks_of(tenant): 0008o's open tasks (status not done in t
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tasks_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35588,7 +35588,7 @@ count(*) where the due date in the tenant's zone is before today. Grouping sets:
 | `cma.crm_task` | source_id, status_ref, type_ref, due_at, owner_ref, deal_source_id, ticket_source_id, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_tasks (0008n) | seconds (webhooks) |
 | `cma.connection_task_status` | status_ref, is_done | CMA | filled from the tasks, done per Configuration → Sources | on change |
 | `cma.crm_record` | source_id, record_type, pipeline_id, stage_id, is_closed, owner_ref, market, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhooks → ingest service → cma.ingest_upsert_records (0006) | seconds (webhooks), the nightly reconcile |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35602,7 +35602,7 @@ count(*) where the due date in the tenant's zone is before today. Grouping sets:
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tasks_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35640,7 +35640,7 @@ count(*) of cma.flash_reviews_of(tenant, from, to): 0008ze's published reviews o
 |---|---|---|---|---|
 | `cma.review` | source_id, rating, submitted_at, state, is_published, review_channel_id | Trusted Shops | eTrusted API → ingest-poll-reviews → cma.ingest_upsert_reviews (0008ze) | hourly at minute 7 |
 | `cma.review_channel` | source_id, market, is_counted | CMA | filled from the reviews, counted per Configuration → Sources | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35660,7 +35660,7 @@ count(*) of cma.flash_reviews_of(tenant, from, to): 0008ze's published reviews o
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35694,7 +35694,7 @@ sum(rating); the page shows rating_sum / reviews as the average rating (two deci
 |---|---|---|---|---|
 | `cma.review` | source_id, rating, submitted_at, state, is_published, review_channel_id | Trusted Shops | eTrusted API → ingest-poll-reviews → cma.ingest_upsert_reviews (0008ze) | hourly at minute 7 |
 | `cma.review_channel` | source_id, market, is_counted | CMA | filled from the reviews, counted per Configuration → Sources | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35714,7 +35714,7 @@ sum(rating); the page shows rating_sum / reviews as the average rating (two deci
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35748,7 +35748,7 @@ count(*) where the whole star is at most reviews.negative_max_rating. Grouping s
 |---|---|---|---|---|
 | `cma.review` | source_id, rating, submitted_at, state, is_published, review_channel_id | Trusted Shops | eTrusted API → ingest-poll-reviews → cma.ingest_upsert_reviews (0008ze) | hourly at minute 7 |
 | `cma.review_channel` | source_id, market, is_counted | CMA | filled from the reviews, counted per Configuration → Sources | on change |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35768,7 +35768,7 @@ count(*) where the whole star is at most reviews.negative_max_rating. Grouping s
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35804,7 +35804,7 @@ count(*) of cma.flash_findings_of(tenant): every finding of cma.data_quality_of 
 | `cma.commerce_customer` | source_id, connection_id, orders_count, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks customers/create, customers/update and orders → ingest service → cma.ingest_upsert_commerce_customers (0007b, 0008h); the match to the CRM contact → cma.set_commerce_customer_contact | seconds (webhooks), the sweep every minute |
 | `cma.subscription` | source_id, connection_id, customer_source_id, status, amount_per_cycle, currency, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.crm_contact` | source_id, connection_id, country | HubSpot | HubSpot webhooks and read-back → ingest service → cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to) | seconds (webhooks), the sweep's second read within ten minutes of a link |
-| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-hourly → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
 
 **Filters**
 
@@ -35825,7 +35825,7 @@ count(*) of cma.flash_findings_of(tenant): every finding of cma.data_quality_of 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).
+**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_findings_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 

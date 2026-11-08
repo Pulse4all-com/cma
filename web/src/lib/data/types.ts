@@ -3366,7 +3366,7 @@ export type FlashSourcesView = Partial<Record<FlashSourceKey, FlashSourceView>>;
 
 /** An open finding of the deterministic watch: aggregates and codes only, never a record's id */
 export interface FlashWatchItem {
-  kind: "jump" | "flow_zero" | "source_stale" | "snapshot_missing" | "dq_rise";
+  kind: "jump" | "flow_zero" | "source_stale" | "snapshot_missing" | "dq_rise" | "current_stale";
   overview: string | null;
   dims: Record<string, string>;
   measure: string | null;
@@ -3449,7 +3449,11 @@ export interface FlashDocumentView {
   totals: Record<string, number | Record<string, number> | null> | null;
   rows: FlashDocRowView[];
   labels: Record<string, Record<string, string>>;
-  /** Data quality only (addition 0008zr): when the stored result its figures come from was computed (Refreshed at); null for the other overviews */
+  /**
+   * When the stored result the figures come from was computed (Refreshed at): data quality's stored result (addition
+   * 0008zr), or now's current take of an overview of flash.current_overviews (addition 0009e: Installed base by default);
+   * null when the figures were computed by the read (now live, or as of a date)
+   */
   refreshedAt?: Instant | null;
   settings: {
     fileMaxRows: number;

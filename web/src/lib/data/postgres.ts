@@ -1422,6 +1422,8 @@ interface FlashDocumentDb {
   history?: { date: string; check: string; findings: number | string }[];
   /** The headline's split's first keys in order (addition 0008zy); absent before it */
   split_order?: string[] | null;
+  /** Now from the overview's stored current take: its instant (addition 0009e); null when computed by the read, absent before 0009e */
+  refreshed_at?: string | null;
 }
 interface FlashRowsDb {
   overview: string; mode: "live" | "snapshot"; as_of: string; from: string | null; to: string | null; sort: string | null; descending: boolean;
@@ -1487,6 +1489,7 @@ function toFlashDocument(j: FlashDocumentDb): FlashDocumentView {
     definitionVersion: j.definition_version, firstSnapshotDate: j.first_snapshot_date, today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "", days: j.days ?? null, activeAtEnd: flashNumber(j.active_at_end),
     history: (j.history ?? []).map((h) => ({ date: h.date, check: h.check, findings: flashNumber(h.findings) ?? 0 })),
     splitOrder: Array.isArray(j.split_order) ? j.split_order.filter((k): k is string => typeof k === "string") : null,
+    refreshedAt: isoAny(j.refreshed_at ?? null),
   };
 }
 
@@ -3378,14 +3381,17 @@ export const postgresData: CmaData = {
   async getFlashView(me, query): Promise<{ document: FlashDocumentView; rows: FlashRowsView | null }> {
     // One transaction for the overview's page: the document and the first page of its list, so the view is one data call
     return withTenant(ctx(me), async (q) => {
-      // data quality's Refreshed at (addition 0008zr) rides in the same statement; null for the other overviews
+      // data quality's Refreshed at (addition 0008zr) rides in the same statement; the other overviews' is the document's own
+      // (now from a current take, addition 0009e; null when computed by the read)
       const r = one((await q.query<{ d: FlashDocumentDb; r: FlashRowsDb | null; dq_at: Date | null }>(
         `select cma.flash_overview($1, $2, $3::date, $4::date, $5::date) as d,
                 case when $11 then cma.flash_rows($1, $6::jsonb, $7, $8, $9, $10, $12::date, $4::date, $5::date) end as r,
                 case when $1 = 'data_quality' then cma.data_quality_computed_at() end as dq_at`,
         [query.overview, query.market, query.asOf, query.from, query.to, JSON.stringify(query.filters), query.sort, query.descending, query.limit,
           query.offset, query.withRows, query.rowsAsOf])).rows, "flash_overview");
-      return { document: { ...toFlashDocument(r.d), refreshedAt: isoAny(r.dq_at) }, rows: r.r ? toFlashRows(r.r, r.d.labels) : null };
+      const document = toFlashDocument(r.d);
+      return { document: { ...document, refreshedAt: r.d.overview === "data_quality" ? isoAny(r.dq_at) : document.refreshedAt },
+        rows: r.r ? toFlashRows(r.r, r.d.labels) : null };
     });
   },
 

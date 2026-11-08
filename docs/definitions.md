@@ -1139,7 +1139,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 |---|---|
 | Term | Flash snapshot (nl: Flash-momentopname) |
 | Key | `cma.flash_snapshot`, `snapshot_date`; settings `flash.snapshot_local_time`, `flash.id_list_retention_months` |
-| Definition | The figures of every Flash overview for one business date as the live computation gave them at the take, stored once and never changed: stock overviews from the mirrors as they were at the take, measured against the date (past due, due within three months, overdue and ages as of that date), flow overviews for the date's own flow. A date is due on the day after it at `flash.snapshot_local_time` in the tenant's zone, and taken by the first hourly run after that. At a month end also the ids of the active customers, the active subscriptions and every device. |
+| Definition | The figures of every Flash overview for one business date as the live computation gave them at the take, stored once and never changed: stock overviews from the mirrors as they were at the take, measured against the date (past due, due within three months, overdue and ages as of that date), flow overviews for the date's own flow. A date is due on the day after it at `flash.snapshot_local_time` in the tenant's zone, and taken by the first run of the job after that (the job runs every minute since addition 0009e; a date is taken once). At a month end also the ids of the active customers, the active subscriptions and every device. |
 | Source | `cma.flash_compute_of` at the take (`cma.flash_snapshot_take`, the job `cma-snapshot-flash`) |
 | Counts / does not count | One succeeded take per tenant and date, written by the take alone (the application reads and holds no write on the snapshot tables). A take more than an hour after the due time is marked late on its run (`late`, a flag of the run, never a status). A date that stops being the latest due one without a succeeded take is recorded as missed (a run row of status `missed`, no figures; a run's other statuses are `succeeded` and `failed`) and never taken afterwards; the page says "No snapshot for this date". A flow over a period is the sum of its dates' snapshots |
 | Unit and display | A business date; "Snapshots start on <date>" before the first |
@@ -1157,8 +1157,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Watch finding (nl: Signaal) |
-| Key | `cma.flash_watch_finding`; kinds `jump`, `flow_zero`, `source_stale`, `snapshot_missing`, `dq_rise`; settings `flash.watch_jump_pct`, `flash.watch_jump_min`, `flash.watch_stale_min_minutes` |
-| Definition | An unexpected movement the deterministic watch finds after a snapshot (docs/architecture/flash-watch.md): a jump of a stock figure per market, a flow that stopped, a source not read for three of its cadences (the cadence of its most frequent job and stream, each measured on its own runs, at least `flash.watch_stale_min_minutes`), a snapshot missing, a data-quality check that rose. It resolves itself on the first snapshot where its condition no longer holds. |
+| Key | `cma.flash_watch_finding`; kinds `jump`, `flow_zero`, `source_stale`, `snapshot_missing`, `dq_rise`, `current_stale`; settings `flash.watch_jump_pct`, `flash.watch_jump_min`, `flash.watch_stale_min_minutes` |
+| Definition | An unexpected movement the deterministic watch finds after a snapshot (docs/architecture/flash-watch.md): a jump of a stock figure per market, a flow that stopped, a source not read for three of its cadences (the cadence of its most frequent job and stream, each measured on its own runs, at least `flash.watch_stale_min_minutes`), a snapshot missing, a data-quality check that rose, a current take older than three times `flash.current_refresh_minutes` (`current_stale`: an overview of `flash.current_overviews` whose take exists and is that old; the value is its age in minutes; no take is no finding). It resolves itself on the first snapshot where its condition no longer holds. |
 | Source | `cma.flash_watch_of` at each take, on the stored figures and `sync_run` |
 | Counts / does not count | One open finding per kind, overview, dims and measure (two stale connections of one source, adapter and store are one finding with their count); aggregates and codes only, never a record's id. A watch that fails is recorded on the snapshot's run, never in the snapshot's place |
 | Unit and display | A line in Flash's watch strip naming the overview, the market or check, the value and the one before |
@@ -1169,7 +1169,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "The watch runs in a subtransaction of its own" (addition 0008zn); 3 Nov 2026, "Definitions: a Flash source's cadence is measured per job and stream" (addition 0008zo) |
 | Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch; Reports → Flash (`/reports/flash`): the watch strip, and `GET /api/v1/reports/flash/snapshots` |
-| As built today | `cma.flash_watch_of` (`122`; `source_stale`'s cadence per job and stream since `125`); `123` raises and resolves each kind, and B28 the cadence per job and stream. Matches the definition |
+| As built today | `cma.flash_watch_of` (`122`; `source_stale`'s cadence per job and stream since `125`; `current_stale` since `158`, evaluated at the dated take, so it opens and resolves at the daily take only and a stopped job shows neither there nor on System health: the page then reads live); `123` raises and resolves each kind, and B28 the cadence per job and stream. Matches the definition |
 
 ### Change line
 
@@ -1215,16 +1215,35 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Refreshed at (nl: Ververst om) |
-| Key | `cma.data_quality_snapshot.computed_at`, read by `cma.data_quality_computed_at()`; API fields `computedAt` (`GET /api/v1/reports/data-quality/rows`, the Data quality page's read) and `refreshedAt` (Flash's data-quality document); copy keys `dataQuality.refreshedAt`, `dataQuality.refreshedHint`, `flash.refreshedAt` |
-| Definition | The instant a tenant's stored data-quality result was computed: every check of `cma.data_quality_of` evaluated once by the refresh job `cma-refresh-data-quality` (or once on demand when a tenant has no result yet), its findings stored in `cma.data_quality_finding`. Reports → Data quality, Flash's data-quality overview and list, the Flash snapshot take and the watch read that result; the counts and the records they show are those of the last refresh, not of the instant of the page (addition 0008zr, night N06) |
+| Key | `cma.data_quality_snapshot.computed_at`, read by `cma.data_quality_computed_at()`, and `cma.flash_current_take.computed_at` (addition 0009e; the document's `refreshed_at`); API fields `computedAt` (`GET /api/v1/reports/data-quality/rows`, the Data quality page's read) and `refreshedAt` (`GET /api/v1/reports/flash` for an overview whose figures are stored: data quality's, or a current take's; null otherwise); copy keys `dataQuality.refreshedAt`, `dataQuality.refreshedHint`, `flash.refreshedAt`, `flash.storedHint`, `flash.rowsLive` |
+| Definition | The instant a stored result was computed: a tenant's stored data-quality result (below), or a Flash overview's current take (Current take). A data-quality result: every check of `cma.data_quality_of` evaluated once by the refresh job `cma-refresh-data-quality` (or once on demand when a tenant has no result yet), its findings stored in `cma.data_quality_finding`. Reports → Data quality, Flash's data-quality overview and list, the Flash snapshot take and the watch read that result; the counts and the records they show are those of the last refresh, not of the instant of the page (addition 0008zr, night N06). The meaning widened on 8 November 2026 from data quality's stored result to any stored result (addition 0009e): the figures beside it are those of that instant, whatever the page's own time |
 | Source | `cma.data_quality_snapshot` (`computed_at`, `duration_ms`, `findings`), written by `cma.refresh_data_quality_of()`; the job runs every minute and refreshes a tenant whose result is older than its setting `data_quality.refresh_minutes` (5 by default, 1 to 1440) |
 | Counts / does not count | A refresh that skipped (the result fresh, or another refresh running) leaves the instant as it was. A tenant without a result computes one on the first read. A transaction that writes and reads data quality (a verify script) sees its own writes: a result computed earlier in the same transaction is computed again on the next read |
-| Unit and display | The weekday, date and time in the viewer's zone ("Refreshed at Thu 5 Nov 2026, 07:14"), under the page's intro on Data quality (its hint says the checks run every few minutes in the background) and under Flash's data-quality card's intro; absent until a result exists |
+| Unit and display | The weekday, date and time in the viewer's zone ("Refreshed at Thu 5 Nov 2026, 07:14"), under the page's intro on Data quality (its hint says the checks run every few minutes in the background) and under Flash's data-quality card's intro, and under the heading of Assets → Installed base and of Flash's overview whose figures come from a current take (the records' count then says it is read live); absent until a result exists |
 | Time rule | The transaction time of the refresh (`now()`), in the tenant's database; shown in the viewer's zone |
 | Scope | Per tenant |
 | Equivalent in the source system | None: the result is the CMA's own computation over its mirrors |
-| Used by | Reports → Data quality, Reports → Flash (data quality), `cma.data_quality()`, `cma.data_quality_rows()`, `cma.flash_findings_of()` |
-| Decided | 5 Nov 2026, "Data quality on stored results" (addition 0008zr, night N06; backlog CMA-087) |
+| Used by | Reports → Data quality, Reports → Flash (data quality, and an overview from a current take), Assets → Installed base, `cma.data_quality()`, `cma.data_quality_rows()`, `cma.flash_findings_of()`, `cma.flash_document_of()` |
+| Decided | 5 Nov 2026, "Data quality on stored results" (addition 0008zr, night N06; backlog CMA-087); 8 Nov 2026, "The page shows \"Refreshed at\" beside the stored figures" and "Definitions: \"Refreshed at\" widens ..." (addition 0009e) |
+### Current take
+
+| Field | Value |
+|---|---|
+| Term | Current take (no label on screen and none in `copy.ts`: the page shows its instant as Refreshed at) |
+| Key | `cma.flash_current_take` (`cma_read.flash_current_take`); settings `flash.current_overviews` (default `installed_base`; stock overviews but data quality, each once, comma-separated, or empty for every now live) and `flash.current_refresh_minutes` (5 by default, 1 to 1440); `cma.flash_current_refresh(tenant)`, `cma.flash_current_state_of(...)` |
+| Definition | The stored "now" of a stock overview: the rows `cma.flash_compute_of` gave for the overview at one instant (the same shape as a Flash snapshot: overview, grouping set, dims, measures, definition version, computed_at), one per tenant and overview, replaced whole when the job refreshes it. The overview's heading, tiles, per-market bars and breakdowns (Assets → Installed base and Flash's installed_base overview) are read from it, shown with Refreshed at. It is fresh when younger than `flash.current_refresh_minutes` and usable when younger than three times that; a missing, older, other-definition-version or pre-migration take means the live read as before (slow but correct), never silently old figures |
+| Source | `cma.flash_compute_of` at the refresh (`cma.flash_current_refresh_of`, called by `cma.flash_current_refresh` from the job `cma-snapshot-flash`, which runs every minute and refreshes the takes that are due) |
+| Counts / does not count | The records list (`cma.flash_rows`), its file and As of (the dated snapshots) are not from the take; the Sources line and the landing's cards stay live. The breakdown file follows the document, so its figures, its as_of column and its file name stamp are the take's (Martin, 8 November 2026, #250). A tenant setting written, changed or reset removes that tenant's takes. No take for a flow overview (a flow's now is a period) or data quality (its own stored result) |
+| Unit and display | "Refreshed at {time}" under the overview's heading; under the records' count "Read live: this count can differ from the figures above until their next refresh." |
+| Time rule | The instant of the refresh; the document's `as_of` is that instant |
+| Scope | Per tenant and overview |
+| Equivalent in the source system | None |
+| Not to use | "Cache" (no request cache, no per-user data) and "snapshot" for it (a snapshot is a dated, never-changed take) |
+| Status | Decided (Martin, 8 November 2026) |
+| Decided | 8 Nov 2026, "The \"now\" of an overview ... is read from a stored current take" and "Definitions: \"Refreshed at\" widens ..." (addition 0009e) |
+| Used by | Assets → Installed base (`/reports/installed-base`) and Reports → Flash's installed_base overview, `GET /api/v1/reports/flash` (`refreshedAt`), the watch kind `current_stale`; docs/metrics/catalog.json `flash.installed_base.*` (refresh) |
+| As built today | `158` (table, settings, functions, trigger), `159` proves a take equals the live document row for row, keeps tenants apart, covers the fallback states and `current_stale` |
+
 ### Device-holding status
 
 | Field | Value |

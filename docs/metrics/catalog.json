@@ -83563,8 +83563,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -83593,7 +83593,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -83740,8 +83740,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -83770,7 +83770,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -83917,8 +83917,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -83947,7 +83947,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84094,8 +84094,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84124,7 +84124,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84271,8 +84271,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84301,7 +84301,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84411,8 +84411,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84436,7 +84436,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84542,8 +84542,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84567,7 +84567,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84673,8 +84673,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84698,7 +84698,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84804,8 +84804,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84829,7 +84829,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84922,8 +84922,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -84952,7 +84952,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85083,8 +85083,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -85108,7 +85108,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85231,8 +85231,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -85256,7 +85256,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85377,8 +85377,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -85402,7 +85402,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85527,8 +85527,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -85552,7 +85552,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85677,8 +85677,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -85702,7 +85702,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85827,8 +85827,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -85852,7 +85852,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85977,8 +85977,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86002,7 +86002,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86130,8 +86130,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86155,7 +86155,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86279,8 +86279,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86298,7 +86298,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86420,8 +86420,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86439,7 +86439,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86561,8 +86561,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86580,7 +86580,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86702,8 +86702,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86721,7 +86721,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86847,8 +86847,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -86866,7 +86866,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86992,8 +86992,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87011,7 +87011,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87137,8 +87137,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87156,7 +87156,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87282,8 +87282,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87301,7 +87301,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87421,8 +87421,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87440,7 +87440,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87560,8 +87560,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87579,7 +87579,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87699,8 +87699,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87718,7 +87718,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87837,8 +87837,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87856,7 +87856,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87970,8 +87970,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -87989,7 +87989,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88103,8 +88103,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88122,7 +88122,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88239,8 +88239,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88258,7 +88258,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88380,8 +88380,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88399,7 +88399,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88503,8 +88503,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88528,7 +88528,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88627,8 +88627,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88652,7 +88652,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88751,8 +88751,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88776,7 +88776,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88909,8 +88909,8 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
-          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-minutely \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
+          "cadence": "daily per tenant after flash.snapshot_local_time; the job runs every minute"
         }
       ],
       "filters": [
@@ -88939,7 +88939,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, hourly at minute 20 UTC).",
+      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {

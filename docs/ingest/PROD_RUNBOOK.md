@@ -2734,6 +2734,8 @@ git switch -q main && git pull -q --ff-only && bash docs/scheduler/deploy-flash.
 ```
 Expected: gcloud's confirmations of the job, the invoker binding and the schedule, then `job cma-snapshot-flash on europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<merge sha>, schedule cma-snapshot-flash-hourly hourly at minute 20 (UTC) in p4a-cma-dev` and the lines `run it now:`, `its log:` and `pause it:`. Dev takes its first date at the next minute 20.
 
+Since addition 0009e (#250) the script runs the job every minute on the schedule `cma-snapshot-flash-minutely`, and deletes `cma-snapshot-flash-hourly` where it still exists: a rerun of this step prints `schedule cma-snapshot-flash-minutely every minute` (docs/scheduler/deploy-flash.sh).
+
 **Terminal**
 ```bash
 bash docs/scheduler/deploy-flash.sh prod <merge sha>

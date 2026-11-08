@@ -136,6 +136,7 @@ export function WatchStrip({ items, query, t, copy, locale }: {
             case "flow_zero": text = t.watch_flow_zero; break;
             case "dq_rise": text = t.watch_dq_rise; break;
             case "source_stale": text = t.watch_source_stale; break;
+            case "current_stale": text = t.watch_current_stale; break;
             default: text = t.watch_snapshot_missing;
           }
           const source = typeof w.dims.source === "string" ? String(t[`source_${w.dims.source}` as keyof T] ?? w.dims.source) : "";

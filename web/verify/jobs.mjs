@@ -11,7 +11,10 @@
  * crash; the run row's finish is retried on its own, never repeating the close. For the Flash snapshot, a retry reports
  * what the first attempt did: a take's answer received is kept (the take not sent again), a take whose answer was lost
  * is this run's when its run started after the tenant's run row (else already), and a finish whose answer was lost
- * answering CMA03 on the retry is done, not a failure. Invented ids only.
+ * answering CMA03 on the retry is done, not a failure. Since addition 0009e the snapshot job refreshes the current takes
+ * first: their counts ride on the same run row, a refresh that fails (one overview's code, or the call refused) fails the
+ * run row with "current_take <code>" while the take still runs, and a reset in the refresh is retried with the rest of
+ * the unit. Invented ids only.
  *
  *   node verify/jobs.mjs             every check must PASS
  *   node verify/jobs.mjs --provoke   every check must FAIL
@@ -21,7 +24,7 @@ import { codeOf, hearIdleErrors, isConnectionError, retryOnce } from "../jobs/li
 import { refreshTenants } from "../jobs/refresh-follow-up.mjs";
 import { refreshTenants as refreshDataQuality } from "../jobs/refresh-data-quality.mjs";
 import { closeTenants } from "../jobs/close-forgotten-workdays.mjs";
-import { snapshotTenants, countsOf, poolMax, STATEMENT_TIMEOUT_MS } from "../jobs/snapshot-flash.mjs";
+import { snapshotTenants, countsOf, currentCountsOf, runErrorOf, poolMax, STATEMENT_TIMEOUT_MS, TAKE_RETRY_MINUTES } from "../jobs/snapshot-flash.mjs";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -60,7 +63,10 @@ function dbTake({ earlier = [] } = {}) {
  * commit landed) and then loses its answer. connectFaults: errors for the next connects. The database's clock moves one
  * second each time a run row starts or a take starts; a run row finished twice answers CMA03 as cma.job_run_finish does.
  */
-function mockPool({ faults = [], connectFaults = [], take = dbTake() } = {}) {
+// The database's current refresh (0009e), per tenant: one take refreshed (65 rows), then fresh
+const CURRENT = { current_refreshed: 1, current_fresh: 0, current_running: 0, current_not_set_up: 0, current_failed: 0, current_rows: 65, current_duration_ms: 40 };
+const dbCurrent = () => () => CURRENT;
+function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = dbCurrent(), lastFailed = () => null } = {}) {
   const pool = new EventEmitter();
   const state = { connects: 0, released: 0, dropped: 0, statements: [], runStarts: [], runFinishes: [] };
   let nextRun = 0;
@@ -88,6 +94,9 @@ function mockPool({ faults = [], connectFaults = [], take = dbTake() } = {}) {
       if (/cma\.refresh_follow_up\(\)/.test(text)) return { rows: [{ r: { refreshed: true, rows: 3, leads: 1, tickets: 1, tasks: 1, duration_ms: 7 } }], rowCount: 1 };
       // the data-quality refresh (0008zr): tenant 1 refreshed, tenant 2's result still fresh
       if (/cma\.refresh_data_quality\(\)/.test(text)) return { rows: [{ r: tenant === T2 ? { refreshed: false, reason: "fresh", age_seconds: 40 } : { refreshed: true, rows: 3, duration_ms: 7 } }], rowCount: 1 };
+      if (/cma\.flash_current_refresh\(/.test(text)) return { rows: [{ r: current(tenant) }], rowCount: 1 };
+      // a failed take of the last TAKE_RETRY_MINUTES without a succeeded one since (0009e's backoff); none by default
+      if (/from cma\.flash_snapshot_run r/.test(text)) { const f = lastFailed(tenant); return { rows: f ? [f] : [], rowCount: f ? 1 : 0 }; }
       if (/cma\.flash_snapshot_take\(/.test(text)) return { rows: [{ r: take(tenant, { now }) }], rowCount: 1 };
       if (/cma\.job_run_finish/.test(text)) {
         if (finished.has(values[0])) throw Object.assign(new Error(`scheduler run ${values[0]} is already finished`), { code: "CMA03" });
@@ -287,7 +296,7 @@ expect("snapshot: the run row's counts from a take's answer (whole numbers only)
     watch_error: "57014", missed_before: 1, missed_recorded: 1, duration_ms: 12.4 }),
     countsOf({ taken: false, reason: "taken" }).already, countsOf({ taken: false, reason: "missed" }).missed, countsOf({ taken: false, reason: "failed" }).failed,
     countsOf({ taken: false, reason: "not_due" }).not_due],
-  [{ taken: 1, not_due: 0, already: 0, missed: 0, failed: 0, late: 1, rows: 7, ids: 4, ids_skipped: 2, watch_opened: 1, watch_open: 0, watch_failed: 1,
+  [{ taken: 1, not_due: 0, already: 0, backoff: 0, missed: 0, failed: 0, late: 1, rows: 7, ids: 4, ids_skipped: 2, watch_opened: 1, watch_open: 0, watch_failed: 1,
     missed_before: 1, missed_recorded: 1, duration_ms: 12 }, 1, 1, 1, 0],
   [{ taken: 0 }, 0, 0, 0, 1]);
 expect("snapshot: a pool of 1 by default, at most 2 (the connection budget); the statement timeout of 123's speed check",
@@ -371,6 +380,62 @@ const tenantLines = (tenant) => lines.filter((l) => l.tenant_id === tenant && l.
     [r, count(pool, finish, T1), finishes(pool), lines.filter((l) => l.tenant_id === T1).map((l) => l.severity), tenantLines(T1)],
     [{ tenants: 2, failed: 0 }, 3, ["t1:succeeded:9", "t2:succeeded:9"], ["WARNING", "INFO"], ["INFO:true:null:9:run row finished by an earlier attempt, its answer lost"]],
     [{ tenants: 2, failed: 1 }, 3, ["t1:succeeded:9", "t2:succeeded:9"], ["WARNING", "ERROR", "ERROR"], ["ERROR:false:undefined:0", "ERROR:false:undefined:0"]]);
+}
+
+// ---- snapshot-flash: the current takes (addition 0009e) ----------------------------------------------------------
+const refreshed = /cma\.flash_current_refresh/;
+const currentAt = (pool, tenant) => pool.state.runFinishes.filter((f) => f.tenant === tenant)
+  .map((f) => `${f.counts.current_refreshed}/${f.counts.current_fresh}/${f.counts.current_failed}/${f.counts.current_rows}`);
+expect("snapshot: the current takes' counts (whole numbers, 0 without an answer); the run's error: the take's, else the current refresh's",
+  [currentCountsOf({ ...CURRENT, current_duration_ms: 40.6, current_error: "57014" }), currentCountsOf(null).current_failed,
+    runErrorOf({ reason: "failed", error: "23514" }, { current_failed: 1, current_error: "57014" }), runErrorOf({ taken: true }, { current_failed: 2, current_error: "P0001" }),
+    runErrorOf({ taken: false, reason: "taken" }, CURRENT)],
+  [{ current_refreshed: 1, current_fresh: 0, current_running: 0, current_not_set_up: 0, current_failed: 0, current_rows: 65, current_duration_ms: 41 }, 0, "23514", "current_take P0001", null],
+  [{}, 1, null, null, "failed"]);
+{
+  const pool = mockPool();
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  const order = pool.state.statements.filter((s) => s.tenant === T1 && (refreshed.test(s.text) || taken.test(s.text))).map((s) => (refreshed.test(s.text) ? "current" : "take"));
+  expect("snapshot: the current takes refreshed first, then the take, once each; their counts on the same run row",
+    [r, order, currentAt(pool, T1), countsAt(pool, T1), lines.map((l) => `${l.current_refreshed}/${l.current_failed}`)],
+    [{ tenants: 2, failed: 0 }, ["current", "take"], ["1/0/0/65"], ["1/0/9/6"], ["1/0", "1/0"]],
+    [{ tenants: 2, failed: 1 }, ["take", "current"], [], [], []]);
+}
+{
+  // a current take that could not be refreshed (one overview's SQLSTATE) and a call refused as a whole (a database
+  // without 0009e: 42883): each tenant's run row failed with the code, the take still sent and its rows counted
+  const pool = mockPool({ current: (t) => (t === T1 ? { ...CURRENT, current_refreshed: 0, current_failed: 1, current_error: "P0001" } : CURRENT),
+    faults: [{ on: refreshed, tenant: T2, times: 1, error: () => Object.assign(new Error("function does not exist"), { code: "42883" }) }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a current take not refreshed: the run row failed with current_take and the code, the take still taken; never retried",
+    [r, finishes(pool), count(pool, taken), count(pool, refreshed, T2), currentAt(pool, T2), lines.map((l) => `${l.severity}:${l.taken}:${l.error}`)],
+    [{ tenants: 2, failed: 2 }, ["t1:failed:current_take P0001", "t2:failed:current_take 42883"], 2, 1, ["0/0/1/0"],
+      ["ERROR:true:current_take P0001", "ERROR:true:current_take 42883"]],
+    [{ tenants: 2, failed: 0 }, ["t1:succeeded:9", "t2:succeeded:9"], 1, 2, ["1/0/0/65"], []]);
+}
+{
+  // a reset in tenant 1's current refresh: the unit retried once on a fresh connection, the refresh asked again, the
+  // take sent once, the run row kept and finished succeeded
+  const pool = mockPool({ faults: [{ on: refreshed, tenant: T1, times: 1, error: reset }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a reset in tenant 1's current refresh: retried once, the take sent once, one run row, succeeded",
+    [r.failed, count(pool, refreshed, T1), count(pool, taken, T1), starts(pool, T1), finishes(pool)[0], currentAt(pool, T1)],
+    [0, 2, 1, 1, "t1:succeeded:9", ["1/0/0/65"]], [1, 1, 2, 2, "t1:failed:ECONNRESET", []]);
+}
+
+{
+  // a take that failed 10 minutes ago (tenant 1): not sent again before TAKE_RETRY_MINUTES, the run row failed with
+  // take_backoff and the failure's code, the current takes still refreshed; tenant 2 taken as usual
+  const pool = mockPool({ lastFailed: (t) => (t === T1 ? { date: DATE, error: "23514" } : null) });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a take failed within the hour: not sent again (backoff), the run row failed take_backoff with its code, the current takes refreshed",
+    [r, count(pool, taken, T1), count(pool, taken, T2), finishes(pool), currentAt(pool, T1), pool.state.runFinishes[0].counts.backoff, TAKE_RETRY_MINUTES],
+    [{ tenants: 2, failed: 1 }, 0, 1, ["t1:failed:take_backoff 23514", "t2:succeeded:9"], ["1/0/0/65"], 1, 60],
+    [{ tenants: 2, failed: 0 }, 1, 1, ["t1:succeeded:9", "t2:succeeded:9"], [], 0, 0]);
 }
 
 const passed = results.filter(Boolean).length;
