@@ -15,9 +15,10 @@
 #   _DB_INSTANCE    <project>:<region>:<instance>   Cloud SQL connection name
 #   _DB_USER        <service account>@<project>.iam   IAM database user, member of cma_app
 #   _DB_NAME        cma
-#   _DB_POOL_MAX    connections per instance (default 5)
-#   _MAX_INSTANCES  Cloud Run ceiling (default 4); instances x pool must stay well
-#                   under the database's max_connections (README, Database connection budget)
+#   _DB_POOL_MAX    connections per instance (default 10 since 6 November 2026: a Flash page holds two)
+#   _MAX_INSTANCES  Cloud Run ceiling (default 4); instances x pool is counted in the Database
+#                   connection budget (docs/architecture/infrastructure.md), whose ceilings together
+#                   pass the usable connections since the pool of 10 (Decision log, 6 November 2026)
 #   _LOGOUT_TARGET  legacy (default): Log out lands on /logout/done; signed-out: on the static
 #                   page outside IAP, only after docs/signed-out/deploy.sh prod --apply and its
 #                   test plan (docs/signed-out/README.md)
@@ -127,7 +128,7 @@ substitutions:
   _DB_INSTANCE: ""
   _DB_USER: ""
   _DB_NAME: cma
-  _DB_POOL_MAX: "5"
+  _DB_POOL_MAX: "10"
   _MAX_INSTANCES: "4"
   _LOGOUT_TARGET: legacy
 

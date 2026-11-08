@@ -16,7 +16,7 @@ Check, in this order:
 3. Source of truth: Postgres mirrors the owning system and never overrules it; nothing moves CMA features into HubSpot.
 4. No customer data in the UI: ids, statuses and links to HubSpot or Aircall only.
 5. Security and data: no secrets or connection strings; no real personal data in fixtures or tests; authentication per README (IAP token, external id, never email); no ingest route with personal data in path or query.
-6. Database: a change is a new numbered script plus its verify script, never an edit to a script that ran in prod; the version follows the series rule in docs/decisions.md (0008za after 0008z); a table, view or column change updates docs/datamap/catalog.json.
+6. Database: a change is a new numbered script plus its verify script, never an edit to a script that ran in prod; the version follows the series rule in docs/decisions.md (0008za after 0008z; after 0008zz the additions continue as 0009a, 0009b, …; no reserved number: Assignments takes the next free addition when it is built); a table, view or column change updates docs/datamap/catalog.json.
 7. Docs: a docs/decisions.md row, a dated CHANGELOG.md line and the affected sections exist for every decision or change; records/ is untouched unless written from Martin's report.
 8. Style and language: UI copy and components follow docs/style/Pulse4all-Style.md; everything is in English.
 9. Definitions: review against docs/definitions.md; a retired word or a term used in another meaning is a Critical.
