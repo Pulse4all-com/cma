@@ -25,7 +25,7 @@ import { CMA_SQLSTATE, CmaDbError, isCmaSqlState } from '@/lib/data/errors';
  *   CMA_DB_INSTANCE   p4a-cma-dev:europe-west4:cma-dev-pg   (connection name, required)
  *   CMA_DB_USER       cma-web@p4a-cma-dev.iam                (IAM database user, required)
  *   CMA_DB_NAME       cma                                     (default cma)
- *   CMA_DB_POOL_MAX   5                                       (per Cloud Run instance)
+ *   CMA_DB_POOL_MAX   10                                      (per Cloud Run instance; a Flash page holds two, 0008zz)
  *   CMA_DB_POOL_MIN   1                                       (kept open between requests; within the budget's ceiling)
  *   CMA_DB_STATEMENT_TIMEOUT_MS  15000                        (a statement longer than this is cancelled: 57014 → DB_ERROR)
  *   CMA_DB_IP         PUBLIC | PRIVATE                        (default PUBLIC)
@@ -78,7 +78,7 @@ function dbConfig() {
     instanceConnectionName: required('CMA_DB_INSTANCE'),
     user: required('CMA_DB_USER'),
     database: process.env.CMA_DB_NAME ?? 'cma',
-    poolMax: Number(process.env.CMA_DB_POOL_MAX ?? 5),
+    poolMax: Number(process.env.CMA_DB_POOL_MAX ?? 10),
     ipType: process.env.CMA_DB_IP === 'PRIVATE' ? IpAddressTypes.PRIVATE : IpAddressTypes.PUBLIC,
   };
 }
