@@ -1229,7 +1229,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 
 | Field | Value |
 |---|---|
-| Term | Current take (nl: Actuele opname) |
+| Term | Current take (no label on screen and none in `copy.ts`: the page shows its instant as Refreshed at) |
 | Key | `cma.flash_current_take` (`cma_read.flash_current_take`); settings `flash.current_overviews` (default `installed_base`; stock overviews but data quality, each once, comma-separated, or empty for every now live) and `flash.current_refresh_minutes` (5 by default, 1 to 1440); `cma.flash_current_refresh(tenant)`, `cma.flash_current_state_of(...)` |
 | Definition | The stored "now" of a stock overview: the rows `cma.flash_compute_of` gave for the overview at one instant (the same shape as a Flash snapshot: overview, grouping set, dims, measures, definition version, computed_at), one per tenant and overview, replaced whole when the job refreshes it. The overview's heading, tiles, per-market bars and breakdowns (Assets → Installed base and Flash's installed_base overview) are read from it, shown with Refreshed at. It is fresh when younger than `flash.current_refresh_minutes` and usable when younger than three times that; a missing, older, other-definition-version or pre-migration take means the live read as before (slow but correct), never silently old figures |
 | Source | `cma.flash_compute_of` at the refresh (`cma.flash_current_refresh_of`, called by `cma.flash_current_refresh` from the job `cma-snapshot-flash`, which runs every minute and refreshes the takes that are due) |
