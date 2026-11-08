@@ -1,0 +1,61 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/135_verify_hours_reads.sql:40: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE VIEW
+CREATE VIEW
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+GRANT
+CREATE FUNCTION
+DO
+DO
+SET
+DO
+RESET
+SET
+DO
+GRANT
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP VIEW
+DROP VIEW
+                                                                               check_name                                                                               |     result      |                                                                                                                                                           detail                                                                                                                                                           
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0008zs recorded after 0008zr                                                                                                                               | ok              | 
+ S2 time_interval_all keeps its ten columns in their order                                                                                                              | ok              | tenant_id,workday_id,user_id,event_id,status_id,from_at,to_at,is_open,is_capped,seconds
+ S3 workday_summary_all keeps its sixteen columns in their order (47 A4, 51 A5)                                                                                         | ok              | workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id
+ S4 the face workday_summary carries the sixteen columns and sessions last                                                                                              | ok              | workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id,sessions
+ S5 cma.team_hours returns sessions as its last column                                                                                                                  | ok              | TABLE(user_id uuid, display_name text, organisation_name text, business_date date, timezone text, status text, started_at timestamp with time zone, ended_at timestamp with time zone, working_seconds bigint, paid_seconds bigint, is_capped boolean, needs_correction boolean, has_correction boolean, sessions integer)
+ S6 team_hours executable by cma_app only, team_hours and team_now with jit off; the core views for the owner, the face for the application                             | ok              | 
+ S7 the day functions exist, stable, the caller's rights, 12 and 1 rows estimated, executable by the application and not by the readers or public                       | ok              | 
+ S8 the readers' wrappers exist with the owner's rights, the readers' alone; cma_read.workday_summary and cma_read.time_interval keep their columns                     | ok              | 
+ E1 time_interval_all: every stretch of every tenant as before                                                                                                          | ok              | 251 stretches
+ E2 workday_summary_all: every day of every tenant as before, column for column                                                                                         | ok              | 106 days
+ E3 pulse4all-subscriptions sessions on the face: each day's effective clock-ins as the per-row count gave them                                                         | ok              | every day
+ E4 pulse4all-invest team_hours                                                                                                                                         | skip            | no active person holds workday.team: not compared
+ E4 pulse4all-subscriptions team_hours 7 days: the same rows in the same order, sessions included                                                                       | ok              | 4 rows
+ E4 pulse4all-subscriptions team_hours 31 days: the same rows in the same order, sessions included                                                                      | ok              | 27 rows
+ E4 pulse4all-subscriptions team_hours 92 days: the same rows in the same order, sessions included                                                                      | ok              | 34 rows
+ E5 pulse4all-subscriptions team_hours of one person, 31 days: the same                                                                                                 | ok              | the same
+ E6 pulse4all-subscriptions team_now: the same people, days and stretches in the same order                                                                             | ok              | 5 people
+ A1 as the application the day functions answer the own tenant's day only: another tenant's id, no tenant set, or another tenant set gives nothing (row-level security) | ok              | 4 stretches of the own day, 0 with the other tenant's id, 0 and 0 without a tenant, 0 with the other tenant set
+ A2 the readers read cma_read.workday_summary and cma_read.time_interval, every tenant, through the day functions                                                       | ok              | 106 days, 251 stretches
+ verdict                                                                                                                                                                | 0008zs verified | 135_verify_hours_reads: 18 ok, 0 FAIL, 1 skip
+(20 rows)
+
+DROP TABLE
+RESET

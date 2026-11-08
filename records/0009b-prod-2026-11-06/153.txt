@@ -1,0 +1,40 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/153_verify_calls_of_restore.sql:45: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                      check_name                                                      | result |                                        detail                                        
+----------------------------------------------------------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------
+ S1 addition 0009b recorded once, after 0008zz                                                                        | PASS   | 
+ S2 the same arguments and columns; SQL, stable, invoker, cma_owner, jit off, the application's only                  | PASS   | 
+ S3 the helpers and both settings, the tags grouped once; no 0008j rule, no tag read per call                         | PASS   | 
+ B1 Connected and Conversation per call; under the talk threshold, not_reached and incorrect_data are no Conversation | PASS   | i1:-- i2:-v i3:-- i4:-- o1:c- o10:c- o2:c- o3:c- o4:cv o5:c- o6:cv o7:c- o8:-- o9:cv
+ B2 connected from 5 s leaves 1 s and in progress out; the Conversation threshold at 29 and 46 s                      | PASS   | connected 7, 9, 9; conversations 4, 5, 1
+ B3 the same rows as 0008zc's definition under each setting, with the market and line filters                         | PASS   | five comparisons, 14 rows each, the same
+ B4 the current tags per call; a removed tag no longer counts                                                         | PASS   | i3:tg-nr o10:tg-inc o5:tg-nr o7:tg-nr-off o9:tg-type
+ E pulse4all-invest                                                                                                   | skip   | no active person holds reports.view: nothing compared
+ E cma.calls_of against 0008zc's definition, the last 92 days (pulse4all-subscriptions)                               | PASS   | 14646 call(s), 10454 connected, 3318 conversation(s), the same
+ verdict                                                                                                              | PASS   | 153_verify_calls_of_restore: 8 PASS, 0 FAIL, 1 skip
+(10 rows)
+
+DROP TABLE
+RESET
