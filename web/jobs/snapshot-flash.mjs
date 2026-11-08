@@ -2,13 +2,19 @@
  * The Flash snapshot (addition 0008zn; Decision log, 1 November 2026): once a day per tenant, the figures of every
  * Reports → Flash overview for the business date that just ended, stored immutably (cma.flash_snapshot_take: the live
  * computation's rows, the id lists at a month end, the watch), as each tenant's own Scheduler user (flash.snapshot).
+ * Since addition 0009e (Decision log, 8 November 2026) each run first refreshes the tenant's current takes that are due
+ * (cma.flash_current_refresh: the now of each overview of flash.current_overviews, Installed base by default, taken again
+ * when older than flash.current_refresh_minutes), which the page reads with its Refreshed at.
  *
- * Runs as a Cloud Run job on the web image (command: node jobs/snapshot-flash.mjs), started by Cloud Scheduler hourly
- * at minute 20 in UTC (docs/scheduler/deploy-flash.sh). Each run visits every tenant; the database decides which date
- * that is: date D is due at D + 1 at flash.snapshot_local_time in the tenant's zone, and at every instant there is a
- * latest due date, which the take stores once (a later run finds it taken). A date that stops being the latest due date
- * without a succeeded take is recorded by the next take as a missed run row, never taken afterwards. So time zones and
- * summer time need no schedule change. With the same database variables as the service:
+ * Runs as a Cloud Run job on the web image (command: node jobs/snapshot-flash.mjs), started by Cloud Scheduler every
+ * minute since 0009e (hourly at minute 20 in UTC before it; docs/scheduler/deploy-flash.sh). Each run visits every
+ * tenant; the database decides what is due. The current takes: one older than the tenant's setting (5 minutes by
+ * default) is taken again, a younger one kept (current_fresh), so the setting is the cadence and the schedule only the
+ * clock. The dated take: date D is due at D + 1 at flash.snapshot_local_time in the tenant's zone, and at every instant
+ * there is a latest due date, which the take stores once (a later run finds it taken: at a run every minute, every run
+ * but the first of a date answers taken, which writes nothing). A date that stops being the latest due date without a
+ * succeeded take is recorded by the next take as a missed run row, never taken afterwards. So time zones and summer
+ * time need no schedule change. With the same database variables as the service:
  *   CMA_DB_INSTANCE  <project>:<region>:<instance>   with the Cloud SQL connector and IAM auth
  *   CMA_DB_USER      <service account>@<project>.iam  member of cma_app
  *   CMA_DB_NAME      cma
@@ -19,16 +25,21 @@
  * Plain JavaScript on pg and the connector, no build step. Every tenant is served in turn and one tenant's failure never
  * stops the others. Each tenant leaves one sync_run row (job flash_snapshot, no connection) through cma.job_run_start()
  * and cma.job_run_finish(): succeeded with taken 1 and the rows stored, with already 1 (the date taken by an earlier
- * run) or missed 1 (the date recorded as missed earlier) when there was nothing to take; failed with the error's code
- * (the take's own failure leaves its failed run row in cma.flash_snapshot_run too), so Configuration → System health
- * shows the job ("Flash snapshot"); and one JSON log line: the tenant's id, the date, the rows, duration_ms. Never a
- * name or a record id. Exit code 0 when every tenant was served, 1 when any failed. No retries by Cloud Scheduler: the
- * next hour is the retry (a date stays the latest due date for a whole local day).
+ * run) or missed 1 (the date recorded as missed earlier) when there was nothing to take, and the current takes' counts
+ * (current_refreshed, current_fresh, current_running, current_not_set_up, current_failed, current_rows,
+ * current_duration_ms); failed with
+ * the error's code when the take failed (its own failure leaves its failed run row in cma.flash_snapshot_run too) or a
+ * current take could not be refreshed ("current_take <code>"; the page then reads that overview live once its take is
+ * older than three times the setting, and the watch's current_stale says so), so Configuration → System health shows
+ * the job ("Flash snapshot"); and one JSON log line: the tenant's id, the date, the rows, the current takes refreshed
+ * and failed, duration_ms. Never a name or a record id. Exit code 0 when every tenant was served, 1 when any failed. No
+ * retries by Cloud Scheduler: the next run is the retry (a date stays the latest due date for a whole local day).
  *
  * A dropped database connection (jobs/lib/connection.mjs): as the follow-up refresh, a tenant's unit is retried once on a
- * fresh connection after a connection error, its run row kept. The take is idempotent (a date already taken answers
- * taken false, reason taken, with that run's start and its stored counts), and the retry reports what the first attempt
- * did, never a second outcome:
+ * fresh connection after a connection error, its run row kept. The current refresh is idempotent (a take refreshed by a
+ * first attempt whose answer was lost is fresh: the retry's answer says so), its answer kept once received. The take is
+ * idempotent (a date already taken answers taken false, reason taken, with that run's start and its stored counts), and
+ * the retry reports what the first attempt did, never a second outcome:
  *   - the take's answer received before the connection was lost: kept, the take not sent again;
  *   - the take sent but its answer lost: a reason taken whose run started at or after this tenant's run row (the
  *     database's clock) is this run's own take, reported as taken with the stored counts;
@@ -142,6 +153,24 @@ export function ownTakeOf(answer, unitAt) {
   return { ...answer.stored, taken: true, date: answer.date, run_id: answer.run_id };
 }
 
+/** The current takes' counts (addition 0009e) of cma.flash_current_refresh's answer, whole numbers; all 0 without one */
+export const CURRENT_COUNTS = ["current_refreshed", "current_fresh", "current_running", "current_not_set_up", "current_failed", "current_rows",
+  "current_duration_ms"];
+export function currentCountsOf(c) {
+  const n = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : 0);
+  return Object.fromEntries(CURRENT_COUNTS.map((k) => [k, n(c?.[k])]));
+}
+
+/**
+ * The run row's outcome from the take's answer and the current refresh's: failed with the take's code when the take
+ * failed, else with "current_take <code>" when a current take could not be refreshed; null when it succeeded
+ */
+export function runErrorOf(answer, current) {
+  if (answer?.reason === "failed") return String(answer.error ?? "failed").slice(0, 60);
+  if (currentCountsOf(current).current_failed > 0) return `current_take ${String(current?.current_error ?? "failed")}`.slice(0, 60);
+  return null;
+}
+
 /** A database time as milliseconds (pg gives a Date for timestamptz; a string is parsed) */
 const msOf = (v) => (v instanceof Date ? v.getTime() : Date.parse(String(v ?? "")));
 
@@ -153,18 +182,23 @@ export async function snapshotTenants({ connect, log }) {
   const tenants = await retryOnce(() => withClient(connect, async (client) =>
     (await client.query("select tenant_id from cma.find_tenants_for_identity($1, $2)", [LOGIN_SYSTEM, LOGIN_ID])).rows), { log, fields: { tenant_id: null, step: "tenants" } });
   let failed = 0;
-  // The tenant's one log line from the answer the unit holds; note: what a retry found the first attempt had done
-  const report = (tenant_id, r, note = null) => {
+  // The tenant's one log line from the answers the unit holds (the take's, the current refresh's); note: what a retry
+  // found the first attempt had done
+  const report = (tenant_id, r, current, note = null) => {
     const counts = countsOf(r);
-    log(r?.reason === "failed" ? "ERROR" : r?.watch_error ? "WARNING" : "INFO", { tenant_id, date: r?.date ?? null, taken: Boolean(r?.taken),
+    const cur = currentCountsOf(current);
+    const error = runErrorOf(r, current);
+    log(error ? "ERROR" : r?.watch_error ? "WARNING" : "INFO", { tenant_id, date: r?.date ?? null, taken: Boolean(r?.taken),
       reason: r?.reason ?? null, rows: counts.rows, ids: counts.ids, watch_opened: counts.watch_opened, duration_ms: counts.duration_ms,
-      ...(r?.error ? { error: r.error } : {}), ...(r?.watch_error ? { watch_error: r.watch_error } : {}), ...(note ? { retry: note } : {}) });
-    return r?.reason === "failed" ? 1 : 0;
+      current_refreshed: cur.current_refreshed, current_failed: cur.current_failed,
+      ...(error ? { error } : {}), ...(r?.watch_error ? { watch_error: r.watch_error } : {}), ...(note ? { retry: note } : {}) });
+    return error ? 1 : 0;
   };
   for (const { tenant_id } of tenants) {
     let runId = null;
     let unitAt = NaN;        // the database's time when this tenant's run row was started
     let me = null;
+    let current = null;      // the current refresh's answer once received (0009e): final for this unit, never sent again
     let answer = null;       // the take's answer once received: final for this unit, the take never sent again
     let takeSent = false;    // a take went out: a retry without its answer cannot know whether its commit landed
     let finishSent = false;  // the run row's finish went out and no answer came back: likewise
@@ -186,7 +220,19 @@ export async function snapshotTenants({ connect, log }) {
           runId = run.id;
           unitAt = msOf(run.at);
         }
-        // 3. The take: the database decides the latest due date and takes it once. A retry whose first take went out
+        // 3. The current takes first (addition 0009e), so a run whose dated take runs long never holds back the stored
+        // figures the page reads. Idempotent (a take just refreshed is fresh), so a retry whose first answer was lost asks
+        // again. A database error of the whole call (a timeout, a database without 0009e) is a failed refresh with its
+        // code: the run row fails, and the dated take still runs
+        if (!current) {
+          try {
+            current = (await asScheduler(client, tenant_id, me, "select cma.flash_current_refresh(cma.current_tenant_id()) as r")).rows[0].r;
+          } catch (e) {
+            if (isConnectionError(e)) throw e;
+            current = { current_failed: 1, current_error: codeOf(e) };
+          }
+        }
+        // 4. The take: the database decides the latest due date and takes it once. A retry whose first take went out
         // without an answer coming back claims a run that started after this run row as its own
         if (!answer) {
           const lost = takeSent;
@@ -195,14 +241,15 @@ export async function snapshotTenants({ connect, log }) {
           answer = lost ? ownTakeOf(taken, unitAt) : taken;
           if (lost && answer !== taken) note = "taken by the first attempt, its answer lost";
         }
-        // 4. The run row's finish; after a finish whose answer was lost, CMA03 means it landed: the first counts stand
-        const counts = countsOf(answer);
+        // 5. The run row's finish; after a finish whose answer was lost, CMA03 means it landed: the first counts stand
+        const counts = { ...countsOf(answer), ...currentCountsOf(current) };
+        const runError = runErrorOf(answer, current);
         const lostFinish = finishSent;
         finishSent = true;
         try {
-          if (answer?.reason === "failed") {
+          if (runError) {
             await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'failed', $2::jsonb, $3)",
-              [runId, JSON.stringify(counts), String(answer.error ?? "failed").slice(0, 60)]);
+              [runId, JSON.stringify(counts), runError]);
           } else {
             await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
           }
@@ -219,7 +266,7 @@ export async function snapshotTenants({ connect, log }) {
         }
         return answer;
       }), { log, fields: { tenant_id } });
-      failed += report(tenant_id, r, note);
+      failed += report(tenant_id, r, current, note);
     } catch (e) {
       // the run row failed with the code, unless the unit's finish whose answer was lost had landed (CMA03 at once):
       // then the unit's answer stands. CMA03 after this finish's own lost answer is this finish landing
@@ -244,7 +291,7 @@ export async function snapshotTenants({ connect, log }) {
           });
       }
       if (done) {
-        failed += report(tenant_id, answer, "run row finished by an earlier attempt, its answer lost");
+        failed += report(tenant_id, answer, current, "run row finished by an earlier attempt, its answer lost");
       } else {
         failed += 1;
         log("ERROR", { tenant_id, date: null, taken: false, rows: 0, duration_ms: 0, error: codeOf(e) });

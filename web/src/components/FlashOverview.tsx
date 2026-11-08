@@ -4,7 +4,9 @@
  * period), the state the reads may correct (the tenant's today adopted on a refusal), the top line's controls, the
  * notices, and the overview's document (getFlashView without its list: the first paint) with the per-market bars and the
  * breakdowns, then its first page of records with their file and pager, read on their own and streamed in a boundary of
- * their own (addition 0008zy), the read started with the document's (addition 0008zz). The Installed base's Model filter narrows the document and the records (addition 0008zy). Moved out of the Flash page so both pages render the
+ * their own (addition 0008zy), the read started with the document's (addition 0008zz). The Installed base's Model filter narrows the document and the records (addition 0008zy). The now of an overview of
+ * flash.current_overviews (Installed base by default) comes from its stored current take with its Refreshed at, the
+ * records read live beside it (addition 0009e). Moved out of the Flash page so both pages render the
  * same data path, filters, As of and files; every link and control keeps the page it is rendered on (lib/flash
  * FlashPath). Team figures only, for reports.view or performance.team (the pages check it; the database again on every
  * read). Ids, statuses, codes, amounts and the CRM's links only: never a name, email, phone or address.
@@ -280,6 +282,13 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
         <div className="flex flex-col gap-6">
           <section aria-label={String(t[`o_${def.key}` as keyof typeof t])}>
             <OverviewHeading def={def} t={t} more={more(def.key)} statusSettings={shown.statusSettings} locale={locale} />
+            {/* now from the stored current take (addition 0009e): its Refreshed at, a timestamp in caption type (Pulse4all-Style
+                3.3), with what it means on hover, as Data quality shows its own; data quality's sits in its card below */}
+            {shown.refreshedAt && def.key !== "data_quality" ? (
+              <p className="-mt-2 mb-4 text-caption text-p4a-grey" data-testid="flash-refreshed-at" title={t.storedHint}>
+                {t.refreshedAt.replace("{time}", fmtDateTime(shown.refreshedAt, me.timeZone, locale))}
+              </p>
+            ) : null}
             {shown.days && shown.days.missing.length > 0 ? (
               <div className="mb-4"><Notice tone="info">{t.daysMissing.replace("{covered}", String(shown.days.covered))
                 .replace("{missing}", shown.days.missing.map((d) => fmtDate(d, locale)).join(", "))}</Notice></div>
@@ -342,7 +351,7 @@ export async function FlashOverview({ me, copy, st, def, path, active, title }: 
                 <Suspense fallback={<RecordsPlaceholder label={t.loading} />}>
                   <FlashRecords me={me} copy={copy} st={st} def={def} plan={plan} rowsRead={rowsRead} filters={filters} pageFilterDim={pageFilter?.dim ?? null}
                     sort={sort} descending={descending} pageNo={pageNo} path={path} query={query} hasFilters={hasFilters} labels={shown.labels}
-                    fileMaxRows={shown.settings.fileMaxRows} />
+                    fileMaxRows={shown.settings.fileMaxRows} storedFigures={Boolean(shown.refreshedAt) && def.key !== "data_quality"} />
                 </Suspense>
               )}
             </Card>
@@ -373,10 +382,13 @@ function RecordsPlaceholder({ label }: { label: string }) {
  * CMA_DB_TRACE (mock sign-in only) it writes the request's database count after its read, so verify/round-trips.mjs
  * reads the total from the last meta and the first paint's from the Shell's
  */
-async function FlashRecords({ me, copy, st, def, plan, rowsRead, filters, pageFilterDim, sort, descending, pageNo, path, query, hasFilters, labels, fileMaxRows }: {
+async function FlashRecords({ me, copy, st, def, plan, rowsRead, filters, pageFilterDim, sort, descending, pageNo, path, query, hasFilters, labels, fileMaxRows,
+  storedFigures }: {
   me: Principal; copy: Copy; st: FlashState; def: FlashOverviewDef; plan: RowsPlan; rowsRead: Promise<RowsRead>; filters: Record<string, string>; pageFilterDim: string | null;
   sort: string; descending: boolean; pageNo: number; path: FlashPath; query: Record<string, string>; hasFilters: boolean;
   labels: FlashDocumentView["labels"]; fileMaxRows: number;
+  /** The figures above come from a stored current take (addition 0009e): the live list's count says it can differ from them */
+  storedFigures: boolean;
 }) {
   const t = copy.flash;
   const locale = me.locale;
@@ -423,6 +435,10 @@ async function FlashRecords({ me, copy, st, def, plan, rowsRead, filters, pageFi
             title={t.downloadHint.replace("{n}", fmtNumber(fileMaxRows, locale))}>{t.download}</LinkButton>
         </span>
       </div>
+      {/* the records are read live while the figures above are the stored take's (addition 0009e): said under the count */}
+      {storedFigures && rows.mode === "live" ? (
+        <p className="-mt-2 mb-4 text-caption text-p4a-grey" data-testid="flash-rows-live">{t.rowsLive}</p>
+      ) : null}
       <RowsTable def={def} rows={rows} sort={plan.rowsAsOf ? null : sort} descending={descending} query={listQuery} locale={locale} timeZone={me.timeZone} t={t}
         path={path} labels={labels} />
       {totalPages > 1 ? (

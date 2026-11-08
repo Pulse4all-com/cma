@@ -10,8 +10,9 @@
 -- (Cloud SQL Studio) and statement by statement (psql), in any database, at any time, as often as wanted. Run as your
 -- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
 -- cma.organisation.is_contact_center), after 140_live_per_organisation.sql; since addition 0008zw (Reviews' period All),
--- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql. Prod is the
--- proof; dev's shared core is for information.
+-- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql; since
+-- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql. Prod is
+-- the proof; dev's shared core is for information.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -36,6 +37,11 @@
 -- (Martin, 6 November 2026; Decision log). A page's set sums the reads the reader waits for first: a Flash overview loads
 -- in two parts since addition 0008zy (the document, then its records streamed after the first paint), so the Installed
 -- base pages' sets are the document against verify.max_overview_ms, and their records read keeps its own list row.
+-- Since addition 0009e the Installed base's document now is read from its stored current take: in part a each tenant's
+-- current takes are refreshed first as its scheduler user (cma.flash_current_refresh, inside the timed part, so rolled
+-- back with it; a row per tenant says what the refresh answered), and the document's row times the stored read the page
+-- makes whenever the snapshot job keeps the take fresh. A take that cannot be made (a source not set up, an error)
+-- leaves the live read, timed as it is.
 -- Provoke: set verify.provoke below to true; every budget is then 0 ms, every timed read FAILs, and the verdict says
 -- PROVOKED, NOT A PASS.
 -- =============================================================================================
@@ -64,6 +70,10 @@ begin
   -- Customers → Courtesy (cma.courtesy_page) since addition 0009a
   if not exists (select 1 from cma.schema_migration where version = '0009a') then
     raise exception 'addition 0009a (150_courtesy.sql) has not run in this database';
+  end if;
+  -- the installed base's current take (cma.flash_current_refresh) since addition 0009e
+  if not exists (select 1 from cma.schema_migration where version = '0009e') then
+    raise exception 'addition 0009e (158_flash_current_take.sql) has not run in this database';
   end if;
 end
 $$;
@@ -231,10 +241,11 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- previous period; the same read whatever the report period, so it is timed once, in part a
 ('a', 'reviews all', 'reviews all by month', $q$select cma.reviews_page(null, '{today}', null, 'month')$q$, 'overview', array['reports.view', 'performance.team']),
 -- Installed base (addition 0008zy; Flash's overview and Assets -> Installed base): the page's two reads apart, the document
--- (totals, per market, the breakdown sets) and the first page of records, live and as of the previous month end (the
+-- (totals, per market, the breakdown sets) and the first page of records, now and as of the previous month end (the
 -- stored document and the month end's frozen list; where that date has no snapshot both raise CMA02 and read skip, below).
--- The set is the document alone, the first paint; the records stream after it and keep their list row (below)
-('a', 'installed base', 'document live', $q$select cma.flash_overview('installed_base', null, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+-- The set is the document alone, the first paint; the records stream after it and keep their list row (below). Now's
+-- document is the stored current take's since addition 0009e (refreshed first, above the reads)
+('a', 'installed base', 'document now (the current take)', $q$select cma.flash_overview('installed_base', null, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base', 'records first page live', $q$select cma.flash_rows('installed_base', '{}', 'serial', false, 500, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'document as of the month end', $q$select cma.flash_overview('installed_base', null, '{to}', null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'frozen list first page', $q$select cma.flash_rows('installed_base', '{}', null, false, 500, 0, '{to}', null, null)$q$, 'list', array['reports.view', 'performance.team']),
@@ -290,7 +301,7 @@ declare
   v_stop    timestamptz := clock_timestamp() + make_interval(secs => current_setting('verify.time_budget_s')::numeric);
   t record; rd record; o record;
   v_user uuid; v_sys text; v_ext text; v_conn uuid; v_today date; v_monday date; v_month date; v_from date; v_to date; v_from92 date;
-  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint;
+  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb;
   -- per page and tenant: the sum of its reads and whether one failed
   v_pages text[]; v_sums numeric[]; v_bad boolean[]; p integer;
   -- per page: a read in its set had nothing to time (and why); a read outside its set (a page that loads in two parts)
@@ -317,6 +328,27 @@ begin
       r_name := r_name || (t.slug || ' periods'); r_result := r_result || 'info'::text;
       r_detail := r_detail || format('previous month %s to %s; 92 days %s to %s; today %s; connection %s', v_from, v_to, v_from92, v_today, v_today, coalesce(v_conn::text, 'none'));
       r_ms := r_ms || null::numeric;
+      -- the current takes (addition 0009e), refreshed as the tenant's scheduler before the reads (rolled back with them), so
+      -- the installed base's document times the stored read; what the refresh answered is an info row
+      if v_part in ('a', 'all') then
+        select u.id into v_sched from cma.app_user u
+        where u.tenant_id = t.id and u.kind = 'system' and u.email = 'scheduler@system.invalid' and u.status = 'active';
+        v_cur := null;
+        if v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          begin
+            v_cur := cma.flash_current_refresh(t.id);
+          exception when others then
+            v_cur := jsonb_build_object('error', sqlstate);
+          end;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        r_name := r_name || (t.slug || ' current takes'); r_result := r_result || 'info'::text;
+        r_detail := r_detail || coalesce('refreshed before the reads: ' || v_cur::text, 'no active scheduler user: the documents read live');
+        r_ms := r_ms || null::numeric;
+      end if;
       for rd in
         select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, 1 as period
         from pg_temp.reads_0131 x where x.part = 'a' and v_part in ('a', 'all')
