@@ -9,6 +9,8 @@
 -- or FAIL, and the last row is the verdict (OK when every check passes), because Cloud SQL Studio shows no notices. Run as
 -- your own IAM login in dev, after 150_courtesy.sql; then 81 and 73 again. Edited by 0009c (154_courtesy_bases.sql): the courtesy
 -- state not_reached is unreachable and the follow-up summary's column courtesy_unreachable, so since 0009c it runs after 154.
+-- Edited by 0009d (156_courtesy_completed_orders.sql): B8, B9, B13 and B14 count completed courtesy orders (Zed's one call
+-- completes k6's two orders: 2), no longer calls, and B13's settings hold the completed tags, so since 0009d it runs after 156.
 --   A  structure and privileges: the addition row after 0008zz; every function the application's only and in the caller's
 --      rights, the readers' function definer, the owner's, pinned, the readers' only; the five settings with their
 --      defaults; the setting check's refusals and normalisation; cma.follow_up_summary()'s columns; the reader view's
@@ -407,15 +409,15 @@ begin
     v_rows := v_rows || array['18', 'B8 the completions split by outcome; an untagged connected call never completes',
       case when v_txt like '%oF:1001/1011/completed/1/true/positive%' and v_txt like '%oR:1002/1012/completed/0/false/negative%'
                 and v_txt like '%o8u:1001/1011/attempted/1/true/-%'
-                and j -> 'completed' = '{"calls": 4, "neutral": 1, "negative": 1, "positive": 2}'::jsonb
+                and j -> 'completed' = '{"orders": 5, "neutral": 2, "negative": 1, "positive": 2}'::jsonb
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s | %s', j -> 'completed', v_txt)];
 
     -- B9. per person by name, never by count (Zed has two, Anna one); a call whose user is linked to nobody last
-    select string_agg(format('%s:%s/%s/%s/%s', coalesce(p ->> 'name', 'none'), p ->> 'calls', p ->> 'positive', p ->> 'neutral', p ->> 'negative'), ' '
+    select string_agg(format('%s:%s/%s/%s/%s', coalesce(p ->> 'name', 'none'), p ->> 'orders', p ->> 'positive', p ->> 'neutral', p ->> 'negative'), ' '
                       order by o) into v_txt2
     from jsonb_array_elements(j -> 'per_person') with ordinality as x(p, o);
     v_rows := v_rows || array['19', 'B9 per person by name, not by count; the user linked to nobody in the not-linked row, last',
-      case when v_txt2 = 'Anna:1/0/0/1 Zed:2/1/1/0 none:1/1/0/0' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt2, 'null')];
+      case when v_txt2 = 'Anna:1/0/0/1 Zed:3/1/2/0 none:1/1/0/0' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt2, 'null')];
 
     -- B10. the follow-up summary's new count equals the page's Unreachable tile (both as of now, in one transaction)
     perform set_config('app.user_id', v_admin1::text, true);
@@ -470,8 +472,9 @@ begin
                 and v_txt2 = 'GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1 1005:2/1/0 1012:0/0/0 1019:1/0/0 1026:2/0/0 | '
                              || '2026-W44* 2 10:-,14:-,21:-,30:- 2026-W43 1 10:0,14:-,21:-,30:- 2026-W41 2 10:1,14:1,21:1,30:1 '
                              || '2026-W40* 8 10:0,14:2,21:4,30:4'
-                and j -> 'previous' = '{"calls": 0, "neutral": 0, "negative": 0, "positive": 0}'::jsonb
-                and (j -> 'settings') = '{"ages": [10, 14, 21, 30], "due_days": 10, "order_kinds": ["first", "repeat"], "alert_attempts": 3}'::jsonb
+                and j -> 'previous' = '{"orders": 0, "neutral": 0, "negative": 0, "positive": 0}'::jsonb
+                and (j -> 'settings') = '{"ages": [10, 14, 21, 30], "due_days": 10, "order_kinds": ["first", "repeat"], "alert_attempts": 3,
+                                          "completed_tags": ["Completed negative", "Completed neutral", "Completed positive"]}'::jsonb
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s | now %s', coalesce(v_txt2, 'null'), j -> 'now')];
 
     -- B14. the filters run in the database: market GB, segment B2B, state unreachable, due and no_contact; the list
@@ -479,7 +482,7 @@ begin
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', 'GB', null, null, 100, true, v_now);
     v_txt2 := format('GB %s %s;', j2 -> 'list' ->> 'total', j2 -> 'list' -> 'rows' -> 0 ->> 'order_name');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, 'B2B', null, 100, true, v_now);
-    v_txt2 := v_txt2 || format(' B2B %s %s;', j2 -> 'list' ->> 'total', j2 -> 'completed' ->> 'calls');
+    v_txt2 := v_txt2 || format(' B2B %s %s;', j2 -> 'list' ->> 'total', j2 -> 'completed' ->> 'orders');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, 'unreachable', 100, true, v_now);
     v_txt2 := v_txt2 || format(' unreachable %s %s;', j2 -> 'list' ->> 'total', j2 -> 'list' -> 'rows' -> 0 ->> 'order_name');
     j2 := cma.courtesy_page_of(v_t1, date '2026-10-01', date '2026-10-31', 'week', 'week', null, null, 'due', 100, true, v_now);

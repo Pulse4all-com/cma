@@ -9,6 +9,9 @@
 -- data values, and no row carries a name of a customer, an address or a phone number. Every check writes one row, PASS
 -- or FAIL, and the last row is the verdict (OK when every check passes), because Cloud SQL Studio shows no notices. Run as
 -- your own IAM login in dev, after 154_courtesy_bases.sql; then 151, 103, 81 and 73 again (154's header says why).
+-- Edited by 0009d (156_courtesy_completed_orders.sql): per market's completed_in_period (0009c's calls) counts each
+-- completed order in its own market (B1, B2) and B4 leaves 0009d's figures out of its comparison with 150's text (157
+-- compares them with 154's), so since 0009d it runs after 156.
 --   A  structure and privileges: the addition row after 0009a (A1); every function 154 makes again the application's
 --      only and in the caller's rights, cma.courtesy_orders_of and cma.courtesy_page_of with JIT off and custom plans
 --      (a create or replace drops a function's settings) (A2); the state renamed (A3): cma.courtesy_not_reached_of
@@ -26,10 +29,10 @@
 --             October (neutral): it counts once, in BE's row (the earlier order)
 --        kR   NL, an order of 2 October, three unanswered attempts since due: Unreachable
 --        kN1  NL, an order of 12 November, not due yet; nc an NL order of 11 November without a contact
---      B1  per market the calls add up to the tile, and markets_total holds the rows' sums, for October and November,
+--      B1  per market the completed orders add up to the tile, and markets_total holds the rows' sums, for October and November,
 --          unfiltered and with each filter (market NL, BE, GB, segment B2C, state unreachable)
---      B2  a call completing orders in two markets counts once, in the earlier order's market (BE); with the market
---          filter NL it counts in NL, the only one of its orders kept, so the row still equals the tile
+--      B2  a call completing orders in two markets counts once per order, each in its own market (since 0009d; 0009c
+--          counted it once, in the earlier order's market); with the market filter NL only NL's, so the row equals the tile
 --      B3  a November call completing an October order counts in November's market column, while that order is not in
 --          November's Orders; November: the tile 2, every Of which completed 0, GB a row with calls and no order
 --      B4  every other field equals 0009a's definition (150's text of the page, the orders and the state filter, kept
@@ -361,12 +364,12 @@ returns text
 language sql immutable
 as $$
   select concat_ws(' | ',
-           nullif((select string_agg(format('%s:%s/%s/%s/%s/%s', m ->> 'market', m ->> 'orders', m ->> 'completed', m ->> 'calls',
+           nullif((select string_agg(format('%s:%s/%s/%s/%s/%s', m ->> 'market', m ->> 'orders', m ->> 'completed', m ->> 'completed_in_period',
                                             m ->> 'unreachable', m ->> 'no_contact'), ' ' order by o)
                    from jsonb_array_elements(j -> 'markets') with ordinality as x(m, o)), ''),
            format('total %s/%s/%s/%s/%s', j -> 'markets_total' ->> 'orders', j -> 'markets_total' ->> 'completed',
-                  j -> 'markets_total' ->> 'calls', j -> 'markets_total' ->> 'unreachable', j -> 'markets_total' ->> 'no_contact'),
-           format('tile %s', j -> 'completed' ->> 'calls'))
+                  j -> 'markets_total' ->> 'completed_in_period', j -> 'markets_total' ->> 'unreachable', j -> 'markets_total' ->> 'no_contact'),
+           format('tile %s', j -> 'completed' ->> 'orders'))
 $$;
 
 -- Empty when the rows add up to markets_total in every field and its calls equal the tile's; per market as text otherwise
@@ -375,12 +378,12 @@ returns text
 language sql immutable
 as $$
   select case when s.o = (j -> 'markets_total' ->> 'orders')::int and s.c = (j -> 'markets_total' ->> 'completed')::int
-                   and s.k = (j -> 'markets_total' ->> 'calls')::int and s.r = (j -> 'markets_total' ->> 'unreachable')::int
+                   and s.k = (j -> 'markets_total' ->> 'completed_in_period')::int and s.r = (j -> 'markets_total' ->> 'unreachable')::int
                    and s.n = (j -> 'markets_total' ->> 'no_contact')::int
-                   and (j -> 'markets_total' ->> 'calls')::int = (j -> 'completed' ->> 'calls')::int
+                   and (j -> 'markets_total' ->> 'completed_in_period')::int = (j -> 'completed' ->> 'orders')::int
               then '' else pg_temp.v0009c_markets(j) end
   from (select coalesce(sum((m ->> 'orders')::int), 0) as o, coalesce(sum((m ->> 'completed')::int), 0) as c,
-               coalesce(sum((m ->> 'calls')::int), 0) as k, coalesce(sum((m ->> 'unreachable')::int), 0) as r,
+               coalesce(sum((m ->> 'completed_in_period')::int), 0) as k, coalesce(sum((m ->> 'unreachable')::int), 0) as r,
                coalesce(sum((m ->> 'no_contact')::int), 0) as n
         from jsonb_array_elements(j -> 'markets') m) s
 $$;
@@ -392,10 +395,16 @@ create or replace function pg_temp.v0009c_same(p_new jsonb, p_old jsonb)
 returns boolean
 language sql immutable
 as $$
-  select (p_new - 'markets' - 'markets_total') = (o.j - 'markets')
-     and coalesce((select jsonb_agg(m - 'calls' order by n) from jsonb_array_elements(p_new -> 'markets') with ordinality as x(m, n)
+  select (nn.j - 'markets' - 'markets_total' - 'groups') = (o.j - 'markets' - 'groups')
+     and coalesce((select jsonb_agg(m - 'calls' - 'due' - 'completed_in_period' order by n)
+                   from jsonb_array_elements(p_new -> 'markets') with ordinality as x(m, n)
                    where (m ->> 'orders')::int + (m ->> 'no_contact')::int > 0), '[]'::jsonb) = o.j -> 'markets'
-  from (select replace(p_old::text, '"not_reached"', '"unreachable"')::jsonb as j) o
+     and coalesce((select jsonb_agg((g - 'due') || jsonb_build_object('markets', coalesce((select jsonb_agg(gm - 'due' order by gk)
+                                                                                        from jsonb_array_elements(g -> 'markets') with ordinality as z(gm, gk)), '[]'::jsonb))
+                                    order by k)
+                   from jsonb_array_elements(p_new -> 'groups') with ordinality as y(g, k)), '[]'::jsonb) = coalesce(o.j -> 'groups', '[]'::jsonb)
+  from (select replace(p_old::text, '"not_reached"', '"unreachable"')::jsonb - 'completed' - 'previous' - 'per_person' as j) o,
+       (select (p_new - 'completed' - 'previous' - 'per_person') #- '{settings,completed_tags}' as j) nn
 $$;
 
 -- A. Structure and privileges (universal)
@@ -624,8 +633,9 @@ begin
       case when v_txt2 = '' and v_n = 12 and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_txt2 = '' then format('%s pages, every one adds up', v_n) else v_txt2 end];
 
-    -- B2. one call completing orders in two markets counts once, in the earlier order's market (BE, 5 October; not NL, 10
-    --     October); with the market filter NL it counts in NL, the only one of its orders kept, so the row equals the tile
+    -- B2. one call completing orders in two markets: since 0009d each completed order counts in its own market, BE's (5
+    --     October) in BE and NL's (10 October) in NL (0009c counted the call once, in the earlier order's market); with
+    --     the market filter NL only NL's, so the row still equals the tile
     j := cma.courtesy_page_of(v_t1, v_oct_from, v_oct_to, 'week', 'week', null, null, null, 100, true, v_now);
     v_txt2 := pg_temp.v0009c_markets(j);
     j2 := cma.courtesy_page_of(v_t1, v_oct_from, v_oct_to, 'week', 'week', 'NL', null, null, 100, true, v_now);
@@ -634,8 +644,8 @@ begin
     v_txt2 := v_txt2 || ' || BE ' || pg_temp.v0009c_markets(j2);
     select count(distinct o.completed_call_id), count(*) into v_n, v_m
     from cma.courtesy_orders_of(v_t1, null, null, v_now) o where o.order_source_id in ('oXbe', 'oXnl');
-    v_rows := v_rows || array['12', 'B2 a call completing orders in two markets counts once, in the earlier order''s market',
-      case when v_txt2 = 'BE:1/1/1/0/0 NL:4/3/1/1/0 | total 5/4/2/1/0 | tile 2 || NL NL:4/3/2/1/0 | total 4/3/2/1/0 | tile 2 '
+    v_rows := v_rows || array['12', 'B2 a call completing orders in two markets counts once per order, each in its own market (0009d)',
+      case when v_txt2 = 'BE:1/1/1/0/0 NL:4/3/2/1/0 | total 5/4/3/1/0 | tile 3 || NL NL:4/3/2/1/0 | total 4/3/2/1/0 | tile 2 '
                          || '|| BE BE:1/1/1/0/0 | total 1/1/1/0/0 | tile 1'
                 and v_n = 1 and v_m = 2
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s; %s call completing %s orders', v_txt2, v_n, v_m)];
