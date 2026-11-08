@@ -41,12 +41,18 @@
 --   cma.flash_current_overviews_ok(value), cma.flash_current_overviews_of(tenant)  the setting's form; the tenant's list
 --   cma.flash_current_state_of(tenant, overview, computed_at, version, now)  one derivation for the read, the refresh and
 --                         the watch: off (not in the setting), none (no take), outdated (another definition version, or
---                         computed before the latest migration or the tenant's latest setting change), fresh (younger
---                         than the setting), usable (younger than three times it), stale (older)
---   cma.flash_current_refresh_of(tenant, overview, force)  the owner's alone: under a transaction-level advisory lock per
---                         tenant and overview (a second refresh at the same time skips, reason running), unless fresh
---                         (reason fresh), replaces the take with cma.flash_compute_of's rows now; flash.snapshot and the
---                         current tenant checked first
+--                         computed before the latest migration), fresh (younger than the setting), usable (younger than
+--                         three times it), stale (older)
+--   cma.flash_current_forget()  a tenant's setting written, changed or reset (a reset deletes its row) removes that
+--                         tenant's current takes (trigger forget_flash_current_takes on cma.tenant_setting, SECURITY
+--                         DEFINER: the writer of a setting holds no write on the takes), so no take computed under the
+--                         earlier settings is read: now is live until the next refresh takes it under the new ones.
+--                         Configuration outside the settings (device statuses and their flags, models, markets) follows
+--                         the refresh interval as the data does
+--   cma.flash_current_refresh_of(tenant, overview, force)  the owner's alone: unless fresh (reason fresh, checked before
+--                         the lock and again under it), under a transaction-level advisory lock per tenant and overview
+--                         (a second refresh at the same time skips, reason running), replaces the take with
+--                         cma.flash_compute_of's rows now; flash.snapshot and the current tenant checked first
 --   cma.flash_current_refresh(tenant)  the job's entry: SECURITY DEFINER, owned by cma_owner, search path pinned, the
 --                         application's only; flash.snapshot and the current tenant first; removes the takes of overviews no
 --                         longer in the setting and refreshes each overview of the setting in a subtransaction of its
@@ -152,9 +158,7 @@ begin
   return new;
 end
 $$;
-drop trigger if exists check_flash_current_setting on cma.tenant_setting;
-create trigger check_flash_current_setting before insert or update on cma.tenant_setting
-  for each row execute function cma.check_flash_current_setting();
+-- (its trigger on cma.tenant_setting is created last, section 7: the lock it takes is held to the commit)
 
 -- The scheduler's permission now covers the current takes too (its key and holders unchanged)
 update cma.permission
@@ -188,7 +192,8 @@ revoke insert, update, delete on cma.flash_current_take from cma_app;
 -- ---------------------------------------------------------------------------------------------
 -- A take (its computed_at and definition version, as read with its rows) at p_now: off when the overview is not in the
 -- tenant's flash.current_overviews; none without a take; outdated when stored under another definition version, or
--- computed before the latest migration or the tenant's latest setting change (what the figures count may have changed);
+-- computed before the latest migration (what the figures count may have changed; a change of the tenant's settings
+-- removes its takes instead, cma.flash_current_forget below);
 -- fresh when younger than flash.current_refresh_minutes (the refresh skips it); usable when younger than three times it
 -- (the read takes it, the refresh takes it again); stale when older (the read computes now live). The read takes fresh
 -- and usable; the refresh every state but fresh and off; the watch an old take of an overview of the setting
@@ -202,11 +207,28 @@ as $$
     when p_computed_at is null then 'none'
     when p_version is distinct from cma.flash_definition_version(p_overview)
       or p_computed_at < (select max(m.applied_at) from cma.schema_migration m)
-      or p_computed_at < coalesce((select max(ts.updated_at) from cma.tenant_setting ts where ts.tenant_id = p_tenant_id), '-infinity'::timestamptz)
       then 'outdated'
     when p_computed_at > p_now - make_interval(mins => cma.setting_of(p_tenant_id, 'flash.current_refresh_minutes')::integer) then 'fresh'
     when p_computed_at > p_now - make_interval(mins => 3 * cma.setting_of(p_tenant_id, 'flash.current_refresh_minutes')::integer) then 'usable'
     else 'stale' end
+$$;
+
+-- A tenant's setting written, changed or reset (a reset deletes the row, cma.set_tenant_setting) removes that tenant's
+-- current takes: what the figures count may follow the setting (bands, holding statuses, required references), and the
+-- document's settings are now's, so a take computed under the earlier ones is never read; now is live until the job's
+-- next refresh. SECURITY DEFINER, owned by cma_owner, search path pinned: whoever writes a setting holds no write on the
+-- takes. The trigger itself is created last (section 7)
+create or replace function cma.flash_current_forget()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, cma, pg_temp
+as $$
+begin
+  delete from cma.flash_current_take c
+  where c.tenant_id = case when tg_op = 'DELETE' then old.tenant_id else new.tenant_id end;
+  return null;
+end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
@@ -223,8 +245,8 @@ $$;
 -- Replaces one overview's current take with the live computation's rows now (cma.flash_compute_of, as the read computes
 -- now and the dated take a date: one code path), in the caller's transaction, computed_at its time. Under a
 -- transaction-level advisory lock per tenant and overview: a second refresh at the same time skips (refreshed false,
--- reason running). Unless p_force, a take that is fresh is kept (reason fresh) and an overview not in the setting is left
--- (reason off). An overview whose source is not set up keeps no take (reason not_set_up, any take removed): the read
+-- reason running). Unless p_force, a take that is fresh is kept (reason fresh, read before the lock, so a fresh take is
+-- answered without it, and again under it) and an overview not in the setting is left (reason off). An overview whose source is not set up keeps no take (reason not_set_up, any take removed): the read
 -- computes now live, which answers not set up at once. The owner's alone (the job's entry runs it with the owner's rights, the application holds no write
 -- on the table); flash.snapshot and the current tenant are checked first, as the take's writers check them
 create or replace function cma.flash_current_refresh_of(p_tenant_id uuid, p_overview text, p_force boolean default false)
@@ -246,10 +268,19 @@ begin
     raise exception 'overview % keeps no current take: a stock overview but data quality does (%)', p_overview,
       array_to_string(cma.flash_current_keys(), ', ') using errcode = 'CMA04';
   end if;
+  -- the state before the lock: a fresh take (or an overview not in the setting) is answered without taking it, so a long
+  -- transaction holding the lock (a time script, a verify) never makes the job's every-minute run answer running
+  select max(c.computed_at), min(c.definition_version) into v_at, v_version
+  from cma.flash_current_take c where c.tenant_id = p_tenant_id and c.overview = p_overview;
+  v_state := cma.flash_current_state_of(p_tenant_id, p_overview, v_at, v_version, now());
+  if not coalesce(p_force, false) and v_state in ('fresh', 'off') then
+    return jsonb_build_object('refreshed', false, 'reason', v_state)
+           || case when v_state = 'fresh' then jsonb_build_object('age_seconds', floor(extract(epoch from now() - v_at))::integer) else '{}'::jsonb end;
+  end if;
   if not pg_try_advisory_xact_lock(cma.flash_current_lock_key(p_tenant_id, p_overview)) then
     return jsonb_build_object('refreshed', false, 'reason', 'running');
   end if;
-  -- the state after the lock, so a refresh that committed while this one waited for its turn is seen
+  -- the state again under the lock, so a refresh that committed meanwhile is seen
   select max(c.computed_at), min(c.definition_version) into v_at, v_version
   from cma.flash_current_take c where c.tenant_id = p_tenant_id and c.overview = p_overview;
   v_state := cma.flash_current_state_of(p_tenant_id, p_overview, v_at, v_version, now());
@@ -501,7 +532,6 @@ $$;
 -- As 0008zu (138), with current_stale: an overview of flash.current_overviews whose current take exists and is older than
 -- three times flash.current_refresh_minutes at the take's instant (the refresh is failing and the page computes its now
 -- live). Every other kind as before
---                     thresholds
 -- based on: 138_flash_totals.sql
 create or replace function cma.flash_watch_of(p_tenant_id uuid, p_date date, p_now timestamptz)
 returns jsonb
@@ -732,16 +762,25 @@ begin
 end
 $$;
 revoke execute on function cma.check_flash_current_setting() from public;
+revoke execute on function cma.flash_current_forget() from public, cma_app;
 
--- The watch's kinds take current_stale. Last, directly before the addition and the commit: the constraint's lock on
--- cma.flash_watch_finding (Flash's landing and the snapshot take read it) is held to the commit (CLAUDE.md, Performance)
+-- The triggers on cma.tenant_setting and the watch's kinds, last, directly before the addition and the commit: each takes
+-- a lock that is held to the commit (cma.tenant_setting is read on nearly every request, cma.flash_watch_finding by
+-- Flash's landing and the snapshot take; CLAUDE.md, Performance), so they wait for nothing that follows
+drop trigger if exists check_flash_current_setting on cma.tenant_setting;
+create trigger check_flash_current_setting before insert or update on cma.tenant_setting
+  for each row execute function cma.check_flash_current_setting();
+drop trigger if exists forget_flash_current_takes on cma.tenant_setting;
+create trigger forget_flash_current_takes after insert or update or delete on cma.tenant_setting
+  for each row execute function cma.flash_current_forget();
+
 alter table cma.flash_watch_finding drop constraint if exists flash_watch_finding_kind_check;
 alter table cma.flash_watch_finding add constraint flash_watch_finding_kind_check
   check (kind in ('jump', 'flow_zero', 'source_stale', 'snapshot_missing', 'dq_rise', 'current_stale'));
 comment on table cma.flash_watch_finding is 'Flash: the deterministic watch''s findings after each snapshot (jump, flow_zero, source_stale, snapshot_missing, dq_rise; current_stale since 0009e): aggregates, codes and counts only, no id of a record (0008zn). Written and resolved by the take only; one open finding per kind, overview, dims and measure';
 
 insert into cma.schema_migration (version, description)
-values ('0009e', 'The installed base''s first paint from a stored current take: cma.flash_current_take (one take per tenant and overview of flash.current_overviews, default installed_base: cma.flash_compute_of''s rows now, replaced when older than flash.current_refresh_minutes, default 5, by the snapshot job through cma.flash_current_refresh, SECURITY DEFINER, flash.snapshot; no audit trigger, no write for the application; cma_read.flash_current_take); cma.flash_document_of reads a stock overview''s now from its take when fresh or usable (cma.flash_current_state_of: younger than three times the setting, the definition and the tenant''s settings unchanged since), else live as before, and answers refreshed_at; cma.flash_watch_of opens current_stale for a take older than three times the setting')
+values ('0009e', 'The installed base''s first paint from a stored current take: cma.flash_current_take (one take per tenant and overview of flash.current_overviews, default installed_base: cma.flash_compute_of''s rows now, replaced when older than flash.current_refresh_minutes, default 5, by the snapshot job through cma.flash_current_refresh, SECURITY DEFINER, flash.snapshot; no audit trigger, no write for the application; cma_read.flash_current_take); cma.flash_document_of reads a stock overview''s now from its take when fresh or usable (cma.flash_current_state_of: younger than three times the setting, its definition current and no migration since; a change of the tenant''s settings removes its takes, cma.flash_current_forget), else live as before, and answers refreshed_at; cma.flash_watch_of opens current_stale for a take older than three times the setting')
 on conflict (version) do nothing;
 
 commit;

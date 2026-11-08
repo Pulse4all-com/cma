@@ -39,7 +39,9 @@
  * fresh connection after a connection error, its run row kept. The current refresh is idempotent (a take refreshed by a
  * first attempt whose answer was lost is fresh: the retry's answer says so), its answer kept once received. The take is
  * idempotent (a date already taken answers taken false, reason taken, with that run's start and its stored counts), and
- * the retry reports what the first attempt did, never a second outcome:
+ * the retry reports what the first attempt did, never a second outcome. (A take that failed within the last
+ * TAKE_RETRY_MINUTES, with no succeeded take since, is not sent again: reason backoff, the run row failed with
+ * "take_backoff <code>" until the next try, so a failing take is retried hourly, as before the every-minute cadence.)
  *   - the take's answer received before the connection was lost: kept, the take not sent again;
  *   - the take sent but its answer lost: a reason taken whose run started at or after this tenant's run row (the
  *     database's clock) is this run's own take, reported as taken with the stored counts;
@@ -56,6 +58,11 @@ const JOB = "flash_snapshot";
 // A take that runs past this is cancelled (57014) and the tenant's row says so; 123_verify_flash.sql reads the same value
 // (verify.job_statement_timeout_ms) and holds a full take at volume under half of it
 export const STATEMENT_TIMEOUT_MS = 240_000;
+// A dated take that failed is tried again after this, not at every run (addition 0009e: the job runs every minute, the
+// take stays retried hourly as before; a take computes every overview, 5.5 s in prod on 3 November 2026, and a failure
+// writes a failed run row each time). The run row says take_backoff with the failure's code meanwhile, so System health
+// keeps showing the job failing
+export const TAKE_RETRY_MINUTES = 60;
 
 /** The pool's size: CMA_DB_POOL_MAX, 1 when absent, never more than 2 (the connection budget) */
 export function poolMax(value) {
@@ -112,7 +119,7 @@ async function asScheduler(client, tenantId, userId, text, values = []) {
 }
 
 /**
- * A take's answer as the run row's counts (whole numbers only): taken, already, missed, failed (one of them 1; not_due
+ * A take's answer as the run row's counts (whole numbers only): taken, already, backoff, missed, failed (one of them 1; not_due
  * stays 0, kept so System health's rows keep one shape: no take answers it since 0008zn), late (the take started more
  * than an hour after its due time), the rows stored, the ids frozen at a month end and those left out (ids_skipped), the
  * watch's findings opened and open, watch_failed (the watch failed, the snapshot kept), the dates missed before, the
@@ -126,6 +133,7 @@ export function countsOf(r) {
     taken: r?.taken ? 1 : 0,
     not_due: 0,
     already: r?.reason === "taken" ? 1 : 0,
+    backoff: r?.reason === "backoff" ? 1 : 0,
     missed: r?.reason === "missed" ? 1 : 0,
     failed: r?.reason === "failed" ? 1 : 0,
     late: r?.late === true ? 1 : 0,
@@ -167,6 +175,7 @@ export function currentCountsOf(c) {
  */
 export function runErrorOf(answer, current) {
   if (answer?.reason === "failed") return String(answer.error ?? "failed").slice(0, 60);
+  if (answer?.reason === "backoff") return `take_backoff ${String(answer.error ?? "failed")}`.slice(0, 60);
   if (currentCountsOf(current).current_failed > 0) return `current_take ${String(current?.current_error ?? "failed")}`.slice(0, 60);
   return null;
 }
@@ -234,6 +243,16 @@ export async function snapshotTenants({ connect, log }) {
         }
         // 4. The take: the database decides the latest due date and takes it once. A retry whose first take went out
         // without an answer coming back claims a run that started after this run row as its own
+        // A take that failed within the last TAKE_RETRY_MINUTES, with no succeeded take since, is not sent again yet
+        if (!answer && !takeSent) {
+          const failed = (await asScheduler(client, tenant_id, me,
+            `select r.snapshot_date::text as date, r.error from cma.flash_snapshot_run r
+              where r.tenant_id = cma.current_tenant_id() and r.status = 'failed' and r.started_at > now() - make_interval(mins => $1)
+                and not exists (select 1 from cma.flash_snapshot_run s
+                                where s.tenant_id = r.tenant_id and s.status = 'succeeded' and s.started_at > r.started_at)
+              order by r.started_at desc limit 1`, [TAKE_RETRY_MINUTES])).rows[0];
+          if (failed) answer = { taken: false, reason: "backoff", date: failed.date, error: failed.error ?? "failed" };
+        }
         if (!answer) {
           const lost = takeSent;
           takeSent = true;

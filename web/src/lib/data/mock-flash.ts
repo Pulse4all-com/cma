@@ -432,6 +432,9 @@ function watchOf(me: Principal, today: string): FlashWatchItem[] {
       detail: { jump_pct: 20, jump_min: 10 }, snapshotDate: addDays(today, -2) },
     { kind: "snapshot_missing", overview: null, dims: {}, measure: null, value: 1, previous: null, threshold: null,
       detail: { missing_from: addDays(today, -SNAPSHOT_MISSING), missing_to: addDays(today, -SNAPSHOT_MISSING), days: 1 }, snapshotDate: addDays(today, -SNAPSHOT_MISSING + 1) },
+    // the installed base's current take not refreshed for 20 minutes (addition 0009e): its now read live
+    { kind: "current_stale", overview: "installed_base", dims: {}, measure: null, value: 20, previous: null, threshold: 15,
+      detail: { age_minutes: 20 }, snapshotDate: addDays(today, -1) },
   ];
 }
 

@@ -17,7 +17,8 @@
 --   S3  the functions: the state and the setting's helpers the application's, in the caller's rights; the job's entry
 --       SECURITY DEFINER, the owner's, search path pinned, the application's only; the writer and its lock key the
 --       owner's alone; JIT off on the two remade functions and the refresh's two; the watch's kinds take current_stale
---   S4  the two settings with their types and defaults, and their check trigger
+--   S4  the two settings with their types and defaults, their check trigger and the trigger that removes a tenant's takes
+--       when one of its settings is written, changed or reset (cma.flash_current_forget: definer, the owner's, pinned)
 --   A1  the setting checks: flash.current_overviews takes stock overviews but data quality, each once (spaces removed),
 --       or nothing, and refuses a flow, data quality, an unknown key, a key twice or a stray comma (CMA04);
 --       flash.current_refresh_minutes takes 1 to 1440 and refuses 0, 1441, a word, a sign and five digits (CMA04)
@@ -37,12 +38,18 @@
 --   A6  the watch: a take older than three times the setting opens current_stale (its age, the threshold); a fresh take
 --       resolves it; no take opens none
 --   A7  the fallback: no take, a take older than three times the setting (16 minutes at 5), another definition version, a
---       setting change or a migration recorded after it, and an overview taken out of the setting all read live
+--       setting written or reset after it (both remove the tenant's takes), a migration recorded after it, and an
+--       overview taken out of the setting all read live
 --       (refreshed_at null, the live figures, 0008zt's document); a take younger than three times it (6 and 14 minutes) is
 --       read (its figures, its instant); the state at 4, 6, 14 and 16 minutes is fresh, usable, usable and stale; an
 --       overview taken out of the setting loses its take at the next refresh
 --   D1  every active tenant with a stock overview of its setting set up: a fresh take of each, refreshed as its scheduler,
 --       equals the live document (0008zt's definition) for every market; rolled back
+-- Block A moves cma.schema_migration.applied_at of the additions recorded in the last day (158 just before this script)
+-- a day back, and A7 sets 0009e's to now and back, all inside its always-rolled-back subtransaction: nothing stays, and
+-- for the block's few seconds no other session sees the change (it is uncommitted), but the rows stay locked by it.
+-- Block D's refresh takes each tenant's advisory lock for its own seconds; the snapshot job's run meanwhile answers
+-- running for that overview and keeps its take.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
@@ -314,6 +321,17 @@ begin
         or exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = to_regprocedure(v_fn) and a.grantee = 0) then
     v_bad := v_bad || v_fn || '; ';
   end if;
+  -- the trigger's function: definer, the owner's, pinned, nobody's to call
+  v_fn := 'cma.flash_current_forget()';
+  if to_regprocedure(v_fn) is null then
+    v_bad := v_bad || v_fn || ' missing; ';
+  elsif not (select prosecdef from pg_proc where oid = to_regprocedure(v_fn))
+        or (select pg_get_userbyid(proowner) from pg_proc where oid = to_regprocedure(v_fn)) <> 'cma_owner'
+        or not (select 'search_path=pg_catalog, cma, pg_temp' = any (proconfig) from pg_proc where oid = to_regprocedure(v_fn))
+        or has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
+        or exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = to_regprocedure(v_fn) and a.grantee = 0) then
+    v_bad := v_bad || v_fn || '; ';
+  end if;
   foreach v_fn in array array['cma.flash_current_refresh_of(uuid,text,boolean)', 'cma.flash_current_lock_key(uuid,text)', 'cma.flash_watch_of(uuid,date,timestamptz)'] loop
     if to_regprocedure(v_fn) is null then
       v_bad := v_bad || v_fn || ' missing; ';
@@ -349,10 +367,11 @@ declare
 begin
   v_txt := (select string_agg(s.key || ':' || s.value_type || ':' || s.default_value, ' ' order by s.key collate "C") from cma.setting s
             where s.key in ('flash.current_overviews', 'flash.current_refresh_minutes'))
-           || ' ' || coalesce((select string_agg(t.tgname, ',') from pg_trigger t
-                               where t.tgrelid = 'cma.tenant_setting'::regclass and t.tgname = 'check_flash_current_setting' and not t.tgisinternal), 'no trigger');
-  insert into verify_0009e values (4, 'S4 the two settings with their types and defaults, and their check trigger',
-    case when v_txt = 'flash.current_overviews:text:installed_base flash.current_refresh_minutes:integer:5 check_flash_current_setting'
+           || ' ' || coalesce((select string_agg(t.tgname, ',' order by t.tgname) from pg_trigger t
+                               where t.tgrelid = 'cma.tenant_setting'::regclass and t.tgname in ('check_flash_current_setting', 'forget_flash_current_takes')
+                                 and not t.tgisinternal), 'no trigger');
+  insert into verify_0009e values (4, 'S4 the two settings with their types and defaults; the check trigger and the trigger that forgets a tenant''s takes on a setting change',
+    case when v_txt = 'flash.current_overviews:text:installed_base flash.current_refresh_minutes:integer:5 check_flash_current_setting,forget_flash_current_takes'
               and not current_setting('verify.provoke')::boolean then 'ok' else 'FAIL' end, v_txt);
 end
 $$;
@@ -431,9 +450,9 @@ begin
     insert into cma.device_status (tenant_id, key, name, is_in_field, is_in_stock, is_tracked) values (v_t2, 'field', 'Field', true, false, true);
     insert into cma.device (tenant_id, connection_id, source_system, source_id, serial, model_key, market, device_status_key, subscription_ref)
     select v_t2, v_reg2, 'verifyregister', 'd-' || g, 'SN-d-' || g, 'm1', 'GB', 'field', null from generate_series(1, 30) g;
-    -- tenant one's setting: every stock overview but data quality keeps a take; written a day ago, so a take backdated
-    -- below stays younger than the tenant's latest setting change
-    insert into cma.tenant_setting (tenant_id, key, value, updated_at) values (v_t1, 'flash.current_overviews', v_all, now() - interval '1 day');
+    -- tenant one's setting: every stock overview but data quality keeps a take (written before any take: a setting change
+    -- removes the tenant's takes)
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t1, 'flash.current_overviews', v_all);
     -- the additions recorded in the last day (158, just before this script) moved a day back inside this rolled-back block,
     -- so a take backdated by minutes below is not older than the latest migration; A4 checks that rule itself
     update cma.schema_migration set applied_at = applied_at - interval '1 day' where applied_at > now() - interval '1 day';
@@ -596,12 +615,19 @@ begin
              || ':' || (cma.flash_document_of(v_t1, 'installed_base', null, null, null, null) -> 'totals' ->> 'devices');
     update cma.flash_current_take c set definition_version = cma.flash_definition_version('installed_base') where c.tenant_id = v_t1 and c.overview = 'installed_base';
     v_txt := v_txt || ' back:' || (cma.flash_document_of(v_t1, 'installed_base', null, null, null, null) -> 'totals' ->> 'devices');
-    -- a setting changed after the take (now), then taken back
+    -- a setting written after the take removes the tenant's takes (now live), and so does a setting reset (its row deleted)
     insert into cma.tenant_setting (tenant_id, key, value) values (v_t1, 'flash.watch_jump_pct', '25');
-    v_txt := v_txt || ' setting:' || cma.flash_current_state_of(v_t1, 'installed_base', now() - interval '1 minute', cma.flash_definition_version('installed_base'), now())
-             || ':' || (cma.flash_document_of(v_t1, 'installed_base', null, null, null, null) -> 'totals' ->> 'devices');
+    v_txt := v_txt || ' setting:' || (select count(*) from cma.flash_current_take c where c.tenant_id = v_t1);
+    v_txt := v_txt || ':' || (cma.flash_document_of(v_t1, 'installed_base', null, null, null, null) -> 'totals' ->> 'devices');
+    perform cma.flash_current_refresh_of(v_t1, 'installed_base', true);
     delete from cma.tenant_setting ts where ts.tenant_id = v_t1 and ts.key = 'flash.watch_jump_pct';
+    v_txt := v_txt || ' reset:' || (select count(*) from cma.flash_current_take c where c.tenant_id = v_t1);
+    v_txt := v_txt || ':' || (cma.flash_document_of(v_t1, 'installed_base', null, null, null, null) -> 'totals' ->> 'devices');
     -- a migration recorded after the take (now), then moved back
+    perform cma.flash_current_refresh_of(v_t1, 'installed_base', true);
+    update cma.flash_current_take c set measures = jsonb_set(c.measures, '{devices}', '9999'::jsonb)
+    where c.tenant_id = v_t1 and c.overview = 'installed_base' and c.dims = '{}'::jsonb;
+    update cma.flash_current_take c set computed_at = now() - interval '1 minute' where c.tenant_id = v_t1 and c.overview = 'installed_base';
     update cma.schema_migration set applied_at = now() where version = '0009e';
     v_txt := v_txt || ' migration:' || cma.flash_current_state_of(v_t1, 'installed_base', now() - interval '1 minute', cma.flash_definition_version('installed_base'), now())
              || ':' || (cma.flash_document_of(v_t1, 'installed_base', null, null, null, null) -> 'totals' ->> 'devices');
@@ -620,9 +646,9 @@ begin
     r := cma.flash_current_refresh(v_t1);
     v_txt := v_txt || ':' || (select count(*) from cma.flash_current_take c where c.tenant_id = v_t1 and c.overview = 'installed_base')
              || ':' || (r ->> 'current_refreshed');
-    v_rows := v_rows || array['17', 'A7 the fallback: fresh, usable (the take read), stale at 16 minutes (live, 0008zt''s document); another version, a later setting change or migration, no take, out of the setting: live',
+    v_rows := v_rows || array['17', 'A7 the fallback: fresh, usable (the take read), stale at 16 minutes (live, 0008zt''s document); another version, a setting written or reset (the takes removed), a later migration, no take, out of the setting: live',
       case when v_txt = '4:fresh:9999:take 6:usable:9999:take 14:usable:9999:take 16:stale:' || v_live || ':live equal | version:outdated:' || v_live
-                        || ' back:9999 setting:outdated:' || v_live || ' migration:outdated:' || v_live || ' none:none:' || v_live || ':null off:off:null:0:1'
+                        || ' back:9999 setting:0:' || v_live || ' reset:0:' || v_live || ' migration:outdated:' || v_live || ' none:none:' || v_live || ':null off:off:null:0:1'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
