@@ -1,0 +1,15 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+         tenant          |      roles_with_performance_team      | verdict 
+-------------------------+---------------------------------------+---------
+ pulse4all-invest        | admin, analytics, manager, supervisor | PASS
+ pulse4all-subscriptions | admin, analytics, manager, supervisor | PASS
+(2 rows)
+

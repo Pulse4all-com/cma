@@ -1,0 +1,66 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/133_verify_perf.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                       check_name                                                                        |     result      |                                                           detail                                                            
+---------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-----------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0008zr recorded                                                                                                                             | ok              | cma.schema_migration holds 0008zr
+ S2 the two tables with their columns                                                                                                                    | ok              | tenant_id,ord,check_key,connection_id,object_type,object_id,value,market,fix_in,fix_adapter
+ S3 row-level security, the tenant policy, the application's grants, no audit trigger, nothing for the readers                                           | ok              | as cma.setup_tenant_table() gives, the audit trigger dropped
+ S4 the setting (integer, 5), the permission on every scheduler role and no other, the job's permission                                                  | ok              | data_quality.refresh_minutes, data_quality.refresh, refresh_data_quality
+ S5 jit off on the six set functions; data_quality and data_quality_rows volatile (the fallback writes)                                                  | ok              | 6 of 6 functions carry jit=off
+ S6 the new functions executable by the application only                                                                                                 | ok              | revoked from public, granted to cma_app
+ E pulse4all-invest                                                                                                                                      | skip            | no active person holds tenant.configure: nothing compared
+ E1 connection_held_kinds_of for every connection (pulse4all-subscriptions)                                                                              | ok              | 30 row(s), the same
+ E2 system_health_runs (pulse4all-subscriptions)                                                                                                         | ok              | 93 row(s), the same in the same order
+ E3 missed_callbacks_of (pulse4all-subscriptions)                                                                                                        | ok              | 20 row(s), the same in the same order
+ E4 calls_of over the last 92 days (pulse4all-subscriptions)                                                                                             | ok              | 14646 row(s), the same
+ E5 inbound_calls_of over the last 92 days (pulse4all-subscriptions)                                                                                     | ok              | 2071 row(s), the same
+ E6 intake_per_day_of over the last 92 days (pulse4all-subscriptions)                                                                                    | ok              | 325 row(s), the same
+ E7 open_tickets_of (pulse4all-subscriptions)                                                                                                            | ok              | 1236 row(s), the same in the same order
+ E8 open_tasks_of (pulse4all-subscriptions)                                                                                                              | ok              | 2678 row(s), the same in the same order
+ E9 the stored findings equal the live computation (pulse4all-subscriptions)                                                                             | ok              | 6646 finding(s) stored, the same as computed live; the stored result of 2026-11-06 15:05:11.657852+00 is kept (rolled back)
+ A1 a tenant without a stored result computes it once on demand; the pages read it with Refreshed at                                                     | ok              | market_not_in_catalog counted 1, computed at 2026-11-06 15:08:47.945565+00
+ A2 the refresh skips a fresh result (reason fresh), refreshes an old one, and a waiting refresh finds it present                                        | ok              | data_quality.refresh_minutes 5: skipped at 0 minutes, refreshed at 6
+ A3 data_quality.refresh_minutes takes 1 to 1440 (0 and 1441 refused with CMA04)                                                                         | ok              | set to 1 for the tenant
+ A4 the scheduler's user writes the job's run row and refreshes; an analyst is refused (CMA06) on both                                                   | ok              | job refresh_data_quality without a connection
+ A5 an agent is refused data_quality, data_quality_computed_at and inbound_now (CMA06); a supervisor reads inbound_now with today, callbacks and summary | ok              | the summary's listed equals the callbacks listed
+ verdict                                                                                                                                                 | 0008zr verified | 133_verify_perf: 20 ok, 0 FAIL, 1 skip
+(22 rows)
+
+DROP TABLE
+RESET
