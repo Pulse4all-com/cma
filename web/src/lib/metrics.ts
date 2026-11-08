@@ -396,15 +396,16 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
   // Customers → Courtesy (addition 0009a): the tiles, the outcome bar, the tables (Per market's calls since 0009c), the cohorts, per
   // person and the list's columns
   "/reports/courtesy": [
-    "courtesy.completed_calls",
+    "courtesy.completed_in_period",
     "courtesy.due_open",
     "courtesy.unreachable",
     "courtesy.no_contact",
     "courtesy.outcomes",
     "courtesy.by_market",
-    "courtesy.by_market.calls",
+    "courtesy.by_market.completed_in_period",
     "courtesy.by_period",
     "courtesy.orders",
+    "courtesy.due",
     "courtesy.completed",
     "courtesy.completion_share",
     "courtesy.cohorts",

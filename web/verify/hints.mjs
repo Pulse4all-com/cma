@@ -10,7 +10,7 @@
  * headers of the callbacks kept per week and per person, and since addition 0008y every tile, header and bar card of
  * Attempts per deal and every header of Attempts per agent, and since addition 0008zb every tile, header and intro card of
  * Funnel and Cancellations, and since addition 0009c every tile, header and intro card of Courtesy (whose hints name their
- * basis, call date or order date), carries exactly one info mark: a button with a name, described by a
+ * basis, since addition 0009d order date, completion date or now, and the completed tags), carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not. Last, the top bar
@@ -191,11 +191,12 @@ const cases = [
   // days to order, not called yet), by week and by month split per market
   ["manager", "/reports/lead-cohorts", 9, 0],
   ["reader", "/reports/lead-cohorts?period=month&split=market&measure=ordered", 9, 0],
-  // Courtesy (additions 0009a and 0009c): four tiles; per market the market, the five order columns and the calls completed in
-  // the period; per week or day the period and five; the order cohorts the cohort, orders and the four ages; per person five
-  // (performance.team only); the order list ten. The intro cards carry their marks too, checked below
-  ["manager", `/reports/courtesy?${COURTESY_LAST_MONTH}`, 34, 4],
-  ["reader", `/reports/courtesy?${COURTESY_LAST_MONTH}&group=day`, 29, 4],
+  // Courtesy (additions 0009a, 0009c and 0009d): four tiles; per market the market, the six order columns (with Of which due)
+  // and the courtesy orders completed in the period; per week or day the period and six; the order cohorts the cohort, orders
+  // and the four ages; per person five (performance.team only); the order list ten. The intro cards carry their marks too,
+  // checked below
+  ["manager", `/reports/courtesy?${COURTESY_LAST_MONTH}`, 36, 4],
+  ["reader", `/reports/courtesy?${COURTESY_LAST_MONTH}&group=day`, 31, 4],
 ];
 let headers = 0;
 let tiles = 0;

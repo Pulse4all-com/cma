@@ -1532,13 +1532,19 @@ async function courtesyChecks() {
     [r.status, typeof d?.setUp, typeof d?.hasStore, d?.setUp === false ? d?.now === null && d?.completed === null : d?.now !== null,
       rows.every((x) => Object.keys(x).every((k) => !/(email|phone|address|firstName|lastName|customerName|contactName)/i.test(k)))],
     [200, "boolean", "boolean", true, true], [200, "string", "boolean", true, true]);
-  // since addition 0009c: per market the calls completed in the period (by call date) add up to the tile, and marketsTotal holds
-  // the rows' sums; not set up, no market row and no total
+  // since addition 0009d: the courtesy orders completed in the period (by completion date, each in its own market) add up per
+  // market to the tile, as do the outcomes and per person; marketsTotal holds the rows' sums; per order block of which due
+  // stays within the orders and of which courtesy completed within the due; not set up, no market row and no total
   const sum = (k) => (d?.byMarket ?? []).reduce((a, m) => a + m[k], 0);
-  expect("courtesy: per market the calls add up to the tile and marketsTotal holds the rows' sums; not set up neither",
-    d?.setUp ? [["orders", "completed", "calls", "unreachable", "noContact"].every((k) => sum(k) === d.marketsTotal?.[k]), d.marketsTotal?.calls === d.completed?.calls]
-      : [d?.marketsTotal === null, (d?.byMarket ?? []).length === 0],
-    [true, true], [false, false]);
+  const c = d?.completed;
+  const people = d?.perPerson ? d.perPerson.reduce((a, x) => a + x.orders, 0) : c?.orders;
+  const within = [...(d?.byMarket ?? []), ...(d?.byGroup ?? []), ...(d?.marketsTotal ? [d.marketsTotal] : [])]
+    .every((x) => x.due <= x.orders && x.completed <= x.due);
+  expect("courtesy: per market the completed orders add up to the tile, as do the outcomes and per person; marketsTotal holds the sums; due within orders, completed within due; not set up neither",
+    d?.setUp ? [["orders", "due", "completed", "completedInPeriod", "unreachable", "noContact"].every((k) => sum(k) === d.marketsTotal?.[k]),
+      d.marketsTotal?.completedInPeriod === c?.orders, c?.positive + c?.neutral + c?.negative === c?.orders && people === c?.orders, within]
+      : [d?.marketsTotal === null, (d?.byMarket ?? []).length === 0, d?.completed === null, true],
+    [true, true, true, true], [false, false, false, false]);
   const refused = [`/api/v1/reports/courtesy?${q}&period=day`, `/api/v1/reports/courtesy?${q}&group=year`, `/api/v1/reports/courtesy?${q}&market=nl`,
     `/api/v1/reports/courtesy?${q}&segment=B2B,B2C`, `/api/v1/reports/courtesy?${q}&state=not_reached`, `/api/v1/reports/courtesy?from=${day(-199)}&to=${day(0)}`];
   expect("courtesy: a period, group, market, segment or state not known and 200 days are 400s; an agent is refused",

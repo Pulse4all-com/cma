@@ -2531,6 +2531,9 @@ function mockCourtesySettings(): CourtesySettings {
     dueDays: Number(mockSetting("courtesy.due_days")), alertAttempts: Number(mockSetting("courtesy.alert_attempts")),
     ages: list(mockSetting("courtesy.ages_days")).map(Number), connectedMinSeconds: Number(mockSetting("telephony.connected_min_seconds")),
     conversationMinSeconds: Number(mockSetting("calls.conversation_min_talk_seconds")), segments: ["B2B", "B2C"],
+    // the names of the tags whose meaning completes an order (0009d): the mock's telephony catalog maps none (its courtesy
+    // calls carry the meanings directly), so the hints say that none is mapped yet, as a tenant without one sees
+    completedTags: [],
   };
 }
 

@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
  * (courtesy.order_kinds) from its due day (courtesy.due_days). `setUp` false (courtesy.start_date unset) answers every figure
  * null; `hasStore` false says no store is connected. `now` (every courtesy order since the start date as of now: `orders` with a
  * contact, `dueOpen`, `notDue`, `dueNoAttempt`, `attempted`, `unreachable`, `completed`, `noContact`); `completed` and `previous`
- * (the courtesy calls completed in the period by call date, for orders of any date, and the previous period like for like,
- * distinct calls, per outcome); `byMarket` (the period's orders by order date, and since addition 0009c `calls`, the calls
- * completed in the period, each in the market of the earliest courtesy order it completed) with `marketsTotal` (its total row,
- * whose `calls` equal `completed.calls`; null while not set up); `byGroup` (the period's orders by order date, no calls);
- * `cohorts` (per ISO week or month at the ages of courtesy.ages_days); `perPerson` (null without
- * performance.team); `list` (`total` and the first follow_up.list_rows rows: ids, codes, dates, counts, the state and the
+ * (since addition 0009d `orders`, `positive`, `neutral`, `negative`: the courtesy orders completed in the period by completion
+ * date, placed on any date, and the previous period like for like); `byMarket` (the period's orders by order date with `due`,
+ * of which due, and `completed`, of which courtesy completed; and `completedInPeriod`, the orders completed in the period, each
+ * in its own market) with `marketsTotal` (its total row, whose `completedInPeriod` equals `completed.orders`; null while not
+ * set up); `byGroup` (the period's orders by order date with `due`); `settings.completedTags` (the tenant's completed tags);
+ * `cohorts` (per ISO week or month at the ages of courtesy.ages_days); `perPerson` (`orders` and the outcomes per person; null
+ * without performance.team); `list` (`total` and the first follow_up.list_rows rows: ids, codes, dates, counts, the state and the
  * contact's record link, never a name, email, phone or address); `settings`; the filter choices. Needs reports.view or
  * performance.team, here and again in the database.
  */

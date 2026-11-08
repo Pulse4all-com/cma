@@ -22,7 +22,7 @@ import type {
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
   DealAttempt, LineStoredCalls, TagMeaning,
   CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
-  CourtesyCalls, CourtesyCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
+  CourtesyCompleted, CourtesyCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
   CohortAge, LeadCohortRow, LeadCohortsReport,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
@@ -1056,25 +1056,25 @@ type ReviewsPageDb = {
 };
 
 /** cma.courtesy_page's JSON (addition 0009a): snake_case as the database answers it; every figure null while not set up */
-type CourtesyCallsDb = { calls: number; positive: number; neutral: number; negative: number };
-type CourtesyCountsDb = { orders: number; completed: number; unreachable: number; no_contact: number };
+type CourtesyCompletedDb = { orders: number; positive: number; neutral: number; negative: number };
+type CourtesyCountsDb = { orders: number; due: number; completed: number; unreachable: number; no_contact: number };
 type CourtesyPageDb = {
   from: string; to: string; rows: number; set_up: boolean; has_store: boolean; start_date: string | null;
-  settings: { due_days: number; alert_attempts: number; ages: number[]; order_kinds: string[] };
+  settings: { due_days: number; alert_attempts: number; ages: number[]; order_kinds: string[]; completed_tags: string[] };
   now: { orders: number; due_open: number; not_due: number; due_no_attempt: number; attempted: number; unreachable: number; completed: number; no_contact: number } | null;
-  completed: CourtesyCallsDb | null; previous: CourtesyCallsDb | null; previous_from: string | null; previous_to: string | null; previous_partial: boolean;
-  markets: (CourtesyCountsDb & { market: string; name: string | null; calls: number })[];
-  markets_total: (CourtesyCountsDb & { calls: number }) | null;
+  completed: CourtesyCompletedDb | null; previous: CourtesyCompletedDb | null; previous_from: string | null; previous_to: string | null; previous_partial: boolean;
+  markets: (CourtesyCountsDb & { market: string; name: string | null; completed_in_period: number })[];
+  markets_total: (CourtesyCountsDb & { completed_in_period: number }) | null;
   groups: (CourtesyCountsDb & { key: string; markets: (CourtesyCountsDb & { market: string })[] })[];
   cohorts: { key: string; label: string; start: string; end: string; partial: boolean; orders: number; ages: { age: number; mature: boolean; completed: number | null }[] }[];
-  per_person: (CourtesyCallsDb & { user_id: string | null; name: string | null })[] | null;
+  per_person: (CourtesyCompletedDb & { user_id: string | null; name: string | null })[] | null;
   list: { total: number; rows: { order_id: string; order_name: string; store: string; store_name: string | null; market: string; segment: string; created_at: string;
     business_date: string; due_date: string; days_past_due: number | null; attempts: number | null; last_attempt_at: string | null; state: CourtesyState | null;
     outcome: CourtesyOutcome | null; completed_at: string | null; record_url: string | null }[] };
   filter_markets: string[]; filter_segments: string[];
 };
-const toCourtesyCalls = (c: CourtesyCallsDb): CourtesyCalls => ({ calls: c.calls, positive: c.positive, neutral: c.neutral, negative: c.negative });
-const toCourtesyCounts = (c: CourtesyCountsDb): CourtesyCounts => ({ orders: c.orders, completed: c.completed, unreachable: c.unreachable, noContact: c.no_contact });
+const toCourtesyCompleted = (c: CourtesyCompletedDb): CourtesyCompleted => ({ orders: c.orders, positive: c.positive, neutral: c.neutral, negative: c.negative });
+const toCourtesyCounts = (c: CourtesyCountsDb): CourtesyCounts => ({ orders: c.orders, due: c.due, completed: c.completed, unreachable: c.unreachable, noContact: c.no_contact });
 
 function toReviewFigures(f: ReviewFiguresDb): ReviewFigures {
   return { reviews: f.reviews, averageRating: f.average_rating === null ? null : Number(f.average_rating), negative: f.negative, linkedOrder: f.linked_order,
@@ -2628,16 +2628,18 @@ export const postgresData: CmaData = {
       const n = j.now;
       return {
         from: j.from, to: j.to, period, group, filter, rows: j.rows, setUp: j.set_up, hasStore: j.has_store, startDate: j.start_date,
-        settings: { dueDays: j.settings.due_days, alertAttempts: j.settings.alert_attempts, ages: j.settings.ages, orderKinds: j.settings.order_kinds },
+        settings: { dueDays: j.settings.due_days, alertAttempts: j.settings.alert_attempts, ages: j.settings.ages, orderKinds: j.settings.order_kinds,
+          completedTags: j.settings.completed_tags ?? [] },
         now: n ? { orders: n.orders, dueOpen: n.due_open, notDue: n.not_due, dueNoAttempt: n.due_no_attempt, attempted: n.attempted, unreachable: n.unreachable,
           completed: n.completed, noContact: n.no_contact } : null,
-        completed: j.completed ? toCourtesyCalls(j.completed) : null, previous: j.previous ? toCourtesyCalls(j.previous) : null,
+        // completed courtesy orders by completion date (addition 0009d: orders, no longer calls)
+        completed: j.completed ? toCourtesyCompleted(j.completed) : null, previous: j.previous ? toCourtesyCompleted(j.previous) : null,
         previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial,
-        // per market the period's orders (by order date) and the calls completed in the period (by call date; addition 0009c)
-        byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, ...toCourtesyCounts(m), calls: m.calls })),
-        marketsTotal: j.markets_total ? { ...toCourtesyCounts(j.markets_total), calls: j.markets_total.calls } : null,
+        // per market the period's orders (by order date) and the orders completed in the period (by completion date; addition 0009d)
+        byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, ...toCourtesyCounts(m), completedInPeriod: m.completed_in_period })),
+        marketsTotal: j.markets_total ? { ...toCourtesyCounts(j.markets_total), completedInPeriod: j.markets_total.completed_in_period } : null,
         byGroup: j.groups.map((g) => ({ key: g.key, ...toCourtesyCounts(g), markets: g.markets.map((m) => ({ market: m.market, ...toCourtesyCounts(m) })) })),
-        cohorts: j.cohorts, perPerson: j.per_person ? j.per_person.map((x) => ({ userId: x.user_id, name: x.name, ...toCourtesyCalls(x) })) : null,
+        cohorts: j.cohorts, perPerson: j.per_person ? j.per_person.map((x) => ({ userId: x.user_id, name: x.name, ...toCourtesyCompleted(x) })) : null,
         list: {
           total: j.list.total,
           rows: j.list.rows.map((r) => ({ orderId: r.order_id, orderName: r.order_name, store: r.store, storeName: r.store_name, market: r.market, segment: r.segment,
