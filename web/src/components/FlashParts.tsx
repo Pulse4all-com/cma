@@ -201,12 +201,16 @@ export function changeText(value: number | null, previous: number | null, previo
 }
 
 /** The totals: one tile per measure, the headline first */
-export function TotalsRow({ def, doc, locale, t, unavailable = [], filtered = false }: {
+export function TotalsRow({ def, doc, locale, t, unavailable = [], filtered = false, withSplit = true, unavailableText }: {
   def: FlashOverviewDef; doc: FlashDocumentView; locale: "en" | "nl"; t: T;
   /** The measures a page filter cannot narrow (addition 0008zy): "Not available with a Model filter", never a figure */
   unavailable?: readonly string[];
   /** A page filter narrows the document (the Model filter): the headline's split, of one model, is left out */
   filtered?: boolean;
+  /** Whether the headline's split is written under its tile; Assets → Installed base draws it as a donut instead (0009f) */
+  withSplit?: boolean;
+  /** The words for a measure a page filter cannot narrow; the Model filter's when left out */
+  unavailableText?: string;
 }) {
   const totals = doc.totals ?? {};
   const order = [def.headline, ...def.measures.filter((m) => m !== def.headline)];
@@ -214,7 +218,7 @@ export function TotalsRow({ def, doc, locale, t, unavailable = [], filtered = fa
   // 0008zu); the orders per order kind in the reader's language, Unknown only above 0 (addition 0008zw); In the field per
   // model by the register's names, in the register's order (the document's splitOrder, addition 0008zy). The document's
   // rows are the market's when one is chosen; none for a snapshot taken before the split's rows were stored
-  const split = filtered ? null : splitLine(splitOf(def, doc.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder)),
+  const split = filtered || !withSplit ? null : splitLine(splitOf(def, doc.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder)),
     (x) => fmtNumber(x, locale, 0), (k) => splitKeyLabel(def.key, k, t, doc.labels));
   return (
     <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5" data-testid="flash-totals">
@@ -225,7 +229,7 @@ export function TotalsRow({ def, doc, locale, t, unavailable = [], filtered = fa
           </p>
           <p className="tabular mt-1 text-title font-bold text-p4a-heading">
             {unavailable.includes(m)
-              ? <span className="text-small font-normal text-p4a-muted" data-testid={`flash-unavailable-${m}`}>{t.modelUnavailable}</span>
+              ? <span className="text-small font-normal text-p4a-muted" data-testid={`flash-unavailable-${m}`}>{unavailableText ?? t.modelUnavailable}</span>
               : measureNotApplicable(def.key, doc.totals, m)
               ? <NotApplicable measure={m} t={t} />
               : <MeasureValue measure={m} value={totals[m]} reviews={totals.reviews} locale={locale} />}
@@ -460,16 +464,18 @@ function cellOf(key: string, kind: string, value: unknown, row: Record<string, u
 }
 
 /** The records: the overview's columns (the links on the ids), sortable on the whitelist, 500 a page */
-export function RowsTable({ def, rows, sort, descending, query, locale, timeZone, t, path, labels }: {
+export function RowsTable({ def, rows, sort, descending, query, locale, timeZone, t, path, labels, hidden = [] }: {
   def: FlashOverviewDef; rows: FlashRowsView; sort: string | null; descending: boolean; query: Query; locale: "en" | "nl"; timeZone: string; t: T;
   /** The page the overview is rendered on (0008zw); Reports → Flash when left out */
   path?: FlashPath;
   /** The document's labels: a device's model by its register name (addition 0008zy) */
   labels?: FlashDocumentView["labels"];
+  /** Columns the screen leaves out while the file keeps them (Assets → Installed base, 0009f: the references and the link) */
+  hidden?: readonly string[];
 }) {
   const frozen = rows.mode === "snapshot";
   const columns = (frozen ? FLASH_FROZEN_COLUMNS : FLASH_LIST_COLUMNS[def.key])
-    .filter((c) => !c.key.endsWith("_url") && !(FLASH_LINKS_LEFT_OUT[def.key] ?? []).includes(c.key));
+    .filter((c) => !c.key.endsWith("_url") && !(FLASH_LINKS_LEFT_OUT[def.key] ?? []).includes(c.key) && !hidden.includes(c.key));
   const shown = def.key === "data_quality" && !frozen ? rows.rows.map(dataQualityRowShown) : rows.rows;
   const sortKeyOf = (column: string): string | null => {
     // a month end's frozen list keeps its order (by id): its headers sort nothing

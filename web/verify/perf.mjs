@@ -15,7 +15,8 @@
  *      .next/build-manifest.json, each chunk read from .next/static and compressed; and the page's HTML (the RSC payload
  *      with the copy object rides in it), gzip-compressed, from the measured response. Both against perf.json's per-route
  *      budgets in kB (night N06's measured values, rounded up; a route that still carries the whole copy object has minus
- *      25 % as its next target, docs/night-2026-11-06/NIGHT_NOTES.md).
+ *      25 % as its next target, docs/night-2026-11-06/NIGHT_NOTES.md). A request row may carry its own html_kb, which wins
+ *      over the route's: Assets → Installed base's default view and each panel (addition 0009f).
  * Needs the standalone build and a running app in api data mode with mock sign-in (CMA_AUTH_MODE=mock CMA_DATA_MODE=api,
  * the local database with verify/perf-volume-fixture.sql loaded for a figure that means something):
  *
@@ -104,9 +105,12 @@ for (const row of budget.requests) {
   if (p95 > maxP95) problems.push(`${row.subject} ${row.path}: p95 ${p95} ms, budget ${maxP95} ms (${row.class} ${cls.p95} × ${factor})`);
   if (done50 > maxP50) problems.push(`${row.subject} ${row.path}: last byte p50 ${done50} ms, budget ${maxP50} ms (${row.class} ${cls.p50} × ${factor})`);
   if (done95 > maxP95) problems.push(`${row.subject} ${row.path}: last byte p95 ${done95} ms, budget ${maxP95} ms (${row.class} ${cls.p95} × ${factor})`);
+  // a row's own HTML budget wins over the route's (addition 0009f: Assets → Installed base's default view and each of its
+  // panels are rows of one route; a panel weighs more than the default view and has its own budget)
   const key = row.path.replace(/\?.*$/, "");
-  if (o.html_kb !== null && budget.html_kb[key] !== undefined) {
-    const max = provoke ? 0 : budget.html_kb[key];
+  const htmlBudget = row.html_kb ?? budget.html_kb[key];
+  if (o.html_kb !== null && htmlBudget !== undefined) {
+    const max = provoke ? 0 : htmlBudget;
     if (o.html_kb > max) problems.push(`${row.subject} ${row.path}: HTML ${o.html_kb} kB gzip, budget ${max} kB`);
   }
   if (o.js_kb !== null && budget.js_kb[key] !== undefined) {

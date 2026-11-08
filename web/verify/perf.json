@@ -117,6 +117,42 @@
       "class": "report"
     },
     {
+      "path": "/reports/installed-base?panel=breakdown",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 64
+    },
+    {
+      "path": "/reports/installed-base?panel=subscription",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 64
+    },
+    {
+      "path": "/reports/installed-base?panel=records",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 48
+    },
+    {
+      "path": "/reports/installed-base?panel=past_due",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 48
+    },
+    {
+      "path": "/reports/installed-base?panel=unlinked",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 48
+    },
+    {
+      "path": "/reports/installed-base?serial=SN-80001",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 32
+    },
+    {
       "path": "/reports/reviews?range=all",
       "subject": "manager",
       "class": "report"
@@ -194,7 +230,7 @@
     "/reports/follow-up": 20,
     "/reports/funnel": 25,
     "/reports/flash": 48,
-    "/reports/installed-base": 92,
+    "/reports/installed-base": 30,
     "/reports/reviews": 22,
     "/reports/courtesy": 30,
     "/reports/data-quality": 16,

@@ -3,8 +3,8 @@ import { flashRowsParams } from "@/lib/api/flash";
 import { exportSettingsFrom, flashCsv, type FlashFileColumn } from "@/lib/csv";
 import { data } from "@/lib/data";
 import {
-  asOfStamp, breakdownColumns, breakdownRows, dataQualityRowShown, documentFilterOf, FLASH_FROZEN_COLUMNS, FLASH_LIST_COLUMNS, filterDocument, filtersText,
-  flashFileName, overviewOf, withLabelColumns,
+  asOfStamp, breakdownColumns, breakdownRows, dataQualityRowShown, FLASH_FROZEN_COLUMNS, FLASH_LIST_COLUMNS, FLASH_NARROW_DIMS, filtersText, flashFileName,
+  narrowDocument, overviewOf, pageFiltersOf, withLabelColumns,
 } from "@/lib/flash";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
 
@@ -20,9 +20,10 @@ export const dynamic = "force-dynamic";
  * phone or address exists to write. A source not set up gives no file (409 not_set_up); a file cut at the row limit says
  * "rows <n> of <total>" in its filters cell; its instants and its name follow the tenant's time zone. On open deals and
  * open tickets a pipeline's (queue's) and a stage's label is a column beside its id, in both parts (pipeline_label,
- * queue_label, stage_label; the id where the CMA holds no label; Decision log, 4 Nov 2026). The Installed base's Model filter
- * (f_model, addition 0008zy) narrows the breakdown as the page does (lib/flash filterDocument) and the rows as a list
- * filter; the filters cell names it, and what the filter cannot narrow (not available with it, never unfiltered).
+ * queue_label, stage_label; the id where the CMA holds no label; Decision log, 4 Nov 2026). The Installed base's page filters
+ * (f_model since addition 0008zy, f_status since 0009f) narrow the breakdown as the page does (lib/flash narrowDocument) and
+ * the rows as list filters; the filters cell names them, and what they cannot narrow (not available with them, never
+ * unfiltered). The list's own filters (f_serial, f_without_subscription_ref, 0009f) narrow the rows as the page's lists do.
  */
 export async function GET(request: Request) {
   return forPrincipal(async (me) => {
@@ -38,9 +39,9 @@ export async function GET(request: Request) {
     // the market the file was read for: the address's (market wins over f_market: lib/api/flash), else the records'
     // market filter; a breakdown is read for the address's market alone, so its name and filters cell say that one
     const market = part === "breakdown" ? q.market : q.market ?? q.filters.market ?? null;
-    // the page filter (the Installed base's model, addition 0008zy): a breakdown is narrowed by it alone of the filters
-    const pageFilter = documentFilterOf(def, q.filters);
-    const breakdownFilters: Record<string, string> = pageFilter ? { [pageFilter.dim]: pageFilter.value } : {};
+    // the page filters (the Installed base's model since addition 0008zy, its operational status since 0009f: FLASH_NARROW_DIMS):
+    // a breakdown is narrowed by them alone of the filters
+    const breakdownFilters = pageFiltersOf(def, q.filters, FLASH_NARROW_DIMS[def.key] ?? []);
     let filters = filtersText(market, def.kind === "flow" ? q.from : null, def.kind === "flow" ? q.to : null, part === "rows" ? q.filters : breakdownFilters);
     let text: string;
     let rows: number;
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
       if (!doc.setUp) throw new ApiError(409, "not_set_up", "this overview's source is not set up, so it has no figures");
       zone = doc.timeZone || me.timeZone;
       // narrowed by the page filter as the page does; what it cannot narrow is named in the filters cell, its cells left empty
-      const narrowed = pageFilter ? filterDocument(def, doc.totals, doc.rows, pageFilter.dim, pageFilter.value) : null;
+      const narrowed = Object.keys(breakdownFilters).length > 0 ? narrowDocument(def, doc.totals, doc.rows, breakdownFilters) : null;
       if (narrowed && narrowed.unavailableMeasures.length + narrowed.unavailableSets.length > 0) {
         filters = `${filters}; not available with the filter: ${[...narrowed.unavailableMeasures, ...narrowed.unavailableSets].join(", ")}`;
       }

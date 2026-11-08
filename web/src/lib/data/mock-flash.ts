@@ -10,8 +10,8 @@
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
 import {
-  bandDimOf, FLASH_FROZEN_LIST, FLASH_OVERVIEWS, FLASH_SPLITS, frozenFilters, overviewOf, ratioOf, splitOf, splitOrderOf, withLabels, type FlashKey, type FlashOverviewDef,
-  type FlashDocRow, type FlashSplitItem, type FlashStatusSettings,
+  bandDimOf, FLASH_FROZEN_LIST, FLASH_LIST_FILTERS, FLASH_OVERVIEWS, FLASH_SPLITS, frozenFilters, listFilterValue, overviewOf, ratioOf, splitOf, splitOrderOf, withLabels,
+  type FlashKey, type FlashOverviewDef, type FlashDocRow, type FlashSplitItem, type FlashStatusSettings,
 } from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
@@ -150,12 +150,14 @@ function fixtureOf(me: Principal, today: string): Fixture {
     const m = i % 4 === 0 ? "NL" : "GB";
     const stock = i % 8 === 0;
     const sub = subscriptions[(i * 5) % subscriptions.length] as Rec;
-    const link = stock ? "none" : i % 13 === 0 ? "not_found" : "linked";
+    // a device in stock has no reference; in the field, every eleventh has none (addition 0009f: the list without a linked
+    // subscription and the check field_device_without_subscription_ref find the same ones), every thirteenth one not found
+    const link = stock || i % 11 === 0 ? "none" : i % 13 === 0 ? "not_found" : "linked";
     devices.push({
       id: `rec${String(900 + i)}`, serial: `SN-${80000 + i}`, device_id: `rec${String(900 + i)}`, model: i % 3 === 0 ? "aed_3" : "aed_plus", market: m,
       since: day(70 - (i % 50)), status: stock ? "in_stock" : "installed", in_field: !stock, in_stock: stock, warehouse: stock ? "wh-utrecht" : "none",
       refs: i % 10 === 0 ? {} : { ns_internal_id: String(700000 + i) }, missing_refs: i % 10 === 0 ? ["ns_internal_id"] : [],
-      customer_id: stock ? null : sub.customer_id, subscription_id: stock ? null : link === "not_found" ? `s-79${i}` : sub.subscription_id, link,
+      customer_id: stock ? null : sub.customer_id, subscription_id: link === "none" ? null : link === "not_found" ? `s-79${i}` : sub.subscription_id, link,
       subscription_status: link === "linked" ? sub.status : link, subscription_payment_state: link === "linked" ? sub.payment_state : null,
       past_due_items: i % 9 === 0 ? 1 : 0, items_due_3m: i % 5 === 0 ? 1 : 0, next_due_on: addDays(today, (i * 23) % 400 - 30),
     });
@@ -232,6 +234,8 @@ function fixtureOf(me: Principal, today: string): Fixture {
     if (REQUIRED_DEVICE_REFS.length > 0 && (d.missing_refs as string[]).length) finding("device_required_ref_missing", "device", String(d.device_id), "ns_internal_id", d.market, "assets", "airtable");
     if (d.link === "not_found") finding("device_subscription_ref_unknown", "device", String(d.device_id), null, d.market, "assets", "airtable",
       { type: "subscription", id: String(d.subscription_id), url: null });
+    // a device in the field without a subscription reference (0008zi's check; the page's list reads the same rule, 0009f)
+    if (d.in_field === true && d.link === "none") finding("field_device_without_subscription_ref", "device", String(d.device_id), null, d.market, "assets", "airtable");
     if (d.link === "linked" && ENDED.includes(String(d.subscription_status))) {
       finding("field_device_on_ended_subscription", "device", String(d.device_id), String(d.subscription_status), d.market, "assets", "airtable",
         { type: "subscription", id: String(d.subscription_id), url: null });
@@ -610,7 +614,11 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
   const today = todayOf(me);
   assertParams(today, request.filters.market ?? null, request.asOf, request.from, request.to);
   if (request.limit < 1 || request.limit > FILE_MAX || request.offset < 0) throw new CmaDbError("CMA04", "a list reads 1 to 50,000 rows");
-  for (const k of Object.keys(request.filters)) if (k !== "measure" && !def.dims.includes(k)) throw new CmaDbError("CMA04", "filters are the overview's dims");
+  const own = FLASH_LIST_FILTERS[def.key] ?? [];
+  for (const [k, v] of Object.entries(request.filters)) {
+    if (k !== "measure" && !def.dims.includes(k) && !own.includes(k)) throw new CmaDbError("CMA04", "filters are the overview's dims and the list's own filters");
+    if (own.includes(k) && listFilterValue(k, v) === null) throw new CmaDbError("CMA04", "a list filter's value as the database takes it");
+  }
   if (request.sort && !def.sorts.includes(request.sort) && !request.asOf) throw new CmaDbError("CMA04", "a sort key of the overview");
   const base = { overview: def.key, from: def.kind === "flow" ? request.from ?? today : null, to: def.kind === "flow" ? request.to ?? today : null,
     sort: request.sort, descending: request.descending, limit: request.limit, offset: request.offset, filters: request.filters,
@@ -636,7 +644,11 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
   let rs = recordsOf(me, today, def, null, base.from, base.to);
   for (const [k, v] of Object.entries(request.filters)) {
     if (k === "measure") continue;
-    rs = def.key === "orders" && k === "sku" ? rs.filter((r) => (r.skus as string[]).includes(v)) : rs.filter((r) => String(r[k] ?? "none") === v);
+    // the list's own filters (addition 0009f), as cma.flash_rows_of applies them: the serial exact, trimmed and case-insensitive;
+    // without_subscription_ref the devices of the check field_device_without_subscription_ref (in the field, no reference)
+    if (k === "serial") rs = rs.filter((r) => typeof r.serial === "string" && r.serial.toLowerCase() === v.trim().toLowerCase());
+    else if (k === "without_subscription_ref") rs = rs.filter((r) => r.in_field === true && r.link === "none");
+    else rs = def.key === "orders" && k === "sku" ? rs.filter((r) => (r.skus as string[]).includes(v)) : rs.filter((r) => String(r[k] ?? "none") === v);
   }
   const m = request.filters.measure;
   // a measure that does not apply has no records (CMA04, as cma.flash_rows answers)
@@ -726,9 +738,11 @@ export function mockRecordFlashFile(me: Principal, read: FlashFileRead): void {
   const def = overviewOf(read.overview);
   assertAny(me, def?.key === "data_quality" ? [...REPORT, "tenant.configure"] : REPORT);
   if (!def || (read.part !== "rows" && read.part !== "breakdown") || read.rows < 0) throw new CmaDbError("CMA04", "an invalid file read");
+  const own = FLASH_LIST_FILTERS[def.key] ?? [];
   for (const [k, v] of Object.entries(read.filters)) {
-    if ((k !== "measure" && !def.dims.includes(k)) || (k === "measure" && !def.countMeasures.includes(v)) || v.length < 1 || v.length > 100 || v.includes("@")) {
-      throw new CmaDbError("CMA04", "a file record's filters are the overview's dims and measure");
+    if ((k !== "measure" && !def.dims.includes(k) && !own.includes(k)) || (k === "measure" && !def.countMeasures.includes(v)) || v.length < 1 || v.length > 100
+        || v.includes("@") || (own.includes(k) && listFilterValue(k, v) === null)) {
+      throw new CmaDbError("CMA04", "a file record's filters are the overview's dims, measure and the list's own filters");
     }
   }
   assertParams(todayOf(me), read.market, read.asOf, read.from, read.to);

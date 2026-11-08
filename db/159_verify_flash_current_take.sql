@@ -6,7 +6,9 @@
 -- takes on its own data inside a subtransaction that is rolled back too, and compares them with the live document. The
 -- script runs alike in dev and in prod. The remade cma.flash_document_of is compared with its previous definition, kept
 -- below as pg_temp.v0009e_document_0008zt (136_flash_insights.sql, word for word but its name), in the same transaction,
--- so the same now(): a take refreshed in that transaction has the instant the live read has. Every check writes one row,
+-- so the same now(): a take refreshed in that transaction has the instant the live read has. Since 0009f (#251) A3 and
+-- D1 read the two documents in one statement, so in one snapshot: prod's first run read D1 FAIL on `sources` alone, the
+-- ingest having committed a read between the two statements. Every check writes one row,
 -- ok or FAIL, and the last row is the verdict, because Cloud SQL Studio shows no notices: "0009e verified |
 -- 159_verify_flash_current_take: 12 ok, 0 FAIL, 0 skip" (D1 reads skip for a database without a tenant whose asset
 -- register is set up: 11 ok, 1 skip). Run as your own IAM login after 158_flash_current_take.sql, dev first, then prod;
@@ -523,8 +525,9 @@ begin
     v_bad := ''; v_docs := 0;
     foreach k in array string_to_array(v_all, ',') loop
       foreach m in array array[null, 'GB', 'NL', 'FR', 'unknown'] loop
-        v_new := cma.flash_overview(k, m);
-        v_old := pg_temp.v0009e_document_0008zt(v_t1, k, m, null, null, null);
+        -- both documents in one statement, so one snapshot: a read an ingest commits meanwhile cannot move the sources' last-read
+        -- instants of one side (0009f, #251: prod's first run read D1 FAIL on sources alone)
+        select cma.flash_overview(k, m), pg_temp.v0009e_document_0008zt(v_t1, k, m, null, null, null) into v_new, v_old;
         v_docs := v_docs + 1;
         v_diff := pg_temp.v0009e_diff(v_new - 'split_order' - 'refreshed_at', v_old);
         if v_diff is not null or (v_new ->> 'refreshed_at')::timestamptz is distinct from now() or v_old ? 'refreshed_at' then
@@ -688,9 +691,10 @@ begin
         select array_agg(distinct c.dims ->> 'market' order by c.dims ->> 'market') into v_markets
         from cma.flash_current_take c where c.tenant_id = t.id and c.overview = k and c.dims ? 'market';
         foreach m in array array[null::text, 'unknown'] || coalesce(v_markets, '{}'::text[]) loop
-          v_new := cma.flash_document_of(t.id, k, m, null, null, null);
+          -- both documents in one statement (one snapshot), as A3: a concurrent ingest cannot move one side's sources (0009f, #251)
+          select x.d, pg_temp.v0009e_diff(x.d - 'refreshed_at', x.o) into v_new, v_diff
+          from (select cma.flash_document_of(t.id, k, m, null, null, null) as d, pg_temp.v0009e_document_0008zt(t.id, k, m, null, null, null) as o) x;
           v_docs := v_docs + 1;
-          v_diff := pg_temp.v0009e_diff(v_new - 'refreshed_at', pg_temp.v0009e_document_0008zt(t.id, k, m, null, null, null));
           if v_diff is not null or v_new ->> 'refreshed_at' is null then
             v_bad := v_bad || t.slug || ' ' || k || ' ' || coalesce(m, 'all') || ': ' || coalesce(v_diff, 'not read from the take') || '; ';
           end if;

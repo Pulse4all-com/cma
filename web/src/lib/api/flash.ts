@@ -1,5 +1,8 @@
 import { ApiError, dateParam } from "@/lib/api/respond";
-import { FLASH_ADDRESS, FLASH_FILE_MAX_ROWS, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, overviewOf, parseMarket, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
+import {
+  FLASH_ADDRESS, FLASH_FILE_MAX_ROWS, FLASH_LIST_FILTERS, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, listFilterValue, overviewOf, parseMarket, type FlashKey,
+  type FlashOverviewDef,
+} from "@/lib/flash";
 
 /**
  * The query of the Flash routes (addition 0008zn): ?overview (one of the eleven keys), &market (a market code or
@@ -65,7 +68,8 @@ function wholeNumber(sp: URLSearchParams, name: string, fallback: number, min: n
 /**
  * The rows' query: flashParams with the overview required, &sort (a sort key of the overview; its default when left
  * out), &dir (asc or desc), &limit (1 to the file's maximum; 500 for a list, the file's maximum for a file when left
- * out), &offset (0 or more), &measure (one of the overview's count measures) and a filter per dim as f_<dim>
+ * out), &offset (0 or more), &measure (one of the overview's count measures), a filter per dim as f_<dim> and the list's
+ * own filters as f_<key> (FLASH_LIST_FILTERS, addition 0009f)
  */
 export function flashRowsParams(sp: URLSearchParams, o: { file?: boolean; maxRows?: number } = {}): FlashRowsQuery {
   const q = flashParams(sp, { overviewRequired: true });
@@ -80,10 +84,19 @@ export function flashRowsParams(sp: URLSearchParams, o: { file?: boolean; maxRow
   const limit = wholeNumber(sp, "limit", o.file ? max : FLASH_PAGE_ROWS, 1, max);
   const offset = wholeNumber(sp, "offset", 0, 0, 100_000_000);
   const filters: Record<string, string> = {};
+  // the list's own filters beside the dims (addition 0009f, FLASH_LIST_FILTERS as cma.flash_list_filters_of): the installed
+  // base's serial (trimmed) and without_subscription_ref ("true" alone)
+  const own = FLASH_LIST_FILTERS[def.key] ?? [];
   for (const [k, v] of sp.entries()) {
     if (!k.startsWith(FLASH_ADDRESS.filterPrefix)) continue;
     const dim = k.slice(FLASH_ADDRESS.filterPrefix.length);
-    if (!def.dims.includes(dim)) throw new ApiError(400, "invalid_filter", `filters are f_ and one of ${def.dims.join(", ")}`);
+    if (own.includes(dim)) {
+      const value = listFilterValue(dim, v);
+      if (value === null) throw new ApiError(400, "invalid_filter", dim === "without_subscription_ref" ? `f_${dim} is true` : `f_${dim} is 1 to 100 characters`);
+      filters[dim] = value;
+      continue;
+    }
+    if (!def.dims.includes(dim)) throw new ApiError(400, "invalid_filter", `filters are f_ and one of ${[...def.dims, ...own].join(", ")}`);
     if (v.length < 1 || v.length > 100) throw new ApiError(400, "invalid_filter", "a filter's value is 1 to 100 characters");
     filters[dim] = v;
   }
