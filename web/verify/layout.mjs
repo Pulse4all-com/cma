@@ -2240,8 +2240,9 @@ async function expectAsOfTyping() {
   const p = await ctx.newPage();
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
-  // Enter on one page; leaving the field (its blur) on the other
-  for (const [path, key] of [["/reports/installed-base", "Enter"], ["/reports/flash?o=installed_base", "blur"]]) {
+  // Enter on one overview; leaving the field (its blur) on another. Both on Reports → Flash: Assets → Installed base has no
+  // As of since addition 0009f (the now view)
+  for (const [path, key] of [["/reports/flash?o=installed_base", "Enter"], ["/reports/flash?o=customers", "blur"]]) {
     await p.goto(BASE + path);
     await settle(p);
     await p.waitForLoadState("networkidle");
