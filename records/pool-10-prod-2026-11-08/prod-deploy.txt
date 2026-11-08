@@ -1,12 +1,18 @@
-# Commands: not quoted in the report: the build of 1ffcf4e by the trigger cma-web-main, its check-config step's log line,
-#           the deployed image and the service's CMA_DB_POOL_MAX
+# Commands:
+#   id=$(gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --format="value(id)")
+#   gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --format="table(id,status,substitutions.SHORT_SHA)"
+#   gcloud builds log "$id" --project=p4a-cma-prod --region=europe-west4 | grep "config:"
+#   gcloud run services describe cma-web --project=p4a-cma-prod --region=europe-west4 --format="value(spec.template.spec.containers[0].image)"
+#   gcloud run services describe cma-web --project=p4a-cma-prod --region=europe-west4 --format="yaml(spec.template.spec.containers[0].env)" | grep -A1 CMA_DB_POOL_MAX
 # Run by:   Martin, in his Terminal, on 8 November 2026, after the merge of Pulse4all-com/cma#244 (merge 1ffcf4e)
 # Output:   as he reported it (the gcloud SDK's SyntaxWarning lines left out)
 
-build d71fb4c9-d07a-4419-ab32-579f82673afa SUCCESS 1ffcf4e (trigger cma-web-main, created 07:51 Europe/Amsterdam)
+ID                                    STATUS   SHORT_SHA
+d71fb4c9-d07a-4419-ab32-579f82673afa  SUCCESS  1ffcf4e
 Step #0 - "check-config": config: auth=iap data=api db=p4a-cma-prod:europe-west4:cma-prod-pg max-instances=4 pool=10 logout=signed-out
-image europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:1ffcf4e
-- name: CMA_DB_POOL_MAX
-  value: '10'
+europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:1ffcf4e
+        - name: CMA_DB_POOL_MAX
+          value: '10'
+# Created 07:51 Europe/Amsterdam by the trigger cma-web-main, read from the Cloud Build history page (not part of the commands' output).
 
 # Verdict: prod's cma-web runs 4 x 10 since 8 Nov 2026.
