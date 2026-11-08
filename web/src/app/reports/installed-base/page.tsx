@@ -69,8 +69,10 @@ export default async function InstalledBasePage({ searchParams }: PageProps<"/re
   const markets = Object.entries(doc.labels.market ?? {}).filter(([code]) => code !== "unknown").map(([code, name]) => ({ code, name }));
   const marketName = (code: string) => (code === "unknown" ? t.unknownMarket : doc.labels.market?.[code] ?? code);
   // the donut: In the field per model from the set that carries the model with every measure (the split's rule, 0008zy),
-  // of the market shown; the page filters narrow it too (one model: one slice)
-  const split = splitOf(def, narrowed.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder)) ?? [];
+  // of the market shown; the page filters narrow it too, and a Model filter leaves that model alone (one slice, not the
+  // register's other models at 0)
+  const split = (splitOf(def, narrowed.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder)) ?? [])
+    .filter((x) => !st.pageFilters.model || x.key === st.pageFilters.model);
   const { slices, total } = donutSlices(split);
   const stacks = stacksOf(def, narrowed.rows, slices);
   const splitUnavailable = narrowed.unavailableMeasures.includes(def.headline);
