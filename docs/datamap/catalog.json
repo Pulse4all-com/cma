@@ -567,7 +567,7 @@
         {
           "name": "flash_snapshot_run",
           "what": "Per tenant and business date one row per Flash take: when the date was due (due_at), started, finished, status succeeded, failed (with the error's code) or missed (a date that stopped being the latest due one without a succeeded take: no figures), late (the take started more than an hour after it was due), the rows stored per overview and at a month end the ids per kind, the sources' state, the Flash settings followed, the dates missed before it and the watch's error code (watch_error; the snapshot is kept) (0008zn). Written by the take only; the application reads",
-          "how": "Written by the take only (cma.flash_snapshot_take, SECURITY DEFINER; the application reads and holds no insert, update or delete), called by the snapshot job cma-snapshot-flash hourly at minute 20 UTC: a business date D is due at D + 1 at flash.snapshot_local_time in the tenant's zone and each run takes the latest due date unless a succeeded run holds it; a date that stops being the latest due one without a take is recorded as a missed run by the next take (since 0008zn)"
+          "how": "Written by the take only (cma.flash_snapshot_take, SECURITY DEFINER; the application reads and holds no insert, update or delete), called by the snapshot job cma-snapshot-flash (every minute since 0009e, a date's take idempotent): a business date D is due at D + 1 at flash.snapshot_local_time in the tenant's zone and each run takes the latest due date unless a succeeded run holds it; a date that stops being the latest due one without a take is recorded as a missed run by the next take (since 0008zn)"
         },
         {
           "name": "flash_snapshot",
@@ -578,6 +578,11 @@
           "name": "flash_snapshot_ids",
           "what": "At each month end the frozen ids of the active customers, the active subscriptions and every device, with connection, market and state (0008zn). Insert only",
           "how": "Written by the take only (cma.flash_snapshot_ids_write_of, in the take of a month's last business date; the application reads); removed after flash.id_list_retention_months (84) by the take (cma.flash_snapshot_ids_expire_of(tenant): its cutoff from the tenant's today, no caller's date), one audit row per removal; no row-level audit trigger"
+        },
+        {
+          "name": "flash_current_take",
+          "what": "The current take: per tenant and stock overview in flash.current_overviews (installed_base by default) the figures of the overview's now, one row per grouping set (dims as codes, measures as numbers; no ids and no customer data), as cma.flash_compute_of gave them, with the definition version and when they were computed (computed_at, the page's Refreshed at). One take per tenant, overview and grouping set, replaced whole on refresh, so it does not grow (0009e)",
+          "how": "Written by the snapshot job cma-snapshot-flash every minute through cma.flash_current_refresh (SECURITY DEFINER; the application reads and holds no insert, update or delete) when a take is older than flash.current_refresh_minutes (5 by default, 1 to 1440); removed when a tenant setting is written, changed or reset; not audited (as data_quality_snapshot); the page reads the live computation when no take is fresh enough"
         },
         {
           "name": "flash_watch_finding",
