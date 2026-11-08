@@ -1,0 +1,44 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/159_verify_flash_current_take.sql:66: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+GRANT
+DO
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                      check_name                                                                                                      | result |                                                                                                                                                                                  detail                                                                                                                                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009e is recorded after 0009d                                                                                                                                                                        | ok     | 0009d, 0009e
+ S2 the table: columns, key, checks; row-level security, no audit trigger; read only for the application, nothing for the readers; the reader view                                                                    | ok     | 
+ S3 the functions: the application's in the caller's rights; the job's entry definer, the owner's, pinned; the writer the owner's alone; JIT off; current_stale                                                       | ok     | 
+ S4 the two settings with their types and defaults; the check trigger and the trigger that forgets a tenant's takes on a setting change                                                                               | ok     | flash.current_overviews:text:installed_base flash.current_refresh_minutes:integer:5 check_flash_current_setting,forget_flash_current_takes
+ A1 the setting checks: stock overviews but data quality, each once, or nothing (CMA04 else); 1 to 1440 minutes (CMA04 else)                                                                                          | ok     | ok installed_base,customers ok . ok CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 | ok ok CMA04 CMA04 CMA04 CMA04 CMA04 CMA04
+ A2 the job's refresh: six takes, then all fresh; none where no source is set up; another tenant, a person without flash.snapshot and an overview without a take refused; each take cma.flash_compute_of's rows       | ok     | 6/0/0/0 0/6/0 CMA06 CMA06 | 0/6/0 | CMA04 CMA04, 65 rows
+ A3 a fresh take equals the live document (0008zt's definition) for the same instant, row for row: six overviews, all markets, each market, unknown, a market without rows                                            | ok     | 30 documents equal; NL rows {"link": "linked", "model": "m2", "market": "NL", "status": "field", "warehouse": "none"} {"link": "not_found", "model": "m1", "market": "NL", "status": "field", "warehouse": "none"} {"market": "NL"} {"model": "m1", "market": "NL", "subscription_status": "not_found"} {"model": "m2", "market": "NL", "subscription_status": "active"}
+ A4 two tenants never see each other's take: each reads its own rows and figures; the definer's take holds the tenant's own devices; another tenant's refresh refused                                                 | ok     | 65=65 14 CMA06 | 4=4 7777
+ A5 the application cannot write the table (insert, update, delete) nor run the writer or its lock key                                                                                                                | ok     | 42501 42501 42501 42501 42501
+ A6 the watch: a take older than three times the setting opens current_stale (age 20, threshold 15); a fresh take resolves it; no take opens none                                                                     | ok     | current_stale:installed_base:20:15:20 | current_stale:resolved:2026-11-07 | 0
+ A7 the fallback: fresh, usable (the take read), stale at 16 minutes (live, 0008zt's document); another version, a setting written or reset (the takes removed), a later migration, no take, out of the setting: live | ok     | 4:fresh:9999:take 6:usable:9999:take 14:usable:9999:take 16:stale:14:live equal | version:outdated:14 back:9999 setting:0:14 reset:0:14 migration:outdated:14 none:none:14:null off:off:null:0:1
+ D1 every active tenant: a fresh take of each stock overview of its setting that is set up equals the live document (0008zt's definition) for every market; rolled back                                               | FAIL   | pulse4all-subscriptions installed_base FI: keys sources; 
+ verdict                                                                                                                                                                                                              | FAIL   | 159_verify_flash_current_take: 11 ok, 1 FAIL, 0 skip
+(13 rows)
+
+DROP TABLE
+RESET

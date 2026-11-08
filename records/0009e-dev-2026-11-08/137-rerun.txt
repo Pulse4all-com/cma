@@ -1,0 +1,71 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 1500
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/137_verify_flash_insights.sql:77: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                    check_name                                                                                                    |     result      |                                                                                                                                                                                                                                      detail                                                                                                                                                                                                                                       
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zt recorded, after 0008zs                                                                                                                                                                        | ok              | 
+ A2 the five settings with their defaults; the settings trigger with every earlier branch and theirs                                                                                                              | ok              | 
+ A3 crm_contact.segment, its checks and the trigger clearing it; a contact's segment mappable; the upsert carries what came before                                                                                | ok              | 
+ A4 the overviews' new dims, sets and measures; the ratio no count measure, the watch reading the counts; the versions                                                                                            | ok              | 
+ A5 every new and remade function the application's only, in the caller's rights; the take's writer the owner's; JIT off; the helpers inlinable                                                                   | ok              | 
+ A6 the band words (1,2,3; 1,3; 2,4; the ages), an age at its edges in the tenant's zone, the ratio, a segment's case                                                                                             | ok              | 0 1 2 3+ | 0 1-2 3+ | 0 1 2-3 4+ | <12 12-24 24-36 36-48 48-60 60+ | 0 3+ 3+ 1-2 1 | 12 11 0 12-24 <12 24+ <12 unknown | 1.40 0.33 none | B2C unknown unknown unknown
+ A7 data quality: the seventh check (a device on a subscription that holds none), fixed in the register, its view; the holding check                                                                              | ok              | 
+ B1 the settings' refusals (bands 0,1; 2,1; 1,,2; spaces; over the maximum; a segment twice, an @; paused or an ended status holding devices; meanings not JSON, an unknown key, too long, an @); the values kept | ok              | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok ok | CMA04 CMA04 CMA04 ok CMA04 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok | 1,2,3 12,24,36,48,60 B2B,B2C active,failed canceled,expired active,failed
+ B2 the mapping: a contact's segment in slot 1 only, never a deal's, no reference system                                                                                                                          | ok              | ok CMA04 CMA04 CMA04 contact:segment:1:customer_type
+ B3 the installed base: each device's subscription status, in_field_on_holding (a failed subscription holds devices); in_field = on holding + non-holding, ended, not_found and none, per market too              | ok              | :15,13,2,8 GB:13,11,2,7 NL:2,2,0,1 GB/active:7,6,1,6 GB/canceled:1,1,0,0 GB/failed:1,1,0,1 GB/none:2,1,1,0 GB/not_found:1,1,0,0 GB/paused:1,1,0,0 NL/active:1,1,0,1 NL/not_found:1,1,0,0 | 
+ B4 the subscriptions: the holding ones and their devices in the field, the ratio (none at 0), the device bands with every band's row; their sums, per market too                                                 | ok              | :8,5,6,8,1.33 GB:4,5,7,1.40 NL:1,1,1,1.00 GB/0:1,0,0.00 GB/1:2,2,1.00 GB/2:1,2,2.00 GB/3+:1,3,3.00 NL/0:0,0,- NL/1:1,1,1.00 NL/2:0,0,- NL/3+:0,0,- | GB/shop-gb/active/paid:4,4,6,1.50 GB/shop-gb/canceled/canceled:0,0,0,- GB/shop-gb/failed/failed:0,1,1,1.00 GB/shop-gb/paused/paused:0,0,0,- NL/shop-nl/active/paid:1,1,1,1.00 | 
+ B5 the active subscriptions' ages on the snapshot's own date (12 months exactly 12-24, a day short <12, none unknown); their sums; a holding one's band; a device in stock in no device measure                  | ok              | GB/12-24:1 GB/24-36:0 GB/36-48:0 GB/48-60:0 GB/60+:1 GB/<12:1 GB/unknown:1 NL/12-24:0 NL/24-36:1 NL/36-48:0 NL/48-60:0 NL/60+:0 NL/<12:0 |  | GB/12-24:2 GB/24-36:0 GB/36-48:0 GB/48-60:0 GB/60+:1 GB/<12:0 GB/unknown:1 NL/12-24:0 NL/24-36:1 NL/36-48:0 NL/48-60:0 NL/60+:0 NL/<12:0 | n-1:1/1/1/24-36 s-1:3/2/2/12-24 s-2:1/1/1/<12 s-3:0/0/0/unknown s-4:3/3/3+/60+ s-5:1/1/-/- s-6:1/1/-/- s-7:1/1/1/- | d-13:true/failed d-3:false/active d-8:true/paused d-9:true/canceled
+ B6 the customers' segment (in the setting, another case, outside it, empty, unlinked, not held); active_customers their sum, per market too; an empty setting: all unknown                                       | ok              | :7,4,1 GB/B2B:1,1,0 GB/B2C:1,1,0 GB/unknown:4,1,1 NL/B2B:1,1,0 |  | cu-1:B2B cu-2:B2C cu-3:unknown cu-4:unknown cu-5:unknown cu-6:unknown ncu-1:B2B | GB/unknown:6,3 NL/unknown:1,1
+ B7 the snapshot equals the computation as of its date (0008zt), the document as of it; devices_on_holding = in_field_on_holding; the run's settings; no jump on the ratio                                        | ok              | true 2026-10-29 true 2026-10-30 | customers:true:0008zu subscriptions:true:0008zu installed_base:true:0008zt | GB:4,5,7,1.40 NL:1,1,2,2.00 true | 1,2,3 12,24,36,48,60 B2B,B2C active,failed | installed_base/devices/NL installed_base/in_field/NL installed_base/in_field_on_holding/NL subscriptions/devices_on_holding/NL | snapshot 1.50 [1, 2, 3] [12, 24, 36, 48, 60] ["B2B", "B2C"] 13 none 0
+ B8 the lists: devices_on_holding's records add up to it; the band, status and segment filters; holding_subscriptions; the ratio no list measure                                                                  | ok              | 5:9:n-1/2/2,s-1/3/2,s-2/1/1,s-4/3/3,s-7/1/1 s-1 9 d-10/not_found/not_found,nd-2/not_found/not_found cu-1,ncu-1 CMA04 CMA04 6
+ B9 tenant isolation: a second tenant's devices, subscriptions and contacts (the same ids) are never counted                                                                                                      | ok              | 5 9 16 9 GB/B2B:1 GB/B2C:1 GB/unknown:4 NL/B2B:1 | :1,5 GB/B2C:1
+ B10 the ingest's segment: trimmed; empty, an @ or over 100 characters none; a deletion and the privacy deletion clear it; the checks                                                                             | ok              | c-11:inserted c-12:inserted c-13:inserted c-14:inserted c-15:inserted c-16:inserted | c-11:B2B c-12:none c-13:none c-14:none c-15:none c-16:none | none 23514 23514
+ B11 the live ages in the tenant's zone: 12 months to the day 12-24, a day short <12 (00:30 local, the day before in UTC), 60+, unknown; the list's age filter                                                    | ok              | 12-24:1 24-36:0 36-48:0 48-60:0 60+:1 <12:1 unknown:1 | 0.00 0 | x-2 x-1
+ B12 data quality: a device on a paused subscription a finding, one on a canceled one the ended check's alone; a holding subscription without a device, a failed one too                                          | ok              | active_subscription_without_device:s-3:active field_device_on_ended_subscription:d-9:canceled field_device_on_non_holding_subscription:d-8:paused | s-3:active s-7:failed
+ B13 the hints' settings on the landing and an overview: the tenant's statuses and meanings; a tenant without meanings none, never another's                                                                      | ok              | ["active"] ["active", "failed"] ["canceled", "expired"] Eén apparaat. none | ["active", "failed"] Unpaid; devices stay. | ["active"] {} {}
+ S1 seed 02: Pulse4all Subscriptions maps contact segment to customer_type; segments B2B,B2C; active and failed hold devices; five meanings                                                                       | ok              | HubSpot CMA dev:customer_type:1 | B2B,B2C active,failed active,canceled,expired,failed,paused
+ D1 every tenant's installed base: in_field, devices the sums over subscription_status; in_field_on_holding the holding statuses' in_field; per market too                                                        | ok              | 1 tenant(s) 
+ D2 every tenant's subscriptions: holding_subscriptions and devices_on_holding the sums over device_band, active_subscriptions over age_band, the ratio to two decimals, none at 0                                | skip            | no tenant with a subscriptions connection set up
+ D3 every tenant's customers: active_customers and customers_held the sums over segment, per market too                                                                                                           | skip            | no tenant with a store set up
+ C1 the three overviews live at volume, as the application, under verify.max_overview_ms                                                                                                                          | skip            | not run: volume off
+ verdict                                                                                                                                                                                                          | 0008zt verified | 137_verify_flash_insights: 22 ok, 0 FAIL, 3 skip
+(26 rows)
+
+RESET
