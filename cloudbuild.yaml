@@ -15,10 +15,10 @@
 #   _DB_INSTANCE    <project>:<region>:<instance>   Cloud SQL connection name
 #   _DB_USER        <service account>@<project>.iam   IAM database user, member of cma_app
 #   _DB_NAME        cma
-#   _DB_POOL_MAX    connections per instance (default 10 since 6 November 2026: a Flash page holds two)
+#   _DB_POOL_MAX    connections per instance (default 10, Decision log 6 November 2026: a Flash page holds two)
 #   _MAX_INSTANCES  Cloud Run ceiling (default 4); instances x pool is counted in the Database
 #                   connection budget (docs/architecture/infrastructure.md), whose ceilings together
-#                   pass the usable connections since the pool of 10 (Decision log, 6 November 2026)
+#                   exceed the 93 usable connections with the pool of 10 (112; Decision log, 6 November 2026)
 #   _LOGOUT_TARGET  legacy (default): Log out lands on /logout/done; signed-out: on the static
 #                   page outside IAP, only after docs/signed-out/deploy.sh prod --apply and its
 #                   test plan (docs/signed-out/README.md)
@@ -107,7 +107,7 @@ steps:
       # The IT audit of 17 October 2026 (INFRA-01, INFRA-02): the floor the console has held since 12 October
       # 2026 (README, Decision log) now in the file; a startup probe on /api/health, which answers 503 when the
       # running configuration cannot serve anyone, so such a revision never takes traffic; the startup CPU boost
-      # that cma-ingest has had since 13 October 2026. Connection budget unchanged (max-instances and the pool).
+      # that cma-ingest has had since 13 October 2026. That change left the connection budget as it was (max-instances and the pool).
       - --min-instances=1
       - --startup-probe=httpGet.path=/api/health,httpGet.port=8080,periodSeconds=2,timeoutSeconds=2,failureThreshold=30
       - --cpu-boost
