@@ -468,7 +468,7 @@ Four policies exist in `p4a-cma-prod` (Console → Monitoring → Alerting → P
 | Policy | Since | Metric and filter | Fires | Documentation text (the first check) |
 |---|---|---|---|---|
 | `cma-ingest 429` | 13 October 2026 (`docs/ingest/alert.sh`; a rerun of `alert.sh prod --email <alert address>` updates it, never duplicates it) | `loadbalancing.googleapis.com/https/request_count`, resource `https_lb_rule`, `backend_target_name = "cma-ingest-backend"`, `response_code = 429` | summed over 5 minutes, above 0; auto-close 30 minutes | whether a source retries or someone floods the endpoint; the limits are set by `docs/ingest/front.sh` |
-| `cma-prod-pg connections above 75 of 93` | 18 October 2026, 14:59 UTC | `cloudsql.googleapis.com/database/postgresql/num_backends` for `p4a-cma-prod:cma-prod-pg`, the mean per minute summed over the instance's databases | above 75 for 2 minutes | the budget's ceiling of 91 of 93 usable (docs/architecture/infrastructure.md, Database connection budget); `cma-web`'s scale-out and the jobs' overlap (`cma-refresh-follow-up` runs every minute) |
+| `cma-prod-pg connections above 75 of 93` | 18 October 2026, 14:59 UTC | `cloudsql.googleapis.com/database/postgresql/num_backends` for `p4a-cma-prod:cma-prod-pg`, the mean per minute summed over the instance's databases | above 75 for 2 minutes | the budget's ceiling of 112 of 93 usable (docs/architecture/infrastructure.md, Database connection budget); `cma-web`'s scale-out and the jobs' overlap (`cma-refresh-follow-up` runs every minute) |
 | `cma-web more than 5 server errors in 5 minutes` | 18 October 2026, 14:59 UTC | `run.googleapis.com/request_count`, resource `cloud_run_revision`, `service_name = "cma-web"`, `response_code_class = "5xx"`, the count per 5 minutes summed over the service's revisions | above 5; auto-close 30 minutes | `cma-web`'s log (section 8), the latest revision, the connections alert |
 | `Cloud Run job failed (any job)` | 18 October 2026, 15:00 UTC | `run.googleapis.com/job/completed_execution_count`, resource `cloud_run_job`, `result = "failed"`, the count per 10 minutes summed per `job_name` | above 0: **one failed execution of any job**; auto-close 30 minutes | the job's latest execution and its log; `cma-refresh-follow-up` runs every minute, so a repeat is likely if it is a code or database problem |
 
@@ -549,8 +549,8 @@ log-based distribution metric on it; until that metric exists the backend latenc
    select coalesce(usename, '(background)') as login, coalesce(datname, '') as database, count(*) as connections
    from pg_stat_activity group by 1, 2 order by 3 desc;
    ```
-   Expected: `cma-web@…` at most 26 (the service's 20 and the four scheduler jobs on the web image, which log in
-   as `cma-web@` too: `cma-close-forgotten-workdays` 2, `cma-refresh-follow-up` 2, `cma-snapshot-flash` 1, `cma-refresh-data-quality` 1; 26 since addition 0008zr) and
+   Expected: `cma-web@…` at most 46 (the service's 40 and the four scheduler jobs on the web image, which log in
+   as `cma-web@` too: `cma-close-forgotten-workdays` 2, `cma-refresh-follow-up` 2, `cma-snapshot-flash` 1, `cma-refresh-data-quality` 1) and
    `cma-ingest@…` at most 25 (and only while busy), `cma-nocodb@…` at most 6, `cloudsqladmin` a few, your own login, the background processes. A login far above its ceiling is a
    leak.
 3. **Terminal:** backups and the instance (**untested here; dry-run first**: the field names are gcloud's
