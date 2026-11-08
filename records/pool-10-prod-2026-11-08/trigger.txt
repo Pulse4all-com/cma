@@ -1,0 +1,12 @@
+# Command: gcloud builds triggers describe cma-web-main --project=p4a-cma-prod --region=europe-west4 --format="yaml(substitutions)"
+# Run by:  Martin, in his Terminal, on 8 November 2026, before the merge of Pulse4all-com/cma#244
+# Output:  as he reported it (the gcloud SDK's SyntaxWarning lines left out)
+
+substitutions:
+  _DATA_MODE: api
+  _DB_INSTANCE: p4a-cma-prod:europe-west4:cma-prod-pg
+  _DB_USER: cma-web@p4a-cma-prod.iam
+  _IAP_AUDIENCE: /projects/467777891162/global/backendServices/4482730491680652158
+  _LOGOUT_TARGET: signed-out
+
+# Verdict: the trigger sets no _DB_POOL_MAX (nor _AUTH_MODE, _MAX_INSTANCES), so the file's defaults apply: 10, iap, 4.

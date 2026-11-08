@@ -1,0 +1,18 @@
+# Command: gcloud run services describe cma-web --project=p4a-cma-dev --region=europe-west4 --format="yaml(spec.template.spec.containers[0].env)"
+# Run by:  Martin, in his Terminal, on 8 November 2026, before the merge of Pulse4all-com/cma#244
+# Output:  the service's env list as he reported it, written as the yaml list (the gcloud SDK's SyntaxWarning lines left out)
+
+- name: CMA_AUTH_MODE
+  value: mock
+- name: CMA_DATA_MODE
+  value: api
+- name: CMA_DB_INSTANCE
+  value: p4a-cma-dev:europe-west4:cma-dev-pg
+- name: CMA_DB_USER
+  value: cma-web@p4a-cma-dev.iam
+- name: CMA_DB_NAME
+  value: cma
+- name: CMA_DB_POOL_MAX
+  value: '5'
+
+# Verdict: dev pins 5 on its service; `--image` updates keep it, so dev's cma-web stays 2 x 5 = 10.
