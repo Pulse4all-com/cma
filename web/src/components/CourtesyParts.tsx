@@ -4,12 +4,14 @@
  * list. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7: tables with numbers right-aligned in tabular figures and every
  * header with its hint; the outcomes in Leaf Green (positive), Light Blue (neutral) and Soft Rose with a Deep Blue edge
  * (negative), never with text on Light Blue or Soft Rose: the colour is a swatch or a bar segment and the words stand beside
- * it on white; Not reached is the warning badge, never red. Ids, codes, counts, dates and links only: never a customer's name,
+ * it on white; Unreachable is the warning badge, never red. Ids, codes, counts, dates and links only: never a customer's name,
  * email, phone or address.
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { CourtesyCalls, CourtesyCohort, CourtesyCounts, CourtesyGroup, CourtesyOutcome, CourtesyReport, CourtesyState } from "@/lib/data";
+import type {
+  CourtesyCalls, CourtesyCohort, CourtesyCounts, CourtesyGroup, CourtesyMarketCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
+} from "@/lib/data";
 import { courtesyShare } from "@/lib/courtesy";
 import { fmtMonth } from "@/lib/maintenance";
 import { fmtCount, fmtShare } from "@/lib/reports";
@@ -38,7 +40,8 @@ function Scroll({ testId, label, children }: { testId: string; label: string; ch
   );
 }
 
-type Col<T> = [string, string, (r: T) => ReactNode];
+/** A column: its label, its hint, its value and, for a column on another basis, the classes that set it apart (0009c) */
+type Col<T> = [string, string, (r: T) => ReactNode, string?];
 
 function Head<T>({ first, firstHint, cols, copy }: { first: string; firstHint: string; cols: Col<T>[]; copy: Copy }) {
   const hint = (label: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
@@ -46,11 +49,16 @@ function Head<T>({ first, firstHint, cols, copy }: { first: string; firstHint: s
     <thead>
       <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
         <th className={th}><HintLabel label={first}>{hint(first, firstHint)}</HintLabel></th>
-        {cols.map(([label, text]) => <th key={label} className={`${th} text-right`}><HintLabel label={label}>{hint(label, text)}</HintLabel></th>)}
+        {cols.map(([label, text, , apart]) => (
+          <th key={label} className={`${th} text-right${apart ? ` ${apart}` : ""}`}><HintLabel label={label}>{hint(label, text)}</HintLabel></th>
+        ))}
       </tr>
     </thead>
   );
 }
+
+/** The left edge of a column counted on another basis than the columns before it (Per market's calls by call date) */
+const APART = "border-l border-p4a-border";
 
 const marketName = (m: string, copy: Copy) => (m === "unknown" ? copy.reports.unknownMarket : m);
 
@@ -88,11 +96,11 @@ export function CourtesyOutcomes({ calls, copy, locale }: { calls: CourtesyCalls
   );
 }
 
-/** An order's state: Not reached as the warning badge; Completed with its outcome's swatch; the others as quiet badges */
+/** An order's state: Unreachable as the warning badge; Completed with its outcome's swatch; the others as quiet badges */
 export function CourtesyStateLabel({ state, outcome, copy }: { state: CourtesyState | null; outcome: CourtesyOutcome | null; copy: Copy }) {
   const t = copy.courtesy;
   if (state === null) return <Badge tone="neutral">{t.state_no_contact}</Badge>;
-  if (state === "not_reached") return <Badge tone="warning">{t.state_not_reached}</Badge>;
+  if (state === "unreachable") return <Badge tone="warning">{t.state_unreachable}</Badge>;
   if (state === "completed" && outcome) {
     return (
       <span className="inline-flex items-center gap-2 text-caption font-semibold">
@@ -104,31 +112,47 @@ export function CourtesyStateLabel({ state, outcome, copy }: { state: CourtesySt
   return <Badge tone={state === "attempted" ? "info" : "neutral"}>{t[`state_${state}`]}</Badge>;
 }
 
-/** The counts' columns every table of orders shares: orders, completed, completion share, not reached, no contact */
+/** The counts' columns every table of orders shares, by order date: orders, of which completed, completion share, unreachable, no contact */
 function countCols<T extends CourtesyCounts>(copy: Copy, hints: Record<string, string>, locale: Locale): Col<T>[] {
   const t = copy.courtesy;
   const n = (x: number) => fmtCount(x, locale);
   return [[t.colOrders, hints.ctColOrders!, (r) => n(r.orders)], [t.colCompleted, hints.ctColCompleted!, (r) => n(r.completed)],
     [t.colShare, hints.ctColShare!, (r) => fmtShare(courtesyShare(r.completed, r.orders), locale)],
-    [t.colNotReached, hints.ctColNotReached!, (r) => (r.notReached > 0 ? <Badge tone="warning">{n(r.notReached)}</Badge> : n(r.notReached))],
+    [t.colUnreachable, hints.ctColUnreachable!, (r) => (r.unreachable > 0 ? <Badge tone="warning">{n(r.unreachable)}</Badge> : n(r.unreachable))],
     [t.colNoContact, hints.ctColNoContact!, (r) => n(r.noContact)]];
 }
 
-/** The period's courtesy orders per market (unknown last) */
-export function CourtesyMarkets({ rows, hints, copy, locale }: { rows: CourtesyReport["byMarket"]; hints: Record<string, string>; copy: Copy; locale: Locale }) {
+/**
+ * Per market (unknown last): the period's courtesy orders by order date with their state now, then, set apart, the courtesy
+ * calls completed in the period by call date, each in the market of the earliest courtesy order it completed (addition
+ * 0009c); the total row under them, whose calls equal the tile
+ */
+export function CourtesyMarkets({ rows, total, hints, copy, locale }: {
+  rows: CourtesyReport["byMarket"]; total: CourtesyMarketCounts | null; hints: Record<string, string>; copy: Copy; locale: Locale;
+}) {
   const t = copy.courtesy;
-  const cols = countCols<CourtesyReport["byMarket"][number]>(copy, hints, locale);
+  const n = (x: number) => fmtCount(x, locale);
+  const cols: Col<CourtesyMarketCounts>[] = [...countCols<CourtesyMarketCounts>(copy, hints, locale),
+    [t.colCallsInPeriod, hints.ctColCallsInPeriod!, (r) => n(r.calls), APART]];
   return (
     <Scroll testId="courtesy-markets" label={t.marketCard}>
-      <Head first={t.colMarket} firstHint={hints.ctColMarket!} cols={cols} copy={copy} />
+      <Head first={t.colMarket} firstHint={hints.ctMarkets!} cols={cols} copy={copy} />
       <tbody>
         {rows.map((r) => (
-          <tr key={r.market} className={row}>
+          <tr key={r.market} className={row} data-market={r.market}>
             <td className="h-10 whitespace-nowrap px-2 font-semibold">{marketName(r.market, copy)}</td>
-            {cols.map(([label, , value]) => <td key={label} className={td}>{value(r)}</td>)}
+            {cols.map(([label, , value, apart]) => <td key={label} className={`${td}${apart ? ` ${apart}` : ""}`}>{value(r)}</td>)}
           </tr>
         ))}
       </tbody>
+      {total ? (
+        <tfoot>
+          <tr className="text-p4a-body" data-testid="courtesy-markets-total">
+            <td className="h-10 whitespace-nowrap px-2 font-semibold">{copy.reports.total}</td>
+            {cols.map(([label, , value, apart]) => <td key={label} className={`${td} font-semibold${apart ? ` ${apart}` : ""}`}>{value(total)}</td>)}
+          </tr>
+        </tfoot>
+      ) : null}
     </Scroll>
   );
 }
@@ -140,7 +164,7 @@ function periodLabel(key: string, group: CourtesyGroup, copy: Copy, locale: Loca
   return fmtDate(key, locale, "compact");
 }
 
-/** The period's courtesy orders per day, ISO week or month (empty ones too), each with its markets on the lines below */
+/** The period's courtesy orders by order date per day, ISO week or month (empty ones too), each with its markets on the lines below; no call column (0009c) */
 export function CourtesyPeriods({ rows, group, hints, copy, locale }: {
   rows: CourtesyReport["byGroup"]; group: CourtesyGroup; hints: Record<string, string>; copy: Copy; locale: Locale;
 }) {

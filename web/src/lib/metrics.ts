@@ -94,7 +94,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "welcome.needs_attention.tickets_at_risk_or_breached",
     "welcome.needs_attention.tasks_overdue",
     "welcome.needs_attention.missed_callbacks",
-    "welcome.needs_attention.courtesy_not_reached",
+    "welcome.needs_attention.courtesy_unreachable",
     "welcome.waiting_for_you.total",
     "welcome.waiting_for_you.counts",
   ],
@@ -393,14 +393,16 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "reviews.by_channel",
     "reviews.market_states",
   ],
-  // Customers → Courtesy (addition 0009a): the tiles, the outcome bar, the tables, the cohorts, per person and the list's columns
+  // Customers → Courtesy (addition 0009a): the tiles, the outcome bar, the tables (Per market's calls since 0009c), the cohorts, per
+  // person and the list's columns
   "/reports/courtesy": [
     "courtesy.completed_calls",
     "courtesy.due_open",
-    "courtesy.not_reached",
+    "courtesy.unreachable",
     "courtesy.no_contact",
     "courtesy.outcomes",
     "courtesy.by_market",
+    "courtesy.by_market.calls",
     "courtesy.by_period",
     "courtesy.orders",
     "courtesy.completed",

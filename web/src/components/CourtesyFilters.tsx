@@ -4,7 +4,7 @@
  * The market (K), segment and state (S) filters of Customers → Courtesy (addition 0009a). The lists come with the page's read
  * (the markets of every courtesy order, the tenant's segments and unknown), so they need no catalog read; choosing loads the
  * page with the filter in its address, kept with the period, the grouping and the cohorts, so a filtered view can be
- * bookmarked and Welcome's Needs attention can open the Not reached orders. The database runs every filter. It takes only its
+ * bookmarked and Welcome's Needs attention can open the Unreachable orders. The database runs every filter. It takes only its
  * own strings (copy.courtesy and the unknown market's name), not the whole copy.
  */
 import type { Route } from "next";

@@ -9,7 +9,8 @@
  * level bar of First orders and every header of Orders per person, and since addition 0008w the Callbacks kept tile and the
  * headers of the callbacks kept per week and per person, and since addition 0008y every tile, header and bar card of
  * Attempts per deal and every header of Attempts per agent, and since addition 0008zb every tile, header and intro card of
- * Funnel and Cancellations, carries exactly one info mark: a button with a name, described by a
+ * Funnel and Cancellations, and since addition 0009c every tile, header and intro card of Courtesy (whose hints name their
+ * basis, call date or order date), carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not. Last, the top bar
@@ -86,6 +87,14 @@ async function coverage(p, withHeaders, scope = "main") {
     return out;
   }, [withHeaders, scope]);
 }
+
+// Courtesy over last month, a fixed span: the mock's orders and completed calls of the last sixty days fill every table there,
+// where This month or This week can be empty on its first day (no cohort, no per person)
+const COURTESY_LAST_MONTH = (() => {
+  const d = new Date();
+  const key = (x) => x.toISOString().slice(0, 10);
+  return `range=custom&from=${key(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)))}&to=${key(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0)))}`;
+})();
 
 const cases = [
   // [subject, path, at least this many headers, at least this many tiles]; on the Dashboard the tiles
@@ -182,6 +191,11 @@ const cases = [
   // days to order, not called yet), by week and by month split per market
   ["manager", "/reports/lead-cohorts", 9, 0],
   ["reader", "/reports/lead-cohorts?period=month&split=market&measure=ordered", 9, 0],
+  // Courtesy (additions 0009a and 0009c): four tiles; per market the market, the five order columns and the calls completed in
+  // the period; per week or day the period and five; the order cohorts the cohort, orders and the four ages; per person five
+  // (performance.team only); the order list ten. The intro cards carry their marks too, checked below
+  ["manager", `/reports/courtesy?${COURTESY_LAST_MONTH}`, 34, 4],
+  ["reader", `/reports/courtesy?${COURTESY_LAST_MONTH}&group=day`, 29, 4],
 ];
 let headers = 0;
 let tiles = 0;
@@ -276,7 +290,7 @@ let barCards = 0;
 // (addition 0008zm) its table's and its chart's
 let funnelIntros = 0;
 for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cancellations?range=month", 2], ["/reports/reviews?range=month", 6],
-  ["/reports/lead-cohorts", 2]]) {
+  ["/reports/lead-cohorts", 2], [`/reports/courtesy?${COURTESY_LAST_MONTH}`, 6]]) {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + path);

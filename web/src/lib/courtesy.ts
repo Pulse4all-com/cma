@@ -15,8 +15,12 @@
  *                     the order's creation, with a current tag meaning courtesy_completed_positive, _neutral or _negative;
  *                     the order's completion is the first such call
  *   attempt since due an Attempt (outbound) on the contact from the start of the due date up to and including the completion
- *   state, now        not_due, due_no_attempt, attempted, not_reached (courtesy.alert_attempts attempts, none a
+ *   state, now        not_due, due_no_attempt, attempted, unreachable (courtesy.alert_attempts attempts, none a
  *                     Conversation: the flag), completed
+ * The bases (154_courtesy_bases.sql, addition 0009c, brief B33): the tile counts the courtesy calls completed in the period
+ * by call date, for orders of any date; Per market and Per week count the orders placed in the period by order date, with
+ * their state now; Per market adds the calls completed in the period, each call once, in the market of the earliest courtesy
+ * order it completed among the filtered orders, so its rows add up to the tile.
  * Ids, codes, counts and times only: never a customer's name, email, phone or address.
  */
 import type {
@@ -31,9 +35,9 @@ import { addMonths, monthOf } from "./maintenance.ts";
 import { timeInZone } from "./reports.ts";
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "./time.ts";
 
-export const COURTESY_STATES: readonly CourtesyState[] = ["not_due", "due_no_attempt", "attempted", "not_reached", "completed"];
+export const COURTESY_STATES: readonly CourtesyState[] = ["not_due", "due_no_attempt", "attempted", "unreachable", "completed"];
 /** The state filter's choices in the select's order: the flag first, then due without completion and its parts */
-export const COURTESY_STATE_FILTERS: readonly CourtesyStateFilter[] = ["not_reached", "due", "due_no_attempt", "attempted", "not_due", "completed", "no_contact"];
+export const COURTESY_STATE_FILTERS: readonly CourtesyStateFilter[] = ["unreachable", "due", "due_no_attempt", "attempted", "not_due", "completed", "no_contact"];
 export const COURTESY_GROUPS: readonly CourtesyGroup[] = ["day", "week", "month"];
 export const COURTESY_PERIODS: readonly CourtesyPeriod[] = ["week", "month"];
 export const COURTESY_OUTCOMES: readonly CourtesyOutcome[] = ["positive", "neutral", "negative"];
@@ -99,7 +103,7 @@ export function courtesyQuery(filter: CourtesyFilter): Record<string, string> {
 export function courtesyStateMatches(state: CourtesyState | null, f: CourtesyStateFilter | null): boolean {
   if (f === null) return true;
   if (f === "no_contact") return state === null;
-  if (f === "due") return state === "due_no_attempt" || state === "attempted" || state === "not_reached";
+  if (f === "due") return state === "due_no_attempt" || state === "attempted" || state === "unreachable";
   return state === f;
 }
 
@@ -286,7 +290,7 @@ export function courtesyOrders(orders: readonly CourtesyOrderSource[], calls: re
     const attempts = own.filter((c) => c.direction === "outbound" && Date.parse(c.startedAt) >= dueMs && Date.parse(c.startedAt) <= endMs);
     const conversation = attempts.some((c) => isConversation(c, s));
     const state: CourtesyState = done ? "completed" : nowMs < dueMs ? "not_due" : attempts.length === 0 ? "due_no_attempt"
-      : attempts.length >= s.alertAttempts && !conversation ? "not_reached" : "attempted";
+      : attempts.length >= s.alertAttempts && !conversation ? "unreachable" : "attempted";
     out.push({
       ...base, segment: segmentOf(o.contactSegment, s.segments), hasContact: true, contact: o.contact, attempts: attempts.length, conversation,
       lastAttemptAt: attempts.length ? attempts[attempts.length - 1]!.startedAt : null,
@@ -300,7 +304,7 @@ export function courtesyOrders(orders: readonly CourtesyOrderSource[], calls: re
 
 // ---- The mirror of cma.courtesy_page_of ----------------------------------------------------------------------------
 
-const STATE_RANK: Record<string, number> = { not_reached: 1, due_no_attempt: 2, attempted: 3, not_due: 4, completed: 6 };
+const STATE_RANK: Record<string, number> = { unreachable: 1, due_no_attempt: 2, attempted: 3, not_due: 4, completed: 6 };
 
 function calls(rows: readonly CourtesyOrderRow[]): CourtesyCalls {
   const ids = (o: CourtesyOutcome | null) => new Set(rows.filter((r) => r.completedCallId !== null && (o === null || r.outcome === o)).map((r) => r.completedCallId)).size;
@@ -309,7 +313,7 @@ function calls(rows: readonly CourtesyOrderRow[]): CourtesyCalls {
 
 function counts(rows: readonly CourtesyOrderRow[]): CourtesyCounts {
   return { orders: rows.filter((r) => r.hasContact).length, completed: rows.filter((r) => r.state === "completed").length,
-    notReached: rows.filter((r) => r.state === "not_reached").length, noContact: rows.filter((r) => !r.hasContact).length };
+    unreachable: rows.filter((r) => r.state === "unreachable").length, noContact: rows.filter((r) => !r.hasContact).length };
 }
 
 /** The page as cma.courtesy_page_of answers it; `rows` every courtesy order as of now (courtesyOrders) */
@@ -325,8 +329,8 @@ export function courtesyReport(rows: readonly CourtesyOrderRow[], opts: {
     segments: [...s.segments, "unknown"],
   };
   if (s.startDate === null) {
-    return { ...head, now: null, completed: null, previous: null, previousFrom: null, previousTo: null, previousPartial: false, byMarket: [], byGroup: [],
-      cohorts: [], perPerson: null, list: { total: 0, rows: [] }, markets: [] };
+    return { ...head, now: null, completed: null, previous: null, previousFrom: null, previousTo: null, previousPartial: false, byMarket: [], marketsTotal: null,
+      byGroup: [], cohorts: [], perPerson: null, list: { total: 0, rows: [] }, markets: [] };
   }
   const sortOf = new Map(opts.markets.map((m) => [m.code, m.sortOrder]));
   const nameOf = new Map(opts.markets.map((m) => [m.code, m.name]));
@@ -365,18 +369,28 @@ export function courtesyReport(rows: readonly CourtesyOrderRow[], opts: {
   const listed = f.filter((r) => courtesyStateMatches(r.state, filter.state))
     .sort((a, b) => (STATE_RANK[a.state ?? ""] ?? 5) - (STATE_RANK[b.state ?? ""] ?? 5) || a.dueDate.localeCompare(b.dueDate)
       || a.createdAt.localeCompare(b.createdAt) || a.orderId.localeCompare(b.orderId));
-  const open = (st: CourtesyState | null) => st === "due_no_attempt" || st === "attempted" || st === "not_reached";
+  const open = (st: CourtesyState | null) => st === "due_no_attempt" || st === "attempted" || st === "unreachable";
+  // per market (addition 0009c): each call completed in the period (by call date) once, in the market of the earliest
+  // courtesy order it completed among the filtered orders, beside the period's orders (by order date); so the rows' calls
+  // add up to the tile, and a market with calls and no order of the period has a row of its own
+  const callMarket = new Map<string, string>();
+  for (const r of f.filter(doneIn).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.orderId.localeCompare(b.orderId))) {
+    if (!callMarket.has(r.completedCallId!)) callMarket.set(r.completedCallId!, r.market);
+  }
+  const callsIn = (m: string) => [...callMarket.values()].filter((x) => x === m).length;
   return {
     ...head,
     now: {
       orders: f.filter((r) => r.hasContact).length, dueOpen: f.filter((r) => open(r.state)).length, notDue: f.filter((r) => r.state === "not_due").length,
       dueNoAttempt: f.filter((r) => r.state === "due_no_attempt").length, attempted: f.filter((r) => r.state === "attempted").length,
-      notReached: f.filter((r) => r.state === "not_reached").length, completed: f.filter((r) => r.state === "completed").length,
+      unreachable: f.filter((r) => r.state === "unreachable").length, completed: f.filter((r) => r.state === "completed").length,
       noContact: f.filter((r) => !r.hasContact).length,
     },
     completed: calls(f.filter(doneIn)), previous: calls(f.filter(donePrev)),
     previousFrom: opts.prev.from, previousTo: opts.prev.to, previousPartial: opts.prev.until !== null,
-    byMarket: [...new Set(p.map((r) => r.market))].sort(marketOrder).map((m) => ({ market: m, name: nameOf.get(m) ?? null, ...counts(p.filter((r) => r.market === m)) })),
+    byMarket: [...new Set([...p.map((r) => r.market), ...callMarket.values()])].sort(marketOrder)
+      .map((m) => ({ market: m, name: nameOf.get(m) ?? null, ...counts(p.filter((r) => r.market === m)), calls: callsIn(m) })),
+    marketsTotal: { ...counts(p), calls: callMarket.size },
     byGroup: keys.map((key) => {
       const g = p.filter((r) => groupKey(r.businessDate) === key);
       return { key, ...counts(g), markets: [...new Set(g.map((r) => r.market))].sort(marketOrder).map((m) => ({ market: m, ...counts(g.filter((r) => r.market === m)) })) };
@@ -414,11 +428,11 @@ export function fillCourtesyHint(text: string, settings: CourtesyReport["setting
 }
 
 /**
- * Welcome's Needs attention line (addition 0009a): the courtesy orders Not reached from the follow-up snapshot, shown only
+ * Welcome's Needs attention line (addition 0009a; Unreachable since 0009c): the courtesy orders Unreachable from the follow-up snapshot, shown only
  * while courtesy is set up and the count is above 0, to monitoring.live or performance.team; null otherwise
  */
 export function courtesyAttention(flag: CourtesyFlag, permissions: readonly string[]): { count: number; alertAttempts: number; href: string } | null {
   if (!permissions.includes("monitoring.live") && !permissions.includes("performance.team")) return null;
-  if (flag.courtesyNotReached === null || flag.courtesyAlertAttempts === null || flag.courtesyNotReached <= 0) return null;
-  return { count: flag.courtesyNotReached, alertAttempts: flag.courtesyAlertAttempts, href: "/reports/courtesy?state=not_reached" };
+  if (flag.courtesyUnreachable === null || flag.courtesyAlertAttempts === null || flag.courtesyUnreachable <= 0) return null;
+  return { count: flag.courtesyUnreachable, alertAttempts: flag.courtesyAlertAttempts, href: "/reports/courtesy?state=unreachable" };
 }
