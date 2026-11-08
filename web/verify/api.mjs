@@ -1033,9 +1033,9 @@ async function followUpChecks() {
     [(await get(AGENT, `${fu}/leads`)).status, (await get(AGENT, `${fu}/tickets`)).status, (await get(AGENT, `${fu}/tasks`)).status, (await get(AGENT, `${fu}/summary`)).status, (await get(AGENT, `${fu}/by-owner`)).status],
     [403, 403, 403, 403, 403], [200, 403, 403, 403, 403]);
   const summary = await get(SUPERVISOR, `${fu}/summary`);
-  // since addition 0009a with the courtesy flag: the courtesy orders Not reached and the attempts that flag one, both null while
+  // since addition 0009a with the courtesy flag (Unreachable since 0009c): the courtesy orders Unreachable and the attempts that flag one, both null while
   // courtesy is not set up
-  const COURTESY_FLAG = ["courtesyNotReached", "courtesyAlertAttempts"];
+  const COURTESY_FLAG = ["courtesyUnreachable", "courtesyAlertAttempts"];
   expect("follow-up: the supervisor (monitoring.live) reads the summary's eight counts, the courtesy flag and computedAt",
     [summary.status, JSON.stringify(Object.keys(summary.body?.data ?? {}).sort()) === JSON.stringify([...SUMMARY_KEYS, ...COURTESY_FLAG, "computedAt"].sort()),
       SUMMARY_KEYS.every((k) => Number.isInteger(summary.body?.data?.[k])),
@@ -1532,11 +1532,23 @@ async function courtesyChecks() {
     [r.status, typeof d?.setUp, typeof d?.hasStore, d?.setUp === false ? d?.now === null && d?.completed === null : d?.now !== null,
       rows.every((x) => Object.keys(x).every((k) => !/(email|phone|address|firstName|lastName|customerName|contactName)/i.test(k)))],
     [200, "boolean", "boolean", true, true], [200, "string", "boolean", true, true]);
+  // since addition 0009c: per market the calls completed in the period (by call date) add up to the tile, and marketsTotal holds
+  // the rows' sums; not set up, no market row and no total
+  const sum = (k) => (d?.byMarket ?? []).reduce((a, m) => a + m[k], 0);
+  expect("courtesy: per market the calls add up to the tile and marketsTotal holds the rows' sums; not set up neither",
+    d?.setUp ? [["orders", "completed", "calls", "unreachable", "noContact"].every((k) => sum(k) === d.marketsTotal?.[k]), d.marketsTotal?.calls === d.completed?.calls]
+      : [d?.marketsTotal === null, (d?.byMarket ?? []).length === 0],
+    [true, true], [false, false]);
   const refused = [`/api/v1/reports/courtesy?${q}&period=day`, `/api/v1/reports/courtesy?${q}&group=year`, `/api/v1/reports/courtesy?${q}&market=nl`,
-    `/api/v1/reports/courtesy?${q}&segment=B2B,B2C`, `/api/v1/reports/courtesy?${q}&state=open`, `/api/v1/reports/courtesy?from=${day(-199)}&to=${day(0)}`];
+    `/api/v1/reports/courtesy?${q}&segment=B2B,B2C`, `/api/v1/reports/courtesy?${q}&state=not_reached`, `/api/v1/reports/courtesy?from=${day(-199)}&to=${day(0)}`];
   expect("courtesy: a period, group, market, segment or state not known and 200 days are 400s; an agent is refused",
     [...await Promise.all(refused.map(async (u) => (await call(ANALYST, u)).status)), (await call(AGENT, `/api/v1/reports/courtesy?${q}`)).status],
     [...refused.map(() => 400), 403], [...refused.map(() => 200), 403]);
+  // since addition 0009c the state is unreachable (0009a's not_reached, refused above): the filter answers its orders, each
+  // in that state
+  const ur = await call(ANALYST, `/api/v1/reports/courtesy?${q}&state=unreachable`);
+  expect("courtesy: the state filter unreachable answers 200 with only Unreachable orders (0009c)",
+    [ur.status, (ur.body?.data?.list?.rows ?? []).every((x) => x.state === "unreachable")], [200, true], [400, false]);
   // the reader (reports.view alone) is a mock identity; a database without it answers every call 403, which says nothing
   if ((await get("reader", "/api/v1/me")).status === 200) {
     const reader = await call("reader", `/api/v1/reports/courtesy?${q}`);
