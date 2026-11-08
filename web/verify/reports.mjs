@@ -102,7 +102,7 @@ import {
 } from "../src/lib/reports.ts";
 import { fmtRating, marketsWithoutChannel, reviewGroupOf, reviewMarketStates, reviewRecords, reviewShare, reviewsReport, starsOf } from "../src/lib/reviews.ts";
 import {
-  courtesyAttention, courtesyGroupOf, courtesyOrders, courtesyPeriodOf, courtesyReport, courtesyStateMatches, fillCourtesyHint, parseCourtesyFilter,
+  courtesyAttention, courtesyGroupOf, courtesyOrders, courtesyPeriodOf, courtesyReport, courtesyShare, courtesyStateMatches, fillCourtesyHint, parseCourtesyFilter,
   parseCourtesySetting,
 } from "../src/lib/courtesy.ts";
 import {
@@ -1932,7 +1932,7 @@ const CT_CALLS = [
 ];
 const CT_PEOPLE = [{ userRef: "tu-1", userId: "u-zed", name: "Zed" }, { userRef: "tu-2", userId: "u-anna", name: "Anna" }];
 const ctSettings = (startDate) => ({ startDate, orderKinds: ["first", "repeat"], dueDays: 10, alertAttempts: 3, ages: [10, 14, 21, 30], connectedMinSeconds: 0,
-  conversationMinSeconds: 30, segments: ["B2B", "B2C"] });
+  conversationMinSeconds: 30, segments: ["B2B", "B2C"], completedTags: ["Completed negative", "Completed neutral", "Completed positive"] });
 const ctRows = (startDate = "2026-09-07") => courtesyOrders(CT_ORDERS, CT_CALLS, CT_PEOPLE, ctSettings(startDate), CT_NOW);
 const ctPage = (filter = {}, rows = 100, perPerson = true, startDate = "2026-09-07") => courtesyReport(ctRows(startDate), {
   from: "2026-10-01", to: "2026-10-31", period: "week", group: "week", filter: { market: null, segment: null, state: null, ...filter }, rows, perPerson, now: CT_NOW,
@@ -1953,12 +1953,12 @@ expect("courtesy: every order's dates, state, attempts, conversation and outcome
     + "oP:1005/1015/attempted/1/false/- oR:1002/1012/completed/0/false/negative",
   "o6a:1001/1011/completed/1/true/neutral");
 const ctP = ctPage();
-expect("courtesy: the tiles, the completed calls split, per person by name with the not-linked row last, as 151's B8, B9, B13",
-  [ctP.now, ctP.completed, ctP.previous, (ctP.perPerson ?? []).map((x) => `${x.name ?? "none"}:${x.calls}/${x.positive}/${x.neutral}/${x.negative}`).join(" ")],
+expect("courtesy: the tiles, the completed courtesy orders split (0009d: orders), per person by name with the not-linked row last, as 151's B8, B9, B13",
+  [ctP.now, ctP.completed, ctP.previous, (ctP.perPerson ?? []).map((x) => `${x.name ?? "none"}:${x.orders}/${x.positive}/${x.neutral}/${x.negative}`).join(" ")],
   [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, unreachable: 1, completed: 5, noContact: 1 },
-   { calls: 4, positive: 2, neutral: 1, negative: 1 }, { calls: 0, positive: 0, neutral: 0, negative: 0 }, "Anna:1/0/0/1 Zed:2/1/1/0 none:1/1/0/0"],
+   { orders: 5, positive: 2, neutral: 2, negative: 1 }, { orders: 0, positive: 0, neutral: 0, negative: 0 }, "Anna:1/0/0/1 Zed:3/1/2/0 none:1/1/0/0"],
   [{ orders: 13, dueOpen: 7, notDue: 1, dueNoAttempt: 2, attempted: 4, unreachable: 1, completed: 5, noContact: 1 },
-   { calls: 5, positive: 2, neutral: 2, negative: 1 }, { calls: 0, positive: 0, neutral: 0, negative: 0 }, "Zed:2/1/1/0 Anna:1/0/0/1 none:1/1/0/0"]);
+   { orders: 4, positive: 2, neutral: 1, negative: 1 }, { orders: 0, positive: 0, neutral: 0, negative: 0 }, "Zed:2/1/1/0 Anna:1/0/0/1 none:1/1/0/0"]);
 expect("courtesy: per market, per ISO week, the order cohorts by week at 10, 14, 21 and 30 days, as 151's B13",
   `${ctP.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.unreachable}/${m.noContact}`).join(" ")} | `
     + `${ctP.byGroup.map((g) => `${g.key.slice(5).replace("-", "")}:${g.orders}/${g.completed}/${g.unreachable}`).join(" ")} | `
@@ -1968,7 +1968,7 @@ expect("courtesy: per market, per ISO week, the order cohorts by week at 10, 14,
   "GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1");
 const ctList = (filter, rows = 100) => ctPage(filter, rows).list;
 expect("courtesy: the filters, the list's order, cap and total, days past due; per person absent without performance.team, as 151's B11 and B14",
-  [ctList({ market: "GB" }).total, ctList({ market: "GB" }).rows[0]?.orderName, ctPage({ segment: "B2B" }).list.total, ctPage({ segment: "B2B" }).completed.calls,
+  [ctList({ market: "GB" }).total, ctList({ market: "GB" }).rows[0]?.orderName, ctPage({ segment: "B2B" }).list.total, ctPage({ segment: "B2B" }).completed.orders,
    ctList({ state: "unreachable" }).total, ctList({ state: "due" }).total, ctList({ state: "no_contact" }).total,
    ctList({}, 3).total, ctList({}, 3).rows.map((r) => `${r.orderName}/${r.state}/${r.daysPastDue ?? "-"}`).join(" "), ctPage({}, 100, false).perPerson],
   [1, "oLdn", 1, 1, 1, 7, 1, 14, "o7a/unreachable/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0", null],
@@ -2018,24 +2018,25 @@ const cbPage = (from, to, filter = {}) => courtesyReport(cbRows, {
   from, to, period: "week", group: "week", filter: { market: null, segment: null, state: null, ...filter }, rows: 100, perPerson: true, now: CB_NOW,
   prev: { from: "2026-08-31", to: "2026-09-30", until: null }, settings: ctSettings("2026-09-07"), hasStore: true,
   markets: ["BE", "GB", "NL"].map((code) => ({ code, name: code, sortOrder: 100 })), people: CT_PEOPLE.map((x) => ({ userId: x.userId, name: x.name })) });
-const cbMarkets = (p) => [p.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.calls}/${m.unreachable}/${m.noContact}`).join(" "),
-  `total ${p.marketsTotal.orders}/${p.marketsTotal.completed}/${p.marketsTotal.calls}/${p.marketsTotal.unreachable}/${p.marketsTotal.noContact}`,
-  `tile ${p.completed.calls}`].filter((x) => x !== "").join(" | ");
+const cbMarkets = (p) => [p.byMarket.map((m) => `${m.market}:${m.orders}/${m.completed}/${m.completedInPeriod}/${m.unreachable}/${m.noContact}`).join(" "),
+  `total ${p.marketsTotal.orders}/${p.marketsTotal.completed}/${p.marketsTotal.completedInPeriod}/${p.marketsTotal.unreachable}/${p.marketsTotal.noContact}`,
+  `tile ${p.completed.orders}`].filter((x) => x !== "").join(" | ");
 const CB_OCT = ["2026-10-01", "2026-10-31"];
 const CB_NOV = ["2026-11-01", "2026-11-30"];
 const cbAddsUp = (p) => {
   const sum = (k) => p.byMarket.reduce((a, m) => a + m[k], 0);
-  return ["orders", "completed", "calls", "unreachable", "noContact"].every((k) => sum(k) === p.marketsTotal[k]) && p.marketsTotal.calls === p.completed.calls;
+  return ["orders", "due", "completed", "completedInPeriod", "unreachable", "noContact"].every((k) => sum(k) === p.marketsTotal[k])
+    && p.marketsTotal.completedInPeriod === p.completed.orders;
 };
-expect("courtesy bases: per market the calls add up to the tile and the total row holds the sums, every filter, as 155's B1 (and 151's scenario)",
+expect("courtesy bases: per market the completed orders add up to the tile and the total row holds the sums, every filter, as 155's B1 (and 151's scenario)",
   [...[CB_OCT, CB_NOV].flatMap(([from, to]) => [{}, { market: "NL" }, { market: "BE" }, { market: "GB" }, { segment: "B2C" }, { state: "unreachable" }]
-    .map((f) => cbAddsUp(cbPage(from, to, f)))), cbAddsUp(ctP), ctPage({ market: "GB" }).marketsTotal.calls, ctP.marketsTotal.calls],
-  [...Array(12).fill(true), true, 0, 4],
-  [...Array(12).fill(false), false, 1, 5]);
-expect("courtesy bases: a call completing orders in two markets counts once, in the earlier order's market; NL's filter keeps it in NL, as 155's B2",
+    .map((f) => cbAddsUp(cbPage(from, to, f)))), cbAddsUp(ctP), ctPage({ market: "GB" }).marketsTotal.completedInPeriod, ctP.marketsTotal.completedInPeriod],
+  [...Array(12).fill(true), true, 0, 5],
+  [...Array(12).fill(false), false, 1, 4]);
+expect("courtesy bases: a call completing orders in two markets counts once per order, each in its own market (0009d); NL's filter keeps NL's, as 155's B2",
   [cbMarkets(cbPage(...CB_OCT)), cbMarkets(cbPage(...CB_OCT, { market: "NL" })), cbMarkets(cbPage(...CB_OCT, { market: "BE" }))],
-  ["BE:1/1/1/0/0 NL:4/3/1/1/0 | total 5/4/2/1/0 | tile 2", "NL:4/3/2/1/0 | total 4/3/2/1/0 | tile 2", "BE:1/1/1/0/0 | total 1/1/1/0/0 | tile 1"],
-  ["BE:1/1/0/0/0 NL:4/3/2/1/0 | total 5/4/2/1/0 | tile 2", "NL:4/3/1/1/0 | total 4/3/1/1/0 | tile 1", "BE:1/1/1/0/0 | total 1/1/1/0/0 | tile 1"]);
+  ["BE:1/1/1/0/0 NL:4/3/2/1/0 | total 5/4/3/1/0 | tile 3", "NL:4/3/2/1/0 | total 4/3/2/1/0 | tile 2", "BE:1/1/1/0/0 | total 1/1/1/0/0 | tile 1"],
+  ["BE:1/1/1/0/0 NL:4/3/1/1/0 | total 5/4/2/1/0 | tile 2", "NL:4/3/1/1/0 | total 4/3/1/1/0 | tile 1", "BE:1/1/0/0/0 | total 1/1/0/0/0 | tile 0"]);
 const cbNov = cbPage(...CB_NOV);
 expect("courtesy bases: a November call of an October order counts in November's market column, not in its Orders; Per week has no calls, as 155's B3",
   [cbMarkets(cbNov), cbMarkets(cbPage(...CB_NOV, { segment: "B2C" })), cbNov.byMarket.every((m) => m.completed === 0),
@@ -2044,6 +2045,63 @@ expect("courtesy bases: a November call of an October order counts in November's
   ["NL:1/1/2/0/1 | total 1/1/2/0/1 | tile 2", "NL:1/0/1/0/0 | total 1/0/1/0/0 | tile 1", false, false, 3]);
 expect("courtesy bases: not set up has no market row and no total row",
   [ctPage({}, 100, true, null).byMarket, ctPage({}, 100, true, null).marketsTotal], [[], null], [[], { orders: 0 }]);
+
+// ---- Courtesy's completed orders (addition 0009d, brief B34) on 157's own scenario ---------------------------------------
+// Tenant one of 157's block B as the mirror holds it, as of Friday 20 November 2026 12:00 UTC: 155's scenario with Anna's one
+// call completing kX's two orders, kB's BE order of 14 November not due yet and kE's NL order of 15 November completed on the
+// 16th, before its due date; the strings are the ones 157 proves in the database (B2 to B4, B7)
+const CD_ORDERS = [...CB_ORDERS, cbOrder("oB", "kB", "BE", "11-14T10:00"), cbOrder("oE", "kE", "NL", "11-15T10:00")];
+const CD_CALLS = [
+  ctCall("cS", "kS", "11-04T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("cN", "kN", "10-12T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("cO", "kO", "11-03T10:00", "outbound", 60, "tu-1", ["courtesy_completed_positive"]),
+  ctCall("cX", "kX", "10-22T10:00", "outbound", 90, "tu-2", ["courtesy_completed_neutral"]),
+  ctCall("cR1", "kR", "10-13T10:00", "outbound", null, "tu-1"), ctCall("cR2", "kR", "10-14T10:00", "outbound", null, "tu-1"),
+  ctCall("cR3", "kR", "10-15T10:00", "outbound", null, "tu-1"),
+  ctCall("cE", "kE", "11-16T10:00", "outbound", 70, "tu-1", ["courtesy_completed_negative"]),
+];
+const cdRows = courtesyOrders(CD_ORDERS, CD_CALLS, CT_PEOPLE, ctSettings("2026-09-07"), CB_NOW);
+const cdPage = (from, to, filter = {}, prev = { from: "2026-08-31", to: "2026-09-30", until: null }) => courtesyReport(cdRows, {
+  from, to, period: "week", group: "week", filter: { market: null, segment: null, state: null, ...filter }, rows: 100, perPerson: true, now: CB_NOW,
+  prev, settings: ctSettings("2026-09-07"), hasStore: true,
+  markets: ["BE", "GB", "NL"].map((code) => ({ code, name: code, sortOrder: 100 })), people: CT_PEOPLE.map((x) => ({ userId: x.userId, name: x.name })) });
+const cdText = (p) => [p.byMarket.map((m) => `${m.market}:${m.orders}/${m.due}/${m.completed}/${m.completedInPeriod}/${m.unreachable}/${m.noContact}`).join(" "),
+  `total ${p.marketsTotal.orders}/${p.marketsTotal.due}/${p.marketsTotal.completed}/${p.marketsTotal.completedInPeriod}/${p.marketsTotal.unreachable}/${p.marketsTotal.noContact}`,
+  `tile ${p.completed.orders}`, `outcomes ${p.completed.positive}/${p.completed.neutral}/${p.completed.negative}`,
+  `people ${(p.perPerson ?? []).map((x) => `${x.name ?? "none"}:${x.orders}/${x.positive}/${x.neutral}/${x.negative}`).join(" ") || "-"}`].filter((x) => x !== "").join(" | ");
+const cdTotals = (p) => p.completed.orders === p.marketsTotal.completedInPeriod && p.completed.orders === p.byMarket.reduce((a, m) => a + m.completedInPeriod, 0)
+  && p.completed.orders === p.completed.positive + p.completed.neutral + p.completed.negative
+  && p.completed.orders === (p.perPerson ?? []).reduce((a, x) => a + x.orders, 0)
+  && p.byMarket.every((m) => m.completed <= m.due && m.due <= m.orders);
+expect("courtesy orders: the tile = per market's completed in the period = the outcomes = per person, every filter, as 157's B1",
+  [CB_OCT, CB_NOV].flatMap(([from, to]) => [{}, { market: "NL" }, { market: "BE" }, { market: "GB" }, { segment: "B2C" }, { state: "unreachable" }]
+    .map((f) => cdTotals(cdPage(from, to, f)))),
+  Array(12).fill(true), Array(12).fill(false));
+expect("courtesy orders: one call completing two open orders counts 2 in the tile and per person, each in its own market, as 157's B2",
+  [cdText(cdPage(...CB_OCT)), cdText(cdPage(...CB_OCT, { market: "NL" }))],
+  ["BE:1/1/1/1/0/0 NL:4/4/3/2/1/0 | total 5/5/4/3/1/0 | tile 3 | outcomes 1/2/0 | people Anna:2/0/2/0 Zed:1/1/0/0",
+   "NL:4/4/3/2/1/0 | total 4/4/3/2/1/0 | tile 2 | outcomes 1/1/0 | people Anna:1/0/1/0 Zed:1/1/0/0"],
+  ["BE:1/1/1/0/0/0 NL:4/4/3/3/1/0 | total 5/5/4/3/1/0 | tile 2 | outcomes 1/1/0 | people Anna:1/0/1/0 Zed:1/1/0/0",
+   "NL:4/4/3/2/1/0 | total 4/4/3/2/1/0 | tile 1 | outcomes 1/0/0 | people Zed:1/1/0/0"]);
+const cdNov = cdPage(...CB_NOV);
+const cdBe = cdNov.byMarket.find((m) => m.market === "BE");
+const cdBeWeek = cdNov.byGroup.find((g) => g.key === "2026-11-09")?.markets.find((m) => m.market === "BE");
+expect("courtesy orders: nothing due gives due 0 and no share; completed before its due date counts in due and completed, as 157's B3 and B4",
+  [`BE orders ${cdBe?.orders} due ${cdBe?.due} completed ${cdBe?.completed} share ${courtesyShare(cdBe?.completed ?? 0, cdBe?.due ?? 0)}`,
+   `week BE orders ${cdBeWeek?.orders} due ${cdBeWeek?.due} share ${courtesyShare(cdBeWeek?.completed ?? 0, cdBeWeek?.due ?? 0)}`,
+   cdRows.filter((r) => r.orderId === "oE").map((r) => `${r.orderId}:${r.dueDate.slice(5).replace("-", "")}/${r.state}/${r.completedDate?.slice(5).replace("-", "")}`).join(""),
+   cdText(cdNov), courtesyShare(1, 2)],
+  ["BE orders 1 due 0 completed 0 share null", "week BE orders 1 due 0 share null", "oE:1125/completed/1116",
+   "BE:1/0/0/0/0/0 GB:0/0/0/1/0/0 NL:2/1/1/2/0/1 | total 3/1/1/3/0/1 | tile 3 | outcomes 2/0/1 | people Zed:3/2/0/1", 0.5],
+  ["BE orders 1 due 1 completed 0 share 0", "week BE orders 1 due 1 share 0", "oE:1125/not_due/1116",
+   "BE:1/0/0/0/0/0 GB:0/0/0/1/0/0 NL:2/0/1/2/0/1 | total 3/0/1/3/0/1 | tile 3 | outcomes 2/0/1 | people Zed:3/2/0/1", 1]);
+const cdPrev = cdPage(CB_NOV[0], "2026-11-20", {}, { from: "2026-10-12", to: "2026-10-31", until: "2026-11-20T12:00:00.000Z" });
+expect("courtesy orders: the previous period counts orders as the tile does (3 orders from 2 calls), as 157's B7; the tags in the settings",
+  [cdPrev.previous, cdPage(...CB_OCT).settings.completedTags,
+   fillCourtesyHint("({completedTags})", cdPage(...CB_OCT).settings), fillCourtesyHint("({completedTags})", cdPage(...CB_OCT).settings, undefined, "none mapped")],
+  [{ orders: 3, positive: 1, neutral: 2, negative: 0 }, ["Completed negative", "Completed neutral", "Completed positive"],
+   "(Completed negative, Completed neutral, Completed positive)", "(none mapped)"],
+  [{ orders: 2, positive: 1, neutral: 1, negative: 0 }, [], "()", "(Completed negative)"]);
 
 // the route and the data layer, from their source: the report's permissions, the read with its eight parameters, the filters
 // refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page

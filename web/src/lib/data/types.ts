@@ -2119,9 +2119,9 @@ export interface CourtesyFilter {
   state: CourtesyStateFilter | null;
 }
 
-/** Completed courtesy calls: distinct calls, split by outcome */
-export interface CourtesyCalls {
-  calls: number;
+/** Completed courtesy orders by their completion date, split by outcome; one call that completes two orders counts twice (0009d) */
+export interface CourtesyCompleted {
+  orders: number;
   positive: number;
   neutral: number;
   negative: number;
@@ -2144,18 +2144,20 @@ export interface CourtesyNow {
 /** The courtesy orders created in a span (by order date): with a contact, of which completed now, Unreachable now, and those without a contact */
 export interface CourtesyCounts {
   orders: number;
+  /** Of which due (0009d): the due date today or earlier, or completed before it; completed ≤ due ≤ orders */
+  due: number;
+  /** Of which courtesy completed now */
   completed: number;
   unreachable: number;
   noContact: number;
 }
 
 /**
- * Per market (addition 0009c): the period's orders by order date beside the courtesy calls completed in the period by call
- * date, each call once, in the market of the earliest courtesy order it completed among the filtered orders; the calls of
- * every row add up to the tile
+ * Per market: the period's orders by order date beside the courtesy orders completed in the period by completion date,
+ * placed on any date, each in its own market (0009d); the rows add up to the tile
  */
 export interface CourtesyMarketCounts extends CourtesyCounts {
-  calls: number;
+  completedInPeriod: number;
 }
 
 /** One order cohort: the orders with a contact of an ISO week or month, at each age of courtesy.ages_days */
@@ -2210,25 +2212,27 @@ export interface CourtesyReport {
   /** The tenant has a store ("No store connected" otherwise, never 0) */
   hasStore: boolean;
   startDate: DateKey | null;
-  settings: { dueDays: number; alertAttempts: number; ages: number[]; orderKinds: string[] };
+  /** completedTags (0009d): the names of the tenant's telephony tags whose meaning completes an order, in name order */
+  settings: { dueDays: number; alertAttempts: number; ages: number[]; orderKinds: string[]; completedTags: string[] };
   now: CourtesyNow | null;
-  /** Courtesy calls completed in the period, by call date, for orders of any date (the tile) */
-  completed: CourtesyCalls | null;
+  /** Courtesy orders completed in the period, by completion date, for orders placed on any date (the tile) */
+  completed: CourtesyCompleted | null;
   /** The previous period's like for like */
-  previous: CourtesyCalls | null;
+  previous: CourtesyCompleted | null;
   previousFrom: DateKey | null;
   previousTo: DateKey | null;
   previousPartial: boolean;
-  /** Per market (unknown last): the period's orders by order date and the calls completed in the period by call date (0009c) */
+  /** Per market (unknown last): the period's orders by order date and the orders completed in the period by completion date (0009d) */
   byMarket: (CourtesyMarketCounts & { market: string; name: string | null })[];
-  /** Per market's total row (0009c): its calls equal the tile's; null while courtesy is not set up */
+  /** Per market's total row (0009c): its completedInPeriod equals the tile's orders (0009d); null while courtesy is not set up */
   marketsTotal: CourtesyMarketCounts | null;
   /** Every day, ISO week or month of the period by order date, empty ones too, each with its markets (no calls: its rows are order dates) */
   byGroup: (CourtesyCounts & { key: DateKey; markets: (CourtesyCounts & { market: string })[] })[];
   /** Newest first */
   cohorts: CourtesyCohort[];
-  /** Completed courtesy calls of the period per person, by name, the calls without a person last; null without performance.team */
-  perPerson: ({ userId: string | null; name: string | null } & CourtesyCalls)[] | null;
+  /** Courtesy orders completed in the period per person who made the completing call, by name, the orders without a person last;
+   *  null without performance.team */
+  perPerson: ({ userId: string | null; name: string | null } & CourtesyCompleted)[] | null;
   /** The filtered total and its first rows */
   list: { total: number; rows: CourtesyListRow[] };
   /** The filter choices: every courtesy order's market (unknown last); the tenant's segments and unknown */

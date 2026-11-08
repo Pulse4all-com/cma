@@ -17,14 +17,16 @@
  *   attempt since due an Attempt (outbound) on the contact from the start of the due date up to and including the completion
  *   state, now        not_due, due_no_attempt, attempted, unreachable (courtesy.alert_attempts attempts, none a
  *                     Conversation: the flag), completed
- * The bases (154_courtesy_bases.sql, addition 0009c, brief B33): the tile counts the courtesy calls completed in the period
- * by call date, for orders of any date; Per market and Per week count the orders placed in the period by order date, with
- * their state now; Per market adds the calls completed in the period, each call once, in the market of the earliest courtesy
- * order it completed among the filtered orders, so its rows add up to the tile.
+ * The bases (154_courtesy_bases.sql, 0009c; 156_courtesy_completed_orders.sql, 0009d, brief B34): every figure counts courtesy
+ * orders. By completion date, for orders placed on any date: the tile, its outcomes, the previous period, Per market's last
+ * column (each completed order in its own market) and Per person; one call that completes two orders counts twice, so the
+ * tile = Per market's last column = the outcomes = Per person. By order date, with their state now: Per market's and Per
+ * week's orders, of which due (the due date today or earlier, or completed before it) and of which courtesy completed; the
+ * Completion share is completed over due, at most 100%, null at 0 due.
  * Ids, codes, counts and times only: never a customer's name, email, phone or address.
  */
 import type {
-  CourtesyCalls, CourtesyCohort, CourtesyCounts, CourtesyFilter, CourtesyFlag, CourtesyGroup, CourtesyOutcome, CourtesyPeriod, CourtesyReport,
+  CourtesyCompleted, CourtesyCohort, CourtesyCounts, CourtesyFilter, CourtesyFlag, CourtesyGroup, CourtesyOutcome, CourtesyPeriod, CourtesyReport,
   CourtesyState, CourtesyStateFilter, DateKey, Instant,
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
@@ -155,6 +157,8 @@ export interface CourtesySettings {
   conversationMinSeconds: number;
   /** crm.customer_segments, in its spelling */
   segments: string[];
+  /** The names of the tenant's telephony tags whose meaning completes an order, in name order (0009d) */
+  completedTags: string[];
 }
 
 /** A store order as the mock holds it, with its store, its market's zone and its customer's linked contact */
@@ -306,13 +310,16 @@ export function courtesyOrders(orders: readonly CourtesyOrderSource[], calls: re
 
 const STATE_RANK: Record<string, number> = { unreachable: 1, due_no_attempt: 2, attempted: 3, not_due: 4, completed: 6 };
 
-function calls(rows: readonly CourtesyOrderRow[]): CourtesyCalls {
-  const ids = (o: CourtesyOutcome | null) => new Set(rows.filter((r) => r.completedCallId !== null && (o === null || r.outcome === o)).map((r) => r.completedCallId)).size;
-  return { calls: ids(null), positive: ids("positive"), neutral: ids("neutral"), negative: ids("negative") };
+/** Completed courtesy orders, per outcome: each order once, so one call that completes two orders counts twice (0009d) */
+function completedOf(rows: readonly CourtesyOrderRow[]): CourtesyCompleted {
+  const n = (o: CourtesyOutcome | null) => rows.filter((r) => r.completedCallId !== null && (o === null || r.outcome === o)).length;
+  return { orders: n(null), positive: n("positive"), neutral: n("neutral"), negative: n("negative") };
 }
 
 function counts(rows: readonly CourtesyOrderRow[]): CourtesyCounts {
-  return { orders: rows.filter((r) => r.hasContact).length, completed: rows.filter((r) => r.state === "completed").length,
+  // due (0009d): the due date today or earlier, or completed before it, so every state but not_due
+  return { orders: rows.filter((r) => r.hasContact).length, due: rows.filter((r) => r.hasContact && r.state !== "not_due").length,
+    completed: rows.filter((r) => r.state === "completed").length,
     unreachable: rows.filter((r) => r.state === "unreachable").length, noContact: rows.filter((r) => !r.hasContact).length };
 }
 
@@ -325,7 +332,7 @@ export function courtesyReport(rows: readonly CourtesyOrderRow[], opts: {
   const { from, to, period, group, filter, settings: s } = opts;
   const head = {
     from, to, period, group, filter, rows: opts.rows, setUp: s.startDate !== null, hasStore: opts.hasStore, startDate: s.startDate,
-    settings: { dueDays: s.dueDays, alertAttempts: s.alertAttempts, ages: [...s.ages], orderKinds: [...s.orderKinds] },
+    settings: { dueDays: s.dueDays, alertAttempts: s.alertAttempts, ages: [...s.ages], orderKinds: [...s.orderKinds], completedTags: [...s.completedTags] },
     segments: [...s.segments, "unknown"],
   };
   if (s.startDate === null) {
@@ -363,21 +370,17 @@ export function courtesyReport(rows: readonly CourtesyOrderRow[], opts: {
   const people = new Map(opts.people.map((x) => [x.userId, x.name]));
   const perPerson = opts.perPerson
     ? [...new Set(f.filter(doneIn).map((r) => r.completedBy))].map((uid) => ({ userId: uid, name: uid === null ? null : people.get(uid) ?? null,
-      ...calls(f.filter((r) => doneIn(r) && r.completedBy === uid)) }))
+      ...completedOf(f.filter((r) => doneIn(r) && r.completedBy === uid)) }))
       .sort((a, b) => (a.userId === null ? 1 : 0) - (b.userId === null ? 1 : 0) || (a.name ?? "").localeCompare(b.name ?? "") || (a.userId ?? "").localeCompare(b.userId ?? ""))
     : null;
   const listed = f.filter((r) => courtesyStateMatches(r.state, filter.state))
     .sort((a, b) => (STATE_RANK[a.state ?? ""] ?? 5) - (STATE_RANK[b.state ?? ""] ?? 5) || a.dueDate.localeCompare(b.dueDate)
       || a.createdAt.localeCompare(b.createdAt) || a.orderId.localeCompare(b.orderId));
   const open = (st: CourtesyState | null) => st === "due_no_attempt" || st === "attempted" || st === "unreachable";
-  // per market (addition 0009c): each call completed in the period (by call date) once, in the market of the earliest
-  // courtesy order it completed among the filtered orders, beside the period's orders (by order date); so the rows' calls
-  // add up to the tile, and a market with calls and no order of the period has a row of its own
-  const callMarket = new Map<string, string>();
-  for (const r of f.filter(doneIn).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.orderId.localeCompare(b.orderId))) {
-    if (!callMarket.has(r.completedCallId!)) callMarket.set(r.completedCallId!, r.market);
-  }
-  const callsIn = (m: string) => [...callMarket.values()].filter((x) => x === m).length;
+  // per market (addition 0009d): the courtesy orders completed in the period (by completion date, placed on any date), each
+  // in its own market, beside the period's orders (by order date); so the rows add up to the tile, and a market with
+  // completed orders and no order placed in the period has a row of its own
+  const doneRows = f.filter(doneIn);
   return {
     ...head,
     now: {
@@ -386,11 +389,12 @@ export function courtesyReport(rows: readonly CourtesyOrderRow[], opts: {
       unreachable: f.filter((r) => r.state === "unreachable").length, completed: f.filter((r) => r.state === "completed").length,
       noContact: f.filter((r) => !r.hasContact).length,
     },
-    completed: calls(f.filter(doneIn)), previous: calls(f.filter(donePrev)),
+    completed: completedOf(doneRows), previous: completedOf(f.filter(donePrev)),
     previousFrom: opts.prev.from, previousTo: opts.prev.to, previousPartial: opts.prev.until !== null,
-    byMarket: [...new Set([...p.map((r) => r.market), ...callMarket.values()])].sort(marketOrder)
-      .map((m) => ({ market: m, name: nameOf.get(m) ?? null, ...counts(p.filter((r) => r.market === m)), calls: callsIn(m) })),
-    marketsTotal: { ...counts(p), calls: callMarket.size },
+    byMarket: [...new Set([...p.map((r) => r.market), ...doneRows.map((r) => r.market)])].sort(marketOrder)
+      .map((m) => ({ market: m, name: nameOf.get(m) ?? null, ...counts(p.filter((r) => r.market === m)),
+        completedInPeriod: doneRows.filter((r) => r.market === m).length })),
+    marketsTotal: { ...counts(p), completedInPeriod: doneRows.length },
     byGroup: keys.map((key) => {
       const g = p.filter((r) => groupKey(r.businessDate) === key);
       return { key, ...counts(g), markets: [...new Set(g.map((r) => r.market))].sort(marketOrder).map((m) => ({ market: m, ...counts(g.filter((r) => r.market === m)) })) };
@@ -419,12 +423,15 @@ export function courtesyShare(part: number, whole: number): number | null {
 }
 
 /**
- * A hint with the tenant's settings filled in: {dueDays}, {alertAttempts}, {ages} and {orderKinds} (courtesy.order_kinds, named
- * by `kindNames`, the order kinds' labels in the reader's language joined; the codes joined when left out)
+ * A hint with the tenant's settings filled in: {dueDays}, {alertAttempts}, {ages}, {orderKinds} (courtesy.order_kinds, named
+ * by `kindNames`, the order kinds' labels in the reader's language joined; the codes joined when left out) and, since 0009d,
+ * {completedTags} (the tenant's completed tags, named by `tagNames`: their names joined, or the words saying none is mapped
+ * yet; the names joined with a comma when left out)
  */
-export function fillCourtesyHint(text: string, settings: CourtesyReport["settings"], kindNames?: string): string {
+export function fillCourtesyHint(text: string, settings: CourtesyReport["settings"], kindNames?: string, tagNames?: string): string {
   return text.replace(/\{dueDays\}/g, String(settings.dueDays)).replace(/\{alertAttempts\}/g, String(settings.alertAttempts))
-    .replace(/\{ages\}/g, settings.ages.join(", ")).replace(/\{orderKinds\}/g, kindNames ?? settings.orderKinds.join(", "));
+    .replace(/\{ages\}/g, settings.ages.join(", ")).replace(/\{orderKinds\}/g, kindNames ?? settings.orderKinds.join(", "))
+    .replace(/\{completedTags\}/g, tagNames ?? settings.completedTags.join(", "));
 }
 
 /**

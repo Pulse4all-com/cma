@@ -1,7 +1,7 @@
 /**
- * Building blocks of Customers → Courtesy (addition 0009a, brief B31): the completed calls by outcome, the state of an order,
- * the orders per market and per day, week or month, the order cohorts by age, the completed calls per person and the order
- * list. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7: tables with numbers right-aligned in tabular figures and every
+ * Building blocks of Customers → Courtesy (addition 0009a, brief B31): the completed courtesy orders by outcome, the state of
+ * an order, the orders per market and per day, week or month (of which due and of which courtesy completed since 0009d), the
+ * order cohorts by age, the completed courtesy orders per person and the order list. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7: tables with numbers right-aligned in tabular figures and every
  * header with its hint; the outcomes in Leaf Green (positive), Light Blue (neutral) and Soft Rose with a Deep Blue edge
  * (negative), never with text on Light Blue or Soft Rose: the colour is a swatch or a bar segment and the words stand beside
  * it on white; Unreachable is the warning badge, never red. Ids, codes, counts, dates and links only: never a customer's name,
@@ -10,7 +10,7 @@
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type {
-  CourtesyCalls, CourtesyCohort, CourtesyCounts, CourtesyGroup, CourtesyMarketCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
+  CourtesyCompleted, CourtesyCohort, CourtesyCounts, CourtesyGroup, CourtesyMarketCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
 } from "@/lib/data";
 import { courtesyShare } from "@/lib/courtesy";
 import { fmtMonth } from "@/lib/maintenance";
@@ -67,18 +67,19 @@ export function OutcomeSwatch({ outcome }: { outcome: CourtesyOutcome }) {
   return <span aria-hidden="true" className={`inline-block h-3 w-3 shrink-0 rounded-sm ${OUTCOME_SWATCH[outcome]}`} />;
 }
 
-/** The completed calls by outcome: one bar of three segments (no text on them) and the legend with the counts beside it */
-export function CourtesyOutcomes({ calls, copy, locale }: { calls: CourtesyCalls; copy: Copy; locale: Locale }) {
+/** The completed courtesy orders by outcome (0009d: orders, by completion date): one bar of three segments (no text on them) and
+ *  the legend with the counts beside it */
+export function CourtesyOutcomes({ completed, copy, locale }: { completed: CourtesyCompleted; copy: Copy; locale: Locale }) {
   const t = copy.courtesy;
   const n = (x: number) => fmtCount(x, locale);
-  const parts: [CourtesyOutcome, number][] = [["positive", calls.positive], ["neutral", calls.neutral], ["negative", calls.negative]];
+  const parts: [CourtesyOutcome, number][] = [["positive", completed.positive], ["neutral", completed.neutral], ["negative", completed.negative]];
   const label = (o: CourtesyOutcome) => t[`outcome_${o}`];
   return (
     <div data-testid="courtesy-outcomes">
       <div className="flex h-4 w-full overflow-hidden rounded-button bg-p4a-neutral-surface" role="img"
         aria-label={parts.map(([o, x]) => t.outcomeTitle.replace("{label}", label(o)).replace("{n}", n(x))).join(", ")}>
         {parts.map(([o, x]) => (x > 0 ? (
-          <span key={o} className={`h-full ${OUTCOME_SWATCH[o]}`} style={{ width: `${(100 * x) / Math.max(1, calls.calls)}%` }}
+          <span key={o} className={`h-full ${OUTCOME_SWATCH[o]}`} style={{ width: `${(100 * x) / Math.max(1, completed.orders)}%` }}
             title={t.outcomeTitle.replace("{label}", label(o)).replace("{n}", n(x))} data-outcome={o} />
         ) : null))}
       </div>
@@ -88,7 +89,7 @@ export function CourtesyOutcomes({ calls, copy, locale }: { calls: CourtesyCalls
             <OutcomeSwatch outcome={o} />
             <span>{label(o)}</span>
             <span className="tabular font-semibold">{n(x)}</span>
-            <span className="tabular text-p4a-muted">{fmtShare(courtesyShare(x, calls.calls), locale)}</span>
+            <span className="tabular text-p4a-muted">{fmtShare(courtesyShare(x, completed.orders), locale)}</span>
           </li>
         ))}
       </ul>
@@ -112,20 +113,26 @@ export function CourtesyStateLabel({ state, outcome, copy }: { state: CourtesySt
   return <Badge tone={state === "attempted" ? "info" : "neutral"}>{t[`state_${state}`]}</Badge>;
 }
 
-/** The counts' columns every table of orders shares, by order date: orders, of which completed, completion share, unreachable, no contact */
+/**
+ * The counts' columns every table of orders shares, by order date: orders, of which due, of which courtesy completed, the
+ * completion share (of which courtesy completed over of which due, at most 100%; a dash titled "No order is due yet" at 0 due;
+ * addition 0009d), unreachable, no contact
+ */
 function countCols<T extends CourtesyCounts>(copy: Copy, hints: Record<string, string>, locale: Locale): Col<T>[] {
   const t = copy.courtesy;
   const n = (x: number) => fmtCount(x, locale);
-  return [[t.colOrders, hints.ctColOrders!, (r) => n(r.orders)], [t.colCompleted, hints.ctColCompleted!, (r) => n(r.completed)],
-    [t.colShare, hints.ctColShare!, (r) => fmtShare(courtesyShare(r.completed, r.orders), locale)],
+  return [[t.colOrders, hints.ctColOrders!, (r) => n(r.orders)], [t.colOfWhichDue, hints.ctColOfWhichDue!, (r) => n(r.due)],
+    [t.colCompleted, hints.ctColCompleted!, (r) => n(r.completed)],
+    [t.colShare, hints.ctColShare!, (r) => (r.due === 0 ? <span title={t.shareNoDue} aria-label={t.shareNoDue}>–</span>
+      : fmtShare(courtesyShare(r.completed, r.due), locale))],
     [t.colUnreachable, hints.ctColUnreachable!, (r) => (r.unreachable > 0 ? <Badge tone="warning">{n(r.unreachable)}</Badge> : n(r.unreachable))],
     [t.colNoContact, hints.ctColNoContact!, (r) => n(r.noContact)]];
 }
 
 /**
  * Per market (unknown last): the period's courtesy orders by order date with their state now, then, set apart, the courtesy
- * calls completed in the period by call date, each in the market of the earliest courtesy order it completed (addition
- * 0009c); the total row under them, whose calls equal the tile
+ * orders completed in the period by completion date, placed on any date, each in its own market (addition 0009d); the total
+ * row under them, whose last column equals the tile
  */
 export function CourtesyMarkets({ rows, total, hints, copy, locale }: {
   rows: CourtesyReport["byMarket"]; total: CourtesyMarketCounts | null; hints: Record<string, string>; copy: Copy; locale: Locale;
@@ -133,7 +140,7 @@ export function CourtesyMarkets({ rows, total, hints, copy, locale }: {
   const t = copy.courtesy;
   const n = (x: number) => fmtCount(x, locale);
   const cols: Col<CourtesyMarketCounts>[] = [...countCols<CourtesyMarketCounts>(copy, hints, locale),
-    [t.colCallsInPeriod, hints.ctColCallsInPeriod!, (r) => n(r.calls), APART]];
+    [t.colCompletedInPeriod, hints.ctColCompletedInPeriod!, (r) => n(r.completedInPeriod), APART]];
   return (
     <Scroll testId="courtesy-markets" label={t.marketCard}>
       <Head first={t.colMarket} firstHint={hints.ctMarkets!} cols={cols} copy={copy} />
@@ -231,13 +238,14 @@ export function CourtesyCohorts({ cohorts, ages, hints, copy, locale }: {
   );
 }
 
-/** The completed calls of the period per person, by name, never ranked; the calls without a person last */
+/** The courtesy orders completed in the period per person who made the completing call, by name, never ranked; the orders
+ *  without a person last (0009d: orders, no longer calls) */
 export function CourtesyPeople({ rows, hints, copy, locale }: {
   rows: NonNullable<CourtesyReport["perPerson"]>; hints: Record<string, string>; copy: Copy; locale: Locale;
 }) {
   const t = copy.courtesy;
   const n = (x: number) => fmtCount(x, locale);
-  const cols: Col<CourtesyCalls>[] = [[t.colCalls, hints.ctColCalls!, (r) => n(r.calls)], [t.colPositive, hints.ctColOutcome!, (r) => n(r.positive)],
+  const cols: Col<CourtesyCompleted>[] = [[t.colCompletedOrders, hints.ctColCompletedOrders!, (r) => n(r.orders)], [t.colPositive, hints.ctColOutcome!, (r) => n(r.positive)],
     [t.colNeutral, hints.ctColOutcome!, (r) => n(r.neutral)], [t.colNegative, hints.ctColOutcome!, (r) => n(r.negative)]];
   return (
     <Scroll testId="courtesy-people" label={t.personCard}>
