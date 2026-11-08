@@ -17,7 +17,9 @@
 # the tenant's flash.current_refresh_minutes, 5 by default, is taken again; a younger one kept, so the setting is the
 # cadence) and then cma.flash_snapshot_take, which takes the tenant's date once its local time is past
 # flash.snapshot_local_time (so time zones and summer time need no schedule change) and answers "taken" for a date
-# already held: idempotent at a run every minute, every run but the first of a date writes no figure. A take lasts some
+# already held: idempotent at a run every minute, every run but the first of a date writes no figure; a take that failed
+# is tried again an hour later, not every minute (the job's TAKE_RETRY_MINUTES; meanwhile each run row fails with
+# take_backoff and the code, so System health keeps showing it). A take lasts some
 # seconds (5.5 s in prod on 3 November 2026), so two runs do not overlap; were one to run past the minute, the next run's
 # take waits on the tenant's advisory lock and then answers taken, and its current refresh skips (fresh or running). No
 # task retries (--max-retries=0): the next minute is the retry (the job itself tries a tenant once more on a fresh
