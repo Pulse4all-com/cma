@@ -31,9 +31,11 @@
 --          market (BE and NL); with the market filter NL only NL's
 --      B3  an order placed in the period with nothing due gives due 0 and a null share (BE in November, and its week)
 --      B4  an order completed before its due date counts in due and in completed (kE's in November)
---      B5  completed_tags lists the mapped names in name order, and is empty without a mapping (tenant two)
---      B6  every other answer of cma.courtesy_page_of equals 154's definition (its text kept below), for every period,
---          group, cohort and filter tried, here and in every tenant of the database for the last 30 days
+--      B5  completed_tags lists the mapped names in name order, and is empty without a mapping (tenant two, whose tags
+--          mean an attempt and not reached); once tenant two maps a tag to completed, each tenant lists only its own
+--      B6  every other answer of cma.courtesy_page_of equals 154's definition (its text kept below), markets_total's
+--          orders, completed, unreachable and no contact included, for every period, group, cohort and filter tried, here
+--          and in every tenant of the database for the last 30 days
 --      B7  the previous period counts orders too, as the tile does (1 to 20 November's previous, 12 to 31 October: 3 orders
 --          from 2 calls), and not set up keeps every figure null
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of OK.
@@ -270,9 +272,9 @@ as $$
         from jsonb_array_elements(j -> 'markets') m) s
 $$;
 
--- 0009d's page equals 0009c's but for what 0009d changes: without settings.completed_tags, the tile, the previous period, per
--- person and markets_total; the markets that hold an order of the period (0009c's rows) without due, completed_in_period
--- and 0009c's calls; the groups and their markets without due
+-- 0009d's page equals 0009c's but for what 0009d changes: without settings.completed_tags, the tile, the previous period and
+-- per person; markets_total without due, completed_in_period and 0009c's calls; the markets that hold an order of the period
+-- (0009c's rows) without the same three; the groups and their markets without due
 create or replace function pg_temp.v0009d_same(p_new jsonb, p_old jsonb)
 returns boolean
 language sql immutable
@@ -287,6 +289,11 @@ as $$
                                     order by k)
                    from jsonb_array_elements(p_new -> 'groups') with ordinality as y(g, k)), '[]'::jsonb)
          = coalesce(p_old -> 'groups', '[]'::jsonb)
+     and (case when jsonb_typeof(p_new -> 'markets_total') = 'object' then (p_new -> 'markets_total') - 'due' - 'completed_in_period'
+               else p_new -> 'markets_total' end)
+         is not distinct from
+         (case when jsonb_typeof(p_old -> 'markets_total') = 'object' then (p_old -> 'markets_total') - 'calls'
+               else p_old -> 'markets_total' end)
   from (select (p_new - 'completed' - 'previous' - 'per_person' - 'markets_total') #- '{settings,completed_tags}' as j) n,
        (select (p_old - 'completed' - 'previous' - 'per_person' - 'markets_total') as j) o
 $$;
@@ -335,7 +342,7 @@ declare
   v_rows     text[] := '{}';
   v_t1 uuid; v_t2 uuid;
   v_admin1 uuid; v_analyst1 uuid; v_zed uuid; v_anna uuid; v_ing1 uuid; v_analyst2 uuid; v_admin2 uuid;
-  v_crm uuid; v_tel uuid; v_nl uuid; v_be uuid; v_gb uuid;
+  v_crm uuid; v_tel uuid; v_nl uuid; v_be uuid; v_gb uuid; v_tel2 uuid; v_ing2 uuid;
   v_txt text; v_txt2 text; v_unset text;
   v_n integer; v_m integer;
   j jsonb; j2 jsonb;
@@ -368,6 +375,9 @@ begin
     returning id into v_crm;
     insert into cma.integration_connection (tenant_id, adapter, kind, name, external_account_id)
     values (v_t1, 'verifytel', 'telephony', 'Verify orders telephony', 'tel-1') returning id into v_tel;
+    insert into cma.integration_connection (tenant_id, adapter, kind, name, external_account_id)
+    values (v_t2, 'verifytel', 'telephony', 'Verify orders telephony two', 'tel-2') returning id into v_tel2;
+    select x.user_id into v_ing2 from cma.app_user_external_id x where x.tenant_id = v_t2 and x.system = 'ingest';
     insert into cma.integration_connection (tenant_id, adapter, kind, name, external_account_id)
     values (v_t1, 'verifyshop', 'commerce', 'Verify orders shop NL', 'shop-nl.example.invalid') returning id into v_nl;
     insert into cma.integration_connection (tenant_id, adapter, kind, name, external_account_id)
@@ -532,18 +542,30 @@ begin
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s; %s', coalesce(v_txt, 'null'), v_txt2)];
 
     -- B5. completed_tags: tenant one's three mapped names in name order (the courtesy_attempt tag is not one); tenant two,
-    --     with no tag mapped, an empty list
+    --     whose tags mean an attempt and not reached, none completed, an empty list; once tenant two maps a tag to
+    --     completed, tenant two lists that one and tenant one still its own three
     v_txt2 := (j -> 'settings' -> 'completed_tags')::text;
     perform set_config('app.tenant_id', v_t2::text, true);
+    perform set_config('app.user_id', v_ing2::text, true);
+    perform cma.ingest_upsert_telephony_catalog(v_tel2, 'tag', '[{"tagRef": "t2-att", "name": "Follow up two"},
+      {"tagRef": "t2-nr", "name": "No answer two"}, {"tagRef": "t2-done", "name": "Done two"}]');
     perform set_config('app.user_id', v_admin2::text, true);
+    perform cma.set_telephony_tag_meaning(v_tel2, 't2-att', 'courtesy_attempt');
+    perform cma.set_telephony_tag_meaning(v_tel2, 't2-nr', 'not_reached');
     perform cma.set_tenant_setting('courtesy.start_date', '2026-09-07');
     perform set_config('app.user_id', v_analyst2::text, true);
     j2 := cma.courtesy_page(v_oct_from, v_oct_to);
     v_txt2 := v_txt2 || ' | two ' || (j2 -> 'settings' -> 'completed_tags')::text;
+    perform set_config('app.user_id', v_admin2::text, true);
+    perform cma.set_telephony_tag_meaning(v_tel2, 't2-done', 'courtesy_completed_neutral');
+    perform set_config('app.user_id', v_analyst2::text, true);
+    v_txt2 := v_txt2 || ' | two mapped ' || (cma.courtesy_page(v_oct_from, v_oct_to) -> 'settings' -> 'completed_tags')::text;
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
+    v_txt2 := v_txt2 || ' | one ' || (cma.courtesy_page(v_oct_from, v_oct_to) -> 'settings' -> 'completed_tags')::text;
     v_rows := v_rows || array['15', 'B5 completed_tags lists the mapped names in name order, empty without a mapping',
-      case when v_txt2 = '["Completed negative", "Completed neutral", "Completed positive"] | two []'
+      case when v_txt2 = '["Completed negative", "Completed neutral", "Completed positive"] | two [] | two mapped ["Done two"]'
+                         || ' | one ["Completed negative", "Completed neutral", "Completed positive"]'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt2];
 
     -- B6. every other answer as 0009c's definition: periods October, November and 7 September to 20 November; every group;

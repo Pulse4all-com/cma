@@ -393,8 +393,8 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "reviews.by_channel",
     "reviews.market_states",
   ],
-  // Customers → Courtesy (addition 0009a): the tiles, the outcome bar, the tables (Per market's calls since 0009c), the cohorts, per
-  // person and the list's columns
+  // Customers → Courtesy (addition 0009a): the tiles, the outcome bar, the tables (Per market's completed in the period since
+  // 0009c, orders since 0009d; Of which due since 0009d), the cohorts, per person and the list's columns
   "/reports/courtesy": [
     "courtesy.completed_in_period",
     "courtesy.due_open",

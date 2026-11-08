@@ -35899,24 +35899,18 @@ orders = count(the courtesy orders, every one since courtesy.start_date, whose c
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
-o as (
-  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
-         cu.crm_connection_id, cu.crm_contact_source_id
-  from cma.commerce_order co
-  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
-  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
-  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
-                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
-  cross join s
-  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
-    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
-    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
--- the completing calls of the period: see cma.courtesy_orders_of's done step; count distinct completing call ids whose start, in the order's zone, is between :from and :to
-select count(*) from o
+-- as the application (app.tenant_id and app.user_id set): the courtesy orders completed in the period by completion date (completed_date: its day in the order's
+-- market zone), placed on any date (0009d), with the outcomes; beside them the page's tile and Per market's total row
+select count(*) filter (where x.completed_date between :from and :to) as orders,
+       count(*) filter (where x.completed_date between :from and :to and x.outcome = 'positive') as positive,
+       count(*) filter (where x.completed_date between :from and :to and x.outcome = 'neutral') as neutral,
+       count(*) filter (where x.completed_date between :from and :to and x.outcome = 'negative') as negative,
+       (select (j -> 'completed' ->> 'orders')::int from (select cma.courtesy_page(:from, :to) as j) p) as tile,
+       (select (j -> 'markets_total' ->> 'completed_in_period')::int from (select cma.courtesy_page(:from, :to) as j) p) as per_market_total
+from cma.courtesy_orders_of(:tenant_id, null, null) x
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -36022,7 +36016,7 @@ A now figure: the period does not narrow it (the hint says so). The market and s
 
 **Unreachable** on /reports/courtesy · Unreachable (Onbereikbaar)
 
-The flag: courtesy orders with at least courtesy.alert_attempts attempts since due, none of them a Conversation, and no completed call, now. Welcome shows the same count under Needs attention.
+The flag: courtesy orders with at least courtesy.alert_attempts attempts since due, none of them a Conversation, and not courtesy completed, now. Welcome shows the same count under Needs attention.
 
 **Formula as computed**
 
@@ -36261,7 +36255,7 @@ o as (
 select count(*) from o
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -36415,14 +36409,15 @@ completed_in_period(market) = count(the courtesy orders of that market whose com
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
--- as the application (app.tenant_id and app.user_id set): per market the calls of the period, the total row and the tile
-select m ->> 'market' as market, (m ->> 'calls')::int as calls, (p.j -> 'markets_total' ->> 'calls')::int as total_calls,
-       (p.j -> 'completed' ->> 'calls')::int as tile
+-- as the application (app.tenant_id and app.user_id set): per market the courtesy orders completed in the period, each in its own market (0009d), the
+-- total row and the tile; the total and the tile are equal
+select m ->> 'market' as market, (m ->> 'completed_in_period')::int as completed_in_period,
+       (p.j -> 'markets_total' ->> 'completed_in_period')::int as total, (p.j -> 'completed' ->> 'orders')::int as tile
 from (select cma.courtesy_page(:from, :to) as j) p
 cross join lateral jsonb_array_elements(p.j -> 'markets') m
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/155_verify_courtesy_bases.sql checks it on a fixed scenario (the calls add up to the tile with every filter, a call of two markets once in the earlier order's, a November call of an October order) and web/verify/reports.mjs checks the mock's mirror against the same strings.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings; db/155_verify_courtesy_bases.sql (as edited by 0009d) checks the same with 0009c's scenario.
 
 **Data prerequisites**
 
@@ -36654,28 +36649,23 @@ due = count(the span's courtesy orders with a contact whose state as of now is n
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.courtesy_page` (0009c); `cma.courtesy_page_of` (0009c); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
+**Computed in** `cma.courtesy_page` (0009d); `cma.courtesy_page_of` (0009d); `cma.courtesy_orders_of` (0009c); `courtesyReport` in src/lib/courtesy.ts; `default (CourtesyPage)` in src/app/reports/courtesy/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
-o as (
-  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
-         cu.crm_connection_id, cu.crm_contact_source_id
-  from cma.commerce_order co
-  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
-  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
-  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
-                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
-  cross join s
-  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
-    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
-    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
-select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+-- as the application (app.tenant_id and app.user_id set): per market the courtesy orders placed in the period with a contact, of which due (due date today or
+-- earlier, or completed before it: every state but not_due), of which courtesy completed, and the completion share over due
+select x.market, count(*) filter (where x.has_contact) as orders,
+       count(*) filter (where x.has_contact and x.state <> 'not_due') as due,
+       count(*) filter (where x.has_contact and x.state = 'completed') as completed,
+       round(100.0 * count(*) filter (where x.has_contact and x.state = 'completed')
+             / nullif(count(*) filter (where x.has_contact and x.state <> 'not_due'), 0), 1) as completion_share_pct
+from cma.courtesy_orders_of(:tenant_id, (:from)::date, (:to)::date + 1) x
+group by x.market order by x.market
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -36684,7 +36674,7 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - The courtesy tags of the telephony connection mapped to their meanings (Configuration -> Sources, Tags; done for Pulse4all Subscriptions on 25 October 2026)
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
-**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period); decisions.md, 8 Nov 2026 (Courtesy counts completed courtesy orders; Of which due)
+**Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009d; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy per market adds calls completed in the period); decisions.md, 8 Nov 2026 (Courtesy counts completed courtesy orders; Of which due)
 
 **Notes**
 
@@ -36746,23 +36736,18 @@ completed = count(the span's courtesy orders whose state is completed as of now)
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
-o as (
-  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
-         cu.crm_connection_id, cu.crm_contact_source_id
-  from cma.commerce_order co
-  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
-  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
-  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
-                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
-  cross join s
-  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
-    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
-    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
-select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+-- as the application (app.tenant_id and app.user_id set): per market the courtesy orders placed in the period with a contact, of which due (due date today or
+-- earlier, or completed before it: every state but not_due), of which courtesy completed, and the completion share over due
+select x.market, count(*) filter (where x.has_contact) as orders,
+       count(*) filter (where x.has_contact and x.state <> 'not_due') as due,
+       count(*) filter (where x.has_contact and x.state = 'completed') as completed,
+       round(100.0 * count(*) filter (where x.has_contact and x.state = 'completed')
+             / nullif(count(*) filter (where x.has_contact and x.state <> 'not_due'), 0), 1) as completion_share_pct
+from cma.courtesy_orders_of(:tenant_id, (:from)::date, (:to)::date + 1) x
+group by x.market order by x.market
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -36829,23 +36814,18 @@ completion_share = completed / due (null when due is 0, shown as a dash), as a p
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select cma.courtesy_start_of(:tenant_id) as start_date),
-o as (
-  select co.id, co.source_created_at, (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date as bdate,
-         cu.crm_connection_id, cu.crm_contact_source_id
-  from cma.commerce_order co
-  join cma.commerce_store st on st.tenant_id = co.tenant_id and st.connection_id = co.connection_id
-  left join cma.market mk on mk.tenant_id = co.tenant_id and mk.code = st.market
-  left join cma.commerce_customer cu on cu.tenant_id = co.tenant_id and cu.connection_id = co.connection_id
-                                     and cu.source_id = co.customer_source_id and cu.source_deleted_at is null
-  cross join s
-  where co.tenant_id = :tenant_id and not co.is_test and co.source_deleted_at is null and co.cancelled_at is null
-    and co.order_kind = any (string_to_array(cma.setting_of(:tenant_id, 'courtesy.order_kinds'), ','))
-    and (co.source_created_at at time zone coalesce(mk.time_zone, st.time_zone))::date >= s.start_date)
-select count(*) filter (where crm_contact_source_id is not null) as orders, count(*) filter (where crm_contact_source_id is null) as no_contact from o
+-- as the application (app.tenant_id and app.user_id set): per market the courtesy orders placed in the period with a contact, of which due (due date today or
+-- earlier, or completed before it: every state but not_due), of which courtesy completed, and the completion share over due
+select x.market, count(*) filter (where x.has_contact) as orders,
+       count(*) filter (where x.has_contact and x.state <> 'not_due') as due,
+       count(*) filter (where x.has_contact and x.state = 'completed') as completed,
+       round(100.0 * count(*) filter (where x.has_contact and x.state = 'completed')
+             / nullif(count(*) filter (where x.has_contact and x.state <> 'not_due'), 0), 1) as completion_share_pct
+from cma.courtesy_orders_of(:tenant_id, (:from)::date, (:to)::date + 1) x
+group by x.market order by x.market
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -37016,7 +36996,7 @@ o as (
 select count(*) from o
 ```
 
-**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set.
+**Fixture check** Not run against prod data here: no store or call data in dev. db/151_verify_courtesy.sql checks the read on a fixed scenario (B1 to B16) and web/verify/reports.mjs checks the mock's mirror against the same figures; at three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page answered in about 1.2 s. Martin runs the query in Studio once courtesy.start_date is set. db/157_verify_courtesy_completed_orders.sql checks it on a fixed scenario since addition 0009d (the four totals equal with every filter, one call completing two orders counted twice each in its own market, nothing due giving due 0 and no share, an order completed before its due date in due and completed, the previous period) and web/verify/reports.mjs checks the mock's mirror against the same strings.
 
 **Data prerequisites**
 
@@ -37123,7 +37103,7 @@ Never a name, email, phone or address. The contact link needs record_url_contact
 
 **Days past due** on /reports/courtesy · Days past due (Dagen over de vervaldag)
 
-Days since the due date for an order due without a completed call.
+Days since the due date for an order due and not courtesy completed.
 
 **Formula as computed**
 
@@ -37206,7 +37186,7 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 
 **Attempts since due** on /reports/courtesy · Attempts since due (Pogingen sinds vervaldatum)
 
-Attempts since due (definitions.md, Attempt since due): the outbound calls on the order's contact from the due date up to and including the completed call.
+Attempts since due (definitions.md, Attempt since due): the outbound calls on the order's contact from the due date up to and including the completing call.
 
 **Formula as computed**
 

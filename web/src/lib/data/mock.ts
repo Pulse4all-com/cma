@@ -2546,8 +2546,8 @@ const MOCK_COURTESY_CONTACT = new Map<string, string>();
  * before the start date, No contact, a London and an Amsterdam order at 23:30 UTC, a completion before the due date, a call
  * before it, one call completing two orders and a later third open, Unreachable after three attempts, Attempted with two and
  * with a conversation, an untagged connected call), and a spread of orders over the last sixty days in NL, GB and DE; no
- * order of this month completed while calls of this month complete older ones (addition 0009c: This month's tile above 0
- * with every Of which completed 0). Invented ids and codes only; the people are the mock team's. Tenant two holds no store
+ * order of this month completed while calls of this month complete older ones (addition 0009c; since 0009d This month's tile
+ * above 0 with every Of which courtesy completed 0). Invented ids and codes only; the people are the mock team's. Tenant two holds no store
  */
 function mockCourtesy(me: Principal, nowMs: number): [CourtesyOrderSource[], CourtesyCallSource[], { userRef: string; userId: string; name: string }[]] {
   if (me.tenantId === MOCK_TENANT_2) return [[], [], []];
@@ -2586,7 +2586,7 @@ function mockCourtesy(me: Principal, nowMs: number): [CourtesyOrderSource[], Cou
   call("k7c", day(-23), "outbound", null, "tu-3");
   order("untagged", "k8u", day(-36)); call("k8u", day(-25), "outbound", 60, "tu-1");
   // the two bases apart (addition 0009c, brief B33): no order placed this month (Amsterdam) is completed yet, while calls made
-  // this month complete older orders, so This month shows the tile above 0 and every Of which completed 0, as prod's first
+  // this month complete older orders, so This month shows the tile above 0 and every Of which courtesy completed 0, as prod's first
   // November did; one such call on the 1st (07:00 or 08:00 in Amsterdam) completes an order of the 20th or so of last month
   const monthStart = `${dateKeyInZone(new Date(nowMs), "Europe/Amsterdam").slice(0, 8)}01`;
   const placedThisMonth = (at: string, market: string) => dateKeyInZone(new Date(at), zones[market]!) >= monthStart;

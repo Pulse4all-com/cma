@@ -22,7 +22,8 @@
 -- change reads the new keys. Between this script and the deploy, main's web (0009c's) reads keys that are gone: the tile
 -- "Courtesy calls completed in the period", its previous period, the outcome bar, Per market's last column and its total,
 -- and Per person read completed.calls, previous.calls, markets[].calls, markets_total.calls and per_person[].calls, so for
--- those minutes they show no number; every other figure, the order list and Welcome stay as they are.
+-- those minutes they show "NaN" (a missing number formatted) and the outcome bar's segments and shares lose their widths
+-- and values; every other figure, the order list and Welcome stay as they are.
 --
 -- Why (Martin, 8 November 2026; Decision log, brief B34): "Courtesy calls completed in the period" and "Calls completed in
 -- the period" read as any finished call (a follow-up call is also completed), and "Of which completed" reads as delivery.

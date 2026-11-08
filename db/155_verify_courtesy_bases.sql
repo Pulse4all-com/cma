@@ -26,7 +26,7 @@
 --        kN   NL, an order of 1 October, completed by a call of 12 October (positive)
 --        kO   NL, an order of 20 October, completed by a call of 3 November (positive): a November call, an October order
 --        kX   one contact with an order in BE (5 October) and one in NL (10 October), both completed by one call of 22
---             October (neutral): it counts once, in BE's row (the earlier order)
+--             October (neutral): since 0009d each order counts, in its own market (0009c counted the call once, in BE's row)
 --        kR   NL, an order of 2 October, three unanswered attempts since due: Unreachable
 --        kN1  NL, an order of 12 November, not due yet; nc an NL order of 11 November without a contact
 --      B1  per market the completed orders add up to the tile, and markets_total holds the rows' sums, for October and November,
@@ -34,7 +34,8 @@
 --      B2  a call completing orders in two markets counts once per order, each in its own market (since 0009d; 0009c
 --          counted it once, in the earlier order's market); with the market filter NL only NL's, so the row equals the tile
 --      B3  a November call completing an October order counts in November's market column, while that order is not in
---          November's Orders; November: the tile 2, every Of which completed 0, GB a row with calls and no order
+--          November's Orders; November: the tile 2, every Of which completed 0, GB a row with a completed order and no
+--          order placed
 --      B4  every other field equals 0009a's definition (150's text of the page, the orders and the state filter, kept
 --          below, with 0009a's state not_reached read as unreachable), for every period, group, cohort and filter tried,
 --          here and in every tenant of the database for the last 30 days

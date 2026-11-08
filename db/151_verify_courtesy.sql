@@ -412,7 +412,8 @@ begin
                 and j -> 'completed' = '{"orders": 5, "neutral": 2, "negative": 1, "positive": 2}'::jsonb
                 and not v_provoke then 'PASS' else 'FAIL' end, format('%s | %s', j -> 'completed', v_txt)];
 
-    -- B9. per person by name, never by count (Zed has two, Anna one); a call whose user is linked to nobody last
+    -- B9. per person by name, never by count (since 0009d the completed orders: Zed three, Anna one); a call whose user is
+    -- linked to nobody last
     select string_agg(format('%s:%s/%s/%s/%s', coalesce(p ->> 'name', 'none'), p ->> 'orders', p ->> 'positive', p ->> 'neutral', p ->> 'negative'), ' '
                       order by o) into v_txt2
     from jsonb_array_elements(j -> 'per_person') with ordinality as x(p, o);
