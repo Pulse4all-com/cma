@@ -4145,7 +4145,7 @@ has_correction = exists(time_event with source = 'correction' on the workday), s
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.time_event` | source, workday_id | CMA | POST /api/v1/team/days/{userId}/{date}/corrections → cma.correct_workday(); cma.correct_time_event() from SQL tools; the import void (0008d) also writes corrections | immediately on each save |
+| `cma.time_event` | source, workday_id | CMA | POST /api/v1/team/days/{userId}/{date}/corrections → cma.correct_workday(); cma.correct_time_event() from SQL tools; the import void (0008d) and Remove day (POST /api/v1/team/days/{userId}/{date}/remove → cma.remove_workday(), 0009g) also write corrections | immediately on each save |
 
 **Filters**
 

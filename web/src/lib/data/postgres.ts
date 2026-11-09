@@ -31,6 +31,7 @@ import type {
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
+import { REMOVE_REFUSAL } from "@/lib/corrections";
 import { FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
 
@@ -457,7 +458,8 @@ function assertDate(d: string, name: string): void {
   if (!DATE_RE.test(d)) throw new CmaDbError("DB_ERROR", `${name} must be YYYY-MM-DD`);
 }
 
-// ---- Team (migrations 0003, 0003a): cma.team_hours, cma.team_day, cma.correct_workday, cma.team_people
+// ---- Team (migrations 0003, 0003a): cma.team_hours, cma.team_day, cma.correct_workday, cma.team_people;
+// cma.remove_workday since addition 0009g
 // team_day carries import_batch_key since addition 0008d; before it the column is absent (null here)
 // These read other people's days, so the permission check is inside each function (workday.team,
 // CMA06), in the same transaction as the read: never a check here followed by a plain query.
@@ -1808,6 +1810,31 @@ export const postgresData: CmaData = {
       // A new statement sees the edit (one transaction, read committed)
       return readTeamDay(q, userId, date);
     });
+  },
+
+  async removeWorkday(me, userId, date, reason) {
+    assertDate(date, "date");
+    try {
+      return await withTenant(ctx(me), async (q) => {
+        // Remove day (0009g): the day is found by person and date inside the one statement, so no id leaves the
+        // database; cma.remove_workday checks workday.team first, then the day (CMA02 when there is none), the
+        // caller's own day, the reason and the day's state
+        await q.query(
+          `select 1 from cma.remove_workday(
+             (select w.id from cma.workday w
+               where w.tenant_id = cma.current_tenant_id() and w.user_id = $1::uuid and w.business_date = $2::date),
+             $3)`,
+          [userId, date, reason],
+        );
+        return readTeamDay(q, userId, date);
+      });
+    } catch (e) {
+      // The two refusals the screen names keep the database's text (REMOVE_REFUSAL), as Clock in keeps its window start
+      const named = e instanceof CmaDbError && e.sqlState === "CMA04"
+        ? Object.values(REMOVE_REFUSAL).find((m) => m === e.detail)
+        : undefined;
+      throw named ? new CmaDbError("CMA04", named) : e;
+    }
   },
 
   async listSettings(me) {

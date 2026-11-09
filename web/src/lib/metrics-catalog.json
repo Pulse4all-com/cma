@@ -6854,7 +6854,7 @@
             "workday_id"
           ],
           "owner": "CMA",
-          "fed_by": "POST /api/v1/team/days/{userId}/{date}/corrections → cma.correct_workday(); cma.correct_time_event() from SQL tools; the import void (0008d) also writes corrections",
+          "fed_by": "POST /api/v1/team/days/{userId}/{date}/corrections → cma.correct_workday(); cma.correct_time_event() from SQL tools; the import void (0008d) and Remove day (POST /api/v1/team/days/{userId}/{date}/remove → cma.remove_workday(), 0009g) also write corrections",
           "cadence": "immediately on each save"
         }
       ],
