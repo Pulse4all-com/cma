@@ -5,7 +5,7 @@
  */
 import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { instantsForLocal } from "@/lib/corrections";
+import { instantsForLocal, REMOVE_REFUSAL } from "@/lib/corrections";
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import type {
   LiveBoardData, DataQualityReport,
@@ -1664,6 +1664,11 @@ function shapeProblem(live: MockEvent[]): string | null {
   return prev ? null : "no start";
 }
 
+/** A day is a day while it has an effective clock-in: a removed day (0009g) is none, as the summary drops it */
+function hasDay(events: MockEvent[]): boolean {
+  return effective(events).some((e) => e.kind === "start");
+}
+
 function withEffective(events: MockEvent[]): MockEvent[] {
   const live = new Set(effective(events).map((e) => e.id));
   return [...events]
@@ -1710,7 +1715,7 @@ function teamDay(p: TeamPerson, date: DateKey, events: MockEvent[]): TeamDay {
 function readTeamDay(userId: string, date: DateKey): TeamDayDetail {
   const p = TEAM.find((x) => x.userId === userId);
   const events = p ? teamStore.get(userId)?.get(date) ?? [] : [];
-  return { day: p && events.length ? teamDay(p, date, events) : null, events: withEffective(events) };
+  return { day: p && hasDay(events) ? teamDay(p, date, events) : null, events: withEffective(events) };
 }
 
 /** One day's status stretches, the way cma.time_interval derives them (billable = paid in the fixture) */
@@ -3126,7 +3131,7 @@ export const mockData: CmaData = {
     for (const p of TEAM) {
       if (userId && p.userId !== userId) continue;
       for (const [date, events] of teamStore.get(p.userId) ?? []) {
-        if (date >= range.from && date <= range.to && events.length) days.push(teamDay(p, date, events));
+        if (date >= range.from && date <= range.to && hasDay(events)) days.push(teamDay(p, date, events));
       }
     }
     days.sort((a, b) => a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName));
@@ -3181,6 +3186,29 @@ export const mockData: CmaData = {
     return readTeamDay(userId, date);
   },
 
+  // Remove day (0009g): every effective event voided by one correction, as cma.remove_workday does
+  async removeWorkday(me, userId, date, reason) {
+    assertTeam(me);
+    seedTeam();
+    const person = TEAM.find((p) => p.userId === userId);
+    const days = person ? teamStore.get(userId) : undefined;
+    const events = [...(days?.get(date) ?? [])];
+    if (!days || events.length === 0) throw new CmaDbError("CMA02", "no such day");
+    if (userId === me.userId) throw new CmaDbError("CMA06", "nobody corrects their own day");
+    const text = reason.trim();
+    if (text.length < 3 || text.length > 500) throw new CmaDbError("CMA04", "a correction needs a reason of 3 to 500 characters");
+    const live = effective(events);
+    if (live.length === 0) throw new CmaDbError("CMA04", REMOVE_REFUSAL.removed);
+    if (live[live.length - 1]!.kind !== "end") throw new CmaDbError("CMA04", REMOVE_REFUSAL.open);
+    // One instant for every void: one correction, one reason, one approver
+    const at = new Date().toISOString();
+    for (const e of live) {
+      events.push({ ...mockEvent("void", at, null, "correction", { supersedes: e.id, reason: text, approvedByName: me.displayName }), recordedAt: at });
+    }
+    days.set(date, events);
+    return readTeamDay(userId, date);
+  },
+
   async listSettings() {
     return state.config ? state.config.settings.map((x) => ({ ...x })) : MOCK_SETTINGS;
   },
@@ -3192,7 +3220,7 @@ export const mockData: CmaData = {
     for (const p of TEAM) {
       if (userId && p.userId !== userId) continue;
       for (const [date, events] of teamStore.get(p.userId) ?? []) {
-        if (date < range.from || date > range.to || !events.length) continue;
+        if (date < range.from || date > range.to || !hasDay(events)) continue;
         const d = teamDay(p, date, events);
         rows.push({
           userId: d.userId, displayName: d.displayName, organisationName: d.organisationName, date: d.date,
@@ -3215,7 +3243,7 @@ export const mockData: CmaData = {
     for (const p of TEAM) {
       if (userId && p.userId !== userId) continue;
       for (const [date, events] of teamStore.get(p.userId) ?? []) {
-        if (date >= range.from && date <= range.to && events.length) rows.push(...statusRows(p, date, events));
+        if (date >= range.from && date <= range.to && hasDay(events)) rows.push(...statusRows(p, date, events));
       }
     }
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.from.localeCompare(b.from));
@@ -3230,7 +3258,7 @@ export const mockData: CmaData = {
     for (const p of TEAM) {
       if (userId && p.userId !== userId) continue;
       for (const [date, events] of teamStore.get(p.userId) ?? []) {
-        if (date < range.from || date > range.to || !events.length) continue;
+        if (date < range.from || date > range.to || !hasDay(events)) continue;
         for (const s of statusRows(p, date, events)) {
           const k = `${s.userId}:${s.date}:${s.statusKey}`;
           const row = sums.get(k);

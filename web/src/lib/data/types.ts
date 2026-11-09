@@ -3616,6 +3616,13 @@ export interface CmaData {
    * invalid edit CMA04. Answers the day as it now stands.
    */
   correctWorkday(me: Principal, userId: string, date: DateKey, correction: Correction): Promise<TeamDayDetail>;
+  /**
+   * Remove day (cma.remove_workday, addition 0009g): voids every effective event of one person's day in one
+   * correction with the reason; the caller is the approver. Without workday.team or on one's own day CMA06, no
+   * day CMA02, a reason outside 3 to 500 characters CMA04; a day already removed or still open CMA04 with the
+   * message of REMOVE_REFUSAL (lib/corrections). Answers the day as it now stands: day null, every event kept.
+   */
+  removeWorkday(me: Principal, userId: string, date: DateKey, reason: string): Promise<TeamDayDetail>;
   /** The tenant's effective settings (cma.tenant_settings); any user of the tenant */
   listSettings(me: Principal): Promise<TenantSetting[]>;
   /** Hours per person per day for a file, with the settings. Needs workday.export (CMA06) */

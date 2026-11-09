@@ -3,6 +3,8 @@
 -- reads existing days, block C creates two throwaway users and their days inside one transaction that
 -- is rolled back, so nothing stays behind (also no audit rows). Runs in dev and prod alike.
 -- Keep the output as the release record in records/0003-<env>-<date>/.
+-- Block A's additions list prints <you>, <another login> or postgres for whoever applied each addition, never
+-- the login itself (Decision log, 9 Nov 2026, verify output from prod).
 --
 -- Block C checks 10 refusals. Each expected refusal is caught and logged as a notice "PASS ..."
 -- (Cloud SQL Studio does not show notices). A refusal that does not happen raises the error
@@ -31,9 +33,12 @@ order by 1;
 -- expect: 6 rows, security_definer false, app_may_call true
 
 set role cma_owner;
-select version, description, applied_by, applied_at::date from cma.schema_migration order by 1;
+select version, description,
+       case when applied_by = session_user then '<you>' when applied_by like '%@%' then '<another login>' else applied_by end as applied_by,
+       applied_at::date
+from cma.schema_migration order by 1;
 reset role;
--- expect: 0001, 0002 and 0003, applied_by your IAM login
+-- expect: 0001, 0002 and 0003, applied_by <you> for the additions you ran (your IAM login, never shown)
 
 -- B. Existing days already meet the new rule --------------------------------------------------------
 -- refresh_workday now refuses a status or end before the start; no stored day may break it

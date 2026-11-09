@@ -5,7 +5,14 @@
 -- Blocks A, B, C, D, F, G, I and J are universal: they check structure and configuration, or create
 -- throwaway users and days inside one transaction that is rolled back, so they leave nothing behind
 -- (also no audit rows) and run in prod before any real person exists. Blocks E, H and K use the dev
--- fixture from 06 and are skipped in prod.
+-- fixture from 06 and run in dev only: the flag verify.is_dev (set below, as the dev-only verifies set
+-- it: true where the dev seed's active agent.two@example.com exists, which prod never holds) guards
+-- them, and in prod each prints one line saying it was skipped, and nothing of anyone. The flag is set by
+-- the statement after the postgres guard, once per session: a block run on its own in a session without it
+-- reads as not dev and skips.
+-- Changed 9 November 2026: block E had listed every prod workday with the person's address and hours,
+-- and block A's additions list printed the login that applied each addition; it now prints <you>,
+-- <another login> or postgres instead of the address (Decision log, 9 Nov 2026, verify output from prod).
 
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -16,6 +23,12 @@ begin
   end if;
 end
 $$;
+
+-- Dev only for blocks E, H and K: the dev seed's active test person (db/03) exists in dev, never in prod
+set role cma_owner;
+select set_config('verify.is_dev', (exists (select 1 from cma.app_user u join cma.tenant t on t.id = u.tenant_id
+                                            where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false) as is_dev;
+reset role;
 
 -- A. Structure: tables, RLS, policies, triggers, views, privileges, functions -----------------------------
 select c.relname, pg_get_userbyid(c.relowner) as owner, c.relrowsecurity as rls_on
@@ -79,9 +92,14 @@ order by 1;
 
 -- schema_migration has no reader view by design; check it as owner
 set role cma_owner;
-select version, description, applied_by, applied_at::date from cma.schema_migration order by 1;
+select version, description,
+       case when applied_by = session_user then '<you>' when applied_by like '%@%' then '<another login>' else applied_by end as applied_by,
+       applied_at::date
+from cma.schema_migration order by 1;
 reset role;
--- expect: 0001 and 0002 (and 0003 once applied), applied_by your IAM login
+-- expect: 0001 and 0002 (and 0003 once applied), applied_by <you> for the additions you ran (a personal IAM
+--         login; the output never shows the address), <another login> for a colleague's, postgres only after
+--         an emergency run
 
 -- B. Configuration as a reader: status ladder per tenant, time zones ------------------------------------
 select t.slug, s.key, s.is_working, s.is_productive, s.is_paid, s.is_billable, s.is_default
@@ -153,11 +171,15 @@ select u.email, s.business_date, s.status,
        s.is_capped, s.needs_correction, s.has_correction
 from cma.workday_summary s
 join cma.app_user u on u.tenant_id = s.tenant_id and u.id = s.user_id
-order by u.email, s.business_date;
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+union all
+select 'block E skipped: not the dev database (no dev seed)', null, null, null, null, null, null, null
+where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+order by email, business_date;
 -- expect: agent.one: day-3 ended 8.00 working and 8.00 paid (the 30 min lunch counts for neither),
 --         day-2 ended 5.92, day-1 ended 8.07 with has_correction true (the manager's end at 17:02);
 --         agent.two: day-2 OPEN, is_capped true, needs_correction true, 14.00 working (10:00 to
---         midnight Madrid, capped), day-1 ended 8.00
+--         midnight Madrid, capped), day-1 ended 8.00. In prod: the one line "block E skipped"
 rollback;
 
 -- F. Tenant isolation through the views, and the core views stay closed ---------------------------------
@@ -196,24 +218,33 @@ begin;
 set local role cma_app;
 select set_config('app.tenant_id', (select id::text from cma.tenant where slug = 'pulse4all-subscriptions'), true);
 select set_config('app.user_id', (select id::text from cma.app_user where email = 'manager@example.com'), true);
--- Agent Two's forgotten day from two days ago: the manager ends it at 18:00 Madrid
+-- Agent Two's forgotten day from two days ago: the manager ends it at 18:00 Madrid. Only open days before today in
+-- the workday's own zone: a day Agent Two clocked in on today (verify:api does) is no forgotten day, and its 18:00
+-- may still lie ahead ("a corrected time must lie in the past")
 select (cma.correct_time_event(
           w.id, 'end', ((w.business_date) + time '18:00') at time zone w.timezone,
           null, null, 'Forgot to end the workday', cma.current_user_id())).kind
 from cma.workday w
 join cma.app_user u on u.tenant_id = w.tenant_id and u.id = w.user_id
-where u.email = 'agent.two@example.com' and w.status = 'open';                 -- expect: end
+where u.email = 'agent.two@example.com' and w.status = 'open' and w.business_date < cma.business_date(now(), w.timezone)
+  and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+union all
+select 'block H skipped: not the dev database (no dev seed)' where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean;
+-- expect: end (in prod: the one line "block H skipped")
 select s.business_date, s.status, round(s.working_seconds / 3600.0, 2) as working_h, s.needs_correction, s.has_correction
 from cma.workday_summary s
 join cma.app_user u on u.tenant_id = s.tenant_id and u.id = s.user_id
-where u.email = 'agent.two@example.com' order by 1;                              -- expect: day-2 ended 8.00 false true
+where u.email = 'agent.two@example.com' and s.business_date < cma.business_date(now(), s.timezone)
+  and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+order by 1;                                                                        -- expect: day-2 ended 8.00 false true
 -- the audit trail names the manager as actor and the correction row carries the approver
 select e.kind, e.source, e.reason is not null as has_reason, e.approved_by = cma.current_user_id() as approved_by_manager,
        a.actor_user_id = cma.current_user_id() as actor_is_manager, a.actor_db_role
 from cma.time_event e
 join cma.audit_log a on a.table_name = 'time_event' and a.row_id = e.id::text and a.action = 'insert'
 where e.source = 'correction'
-  and e.user_id = (select id from cma.app_user where email = 'agent.two@example.com');
+  and e.user_id = (select id from cma.app_user where email = 'agent.two@example.com')
+  and coalesce(current_setting('verify.is_dev', true), 'false')::boolean;
 -- expect: end, correction, true, true, true, cma_app
 rollback;   -- the correction is discarded; the fixture keeps its open day for the web app
 
@@ -269,8 +300,12 @@ set local role cma_app;
 select t.slug
 from cma.find_tenants_for_identity('mock', 'agent-one') f
 join cma.tenant t on t.id = f.tenant_id
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+union all
+select 'block K skipped: not the dev database (no dev seed)' where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
--- expect: pulse4all-invest, pulse4all-subscriptions (same person in two tenants: the picker case)
+-- expect: pulse4all-invest, pulse4all-subscriptions (same person in two tenants: the picker case); in prod the
+--         one line "block K skipped"
 select count(*) as unknown_subject from cma.find_tenants_for_identity('mock', 'nobody');   -- expect: 0
 select count(*) as wrong_system    from cma.find_tenants_for_identity('google', 'agent-one'); -- expect: 0
 rollback;

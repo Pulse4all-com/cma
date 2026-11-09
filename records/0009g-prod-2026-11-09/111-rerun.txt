@@ -1,0 +1,14 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+ verdict 
+---------
+ PASS
+(1 row)
+
