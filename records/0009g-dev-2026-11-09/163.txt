@@ -1,0 +1,58 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/163_verify_remove_day.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DO
+                         check_name                         | result |                                                 detail                                                  
+------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------
+ S1 addition, function and rights; open_workday             | PASS   | invoker, volatile, plpgsql, cma_owner, cma_app only; open_workday starts a removed day under a lock
+ A1 removed: the header back, the day leaves the summary    | PASS   | ended 09:00 to 13:30 unchanged; counted 4 h before, no summary row after
+ A1 every effective event voided once, nothing deleted      | PASS   | 4 effective events, 4 voids, one each; the 5 earlier events kept
+ A1 the trail rows carry the reason and the approver        | PASS   | source correction, the reason trimmed, approved by the second admin, one instant
+ A1 the day's figures are 0                                 | PASS   | 0 worked, 0 paid, 0 sessions, no stretch
+ A1 not in Team hours, the exports or time per status       | PASS   | no row for the removed day in any of the four; the first admin's own day in each (the controls)
+ A1 the history keeps every event                           | PASS   | 9 events, none effective, 4 voids with reason and approver
+ A2 the caller's own day is refused                         | PASS   | CMA06 nobody corrects their own day; nothing written
+ A2 no reason, a short or a long one is refused             | PASS   | CMA04 five times; nothing written
+ A2 a caller without workday.team is refused                | PASS   | agent and analyst CMA06; nothing written
+ A2 an open day is refused                                  | PASS   | CMA04 end the day before removing it; still open, nothing written
+ A2 another tenant's, an unknown or no day is refused       | PASS   | CMA02 both ways, unknown id and null; no void in either tenant
+ A2 a second removal is refused                             | PASS   | CMA04 this day has already been removed; nothing written
+ A3 an imported day may be removed                          | PASS   | removed; the batch still loaded with its counts and its day
+ A3 the batch can still be withdrawn                        | PASS   | voided, 0 events voided: nothing was left on the day
+ A4 a removed day: Clock in before the window start refused | PASS   | CMA04 the workday starts at 07:00; nothing written
+ A4 Clock in starts a removed day again                     | PASS   | open from 11:00, one start by the person in the default status, clocked in, one session; the voids kept
+ A4 a second Clock in adds no second start                  | PASS   | open, one start, nothing written
+ A4 a person whose time is not kept is refused              | PASS   | CMA06; nothing written
+ A4 an ordinary ended day stays ended                       | PASS   | ended 10:00, nothing written
+ A5 Add day on a removed date brings the day back           | PASS   | 14:00 to 15:00, 3600 s worked, one session, corrected
+ verdict                                                    | PASS   | 21 PASS, 0 FAIL
+(22 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET

@@ -138,6 +138,8 @@ On a new machine, one step at a time:
 
    Expected: `function` twice. A tab opened before this step sources the file with `. ~/.cma_helpers.sh`.
 
+   A provoking old-style verify (`07`, whose expected errors halt a stop-on-error run at the first) is not rerun through `run_migration`'s loop: run it with `psql "$PGCONN" -v ON_ERROR_STOP=0 -f db/07_verify_time_model.sql` and compare its error lines with its last record, apart from ids.
+
    `cma_db: command not found` in a new terminal window: `. ~/.cma_helpers.sh` gets that window going.
    The Chromebook's terminal opens a login shell, which reads the first of `~/.bash_profile`,
    `~/.bash_login` and `~/.profile` that exists, never `~/.bashrc` itself. On Martin's machine none of
