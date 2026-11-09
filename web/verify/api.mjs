@@ -32,7 +32,8 @@
  * Attempts per deal, Attempts per agent and a line's stored calls (reads only), and since addition 0008z one deal's
  * attempts, the attempted and outcome filters, withdrawing the run's message (the admin; dev data) and Welcome on open,
  * and since addition 0008zv a Live board per contact-center organisation (Newco's people only, ?organisation=, the API's
- * 404 and the page's not-found of an unflagged key, /live/board opening Newco's board; needs 140 and seed 02 run again).
+ * 404 and the page's not-found of an unflagged key, /live/board opening Newco's board; needs 140 and seed 02 run again),
+ * and since addition 0009g Remove day on the day the run added (needs 162; the day is removed again each run).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -395,6 +396,41 @@ expect("a replaced event stays visible",
    moved.body?.data?.day?.minutes],
   [true, 1, worked(300)],
   [false, 2, 241]);
+
+// ---- Remove day (cma.remove_workday, addition 0009g), 8 checks -------------------------------------
+// The day added above is removed again by the supervisor: every effective event voided in one correction, the day
+// no longer listed. The next run's search for a free date finds it free again (a removed day is not listed), and its
+// Add day enters the date anew on the same day row, its history kept (dev data).
+const removeDay = (s, userId, date, body, headers = { "x-cma-request": "1" }) =>
+  call(s, `/api/v1/team/days/${userId}/${date}/remove`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+const aRemoval = { reason: "Verifier: a test day removed (dev)" };
+expect("remove day needs the request header", (await removeDay(SUPERVISOR, meA.userId, freeDate, aRemoval, {})).status, 400, 200);
+expect("remove day needs a reason", (await removeDay(SUPERVISOR, meA.userId, freeDate, { reason: "ab" })).status, 400, 200);
+expect("nobody removes their own day", (await removeDay(SUPERVISOR, meS.userId, today, aRemoval)).status, 403, 200);
+expect("an agent cannot remove a day", (await removeDay(AGENT, meS.userId, today, aRemoval)).status, 403, 200);
+expect("a date without a day is a 404 for remove day", (await removeDay(SUPERVISOR, meA.userId, "2001-01-01", aRemoval)).status, 404, 200);
+// An open day is refused while the agent's day of today is open (it is, unless the verifier ran earlier today and
+// ended it); either way the line says which
+const agentToday = ((await teamHours(SUPERVISOR, today, today, meA.userId)).body?.data?.days ?? [])[0] ?? null;
+const openRefusal = agentToday?.status === "open" ? await removeDay(SUPERVISOR, meA.userId, today, aRemoval) : null;
+expect("an open day cannot be removed",
+  openRefusal ? [openRefusal.status, openRefusal.body?.error?.code] : "the agent's day of today is not open",
+  openRefusal ? [409, "day_open"] : "the agent's day of today is not open",
+  [200, null]);
+const removed = await removeDay(SUPERVISOR, meA.userId, freeDate, aRemoval);
+const removedEvents = removed.body?.data?.events ?? [];
+expect("remove day voids the whole day and leaves team hours",
+  [removed.status, removed.body?.data?.day ?? null, removedEvents.some((e) => e.isEffective),
+   removedEvents.some((e) => e.kind === "void" && e.reason === aRemoval.reason && e.source === "correction"),
+   ((await teamHours(SUPERVISOR, freeDate, freeDate, meA.userId)).body?.data?.days ?? []).length],
+  [200, null, false, true, 0],
+  [404, "a day", true, false, 1]);
+const removedAgain = await removeDay(SUPERVISOR, meA.userId, freeDate, aRemoval);
+expect("a removed day cannot be removed again", [removedAgain.status, removedAgain.body?.error?.code], [409, "day_removed"], [200, null]);
 
 // ---- no past day open ----------------------------------------------------------------------
 // After the closing above, no past day may be open, and every past day must count its exact

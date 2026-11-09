@@ -13,6 +13,8 @@
  *    its event (a row whose kind changed, a status that became a clock-in, is a changed row), a
  *    removed row voids it, a new row adds one. The database validates everything again; these
  *    checks only explain.
+ * 3. Remove day (addition 0009g): when the editor offers it, and a refusal as the problem it names.
+ *    The database voids every effective event of the day in one correction (cma.remove_workday).
  */
 import type { CorrectionChange, DateKey, TimeEvent, TimeEventKind } from "./data/types";
 
@@ -300,4 +302,39 @@ export function diff(original: EditorRow[], rows: ResolvedRow[]): CorrectionChan
   // The first clock-in first, then voids, then the rest in time order (rows are already in time order)
   const rank = (c: CorrectionChange) => (c === first ? 0 : c.kind === "void" ? 1 : 2);
   return out.map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map(({ c }) => c);
+}
+
+// ---- Remove day (addition 0009g) ------------------------------------------------------------
+
+/**
+ * The refusals of cma.remove_workday the screen names, by the database's own message (both CMA04). The data layer
+ * passes them on with this text, and the route answers them as 409 day_removed and 409 day_open
+ */
+export const REMOVE_REFUSAL = {
+  removed: "this day has already been removed",
+  open: "end the day before removing it",
+} as const;
+
+/**
+ * Whether the day editor offers Remove day: in the Correct dialog of a day (not in Add day), never on the viewer's
+ * own day (the database refuses it, CMA06, as it refuses Correct there) and only on a day with an effective event.
+ * An open day is offered disabled, with the reason as its hint: the database refuses it until the day has ended
+ */
+export function removeDayState(p: {
+  mode: "correct" | "add"; personId: string; meId: string; rows: number; open: boolean;
+}): "hidden" | "disabled" | "enabled" {
+  if (p.mode !== "correct" || p.personId === p.meId || p.rows === 0) return "hidden";
+  return p.open ? "disabled" : "enabled";
+}
+
+export type RemoveProblem = "notPermitted" | "notFound" | "removed" | "open" | "reason" | "failed";
+
+/** The answer of POST /api/v1/team/days/{userId}/{date}/remove that failed, as the problem the dialog names */
+export function removeProblemOf(status: number, code: string | undefined): RemoveProblem {
+  if (status === 403) return "notPermitted";
+  if (status === 404) return "notFound";
+  if (status === 409 && code === "day_removed") return "removed";
+  if (status === 409 && code === "day_open") return "open";
+  if (status === 400 && code === "invalid_reason") return "reason";
+  return "failed";
 }

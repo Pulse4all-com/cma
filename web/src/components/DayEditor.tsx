@@ -10,13 +10,21 @@
  * POST /api/v1/team/days/{userId}/{date}/corrections, with one reason for the whole edit; the
  * database validates again and the caller is the approver (V1). Nothing here knows a status key.
  *
+ * Remove day (addition 0009g): in the Correct dialog of someone else's day, a destructive secondary action under
+ * the rows opens a confirmation with a required reason and POSTs /api/v1/team/days/{userId}/{date}/remove; every
+ * effective event of the day is voided in one correction, and the day leaves Team hours. Disabled on an open day.
+ *
  * Keyboard: Tab through the rows, Ctrl+Enter saves, Esc closes (twice with unsaved changes).
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { DateKey, TeamDayDetail, TeamPerson, TimeEvent, WorkStatus } from "@/lib/data";
-import { check, localParts, normalizeTime, rowsFromEvents, type DayProblem, type EditorRow, type RowProblem } from "@/lib/corrections";
+import {
+  check, localParts, normalizeTime, removeDayState, removeProblemOf, rowsFromEvents,
+  type DayProblem, type EditorRow, type RemoveProblem, type RowProblem,
+} from "@/lib/corrections";
 import { fmtDate } from "@/lib/time";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Notice } from "./primitives";
 
 export type EditorTarget =
@@ -83,6 +91,11 @@ export function DayEditor({
   const [reason, setReason] = useState("");
   const [armed, setArmed] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Remove day: whether the day is open (offered disabled), the confirmation, its reason and its refusal */
+  const [dayOpen, setDayOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeReason, setRemoveReason] = useState("");
+  const [removeError, setRemoveError] = useState<RemoveProblem | null>(null);
 
   const defaultStatus = statuses.find((s) => s.isDefault) ?? statuses[0];
   /** The statuses that can be chosen now; a row may still show one that is no longer in use */
@@ -103,6 +116,7 @@ export function DayEditor({
         const start = rowsFromEvents(detail.events, w.timeZone);
         setEvents(detail.events);
         setExisted(detail.day !== null);
+        setDayOpen(detail.day?.status === "open");
         const opened = start.length ? start : [newRow(null)];
         setOriginal(start);
         setRows(opened);
@@ -135,7 +149,11 @@ export function DayEditor({
   );
   const reasonOk = reason.trim().length >= 3 && reason.trim().length <= 500;
   const dirty = reason.trim() !== "" || JSON.stringify(rows) !== JSON.stringify(initial);
-  const canSave = step === "edit" && !!checked && checked.changes.length > 0 && reasonOk && !pending;
+  const canSave = step === "edit" && !!checked && checked.changes.length > 0 && reasonOk && !pending && !removing;
+  const removeState = who
+    ? removeDayState({ mode: target.mode, personId: who.userId, meId, rows: original.length, open: dayOpen })
+    : "hidden";
+  const removeReasonOk = removeReason.trim().length >= 3 && removeReason.trim().length <= 500;
 
   function update(id: string, patch: Partial<EditorRow>) {
     setArmed(false);
@@ -178,6 +196,25 @@ export function DayEditor({
     });
   }
 
+  function remove() {
+    if (!who || removeState !== "enabled" || !removeReasonOk || pending) return;
+    setRemoveError(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/v1/team/days/${who.userId}/${date}/remove`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-cma-request": "1" },
+        body: JSON.stringify({ reason: removeReason.trim() }),
+      });
+      if (res.ok) {
+        // The parent closes the editor and reloads Team hours: the row goes, the totals follow
+        onSaved();
+        return;
+      }
+      const code = await res.json().then((b: { error?: { code?: string } }) => b.error?.code).catch(() => undefined);
+      setRemoveError(removeProblemOf(res.status, code));
+    });
+  }
+
   function openPicked() {
     const p = choosable.find((x) => x.userId === pickUser);
     if (!p || !date) return;
@@ -194,6 +231,10 @@ export function DayEditor({
   const dayProblem: Record<DayProblem, string> = {
     empty: t.problemEmpty, firstIsEnd: t.problemFirstIsEnd, endAfterEnd: t.problemEndAfterEnd, noChange: t.problemNoChange,
   };
+  const removeProblem: Record<RemoveProblem, string> = {
+    notPermitted: t.removeNotPermitted, notFound: t.removeNotFound, removed: t.removeRemoved, open: t.removeOpenFailed,
+    reason: t.problemReason, failed: t.removeFailed,
+  };
   /** Every row that clocks in: the day's first and each one after a clock-out (0008zp) */
   const startIds = new Set(checked?.rows.filter((r) => r.kind === "start").map((r) => r.id) ?? []);
   const hasHistory = events.some((e) => !e.isEffective || e.source !== "user");
@@ -204,7 +245,7 @@ export function DayEditor({
       aria-labelledby="day-editor-title"
       onCancel={(e) => {
         e.preventDefault();
-        if (pending) return;
+        if (pending || removing) return;
         if (dirty && !armed) setArmed(true);
         else onClose();
       }}
@@ -375,10 +416,25 @@ export function DayEditor({
             </tbody>
           </table>
 
-          <div className="mt-3">
+          <div className="mt-3 flex items-center justify-between gap-3">
             <Button variant="outlined" size="sm" onClick={addRow}>
               {t.addRow}
             </Button>
+            {removeState !== "hidden" ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={removeState === "disabled" || pending}
+                title={removeState === "disabled" ? t.removeOpen : undefined}
+                onClick={() => {
+                  setRemoveReason("");
+                  setRemoveError(null);
+                  setRemoving(true);
+                }}
+              >
+                {t.removeDay}
+              </Button>
+            ) : null}
           </div>
 
           {checked.dayProblems.length ? (
@@ -448,6 +504,42 @@ export function DayEditor({
           </div>
         </div>
       ) : null}
+
+      {/* Inside the editor's dialog, so its Esc and Ctrl+Enter reach the editor's handlers too: canSave and the
+          editor's onCancel ignore them while it is open */}
+      <ConfirmDialog
+        open={removing}
+        title={t.removeTitle}
+        confirmLabel={t.removeDay}
+        cancelLabel={t.cancel}
+        onConfirm={remove}
+        onCancel={() => setRemoving(false)}
+        busy={pending}
+        irreversible
+        confirmDisabled={!removeReasonOk}
+      >
+        <p>{t.removeIntro}</p>
+        <label className="mt-4 flex flex-col gap-2 text-small font-semibold">
+          {t.removeReason}
+          <textarea
+            value={removeReason}
+            onChange={(e) => setRemoveReason(e.target.value)}
+            maxLength={500}
+            rows={2}
+            required
+            className="rounded-input border border-p4a-border bg-white px-3 py-2 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
+          />
+          <span className="font-normal text-caption text-p4a-grey">
+            {t.reasonHint} <span className="tabular">{removeReason.trim().length}/500</span>
+          </span>
+        </label>
+        {removeReason.trim() !== "" && !removeReasonOk ? <p className="mt-1 text-small text-p4a-error">{t.problemReason}</p> : null}
+        {removeError ? (
+          <p role="alert" className="mt-4 text-small text-p4a-error">
+            {removeProblem[removeError]}
+          </p>
+        ) : null}
+      </ConfirmDialog>
     </dialog>
   );
 }

@@ -10,9 +10,10 @@
  * a day imported from an earlier system (addition 0008d), in a status retired by the import; and a day
  * of sessions (addition 0008zp): a row after a clock-out clocks in again, a row whose kind changes
  * replaces its event, two clock-outs need a clock-in between them, a new row at a clock-out's minute
- * is refused while an untouched one stays.
+ * is refused while an untouched one stays; and Remove day (addition 0009g): when the editor offers it and how
+ * the route's refusals read.
  */
-import { check, instantsForLocal, localParts, normalizeTime, rowsFromEvents } from "../src/lib/corrections.ts";
+import { check, instantsForLocal, localParts, normalizeTime, removeDayState, removeProblemOf, rowsFromEvents } from "../src/lib/corrections.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -236,6 +237,22 @@ expect("Add day with two sessions starts with the first clock-in",
        { id: "a4", eventId: null, end: false, statusKey: "available", time: "09:00", offset: null }], "2026-10-02", []).changes
     .map((c) => `${c.kind} ${c.at.slice(11, 16)}`),
   ["start 09:00", "end 13:00", "start 17:00", "end 21:00"], ["start 09:00", "start 17:00", "end 13:00", "end 21:00"]);
+
+// ---- Remove day (addition 0009g) -----------------------------------------------------------------
+// Offered in the Correct dialog of someone else's day with an effective event, disabled while the day is open; a
+// refusal of the route reads as the problem the dialog names
+const offer = (p) => removeDayState({ mode: "correct", personId: "p1", meId: "me", rows: 3, open: false, ...p });
+expect("Remove day: offered on someone else's ended day", offer({}), "enabled", "hidden");
+expect("Remove day: never on the viewer's own day", offer({ personId: "me" }), "hidden", "enabled");
+expect("Remove day: not in Add day, not on a day without rows",
+  [offer({ mode: "add" }), offer({ rows: 0 })], ["hidden", "hidden"], ["enabled", "enabled"]);
+expect("Remove day: disabled while the day is open", offer({ open: true }), "disabled", "enabled");
+expect("Remove day: the route's refusals as the dialog's problems",
+  [removeProblemOf(403, "not_permitted"), removeProblemOf(404, "not_found"), removeProblemOf(409, "day_removed"),
+   removeProblemOf(409, "day_open"), removeProblemOf(400, "invalid_reason"), removeProblemOf(500, "database_error"),
+   removeProblemOf(409, undefined)],
+  ["notPermitted", "notFound", "removed", "open", "reason", "failed", "failed"],
+  ["notPermitted", "notFound", "open", "removed", "reason", "failed", "failed"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
