@@ -11,9 +11,9 @@
 -- Adjusted with migration 0006 (9 October 2026): a tenant now has two system users (Scheduler
 -- and Ingest), so the scheduler is found by its address, scheduler@system.invalid.
 -- Adjusted 9 November 2026 (records of addition 0009g): A4 lets the scheduler role hold the jobs'
--- permissions added since 0005a (follow_up.refresh 0008s, flash.snapshot 0008zn, data_quality.refresh
--- 0008zr) beside workday.close_forgotten, and still nothing else: a job never gets a person's right.
--- The four are named once, in verify.job_permissions below.
+-- permissions added since 0005a (by 0008s, 0008zn and 0008zr) beside workday.close_forgotten, and still
+-- nothing else: a job never gets a person's right. The jobs' permissions are named once, in
+-- verify.job_permissions below.
 -- =============================================================================================
 
 do $$
