@@ -31,9 +31,9 @@
 - Never change cloudbuild.yaml substitutions or environment variables without saying so explicitly in the PR.
 
 ## Subagents
-- .claude/agents/ holds two project subagents: cma-reviewer (read-only) and cma-docs-keeper. They start without this conversation, so the delegation message carries the brief's goal, the decisions made (verbatim), the migration number and the verifier results.
-- Every brief that changes code ends in this order: build and run the pure verifiers; delegate to cma-reviewer; fix every Critical, re-run the verifiers and review once more at most; a Critical still open after the second round goes in the PR description as open, never fixed silently; delegate to cma-docs-keeper with the reviewer's verdict; open the PR with the reviewer's three-line summary and the docs keeper's file list.
-- A docs-only change skips cma-reviewer. A brief can say "no subagents" for a trivial change.
+- .claude/agents/ holds the project subagents: cma-reviewer, cma-db-reviewer, cma-security-reviewer, cma-performance, cma-migration-impact and cma-advisor (all read-only), and cma-docs-keeper. cma-db-reviewer applies when db/ changes, cma-security-reviewer when web/, ingest/ or db/ change, cma-performance when web/ or db/ change (it proposes gains and flags a slower page; it decides nothing), cma-migration-impact before a migration that re-creates a function or changes a table, view or column (it lists the verifies to rerun), and cma-advisor at the start of a brief or on request (what may be forgotten, adjacent opportunities; it is not part of the review chain). They start without this conversation, so the delegation message carries the brief's goal, the decisions made (verbatim), the migration number and the verifier results.
+- Every brief that changes code ends in this order: build and run the pure verifiers; delegate to cma-reviewer and, in the same message, to the specialised reviewers that apply; fix every Critical, re-run the verifiers and review once more at most; a Critical still open after the second round goes in the PR description as open, never fixed silently; delegate to cma-docs-keeper with the reviewers' verdicts; open the PR with cma-reviewer's three-line summary, the specialised reviewers' one-liners and the performance opportunities taken or left and the docs keeper's file list.
+- A docs-only change skips the reviewers. A brief can say "no subagents" for a trivial change.
 - Subagents never run db/ scripts, never write records/, never reach a database or Google Cloud, and never use connectors.
 
 ## Database (db/)
