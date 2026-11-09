@@ -145,6 +145,13 @@ On a new machine, one step at a time:
    block sources `~/.bashrc`. Where a `~/.bash_profile` exists, add `[ -f ~/.bashrc ] && . ~/.bashrc`
    to it instead. Check in a new window: `type cma_db run_migration` prints `function` twice.
 
+   A provoking old-style verify (`07`, whose expected errors halt a stop-on-error run at the first) is
+   not rerun through `run_migration`'s loop: run it with `psql "$PGCONN" -v ON_ERROR_STOP=0 -f
+   db/07_verify_time_model.sql` and compare its error lines with its last record, apart from ids. Its
+   blocks E, H and K use the dev fixture (07's header): in prod, block E lists every workday with the
+   person's address and hours, so those rows are left out of the record, as in
+   `records/0009g-prod-2026-11-09`.
+
    The data map's schema snapshot (`tools/datamap/schema.sql`) runs with `psql -X -qAt`: `-X` skips
    `~/.psqlrc`, `-q` keeps the `SET` of its `set role cma_owner` out of the output, `-At` prints the one
    line of JSON bare, so `docs/datamap/schema.json` holds that line alone:
