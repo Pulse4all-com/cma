@@ -10,14 +10,19 @@
 -- the kept wrapper calls the kept list), in the same transaction. Every comparison of two reads is made in one statement
 -- (one snapshot), so a concurrent ingest cannot move one side (the lesson of 159's first prod run, #251). Every check
 -- writes one row, ok or FAIL, and the last row is the verdict, because Cloud SQL Studio shows no notices: "0009f verified |
--- 161_verify_installed_base_now: 9 ok, 0 FAIL, 0 skip" (D1 reads skip for a database without a tenant whose asset
--- register is set up: 8 ok, 1 skip). Run as your own IAM login after 160_installed_base_now.sql, dev first, then prod;
+-- 161_verify_installed_base_now: 10 ok, 0 FAIL, 0 skip" (D1 reads skip for a database without a tenant whose asset
+-- register is set up: 9 ok, 1 skip). Run as your own IAM login after 160_installed_base_now.sql, dev first, then prod;
 -- then 41, 69, 73, 75, 101, 105, 113, 117, 123, 133, 137, 139, 149 and 159 again (160's header).
 --   S1  the addition 0009f is recorded after 0009e
 --   S2  the functions: the two new ones and the four remade ones the application's, in the caller's rights, nothing for
 --       the readers; JIT off on cma.flash_rows_of; cma.flash_list_filters_of answers the installed base's two keys and
 --       none for every other overview; the catalog triggers on the seven tables, both kinds, running cma.flash_current_forget
 --       (definer, the owner's, pinned, nobody's to call)
+--   S3  every function 160 remakes keeps exactly the settings (pg_proc.proconfig) it carried before 160:
+--       cma.data_quality_of jit=off (122, 136), cma.flash_rows_of jit=off (122, 136, 138, 148), cma.flash_rows and
+--       cma.flash_file_record none. Provoked: cma.data_quality_of's jit reset inside a subtransaction that is rolled back
+--       (a deliberate difference the comparison must find). The check 160's first version lacked (dev, 9 November 2026:
+--       it left cma.data_quality_of without jit=off, which 137's A5 found)
 --   A1  D6: the devices of the data-quality check field_device_without_subscription_ref, the rule's function and the list
 --       "In the field without a linked subscription" are the same devices, in one statement; 136's definition finds them
 --       too; the list's count is theirs. Provoked: the list against the check less one device (a deliberate difference)
@@ -711,6 +716,42 @@ begin
 end
 $$;
 
+-- S3. Every remade function keeps exactly the settings it carried before 160 (a create or replace drops them; 160's
+-- section 5 sets them again). The list is taken from the scripts that set them: jit=off on cma.data_quality_of (122,
+-- 136) and on cma.flash_rows_of (122, 136, 138, 148); no script set one on cma.flash_rows or cma.flash_file_record.
+-- Provoked: one setting dropped for real, inside a subtransaction that is always rolled back, so nothing stays
+do $$
+declare
+  v_provoke boolean := current_setting('verify.provoke')::boolean;
+  v_bad text := '';
+  v_txt text;
+  r record;
+begin
+  begin
+    if v_provoke then
+      execute 'alter function cma.data_quality_of(uuid) reset jit';
+    end if;
+    for r in select x.fn, x.want from (values
+               ('cma.data_quality_of(uuid)', array['jit=off']),
+               ('cma.flash_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date,date)', array['jit=off']),
+               ('cma.flash_rows(text,jsonb,text,boolean,integer,integer,date,date,date)', '{}'::text[]),
+               ('cma.flash_file_record(text,text,jsonb,text,date,date,date,integer)', '{}'::text[])) x(fn, want) loop
+      select coalesce(array_to_string(array(select c from unnest(p.proconfig) c order by c), ','), '') into v_txt
+      from pg_proc p where p.oid = to_regprocedure(r.fn);
+      if v_txt is distinct from array_to_string(r.want, ',') then
+        v_bad := v_bad || r.fn || ' has {' || coalesce(v_txt, 'no such function') || '}, before 160 {' || array_to_string(r.want, ',') || '}; ';
+      end if;
+    end loop;
+    raise exception using errcode = 'CMAOK', message = 'rollback';
+  exception
+    when sqlstate 'CMAOK' then null;
+    when others then v_bad := v_bad || 'ended early: ' || sqlstate || ' ' || left(sqlerrm, 200);
+  end;
+  insert into verify_0009f values (3, 'S3 every function 160 remakes keeps exactly the settings it carried before: jit=off on cma.data_quality_of and cma.flash_rows_of, none on cma.flash_rows and cma.flash_file_record',
+    case when v_bad = '' then 'ok' else 'FAIL' end, coalesce(nullif(v_bad, ''), '4 functions as before'));
+end
+$$;
+
 -- A. Behaviour on two throwaway tenants, always rolled back
 do $$
 declare
@@ -1010,7 +1051,7 @@ from (select ord, check_name, result, detail from verify_0009f
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from verify_0009f where result not in ('ok', 'skip')) then 'FAIL'
-                  when (select count(*) from verify_0009f where result = 'ok') >= 8 then '0009f verified'
+                  when (select count(*) from verify_0009f where result = 'ok') >= 9 then '0009f verified'
                   else 'FAIL' end,
              format('161_verify_installed_base_now: %s ok, %s FAIL, %s skip', (select count(*) from verify_0009f where result = 'ok'),
                     (select count(*) from verify_0009f where result not in ('ok', 'skip')),

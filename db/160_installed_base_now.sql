@@ -46,10 +46,14 @@
 --   cma.field_devices_without_subscription_ref_of(tenant) new: the one rule: a device the register still holds, in a
 --                                                        status flagged in the field, without a subscription reference
 --   cma.data_quality_of                                  based on 136: that check reads the rule's function; every other
---                                                        check as before
+--                                                        check as before; JIT off again, as 122 and 136 set it
 --   cma.flash_rows_of                                    based on 148: the installed base's two filters; JIT off again
 --   cma.flash_rows, cma.flash_file_record                based on 148 and 122: the list's own filters pass their checks
---                                                        (without_subscription_ref takes "true" alone; CMA04 else)
+--                                                        (without_subscription_ref takes "true" alone; CMA04 else); no
+--                                                        setting, as before
+--   Every remade function keeps exactly the settings it carried before (section 5; 161's S3). The first version of this
+--   script set JIT off again on cma.flash_rows_of alone, so cma.data_quality_of lost its jit = off (dev, 9 November 2026:
+--   137's A5 FAIL); run this script again where that version ran
 --   triggers forget_flash_current_takes (insert, delete) and forget_flash_current_takes_change (an update of a read column
 --     that changes it) on cma.device_status, cma.device_component_kind, cma.maintenance_rule, cma.connection_pipeline,
 --     cma.connection_stage, cma.connection_task_status and cma.connection_task_type (section 5)
@@ -749,8 +753,17 @@ begin
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
   end loop;
-  -- JIT off again for the large read (a create or replace drops a function's settings), as 148 set it
-  execute 'alter function cma.flash_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date,date) set jit = off';
+  -- The settings each remade function carried before 160, set again: a create or replace drops a function's settings
+  -- (CLAUDE.md, Performance). cma.data_quality_of: jit = off (122, 136; about 8.6 s with JIT against 1.8 s without, 122's
+  -- note); cma.flash_rows_of: jit = off (122, 136, 138, 148); cma.flash_rows and cma.flash_file_record: none (no script
+  -- set one). 161's S3 compares each function's settings with this list. Rerunnable: a second run makes the functions
+  -- again and sets the same settings, so a database where the first run of 160 left cma.data_quality_of without it
+  -- (dev, 9 November 2026: 137's A5) has it back after 160 runs again
+  foreach f in array array[
+    'cma.data_quality_of(uuid)', 'cma.flash_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date,date)'
+  ] loop
+    execute format('alter function %s set jit = off', f);
+  end loop;
 end
 $$;
 
