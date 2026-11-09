@@ -11,7 +11,7 @@
  * database validates again and the caller is the approver (V1). Nothing here knows a status key.
  *
  * Remove day (addition 0009g): in the Correct dialog of someone else's day, a destructive secondary action under
- * the rows opens a confirmation with a required reason and POSTs /api/v1/team/days/{userId}/{date}/remove; every
+ * the rows opens a confirmation with a required reason (it starts from the editor's Reason field) and POSTs /api/v1/team/days/{userId}/{date}/remove; every
  * effective event of the day is voided in one correction, and the day leaves Team hours. Disabled on an open day.
  *
  * Keyboard: Tab through the rows, Ctrl+Enter saves, Esc closes (twice with unsaved changes).
@@ -427,7 +427,7 @@ export function DayEditor({
                 disabled={removeState === "disabled" || pending}
                 title={removeState === "disabled" ? t.removeOpen : undefined}
                 onClick={() => {
-                  setRemoveReason("");
+                  setRemoveReason(reason);
                   setRemoveError(null);
                   setRemoving(true);
                 }}

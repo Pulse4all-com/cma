@@ -2,6 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 9 November 2026: Remove day's confirmation takes over the reason already typed in the day editor.
 - 9 November 2026: the desktop-only gate scales the 1280 px layout to fit windows of 1152 to 1279 px and shows the gate below 1152 px, with how to fix it (DesktopOnly.tsx, layout.tsx, globals.css, copy.ts, verify/layout.mjs; docs/decisions.md).
 - 9 November 2026 (verify output from prod): 07's blocks E, H and K run in dev only (`verify.is_dev`, as the dev-only verifies set it) and print one line each in prod; 07's and 10's additions list and 04's audit summary print `<you>` or `<another login>`, never the login; 04's people lines in block D run in dev only; `tools/check-records.mjs` (unit test `tools/check-records.test.mjs`) names file and line of a real person's address or the operator's login in raw outputs, and `run_migration` runs it; docs/RUNBOOK.md Setup step 8 and CLAUDE.md (records): no raw prod output is committed before the check passes.
 - 9 November 2026 (records of addition 0009g): addition 0009g (Remove day) in dev and prod; verify 27's A4 allows the scheduler's job permissions (`db/27_verify_configuration.sql`, the four named once in `verify.job_permissions`); `records/0009g-dev-2026-11-09` and `records/0009g-prod-2026-11-09`; docs/RUNBOOK.md, Setup step 8: a provoking old-style verify (07) is rerun with ON_ERROR_STOP=0 and compared with its last record, its dev-fixture rows left out of a prod record.
