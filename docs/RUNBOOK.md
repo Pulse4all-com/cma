@@ -130,6 +130,7 @@ On a new machine, one step at a time:
      psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "records/$rec/${ver%%_*}-provoked.txt" 2>&1
      grep -cE "FAIL" "records/$rec/${ver%%_*}-provoked.txt" | sed 's/^/provoked FAIL lines: /'; grep -E "PROVOKED" "records/$rec/${ver%%_*}-provoked.txt" | tail -2
      for f in "$@"; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "records/$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "records/$rec/${f%%_*}-rerun.txt") PASS rows"; done
+     node tools/check-records.mjs --login "$(gcloud config get-value account 2>/dev/null)" "records/$rec"
    }
    EOF
    grep -q 'cma_helpers.sh' ~/.bashrc || echo '[ -f ~/.cma_helpers.sh ] && . ~/.cma_helpers.sh' >> ~/.bashrc
@@ -148,9 +149,15 @@ On a new machine, one step at a time:
    A provoking old-style verify (`07`, whose expected errors halt a stop-on-error run at the first) is
    not rerun through `run_migration`'s loop: run it with `psql "$PGCONN" -v ON_ERROR_STOP=0 -f
    db/07_verify_time_model.sql` and compare its error lines with its last record, apart from ids. Its
-   blocks E, H and K use the dev fixture (07's header): in prod, block E lists every workday with the
-   person's address and hours, so those rows are left out of the record, as in
-   `records/0009g-prod-2026-11-09`.
+   blocks E, H and K use the dev fixture and run in dev only (`verify.is_dev`, 07's header): in prod each
+   prints one line saying it was skipped.
+
+   Raw outputs from prod are never committed or pushed before `node tools/check-records.mjs
+   records/<dir>` passes (`records clean: <n> files`; add `--login "$(gcloud config get-value account
+   2>/dev/null)"` to look for your login in every form too). A prod output that fails it is masked first
+   (the operator's login as `<operator>`), or its rows are left out with one line saying why, as
+   `records/0009g-prod-2026-11-09`'s 07 did. `run_migration` runs the check on its own folder last. The
+   repository is public until launch.
 
    The data map's schema snapshot (`tools/datamap/schema.sql`) runs with `psql -X -qAt`: `-X` skips
    `~/.psqlrc`, `-q` keeps the `SET` of its `set role cma_owner` out of the output, `-At` prints the one

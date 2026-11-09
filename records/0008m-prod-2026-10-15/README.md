@@ -2,7 +2,7 @@
 
 Brief B17a (email activity data model, amended with B17b's database half; PR #135), steps 5 and 6
 of `docs/b17a-email-data/MORNING_RUNBOOK.md`, run by Martin on 15 October 2026 in p4a-cma-prod
-(cma-prod-pg), connected as `martin@pulse4all.com`, after dev (`records/0008m-dev-2026-10-15`).
+(cma-prod-pg), connected as `<operator>`, after dev (`records/0008m-dev-2026-10-15`).
 Written down by Claude Code at Martin's request from his report of the run, as `records/0008l-*`
 were (PR #131); the values below are his. Ids, counts, dates and times only: no key, no secret, no
 hash and no personal data. The psql outputs of the run are not in this folder.
@@ -21,7 +21,7 @@ hash and no personal data. The psql outputs of the run are not in this folder.
 | `35_verify_telephony.sql` | rerun | 2 PASS rows |
 | `41_verify_lead_metrics.sql` | rerun | 2 PASS rows |
 
-`cma.schema_migration`: `0008m` applied at 2026-10-15T12:42:01Z by `martin@pulse4all.com`. `69` and
+`cma.schema_migration`: `0008m` applied at 2026-10-15T12:42:01Z by `<operator>`. `69` and
 `53` refuse prod (they write throwaway tenants) and ran in dev only.
 
 ## Read-only check (step 5)

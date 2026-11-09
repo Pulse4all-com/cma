@@ -19,7 +19,7 @@ counts only: no key, no secret, no hash and no personal data.
 | `35-rerun.txt` | `35_verify_telephony.sql` | 2 PASS rows |
 | `41-rerun.txt` | `41_verify_lead_metrics.sql` | 2 PASS rows |
 
-`cma.schema_migration`: `0008i` applied at 14:44:55 UTC by `martin@pulse4all.com`. `61`, `53` and `55`
+`cma.schema_migration`: `0008i` applied at 14:44:55 UTC by `<operator>`. `61`, `53` and `55`
 refuse prod (they write throwaway tenants) and ran in dev only.
 
 ## Read-only check (step 3)

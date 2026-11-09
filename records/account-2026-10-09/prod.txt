@@ -1,4 +1,4 @@
-cma-prod-pg, 9 October 2026, 29_verify_my_profile.sql as martin@pulse4all.com
+cma-prod-pg, 9 October 2026, 29_verify_my_profile.sql as <operator>
 
  tenant                  | people | verdict
  pulse4all-invest        |      0 | PASS

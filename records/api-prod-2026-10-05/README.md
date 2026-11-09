@@ -10,7 +10,7 @@ Increment: the API (Roadmap step 2). Environment: `p4a-cma-prod`. Recorded by Ma
 - Service account roles in `p4a-cma-prod`: Cloud SQL Client, Cloud SQL Instance User
 
 ## People
-- `db/09_seed_people_prod.sql` run with only Martin's id filled in: `pulse4all-subscriptions | martin@pulse4all.com | Martin Bartels | active | manager | 1 google id`. Joshua and Finn skipped (placeholders). The id itself is not recorded here.
+- `db/09_seed_people_prod.sql` run with only Martin's id filled in: `pulse4all-subscriptions | <operator> | Martin Bartels | active | manager | 1 google id`. Joshua and Finn skipped (placeholders). The id itself is not recorded here.
 
 ## Behaviour
 - workspace.pulse4all.app at 17:52 Amsterdam: "Signed in as Martin Bartels · Pulse4all B.V.", no test-data banner, My day "Working since 17:52", version `cd70368`

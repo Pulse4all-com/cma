@@ -1,0 +1,15 @@
+ version | description            | applied_by | applied_at
+---------+------------------------+------------+------------
+ 0001    | Foundation             | <you>      | 2026-11-09
+ 0002    | Time model             | <operator> | 2026-11-09
+(2 rows)
+
+ email                 | business_date | status
+-----------------------+---------------+--------
+ agent.two@example.com | 2026-11-07    | ended
+ manager@mail.example.com | 2026-11-07 | ended
+(2 rows)
+
+ scheduler@system.invalid, ingest@system.invalid, verify.one@example.invalid
+ connected to cma as cma-web@p4a-cma-dev.iam; build by 123-compute@developer.iam.gserviceaccount.com
+ npm: @opentelemetry/api@1.9.1 next@16.4.3
