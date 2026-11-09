@@ -1,0 +1,9 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/27_verify_configuration.sql:141: ERROR:  FAIL A4: 2 scheduler role(s) with other permissions than workday.close_forgotten
+CONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE

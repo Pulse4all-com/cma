@@ -1,0 +1,43 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:/tmp/provoke.sql:184: ERROR:  FAIL S1: addition 0009g not recorded after 0009f
+CONTEXT:  PL/pgSQL function inline_code_block line 9 at RAISE
+psql:/tmp/provoke.sql:285: ERROR:  FAIL A1: the removal answered ended (2026-03-10 08:00:00+00 to 2026-03-10 12:30:00+00), the day counted 14400 s before, summary row left: f
+CONTEXT:  PL/pgSQL function inline_code_block line 38 at RAISE
+psql:/tmp/provoke.sql:379: ERROR:  FAIL A2: the caller's own day gave [CMA06: nobody corrects their own day]
+CONTEXT:  PL/pgSQL function inline_code_block line 28 at RAISE
+psql:/tmp/provoke.sql:432: ERROR:  FAIL A3: the one-day batch gave loaded with {"sessions_in": 1, "days_clipped": 0, "days_dropped": 0, "days_written": 1, "events_written": 2, "sessions_merged": 0, "accounts_skipped": 0, "sessions_unmapped": 0, "days_closed_by_rule": 0, "days_skipped_existing": 0, "sessions_open_dropped": 0, "sessions_outside_window": 0}
+CONTEXT:  PL/pgSQL function inline_code_block line 25 at RAISE
+psql:/tmp/provoke.sql:524: ERROR:  FAIL A4: Clock in before the window start on a removed day gave [CMA04: the workday starts at 07:00]
+CONTEXT:  PL/pgSQL function inline_code_block line 34 at RAISE
+psql:/tmp/provoke.sql:560: ERROR:  FAIL A5: Add day on the removed date gave ended from 2026-03-10 13:00:00+00 to 2026-03-10 14:00:00+00, 3600 worked
+CONTEXT:  PL/pgSQL function inline_code_block line 25 at RAISE
+ check_name |        result        |     detail      
+------------+----------------------+-----------------
+ verdict    | PROVOKED, NOT A PASS | 0 PASS, 21 FAIL
+(1 row)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET

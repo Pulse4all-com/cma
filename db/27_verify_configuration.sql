@@ -10,6 +10,10 @@
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- Adjusted with migration 0006 (9 October 2026): a tenant now has two system users (Scheduler
 -- and Ingest), so the scheduler is found by its address, scheduler@system.invalid.
+-- Adjusted 9 November 2026 (records of addition 0009g): A4 lets the scheduler role hold the jobs'
+-- permissions added since 0005a (by 0008s, 0008zn and 0008zr) beside workday.close_forgotten, and still
+-- nothing else: a job never gets a person's right. The jobs' permissions are named once, in
+-- verify.job_permissions below.
 -- =============================================================================================
 
 do $$
@@ -21,6 +25,8 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);   -- 'true' to make every block fail
+-- The jobs' permissions: the only ones the scheduler role may hold (A4), each a system job's right, none a person's
+select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh', false);
 
 -- A. Structure and privileges (universal)
 do $$
@@ -29,6 +35,7 @@ declare
   v_fn      text;
   v_t       text;
   v_n       int;
+  v_jobs    text[] := string_to_array(current_setting('verify.job_permissions'), ',');
 begin
   if not exists (select 1 from cma.schema_migration where version = '0005a') then
     raise exception 'FAIL A1: migration 0005a not recorded';
@@ -60,7 +67,8 @@ begin
   end loop;
 
   -- A4. every active tenant has exactly one scheduler: a system user, active, with the system
-  --     role scheduler (not assignable) holding only workday.close_forgotten, the login id
+  --     role scheduler (not assignable) holding workday.close_forgotten and otherwise only the jobs'
+  --     permissions (verify.job_permissions, set at the top), the login id
   --     (scheduler, scheduler), no clock (time_is_kept false). Since migration 0006 a tenant has
   --     a second system user (Ingest), so the scheduler is found by its address
   select count(*) into v_n from cma.tenant t
@@ -79,9 +87,13 @@ begin
   end if;
   select count(*) into v_n from cma.app_role r
   where r.key = 'scheduler'
-    and (select string_agg(rp.permission_key, ',') from cma.role_permission rp where rp.tenant_id = r.tenant_id and rp.role_id = r.id) is distinct from 'workday.close_forgotten';
+    and (not exists (select 1 from cma.role_permission rp where rp.tenant_id = r.tenant_id and rp.role_id = r.id
+                     and rp.permission_key = 'workday.close_forgotten')
+         or exists (select 1 from cma.role_permission rp where rp.tenant_id = r.tenant_id and rp.role_id = r.id
+                    and rp.permission_key <> all (v_jobs)));
   if v_n <> 0 then
-    raise exception 'FAIL A4: % scheduler role(s) with other permissions than workday.close_forgotten', v_n;
+    raise exception 'FAIL A4: % scheduler role(s) without workday.close_forgotten or with a permission outside the jobs'' (%)',
+      v_n, array_to_string(v_jobs, ', ');
   end if;
   select count(*) into v_n from cma.app_user u
   where u.kind = 'system' and u.email = 'scheduler@system.invalid'
