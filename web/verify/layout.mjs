@@ -1249,14 +1249,16 @@ async function expectGate(width, height) {
 // The desktop fit (9 November 2026, src/lib/desktop-fit.ts): from FIT_FLOOR_PX to just under DESIGN_WIDTH_PX the app renders
 // its DESIGN_WIDTH_PX layout zoomed to the window, while media queries read the real window. At 1279, 1216 and 1152 px: the
 // app and not the gate, the zoom the window over 1280 (within 0.005), laid out 1280 px wide, the rail and the top bar at their
-// tokens, no horizontal page scroll; on the pages checked at 1280 the main area never sideways; the Follow-up open links in
-// their tables' view (the pinned link column), the roster's week bar on one line, the Invite dialog inside the window and
-// centred at its 1280 width. At 1216: the frame fixed (the wheel and End scroll main, never the page; a fixed element 24 px
-// times the zoom from the window's corner), a header hint next to its mark within 4 px, a resize from 1400 to 1200 to 1100 to
-// 1400 without a reload, and the roster's print view at A4 printing as it does from 1280 (zoom 1, the same PDF). --provoke at
-// 1216 takes the zoom away on Welcome, widens main's content on the first page, unpins the Follow-up link column, narrows the
-// week bar, shifts the Invite dialog, lets the page scroll under the frame, places the hint as before (unscaled), freezes
-// the zoom across the resize and zooms the print
+// tokens, no horizontal page scroll; on the pages checked at 1280 the main area never sideways and every grid in main with
+// the columns it has at 1280 (xl: lowered to the floor); the Follow-up open links in their tables' view (the pinned link
+// column), the roster's week bar on one line, the Invite dialog inside the window and centred at its 1280 width. At 1216:
+// the frame fixed (the wheel and End scroll main, never the page; a fixed element 24 px times the zoom from the window's
+// corner), a header hint next to its mark within 4 px, without JavaScript the unscaled layout (and the gate at 1151), a
+// resize from 1400 to 1200 to 1100 to 1400 without a reload, and the roster's print view at A4 printing as it does from
+// 1280 (zoom 1, the same PDF). --provoke at 1216 takes the zoom away on Welcome, widens main's content on the first page,
+// gives Flash's cards two columns, unpins the Follow-up link column, narrows the week bar, shifts the Invite dialog, lets
+// the page scroll under the frame, places the hint as before (unscaled), expects the zoom without JavaScript, freezes the
+// zoom across the resize and zooms the print
 const FIT_WIDTHS = [DESIGN_WIDTH_PX - 1, (DESIGN_WIDTH_PX + FIT_FLOOR_PX) / 2, FIT_FLOOR_PX];
 const FIT_MID = FIT_WIDTHS[1];
 const FIT_PAGES = {
@@ -1298,7 +1300,25 @@ function fitOf(p) {
 /** Two frames, so a resize has been handled and laid out */
 const frames = (p) => p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
 
+/** The column count of every grid in main, in document order: what a breakpoint (xl: lowered to the floor) decides */
+const gridsOf = (p) => p.evaluate(() => [...document.querySelectorAll("main *")]
+  .filter((el) => /grid/.test(getComputedStyle(el).display))
+  .map((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length));
+
 async function expectFit() {
+  // Every page's grids at the design width, to compare the band's with: a breakpoint up to 1280 must hold from the floor
+  const reference = {};
+  for (const [subject, paths] of Object.entries(FIT_PAGES)) {
+    const ctx = await b.newContext({ viewport: { width: DESIGN_WIDTH_PX, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    for (const path of paths) {
+      await p.goto(BASE + path);
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      reference[`${subject} ${path}`] = await gridsOf(p);
+    }
+    await ctx.close();
+  }
   for (const width of FIT_WIDTHS) {
     const tag = `${width}x800`;
     const want = width / DESIGN_WIDTH_PX;
@@ -1335,6 +1355,15 @@ async function expectFit() {
         }
         fitted(`${subject} ${path} at ${tag}`, await fitOf(p));
         const where = `${subject} ${path.split("?")[0]} at ${tag}`;
+        // The grids as at 1280 (Flash's cards four across, its totals five, the two-column report sections); --provoke
+        // gives Flash's cards two columns
+        if (provoke && width === FIT_MID && path === "/reports/flash") {
+          await p.evaluate(() => { const g = document.querySelector('[data-testid="flash-cards"]'); if (g) g.style.gridTemplateColumns = "1fr 1fr"; });
+        }
+        const grids = await gridsOf(p);
+        const ref = reference[`${subject} ${path}`];
+        if (ref.length === 0 && path === "/reports/flash") problems.push(`${where}: no grid in main to compare with 1280`);
+        if (JSON.stringify(grids) !== JSON.stringify(ref)) problems.push(`${where}: the grids in main have ${JSON.stringify(grids)} columns, at ${DESIGN_WIDTH_PX} ${JSON.stringify(ref)}`);
         // The pinned link column (Follow-up's tables): every open link in its table's view, the table scrolled or not
         if (path === "/reports/follow-up") {
           const links = await p.evaluate((unpin) => {
@@ -1471,6 +1500,26 @@ async function expectFit() {
     }
     console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: a header hint next to its mark`);
     await ctx.close();
+  }
+  // Without JavaScript nothing scales: in the band the unscaled layout (zoom 1, the frame with its rail, the page never
+  // sideways), below the floor the gate; never a broken page. --provoke expects the zoom without JavaScript
+  {
+    const before = problems.length;
+    for (const width of [FIT_MID, FIT_FLOOR_PX - 1]) {
+      const gate = width < FIT_FLOOR_PX;
+      const ctx = await b.newContext({ javaScriptEnabled: false, viewport: { width, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "/");
+      const m = await fitOf(p);
+      const want = provoke && !gate ? width / DESIGN_WIDTH_PX : 1;
+      if (m.gate !== gate || m.app === gate) problems.push(`${width}x800 without JavaScript: ${m.gate ? "the gate" : "the app"} shows, expected ${gate ? "the gate" : "the app"}`);
+      if (Math.abs(m.zoom - want) > 0.005) problems.push(`${width}x800 without JavaScript: the zoom is ${m.zoom}, expected ${want}`);
+      if (!gate && Math.round(m.rail) !== 256) problems.push(`${width}x800 without JavaScript: the rail is ${m.rail.toFixed(1)}px, token says 256`);
+      if (m.pageX > 0) problems.push(`${width}x800 without JavaScript: the page scrolls horizontally`);
+      await p.screenshot({ path: `${outDir}/${width}x800-no-javascript.png` });
+      await ctx.close();
+    }
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit without JavaScript: unscaled at ${FIT_MID}, the gate at ${FIT_FLOOR_PX - 1}`);
   }
   // A resize without a reload: 1400 (no zoom), 1200 (zoomed), 1100 (the gate), 1400 again. --provoke freezes the zoom: a copy
   // of the script's style element takes its place, so the script's updates no longer reach the page
@@ -2754,5 +2803,5 @@ await expectGate(FIT_FLOOR_PX - 1, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the grids as at ${DESIGN_WIDTH_PX}, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, without JavaScript, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

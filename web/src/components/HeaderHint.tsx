@@ -47,7 +47,7 @@ export function HeaderHint({ label, text, more }: {
     const left = Math.max(MARGIN, Math.min(m.left - 12, window.innerWidth - width - MARGIN));
     // Under the desktop fit's zoom (src/lib/desktop-fit.ts) the rectangles and the window are in window pixels, while the
     // panel's own top and left are in its zoomed CSS pixels: placed in window pixels, written divided by the zoom
-    const zoom = p.currentCSSZoom || 1;
+    const zoom = ("currentCSSZoom" in p ? p.currentCSSZoom : parseFloat(getComputedStyle(document.documentElement).zoom)) || 1;
     p.style.top = `${top / zoom}px`;
     p.style.left = `${left / zoom}px`;
     p.style.visibility = "visible";
