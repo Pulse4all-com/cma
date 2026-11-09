@@ -147,7 +147,7 @@ export function InviteDialog({ mode, context, copy, onClose, onDone }: {
       ref={ref}
       data-testid="invite-dialog"
       aria-labelledby={titleId}
-      className="m-auto w-[44rem] max-w-[calc(100vw-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40"
+      className="m-auto w-[44rem] max-w-[calc(100%-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40"
       onCancel={(e) => {
         e.preventDefault();
         close();

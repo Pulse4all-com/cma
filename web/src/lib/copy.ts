@@ -3846,7 +3846,8 @@ const en = {
   },
   desktopOnly: {
     title: "The Workspace needs a wider screen",
-    body: "Open it on a desktop or laptop with a window of at least 1280 pixels wide.",
+    // {px}: FIT_FLOOR_PX (src/lib/desktop-fit.ts), filled in by DesktopOnly
+    body: "Maximise the window, close the browser's side panel, or zoom out with Ctrl and minus. The Workspace needs a window of at least {px} pixels wide.",
   },
 } satisfies Record<string, Record<string, string>>;
 
@@ -7666,7 +7667,7 @@ const nl: Copy = {
   },
   desktopOnly: {
     title: "De Workspace heeft een breder scherm nodig",
-    body: "Open hem op een desktop of laptop met een venster van minstens 1280 pixels breed.",
+    body: "Maak het venster zo groot mogelijk, sluit het zijpaneel van de browser of zoom uit met Ctrl en min. De Workspace heeft een venster van minstens {px} pixels breed nodig.",
   },
 };
 

@@ -4,6 +4,7 @@ import "./globals.css";
 import { config } from "@/lib/config";
 import { t } from "@/lib/copy";
 import { DesktopOnly } from "@/components/DesktopOnly";
+import { FIT_SCRIPT } from "@/lib/desktop-fit";
 import { ErrorCopyProvider } from "@/components/ErrorCopy";
 
 // Montserrat is the only typeface (style guide 3.1). The variable font ships with the app, so no request leaves the
@@ -28,6 +29,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={config.defaultLocale} className={`${montserrat.variable} h-full antialiased`}>
+      <head>
+        {/* The desktop fit (src/lib/desktop-fit.ts): blocking, so a window between the fit floor and the design width paints
+            its first frame already scaled to the design width's layout, without waiting for hydration; it follows every resize */}
+        <script dangerouslySetInnerHTML={{ __html: FIT_SCRIPT }} />
+      </head>
       <body className="h-full font-sans text-body text-p4a-body">
         {/* The manifest opens an installed Workspace on Welcome (addition 0008z); with credentials, so IAP lets it through */}
         <link rel="manifest" href="/app.webmanifest" crossOrigin="use-credentials" />

@@ -13,7 +13,7 @@
     "verify:boundaries": "node verify/boundaries.mjs",
     "verify:theme": "node verify/theme.mjs",
     "verify:round-trips": "node verify/round-trips.mjs",
-    "verify:layout": "node verify/layout.mjs",
+    "verify:layout": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/layout.mjs",
     "verify:hints": "node verify/hints.mjs",
     "verify:iap": "node verify/iap-token.mjs",
     "verify:api": "node verify/api.mjs",

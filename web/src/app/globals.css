@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* The desktop fit (src/lib/desktop-fit.ts, 9 November 2026): the gate's breakpoint desk, xl lowered to the fit floor,
+   the zoom band and zoom 1 on paper, built from the two constants there */
+@plugin "../lib/desktop-fit-css.ts";
 
 /*
   Pulse4all design tokens for the CMA (Pulse4all-Style.md sections 2, 3, 7).
@@ -64,7 +67,7 @@
   --spacing-rail: 16rem; /* 256px left navigation: room for "Configuration" with its icon, keycap and chevron, and for "Absences and coverage" on one line */
   --spacing-rail-collapsed: 4rem; /* 64px: the rail folded to icons (16 October 2026), a 40px pill with 12px at each side */
   --spacing-topbar: 3.5rem; /* 56px */
-  --breakpoint-desk: 80rem; /* 1280px, the desktop-only gate */
+  /* desk, the desktop-only gate's breakpoint, comes from src/lib/desktop-fit-css.ts (FIT_FLOOR_PX) */
 }
 
 :root {
