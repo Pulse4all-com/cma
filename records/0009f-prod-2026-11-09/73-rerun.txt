@@ -1,0 +1,14 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ false
+(1 row)
+
+psql:db/73_verify_follow_up.sql:54: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 73 runs in dev only
+CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE

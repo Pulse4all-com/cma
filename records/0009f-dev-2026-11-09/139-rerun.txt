@@ -1,0 +1,64 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 1500
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/139_verify_flash_totals.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                               check_name                                                                               |     result      |                                                                                detail                                                                                 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zu recorded, after 0008zt                                                                                                                              | ok              | 
+ A2 the subscriptions' headline holding_subscriptions and its split set [market, status]; the customers' as they were; versions 0008zu; the split dim                   | ok              | 
+ A3 privileges: the application's only, the caller's rights; the take's writers the owner's; JIT off; 0008zt's base set keeps its columns                               | ok              | 
+ A4 the split's helper: the setting's order, zeros, another key after, one market or every market, other sets never counted                                             | ok              | failed 1, active 5, never-subscribed 0, zz-other 1 | active 3, failed 1 | active 0, failed 0 | active 0
+ B1 the customers: active on the device-holding statuses (a failed one only, paused and failed), paused with none holding; the segment rows add up to active_customers  | ok              | :9,5,2 GB:7,4,1 NL:2,1,1 GB/B2B:2,2 GB/B2C:1,2 GB/unknown:1,3 NL/B2B:1,1 NL/B2C:0,1 | 
+ B2 the lists: the active customers on the holding statuses, the paused ones, a customer's holding subscriptions; a split cell's list                                   | ok              | cu-1,cu-2,cu-3,cu-6,ncu-1 | cu-4,ncu-2 | cu-2:0/0/1 cu-3:0/1/1 cu-6:1/0/2 | s-2,s-4,s-8 2 0
+ B3 the subscriptions: Total subscriptions the sum of its split per holding status, per market too, zeros included; amount_per_cycle over the paying statuses only      | ok              | :10,2,3,6,{"GBP": 40.00} GB:8,2,2,5,{"GBP": 40.00} NL:2,0,1,1,{} GB/active:2 GB/failed:3 NL/active:0 NL/failed:1 | 
+ B4 tenant one against 0008zt's computation: the subscriptions' rows other than the split row for row; the customers' active and paused before and after                | ok              | true 2/3 5/2
+ B5 a tenant whose holding statuses are active alone: the customers' and the subscriptions' figures as before 0008zu, row for row; its split adding up                  | ok              | true true GB/active:2 | 
+ B6 the headline, live: Total subscriptions and its split per holding status in the setting's order, per market with a zero; its definition; no split for the customers | ok              | 6 active 2, failed 4 0008zu | 5 active 2, failed 3 | 1 active 0, failed 1 | 5 none 0008zu
+ B7 the take: stored as computed as of its date, under 0008zu; the month end's customer list on the holding statuses; no jump across the change of definition           | ok              | true 2026-10-31 | customers:true:0008zu subscriptions:true:0008zu | cu-1,cu-2,cu-3,cu-6,ncu-1 s-1,s-7 | -
+ B8 the landing: as of a date the stored split and the definitions of the figure and of the one it is compared with; now the definitions alike                          | ok              | customers 5 none 0008zu 3 2026-10-30 0008zt | subscriptions 6 active 2, failed 4 0008zu 5 2026-10-30 0008zt | live 0008zu 0008zu 6 none | GB 5 active 2, failed 3 100
+ B9 the watch within one definition: a jump of active_customers between two dates under 0008zu is found                                                                 | ok              | true 2026-11-01 | customers/active_customers/GB:4:100
+ B10 tenant isolation: each tenant's Total subscriptions and active customers its own                                                                                   | ok              | 6 | 1 active 0, failed 1 | 1 0
+ D1 every tenant's subscriptions: Total subscriptions the sum of its split, per market too; every split status a holding one                                            | skip            | no tenant with a subscriptions connection set up
+ D2 every tenant's customers: active_customers the sum over segment, per market too; active and paused at most the customers held                                       | skip            | no tenant with a store set up
+ C1 the customers' and subscriptions' overviews, the headline and the landing live at volume, under verify.max_overview_ms                                              | skip            | not run: volume off
+ verdict                                                                                                                                                                | 0008zu verified | 139_verify_flash_totals: 14 ok, 0 FAIL, 3 skip
+(18 rows)
+
+RESET

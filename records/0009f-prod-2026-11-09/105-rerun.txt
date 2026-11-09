@@ -1,0 +1,19 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ is_dev 
+--------
+ false
+(1 row)
+
+psql:db/105_verify_reviews.sql:55: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 105 runs in dev only
+CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE
