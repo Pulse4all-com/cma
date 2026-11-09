@@ -218,20 +218,24 @@ begin;
 set local role cma_app;
 select set_config('app.tenant_id', (select id::text from cma.tenant where slug = 'pulse4all-subscriptions'), true);
 select set_config('app.user_id', (select id::text from cma.app_user where email = 'manager@example.com'), true);
--- Agent Two's forgotten day from two days ago: the manager ends it at 18:00 Madrid
+-- Agent Two's forgotten day from two days ago: the manager ends it at 18:00 Madrid. Only open days before today in
+-- the workday's own zone: a day Agent Two clocked in on today (verify:api does) is no forgotten day, and its 18:00
+-- may still lie ahead ("a corrected time must lie in the past")
 select (cma.correct_time_event(
           w.id, 'end', ((w.business_date) + time '18:00') at time zone w.timezone,
           null, null, 'Forgot to end the workday', cma.current_user_id())).kind
 from cma.workday w
 join cma.app_user u on u.tenant_id = w.tenant_id and u.id = w.user_id
-where u.email = 'agent.two@example.com' and w.status = 'open' and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+where u.email = 'agent.two@example.com' and w.status = 'open' and w.business_date < cma.business_date(now(), w.timezone)
+  and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 union all
 select 'block H skipped: not the dev database (no dev seed)' where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean;
 -- expect: end (in prod: the one line "block H skipped")
 select s.business_date, s.status, round(s.working_seconds / 3600.0, 2) as working_h, s.needs_correction, s.has_correction
 from cma.workday_summary s
 join cma.app_user u on u.tenant_id = s.tenant_id and u.id = s.user_id
-where u.email = 'agent.two@example.com' and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+where u.email = 'agent.two@example.com' and s.business_date < cma.business_date(now(), s.timezone)
+  and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;                                                                        -- expect: day-2 ended 8.00 false true
 -- the audit trail names the manager as actor and the correction row carries the approver
 select e.kind, e.source, e.reason is not null as has_reason, e.approved_by = cma.current_user_id() as approved_by_manager,
