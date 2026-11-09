@@ -5,9 +5,9 @@
 -- Universal: no customer, tenant or vendor specifics: who may remove a day is the permission workday.team, the one
 -- cma.correct_workday requires, held by whichever roles a tenant gives it. Runs unchanged in every database, after
 -- 160_installed_base_now.sql (0009f). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own
--- IAM login: dev first, then 163_verify_remove_day.sql there, then the verifies that read cma.open_workday again
--- (unchanged, still PASS): 07, 14, 16, 18, 20, 27, 43, 45, 47, 111 and 127; then the merge; then prod in the same order
--- right after the merge. main's web runs unchanged on it (no function it calls changes its name, arguments or answers;
+-- IAM login: dev first, then 163_verify_remove_day.sql there (dev only, as briefed), then the verifies that read
+-- cma.open_workday again (unchanged, still PASS): 07, 14, 16, 18, 20, 27, 43, 45, 47, 111 and 127; then the merge; then
+-- prod right after the merge: 162, then the same eleven verifies, without 163. main's web runs unchanged on it (no function it calls changes its name, arguments or answers;
 -- cma.open_workday answers differently only on a removed day, which main cannot make). This branch's web on a database
 -- without it: Remove day answers "not removed" (the function does not exist) and nothing else changes. No table, view,
 -- column or setting changes: the data map's schema does not change.

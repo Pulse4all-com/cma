@@ -1703,7 +1703,10 @@ export const postgresData: CmaData = {
       if (!w) throw new CmaDbError("CMA02", "no workday today");
       // Same as the mock: ending an ended day returns it, so a repeated log out is harmless
       if (w.status !== "ended") await q.query(`select 1 from cma.end_workday($1)`, [w.id]);
-      return toWorkday(one(await readDay(q, TODAY, []), "end_workday"));
+      // A day a supervisor removed (0009g) keeps its row but has no summary row: no workday today, as before Clock in
+      const row = (await readDay(q, TODAY, []))[0];
+      if (!row) throw new CmaDbError("CMA02", "no workday today");
+      return toWorkday(row);
     });
   },
 

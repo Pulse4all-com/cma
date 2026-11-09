@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in) with Remove day of 9 November 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -1698,7 +1698,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Time rule | The person's zone; the business date it started on (a shift belongs to the business day it started on) |
 | Scope | One person, one business date, one tenant |
 | Equivalent in the source system | None |
-| Not to use | "Shift" for the clocked time (a shift is the rostered plan, Rostering); "day" alone for this meaning (Day is defined under Call terms) |
+| Not to use | "Shift" for the clocked time (a shift is the rostered plan, Rostering); "day" alone for this meaning (Day is defined under Call terms), except in the day editor's action labels Add day, Correct a day and Remove day (Martin's wording, addition 0009g), where the day is a Workday |
 | Status | Decided |
 | Decided | 3 November 2026 (Martin, D1 to D4; the night defaults N1 to N7 and the build choices B1 to B7 confirmed 4 Nov 2026); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
 | Used by | `cma.workday`, `cma.open_workday`, `cma.refresh_workday`; Welcome, My day, My hours, Team hours, Live board; API `/api/v1/me/day`, `/api/v1/me/hours`, `/api/v1/team/hours` |
@@ -1741,6 +1741,25 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Decided | 3 November 2026 (Martin, D1 to D4); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
 | Used by | `cma.is_clocked_in`; Live board; the `only clocked in` filter |
 | As built today | Matches the definition; the gap between sessions reads as clocked out |
+
+### Remove day
+
+| Field | Value |
+|---|---|
+| Term | Remove day (nl: Dag verwijderen; copy "Remove day", "Why is this day removed?") |
+| Key | API route `POST /api/v1/team/days/{userId}/{date}/remove`; SQL `cma.remove_workday`; permission `workday.team`; API errors `day_removed`, `day_open` |
+| Definition | Voiding every event of a Workday by correction, with a reason and the caller as approver. The day then counts 0 and is not listed. It is not a deletion: the events and the voids stay |
+| Source | The CMA: one void per effective event of the day, all at one instant, source `correction` (`cma.time_event`) |
+| Counts / does not count | A removed day counts 0 worked and 0 paid and is not listed in Team hours, My hours, My day, the hours export or the Live board; no stretch, so time per status reads nothing. Not allowed on the caller's own day, on an open day (end it first) or on a day already removed. Add day on the date brings it back with the new times only, and Clock in starts it again |
+| Unit and display | A destructive secondary button in the Correct dialog of Team hours, with a confirmation and a required reason (3 to 500 characters) |
+| Time rule | The person's zone; the workday's business date |
+| Scope | One person, one business date, one tenant; for people holding workday.team |
+| Equivalent in the source system | None |
+| Not to use | "Delete" for it (nothing is deleted); "day" alone beyond the day editor's labels (Workday) |
+| Status | Decided |
+| Decided | 9 November 2026 (Martin); docs/decisions.md, 9 Nov 2026, "An admin can remove a whole day (Remove day)" and "Definitions: "Remove day" (nl Dag verwijderen) is a new term" (this PR) |
+| Used by | Team hours (the Correct dialog); API `POST /api/v1/team/days/{userId}/{date}/remove`; `cma.remove_workday` |
+| As built today | `162` (`cma.remove_workday`, invoker rights; `cma.open_workday` remade so Clock in starts a removed day again, also a withdrawn import's day) and `163` (21 checks), and the web (Correct dialog, copy in English and Dutch). The two 409 texts are the database's own, kept in `REMOVE_REFUSAL` (`web/src/lib/corrections.ts`) |
 
 ## Retired words
 

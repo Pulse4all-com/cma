@@ -4,8 +4,8 @@
 -- Universal: no seed is assumed. The people are synthetic (example.invalid), the statuses are picked by flag, and every
 -- instant lies on Tuesday 10 March 2026 in Europe/Amsterdam (the workday window 07:00 to 22:00, set on the throwaway
 -- tenant), so the verdict never depends on the time it runs. Block S checks the addition and the grants; blocks A1 to A5
--- each work on throwaway tenants inside a subtransaction that is always rolled back, so nothing stays. Meant for dev (the
--- brief: dev only); it writes nothing that stays, so a run in prod is harmless. Cloud SQL Studio shows no notices: a
+-- each work on throwaway tenants inside a subtransaction that is always rolled back, so nothing stays. Run in dev only
+-- (the brief; 162's header gives prod's steps without it); it writes nothing that stays. Cloud SQL Studio shows no notices: a
 -- check that fails raises "FAIL …" and stops its block; every check that passed writes one row, and the last row is the
 -- verdict: "PASS | 21 PASS, 0 FAIL" (provoked: "PROVOKED, NOT A PASS | 0 PASS, 21 FAIL"). A block that stopped counts
 -- its checks as FAIL; the verdict is reached only when the client goes on after an error (psql -v ON_ERROR_STOP=0, as the
@@ -20,7 +20,7 @@
 --       back, the day leaves the summary (it counted 4 h before); every effective event voided once, nothing deleted;
 --       the trail rows carry the reason (trimmed), the approver, the person, one instant; the day's figures are 0 (0
 --       worked, 0 paid, 0 sessions, no stretch); not in Team hours, the hours export, time per status or the
---       status-changes export, while the first admin's own day still is (the control); the day editor's history keeps
+--       status-changes export, while the first admin's own day is in each (the controls); the day editor's history keeps
 --       every event, none effective
 --   A2  refused, each writing nothing: the caller's own day (CMA06, correct_workday's message); no reason, a blank or a
 --       two-character reason, 501 characters (CMA04); an agent and an analyst without workday.team (CMA06); an open day
@@ -260,11 +260,14 @@ begin
        or not exists (select 1 from cma.team_hours(date '2026-03-10', date '2026-03-10') t where t.user_id = (x ->> 'admin')::uuid)
        or exists (select 1 from cma.export_hours(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid))
        or exists (select 1 from cma.team_status_time(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid))
-       or exists (select 1 from cma.export_status_changes(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid)) then
-      raise exception 'FAIL A1: the removed day is still read by Team hours, an export or time per status (or the control is missing)';
+       or exists (select 1 from cma.export_status_changes(date '2026-03-10', date '2026-03-10', (x ->> 'p1')::uuid))
+       or not exists (select 1 from cma.export_hours(date '2026-03-10', date '2026-03-10', (x ->> 'admin')::uuid))
+       or not exists (select 1 from cma.team_status_time(date '2026-03-10', date '2026-03-10', (x ->> 'admin')::uuid))
+       or not exists (select 1 from cma.export_status_changes(date '2026-03-10', date '2026-03-10', (x ->> 'admin')::uuid)) then
+      raise exception 'FAIL A1: the removed day is still read by Team hours, an export or time per status (or a control is missing)';
     end if;
     v_rows := v_rows || array['14', 'A1 not in Team hours, the exports or time per status', 'PASS',
-      'no row for the removed day; the first admin''s own day still listed'];
+      'no row for the removed day in any of the four; the first admin''s own day in each (the controls)'];
 
     select count(*) as n, count(*) filter (where t.is_effective) as live,
            count(*) filter (where t.kind = 'void' and t.reason = 'verify 0009g a test clock-in' and t.approved_by_name = 'admin2') as voids
