@@ -14,7 +14,10 @@
  * currency and sorting within currency; the grouping sets; the average rating; a measure that does not apply (left out
  * by db/122 while its setting is empty: not applicable on screen without a link, an empty cell in a file, its records
  * refused); a flow card's change line, which compares a complete period only (its end passed in the tenant's zone and
- * every set-up source feeding it read after that end; else "so far", en and nl). Invented values only.
+ * every set-up source feeding it read after that end; else "so far", en and nl). Since addition 0009f Assets → Installed
+ * base's own view (src/lib/installed-base.ts): the list's own filters against db/160, the document narrowed by several page
+ * filters, the donut's slices and arcs, the per-market stacks, a breakdown's chart, the page's state, the mock's serial
+ * search and unlinked list against its data-quality check, and the page's shape. Invented values only.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -750,9 +753,9 @@ expect("the mock answers as the database: the Orders headline split per kind, ad
   [["first", "renewal", "repeat"], true], [["first", "repeat", "renewal"], false]);
 const ibPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "installed-base", "page.tsx"), "utf8");
 const flashOnlySrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
-expect("both pages render an overview through components/FlashOverview; Installed base its own overview on its own path, without Flash's strip and o",
+expect("Flash renders an overview through components/FlashOverview; Assets → Installed base its own now view (0009f) on its own path, without Flash's strip, o or As of",
   [/<FlashOverview me=\{me\} copy=\{copy\} st=\{st\} def=\{def\} path="\/reports\/flash" active="flash"/.test(flashOnlySrc),
-    /flashState\(me, await searchParams, "installed_base"\)/.test(ibPageSrc) && /path="\/reports\/installed-base" active="installed-base"/.test(ibPageSrc),
+    /installedBaseState\(await searchParams, parseFilters\)/.test(ibPageSrc) && /active="installed-base" wide/.test(ibPageSrc) && !/<FlashOverview|FlashAsOf|flashState/.test(ibPageSrc),
     /holdsAny\(me, REPORT_PERMISSIONS\)/.test(ibPageSrc), /\{own \? <FlashStrip /.test(overviewSrc), /path === "\/reports\/flash" && def \? \{ o: def\.key \} : \{\}/.test(overviewSrc),
     flashHref("/reports/installed-base", { market: "GB", f_status: "field" }), flashHref("/reports/flash", {})],
   [true, true, true, true, true, "/reports/installed-base?market=GB&f_status=field", "/reports/flash"],
@@ -852,8 +855,11 @@ expect("the page in two parts: the document first (no list in its read), the rec
   [/withRows: false, rowsAsOf: null/.test(overviewSrc), /<Suspense fallback=\{<RecordsPlaceholder label=\{t\.loading\} \/>\}>/.test(overviewSrc),
     /return streamed\(\(\) => data\(\)\.getFlashRows\(me, \{/.test(overviewSrc) && /const read = await rowsRead;[\s\S]{0,600}const dbTrace = requestDbTrace\(\);/.test(overviewSrc),
     /const pageFilter = documentFilterOf\(def, filters\);/.test(overviewSrc) && /filterDocument\(def, doc\.totals, doc\.rows, pageFilter\.dim, pageFilter\.value\)/.test(overviewSrc),
-    /filterDocument\(def, doc\.totals, doc\.rows, pageFilter\.dim, pageFilter\.value\)/.test(fileRouteSrc) && /part === "rows" \? q\.filters : breakdownFilters/.test(fileRouteSrc),
-    /filterDocument\(def, doc\.totals, doc\.rows, dim, value\)/.test(docRouteSrc), /row\.firstTx !== undefined/.test(tripsSrc)],
+    // since 0009f the file and the API narrow by every dim of FLASH_NARROW_DIMS the address names (the model, the status)
+    /narrowDocument\(def, doc\.totals, doc\.rows, breakdownFilters\)/.test(fileRouteSrc) && /part === "rows" \? q\.filters : breakdownFilters/.test(fileRouteSrc)
+      && /pageFiltersOf\(def, q\.filters, FLASH_NARROW_DIMS\[def\.key\] \?\? \[\]\)/.test(fileRouteSrc),
+    /narrowDocument\(def, doc\.totals, doc\.rows, filter\)/.test(docRouteSrc) && /for \(const dim of FLASH_NARROW_DIMS\[def\.key\] \?\? \[\]\)/.test(docRouteSrc),
+    /row\.firstTx !== undefined/.test(tripsSrc)],
   [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
 
 
@@ -900,8 +906,133 @@ expect("the database's list (148): the installed base's devices filtered and pag
     /update pg_temp\.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'\s*where page = 'installed base as of month end';/.test(time131)
       && /update pg_temp\.reads_0131 set in_set = false\s*where page in \('installed base', 'installed base as of month end'\) and cls = 'list';/.test(time131)
       && /v_skipped := not v_provoke and v_err is not null and v_err = rd\.skip_state;/.test(time131)],
-  [["148_installed_base_list.sql", "148_installed_base_list.sql", "148_installed_base_list.sql"], true, true, true, true, true],
+  [["160_installed_base_now.sql", "160_installed_base_now.sql", "148_installed_base_list.sql"], true, true, true, true, true],
   [[], false, false, false, false, false]);
+
+// ---- Since addition 0009f: Assets → Installed base as the "now" view ----------------------------------------------------
+const {
+  FLASH_LIST_FILTERS, FLASH_NARROW_DIMS, listFilterValue, narrowDocument, pageFiltersOf,
+} = await import("../src/lib/flash.ts");
+const ibLib = await import("../src/lib/installed-base.ts");
+// the list's own filters: the page's catalog is the database's (cma.flash_list_filters_of in its latest definition)
+const listFiltersDef = defOf("flash_list_filters_of");
+const listFiltersSql = Object.fromEntries([...listFiltersDef.text.slice(0, listFiltersDef.text.indexOf("$$;")).matchAll(/when p_overview = '([a-z_]+)' then array\[([^\]]*)\]/g)]
+  .map((m) => [m[1], [...m[2].matchAll(/'([a-z_]+)'/g)].map((x) => x[1])]));
+expect("the list's own filters are the database's (160): the installed base's serial and without_subscription_ref, none for another overview",
+  [listFiltersDef.file, listFiltersSql, Object.fromEntries(Object.entries(FLASH_LIST_FILTERS).map(([k, v]) => [k, [...v]])),
+    FLASH_OVERVIEWS.filter((o) => o.key !== "installed_base").every((o) => FLASH_LIST_FILTERS[o.key] === undefined)],
+  ["160_installed_base_now.sql", { installed_base: ["serial", "without_subscription_ref"] }, { installed_base: ["serial", "without_subscription_ref"] }, true],
+  ["", {}, {}, false]);
+expect("a list filter's value as the database takes it: a serial trimmed, 1 to 100 characters; without_subscription_ref true alone; another key as given",
+  [listFilterValue("serial", "  SN-1 "), listFilterValue("serial", "   "), listFilterValue("serial", "x".repeat(101)), listFilterValue("without_subscription_ref", "true"),
+    listFilterValue("without_subscription_ref", "yes"), listFilterValue("without_subscription_ref", "TRUE"), listFilterValue("serial", 5)],
+  ["SN-1", null, null, "true", null, null, null], ["  SN-1 ", "", "x", "yes", "yes", "TRUE", "5"]);
+const ibDef0009f = overviewOf("installed_base");
+const ibRead = (q) => (k) => q[k];
+expect("the address's list filters: f_serial and f_without_subscription_ref on the installed base, dropped elsewhere and when not as the database takes them",
+  [parseFilters(ibDef0009f, ibRead({ f_serial: " SN-9 ", f_without_subscription_ref: "true", f_status: "field" })),
+    parseFilters(ibDef0009f, ibRead({ f_serial: "  ", f_without_subscription_ref: "yes" })), parseFilters(overviewOf("customers"), ibRead({ f_serial: "SN-9" }))],
+  [{ status: "field", serial: "SN-9", without_subscription_ref: "true" }, {}, {}], [{}, { serial: "" }, { serial: "SN-9" }]);
+// the document narrowed by two page filters at once (the model and the operational status) from the set that holds both
+const rowsZf = [
+  mRow({ market: "GB" }, 10, 7, 3, 2, 1, 5), mRow({ market: "NL" }, 4, 4, 0, 1, 0, 3),
+  mRow({ market: "GB", status: "field", model: "ma", warehouse: "none", link: "linked" }, 5, 5, 0, 2, 1, 4),
+  mRow({ market: "GB", status: "field", model: "mb", warehouse: "none", link: "linked" }, 2, 2, 0, 0, 0, 1),
+  mRow({ market: "GB", status: "stock", model: "ma", warehouse: "w1", link: "none" }, 3, 0, 3, 0, 0, 0),
+  mRow({ market: "NL", status: "field", model: "ma", warehouse: "none", link: "linked" }, 4, 4, 0, 1, 0, 3),
+  mRow({ market: "GB", model: "ma", subscription_status: "active" }, 8, 5, 3, 2, 1, 4), mRow({ market: "GB", model: "mb", subscription_status: "active" }, 2, 2, 0, 0, 0, 1),
+  mRow({ market: "NL", model: "ma", subscription_status: "active" }, 4, 4, 0, 1, 0, 3),
+];
+const totalsZf = { devices: 14, in_field: 11, in_stock: 3, components_past_due: 3, items_due_3m: 1, in_field_on_holding: 8 };
+const byStatus = narrowDocument(ibDef0009f, totalsZf, rowsZf, { status: "field" });
+const both = narrowDocument(ibDef0009f, totalsZf, rowsZf, { status: "stock", model: "ma" });
+const none = narrowDocument(ibDef0009f, totalsZf, rowsZf, {});
+expect("narrowDocument: a status filter sums the set that holds the status (the tiles exact, the market rows per market), the subscription set is not available; two filters at once; no filter is the document",
+  [byStatus.totals, rowsOfSet(byStatus.rows, ["market"]).map((r) => `${r.dims.market}:${r.measures.devices}`), byStatus.unavailableSets, byStatus.unavailableMeasures,
+    both.totals?.devices, both.totals?.in_stock, rowsOfSet(both.rows, ["market"]).length, none.totals?.devices, none.rows.length, none.unavailableSets,
+    JSON.stringify(narrowDocument(ibDef0009f, totalsZf, rowsZf, { model: "ma" })) === JSON.stringify(filterDocument(ibDef0009f, totalsZf, rowsZf, "model", "ma"))],
+  [{ devices: 11, in_field: 11, in_stock: 0, components_past_due: 3, items_due_3m: 1, in_field_on_holding: 8 }, ["GB:7", "NL:4"], ["market+model+subscription_status"], [],
+    3, 3, 1, 14, 9, [], true],
+  [null, [], [], ["devices"], 0, 0, 0, 0, 0, ["x"], false]);
+expect("pageFiltersOf: the narrowing dims of the address alone (the model and the status; never the market or a list filter); FLASH_NARROW_DIMS names them for the installed base alone",
+  [pageFiltersOf(ibDef0009f, { market: "GB", model: "ma", status: "field", serial: "x", warehouse: "w1" }, FLASH_NARROW_DIMS.installed_base),
+    Object.keys(FLASH_NARROW_DIMS), [...ibLib.INSTALLED_BASE_PAGE_FILTERS]],
+  [{ model: "ma", status: "field" }, ["installed_base"], ["model", "status"]], [{}, [], []]);
+// the donut: the split's parts in the register's order, the smallest grouped as Other above five, the colours by position
+const parts = (vals) => vals.map((v, i) => ({ key: `m${i + 1}`, value: v }));
+const five = ibLib.donutSlices(parts([5, 0, 3, 2, 1]));
+const seven = ibLib.donutSlices(parts([9, 1, 7, 2, 1, 6, 0]));
+expect("donutSlices: five or fewer models stay as they are with zeros and colours by position; above five the four largest keep their order and the rest are Other, last",
+  [five.total, five.slices.map((s) => `${s.key}:${s.value}:${s.colour}`), five.slices.map((s) => Math.round(s.share * 100)),
+    seven.total, seven.slices.map((s) => `${s.key}:${s.value}:${s.colour}`), seven.slices.at(-1)?.keys, ibLib.donutSlices([]).slices, ibLib.donutSlices(parts([0, 0])).slices.map((s) => s.share)],
+  [11, ["m1:5:0", "m2:0:1", "m3:3:2", "m4:2:3", "m5:1:4"], [45, 0, 27, 18, 9], 26, ["m1:9:0", "m3:7:1", "m4:2:2", "m6:6:3", "-other:2:4"], ["m2", "m5", "m7"], [], [0, 0]],
+  [0, [], [], 0, [], [], [{}], [1, 1]]);
+const arcs = ibLib.donutArcs(five.slices, 100, 10);
+const full = ibLib.donutArcs(ibLib.donutSlices(parts([4])).slices, 100, 10);
+expect("donutArcs: a slice of 0 draws nothing, the others sum the circle; one slice is a full ring of two halves; a path uses the series' colour tokens",
+  [arcs.filter((a) => a.d === "").map((a) => a.slice.key), arcs.filter((a) => a.d !== "").length, full[0]?.d.split("M").length - 1, /^M50\.00,0\.00 A50,50 0 0 1/.test(arcs[0]?.d ?? ""),
+    ibLib.SERIES_CLASSES, ibLib.seriesClass(9), ibLib.seriesClass(-1)],
+  [["m2"], 4, 2, true, ["text-p4a-deepblue", "text-p4a-green", "text-p4a-lightblue", "text-p4a-denim", "text-p4a-rose", "text-p4a-inkt"], "text-p4a-inkt", "text-p4a-deepblue"],
+  [[], 0, 0, false, [], "", ""]);
+const stackSlices = ibLib.donutSlices([{ key: "ma", value: 9 }, { key: "mb", value: 2 }]).slices;
+const stacks = ibLib.marketStacks(rowsZf, ["market", "status", "model", "warehouse", "link"], "in_field", stackSlices);
+expect("marketStacks: In the field per market stacked per model in the slices' order and colours, the parts summed over status, warehouse and link",
+  [stacks.map((s) => `${s.market}=${s.total}:${s.parts.map((p) => `${p.key}/${p.value}/${p.colour}`).join(",")}`)],
+  [["GB=7:ma/5/0,mb/2/1", "NL=4:ma/4/0"]], [[]]);
+const chartFew = ibLib.breakdownChart(rowsZf, ["market", "status", "model", "warehouse", "link"], "status", "devices");
+const chartMany = ibLib.breakdownChart(rowsZf.flatMap((r, i) => (r.dims.status ? [0, 1, 2].map((k) => ({ ...r, dims: { ...r.dims, status: `${r.dims.status}${k}${i}` } })) : [])),
+  ["market", "status", "model", "warehouse", "link"], "status", "devices");
+expect("breakdownChart: the figures per value sorted by size, a donut at five categories or fewer, bars above; widthShare for a bar",
+  [chartFew.kind, chartFew.items.map((i) => `${i.key}:${i.value}:${i.colour}`), chartFew.total, chartMany.kind, chartMany.items.length, chartMany.items.every((i) => i.colour === 0),
+    ibLib.widthShare(5, 10), ibLib.widthShare(0, 10), ibLib.widthShare(5, 0)],
+  ["donut", ["field:11:0", "stock:3:1"], 14, "bars", 12, true, 0.5, 0, 0], ["bars", [], 0, "donut", 0, false, 1, 1, 1]);
+const stState = ibLib.installedBaseState({ market: "GB", f_model: "ma", f_status: "field", f_warehouse: "w1", panel: "past_due", serial: " SN-1 ", sort: "model", dir: "desc", page: "3" }, parseFilters);
+expect("the page's state: the market, the page filters (model, status) apart from the list's (warehouse), the panel, the serial trimmed, the sort and page; the base keeps the market and the page filters",
+  [stState.market, stState.pageFilters, stState.filters, stState.panel, stState.serial, stState.sort, stState.descending, stState.pageNo, stState.base,
+    ibLib.parsePanel("nope"), ibLib.parsePanel("records"), ibLib.parseSerial(""), ibLib.parseSerial("x".repeat(101)), ibLib.installedBaseState({ market: "gb" }, parseFilters).marketProblem],
+  ["GB", { status: "field", model: "ma" }, { status: "field", model: "ma", warehouse: "w1", market: "GB" }, "past_due", "SN-1", "model", true, 3, { market: "GB", f_status: "field", f_model: "ma" },
+    null, "records", null, null, true],
+  [null, {}, {}, null, null, "serial", false, 1, {}, "nope", null, "", "x", false]);
+expect("the list panels' filters: the records none, the devices past due the measure components_past_due, the unlinked the database's rule; the panels and the lists among them; the hidden columns",
+  [ibLib.panelListFilters("records"), ibLib.panelListFilters("past_due"), ibLib.panelListFilters("unlinked"), [...ibLib.INSTALLED_BASE_PANELS], [...ibLib.LIST_PANELS],
+    [...ibLib.INSTALLED_BASE_HIDDEN_COLUMNS], ibLib.INSTALLED_BASE_PAGE_ROWS, ibLib.panelSet("breakdown", ibDef0009f), ibLib.panelSet("subscription", ibDef0009f), ibLib.panelSet("records", ibDef0009f),
+    ibLib.installedBaseHref({ market: "GB", panel: "records" })],
+  [{}, { measure: "components_past_due" }, { without_subscription_ref: "true" }, ["breakdown", "subscription", "records", "past_due", "unlinked"], ["records", "past_due", "unlinked"],
+    ["refs", "missing_refs", "link"], 50, ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"], null, "/reports/installed-base?market=GB&panel=records"],
+  [{ x: "y" }, {}, {}, [], [], [], 500, null, null, [], ""]);
+// the mock answers as the database: the serial search exact, trimmed and case-insensitive; the list without a subscription
+// reference the devices of the check field_device_without_subscription_ref (one rule), both refused as the database refuses
+const { mockFlashRows: mockRows0009f, mockDataQualityRows: mockDq0009f, mockRecordFlashFile: mockRecord0009f } = await import("../src/lib/data/mock-flash.ts");
+const rowsReq = (filters, limit = 500) => ({ overview: "installed_base", market: null, asOf: null, from: null, to: null, filters, sort: "serial", descending: false, limit, offset: 0 });
+const all0009f = mockRows0009f(reader, rowsReq({}));
+const firstSerial = String(all0009f.rows[0]?.serial ?? "");
+const found = mockRows0009f(reader, rowsReq({ serial: `  ${firstSerial.toLowerCase()} ` }));
+const unlinked = mockRows0009f(reader, rowsReq({ without_subscription_ref: "true" }));
+const checkRows = mockDq0009f({ ...reader, permissions: ["reports.view"] }, { check: "field_device_without_subscription_ref", market: null, limit: 50000, offset: 0 });
+expect("the mock: the serial search finds the device by its serial trimmed and case-insensitive, none for an unknown one; the unlinked list is the check's devices, in the field without a reference",
+  [found.total, found.rows[0]?.serial === firstSerial, mockRows0009f(reader, rowsReq({ serial: "SN-nope" })).total, unlinked.total > 0,
+    unlinked.rows.map((r) => r.device_id).sort().join(","), checkRows.rows.map((r) => r.object_id).sort().join(","),
+    unlinked.rows.every((r) => r.in_field === true && r.subscription_id === null && r.link === "none"),
+    codeOfCall(() => mockRows0009f(reader, rowsReq({ without_subscription_ref: "yes" }))), codeOfCall(() => mockRows0009f(reader, { ...rowsReq({ serial: "x" }), overview: "customers" })),
+    codeOfCall(() => mockRecord0009f(reader, fileRead({ overview: "installed_base", filters: { serial: "SN-1", without_subscription_ref: "true" } }))),
+    codeOfCall(() => mockRecord0009f(reader, fileRead({ overview: "installed_base", filters: { without_subscription_ref: "yes" } })))],
+  [1, true, 0, true, unlinked.rows.map((r) => r.device_id).sort().join(","), unlinked.rows.map((r) => r.device_id).sort().join(","), true, "CMA04", "CMA04", "ok", "CMA04"],
+  [0, false, 1, false, "", "x", false, "ok", "ok", "CMA04", "ok"]);
+// the page: one document read, the list a streamed read under a boundary with its skeleton, the panels and the search as address state
+const ibParts0009f = readFileSync(path.join(here, "..", "src", "components", "InstalledBase.tsx"), "utf8");
+expect("the page reads the document alone (getFlashOverview), starts a list's read with it under streamed and awaits it in a boundary with a skeleton; the panels and the serial are address keys; the lists hide the file-only columns and show 50 rows",
+  [/data\(\)\.getFlashOverview\(me, def\.key, st\.market, null, null, null\)/.test(ibPageSrc), !/getFlashView/.test(ibPageSrc),
+    /streamed\(\(\) => data\(\)\.getFlashRows\(me, \{/.test(ibPageSrc) && /limit: INSTALLED_BASE_PAGE_ROWS, offset: \(st\.pageNo - 1\) \* INSTALLED_BASE_PAGE_ROWS/.test(ibPageSrc),
+    /<Suspense fallback=\{<Card title=\{list\.title\}><ListSkeleton /.test(ibPageSrc), /const r = await read;\s*const dbTrace = requestDbTrace\(\);/.test(ibParts0009f),
+    /hidden=\{INSTALLED_BASE_HIDDEN_COLUMNS\}/.test(ibParts0009f), /narrowDocument\(def, doc\.totals, doc\.rows, st\.pageFilters\)/.test(ibPageSrc),
+    /withSplit=\{false\}/.test(ibPageSrc), /<form method="get" action=\{INSTALLED_BASE_PATH\}/.test(ibParts0009f), /name=\{INSTALLED_BASE_ADDRESS\.serial\}/.test(ibParts0009f),
+    (ibParts0009f.match(/path=\{INSTALLED_BASE_PATH\}/g) ?? []).length >= 2, !/FLASH_PAGE_ROWS\b(?!.*export)/.test(ibPageSrc)],
+  [true, true, true, true, true, true, true, true, true, true, true, true], [false, false, false, false, false, false, false, false, false, false, false, false]);
+expect("the copy of the now view: the status filter, Other, the panels, the search and the two lists' notes, en and nl, the Dutch past due achterstallig",
+  [["statusFilter", "allStatuses", "other", "panelBreakdown", "panelSubscription", "panelRecords", "panelPastDue", "panelUnlinked", "searchLabel", "searchNone", "pastDueNote", "unlinkedNote", "filterUnavailable"]
+    .every((k) => typeof copyAll.en.installedBase[k] === "string" && copyAll.en.installedBase[k] !== "" && typeof copyAll.nl.installedBase[k] === "string" && copyAll.nl.installedBase[k] !== ""),
+    /achterstallig/.test(copyAll.nl.installedBase.panelPastDue), /te laat/i.test(copyAll.nl.installedBase.panelPastDue), /AED/.test(copyAll.en.installedBase.panelRecords + copyAll.en.installedBase.panelPastDue)],
+  [true, true, false, false], [false, false, true, true]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

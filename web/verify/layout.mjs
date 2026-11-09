@@ -2133,9 +2133,12 @@ async function expectAttempts() {
 // switch); the page never scrolls sideways, by week and by day; the keycaps K, P, S, G and X on Funnel, K, G and X on
 // Cancellations, next to the period bar's; ten tiles and four; the tables end inside their cards. --provoke lets the
 // lost deals per period spill out of their card
-// Installed base by model (addition 0008zy), on Assets -> Installed base as the manager: the In the field tile's split per
-// model under the figure; the Model select with D and "All models" first; choosing a model puts f_model in the address and
-// the tile becomes that model's part of the split, the split goes; the records come in their own card after the tiles
+// Assets -> Installed base as the "now" view (addition 0009f; by model since 0008zy), as the manager: no As of; the tiles,
+// the model donut with its legend (a table: every figure in text), In the field per market stacked per model; the Model
+// select with D and "All models" first, the Operational status select with S; no records, breakdown or list until a
+// panel is opened (address state: panel=); choosing a model puts f_model in the address, the In the field tile becomes
+// that model's legend count and the donut keeps one slice; opening Records streams the list in its card, 50 rows at
+// most, without the file-only columns; the serial search (F) finds a device by its serial
 async function expectInstalledBaseModels() {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
@@ -2143,34 +2146,80 @@ async function expectInstalledBaseModels() {
   await settle(p);
   await p.waitForLoadState("networkidle");
   const before = await p.evaluate(() => ({
+    asOf: !!document.querySelector('[data-testid="flash-as-of"]'),
     split: document.querySelector('[data-testid="flash-split-installed_base"]')?.textContent?.trim() ?? null,
     inField: document.querySelector('[data-testid="flash-total-in_field"] p.tabular')?.textContent?.trim() ?? null,
+    legend: [...document.querySelectorAll('[data-testid="ib-donut-legend"] tbody tr[data-testid^="ib-slice-"]')]
+      .map((tr) => [tr.getAttribute("data-testid").slice("ib-slice-".length), tr.children[0].textContent.trim(), tr.children[1].textContent.trim()]),
+    donutPaths: document.querySelectorAll('[data-testid="ib-donut"] svg path').length,
+    stacks: document.querySelectorAll('[data-testid="ib-market-stacks"] > li').length,
     options: [...document.querySelectorAll('[data-testid="flash-model"] option')].map((o) => [o.value, o.textContent?.trim()]),
     key: document.querySelector('[data-testid="flash-model"]')?.getAttribute("data-shortcut") ?? null,
+    statusKey: document.querySelector('[data-testid="ib-status"]')?.getAttribute("data-shortcut") ?? null,
+    searchKey: document.querySelector('#ib-serial')?.getAttribute("data-shortcut") ?? null,
+    panels: document.querySelectorAll('[data-testid="ib-panels"] a').length,
     rows: !!document.querySelector('[data-testid="flash-rows"]'),
+    breakdown: !!document.querySelector('[data-testid^="flash-breakdown-"]'),
+    links: document.querySelectorAll("main a").length,
   }));
-  if (!before.split || !/ · /.test(before.split)) problems.push(`installed base: no split per model under In the field (${JSON.stringify(before.split)})`);
+  if (before.asOf) problems.push("installed base: an As of control on the now view");
+  if (before.split !== null) problems.push("installed base: the split line still under In the field (the donut replaces it)");
+  if (before.legend.length < 2 || before.donutPaths < 2) problems.push(`installed base: the model donut has ${before.donutPaths} slices and ${before.legend.length} legend rows, expected two or more`);
+  if (before.stacks < 2) problems.push(`installed base: ${before.stacks} market stacks, expected two or more`);
   if (before.key !== (provoke ? "x" : "d")) problems.push(`installed base: the Model select answers to ${before.key}, expected D`);
+  if (before.statusKey !== "s") problems.push(`installed base: the Operational status select answers to ${before.statusKey}, expected S`);
+  if (before.searchKey !== "f") problems.push(`installed base: the serial field answers to ${before.searchKey}, expected F`);
   if (before.options[0]?.[0] !== "" || before.options.length < 2) problems.push(`installed base: the Model select's choices ${JSON.stringify(before.options)}, expected All models first`);
-  if (!before.rows) problems.push("installed base: the records did not arrive in their card");
+  if (before.panels !== 5) problems.push(`installed base: ${before.panels} panel links, expected 5`);
+  if (before.rows || before.breakdown) problems.push("installed base: records or a breakdown rendered before a panel was opened");
+  if (before.links > 60) problems.push(`installed base: ${before.links} links in the default view, expected a light page (no breakdown filter links)`);
   const [value, name] = before.options[1] ?? ["", ""];
-  const part = (before.split ?? "").split(" · ").find((x) => x.startsWith(`${name} `))?.slice(name.length + 1) ?? null;
+  const part = before.legend.find((r) => r[0] === value)?.[2] ?? null;
   await p.locator('[data-testid="flash-model"]').selectOption(value);
   await p.waitForURL(new RegExp(`f_model=${value}`)).catch(() => undefined);
   await settle(p);
   await p.waitForLoadState("networkidle");
   const after = await p.evaluate(() => ({
     url: location.search,
-    split: document.querySelector('[data-testid="flash-split-installed_base"]')?.textContent?.trim() ?? null,
     inField: document.querySelector('[data-testid="flash-total-in_field"] p.tabular')?.textContent?.trim() ?? null,
     chosen: document.querySelector('[data-testid="flash-model"]')?.value ?? null,
-    rows: !!document.querySelector('[data-testid="flash-rows"]'),
+    slices: document.querySelectorAll('[data-testid="ib-donut-legend"] tbody tr[data-testid^="ib-slice-"]').length,
   }));
   if (!after.url.includes(`f_model=${value}`) || after.chosen !== value) problems.push(`installed base: choosing ${value} gave ${after.url} with ${after.chosen} chosen`);
-  if (after.inField !== (provoke ? before.inField : part)) problems.push(`installed base: In the field with ${name} is ${after.inField}, the split's part ${part}`);
-  if (after.split !== null) problems.push("installed base: the split per model still shows with a Model filter");
-  if (!after.rows) problems.push("installed base: no records with a Model filter");
+  if (after.inField !== (provoke ? before.inField : part)) problems.push(`installed base: In the field with ${name} is ${after.inField}, the legend's count ${part}`);
+  if (after.slices !== 1) problems.push(`installed base: ${after.slices} slices with a Model filter, expected the one model`);
+  // the Records panel: the list streams into its card, the Model filter kept, 50 rows at most, the file-only columns left out
+  await p.locator('[data-testid="ib-panel-records"]').click();
+  await p.waitForURL(/panel=records/).catch(() => undefined);
+  await settle(p);
+  await p.waitForLoadState("networkidle");
+  await p.locator('[data-testid="flash-rows"], [data-testid="flash-rows-empty"]').first().waitFor({ timeout: 15000 }).catch(() => undefined);
+  const panel = await p.evaluate(() => ({
+    url: location.search,
+    rows: document.querySelectorAll('[data-testid="flash-rows"] tbody tr').length,
+    headers: [...document.querySelectorAll('[data-testid="flash-rows"] thead th')].map((th) => th.textContent?.trim()),
+    open: document.querySelector('[data-testid="ib-panel-records"]')?.getAttribute("aria-current") ?? null,
+  }));
+  if (!panel.url.includes("panel=records") || !panel.url.includes(`f_model=${value}`)) problems.push(`installed base: opening Records gave ${panel.url}`);
+  if (panel.rows < 1 || panel.rows > 50) problems.push(`installed base: ${panel.rows} record rows, expected 1 to 50`);
+  if (panel.headers.some((h) => /^(References|Missing references|Subscription link)$/.test(h ?? ""))) problems.push(`installed base: a file-only column on screen (${panel.headers.join(", ")})`);
+  if (panel.open !== "page") problems.push("installed base: the open panel is not marked");
   await p.screenshot({ path: `${outDir}/manager-installed-base-model.png` });
+  // the serial search: the first record's serial, typed with spaces and in lower case, found
+  const serial = await p.evaluate(() => document.querySelector('[data-testid="flash-rows"] tbody tr td')?.textContent?.trim() ?? "");
+  await p.fill("#ib-serial", ` ${serial.toLowerCase()} `);
+  await p.press("#ib-serial", "Enter");
+  await p.waitForURL(/serial=/).catch(() => undefined);
+  await settle(p);
+  await p.waitForLoadState("networkidle");
+  await p.locator('[data-testid="flash-rows"], [data-testid="ib-search-none"]').first().waitFor({ timeout: 15000 }).catch(() => undefined);
+  const search = await p.evaluate(() => ({
+    rows: document.querySelectorAll('[data-testid="flash-rows"] tbody tr').length,
+    first: document.querySelector('[data-testid="flash-rows"] tbody tr td')?.textContent?.trim() ?? null,
+    none: !!document.querySelector('[data-testid="ib-search-none"]'),
+  }));
+  if (search.rows !== 1 || search.first !== serial || search.none) problems.push(`installed base: the serial search for ${serial} gave ${search.rows} row(s), first ${search.first}`);
+  await p.screenshot({ path: `${outDir}/manager-installed-base-search.png` });
   await ctx.close();
 }
 
@@ -2191,8 +2240,9 @@ async function expectAsOfTyping() {
   const p = await ctx.newPage();
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
-  // Enter on one page; leaving the field (its blur) on the other
-  for (const [path, key] of [["/reports/installed-base", "Enter"], ["/reports/flash?o=installed_base", "blur"]]) {
+  // Enter on one overview; leaving the field (its blur) on another. Both on Reports → Flash: Assets → Installed base has no
+  // As of since addition 0009f (the now view)
+  for (const [path, key] of [["/reports/flash?o=installed_base", "Enter"], ["/reports/flash?o=customers", "blur"]]) {
     await p.goto(BASE + path);
     await settle(p);
     await p.waitForLoadState("networkidle");

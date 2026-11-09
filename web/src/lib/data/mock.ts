@@ -4732,7 +4732,10 @@ export const mockData: CmaData = {
   },
 
   async getFlashOverview(me, overview, market, asOf, from, to) {
-    return mockFlashOverview(me, overview, market, asOf, from, to);
+    const document = mockFlashOverview(me, overview, market, asOf, from, to);
+    // now's current take of the installed base (addition 0009e, the default flash.current_overviews): the stored instant, in
+    // the mock the minute's start, as getFlashView answers it; null as of a date and for the other overviews (live)
+    return { ...document, refreshedAt: overview === "installed_base" && asOf === null ? mockRefreshedAt() : null };
   },
 
   async getFlashView(me, request) {

@@ -179,13 +179,36 @@ export function parseSort(def: FlashOverviewDef, sort: unknown, dir: unknown): {
   return { sort: s, descending };
 }
 
-/** The list's filters from the address: f_<dim> for the overview's dims (1 to 100 characters) and measure for a count measure */
+/**
+ * The filter keys a list takes beside its overview's dims and measure, as cma.flash_list_filters_of answers them
+ * (addition 0009f; verify:flash compares the two): the installed base's serial (an exact match, trimmed and
+ * case-insensitive, every device with it) and without_subscription_ref ("true": the devices of the data-quality check
+ * field_device_without_subscription_ref, one rule in the database); none for another overview
+ */
+export const FLASH_LIST_FILTERS: Partial<Record<FlashKey, readonly string[]>> = { installed_base: ["serial", "without_subscription_ref"] };
+
+/** A list filter's value as the database takes it: without_subscription_ref is "true" alone; a serial is trimmed, 1 to 100 characters */
+export function listFilterValue(key: string, value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (key === "without_subscription_ref") return value === "true" ? "true" : null;
+  const v = key === "serial" ? value.trim() : value;
+  return v.length >= 1 && v.length <= 100 ? v : null;
+}
+
+/**
+ * The list's filters from the address: f_<dim> for the overview's dims (1 to 100 characters), f_<key> for the list's own
+ * filters (FLASH_LIST_FILTERS, their values as the database takes them) and measure for a count measure
+ */
 export function parseFilters(def: FlashOverviewDef, read: (key: string) => string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   for (const d of def.dims) {
     const v = read(`${FLASH_ADDRESS.filterPrefix}${d}`);
     // a market filter is a market's code or unknown, as the database checks it (CMA04 otherwise): anything else dropped
     if (typeof v === "string" && v.length >= 1 && v.length <= 100 && (d !== "market" || parseMarket(v) !== null)) out[d] = v;
+  }
+  for (const k of FLASH_LIST_FILTERS[def.key] ?? []) {
+    const v = listFilterValue(k, read(`${FLASH_ADDRESS.filterPrefix}${k}`));
+    if (v !== null) out[k] = v;
   }
   const m = read(FLASH_ADDRESS.measure);
   if (typeof m === "string" && def.countMeasures.includes(m)) out.measure = m;
@@ -1037,6 +1060,13 @@ export function definitionChanged(version: string | null | undefined, previousVe
  */
 export const FLASH_DOCUMENT_FILTERS: Partial<Record<FlashKey, string>> = { installed_base: "model" };
 
+/**
+ * The dims a document may be narrowed by on request, per overview (the API's f_<dim> and the breakdown file; addition
+ * 0009f): the installed base's model and operational status, the "now" view's page filters (lib/installed-base). Reports →
+ * Flash's own tab keeps FLASH_DOCUMENT_FILTERS (the model alone)
+ */
+export const FLASH_NARROW_DIMS: Partial<Record<FlashKey, readonly string[]>> = { installed_base: ["model", "status"] };
+
 /** The page filter of an overview from its list filters: the dim and its value, or none */
 export function documentFilterOf(def: FlashOverviewDef, filters: Readonly<Record<string, string>>): { dim: string; value: string } | null {
   const dim = FLASH_DOCUMENT_FILTERS[def.key];
@@ -1067,9 +1097,26 @@ const exactly = (r: FlashDocRow, set: readonly string[]) => Object.keys(r.dims).
  */
 export function filterDocument(def: FlashOverviewDef, totals: Readonly<Record<string, unknown>> | null, rows: readonly FlashDocRow[], dim: string,
   value: string): FlashDocumentFiltered {
-  const withDim = def.sets.filter((set) => set.includes(dim));
-  const sourceOf = (m: string) => withDim.find((set) => rows.some((r) => exactly(r, set) && typeof r.measures[m] === "number"));
-  const kept = rows.filter((r) => withDim.some((set) => exactly(r, set)) && r.dims[dim] === value);
+  return narrowDocument(def, totals, rows, { [dim]: value });
+}
+
+/**
+ * A document narrowed by several page filters at once (addition 0009f: the Installed base's Model and Operational status),
+ * by filterDocument's rule for each: the rows of the sets that hold every filtered dim, each matching every value; a
+ * measure no such set carries, and a breakdown set that lacks one of the dims (the installed base's
+ * [market, model, subscription_status] under a status filter), are not available with the filters: said so, never a
+ * figure. Without a filter the document is itself (nothing unavailable)
+ */
+export function narrowDocument(def: FlashOverviewDef, totals: Readonly<Record<string, unknown>> | null, rows: readonly FlashDocRow[],
+  filters: Readonly<Record<string, string>>): FlashDocumentFiltered {
+  const dims = Object.keys(filters).filter((d) => def.dims.includes(d) && d !== "market");
+  if (dims.length === 0) {
+    return { totals: totals === null ? null : Object.fromEntries(Object.entries(totals).filter((e): e is [string, number] => typeof e[1] === "number")),
+      rows: [...rows], unavailableMeasures: [], unavailableSets: [] };
+  }
+  const withDims = def.sets.filter((set) => dims.every((d) => set.includes(d)));
+  const sourceOf = (m: string) => withDims.find((set) => rows.some((r) => exactly(r, set) && typeof r.measures[m] === "number"));
+  const kept = rows.filter((r) => withDims.some((set) => exactly(r, set)) && dims.every((d) => r.dims[d] === filters[d]));
   const measures = def.measures.filter((m) => totals === null || m in totals);
   const unavailableMeasures = measures.filter((m) => sourceOf(m) === undefined || measureKind(def, m) !== "count");
   const summed = measures.filter((m) => !unavailableMeasures.includes(m));
@@ -1081,9 +1128,16 @@ export function filterDocument(def: FlashOverviewDef, totals: Readonly<Record<st
     dims: { market },
     measures: Object.fromEntries(summed.map((m) => [m, sumOver(of(sourceOf(m)).filter((r) => r.dims.market === market), m)])),
   }));
-  const unavailableSets = breakdownSets(def).filter((set) => !set.includes(dim) || shownSetOf(def, rows, set, dim) !== set).map((set) => set.join("+"));
+  // a breakdown set lacking one of the dims, or whose rows were stored without it (shownSetOf), is not available
+  const unavailableSets = breakdownSets(def)
+    .filter((set) => dims.some((d) => !set.includes(d) || shownSetOf(def, rows, set, d) !== set)).map((set) => set.join("+"));
   const breakdown = kept.filter((r) => breakdownSets(def).some((set) => exactly(r, set) && !unavailableSets.includes(set.join("+"))));
   return { totals: filteredTotals, rows: [...marketRows, ...breakdown], unavailableMeasures, unavailableSets };
+}
+
+/** The page filters of an overview's address (every f_<dim> that is a dim, the market apart), for narrowDocument */
+export function pageFiltersOf(def: FlashOverviewDef, filters: Readonly<Record<string, string>>, dims: readonly string[]): Record<string, string> {
+  return Object.fromEntries(Object.entries(filters).filter(([k]) => dims.includes(k) && def.dims.includes(k) && k !== "market"));
 }
 
 /**

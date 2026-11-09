@@ -37,6 +37,8 @@
 -- (Martin, 6 November 2026; Decision log). A page's set sums the reads the reader waits for first: a Flash overview loads
 -- in two parts since addition 0008zy (the document, then its records streamed after the first paint), so the Installed
 -- base pages' sets are the document against verify.max_overview_ms, and their records read keeps its own list row.
+-- Since addition 0009f Assets -> Installed base reads its lists on demand (a page of 50 records, the devices past due, the
+-- devices without a subscription reference, the serial search): each is a list row of the page, outside its set.
 -- Since addition 0009e the Installed base's document now is read from its stored current take: in part a each tenant's
 -- current takes are refreshed first as its scheduler user (cma.flash_current_refresh, inside the timed part, so rolled
 -- back with it; a row per tenant says what the refresh answered), and the document's row times the stored read the page
@@ -247,6 +249,13 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- document is the stored current take's since addition 0009e (refreshed first, above the reads)
 ('a', 'installed base', 'document now (the current take)', $q$select cma.flash_overview('installed_base', null, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base', 'records first page live', $q$select cma.flash_rows('installed_base', '{}', 'serial', false, 500, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+-- Assets -> Installed base's own lists (addition 0009f): a page of 50 records, the devices past due, the devices in the field
+-- without a subscription reference (the list's own filter), and the serial search (one serial of the tenant's register, the
+-- list's own filter serial), each read on demand after the first paint
+('a', 'installed base', 'records page of 50 live', $q$select cma.flash_rows('installed_base', '{}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'devices past due page of 50', $q$select cma.flash_rows('installed_base', '{"measure": "components_past_due"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'without subscription reference page of 50', $q$select cma.flash_rows('installed_base', '{"without_subscription_ref": "true"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'serial search', $q$select cma.flash_rows('installed_base', jsonb_build_object('serial', coalesce((select d.serial from cma.device d where d.serial is not null order by d.id limit 1), 'none')), 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'document as of the month end', $q$select cma.flash_overview('installed_base', null, '{to}', null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'frozen list first page', $q$select cma.flash_rows('installed_base', '{}', null, false, 500, 0, '{to}', null, null)$q$, 'list', array['reports.view', 'performance.team']),
 -- Campaigns

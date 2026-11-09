@@ -222,18 +222,70 @@
   {
     "path": "/reports/installed-base",
     "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/installed-base?f_model=hs1&f_status=active_customer",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/installed-base?panel=breakdown",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/installed-base?panel=subscription",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/installed-base?panel=records",
+    "subject": "manager",
     "tx": 3,
     "rt": 13,
     "firstTx": 2,
     "firstRt": 9
   },
   {
-    "path": "/reports/installed-base?f_model=hs1",
+    "path": "/reports/installed-base?panel=past_due&f_model=hs1",
     "subject": "manager",
     "tx": 3,
     "rt": 13,
     "firstTx": 2,
     "firstRt": 9
+  },
+  {
+    "path": "/reports/installed-base?panel=unlinked",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/installed-base?serial=SN-80001",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/api/v1/reports/flash/rows?overview=installed_base&f_without_subscription_ref=true&limit=50",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/api/v1/reports/flash/rows?overview=installed_base&f_serial=SN-80001",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
   },
   {
     "path": "/api/v1/reports/funnel?from=2026-10-01&to=2026-10-20",

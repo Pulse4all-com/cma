@@ -118,6 +118,35 @@ export function FlashModel({ model, models, query, labels, path = "/reports/flas
 }
 
 /**
+ * A page filter as a select (Assets → Installed base's Operational status, S, addition 0009f): every tile, chart,
+ * breakdown and list of one value, kept in the address as f_<dim>; "All" first, the catalog's values by name, unknown
+ * last. A value the address names that the document does not is kept as a choice
+ */
+export function FlashChoice({ dim, value, choices, query, labels, keycap, testId, path = "/reports/flash" }: {
+  dim: string;
+  value: string | null;
+  choices: { key: string; name: string | null }[];
+  query: Record<string, string>;
+  labels: { label: string; all: string; unknown: string };
+  keycap: string;
+  testId: string;
+  path?: FlashPath;
+}) {
+  const router = useRouter();
+  const list = value && !choices.some((c) => c.key === value) ? [...choices, { key: value, name: null }] : choices;
+  return (
+    <label className="flex flex-col gap-2 text-small font-semibold">
+      <span className="flex items-center gap-2">{labels.label} <Keycap>{keycap.toUpperCase()}</Keycap></span>
+      <select value={value ?? ""} data-shortcut={keycap.toLowerCase()} data-testid={testId} onChange={(e) => go(router, path, query, { [`f_${dim}`]: e.target.value || null })}
+        className="h-10 min-w-48 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue">
+        <option value="">{labels.all}</option>
+        {list.map((c) => <option key={c.key} value={c.key}>{c.key === "unknown" ? labels.unknown : c.name ?? c.key}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/**
  * A landing card's live figure: its overview's headline read once after the page painted. While it reads, a calm line;
  * a failed read shows the dash, never an error code. The change against the figure to compare with is written here too,
  * since it needs the live value; a flow whose period is open (open: lib/flash periodComplete) says "so far" instead

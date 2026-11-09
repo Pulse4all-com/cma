@@ -611,14 +611,14 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Definition | The register's state of a device, mapped to the tenant's catalog of device statuses, each with the flags in the field (at a customer), in stock and tracked (forecast for maintenance). Reporting reads the flags, never a status name. |
 | Source | The register's status column, mapped through the catalog's aliases (`cma.device_status_key_of`); the catalog is tenant configuration (`cma.device_status`, seed `02` for Pulse4all) |
 | Counts / does not count | Only devices in a tracked status are forecast; the scope filter takes in the field or in stock from the flags. A label no alias holds leaves the device without a status (`device_status_unmapped`), not forecast |
-| Unit and display | The status's name from the catalog |
+| Unit and display | The status's name from the catalog. "Operational status" (nl Operationele status) is the label of Assets → Installed base's filter on it (URL parameter `f_status`), whose options are the catalog's names. In Transit is a tenant row of the catalog (key `in_transit`, name In Transit, alias `in transit`, not in the field, not in stock, tracked, ordered after Active/Customer), added by a Studio step (addition 0009f, D8) |
 | Time rule | As of the latest read (the poll or the nightly snapshot, or a loaded file); no history is kept |
 | Scope | As Device |
 | Equivalent in the source system | The register's operational status (Airtable: `aed_operational_status`) |
 | Not to use | A status name in SQL or code; "connected" or "active" for a device's state |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Device status is a catalog with the flags" and "Definitions: Device status" |
-| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Assets → Maintenance |
+| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Assets → Maintenance; the Operational status filter of Assets → Installed base and of its API (`f_status`) |
 | As built today | `cma.device_status` (`112`), its flags read by `cma.maintenance_items_of` and `cma.maintenance_bucketed_of`. Matches the definition |
 
 ### Due date
@@ -1233,7 +1233,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Key | `cma.flash_current_take` (`cma_read.flash_current_take`); settings `flash.current_overviews` (default `installed_base`; stock overviews but data quality, each once, comma-separated, or empty for every now live) and `flash.current_refresh_minutes` (5 by default, 1 to 1440); `cma.flash_current_refresh(tenant)`, `cma.flash_current_state_of(...)` |
 | Definition | The stored "now" of a stock overview: the rows `cma.flash_compute_of` gave for the overview at one instant (the same shape as a Flash snapshot: overview, grouping set, dims, measures, definition version, computed_at), one per tenant and overview, replaced whole when the job refreshes it. The overview's heading, tiles, per-market bars and breakdowns (Assets → Installed base and Flash's installed_base overview) are read from it, shown with Refreshed at. It is fresh when younger than `flash.current_refresh_minutes` and usable when younger than three times that; a missing, older, other-definition-version or pre-migration take means the live read as before (slow but correct), never silently old figures |
 | Source | `cma.flash_compute_of` at the refresh (`cma.flash_current_refresh_of`, called by `cma.flash_current_refresh` from the job `cma-snapshot-flash`, which runs every minute and refreshes the takes that are due) |
-| Counts / does not count | The records list (`cma.flash_rows`), its file and As of (the dated snapshots) are not from the take; the Sources line and the landing's cards stay live. The breakdown file follows the document, so its figures, its as_of column and its file name stamp are the take's (Martin, 8 November 2026, #250). A tenant setting written, changed or reset removes that tenant's takes. No take for a flow overview (a flow's now is a period) or data quality (its own stored result) |
+| Counts / does not count | The records list (`cma.flash_rows`), its file and As of (the dated snapshots) are not from the take; the Sources line and the landing's cards stay live. The breakdown file follows the document, so its figures, its as_of column and its file name stamp are the take's (Martin, 8 November 2026, #250). A tenant setting written, changed or reset removes that tenant's takes, and so does a change of a column the take reads in one of seven catalogs: device status, device component kind, maintenance rule, connection pipeline, stage, task status and task type (addition 0009f, D9); models, markets and market aliases do not, as the device row stores the mapped keys at the register's read. No take for a flow overview (a flow's now is a period) or data quality (its own stored result) |
 | Unit and display | "Refreshed at {time}" under the overview's heading; under the records' count "Read live: this count can differ from the figures above until their next refresh." |
 | Time rule | The instant of the refresh; the document's `as_of` is that instant |
 | Scope | Per tenant and overview |
@@ -1317,8 +1317,46 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | A model key typed into a label |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 6 November 2026 (Proposed, Martin's brief); docs/decisions.md, 6 Nov 2026, "The Installed base gets a Model filter" and "Definitions: In the field, split by model and Model (filter)" (migration 146, addition 0008zy, #238) |
-| Used by | `flash.installed_base.*` (every tile), Assets → Installed base and Reports → Flash (Installed base), their files and the Flash API |
+| Used by | `flash.installed_base.*` (every tile), Assets → Installed base (its own "now" view since addition 0009f, where it also narrows the donut and Per market, and "Not available with this filter" names a tile or chart the take cannot give) and Reports → Flash (Installed base), their files and the Flash API |
 | As built today | `db/146` (0008zy), `147`; the web narrows the stored document. Matches the definition |
+
+### Device past due
+
+| Field | Value |
+|---|---|
+| Term | Device past due (nl: Apparaat achterstallig); the list's title "Devices past due" (nl "Apparaten achterstallig") |
+| Key | Panel `past_due` of `/reports/installed-base` (`panel=past_due`); measure `components_past_due` of the records read (`GET /api/v1/reports/flash/rows?overview=installed_base&measure=components_past_due`); copy section `installedBase` |
+| Definition | A tracked device (Device status) with at least one item past due (Past due). The list's count is of devices and the list states it, so it differs from the Items past due tile, which counts items: a device with two items past due is one device and two items. |
+| Source | `cma.flash_rows_of` over `cma.flash_devices_of` |
+| Counts / does not count | A device in an untracked status has no due items and is not listed |
+| Unit and display | A count of devices; 50 rows a page, without the columns References, Missing references and Subscription linked; the file keeps every column |
+| Time rule | The page's "now": the records read live |
+| Scope | The tenant; narrowed by the page's Market, Model and Operational status filters |
+| Equivalent in the source system | None |
+| Not to use | "AEDs overdue" or "Overdue" in the label ("AED" is not used in a label, Device; "Overdue" is tasks' word) |
+| Status | Decided (Martin, 8 November 2026) |
+| Decided | 8 Nov 2026, "\"Device past due\" ... counts devices" and "Definitions: \"Device past due\" ..." (addition 0009f, this PR) |
+| Used by | `flash.installed_base.components_past_due`; Assets → Installed base (`panel=past_due`) |
+| As built today | `db/160`, proved by `161`; the web list in `web/src/components/InstalledBase.tsx`. Matches the definition |
+
+### In the field without a linked subscription
+
+| Field | Value |
+|---|---|
+| Term | In the field without a linked subscription (nl: In het veld zonder gekoppeld abonnement) |
+| Key | Panel `unlinked` of `/reports/installed-base` (`panel=unlinked`); records filter `without_subscription_ref=true` (`f_without_subscription_ref`); `cma.field_devices_without_subscription_ref_of(tenant)`; the data quality check `field_device_without_subscription_ref` |
+| Definition | The devices in the field (Device status) that carry no subscription link. One rule for the list and the data quality check `field_device_without_subscription_ref`, implemented once (`cma.field_devices_without_subscription_ref_of`), which `cma.data_quality_of` and the records read both use, so the list and the check always agree. |
+| Source | `cma.field_devices_without_subscription_ref_of`, read by `cma.flash_rows_of` and `cma.data_quality_of` |
+| Counts / does not count | The filter takes `true` alone (CMA04 else) and applies on the installed base only (400 `invalid_filter` elsewhere) |
+| Unit and display | A list of devices, 50 rows a page, with the Records columns but not References, Missing references and Subscription linked |
+| Time rule | The page's "now": the records read live |
+| Scope | The tenant; narrowed by the page's filters |
+| Equivalent in the source system | None |
+| Not to use | A second implementation of the rule in the web or in SQL |
+| Status | Decided (Martin, 8 November 2026) |
+| Decided | 8 Nov 2026, "\"Device past due\" ... counts devices" (D6) and "Definitions: \"Device past due\" ..." (addition 0009f, this PR) |
+| Used by | `field_device_without_subscription_ref`; Assets → Installed base (`panel=unlinked`), `/flash/rows` and `/flash/file` |
+| As built today | `db/160`; `161`'s A1 and D1 prove the list equals the check's devices. Matches the definition |
 
 ### Devices on holding subscriptions
 
@@ -1633,7 +1671,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Definition | The rail group of the pages about the devices the asset register holds: Installed base and Maintenance. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/maintenance`) and its permission (`reports.view` or `performance.team`); a group with no page the person may see is absent |
-| Unit and display | A group with a box icon, after Customers. Installed base renders Flash's Installed base overview (the same read, filters, As of and files; no overviews' strip and no back link to Flash); Flash keeps its own Installed base overview |
+| Unit and display | A group with a box icon, after Customers. Installed base is a "now" view of its own with no As of, light by default (the filters, the tiles, In the field per model as a donut, Per market stacked per model, from the stored current take) and its breakdowns, lists and serial search loaded only when asked as address state (`panel=`, `serial=`; addition 0009f); Flash keeps its own Installed base overview, with As of and history |
 | Time rule | None |
 | Scope | The rail of every tenant |
 | Equivalent in the source system | None |
@@ -1641,7 +1679,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Status | Decided |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
 | Used by | `flash.installed_base.*`, `maintenance.*`; Assets → Installed base, Maintenance |
-| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/FlashOverview.tsx`, shared with Flash) |
+| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash) |
 
 ## Time terms
 
