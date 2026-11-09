@@ -1,0 +1,4921 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 7500
+(1 row)
+
+ set_config 
+------------
+ 5000
+(1 row)
+
+ set_config 
+------------
+ 5000
+(1 row)
+
+ set_config 
+------------
+ 10000
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:db/117_verify_asset_sync_load.sql:82: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+psql:db/117_verify_asset_sync_load.sql:85: NOTICE:  table "v0008zk_step" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+psql:db/117_verify_asset_sync_load.sql:88: NOTICE:  table "v0008zk_c4_state" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+BEGIN
+ v0008zk_c3_setup 
+------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3_part 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c3 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+BEGIN
+ v0008zk_b_setup 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_fp 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b1_one_call 
+---------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b1 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_fp 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_fp 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_fp 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_load 
+----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b_final 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b3 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b4 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b5 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b6 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b7 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_load 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_analyze 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b8_state 
+------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_load 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_load 
+--------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b8_state 
+------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_b8 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+BEGIN
+ v0008zk_c_setup 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_next 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c4_check 
+------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_analyze 
+-----------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c1 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c2_check 
+------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c5 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c5 
+------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_c5_check 
+------------------
+ 
+(1 row)
+
+COMMIT
+BEGIN
+ v0008zk_clean 
+---------------
+ 
+(1 row)
+
+COMMIT
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                                                     check_name                                                                                                                                     | result |                                                                                                                                                                                                                                                                                                                                                                                detail                                                                                                                                                                                                                                                                                                                                                                                
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zk recorded, after 0008zj                                                                                                                                                                                                                                          | ok     | 
+ A2 the load's row types; the staging trigger on the COPY target                                                                                                                                                                                                                    | ok     | 
+ A3 every function the application's only and invoker, the trigger function nobody's; the load set-based in one place                                                                                                                                                               | ok     | 
+ A4 the setting assets_load_chunk by form: a whole number from 100 to 5,000                                                                                                                                                                                                         | ok     | ok ok ok assets_load_chunk assets_load_chunk assets_load_chunk assets_load_chunk assets_load_chunk table_id
+ A5 the value checks read as 0008zi's helpers: JSON objects, dates, references                                                                                                                                                                                                      | ok     | every sample the same
+ A6 the final step in slices by the range index on present devices; the components by device; the forecast without a row loop                                                                                                                                                       | ok     | 
+ B1 the night's full snapshot of 10,000 in ten chunks and the final step's ten slices: the same counts, devices and components as one call                                                                                                                                          | ok     | true 10000 rows=10000 ins=1000 upd=1440 same=7560 missing=1000 repl=360 um=20 us=0 uk=24 cri=14 drop=64 | rows=10000 ins=1000 upd=1440 same=7560 missing=1000 repl=360 um=20 us=0 uk=24 cri=14 drop=64 true 0 40
+ B2 a rerun of the same chunks and slices changes nothing                                                                                                                                                                                                                           | ok     | rows=10000 ins=0 upd=0 same=10000 missing=0 repl=0 um=20 us=0 uk=24 cri=14 drop=64 true
+ B3 a run that fails before its final step marks nothing missing; the rerun's chunks unchanged; a chunk with a bad row loads nothing                                                                                                                                                | ok     | 1000 1000 rows=4000 ins=0 upd=0 same=4000 missing=0 repl=0 um=8 us=0 uk=10 cri=6 drop=27 2000 3000 | CMA04: line 501: first_shipped_on is not a date as YYYY-MM-DD true
+ B4 row-level security: each Ingest user loads, marks and sees its own tenant only                                                                                                                                                                                                  | ok     | CMA02 CMA02 rows=3 ins=3 upd=0 same=0 missing=0 repl=0 um=3 us=3 uk=3 cri=0 drop=2 1 3/6 0 0 true
+ B5 the refusals: a person, a file-only and a CRM connection, a chunk out of its form, a slice out of its form; an address a bare @                                                                                                                                                 | ok     | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04: a chunk's rows hold the staging's columns only, not serial_number CMA04 CMA04 CMA04: line 4: serial is longer than the staging takes CMA04 CMA04 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04: a record id lies outside its slice (from rec-000001 before rec-000100): nothing is marked true | CMA06 CMA06 | rows=1 ins=1 upd=0 same=0 missing=0 repl=0 um=1 us=1 uk=1 cri=1 drop=3 0/0/0 -:-:true
+ B6 the run's counts take the phase times, components_closed, the slowest chunk and slice and the adaptive chunks, another key refused; the setting assets_load_chunk by form; view_id refused on an asset register                                                                 | ok     | ok 12/6/1/140/7/500/1 CMA04 ok CMA04 ok CMA04: an asset register is read whole: view_id is no setting of it (a view's filter would make the devices outside it look missing) ok {"table_id": "tblVerify0001", "assets_load_chunk": 1000}
+ B7 the mapped fields' types: the first read recorded, a later one kept out, mapped again (another id, or the same id removed and set) read afresh; the refusals, a file-only connection's by its message                                                                           | ok     | 2 0 fldVerify0000001:singlelinetext:true fldVerify0000002:date:true | fldVerify0000002:date fldVerify0000003:- 1 number - 1 singlelinetext | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA06 CMA02
+ B8 a kind the register emptied closes the component (no new row, its item due unknown); a kind not staged, or a dropped serial without an expiry, left as it is; a rerun changes nothing; held again: another serial inserted, the same serial reopened                            | ok     | closed=2 repl=0 ins=0 drop=1 | rec-000101:battery:B-101:2027-01-20:current rec-000101:pads:P-101:2026-12-10:closed rec-000102:battery:B-102:2027-01-20:current rec-000102:pads:P-102:2026-12-10:current rec-000104:battery:B-104:2027-01-20:closed rec-000104:pads:P-104:2026-12-10:current battery:recorded:2027-01-20 pads:unknown:- unknown=1 | closed=0 upd=0 same=3 | closed=0 repl=0 | rec-000101:battery:B-101:2027-01-20:current rec-000101:pads:P-101:2026-12-10:closed rec-000101:pads:P-101-r:2028-06-30:current rec-000102:battery:B-102:2027-01-20:current rec-000102:pads:P-102:2026-12-10:current rec-000104:battery:B-104:2027-01-20:current rec-000104:pads:P-104:2026-12-10:current battery:recorded:2027-01-20 pads:recorded:2028-06-30 unknown=0
+ C1 one chunk of 1,000 unchanged rows at 50,000 devices as the Ingest user, under verify.max_ms                                                                                                                                                                                     | ok     | 992.1 ms (budget 7500), stage 31, map 531, upsert 196, components 229; rows=1000 ins=0 upd=0 same=1000 missing=0 repl=0 um=0 us=0 uk=0 cri=0 drop=0
+ C2 the final step over 49,500 record ids of 50,000 devices in 50 slices as the Ingest user: each slice under verify.max_ms                                                                                                                                                         | ok     | 50 slices, 49500 ids; slowest 727.6 ms (budget 7500), all 1862.3 ms; missing_now=500
+ C3 115's C1 again in a fresh transaction: a full snapshot of 5,000 unchanged records staged and loaded in one call, under verify.max_one_call_ms, its phases                                                                                                                       | ok     | 3651.4 ms (budget 10000): staging insert 2310.5; load: stage 10, map 530, upsert 66, components 153, missing 9, cleanup 562; rows=5000 ins=0 upd=0 same=5000 missing=0 repl=0 um=0 us=0 uk=0 cri=0 drop=0
+ C4 a first load of 50,000 new records into an empty connection in chunks under the adapter's rule (from 1,000, halved after a call slower than a third of the timeout, at least 100), each call its own transaction, no statistics read: all loaded, each call under verify.max_ms | FAIL   | 452 calls, sizes 1000 to 100, 4 halvings (slower than 5000 ms); first 1360.2 ms, last 1446.0, slowest 15709.5 (budget 7500); first five 5987 on average, last five 964; phases first: map 107, upsert 269, components 957; last: map 21, upsert 526, components 695; 50000 devices
+ C5 the Maintenance page of 24 months and the device list of all buckets over 50,000 devices, as the application, under verify.max_report_ms                                                                                                                                        | FAIL   | page 3763.8 ms, list 6236.9 ms (budget 5000, best of three each); the page: 49500 devices, 100 cells; the list: 500 of 84215 rows
+ Z1 every step its own transaction, as each of the ingest's calls is                                                                                                                                                                                                                | ok     | 619 steps, 619 transactions; PostgreSQL 18.6; shared_buffers 128MB, work_mem 4MB, jit on
+ Z2 the throwaway tenants removed with their rows and audit rows, at the start and at the end; every table with a tenant_id held by a foreign key to cma.tenant, every foreign key into a tenant's rows from a table of cma, paired on tenant_id                                    | ok     | start: verify-0008zk-one absent, verify-0008zk-two absent, verify-0008zk-one-call absent, verify-0008zk-volume absent; end: 4 removed in 245556.9 ms; 1 cleanups tried again after a deadlock; 101 tables with a tenant_id, each with a foreign key to cma.tenant; 234 foreign keys into a tenant's rows, all from cma and paired on tenant_id
+ verdict                                                                                                                                                                                                                                                                            | FAIL   | 117_verify_asset_sync_load: 19 ok, 2 FAIL
+(22 rows)
+
+RESET

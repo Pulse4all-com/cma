@@ -1,0 +1,254 @@
+DO
+SET
+DO
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ a
+(1 row)
+
+ set_config 
+------------
+ 20
+(1 row)
+
+ set_config 
+------------
+ 50
+(1 row)
+
+ set_config 
+------------
+ 100
+(1 row)
+
+ set_config 
+------------
+ 300
+(1 row)
+
+ set_config 
+------------
+ 500
+(1 row)
+
+ set_config 
+------------
+ 150
+(1 row)
+
+ set_config 
+------------
+ 500
+(1 row)
+
+ set_config 
+------------
+ 240
+(1 row)
+
+psql:<stdin>:93: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+psql:<stdin>:142: NOTICE:  table "reads_0131" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+INSERT 0 101
+UPDATE 2
+UPDATE 6
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+                                      check_name                                      | result |                                                                                            detail                                                                                             
+--------------------------------------------------------------------------------------+--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ rolled back                                                                          | info   | the timed part is rolled back: 0 audit row(s) of its writes remain
+ pulse4all-invest periods                                                             | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-10 to 2026-11-09; today 2026-11-09; connection none
+ pulse4all-invest current takes                                                       | info   | refreshed before the reads: {"current_rows": 0, "current_fresh": 0, "current_failed": 0, "current_running": 0, "current_refreshed": 0, "current_not_set_up": 1, "current_duration_ms": 21}
+ pulse4all-invest polls: identity principal                                           | skip   | no active person holds *: not timed
+ pulse4all-invest polls: messages poll (since now)                                    | skip   | no active person holds *: not timed
+ pulse4all-invest polls: team now                                                     | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest polls: work status flags                                            | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest polls: inbound today                                                | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest polls: missed callbacks                                             | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest polls: missed callbacks summary                                     | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest polls: inbound now (one statement)                                  | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest polls: shifts today                                                 | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest welcome agent: own day today                                        | skip   | no active person holds workday.own: not timed
+ pulse4all-invest welcome agent: statuses                                             | skip   | no active person holds workday.own: not timed
+ pulse4all-invest welcome agent: app links                                            | skip   | no active person holds *: not timed
+ pulse4all-invest welcome agent: my roster today                                      | skip   | no active person holds roster.view: not timed
+ pulse4all-invest welcome agent: updates (5 messages)                                 | skip   | no active person holds *: not timed
+ pulse4all-invest welcome agent: waiting for you                                      | skip   | no active person holds leads.accept or workday.own: not timed
+ pulse4all-invest welcome manager: team hours 31 days                                 | skip   | no active person holds workday.team: not timed
+ pulse4all-invest welcome manager: follow-up summary                                  | skip   | no active person holds monitoring.live or performance.team or workday.team: not timed
+ pulse4all-invest welcome admin: roles                                                | skip   | no active person holds users.manage_all: not timed
+ pulse4all-invest my hours: own days 7 days                                           | skip   | no active person holds workday.own: not timed
+ pulse4all-invest my schedule: my roster week                                         | skip   | no active person holds roster.view: not timed
+ pulse4all-invest messages: inbox (50 messages)                                       | skip   | no active person holds *: not timed
+ pulse4all-invest my account: my profile                                              | skip   | no active person holds *: not timed
+ pulse4all-invest live board: team members now                                        | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest live board: tenant settings                                         | skip   | no active person holds monitoring.live: not timed
+ pulse4all-invest team people: directory                                              | skip   | no active person holds users.manage_agents or users.manage_all: not timed
+ pulse4all-invest team people: teams                                                  | skip   | no active person holds users.manage_agents or users.manage_all: not timed
+ pulse4all-invest team people: skills                                                 | skip   | no active person holds users.manage_agents or users.manage_all: not timed
+ pulse4all-invest team people: organisations                                          | skip   | no active person holds users.manage_agents or users.manage_all: not timed
+ pulse4all-invest team people: linked accounts                                        | skip   | no active person holds users.manage_agents or users.manage_all: not timed
+ pulse4all-invest team people: invitations                                            | skip   | no active person holds users.manage_agents or users.manage_all: not timed
+ pulse4all-invest team hours: team people                                             | skip   | no active person holds workday.team: not timed
+ pulse4all-invest team hours: team hours 7 days                                       | skip   | no active person holds workday.team: not timed
+ pulse4all-invest roster week: roster week                                            | skip   | no active person holds roster.manage: not timed
+ pulse4all-invest roster week: roster people                                          | skip   | no active person holds roster.manage: not timed
+ pulse4all-invest roster week: roster entries                                         | skip   | no active person holds roster.manage: not timed
+ pulse4all-invest roster week: roster coverage                                        | skip   | no active person holds roster.manage: not timed
+ pulse4all-invest roster week: roster weeks around                                    | skip   | no active person holds roster.manage: not timed
+ pulse4all-invest roster week: absence types                                          | skip   | no active person holds roster.manage: not timed
+ pulse4all-invest follow-up: follow-up page with callbacks                            | skip   | no active person holds performance.team: not timed
+ pulse4all-invest sources: sources                                                    | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest sources: form categories                                            | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest sources: record kinds                                               | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest connection page: the connection                                     | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest connection page: connection config                                  | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest connection page: connection catalogs                                | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest connection page: pipeline response times                            | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest connection page: reads                                              | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest connection page: markets, hours, holidays                           | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest system health: storage round trip                                   | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest system health: system health runs                                   | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest system health: outbox status                                        | skip   | no active person holds tenant.configure: not timed
+ pulse4all-invest data quality: data quality checks                                   | skip   | no active person holds reports.view or tenant.configure: not timed
+ pulse4all-invest data quality: outbox late                                           | skip   | no active person holds reports.view or tenant.configure: not timed
+ pulse4all-invest data quality: flash data quality overview                           | skip   | no active person holds reports.view or performance.team or tenant.configure: not timed
+ pulse4all-invest data quality: flash data quality first page                         | skip   | no active person holds reports.view or performance.team or tenant.configure: not timed
+ pulse4all-invest flash: landing                                                      | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest flash: snapshots                                                    | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest reviews all: reviews all by month                                   | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base: document now (the current take)                     | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base: records first page live                             | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base: records page of 50 live                             | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base: devices past due page of 50                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base: without subscription reference page of 50           | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base: serial search                                       | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base as of month end: document as of the month end        | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest installed base as of month end: frozen list first page              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest campaigns: journeys                                                 | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest welcome agent (set)                                                 | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest welcome manager (set)                                               | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest welcome admin (set)                                                 | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest my hours (set)                                                      | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest my schedule (set)                                                   | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest messages (set)                                                      | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest my account (set)                                                    | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest live board (set)                                                    | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest team people (set)                                                   | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest team hours (set)                                                    | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest roster week (set)                                                   | ok     | 0 ms, the reads summed, against 100 ms
+ pulse4all-invest follow-up (set)                                                     | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest sources (set)                                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest connection page (set)                                               | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest system health (set)                                                 | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest data quality (set)                                                  | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest flash (set)                                                         | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest reviews all (set)                                                   | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest installed base (set)                                                | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest installed base as of month end (set)                                | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions periods                                                      | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-10 to 2026-11-09; today 2026-11-09; connection 01a12f17-4fcb-7406-b0ff-b335c54f828a
+ pulse4all-subscriptions current takes                                                | info   | refreshed before the reads: {"current_rows": 202, "current_fresh": 0, "current_failed": 0, "current_running": 0, "current_refreshed": 1, "current_not_set_up": 0, "current_duration_ms": 440}
+ pulse4all-subscriptions polls: identity principal                                    | ok     | 2.8 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: messages poll (since now)                             | ok     | 2.2 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: team now                                              | ok     | 15.2 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: work status flags                                     | ok     | 0.1 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: inbound today                                         | ok     | 2.7 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: missed callbacks                                      | ok     | 2.6 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: missed callbacks summary                              | ok     | 2.6 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: inbound now (one statement)                           | ok     | 8.5 ms (best of 2) against 20 ms
+ pulse4all-subscriptions polls: shifts today                                          | ok     | 2.7 ms (best of 2) against 20 ms
+ pulse4all-subscriptions welcome agent: own day today                                 | ok     | 4.0 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: statuses                                      | ok     | 0.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: app links                                     | ok     | 0.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: my roster today                               | ok     | 1.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: updates (5 messages)                          | ok     | 1.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent: waiting for you                               | ok     | 2.1 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome manager: team hours 31 days                          | ok     | 25.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome manager: follow-up summary                           | ok     | 0.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome admin: roles                                         | ok     | 1.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions my hours: own days 7 days                                    | ok     | 3.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions my schedule: my roster week                                  | ok     | 1.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions messages: inbox (50 messages)                                | ok     | 1.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions my account: my profile                                       | ok     | 2.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions live board: team members now                                 | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions live board: tenant settings                                  | ok     | 1.0 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: directory                                       | ok     | 8.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: teams                                           | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: skills                                          | ok     | 0.6 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: organisations                                   | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: linked accounts                                 | ok     | 1.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team people: invitations                                     | ok     | 2.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team hours: team people                                      | ok     | 1.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions team hours: team hours 7 days                                | ok     | 7.0 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster week                                     | ok     | 2.0 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster people                                   | ok     | 4.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster entries                                  | ok     | 1.0 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster coverage                                 | ok     | 1.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: roster weeks around                             | ok     | 0.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions roster week: absence types                                   | ok     | 0.3 ms (best of 2) against 50 ms
+ pulse4all-subscriptions follow-up: follow-up page with callbacks                     | ok     | 51.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions sources: sources                                             | ok     | 49.8 ms (best of 2) against 150 ms
+ pulse4all-subscriptions sources: form categories                                     | ok     | 0.5 ms (best of 2) against 50 ms
+ pulse4all-subscriptions sources: record kinds                                        | ok     | 0.8 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: the connection                              | ok     | 49.8 ms (best of 2) against 150 ms
+ pulse4all-subscriptions connection page: connection config                           | ok     | 5.1 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: connection catalogs                         | ok     | 35.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: pipeline response times                     | ok     | 0.1 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: reads                                       | ok     | 0.6 ms (best of 2) against 50 ms
+ pulse4all-subscriptions connection page: markets, hours, holidays                    | ok     | 1.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions system health: storage round trip                            | ok     | 0.0 ms (best of 2) against 20 ms
+ pulse4all-subscriptions system health: system health runs                            | ok     | 287.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions system health: outbox status                                 | ok     | 0.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions data quality: data quality checks                            | ok     | 179.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions data quality: outbox late                                    | ok     | 0.4 ms (best of 2) against 50 ms
+ pulse4all-subscriptions data quality: flash data quality overview                    | ok     | 131.0 ms (best of 2) against 500 ms
+ pulse4all-subscriptions data quality: flash data quality first page                  | ok     | 82.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions flash: landing                                               | ok     | 229.8 ms (best of 2) against 500 ms
+ pulse4all-subscriptions flash: snapshots                                             | ok     | 1.0 ms (best of 2) against 50 ms
+ pulse4all-subscriptions reviews all: reviews all by month                            | ok     | 19.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions installed base: document now (the current take)              | ok     | 197.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions installed base: records first page live                      | ok     | 296.1 ms (best of 2) against 300 ms
+ pulse4all-subscriptions installed base: records page of 50 live                      | FAIL   | 322.7 ms (best of 2) against 300 ms
+ pulse4all-subscriptions installed base: devices past due page of 50                  | ok     | 207.5 ms (best of 2) against 300 ms
+ pulse4all-subscriptions installed base: without subscription reference page of 50    | ok     | 238.8 ms (best of 2) against 300 ms
+ pulse4all-subscriptions installed base: serial search                                | ok     | 181.7 ms (best of 2) against 300 ms
+ pulse4all-subscriptions installed base as of month end: document as of the month end | skip   | no snapshot for that date (CMA02: no Flash snapshot for 2026-10-31): nothing to time
+ pulse4all-subscriptions installed base as of month end: frozen list first page       | skip   | no snapshot for that date (CMA02: no frozen list of device for 2026-10-31: lists are kept for month ends): nothing to time
+ pulse4all-subscriptions campaigns: journeys                                          | ok     | 0.2 ms (best of 2) against 50 ms
+ pulse4all-subscriptions welcome agent (set)                                          | ok     | 9.8 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions welcome manager (set)                                        | ok     | 25.7 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions welcome admin (set)                                          | ok     | 1.2 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions my hours (set)                                               | ok     | 3.4 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions my schedule (set)                                            | ok     | 1.2 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions messages (set)                                               | ok     | 1.9 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions my account (set)                                             | ok     | 2.3 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions live board (set)                                             | ok     | 1.3 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions team people (set)                                            | ok     | 14.4 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions team hours (set)                                             | ok     | 8.5 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions roster week (set)                                            | ok     | 9.9 ms, the reads summed, against 100 ms
+ pulse4all-subscriptions follow-up (set)                                              | ok     | 51.5 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions sources (set)                                                | ok     | 51.1 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions connection page (set)                                        | ok     | 92.0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions system health (set)                                          | ok     | 287.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions data quality (set)                                           | ok     | 392.8 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions flash (set)                                                  | ok     | 230.8 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions reviews all (set)                                            | ok     | 19.2 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions installed base (set)                                         | ok     | 197.4 ms, the first paint's reads (the records stream after it, on their own row), against 500 ms
+ pulse4all-subscriptions installed base as of month end (set)                         | skip   | no snapshot for that date: nothing to time
+ verdict                                                                              | FAIL   | 131_time_all (part a): 103 ok, 1 FAIL, 70 skip; worst 322.7 ms (pulse4all-subscriptions installed base: records page of 50 live)
+(180 rows)
+
+DROP TABLE
+RESET

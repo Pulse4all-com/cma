@@ -1,0 +1,48 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:60: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+GRANT
+GRANT
+GRANT
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                                                                                                     check_name                                                                                                                                                                                      |        result        |                                                   detail                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009f is recorded after 0009e                                                                                                                                                                                                                                                                                                                                       | FAIL                 | 0009e, 0009f
+ S2 the functions the application's in the caller's rights, nothing for the readers; JIT off on the list; the list filters; the catalog triggers, both kinds on seven tables, the definer function                                                                                                                                                                                   | FAIL                 | 
+ S3 every function 160 remakes keeps exactly the settings it carried before: jit=off on cma.data_quality_of and cma.flash_rows_of, none on cma.flash_rows and cma.flash_file_record                                                                                                                                                                                                  | FAIL                 | cma.data_quality_of(uuid) has {}, before 160 {jit=off}; 
+ A1 D6: the check field_device_without_subscription_ref, the rule's function and the list without a subscription reference are the same devices (in one statement); 136's definition finds them; the list's count is theirs                                                                                                                                                          | FAIL                 | check d-14 | rule d-11,d-14 | list d-11,d-14 | 136 d-11,d-14 | total 2
+ A2 D7: the serial search is exact, trimmed and case-insensitive, finds every device with the serial (two share SN-d-1), none for an unknown one, nothing of another tenant; its rows are the records list's                                                                                                                                                                         | FAIL                 | SN-d-1=d-1+d-14/2;   sn-d-1 =d-1+d-14/2; SN-D-2=d-2/1; SN-nd-1=nd-1/1; SN-none=-/0; SN-d-1 x=-/0; same row
+ A3 every filter narrows the list as it narrows the take's rows (market, status, model, two together, unknown; the list's total is the rows' devices summed); the devices past due (2) differ from the items past due (3)                                                                                                                                                            | FAIL                 | {"market": "GB"} list 11 take 11; 
+ A4 the remade functions answer as before: the list 148's over a grid and every other overview, cma.flash_rows 148's, data quality 136's check by check; the new keys taken by the list and the file record, refused when not "true", on another overview, unknown or on a month end's list                                                                                          | FAIL                 | 64 lists equal; ok ok CMA04 CMA04 CMA04 CMA04 | ok CMA04 CMA04 CMA04; 1 file record
+ A5 D9: a catalog change the take reads forgets the tenant's takes (a status flag, a status inserted, a kind's status, a rule inserted and changed, a pipeline inserted, a stage closed, a task status done, a task type uncounted); a change it does not read keeps them (a status's name and aliases, a rule written unchanged, a pipeline's label); the other tenant's take stays | FAIL                 | 1/1 0/1 0/1 0/1 0/1 0/1 1/1 1/1 0/1 0/1 0/1 0/1 
+ D1 every active tenant with an asset register: the list without a subscription reference equals the check's devices, in one statement                                                                                                                                                                                                                                               | FAIL                 | 1 tenant(s), 1 device(s) without a subscription reference
+ D2 every active tenant: cma.data_quality_of equals 136's definition, check by check, in one statement                                                                                                                                                                                                                                                                               | FAIL                 | 2 tenant(s)
+ verdict                                                                                                                                                                                                                                                                                                                                                                             | PROVOKED, NOT A PASS | 161_verify_installed_base_now: 0 ok, 10 FAIL, 0 skip
+(11 rows)
+
+DROP TABLE
+RESET

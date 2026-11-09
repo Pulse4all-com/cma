@@ -1,0 +1,57 @@
+DO
+BEGIN
+SET
+SET
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+psql:db/160_installed_base_now.sql:770: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.device_status" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:773: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.device_status" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:777: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.device_component_kind" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:780: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.device_component_kind" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:784: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.maintenance_rule" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:787: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.maintenance_rule" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:791: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.connection_pipeline" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:794: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.connection_pipeline" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:798: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.connection_stage" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:801: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.connection_stage" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:805: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.connection_task_status" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:808: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.connection_task_status" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:812: NOTICE:  trigger "forget_flash_current_takes" for relation "cma.connection_task_type" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/160_installed_base_now.sql:815: NOTICE:  trigger "forget_flash_current_takes_change" for relation "cma.connection_task_type" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+INSERT 0 1
+COMMIT
+RESET
