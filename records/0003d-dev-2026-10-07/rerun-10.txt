@@ -13,13 +13,13 @@ DO
 SET
  version |                                                             description                                                              |      applied_by      | applied_at 
 ---------+--------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
- 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                              | <operator> | 2026-10-04
- 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views | <operator> | 2026-10-05
- 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                   | <operator> | 2026-10-06
- 0003a   | Team people: team_people for Add day and the person filter                                                                           | <operator> | 2026-10-06
- 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads               | <operator> | 2026-10-07
- 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                    | <operator> | 2026-10-07
- 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                   | <operator> | 2026-10-07
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                              | martin@pulse4all.com | 2026-10-04
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views | martin@pulse4all.com | 2026-10-05
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                   | martin@pulse4all.com | 2026-10-06
+ 0003a   | Team people: team_people for Add day and the person filter                                                                           | martin@pulse4all.com | 2026-10-06
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads               | martin@pulse4all.com | 2026-10-07
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                    | martin@pulse4all.com | 2026-10-07
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                   | martin@pulse4all.com | 2026-10-07
 (7 rows)
 
 RESET

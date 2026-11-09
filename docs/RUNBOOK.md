@@ -157,7 +157,8 @@ On a new machine, one step at a time:
    2>/dev/null)"` to look for your login in every form too). A prod output that fails it is masked first
    (the operator's login as `<operator>`), or its rows are left out with one line saying why, as
    `records/0009g-prod-2026-11-09`'s 07 did. `run_migration` runs the check on its own folder last. The
-   repository is public until launch.
+   check guards new output: records committed before 9 Nov 2026 are not re-checked and are not altered.
+   The repository is public until launch.
 
    The data map's schema snapshot (`tools/datamap/schema.sql`) runs with `psql -X -qAt`: `-X` skips
    `~/.psqlrc`, `-q` keeps the `SET` of its `set role cma_owner` out of the output, `-At` prints the one

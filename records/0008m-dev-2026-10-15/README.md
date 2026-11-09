@@ -2,7 +2,7 @@
 
 Brief B17a (email activity data model, amended with B17b's database half; PR #135), steps 2 to 4 of
 `docs/b17a-email-data/MORNING_RUNBOOK.md`, run by Martin on 15 October 2026 in p4a-cma-dev
-(cma-dev-pg), connected as `<operator>`. Written down by Claude Code at Martin's request
+(cma-dev-pg), connected as `martin@pulse4all.com`. Written down by Claude Code at Martin's request
 from his report of the run, as `records/0008l-*` were (PR #131); the values below are his. Ids,
 counts, dates and times only: no key, no secret and no personal data. The psql outputs of the run
 are not in this folder.
@@ -28,7 +28,7 @@ Studio on cma-dev-pg, the runbook's read-only queries:
 
 | Read | Value |
 |---|---|
-| `cma.schema_migration` | `0008m` applied by `<operator>` |
+| `cma.schema_migration` | `0008m` applied by `martin@pulse4all.com` |
 | `email.market_order` | `text`, default `contact,form,record,inbox` |
 | `email.no_response_days` | `integer`, default `5` |
 | `email.reply_target_minutes` | `integer`, default `240` |

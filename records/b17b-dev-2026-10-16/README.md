@@ -2,7 +2,7 @@
 
 Brief B17b (the email poll: HubSpot email engagements and inbox conversations, metadata only; PR #139,
 squash-merged as `1146ee3`), steps 1 to 8 of `docs/b17b-email-ingest/MORNING_RUNBOOK.md`, run by Martin
-in p4a-cma-dev (cma-dev-pg) and HubSpot's developer test account `CMA dev`, connected as `<operator>`.
+in p4a-cma-dev (cma-dev-pg) and HubSpot's developer test account `CMA dev`, connected as `martin@pulse4all.com`.
 Steps 1 to 3 and the merge ran on 15 October 2026 (git dates `1146ee3` 2026-10-15T16:02:39Z), step 7
 on 16 October 2026 (its run at 03:00:25Z). Written down by Claude Code at Martin's request from his report
 of the run, as `records/0008m-*` were (PR #138); the values below are his. Ids, counts, dates and times

@@ -22,7 +22,7 @@ dev   cma-web       on 2150403: Agent Two refused; Maintenance shows the fixture
                     4 exchanges, 4 without a due date)
 
 The register's connection (prod)
-prod  connection    adapter airtable, kind assets; created in Studio as <operator>
+prod  connection    adapter airtable, kind assets; created in Studio as martin@pulse4all.com
 prod  account id    first stored as the literal "<base id>"; corrected by a single audited owner-level update
                     (actor studio:martin) to appsEV7MhflMLd2Xv. No function exists to change a connection's
                     account id
