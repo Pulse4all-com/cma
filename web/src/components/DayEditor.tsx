@@ -214,7 +214,7 @@ export function DayEditor({
           save();
         }
       }}
-      className="m-auto max-h-[88vh] w-[52rem] overflow-y-auto rounded-card border border-p4a-border bg-white p-6 text-p4a-body shadow-[0_1px_2px_rgba(11,19,61,0.06)] backdrop:bg-p4a-inkt/30"
+      className="m-auto max-h-[88%] w-[52rem] overflow-y-auto rounded-card border border-p4a-border bg-white p-6 text-p4a-body shadow-[0_1px_2px_rgba(11,19,61,0.06)] backdrop:bg-p4a-inkt/30"
     >
       <h2 id="day-editor-title" className="text-panel font-semibold text-p4a-heading">
         {target.mode === "add" ? t.addTitle : t.correctTitle}

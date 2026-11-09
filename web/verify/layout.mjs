@@ -1,5 +1,6 @@
 /**
- * Verifier: layout at 1280 and 1920 px, the 1280 px gate below that, no
+ * Verifier: layout at 1280 and 1920 px (zoom 1), the desktop fit from 1152 to 1279 px (since 9 November 2026: the 1280 px
+ * layout zoomed to the window, see expectFit) and the gate below 1152 px with how to fix it, no
  * horizontal scrolling, the shell dimensions from the tokens, and the keycaps
  * that make the keyboard shortcuts discoverable. Also the navigation per
  * permission: everyone lands on Welcome (increment e), which pages each test
@@ -73,9 +74,13 @@
  * the window, and at 1280x600 the rail with its longest group open scrolls on its own to its toggle.
  * Saves screenshots under records/ for the release note.
  *
- *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
- *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
- *       1279 px and demands the app shell, moves one hint panel over its header, lets the
+ * The two widths come from src/lib/desktop-fit.ts and the gate's words from src/lib/copy.ts, which Node reads with its type
+ * stripping (on by default from Node 22.18; npm run verify:layout passes the flag for earlier 22s).
+ *
+ *   BASE=http://localhost:8080 npm run verify:layout                expect PASS
+ *   BASE=http://localhost:8080 npm run verify:layout -- --provoke   zooms 1920 px, breaks each fit
+ *       check at 1216 px (see expectFit), demands the app shell at 1151 px and the old gate's number in its words,
+ *       moves one hint panel over its header, lets the
  *       Intake and Inbound tables spill out of their cards, writes a count on a Light Blue reason mark,
  *       lets the Calls tag table and the per-agent table spill out of theirs,
  *       widens the missed-reason table past its card on Sources,
@@ -93,6 +98,8 @@
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
+import { copy } from "../src/lib/copy.ts";
+import { DESIGN_WIDTH_PX, FIT_FLOOR_PX } from "../src/lib/desktop-fit.ts";
 
 /** Since night N06 every page route streams its skeleton first (loading.tsx): wait until the page has replaced it */
 async function settle(page) {
@@ -144,11 +151,14 @@ async function expectShell(width, height) {
   await p.goto(BASE + "/");
   await settle(p);
   await p.waitForLoadState("networkidle");
+  // --provoke scales the window above the design width as the band does under it: the zoom must stay 1 there
+  if (provoke && width > DESIGN_WIDTH_PX) await p.addStyleTag({ content: "html { zoom: 0.9 !important }" });
   const m = await p.evaluate(() => {
     const nav = document.querySelector("nav");
     const header = document.querySelector("header");
     const main = document.querySelector("main");
     return {
+      zoom: parseFloat(getComputedStyle(document.documentElement).zoom) || 1,
       gateVisible: !!document.querySelector('[data-testid="desktop-only"]') && getComputedStyle(document.querySelector('[data-testid="desktop-only"]')).display !== "none",
       scrollX: document.documentElement.scrollWidth > window.innerWidth,
       rail: nav ? nav.getBoundingClientRect().width : 0,
@@ -160,6 +170,7 @@ async function expectShell(width, height) {
   });
   const tag = `${width}x${height}`;
   if (m.gateVisible) problems.push(`${tag}: the desktop-only gate is showing instead of the app`);
+  if (Math.abs(m.zoom - 1) > 0.005) problems.push(`${tag}: the root element is zoomed to ${m.zoom}, expected 1 from the design width up`);
   if (m.scrollX) problems.push(`${tag}: page scrolls horizontally`);
   if (Math.round(m.rail) !== 256) problems.push(`${tag}: rail is ${m.rail}px, token says 256`);
   if (Math.round(m.topbar) !== 56) problems.push(`${tag}: top bar is ${m.topbar}px, token says 56`);
@@ -1213,6 +1224,9 @@ async function expectFrameFixed() {
   }
 }
 
+// The gate below FIT_FLOOR_PX (softened on 9 November 2026): the message in the page's language, saying how to make the
+// window wide enough, with the number built from FIT_FLOOR_PX, and the app not rendered. --provoke expects the old gate's
+// number (DESIGN_WIDTH_PX) in the message
 async function expectGate(width, height) {
   const p = await b.newPage({ viewport: { width, height } });
   await p.goto(BASE + "/");
@@ -1220,8 +1234,295 @@ async function expectGate(width, height) {
   const gate = await p.locator('[data-testid="desktop-only"]').isVisible();
   const shell = await p.locator("nav").isVisible();
   if (!gate || shell) problems.push(`${width}x${height}: expected the desktop-only gate, got the app`);
+  const shown = await p.evaluate(() => {
+    const g = document.querySelector('[data-testid="desktop-only"]');
+    return { lang: document.documentElement.lang, title: g?.querySelector("h1")?.textContent ?? "", body: g?.querySelector("p")?.textContent ?? "" };
+  });
+  const words = (copy[shown.lang] ?? copy.en).desktopOnly;
+  const body = words.body.replace("{px}", String(provoke ? DESIGN_WIDTH_PX : FIT_FLOOR_PX));
+  if (shown.title !== words.title) problems.push(`${width}x${height}: the gate's title is "${shown.title}", expected "${words.title}"`);
+  if (shown.body !== body) problems.push(`${width}x${height}: the gate says "${shown.body}", expected "${body}"`);
   await p.screenshot({ path: `${outDir}/${width}x${height}-gate.png` });
   await p.close();
+}
+
+// The desktop fit (9 November 2026, src/lib/desktop-fit.ts): from FIT_FLOOR_PX to just under DESIGN_WIDTH_PX the app renders
+// its DESIGN_WIDTH_PX layout zoomed to the window, while media queries read the real window. At 1279, 1216 and 1152 px: the
+// app and not the gate, the zoom the window over 1280 (within 0.005), laid out 1280 px wide, the rail and the top bar at their
+// tokens, no horizontal page scroll; on the pages checked at 1280 the main area never sideways; the Follow-up open links in
+// their tables' view (the pinned link column), the roster's week bar on one line, the Invite dialog inside the window and
+// centred at its 1280 width. At 1216: the frame fixed (the wheel and End scroll main, never the page; a fixed element 24 px
+// times the zoom from the window's corner), a header hint next to its mark within 4 px, a resize from 1400 to 1200 to 1100 to
+// 1400 without a reload, and the roster's print view at A4 printing as it does from 1280 (zoom 1, the same PDF). --provoke at
+// 1216 takes the zoom away on Welcome, widens main's content on the first page, unpins the Follow-up link column, narrows the
+// week bar, shifts the Invite dialog, lets the page scroll under the frame, places the hint as before (unscaled), freezes
+// the zoom across the resize and zooms the print
+const FIT_WIDTHS = [DESIGN_WIDTH_PX - 1, (DESIGN_WIDTH_PX + FIT_FLOOR_PX) / 2, FIT_FLOOR_PX];
+const FIT_MID = FIT_WIDTHS[1];
+const FIT_PAGES = {
+  manager: ["/reports/flash", "/reports/dashboard?range=month", "/reports/speed-to-lead?range=month", "/reports/follow-up",
+    "/reports/intake?range=month", "/reports/inbound?range=month", "/reports/data-quality", "/reports/calls?range=month&group=day",
+    "/reports/calls-per-agent?range=month", "/reports/forms?range=month&group=day", "/reports/email?range=month&group=day",
+    "/reports/email-per-agent?range=month", "/reports/first-orders?range=month&group=day", "/reports/orders-per-person?range=month",
+    "/reports/attempts?range=month&group=day", "/reports/attempts-per-agent?range=month", "/reports/funnel?range=month",
+    "/reports/cancellations?range=month", "/reports/installed-base", "/live/newco", "/campaigns", "/campaigns/opc", "/roster/planner"],
+  admin: ["/team/people", "/configuration/sources", "/configuration/sources/00000000-0000-7000-8000-00000000c002", "/configuration/markets",
+    "/configuration/alert-rules"],
+};
+
+/** The open page under the fit, in the layout's own pixels (window pixels over the zoom) */
+function fitOf(p) {
+  return p.evaluate(() => {
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const gate = document.querySelector('[data-testid="desktop-only"]');
+    const nav = document.querySelector("nav");
+    const header = document.querySelector("header");
+    const main = document.querySelector("main");
+    window.scrollTo(100000, 0);
+    const pageX = window.scrollX;
+    window.scrollTo(0, 0);
+    return {
+      zoom,
+      gate: !!gate && getComputedStyle(gate).display !== "none",
+      app: !!nav && nav.getClientRects().length > 0,
+      layout: document.documentElement.getBoundingClientRect().width / zoom,
+      rail: nav ? nav.getBoundingClientRect().width / zoom : 0,
+      topbar: header ? header.getBoundingClientRect().height / zoom : 0,
+      content: main?.querySelector("div") ? main.querySelector("div").getBoundingClientRect().width / zoom : 0,
+      pageX,
+      mainX: main ? main.scrollWidth - main.clientWidth : 0,
+    };
+  });
+}
+
+/** Two frames, so a resize has been handled and laid out */
+const frames = (p) => p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+async function expectFit() {
+  for (const width of FIT_WIDTHS) {
+    const tag = `${width}x800`;
+    const want = width / DESIGN_WIDTH_PX;
+    const before = problems.length;
+    const fitted = (where, m) => {
+      if (m.gate || !m.app) problems.push(`${where}: ${m.gate ? "the desktop-only gate shows" : "the app is not rendered"}, expected the app scaled to the window`);
+      if (Math.abs(m.zoom - want) > 0.005) problems.push(`${where}: the zoom is ${m.zoom}, expected ${want.toFixed(4)} (the window over ${DESIGN_WIDTH_PX})`);
+      if (m.pageX > 0) problems.push(`${where}: the page scrolls horizontally`);
+      if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px`);
+    };
+    for (const [subject, paths] of Object.entries(FIT_PAGES)) {
+      const ctx = await b.newContext({ viewport: { width, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+      const p = await ctx.newPage();
+      if (subject === "manager") {
+        // The shell on Welcome: the design width's layout, its tokens
+        await p.goto(BASE + "/");
+        await settle(p);
+        await p.waitForLoadState("networkidle");
+        if (provoke && width === FIT_MID) await p.evaluate(() => { const s = document.getElementById("cma-fit"); if (s) s.textContent = ""; });
+        const m = await fitOf(p);
+        fitted(tag, m);
+        if (Math.abs(m.layout - DESIGN_WIDTH_PX) > 1) problems.push(`${tag}: laid out ${m.layout.toFixed(1)}px wide, expected the design width, ${DESIGN_WIDTH_PX}`);
+        if (Math.round(m.rail) !== 256) problems.push(`${tag}: the rail is ${m.rail.toFixed(1)}px in the layout, token says 256`);
+        if (Math.round(m.topbar) !== 56) problems.push(`${tag}: the top bar is ${m.topbar.toFixed(1)}px in the layout, token says 56`);
+        if (m.content > 896.5) problems.push(`${tag}: the content column is ${m.content.toFixed(1)}px in the layout, wider than max-w-4xl`);
+        await p.screenshot({ path: `${outDir}/${tag}-fit.png` });
+      }
+      for (const [i, path] of paths.entries()) {
+        await p.goto(BASE + path);
+        await settle(p);
+        await p.waitForLoadState("networkidle");
+        if (provoke && width === FIT_MID && subject === "manager" && i === 0) {
+          await p.evaluate(() => { const d = document.createElement("div"); Object.assign(d.style, { width: "2400px", height: "1px" }); document.querySelector("main").appendChild(d); });
+        }
+        fitted(`${subject} ${path} at ${tag}`, await fitOf(p));
+        const where = `${subject} ${path.split("?")[0]} at ${tag}`;
+        // The pinned link column (Follow-up's tables): every open link in its table's view, the table scrolled or not
+        if (path === "/reports/follow-up") {
+          const links = await p.evaluate((unpin) => {
+            const tables = [...document.querySelectorAll('table[data-testid^="follow-up-"]')].filter((t) => t.querySelector("tbody tr td:last-child a"));
+            return tables.map((t) => {
+              const box = t.parentElement;
+              if (unpin) {
+                for (const c of t.querySelectorAll("tr > :last-child")) c.style.position = "static";
+                t.style.minWidth = "2400px";
+              }
+              const r = box.getBoundingClientRect();
+              const a = t.querySelector("tbody tr td:last-child a").getBoundingClientRect();
+              return { id: t.dataset.testid, inView: a.width > 0 && a.left >= r.left - 0.5 && a.right <= r.right + 0.5 && a.right <= window.innerWidth };
+            });
+          }, provoke && width === FIT_MID);
+          if (links.length === 0) problems.push(`${where}: no Follow-up table with an open link to check`);
+          for (const x of links) if (!x.inView) problems.push(`${where}: ${x.id}'s open link is out of its table's view`);
+        }
+        // The roster's week bar: the three week links on one line
+        if (path === "/roster/planner") {
+          const bar = await p.evaluate((narrow) => {
+            const links = [...document.querySelectorAll('main nav a[data-shortcut="p"], main nav a[data-shortcut="w"], main nav a[data-shortcut="n"]')];
+            if (narrow && links[0]) links[0].closest("nav").style.width = "200px";
+            return { n: links.length, lines: new Set(links.map((a) => Math.round(a.getBoundingClientRect().top))).size };
+          }, provoke && width === FIT_MID);
+          if (bar.n !== 3 || bar.lines !== 1) problems.push(`${where}: the week links are ${bar.n} on ${bar.lines} lines, expected 3 on one line`);
+        }
+        // A dialog: the Invite dialog inside the window, centred, at its width at 1280 (44rem) in the layout
+        if (path === "/team/people") {
+          await p.keyboard.press("v");
+          await p.locator('[data-testid="invite-dialog"][open]').waitFor({ timeout: 5000 }).catch(() => undefined);
+          const d = await p.evaluate((shift) => {
+            const dialog = document.querySelector('[data-testid="invite-dialog"][open]');
+            if (!dialog) return null;
+            if (shift) dialog.style.marginLeft = "0";
+            const z = dialog.currentCSSZoom || 1;
+            const r = dialog.getBoundingClientRect();
+            return {
+              inside: r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight + 0.5 && r.right <= window.innerWidth + 0.5,
+              centred: Math.abs(r.left - (window.innerWidth - r.right)) <= 1,
+              width: r.width / z,
+            };
+          }, provoke && width === FIT_MID);
+          if (!d) problems.push(`${where}: V does not open the Invite dialog`);
+          else {
+            if (!d.inside) problems.push(`${where}: the Invite dialog is not inside the window`);
+            if (!d.centred) problems.push(`${where}: the Invite dialog is not centred in the window`);
+            if (Math.round(d.width) !== 704) problems.push(`${where}: the Invite dialog is ${d.width.toFixed(1)}px wide in the layout, expected 704 (44rem) as at 1280`);
+          }
+          await p.keyboard.press("Escape");
+        }
+      }
+      await ctx.close();
+    }
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: zoom ${want.toFixed(4)}, the ${DESIGN_WIDTH_PX} px layout on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages`);
+  }
+
+  const tag = `${FIT_MID}x800`;
+  // The frame fixed under the zoom (23 October 2026): the wheel and End move main, never the page; a fixed element 24 px
+  // (in the layout) from the window's corner
+  {
+    const before = problems.length;
+    const ctx = await b.newContext({ viewport: { width: FIT_MID, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/live/newco");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    // --provoke puts the frame of before back, as expectFrameFixed's does
+    if (provoke) await p.evaluate(() => {
+      Object.assign(document.querySelector(".cma-frame").style, { gridTemplateRows: "var(--spacing-topbar) 1fr", overflow: "visible" });
+      Object.assign(document.querySelector("main").style, { position: "static", minHeight: "auto" });
+      Object.assign(document.querySelector("nav[data-rail-nav]").style, { overflow: "visible", minHeight: "auto" });
+    });
+    await p.locator("main h1").first().click();
+    const box = await p.locator("main").boundingBox();
+    await p.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height, 800 - box.y) / 2);
+    await p.mouse.wheel(0, 20000);
+    await p.waitForTimeout(300);
+    await p.keyboard.press("End");
+    await p.waitForTimeout(400);
+    const m = await p.evaluate(() => {
+      const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+      const el = document.createElement("div");
+      Object.assign(el.style, { position: "fixed", right: "24px", bottom: "24px", width: "8px", height: "8px" });
+      document.querySelector("main").appendChild(el);
+      const r = el.getBoundingClientRect();
+      el.remove();
+      return { y: window.scrollY, main: document.querySelector("main").scrollTop, right: (window.innerWidth - r.right) / zoom, bottom: (window.innerHeight - r.bottom) / zoom };
+    });
+    if (m.y !== 0) problems.push(`manager /live/newco at ${tag}: the wheel and End scrolled the page by ${m.y}px`);
+    if (m.main <= 0) problems.push(`manager /live/newco at ${tag}: the wheel and End did not scroll main`);
+    if (Math.abs(m.right - 24) > 1 || Math.abs(m.bottom - 24) > 1) problems.push(`manager /live/newco at ${tag}: a fixed element sits ${m.right.toFixed(1)} and ${m.bottom.toFixed(1)}px from the window's corner in the layout, expected 24`);
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: the frame fixed, main scrolls`);
+    await ctx.close();
+  }
+  // A header hint opens next to its mark: below its header (above when there is no room), its left 12 px before the mark,
+  // kept inside the window, all within 4 px. --provoke places it as before the fix, the window's pixels written unscaled
+  {
+    const before = problems.length;
+    const ctx = await b.newContext({ viewport: { width: FIT_MID, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    for (const [path, mark] of [["/reports/speed-to-lead?range=month", '[data-testid="speed-summary"] th:nth-child(3) button[data-header-hint]'],
+      ["/reports/speed-to-lead?range=month", '[data-testid="speed-summary"] th:nth-child(6) button[data-header-hint]']]) {
+      await p.goto(BASE + path);
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      const where = `manager ${path.split("?")[0]} ${mark.match(/nth-child\(\d+\)/)[0]} hint at ${tag}`;
+      if (await p.locator(mark).count() !== 1) { problems.push(`${where}: the mark is missing`); continue; }
+      await p.locator(mark).focus();
+      const h = await p.evaluate((unscaled) => {
+        const m = document.activeElement;
+        const panel = document.getElementById(m.getAttribute("aria-describedby") ?? "");
+        if (!panel || panel.hidden || getComputedStyle(panel).visibility !== "visible") return null;
+        if (unscaled) {
+          const z = panel.currentCSSZoom || 1;
+          panel.style.top = `${parseFloat(panel.style.top) * z}px`;
+          panel.style.left = `${parseFloat(panel.style.left) * z}px`;
+        }
+        const a = m.closest("th, [data-hint-anchor]").getBoundingClientRect();
+        const k = m.getBoundingClientRect();
+        const r = panel.getBoundingClientRect();
+        const below = a.bottom + 6 + r.height + 8 <= window.innerHeight;
+        return {
+          top: r.top, left: r.left,
+          wantTop: below ? a.bottom + 6 : Math.max(8, a.top - 6 - r.height),
+          wantLeft: Math.max(8, Math.min(k.left - 12, window.innerWidth - r.width - 8)),
+        };
+      }, provoke);
+      if (!h) problems.push(`${where}: the hint does not show on focus`);
+      else if (Math.abs(h.top - h.wantTop) > 4 || Math.abs(h.left - h.wantLeft) > 4) {
+        problems.push(`${where}: the panel sits at ${h.left.toFixed(1)}, ${h.top.toFixed(1)}, expected next to its mark at ${h.wantLeft.toFixed(1)}, ${h.wantTop.toFixed(1)}`);
+      }
+      await p.screenshot({ path: `${outDir}/manager-speed-to-lead-hint-${tag}.png` });
+    }
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: a header hint next to its mark`);
+    await ctx.close();
+  }
+  // A resize without a reload: 1400 (no zoom), 1200 (zoomed), 1100 (the gate), 1400 again. --provoke freezes the zoom: a copy
+  // of the script's style element takes its place, so the script's updates no longer reach the page
+  {
+    const before = problems.length;
+    const ctx = await b.newContext({ viewport: { width: 1400, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    if (provoke) await p.evaluate(() => { const s = document.getElementById("cma-fit"); s?.replaceWith(s.cloneNode(true)); });
+    for (const width of [1400, 1200, 1100, 1400]) {
+      await p.setViewportSize({ width, height: 800 });
+      await frames(p);
+      const m = await fitOf(p);
+      const gate = width < FIT_FLOOR_PX;
+      const want = width < DESIGN_WIDTH_PX && !gate ? width / DESIGN_WIDTH_PX : 1;
+      if (m.gate !== gate || m.app === gate) problems.push(`resize to ${width}: ${m.gate ? "the gate" : "the app"} shows, expected ${gate ? "the gate" : "the app"}`);
+      if (!gate && Math.abs(m.zoom - want) > 0.005) problems.push(`resize to ${width}: the zoom is ${m.zoom}, expected ${want.toFixed(4)}`);
+    }
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit: resize 1400, 1200, 1100, 1400 without a reload`);
+    await ctx.close();
+  }
+  // Print (8 October 2026): the zoom 1 on paper, and the roster's print view at A4 the same PDF from the band as from 1280
+  // (the creation and modification dates aside; its footer names the minute, so a pair that straddles a minute is made again)
+  {
+    const before = problems.length;
+    const pdfOf = async (width) => {
+      const ctx = await b.newContext({ viewport: { width, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "/roster/planner/print");
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      if (provoke && width === FIT_MID) await p.addStyleTag({ content: "@media print { html { zoom: 0.9 !important } }" });
+      const pdf = (await p.pdf({ preferCSSPageSize: true, printBackground: true })).toString("latin1").replace(/\/(CreationDate|ModDate) \(D:[^)]*\)/g, "");
+      await p.emulateMedia({ media: "print" });
+      const m = await p.evaluate(() => ({
+        zoom: parseFloat(getComputedStyle(document.documentElement).zoom) || 1,
+        sheet: !!document.querySelector('[data-testid="roster-print"] table')?.getClientRects().length,
+        gate: getComputedStyle(document.querySelector('[data-testid="desktop-only"]')).display !== "none",
+      }));
+      await ctx.close();
+      return { pdf, ...m };
+    };
+    let a = await pdfOf(DESIGN_WIDTH_PX);
+    let z = await pdfOf(FIT_MID);
+    if (a.pdf !== z.pdf) { a = await pdfOf(DESIGN_WIDTH_PX); z = await pdfOf(FIT_MID); }
+    if (Math.abs(z.zoom - 1) > 0.005) problems.push(`print from ${tag}: the zoom on paper is ${z.zoom}, expected 1`);
+    if (!z.sheet || z.gate) problems.push(`print from ${tag}: ${z.gate ? "the gate shows" : "the roster's sheet is missing"} on paper`);
+    if (a.pdf !== z.pdf) problems.push(`print from ${tag}: the roster's print view at A4 differs from the one printed at ${DESIGN_WIDTH_PX}`);
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: print at A4 as from ${DESIGN_WIDTH_PX}, zoom 1 on paper`);
+  }
 }
 
 // Sources, Markets and Alert rules (addition 0008e): at 1280 px as the admin, the shell without horizontal
@@ -2446,10 +2747,12 @@ await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();
 await expectIrreversibleConfirmations();
-if (provoke) await expectShell(1279, 800);
-else await expectGate(1279, 800);
+await expectFit();
+// --provoke also demands the app below the floor
+if (provoke) await expectShell(FIT_FLOOR_PX - 1, 800);
+await expectGate(FIT_FLOOR_PX - 1, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

@@ -100,7 +100,7 @@ export function FormDialog({
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      className={`m-auto ${wide ? "w-[44rem]" : "w-[32rem]"} max-w-[calc(100vw-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40`}
+      className={`m-auto ${wide ? "w-[44rem]" : "w-[32rem]"} max-w-[calc(100%-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40`}
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onClose();

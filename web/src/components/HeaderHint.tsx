@@ -7,7 +7,8 @@
  * own (its own tab stop) described by the panel, so a header that is a link or a sort control keeps
  * working as it does. The panel is placed below the header it explains (the closest th or
  * [data-hint-anchor]) when there is room, above it when there is not, and kept inside the viewport.
- * No library: the panel is fixed-positioned, so a table or card never clips it.
+ * No library: the panel is fixed-positioned, so a table or card never clips it. Under the desktop fit's zoom it is placed
+ * in window pixels and written in its own zoomed pixels, so it sits next to its mark at any zoom (9 November 2026).
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
@@ -44,8 +45,11 @@ export function HeaderHint({ label, text, more }: {
     const fitsBelow = below + height + MARGIN <= window.innerHeight;
     const top = fitsBelow ? below : Math.max(MARGIN, a.top - GAP - height);
     const left = Math.max(MARGIN, Math.min(m.left - 12, window.innerWidth - width - MARGIN));
-    p.style.top = `${top}px`;
-    p.style.left = `${left}px`;
+    // Under the desktop fit's zoom (src/lib/desktop-fit.ts) the rectangles and the window are in window pixels, while the
+    // panel's own top and left are in its zoomed CSS pixels: placed in window pixels, written divided by the zoom
+    const zoom = p.currentCSSZoom || 1;
+    p.style.top = `${top / zoom}px`;
+    p.style.left = `${left / zoom}px`;
     p.style.visibility = "visible";
   }, []);
 
