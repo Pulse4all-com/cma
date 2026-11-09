@@ -1,0 +1,12 @@
+ version | description            | applied_by                | applied_at
+---------+------------------------+---------------------------+------------
+ 0001    | Foundation             | operator.login@acme.test  | 2026-11-09
+(1 row)
+
+ email                    | business_date | working_h
+--------------------------+---------------+-----------
+ agent.two@example.com    | 2026-11-07    |      8.00
+ Jane.Doe@Acme.Test       | 2026-11-07    |      7.50
+(2 rows)
+
+ host=127.0.0.1 user=operator.login%40acme.test dbname=cma

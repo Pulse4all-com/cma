@@ -2,7 +2,12 @@
 -- Run as yourself (IAM login), no SET ROLE, after 00 to 03. Run the blocks A to H one at a time;
 -- blocks F, G and H each end in an expected error. Keep the output as the release record.
 -- Block A is universal (structure). Blocks B to H use the Pulse4all seed and the dev test data;
--- in prod, where 03 is not run, expect B to show 0 users and skip the user-level checks in D.
+-- in prod, where 03 is not run, B shows the tenants' user counts and D's lines that list people
+-- run in dev only: the flag verify.is_dev (set below, as the dev-only verifies set it: true where the
+-- dev seed's active agent.two@example.com exists, which prod never holds) guards them, and in prod D
+-- prints one line saying they were skipped (the flag is set once per session by the statement after the
+-- postgres guard; a block run on its own without it reads as not dev). B's audit summary prints <you>, <another login> or the role
+-- name for the actor, never the login itself (Decision log, 9 Nov 2026, verify output from prod).
 
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -13,6 +18,12 @@ begin
   end if;
 end
 $$;
+
+-- Dev only for the people lines of block D: the dev seed's active test person (db/03) exists in dev, never in prod
+set role cma_owner;
+select set_config('verify.is_dev', (exists (select 1 from cma.app_user u join cma.tenant t on t.id = u.tenant_id
+                                            where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false) as is_dev;
+reset role;
 
 -- A. Roles, ownership, RLS, policies, audit triggers, reader access ------------------------------------
 select rolname, rolcanlogin
@@ -61,13 +72,14 @@ order by 1;
 -- expect: pulse4all-invest 1, pulse4all-subscriptions 4
 
 select table_name, action, count(*) as changes,
-       min(actor_login) as actor_login,
+       case when min(actor_login) = session_user then '<you>' when min(actor_login) like '%@%' then '<another login>'
+            else min(actor_login) end as actor_login,
        bool_and(actor_user_id is null and actor_label is null) as system_actor
 from cma_read.audit_log
 group by 1, 2
 order by 1, 2;
 -- expect: inserts only, from the seed: app_role 8, app_user 5, app_user_external_id 2, channel 4,
---         organisation 4, role_permission 62, user_role 5; actor_login is your IAM login;
+--         organisation 4, role_permission 62, user_role 5; actor_login <you> (your IAM login, never shown);
 --         system_actor true (no app.user_id or app.actor_label was set)
 
 -- C. As yourself with a tenant setting: a reader limited to one tenant --------------------------------------
@@ -93,8 +105,12 @@ select set_config('app.actor_label', 'verify-script', true);
 
 select email, display_name
 from cma.app_user
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+union all
+select 'block D skipped: not the dev database (no dev seed)', null where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
--- expect: 4 rows, all Subscriptions; the Invest "agent.one" is not visible
+-- expect: 4 rows, all Subscriptions; the Invest "agent.one" is not visible. In prod: the one line "block D skipped",
+--         and the people lines below answer no rows
 
 select o.key as organisation, count(u.id) as users
 from cma.organisation o
@@ -110,6 +126,7 @@ select u.email, r.key as role, ur.scope_type
 from cma.user_role ur
 join cma.app_user u on u.tenant_id = ur.tenant_id and u.id = ur.user_id
 join cma.app_role r on r.tenant_id = ur.tenant_id and r.id = ur.role_id
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
 -- expect: 4 rows, scope_type NULL (whole tenant)
 
@@ -127,6 +144,7 @@ select table_name, action, actor_db_role, actor_label,
        actor_user_id = cma.current_user_id() as actor_is_manager,
        old_row ->> 'display_name' as before, new_row ->> 'display_name' as after
 from cma.audit_log
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by changed_at desc
 limit 1;
 -- expect: app_user, update, cma_app, verify-script, true, Agent One, Agent One (renamed)
