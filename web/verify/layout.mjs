@@ -96,7 +96,7 @@
  *       of their cards, puts the frame of before back (rows that grow, main not positioned, the rail not scrolling),
  *       expect FAIL, exit 1
  */
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 import { copy } from "../src/lib/copy.ts";
 import { DESIGN_WIDTH_PX, FIT_FLOOR_PX } from "../src/lib/desktop-fit.ts";
@@ -1255,10 +1255,10 @@ async function expectGate(width, height) {
 // the frame fixed (the wheel and End scroll main, never the page; a fixed element 24 px times the zoom from the window's
 // corner), a header hint next to its mark within 4 px, without JavaScript the unscaled layout (and the gate at 1151), a
 // resize from 1400 to 1200 to 1100 to 1400 without a reload, and the roster's print view at A4 printing as it does from
-// 1280 (zoom 1, the same PDF). --provoke at 1216 takes the zoom away on Welcome, widens main's content on the first page,
-// gives Flash's cards two columns, unpins the Follow-up link column, narrows the week bar, shifts the Invite dialog, lets
-// the page scroll under the frame, places the hint as before (unscaled), expects the zoom without JavaScript, freezes the
-// zoom across the resize and zooms the print
+// 1280 (zoom 1, the same pages, page 1 the same to the eye). --provoke at 1216 takes the zoom away on Welcome, widens main's
+// content on the first page, gives Flash's cards two columns, unpins the Follow-up link column, narrows the week bar,
+// shifts the Invite dialog, lets the page scroll under the frame, places the hint as before (unscaled), expects the zoom
+// without JavaScript, freezes the zoom across the resize and zooms the print
 const FIT_WIDTHS = [DESIGN_WIDTH_PX - 1, (DESIGN_WIDTH_PX + FIT_FLOOR_PX) / 2, FIT_FLOOR_PX];
 const FIT_MID = FIT_WIDTHS[1];
 const FIT_PAGES = {
@@ -1543,8 +1543,15 @@ async function expectFit() {
     console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit: resize 1400, 1200, 1100, 1400 without a reload`);
     await ctx.close();
   }
-  // Print (8 October 2026): the zoom 1 on paper, and the roster's print view at A4 the same PDF from the band as from 1280
-  // (the creation and modification dates aside; its footer names the minute, so a pair that straddles a minute is made again)
+  // Print (8 October 2026): the zoom 1 on paper, and the roster's print view at A4 from the band as it prints from 1280: the
+  // same page count, the same page size, and page 1 the same to the eye. Not the same bytes: Chromium writes the document's
+  // title into the PDF's /Title, and the print view carries two titles, its own <title> (the week) and the app's metadata
+  // title, whose order in <head> follows how the response streamed, so two identical sheets can differ in that one field
+  // (seen with Playwright's chromium v1248, Chrome for Testing 156, 9 November 2026). Page 1 is rendered by Chromium's own
+  // PDF viewer, in Playwright's full chromium (the headless shell has none; npx playwright install chromium installs both),
+  // and compared pixel by pixel: at most 0.1 % of the pixels may differ by more than 32 in a channel. The footer names the
+  // minute, so a pair that differs is made once more. On a failure both PDFs and both rendered pages go to OUT_DIR.
+  // --provoke zooms the paper to 0.9 from the band
   {
     const before = problems.length;
     const pdfOf = async (width) => {
@@ -1554,7 +1561,7 @@ async function expectFit() {
       await settle(p);
       await p.waitForLoadState("networkidle");
       if (provoke && width === FIT_MID) await p.addStyleTag({ content: "@media print { html { zoom: 0.9 !important } }" });
-      const pdf = (await p.pdf({ preferCSSPageSize: true, printBackground: true })).toString("latin1").replace(/\/(CreationDate|ModDate) \(D:[^)]*\)/g, "");
+      const pdf = await p.pdf({ preferCSSPageSize: true, printBackground: true });
       await p.emulateMedia({ media: "print" });
       const m = await p.evaluate(() => ({
         zoom: parseFloat(getComputedStyle(document.documentElement).zoom) || 1,
@@ -1564,13 +1571,87 @@ async function expectFit() {
       await ctx.close();
       return { pdf, ...m };
     };
-    let a = await pdfOf(DESIGN_WIDTH_PX);
-    let z = await pdfOf(FIT_MID);
-    if (a.pdf !== z.pdf) { a = await pdfOf(DESIGN_WIDTH_PX); z = await pdfOf(FIT_MID); }
-    if (Math.abs(z.zoom - 1) > 0.005) problems.push(`print from ${tag}: the zoom on paper is ${z.zoom}, expected 1`);
-    if (!z.sheet || z.gate) problems.push(`print from ${tag}: ${z.gate ? "the gate shows" : "the roster's sheet is missing"} on paper`);
-    if (a.pdf !== z.pdf) problems.push(`print from ${tag}: the roster's print view at A4 differs from the one printed at ${DESIGN_WIDTH_PX}`);
-    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: print at A4 as from ${DESIGN_WIDTH_PX}, zoom 1 on paper`);
+    /** Every page's MediaBox, in points, from the PDF's page objects (one per page) */
+    const pagesOf = (pdf) => pdf.toString("latin1").split("endobj")
+      .filter((o) => /\/Type\s*\/Page(?![s\w])/.test(o))
+      .map((o) => (o.match(/\/MediaBox\s*\[([^\]]+)\]/)?.[1] ?? "?").trim().split(/\s+/).map((n) => Math.round(Number(n))).join(" "));
+    // Page 1 in Chromium's PDF viewer at A4 landscape's size at 96 dpi, fitted, without its toolbar; taken once two shots in a
+    // row agree and hold a rendered page (a viewer still loading, or none, gives a near-empty image)
+    let viewer = null;
+    const pageOne = async (pdf) => {
+      viewer ??= await chromium.launch({ channel: "chromium" });
+      const p = await viewer.newPage({ viewport: { width: 1123, height: 794 } });
+      await p.setContent(`<html><body style="margin:0"><embed type="application/pdf" style="display:block;width:100vw;height:100vh"
+        src="data:application/pdf;base64,${pdf.toString("base64")}#toolbar=0&navpanes=0&view=Fit"></body></html>`);
+      let shot = null;
+      let steady = 0;
+      for (let i = 0; i < 80 && steady < 2; i++) {
+        await p.waitForTimeout(250);
+        const next = await p.screenshot();
+        steady = shot && next.equals(shot) && next.length > 20000 ? steady + 1 : 0;
+        shot = next;
+      }
+      await p.close();
+      return steady >= 2 ? shot : null;
+    };
+    /** Two PNGs compared in a canvas: the share of pixels that differ by more than 32 in a channel, and page 1's white share */
+    const compare = async (one, two) => {
+      const p = await b.newPage();
+      const r = await p.evaluate(async ([one, two]) => {
+        const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+        const pixels = (img) => {
+          const c = document.createElement("canvas");
+          Object.assign(c, { width: img.width, height: img.height });
+          const g = c.getContext("2d");
+          g.drawImage(img, 0, 0);
+          return g.getImageData(0, 0, c.width, c.height).data;
+        };
+        const [i1, i2] = await Promise.all([load(one), load(two)]);
+        if (i1.width !== i2.width || i1.height !== i2.height) return { same: false };
+        const [d1, d2] = [pixels(i1), pixels(i2)];
+        let differ = 0;
+        let white = 0;
+        for (let k = 0; k < d1.length; k += 4) {
+          if (Math.max(Math.abs(d1[k] - d2[k]), Math.abs(d1[k + 1] - d2[k + 1]), Math.abs(d1[k + 2] - d2[k + 2])) > 32) differ++;
+          if (d1[k] >= 245 && d1[k + 1] >= 245 && d1[k + 2] >= 245) white++;
+        }
+        return { same: true, differ: differ / (d1.length / 4), white: white / (d1.length / 4) };
+      }, [one, two].map((png) => `data:image/png;base64,${png.toString("base64")}`));
+      await p.close();
+      return r;
+    };
+    const pair = async () => {
+      const a = await pdfOf(DESIGN_WIDTH_PX);
+      const z = await pdfOf(FIT_MID);
+      const pages = { a: pagesOf(a.pdf), z: pagesOf(z.pdf) };
+      const shots = { a: await pageOne(a.pdf), z: await pageOne(z.pdf) };
+      const diff = shots.a && shots.z ? await compare(shots.a, shots.z) : null;
+      const same = JSON.stringify(pages.a) === JSON.stringify(pages.z) && !!diff?.same && diff.differ <= 0.001;
+      return { a, z, pages, shots, diff, same };
+    };
+    let r = await pair().catch((e) => ({ error: e }));
+    if (!r.error && !r.same) r = await pair().catch((e) => ({ error: e }));
+    await viewer?.close();
+    if (r.error) problems.push(`print from ${tag}: the PDFs could not be made and rendered (${r.error.message.split("\n")[0]}); page 1 is rendered in Playwright's full chromium: npx playwright install chromium`);
+    else {
+      const { a, z, pages, shots, diff } = r;
+      if (Math.abs(z.zoom - 1) > 0.005) problems.push(`print from ${tag}: the zoom on paper is ${z.zoom}, expected 1`);
+      if (!z.sheet || z.gate) problems.push(`print from ${tag}: ${z.gate ? "the gate shows" : "the roster's sheet is missing"} on paper`);
+      if (pages.a.length === 0 || JSON.stringify(pages.a) !== JSON.stringify(pages.z)) {
+        problems.push(`print from ${tag}: ${pages.z.length} pages of ${JSON.stringify(pages.z)} pt, at ${DESIGN_WIDTH_PX} ${pages.a.length} of ${JSON.stringify(pages.a)}`);
+      }
+      if (!shots.a || !shots.z) problems.push(`print from ${tag}: Chromium's PDF viewer did not render page 1 (Playwright's full chromium is needed: npx playwright install chromium)`);
+      else if (!diff.same) problems.push(`print from ${tag}: page 1 renders at another size than the one printed at ${DESIGN_WIDTH_PX}`);
+      else if (diff.white < 0.5) problems.push(`print from ${tag}: page 1 rendered without its sheet (${(diff.white * 100).toFixed(1)} % white)`);
+      else if (diff.differ > 0.001) problems.push(`print from ${tag}: page 1 differs from the one printed at ${DESIGN_WIDTH_PX} in ${(diff.differ * 100).toFixed(2)} % of its pixels, more than 0.1 %`);
+      if (problems.length > before) {
+        writeFileSync(`${outDir}/print-${DESIGN_WIDTH_PX}.pdf`, a.pdf);
+        writeFileSync(`${outDir}/print-${FIT_MID}.pdf`, z.pdf);
+        if (shots.a) writeFileSync(`${outDir}/print-${DESIGN_WIDTH_PX}.png`, shots.a);
+        if (shots.z) writeFileSync(`${outDir}/print-${FIT_MID}.png`, shots.z);
+      }
+    }
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  fit at ${tag}: print at A4 as from ${DESIGN_WIDTH_PX} (pages, size, page 1 to the eye), zoom 1 on paper`);
   }
 }
 
