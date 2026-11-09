@@ -1,7 +1,8 @@
 /**
  * Unit test: tools/check-records.mjs on the synthetic fixture tools/fixtures/check-records/ (a clean and a dirty
- * rerun output; every address on a domain reserved for examples, example.com, .invalid or .test) and on small files
- * written to a temporary folder. No database, no real data.
+ * rerun output) and on small files written to a temporary folder. No database, no real data: every address is on a
+ * reserved domain, example.com and .invalid (which the tool allows) or .test (which it does not, so acme.test stands
+ * in for a real person's domain).
  *
  *   node --test tools/check-records.test.mjs
  */

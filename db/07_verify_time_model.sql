@@ -7,7 +7,9 @@
 -- (also no audit rows) and run in prod before any real person exists. Blocks E, H and K use the dev
 -- fixture from 06 and run in dev only: the flag verify.is_dev (set below, as the dev-only verifies set
 -- it: true where the dev seed's active agent.two@example.com exists, which prod never holds) guards
--- them, and in prod each prints one line saying it was skipped, and nothing of anyone.
+-- them, and in prod each prints one line saying it was skipped, and nothing of anyone. The flag is set by
+-- the statement after the postgres guard, once per session: a block run on its own in a session without it
+-- reads as not dev and skips.
 -- Changed 9 November 2026: block E had listed every prod workday with the person's address and hours,
 -- and block A's additions list printed the login that applied each addition; it now prints <you>,
 -- <another login> or postgres instead of the address (Decision log, 9 Nov 2026, verify output from prod).
@@ -169,10 +171,10 @@ select u.email, s.business_date, s.status,
        s.is_capped, s.needs_correction, s.has_correction
 from cma.workday_summary s
 join cma.app_user u on u.tenant_id = s.tenant_id and u.id = s.user_id
-where current_setting('verify.is_dev')::boolean
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 union all
 select 'block E skipped: not the dev database (no dev seed)', null, null, null, null, null, null, null
-where not current_setting('verify.is_dev')::boolean
+where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by email, business_date;
 -- expect: agent.one: day-3 ended 8.00 working and 8.00 paid (the 30 min lunch counts for neither),
 --         day-2 ended 5.92, day-1 ended 8.07 with has_correction true (the manager's end at 17:02);
@@ -222,14 +224,14 @@ select (cma.correct_time_event(
           null, null, 'Forgot to end the workday', cma.current_user_id())).kind
 from cma.workday w
 join cma.app_user u on u.tenant_id = w.tenant_id and u.id = w.user_id
-where u.email = 'agent.two@example.com' and w.status = 'open' and current_setting('verify.is_dev')::boolean
+where u.email = 'agent.two@example.com' and w.status = 'open' and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 union all
-select 'block H skipped: not the dev database (no dev seed)' where not current_setting('verify.is_dev')::boolean;
+select 'block H skipped: not the dev database (no dev seed)' where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean;
 -- expect: end (in prod: the one line "block H skipped")
 select s.business_date, s.status, round(s.working_seconds / 3600.0, 2) as working_h, s.needs_correction, s.has_correction
 from cma.workday_summary s
 join cma.app_user u on u.tenant_id = s.tenant_id and u.id = s.user_id
-where u.email = 'agent.two@example.com' and current_setting('verify.is_dev')::boolean
+where u.email = 'agent.two@example.com' and coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;                                                                        -- expect: day-2 ended 8.00 false true
 -- the audit trail names the manager as actor and the correction row carries the approver
 select e.kind, e.source, e.reason is not null as has_reason, e.approved_by = cma.current_user_id() as approved_by_manager,
@@ -238,7 +240,7 @@ from cma.time_event e
 join cma.audit_log a on a.table_name = 'time_event' and a.row_id = e.id::text and a.action = 'insert'
 where e.source = 'correction'
   and e.user_id = (select id from cma.app_user where email = 'agent.two@example.com')
-  and current_setting('verify.is_dev')::boolean;
+  and coalesce(current_setting('verify.is_dev', true), 'false')::boolean;
 -- expect: end, correction, true, true, true, cma_app
 rollback;   -- the correction is discarded; the fixture keeps its open day for the web app
 
@@ -294,9 +296,9 @@ set local role cma_app;
 select t.slug
 from cma.find_tenants_for_identity('mock', 'agent-one') f
 join cma.tenant t on t.id = f.tenant_id
-where current_setting('verify.is_dev')::boolean
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 union all
-select 'block K skipped: not the dev database (no dev seed)' where not current_setting('verify.is_dev')::boolean
+select 'block K skipped: not the dev database (no dev seed)' where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
 -- expect: pulse4all-invest, pulse4all-subscriptions (same person in two tenants: the picker case); in prod the
 --         one line "block K skipped"

@@ -5,7 +5,8 @@
 -- in prod, where 03 is not run, B shows the tenants' user counts and D's lines that list people
 -- run in dev only: the flag verify.is_dev (set below, as the dev-only verifies set it: true where the
 -- dev seed's active agent.two@example.com exists, which prod never holds) guards them, and in prod D
--- prints one line saying they were skipped. B's audit summary prints <you>, <another login> or the role
+-- prints one line saying they were skipped (the flag is set once per session by the statement after the
+-- postgres guard; a block run on its own without it reads as not dev). B's audit summary prints <you>, <another login> or the role
 -- name for the actor, never the login itself (Decision log, 9 Nov 2026, verify output from prod).
 
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
@@ -104,9 +105,9 @@ select set_config('app.actor_label', 'verify-script', true);
 
 select email, display_name
 from cma.app_user
-where current_setting('verify.is_dev')::boolean
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 union all
-select 'block D skipped: not the dev database (no dev seed)', null where not current_setting('verify.is_dev')::boolean
+select 'block D skipped: not the dev database (no dev seed)', null where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
 -- expect: 4 rows, all Subscriptions; the Invest "agent.one" is not visible. In prod: the one line "block D skipped",
 --         and the people lines below answer no rows
@@ -125,7 +126,7 @@ select u.email, r.key as role, ur.scope_type
 from cma.user_role ur
 join cma.app_user u on u.tenant_id = ur.tenant_id and u.id = ur.user_id
 join cma.app_role r on r.tenant_id = ur.tenant_id and r.id = ur.role_id
-where current_setting('verify.is_dev')::boolean
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
 -- expect: 4 rows, scope_type NULL (whole tenant)
 
@@ -143,7 +144,7 @@ select table_name, action, actor_db_role, actor_label,
        actor_user_id = cma.current_user_id() as actor_is_manager,
        old_row ->> 'display_name' as before, new_row ->> 'display_name' as after
 from cma.audit_log
-where current_setting('verify.is_dev')::boolean
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by changed_at desc
 limit 1;
 -- expect: app_user, update, cma_app, verify-script, true, Agent One, Agent One (renamed)
