@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\"",
+            "timeout": 30,
+            "statusMessage": "Checking git rules"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__merge_pull_request|mcp__github__enable_pr_auto_merge",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

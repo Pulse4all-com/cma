@@ -35,6 +35,8 @@
 - Every brief that changes code ends in this order: build and run the pure verifiers; delegate to cma-reviewer and, in the same message, to the specialised reviewers that apply; fix every Critical, re-run the verifiers and review once more at most; a Critical still open after the second round goes in the PR description as open, never fixed silently; delegate to cma-docs-keeper with the reviewers' verdicts; open the PR with cma-reviewer's three-line summary, the specialised reviewers' one-liners and the performance opportunities taken or left and the docs keeper's file list.
 - A docs-only change skips the reviewers. A brief can say "no subagents" for a trivial change.
 - Subagents never run db/ scripts, never write records/, never reach a database or Google Cloud, and never use connectors.
+- .claude/settings.json wires hooks (`.claude/hooks/guard.mjs`, unit test `guard.test.mjs`) that enforce what the harness can check: no push to main, no `gh pr merge` or merge through the GitHub tools, a commit or push carrying records/ files runs `tools/check-records.mjs` first, and a reminder when `cloudbuild.yaml` or an existing db/ script is edited. A blocked call is never worked around.
+- .claude/skills/ holds the procedures: `new-migration` (numbers, script frame, verify, budgets, docs, Martin's steps) and `pr-description` (the PR's required shape); use them when a brief adds a migration or a PR is asked for.
 
 ## Database (db/)
 - Scripts are numbered and run in order; a change is a new script plus its verify script (for example `32_<name>.sql` and `33_verify_<name>.sql`), not an edit to a script that has run in prod. Every new tenant table gets `cma.setup_tenant_table(table)`.
