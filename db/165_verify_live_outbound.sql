@@ -1,6 +1,6 @@
 -- =============================================================================================
--- 165_verify_live_outbound.sql: verifies addition 0009h, the Live board's Outbound today and cma.inbound_now() without
--- Longest waiting
+-- 165_verify_live_outbound.sql: verifies addition 0009h, the Live board's Outbound today and cma.inbound_now() with
+-- Longest waiting always null
 -- =============================================================================================
 -- Universal: no seed is assumed. Block S checks the addition, the functions and the grants. Block B works on a throwaway
 -- tenant inside a subtransaction that is always rolled back, so nothing stays: synthetic people (example.invalid) and
@@ -18,7 +18,7 @@
 --   S1  the addition 0009h is recorded once, after 0009g
 --   S2  cma.outbound_today_of(uuid, timestamptz) and cma.outbound_now(): SQL, stable, the caller's rights, owned by
 --       cma_owner, jit off, executable by the application only; outbound_today_of's seven columns; cma.inbound_now():
---       plpgsql, stable, jsonb, the application's only, its text taking longest_waiting_seconds out of today
+--       plpgsql, stable, jsonb, the application's only, its text setting today's longest_waiting_seconds to null
 --   B1  the fixed calls of 6 October: 8 attempts (an unanswered one, one in progress, one on the New York line that
 --       started on 7 October in Amsterdam, one on the Tokyo line that started on 5 October in Amsterdam: both ends of
 --       the window), 7 connected, 87.5, 4 conversations (not under the talk threshold, not with a tag meaning
@@ -37,16 +37,17 @@
 --       cma.outbound_today_of at now(), with the running day's calls counted (2 attempts, 1 connected, 50.0, 1
 --       conversation, 40 s, 40.0)
 --   B7  cma.inbound_now() on the throwaway tenant, with a call waiting: the same JSON as 0008zx's definition once
---       longest_waiting_seconds is taken out of its today; 0008zx's today holds that key (not null) and the new one
---       does not; the other keys of today are the fourteen it had
---   E1  per active tenant: cma.inbound_now() the same as 0008zx's without the key
+--       longest_waiting_seconds is set to null in its today; 0008zx's today holds a number there and the new one null
+--       (the key is kept for one release, for main's web); the keys of today are the fifteen it had
+--   E1  per active tenant: cma.inbound_now() the same as 0008zx's with the key set to null
 --   E2  per active tenant: today's outbound figures the same as cma.calls_figures_of for the tenant's date
 --   E3  per active tenant: cma.outbound_now() no slower than cma.inbound_now(): the best of verify.timing_runs runs
 --       each, at most inbound's best plus verify.slack_ms. This is the brief's comparison, not the poll's budget:
 --       131_time_all.sql part a holds that (the rows 'outbound now' and 'live board calls (one statement)', 20 ms)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
 -- comparisons are provoked by a deliberate difference, not by the switch alone: B7 and E1 then compare with 0008zx's
--- JSON with longest_waiting_seconds left in, B2 with the report's figures of the day before.
+-- JSON with longest_waiting_seconds taken out (the new answer holds the key), B2 with the report's figures of the day
+-- before.
 -- =============================================================================================
 
 do $$
@@ -233,10 +234,10 @@ begin
   end if;
   if to_regprocedure('cma.inbound_now()') is not null
      and (pg_get_function_result('cma.inbound_now()'::regprocedure) <> 'jsonb'
-          or (select p.prosrc from pg_proc p where p.oid = 'cma.inbound_now()'::regprocedure) !~ 'to_jsonb\(x\) - ''longest_waiting_seconds''') then
-    v_bad := v_bad || 'inbound_now''s result, or its text keeps longest_waiting_seconds; ';
+          or (select p.prosrc from pg_proc p where p.oid = 'cma.inbound_now()'::regprocedure) !~ 'to_jsonb\(x\) \|\| ''\{"longest_waiting_seconds": null\}''::jsonb') then
+    v_bad := v_bad || 'inbound_now''s result, or its text does not set longest_waiting_seconds to null; ';
   end if;
-  insert into verify_0009h values (2, 'S2 outbound_today_of and outbound_now: SQL, stable, invoker, cma_owner, jit off; inbound_now without the key; the application''s only',
+  insert into verify_0009h values (2, 'S2 outbound_today_of and outbound_now: SQL, stable, invoker, cma_owner, jit off; inbound_now with the key null; the application''s only',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 end
 $$;
@@ -390,21 +391,21 @@ begin
     rows_ := rows_ || pg_temp.v0009h_row(16, 'B6 outbound_now(): an agent refused (CMA06); a supervisor reads the seven keys, outbound_today_of at now(), the running day''s calls',
       case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
 
-    -- B7. cma.inbound_now(): 0008zx's answer without the one key
+    -- B7. cma.inbound_now(): 0008zx's answer with the one key null
     v_bad := '';
     j := cma.inbound_now();
     j_old := pg_temp.inbound_now_0008zx();
-    -- provoked: the key left in 0008zx's answer, which the comparison must then report
-    if j is distinct from (case when v_provoke then j_old else j_old #- '{today,longest_waiting_seconds}' end) then v_bad := v_bad || 'not 0008zx''s JSON without the key; '; end if;
-    if j -> 'today' ? 'longest_waiting_seconds' then v_bad := v_bad || 'today still holds the key; '; end if;
+    -- provoked: the key taken out of 0008zx's answer, which the comparison must then report (the new answer holds it)
+    if j is distinct from (case when v_provoke then j_old #- '{today,longest_waiting_seconds}' else jsonb_set(j_old, '{today,longest_waiting_seconds}', 'null') end) then v_bad := v_bad || 'not 0008zx''s JSON with the key null; '; end if;
+    if (j -> 'today' -> 'longest_waiting_seconds') is distinct from 'null'::jsonb then v_bad := v_bad || 'today''s longest_waiting_seconds is not a null key; '; end if;
     if jsonb_typeof(j_old -> 'today' -> 'longest_waiting_seconds') is distinct from 'number' then v_bad := v_bad || '0008zx''s today holds no longest wait: nothing proven; '; end if;
     if (select array_agg(k order by k collate "C") from jsonb_object_keys(j -> 'today') k) is distinct from
-       array['answered', 'answered_within_target', 'avg_answer_seconds', 'business_date', 'offered', 'p80_answer_seconds', 'service_level_base',
+       array['answered', 'answered_within_target', 'avg_answer_seconds', 'business_date', 'longest_waiting_seconds', 'offered', 'p80_answer_seconds', 'service_level_base',
              'service_level_pct', 'service_level_seconds', 'unanswered', 'unanswered_by_reason', 'waiting', 'waiting_max_minutes', 'waiting_now'] then
       v_bad := v_bad || 'today''s keys: ' || (select string_agg(k, ',' order by k) from jsonb_object_keys(j -> 'today') k) || '; ';
     end if;
     if (j -> 'today' ->> 'waiting_now') is distinct from '1' then v_bad := v_bad || 'waiting now is ' || coalesce(j -> 'today' ->> 'waiting_now', 'null') || '; '; end if;
-    rows_ := rows_ || pg_temp.v0009h_row(17, 'B7 inbound_now(): 0008zx''s JSON without longest_waiting_seconds; the fourteen other keys of today, one call waiting',
+    rows_ := rows_ || pg_temp.v0009h_row(17, 'B7 inbound_now(): 0008zx''s JSON with longest_waiting_seconds null; the fifteen keys of today, one call waiting',
       case when v_bad = '' then 'PASS' else 'FAIL' end, v_bad);
 
     raise exception using errcode = 'CMAOK';
@@ -450,12 +451,13 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_user::text, true);
 
-    -- E1. inbound now: 0008zx's answer without the key
+    -- E1. inbound now: 0008zx's answer with the key null
     v_ord := v_ord + 1;
     begin
-      -- provoked: the key left in 0008zx's answer, which the comparison must then report
-      select cma.inbound_now() is not distinct from (case when v_provoke then pg_temp.inbound_now_0008zx() else pg_temp.inbound_now_0008zx() #- '{today,longest_waiting_seconds}' end) into v_same;
-      insert into verify_0009h values (v_ord, 'E1 inbound_now(): the same JSON as 0008zx''s without longest_waiting_seconds (' || t.slug || ')',
+      -- provoked: the key taken out of 0008zx's answer, which the comparison must then report (the new answer holds it)
+      select cma.inbound_now() is not distinct from (case when v_provoke then pg_temp.inbound_now_0008zx() #- '{today,longest_waiting_seconds}'
+                                                          else jsonb_set(pg_temp.inbound_now_0008zx(), '{today,longest_waiting_seconds}', 'null') end) into v_same;
+      insert into verify_0009h values (v_ord, 'E1 inbound_now(): the same JSON as 0008zx''s with longest_waiting_seconds null (' || t.slug || ')',
         case when v_same then 'PASS' else 'FAIL' end, case when v_same then 'the same today, callbacks and summary' else 'the JSON differs' end);
     exception when others then
       insert into verify_0009h values (v_ord, 'E1 inbound_now() (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));

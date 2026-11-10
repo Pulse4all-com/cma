@@ -7,14 +7,16 @@
 -- catalogs. Runs unchanged in every database, after 162_remove_day.sql (0009g). Rerunnable, forward-only, in one
 -- transaction with a lock timeout. Run as your own IAM login: dev first, then 165_verify_live_outbound.sql there, then
 -- the verifies that read cma.inbound_now() again: 133_verify_perf.sql (unchanged, still PASS: its A5 reads today,
--- callbacks and summary, never the key that left) and 145_verify_held_kinds_restore.sql, which this change edits (its
+-- callbacks and summary, never the key that changed) and 145_verify_held_kinds_restore.sql, which this change edits (its
 -- A10 and E6 compare cma.inbound_now() with 0008zr's definition kept inside 145; that side now has the key
--- longest_waiting_seconds taken out of today before the comparison); then the merge; then prod right after the merge:
--- 164, then 133 and 145, without 165 unless Martin wants it there (it writes nothing that stays).
--- Neither order of database and web is clean, so 164 runs in prod right after the merge, while the build runs: main's
--- web on a database with 164 reads no longest_waiting_seconds and shows "NaN:NaN" on the Longest waiting tile (nothing
--- else changes) until the new web is live, a few minutes; this branch's web on a database without 164 fails the Live
--- board's read (the function cma.outbound_now() does not exist), which is the worse of the two.
+-- longest_waiting_seconds set to null in today before the comparison); then 131_time_all.sql part a; then prod, before
+-- the merge: 164, then 133 and 145, without 165 unless Martin wants it there (it writes nothing that stays); then the
+-- merge.
+-- Release order (Martin, 10 November 2026): the database first. cma.inbound_now() keeps the key longest_waiting_seconds
+-- in today for one release, always null, so main's web runs unchanged on a database with 164: its Longest waiting tile
+-- reads null and shows "Nobody waiting", and nothing else changes. This branch's web ignores the key; on a database
+-- without 164 it would fail the Live board's read (cma.outbound_now() does not exist), which is why 164 runs in prod
+-- before the merge. The null key leaves in the next migration that re-creates cma.inbound_now() (Open decisions).
 -- No table, view, column or setting changes: the data map's schema does not change.
 --
 -- Why (Martin, 10 November 2026; Decision log, 10 Nov 2026, Live board: Outbound today): the Live board showed inbound
@@ -44,7 +46,8 @@
 --                      tenant as JSON (business_date, attempts, connected, connected_rate, conversations,
 --                      outbound_talk_seconds, outbound_talk_avg). language sql stable, jit off
 -- What it changes
---   cma.inbound_now()  (based on 144): today without the key longest_waiting_seconds; callbacks and summary, and every
+--   cma.inbound_now()  (based on 144): today's key longest_waiting_seconds always null (kept one release for the
+--                      release order above; no web reads it after the merge); callbacks and summary, and every
 --                      other key of today, as before. cma.inbound_today_of and cma.inbound_today (60) are not touched:
 --                      they keep the column for whoever reads them; the web no longer maps it
 --
@@ -132,7 +135,8 @@ alter function cma.outbound_now() set jit = off;
 -- ---------------------------------------------------------------------------------------------
 -- 2. Inbound now without Longest waiting
 -- ---------------------------------------------------------------------------------------------
--- As 0008zx (144): the same answer, today without the key longest_waiting_seconds
+-- As 0008zx (144): the same answer, today's longest_waiting_seconds always null (the key kept for one release, so main's
+-- web shows "Nobody waiting" until this branch's web, which ignores it, is live)
 -- based on: 144_held_kinds_restore.sql
 create or replace function cma.inbound_now()
 returns jsonb
@@ -147,7 +151,7 @@ begin
     into v_list
   from cma.missed_callbacks_of(v_tenant) m;
   return jsonb_build_object(
-    'today', (select to_jsonb(x) - 'longest_waiting_seconds' from cma.inbound_today_of(v_tenant) x),
+    'today', (select to_jsonb(x) || '{"longest_waiting_seconds": null}'::jsonb from cma.inbound_today_of(v_tenant) x),
     'callbacks', v_list,
     'summary', (select jsonb_build_object('listed', jsonb_array_length(v_list),
                                           'anonymous_count', cma.anonymous_missed_calls_of(v_tenant, now() - make_interval(days => s.lookback)),
@@ -175,7 +179,7 @@ end
 $$;
 
 insert into cma.schema_migration (version, description)
-values ('0009h', 'Live board, Outbound today: cma.outbound_today_of(tenant, now) and cma.outbound_now() (monitoring.live) answer today''s attempts, connected, connected rate, outbound conversations and the talk time of the connected calls in all and on average, from cma.calls_of for the calls whose business date in their line''s zone is the tenant''s date, as cma.calls_figures_of counts them; cma.inbound_now() (from 144) answers today without longest_waiting_seconds, everything else as before')
+values ('0009h', 'Live board, Outbound today: cma.outbound_today_of(tenant, now) and cma.outbound_now() (monitoring.live) answer today''s attempts, connected, connected rate, outbound conversations and the talk time of the connected calls in all and on average, from cma.calls_of for the calls whose business date in their line''s zone is the tenant''s date, as cma.calls_figures_of counts them; cma.inbound_now() (from 144) answers today with longest_waiting_seconds always null (the key kept for one release), everything else as before')
 on conflict (version) do nothing;
 
 commit;
