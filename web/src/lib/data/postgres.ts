@@ -1566,9 +1566,12 @@ async function readFollowUpSummary(q: Querier): Promise<FollowUpSummaryAt> {
     computedAt: s.computed_at.toISOString() };
 }
 
-/** cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives them */
+/**
+ * cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives
+ * them. Today's inbound_talk_seconds since addition 0009j; its waiting_now and longest_waiting_seconds are not read
+ */
 type InboundNowDb = {
-  today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; waiting_now: number;
+  today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; inbound_talk_seconds: number;
     service_level_seconds: number; waiting_max_minutes: number }) | null;
   callbacks: (Omit<CallbackDbRow, "started_at"> & { started_at: string })[];
   summary: { listed: number; anonymous_count: number; lookback_days: number };
@@ -1600,7 +1603,7 @@ async function readCallsNow(q: Querier, withOutbound: boolean): Promise<{ inboun
   const inbound: InboundNow = {
     telephony: connections.telephony,
     today: connections.telephony && t ? {
-      ...toFigures(t), date: t.business_date, waitingNow: t.waiting_now,
+      ...toFigures(t), date: t.business_date, inboundTalkSeconds: Number(t.inbound_talk_seconds),
       serviceLevelSeconds: t.service_level_seconds, waitingMaxMinutes: t.waiting_max_minutes,
     } : null,
     callbacks: connections.telephony ? j.callbacks.map((x) => ({

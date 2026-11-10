@@ -177,12 +177,20 @@ export function fmtSeconds(s: number): string {
 
 // ---- Inbound today and the missed calls not called back (addition 0008i, brief B15) ---------------
 
-/** The tiles of the inbound row, in order; each a figure of cma.inbound_today */
-export type InboundTileKey = "offered" | "answered" | "unansweredPct" | "serviceLevel" | "avgAnswer" | "waitingNow";
-export const INBOUND_TILES: readonly InboundTileKey[] = ["offered", "answered", "unansweredPct", "serviceLevel", "avgAnswer", "waitingNow"];
+/**
+ * The tiles of the inbound row, in order; each a figure of cma.inbound_now's today. Talk time is the fifth, in the
+ * column of Outbound today's Talk time (OUTBOUND_TILES; Martin, 10 November 2026)
+ */
+export type InboundTileKey = "offered" | "answered" | "unansweredPct" | "serviceLevel" | "talk" | "avgAnswer";
+export const INBOUND_TILES: readonly InboundTileKey[] = ["offered", "answered", "unansweredPct", "serviceLevel", "talk", "avgAnswer"];
 
-/** A tile's value, before formatting: a count, a percentage (0 to 100), seconds, or nothing yet */
-export type InboundTileValue = { kind: "count"; value: number } | { kind: "pct"; value: number | null } | { kind: "seconds"; value: number | null };
+/**
+ * A tile's value, before formatting: a count, a percentage (0 to 100), seconds to answer, talk seconds (a duration, as
+ * Outbound today's Talk time), or nothing yet
+ */
+export type InboundTileValue =
+  | { kind: "count"; value: number } | { kind: "pct"; value: number | null } | { kind: "seconds"; value: number | null }
+  | { kind: "talk"; value: number | null };
 
 export function inboundTileValue(today: InboundToday, key: InboundTileKey): InboundTileValue {
   switch (key) {
@@ -190,9 +198,20 @@ export function inboundTileValue(today: InboundToday, key: InboundTileKey): Inbo
     case "answered": return { kind: "count", value: today.answered };
     case "unansweredPct": return { kind: "pct", value: unansweredPct(today) };
     case "serviceLevel": return { kind: "pct", value: today.serviceLevelPct };
+    // a dash without an answered call (Martin, 10 November 2026); Outbound today's Talk time shows 0 s without a connected one
+    case "talk": return { kind: "talk", value: today.answered > 0 ? today.inboundTalkSeconds : null };
     case "avgAnswer": return { kind: "seconds", value: today.avgAnswerSeconds };
-    case "waitingNow": return { kind: "count", value: today.waitingNow };
   }
+}
+
+/**
+ * Today's inbound talk time as cma.inbound_today_live_of computes it (addition 0009j): the talk time of the answered
+ * inbound calls whose date in their line's zone is the date (lib/reports callRecords: counted lines, the line's zone, as
+ * Reports → Calls dates a call), 0 without one. It equals callsFigures' talk time minus its outbound talk time for the
+ * date while Connected needs no minimum talk time (telephony.connected_min_seconds 0)
+ */
+export function inboundTalkToday(calls: readonly CallRecord[], date: DateKey): number {
+  return calls.reduce((n, c) => n + (c.isAnsweredInbound && c.date === date && c.talkSeconds !== null ? c.talkSeconds : 0), 0);
 }
 
 // ---- Outbound today (addition 0009h) -----------------------------------------------------------

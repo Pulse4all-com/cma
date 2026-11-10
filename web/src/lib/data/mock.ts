@@ -59,7 +59,7 @@ import {
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
   type CallRecord, type CallRules, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
-import { missedCallbacks, outboundToday, type CallerCall } from "@/lib/live";
+import { inboundTalkToday, missedCallbacks, outboundToday, type CallerCall } from "@/lib/live";
 import {
   cancellationRecords, cancellationsReport, DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION, dealsPerPerson, FUNNEL_GROUPS, funnelDeals, funnelFilter,
   funnelLists, funnelPrevious, funnelReport, lostReasonsReport, parseFunnelFilter, reasonStateOf, type CancellationTicketFixture, type FunnelDeal,
@@ -1359,12 +1359,13 @@ function mockInboundNow(me: Principal): InboundNow {
   const live = mockLiveCalls(now);
   const reasons = mockReasons(me);
   const todays = inboundCalls(live.filter((c) => Date.parse(c.startedAt) >= midnight), MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, now);
-  const waiting = inboundCalls(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, now).filter((c) => c.isWaiting);
+  // the talk time as the database dates it (addition 0009j): each call in its line's zone, as Reports → Calls
+  const talk = inboundTalkToday(callRecords(live, MOCK_INBOUND_LINES, me.timeZone, mockCallRules(me)), today);
   const { rows, anonymousCount } = missedCallbacks(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, MOCK_LOOKBACK_DAYS, now,
     mockBusinessSeconds, (connectionId, sourceId) => mockCallUrl(me, connectionId, sourceId));
   return {
     telephony: true,
-    today: { ...(todays.length ? inboundFigures(todays, MOCK_SL_SECONDS) : noFigures()), date: today, waitingNow: waiting.length,
+    today: { ...(todays.length ? inboundFigures(todays, MOCK_SL_SECONDS) : noFigures()), date: today, inboundTalkSeconds: talk,
       serviceLevelSeconds: MOCK_SL_SECONDS, waitingMaxMinutes: MOCK_WAITING_MAX },
     callbacks: rows,
     anonymousCount,

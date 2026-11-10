@@ -19,7 +19,9 @@
  * keycaps, a hint on its right-most reason column, its table scrolling inside its card and no text on a
  * Light Blue or Soft Rose reason mark, the not-connected state for a tenant without telephony; the
  * Live board for every identity that holds it, with the inbound tiles, the missed calls and a tile's
- * hint inside the viewport, or the not-connected state, and no horizontal scrolling. Calls and Calls per
+ * hint inside the viewport, or the not-connected state, and no horizontal scrolling; since addition 0009j the six
+ * inbound tiles in their order by test id (Inbound, Answered, Unanswered, Service level, Talk time, Average to answer),
+ * no Waiting now, and Talk time in the column of Outbound today's Talk time at 1280 and 1536 px. Calls and Calls per
  * agent (addition 0008j) for seven identities: the per-agent page only for performance.team (the reader,
  * with reports.view alone, sees Calls and not Calls per agent), the keycaps K, N and G, the tag table and
  * the per-agent table with two rows opened inside their cards, Enter opening a row and Down moving to the
@@ -84,7 +86,8 @@
  *       Intake and Inbound tables spill out of their cards, writes a count on a Light Blue reason mark,
  *       lets the Calls tag table and the per-agent table spill out of theirs,
  *       widens the missed-reason table past its card on Sources,
- *       widens the Live board's inbound tiles past the main area, focuses the confirm button of each
+ *       widens the Live board's inbound tiles past the main area, moves Inbound today's Talk time to the end of
+ *       its row (the admin's board), focuses the confirm button of each
  *       irreversible confirmation (unticking the line's box) and Cancel on End workday, lets the invitations
  *       table spill out of its card and expects the expired invitation open, expects the folded rail at
  *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
@@ -1009,6 +1012,9 @@ async function expectForms() {
   }
 }
 
+// Inbound today's tiles in their order (addition 0009j; Martin, 10 November 2026), by test id, not by text
+const INBOUND_ORDER = ["offered", "answered", "unansweredPct", "serviceLevel", "talk", "avgAnswer"].map((k) => `inbound-${k}`).join(",");
+
 // The Live board per identity (addition 0008i): at 1280 px the inbound tiles, the missed calls and the
 // people board without horizontal scrolling, a tile's hint inside the viewport; a tenant without telephony
 // says so in words; an agent gets the no-permission card and no inbound figures
@@ -1040,6 +1046,8 @@ async function expectLiveBoard() {
     if (provoke && subject === "supervisor") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-tiles"]'); if (t) t.style.width = "2400px"; });
     // --provoke puts Missed, not called back back above the team (where it sat before 0008z)
     if (provoke && subject === "analyst") await p.evaluate(() => { const m = document.querySelector('[data-testid="missed-live"]'); const t = document.querySelector('[data-testid="inbound-live"]'); if (m && t) t.after(m); });
+    // --provoke moves Inbound today's Talk time to the end of its row (where Waiting now sat before 0009j)
+    if (provoke && subject === "admin") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-talk"]'); t?.parentElement?.append(t); });
     const m = await p.evaluate((strip) => {
       const main = document.querySelector("main");
       // A name on a plain div or span needs a role (the tiles group, the IT audit of 17 October 2026); --provoke strips it
@@ -1048,6 +1056,9 @@ async function expectLiveBoard() {
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
+        // Inbound today since addition 0009j: the six tiles in their order by test id, Talk time in place of Waiting now
+        inboundOrder: [...document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]')].map((el) => el.getAttribute("data-testid")).join(","),
+        waitingNow: !!document.querySelector('[data-testid="inbound-waitingNow"]'),
         // Outbound today (addition 0009h): six tiles between Inbound today and Follow-up now; no Longest waiting anywhere
         outboundTiles: document.querySelectorAll('[data-testid="outbound-tiles"] [data-tile]').length,
         outboundBetween: (() => {
@@ -1072,6 +1083,30 @@ async function expectLiveBoard() {
     if (telephony && (m.outboundTiles !== 6 || !m.outboundBetween)) problems.push(`${subject} /live/board: ${m.outboundTiles} outbound tiles${m.outboundBetween ? "" : ", not between Inbound today and Follow-up now"}, expected 6 between them`);
     if (!telephony && m.outboundTiles !== 0) problems.push(`${subject} /live/board: outbound tiles without telephony`);
     if (m.longestWaiting) problems.push(`${subject} /live/board: Longest waiting is still on the board`);
+    if (telephony && m.inboundOrder !== INBOUND_ORDER) problems.push(`${subject} /live/board: the inbound tiles read ${m.inboundOrder}, expected ${INBOUND_ORDER}`);
+    if (m.waitingNow) problems.push(`${subject} /live/board: Waiting now is still on the board`);
+    if (telephony) {
+      // Talk time in the column of Outbound today's Talk time, at 1280 px (three to a row) and at 1536 px (six to a row)
+      for (const width of [1280, 1536]) {
+        if (width !== 1280) {
+          await p.setViewportSize({ width, height: 900 });
+          await settle(p);
+        }
+        const c = await p.evaluate(() => {
+          const x = (id) => document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect().left ?? null;
+          return {
+            order: [...document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]')].map((el) => el.getAttribute("data-testid")).join(","),
+            inbound: x("inbound-talk"), outbound: x("outbound-talk"),
+          };
+        });
+        if (c.order !== INBOUND_ORDER) problems.push(`${subject} /live/board at ${width}: the inbound tiles read ${c.order}, expected ${INBOUND_ORDER}`);
+        if (c.inbound === null || c.outbound === null || Math.abs(c.inbound - c.outbound) > 1) {
+          problems.push(`${subject} /live/board at ${width}: Inbound today's Talk time at ${c.inbound} px, Outbound today's at ${c.outbound} px, expected one column`);
+        }
+      }
+      await p.setViewportSize({ width: 1280, height: 800 });
+      await settle(p);
+    }
     if (telephony && !m.lastHeading) problems.push(`${subject} /live/board: Missed, not called back is not the board's last section`);
     if (telephony && (m.scopes.length !== 4 || !m.scopes.every((x) => x.includes("Newco")))) problems.push(`${subject} /live/board: ${m.scopes.length} captions on the call parts and the follow-up strip naming Newco, expected 4`);
     if (telephony) {

@@ -1665,7 +1665,9 @@ async function inboundChecks() {
     [(groups[3]?.rows ?? []).every((r) => /^([01][0-9]|2[0-3])$/.test(r.groupKey)), Number.isInteger(d.serviceLevelSeconds) && d.serviceLevelSeconds >= 0],
     [true, true], [false, true]);
   expect("inbound: the board's today is coherent and its missed calls run oldest first",
-    [live?.telephony === false || (coherent(live.today) && live.today.waitingNow >= 0),
+    // since addition 0009j today carries the talk time of its answered inbound calls (Talk time) in place of waitingNow
+    [live?.telephony === false || (coherent(live.today) && Number.isInteger(live.today.inboundTalkSeconds) && live.today.inboundTalkSeconds >= 0
+      && !("waitingNow" in live.today)),
       (live?.callbacks ?? []).every((r, i, a) => i === 0 || Date.parse(a[i - 1].startedAt) <= Date.parse(r.startedAt)),
       (live?.callbacks ?? []).every((r) => r.missedCount >= 1 && (r.recordUrl === null || /^https:\/\//.test(r.recordUrl)))],
     [true, true, true], [false, true, true]);

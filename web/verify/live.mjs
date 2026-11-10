@@ -23,13 +23,17 @@
  * decimal and its dash without an attempt, the outbound conversations only (not under the talk threshold, not with a
  * tag meaning not reached, never an inbound one), the talk time of the connected calls and its average, each call on
  * its day in its line's zone, a line that does not count left out, the settings moving the figures; and the absence
- * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog.
+ * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog. Since
+ * addition 0009j Inbound today's Talk time in place of Waiting now, as 169 proves it in the database: the six tiles in
+ * their order, Talk time in the column of Outbound today's, a dash without an answered call, the talk time of the
+ * answered inbound calls dated in their line's zone (Reports → Calls' talk time minus its outbound talk time), and no
+ * Waiting now key in the copy, the registry, the catalog, the types, the component, the mock or the mapping.
  */
 import {
-  INBOUND_TILES, LIVE_GROUPS, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
+  INBOUND_TILES, LIVE_GROUPS, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTalkToday, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
   outboundTileValue, outboundToday, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
-import { callRecords, callRules, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
+import { callRecords, callRules, callsFigures, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
 import { readFileSync } from "node:fs";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -175,16 +179,22 @@ expect("the format drops the hour below one", [fmtSeconds(5), fmtSeconds(3599), 
 
 // ---- inbound today and the missed calls not called back (addition 0008i) -------------------------
 const today = { offered: 28, answered: 17, unanswered: 10, waiting: 1, answeredWithinTarget: 11, serviceLevelBase: 25, serviceLevelPct: 44,
-  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", waitingNow: 1,
+  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", inboundTalkSeconds: 1234,
   serviceLevelSeconds: 20, waitingMaxMinutes: 30 };
 expect("the inbound tiles in order with their values",
-  INBOUND_TILES.map((k) => inboundTileValue(today, k)),
-  [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 37 }, { kind: "pct", value: 44 },
-    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }],
-  [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 35.7 }, { kind: "pct", value: 44 },
-    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }]);
-expect("six inbound tiles, Waiting now the last, no Longest waiting", [INBOUND_TILES.length, INBOUND_TILES.at(-1), INBOUND_TILES.includes("longestWaiting")],
-  [6, "waitingNow", false], [7, "longestWaiting", true]);
+  INBOUND_TILES.map((k) => [k, inboundTileValue(today, k)]),
+  [["offered", { kind: "count", value: 28 }], ["answered", { kind: "count", value: 17 }], ["unansweredPct", { kind: "pct", value: 37 }],
+    ["serviceLevel", { kind: "pct", value: 44 }], ["talk", { kind: "talk", value: 1234 }], ["avgAnswer", { kind: "seconds", value: 17.2 }]],
+  [["offered", { kind: "count", value: 28 }], ["answered", { kind: "count", value: 17 }], ["unansweredPct", { kind: "pct", value: 35.7 }],
+    ["serviceLevel", { kind: "pct", value: 44 }], ["avgAnswer", { kind: "seconds", value: 17.2 }], ["waitingNow", { kind: "count", value: 1 }]]);
+expect("six inbound tiles, Talk time the fifth, in the column of Outbound today's Talk time; no Waiting now, no Longest waiting",
+  [INBOUND_TILES.length, INBOUND_TILES.indexOf("talk"), INBOUND_TILES.indexOf("talk") === OUTBOUND_TILES.indexOf("talk"),
+    INBOUND_TILES.includes("waitingNow"), INBOUND_TILES.includes("longestWaiting")],
+  [6, 4, true, false, false], [6, 5, false, true, false]);
+expect("Talk time as Outbound today's shows it, a dash without an answered call",
+  [fmtTalk(inboundTileValue(today, "talk").value, "en"), inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk"),
+    fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk").value, "nl"), fmtTalk(inboundTileValue({ ...today, inboundTalkSeconds: 0 }, "talk").value, "en")],
+  ["20m 34s", { kind: "talk", value: null }, "–", "0 s"], ["1234 s", { kind: "talk", value: 0 }, "0 s", "–"]);
 // The calls of 61 B6 to B10 (invented ids; callers are opaque keys standing in for the hash)
 const NOW = Date.parse("2026-10-14T12:00:00Z");
 const ago = (minutes) => new Date(NOW - minutes * 60_000).toISOString();
@@ -305,6 +315,40 @@ expect("a day without an attempt: zeros, no rate, no average",
 expect("the connected rate with one decimal, a dash without an attempt; the average's dash",
   [fmtRate1(out6.connectedRate, "en"), fmtRate1(57.1, "nl"), fmtRate1(100, "en"), fmtRate1(none.connectedRate, "en"), fmtTalk(none.talkAvgSeconds, "en"), fmtTalk(none.talkSeconds, "en")],
   ["87.5%", "57,1%", "100.0%", "–", "–", "0 s"], ["88%", "57%", "100%", "0%", "0 s", "–"]);
+// ---- Inbound today's Talk time (addition 0009j) ----------------------------------------------------
+// The calls of 169 B (invented ids), on 10 November 2026 around the tenant's midnight (Europe/Amsterdam, 23:00 UTC the
+// day before): two ended NL calls (45 and 100 s), one answered and in progress, one unanswered; the New York line's
+// answered call 5 seconds after the tenant's midnight (18:00 the day before there); the Tokyo line's call 10 seconds
+// before it (07:59:50 on the date there); a connected outbound call (30 s), an outbound one not connected; the day before
+const MIDNIGHT = Date.parse("2026-11-09T23:00:00Z");
+const sec = (n) => MIDNIGHT + n * 1000;
+const tCalls = [
+  oCall("i1", "inbound", sec(1), 45, "nl"), oCall("i2", "inbound", sec(2), 100, "nl"), oCall("i3", "inbound", sec(3), 0, "nl", [], false),
+  oCall("i4", "inbound", sec(4), null, "nl"), oCall("u1", "inbound", sec(5), 60, "us"), oCall("j1", "inbound", sec(-10), 70, "jp"),
+  oCall("o1", "outbound", sec(6), 30, "nl"), oCall("o2", "outbound", sec(7), null, "nl"), oCall("y1", "inbound", sec(-23 * 3600), 50, "nl"),
+];
+const tRecords = (connectedMin) => callRecords(tCalls, oLines, "Europe/Amsterdam", callRules(connectedMin, 30, oTags));
+const reportDiff = (connectedMin, date) => {
+  const f = callsFigures(tRecords(connectedMin).filter((c) => c.date === date));
+  return f.talkSeconds - f.outboundTalkSeconds;
+};
+expect("inbound talk today: the ended NL calls and the Tokyo call (its date there), not the New York call (the day before there)",
+  [inboundTalkToday(tRecords(0), "2026-11-10"), inboundTalkToday(tRecords(0), "2026-11-09")], [215, 110], [275, 50]);
+expect("it equals Reports → Calls' talk time minus its outbound talk time while Connected needs no talk time; above it, the report's difference holds more",
+  [reportDiff(0, "2026-11-10"), inboundTalkToday(tRecords(40), "2026-11-10"), reportDiff(40, "2026-11-10")], [215, 215, 245], [245, 245, 215]);
+// Waiting now is gone everywhere the web held its keys: the copy's (inboundWaitingNow, liveWaitingNow, en and nl), the
+// registry's and the catalog's (live.inbound.waiting_now), the field, the tile, the mock and the database mapping (no
+// waiting_now read). Email's own "Waiting now" (email.waitingTitle) is another figure and stays
+const keysGone = [
+  ["src/lib/copy.ts", /inboundWaitingNow|liveWaitingNow/], ["src/lib/metrics.ts", /live\.inbound\.waiting_now/],
+  ["src/lib/metrics-catalog.json", /"live\.inbound\.waiting_now"/], ["src/lib/data/types.ts", /waitingNow/],
+  ["src/components/InboundLive.tsx", /waitingNow|WaitingNow/], ["src/lib/live.ts", /waitingNow/], ["src/lib/data/mock.ts", /waitingNow/],
+  ["src/lib/data/postgres.ts", /\.waiting_now\b|waiting_now:|\.longest_waiting_seconds\b/],
+].filter(([f, re]) => re.test(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"))).map(([f]) => f);
+expect("no Waiting now in the copy, the registry, the catalog, the types, the component, the tiles, the mock or the mapping", keysGone, [],
+  ["src/lib/copy.ts"]);
+expect("email's Waiting now stays (another figure)", /waitingTitle: "Waiting now"/.test(readFileSync(new URL("../src/lib/copy.ts", import.meta.url), "utf8")), true, false);
+
 // Longest waiting is gone everywhere the web holds its keys: the copy's (inboundLongestWaiting, liveLongestWaiting and
 // nobodyWaiting, en and nl), the registry's and the catalog's (live.inbound.longest_waiting), the field and the tile
 const gone = ["src/lib/copy.ts", "src/lib/metrics.ts", "src/lib/metrics-catalog.json", "src/lib/data/types.ts", "src/components/InboundLive.tsx"]
