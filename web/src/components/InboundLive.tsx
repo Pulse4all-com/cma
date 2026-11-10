@@ -1,6 +1,6 @@
 /**
  * The Live board's inbound parts (addition 0008i, brief B15): today's inbound tiles (inbound, answered,
- * unanswered share, service level, average time to answer, waiting now, longest waiting) at the top, and
+ * unanswered share, service level, average time to answer, waiting now) at the top, and
  * the missed calls not called back (MissedCallbacks), the board's last section since addition 0008z
  * (Martin, 20 October 2026), one row per caller, oldest first, with the line, market, reason, the
  * time of the latest missed call, the waiting time in office time of the line's market, how often the
@@ -8,14 +8,14 @@
  * of anonymous missed calls. A server component: the page's poll (LiveRefresh) reads it again every 10
  * seconds. Ids, codes, line names and counts only: no number, no name, never the caller's hash. A tenant
  * without telephony sees "No telephony connected", never 0. Tiles are white cards with Deep Blue figures
- * and Muted labels (docs/style/Pulse4all-Style.md 7.3: radius 15px, padding 24px), four to a row at
- * 1280 px and seven from 1536 px; no figure is a filled red tile. The table has zebra rows and a hover row
+ * and Muted labels (docs/style/Pulse4all-Style.md 7.3: radius 15px, padding 24px), three to a row at
+ * 1280 px and six from 1536 px, as the outbound row (OutboundLive) and the follow-up strip; no figure is a filled red tile. The table has zebra rows and a hover row
  * (7.6).
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { InboundNow, MissedCallback } from "@/lib/data";
-import { callbackWaiting, fmtSeconds, INBOUND_TILES, inboundTileValue, type InboundTileKey } from "@/lib/live";
+import { callbackWaiting, INBOUND_TILES, inboundTileValue, type InboundTileKey } from "@/lib/live";
 import { fillHint, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct } from "@/lib/reports";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
@@ -24,7 +24,7 @@ import { HintLabel } from "./HintLabel";
 import { NotConnected, RecordLink } from "./ReportParts";
 import { Card } from "./primitives";
 
-function Tile({ label, info, value, testId }: {
+export function Tile({ label, info, value, testId }: {
   label: string;
   /** The hint behind the info mark; more: "How this is computed" to the figure's catalog entry, for tenant.configure only */
   info: { about: string; text: string; more?: { href: string; label: string } }; value: ReactNode; testId: string;
@@ -66,17 +66,12 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, sco
     serviceLevel: { label: t.inboundServiceLevel, hint: h.serviceLevel, metric: "live.inbound.service_level" },
     avgAnswer: { label: t.inboundAvgAnswer, hint: h.avgAnswer, metric: "live.inbound.avg_answer" },
     waitingNow: { label: t.inboundWaitingNow, hint: h.liveWaitingNow, metric: "live.inbound.waiting_now" },
-    longestWaiting: { label: t.inboundLongestWaiting, hint: h.liveLongestWaiting, metric: "live.inbound.longest_waiting" },
   };
   const shown = (key: InboundTileKey): ReactNode => {
     if (!today) return "–";
     const v = inboundTileValue(today, key);
     if (v.kind === "count") return fmtCount(v.value, locale);
     if (v.kind === "pct") return fmtPct(v.value, locale);
-    if (key === "longestWaiting") {
-      // the board's clock format (2:05), as since and worked so far on the rows below
-      return v.value === null ? <span className="text-body font-semibold text-p4a-muted">{t.nobodyWaiting}</span> : fmtSeconds(v.value);
-    }
     return fmtAnswerSeconds(v.value, locale);
   };
 
@@ -94,7 +89,7 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, sco
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7" data-testid="inbound-tiles">
+        <div className="grid grid-cols-3 gap-4 2xl:grid-cols-6" data-testid="inbound-tiles">
           {INBOUND_TILES.map((key) => (
             <Tile key={key} testId={`inbound-${key}`} label={tiles[key].label} info={info(tiles[key].label, tiles[key].hint, tiles[key].metric)} value={shown(key)} />
           ))}

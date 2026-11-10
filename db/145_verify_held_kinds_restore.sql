@@ -11,6 +11,8 @@
 -- inbound_calls_of, missed_callbacks_of and inbound_now() as 0008zr (132); missed_callbacks_summary_of and
 -- inbound_today_of as 0008i (60). Every check writes one row, ok, FAIL or skip, and the last row is the verdict, because
 -- Cloud SQL Studio shows no notices. Run as your own IAM login after 144_held_kinds_restore.sql, dev first, then prod.
+-- Edited by addition 0009h (164_live_outbound.sql): cma.inbound_now() answers today's longest_waiting_seconds as null, so
+-- A10 and E6 set that key to null in 0008zr's answer before comparing; every other key is compared as before.
 -- Expected verdict, in dev and in prod: "0008zx verified | 145_verify_held_kinds_restore: <n> ok, 0 FAIL, <k> skip" (the
 -- skips are active tenants without a person holding tenant.configure, or monitoring.live, whose E rows cannot run as the
 -- application); provoked (verify.provoke true at the top): every row reads FAIL (block E's comparisons lose the previous
@@ -831,7 +833,7 @@ begin
       case when v_diff is null and not v_provoke then 'ok' else 'FAIL' end,
       coalesce(v_diff, (select format('listed %s, anonymous %s, lookback %s days', x.listed, x.anonymous_count, x.lookback_days) from cma.missed_callbacks_summary_of(v_t) x)));
     -- A10 inbound now, the board's one statement
-    v_diff := pg_temp.v0008zx_diff('select cma.inbound_now()', 'select pg_temp.inbound_now_0008zr()');
+    v_diff := pg_temp.v0008zx_diff('select cma.inbound_now()', 'select jsonb_set(pg_temp.inbound_now_0008zr(), ''{today,longest_waiting_seconds}'', ''null'')');
     rows_ := rows_ || pg_temp.v0008zx_row(253, 'A10 inbound_now() for the made callers: the same JSON as 0008zr''s',
       case when v_diff is null and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_diff, 'the same today, callbacks and summary'));
     -- A11 inbound_calls_of over the last 92 days and over the lookback
@@ -969,7 +971,7 @@ begin
     v_olds := array[format('select * from pg_temp.inbound_calls_of_0008zr(%L, %L::date::timestamptz, null)', t.id, cma.tenant_today_of(t.id) - 91),
                     format('select * from pg_temp.missed_callbacks_of_0008zr(%L)', t.id),
                     format('select * from pg_temp.missed_callbacks_summary_of_0008i(%L)', t.id),
-                    'select pg_temp.inbound_now_0008zr()'];
+                    'select jsonb_set(pg_temp.inbound_now_0008zr(), ''{today,longest_waiting_seconds}'', ''null'')'];
     for i in 1 .. 4 loop
       v_ord := v_ord + 1;
       begin

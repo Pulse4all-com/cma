@@ -2,18 +2,19 @@
 
 /**
  * The Live board's poll (addition 0008zr's web, night N06; the IT audit's 5.6-01): the board, the inbound tiles, the
- * follow-up strip and the missed callers from one read, GET /api/v1/live/board, fetched every 10 seconds while the tab
+ * outbound tiles (addition 0009h), the follow-up strip and the missed callers from one read, GET /api/v1/live/board, fetched every 10 seconds while the tab
  * is visible and once more when it comes back, never while it is hidden; after a failed poll the wait doubles up to a
  * minute. The answer replaces the data and the rows are computed again (lib/live-board, the same function the page
  * used for the first render), so a poll costs one transaction instead of the page's render (eight transactions and 26
  * statements before). The filters the board holds survive every poll: they are the board's own state. Since addition
- * 0008zv the board is one contact center's: the poll asks for its organisation (?organisation=<key>), and the inbound
- * and missed-call parts, which stay tenant-wide, say they cover all lines, and the follow-up strip the whole business line.
+ * 0008zv the board is one contact center's: the poll asks for its organisation (?organisation=<key>), and the inbound,
+ * outbound and missed-call parts, which stay tenant-wide, say they cover all lines, and the follow-up strip the whole business line.
  */
 import { useCallback, useEffect, useState } from "react";
 import { FollowUpLive } from "./FollowUpLive";
 import { InboundLive, MissedCallbacks, type InboundCopy } from "./InboundLive";
 import { LiveBoard } from "./LiveBoard";
+import { OutboundLive } from "./OutboundLive";
 import { Card } from "./primitives";
 import type { ContactCenter } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
@@ -104,6 +105,13 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
       <div className="mb-8">
         <InboundLive inbound={data.inbound} copy={copy} locale={viewer.locale} canOpenMetrics={canOpenMetrics} scope={allLines} />
       </div>
+
+      {data.outbound ? (
+        <div className="mb-8">
+          <OutboundLive outbound={data.outbound} copy={copy} locale={viewer.locale} canOpenMetrics={canOpenMetrics} scope={allLines}
+            connectedMinSeconds={data.settings.connectedMinSeconds} conversationMinSeconds={data.settings.conversationMinSeconds} />
+        </div>
+      ) : null}
 
       <div className="mb-8">
         <FollowUpLive summary={data.followUp} copy={copy} locale={viewer.locale}

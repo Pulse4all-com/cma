@@ -18,7 +18,9 @@ const FORMER_ADDRESS = "board";
  * (addition 0008zr's web) the page reads everything once, in one transaction (data().getLiveBoard), and
  * the client (LiveBoardLive) polls GET /api/v1/live/board every 10 seconds while the tab is visible and
  * updates the board from the answer: no page render per poll. Staff data, never customer data, and no
- * ranking. Since addition 0008i it opens with today's inbound tiles (InboundLive); the missed calls not
+ * ranking. Since addition 0008i it opens with today's inbound tiles (InboundLive), since addition 0009h (Martin, 10
+ * November 2026) followed by today's outbound tiles (OutboundLive: attempts, connected, the connected rate, the outbound
+ * conversations, talk time and its average; tenant-wide and captioned as the inbound tiles); the missed calls not
  * called back (MissedCallbacks) close the board since addition 0008z (Martin, 20 October 2026): line
  * names, codes and counts, never a number, a name or the caller's hash.
  *
@@ -62,7 +64,7 @@ export default async function LiveBoardPage({ params }: { params: Promise<{ org:
   }
   const href = `/live/${center.key}` as const;
 
-  // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound and follow-up;
+  // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound, outbound and follow-up;
   // then this contact center's people only
   const board = boardOfOrganisation(await data().getLiveBoard(me), center.key);
   // The board's words only (a slice of the copy object; the whole one weighed about 90 kB in every poll's page before)

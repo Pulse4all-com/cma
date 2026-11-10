@@ -10,7 +10,7 @@ import type {
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
-  InboundFigures, InboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
+  InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
@@ -1550,22 +1550,39 @@ async function readFollowUpSummary(q: Querier): Promise<FollowUpSummaryAt> {
 
 /** cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives them */
 type InboundNowDb = {
-  today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; waiting_now: number; longest_waiting_seconds: number | null;
+  today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; waiting_now: number;
     service_level_seconds: number; waiting_max_minutes: number }) | null;
   callbacks: (Omit<CallbackDbRow, "started_at"> & { started_at: string })[];
   summary: { listed: number; anonymous_count: number; lookback_days: number };
 };
 
+/** cma.outbound_now()'s JSON (addition 0009h); the numerics as JSON gives them */
+type OutboundNowDb = {
+  business_date: string; attempts: number; connected: number; connected_rate: number | null; conversations: number;
+  outbound_talk_seconds: number; outbound_talk_avg: number | null;
+};
+
 async function readInboundNow(q: Querier): Promise<InboundNow> {
+  return (await readCallsNow(q, false)).inbound;
+}
+
+/**
+ * The Live board's call parts: inbound (addition 0008zr) and, for the board, today's outbound (addition 0009h) in the
+ * same statement, so the board's poll gains no round trip; outbound is null for a tenant without telephony
+ */
+async function readCallsNow(q: Querier, withOutbound: boolean): Promise<{ inbound: InboundNow; outbound: OutboundNow | null }> {
   // One statement (addition 0008zr): today's figures, the missed callers (each with its record link from the connection's
   // record_url_call template; null without one) and the summary, the list computed once in the database
-  const j = one((await q.query<{ j: InboundNowDb }>(`select cma.inbound_now() as j`)).rows, "inbound_now").j;
+  const row = one((await q.query<{ j: InboundNowDb; o: OutboundNowDb | null }>(
+    withOutbound ? `select cma.inbound_now() as j, cma.outbound_now() as o` : `select cma.inbound_now() as j, null::jsonb as o`)).rows, "inbound_now");
+  const j = row.j;
+  const o = row.o;
   const connections = await readConnections(q);
   const t = j.today;
-  return {
+  const inbound: InboundNow = {
     telephony: connections.telephony,
     today: connections.telephony && t ? {
-      ...toFigures(t), date: t.business_date, waitingNow: t.waiting_now, longestWaitingSeconds: t.longest_waiting_seconds,
+      ...toFigures(t), date: t.business_date, waitingNow: t.waiting_now,
       serviceLevelSeconds: t.service_level_seconds, waitingMaxMinutes: t.waiting_max_minutes,
     } : null,
     callbacks: connections.telephony ? j.callbacks.map((x) => ({
@@ -1576,6 +1593,12 @@ async function readInboundNow(q: Querier): Promise<InboundNow> {
     anonymousCount: connections.telephony ? j.summary.anonymous_count : 0,
     lookbackDays: j.summary.lookback_days,
   };
+  const outbound: OutboundNow | null = connections.telephony && o ? {
+    date: o.business_date, attempts: o.attempts, connected: o.connected,
+    connectedRate: o.connected_rate === null ? null : Number(o.connected_rate), conversations: o.conversations,
+    talkSeconds: Number(o.outbound_talk_seconds), talkAvgSeconds: o.outbound_talk_avg === null ? null : Number(o.outbound_talk_avg),
+  } : null;
+  return { inbound, outbound };
 }
 
 export const postgresData: CmaData = {
@@ -1921,15 +1944,16 @@ export const postgresData: CmaData = {
       const memberships = await readTeamMembersNow(q);
       const shifts = await readRosterToday(q);
       const settings = await readSettings(q);
-      const inbound = await readInboundNow(q);
+      const { inbound, outbound } = await readCallsNow(q, true);
       const followUp = await readFollowUpSummary(q);
       const numberSetting = (key: string): number | null => {
         const v = settings.find((x) => x.key === key)?.value;
         return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
       };
       return {
-        now, memberships, shifts, inbound, followUp, readAt: new Date().toISOString(),
-        settings: { adherenceToleranceMinutes: numberSetting("roster.adherence_tolerance_minutes") ?? 5, targetMinutes: numberSetting("speed_to_lead.target_minutes"), warningPct: numberSetting("tickets.sla_warning_pct") },
+        now, memberships, shifts, inbound, outbound, followUp, readAt: new Date().toISOString(),
+        settings: { adherenceToleranceMinutes: numberSetting("roster.adherence_tolerance_minutes") ?? 5, targetMinutes: numberSetting("speed_to_lead.target_minutes"), warningPct: numberSetting("tickets.sla_warning_pct"),
+          connectedMinSeconds: numberSetting("telephony.connected_min_seconds"), conversationMinSeconds: numberSetting("calls.conversation_min_talk_seconds") },
       };
     });
   },

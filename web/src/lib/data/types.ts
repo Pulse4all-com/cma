@@ -1009,10 +1009,28 @@ export interface InboundService {
 export interface InboundToday extends InboundFigures {
   date: DateKey;
   waitingNow: number;
-  /** Seconds the longest waiting call has waited; null when nobody waits */
-  longestWaitingSeconds: number | null;
   serviceLevelSeconds: number;
   waitingMaxMinutes: number;
+}
+
+/**
+ * Today's outbound for the Live board (cma.outbound_now, addition 0009h): the outbound calls on counted lines whose
+ * date in their line's zone is today's date in the tenant's zone, as Reports → Calls dates a call
+ */
+export interface OutboundNow {
+  date: DateKey;
+  /** Attempts: every outbound call of today, connected or not */
+  attempts: number;
+  /** Connected: answered by the recipient or their voicemail (at telephony.connected_min_seconds of talk when above 0) */
+  connected: number;
+  /** The connected rate: connected of the attempts, 0 to 100 with one decimal; null without an attempt */
+  connectedRate: number | null;
+  /** Conversations among the outbound calls only */
+  conversations: number;
+  /** Talk time over the connected outbound calls, in seconds */
+  talkSeconds: number;
+  /** Its average over the connected calls with talk time; null without one */
+  talkAvgSeconds: number | null;
 }
 
 /** A caller's latest missed inbound call not called back (cma.missed_callbacks); never the caller's hash */
@@ -3185,16 +3203,22 @@ export type FollowUpSummaryAt = FollowUpSummary & CourtesyFlag & { computedAt: I
 
 /**
  * The Live board in one read (addition 0008zr's web, night N06; the IT audit's 5.6-01): the team now, the current team
- * memberships, today's published shifts, the settings the board needs, today's inbound and the follow-up counts, read
+ * memberships, today's published shifts, the settings the board needs, today's inbound and outbound and the follow-up counts, read
  * in one transaction and served as GET /api/v1/live/board, which the board polls every 10 seconds while visible.
  */
 export interface LiveBoardData {
   now: TeamNow;
   memberships: TeamMembership[];
   shifts: TodayShift[];
-  /** roster.adherence_tolerance_minutes, speed_to_lead.target_minutes and tickets.sla_warning_pct as the board reads them */
-  settings: { adherenceToleranceMinutes: number; targetMinutes: number | null; warningPct: number | null };
+  /**
+   * roster.adherence_tolerance_minutes, speed_to_lead.target_minutes and tickets.sla_warning_pct as the board reads them,
+   * and the two thresholds the outbound hints name (telephony.connected_min_seconds, calls.conversation_min_talk_seconds)
+   */
+  settings: { adherenceToleranceMinutes: number; targetMinutes: number | null; warningPct: number | null;
+    connectedMinSeconds: number | null; conversationMinSeconds: number | null };
   inbound: InboundNow;
+  /** Today's outbound (addition 0009h); null when the tenant has no telephony connected: the inbound part says so */
+  outbound: OutboundNow | null;
   followUp: FollowUpSummaryAt;
   /** The instant of the read, for the client's clock */
   readAt: Instant;

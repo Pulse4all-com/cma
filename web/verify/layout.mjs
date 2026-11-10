@@ -1048,9 +1048,18 @@ async function expectLiveBoard() {
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
+        // Outbound today (addition 0009h): six tiles between Inbound today and Follow-up now; no Longest waiting anywhere
+        outboundTiles: document.querySelectorAll('[data-testid="outbound-tiles"] [data-tile]').length,
+        outboundBetween: (() => {
+          const order = [...document.querySelectorAll('[data-testid="inbound-live"], [data-testid="outbound-live"], [data-testid="follow-up-live"]')].map((el) => el.getAttribute("data-testid"));
+          return order.join(",") === "inbound-live,outbound-live,follow-up-live";
+        })(),
+        // the tile and the tiles' labels only: the page's text may say "longest waiting" elsewhere (a follow-up hint does)
+        longestWaiting: !!document.querySelector('[data-testid="inbound-longestWaiting"]')
+          || [...document.querySelectorAll("[data-tile] p")].some((el) => (el.firstChild?.textContent ?? "").trim() === "Longest waiting"),
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
         // the call parts and the follow-up strip stay tenant-wide on a contact center's board and say so (addition 0008zv)
-        scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="missed-scope"], [data-testid="follow-up-scope"]')].map((el) => el.textContent ?? ""),
+        scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="outbound-scope"], [data-testid="missed-scope"], [data-testid="follow-up-scope"]')].map((el) => el.textContent ?? ""),
         unnamedLabels: [...document.querySelectorAll("main div[aria-label], main span[aria-label]")].filter((el) => !el.getAttribute("role")).length,
         // Missed, not called back is the board's last section since 0008z: the last heading in main is its own
         lastHeading: [...document.querySelectorAll("main h2")].at(-1)?.closest('[data-testid="missed-live"]') !== null,
@@ -1059,11 +1068,14 @@ async function expectLiveBoard() {
     if (m.unnamedLabels > 0) problems.push(`${subject} /live/board: ${m.unnamedLabels} div or span carries aria-label without a role`);
     if (m.scrollX) problems.push(`${subject} /live/board: page scrolls horizontally at 1280`);
     if (m.mainX > 0) problems.push(`${subject} /live/board: the main area scrolls sideways by ${m.mainX}px at 1280`);
-    if (telephony && (m.tiles !== 7 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 7 and a table`);
+    if (telephony && (m.tiles !== 6 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 6 and a table`);
+    if (telephony && (m.outboundTiles !== 6 || !m.outboundBetween)) problems.push(`${subject} /live/board: ${m.outboundTiles} outbound tiles${m.outboundBetween ? "" : ", not between Inbound today and Follow-up now"}, expected 6 between them`);
+    if (!telephony && m.outboundTiles !== 0) problems.push(`${subject} /live/board: outbound tiles without telephony`);
+    if (m.longestWaiting) problems.push(`${subject} /live/board: Longest waiting is still on the board`);
     if (telephony && !m.lastHeading) problems.push(`${subject} /live/board: Missed, not called back is not the board's last section`);
-    if (telephony && (m.scopes.length !== 3 || !m.scopes.every((x) => x.includes("Newco")))) problems.push(`${subject} /live/board: ${m.scopes.length} captions on the call parts and the follow-up strip naming Newco, expected 3`);
+    if (telephony && (m.scopes.length !== 4 || !m.scopes.every((x) => x.includes("Newco")))) problems.push(`${subject} /live/board: ${m.scopes.length} captions on the call parts and the follow-up strip naming Newco, expected 4`);
     if (telephony) {
-      const mark = p.locator('[data-testid="inbound-longestWaiting"] button[data-header-hint]');
+      const mark = p.locator('[data-testid="outbound-talkAvg"] button[data-header-hint]');
       await mark.focus();
       const h = await p.evaluate(() => {
         const m = document.activeElement;
