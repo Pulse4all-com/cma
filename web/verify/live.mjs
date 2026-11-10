@@ -255,11 +255,13 @@ expect("oldest first, then by the call's id",
 // ---- Outbound today (addition 0009h) --------------------------------------------------------------
 // The calls of 165 B (invented ids): 6 October 2026 on the NL line (Amsterdam), five seconds of ringing, then the talk;
 // a New York line whose call of 7 October 01:30 in Amsterdam is still the 6th there and whose call of 6 October 03:00
-// in Amsterdam is the 5th there; a line that does not count; the tag nr means not reached
+// in Amsterdam is the 5th there; a Tokyo line whose call of 5 October 23:30 in Amsterdam is already the 6th there; a line
+// that does not count; the tag nr means not reached
 const D = Date.parse("2026-10-06T08:00:00Z");
 const oLines = [
   { connectionId: "c", lineRef: "nl", name: "NL line", market: "NL", zone: "Europe/Amsterdam", isCounted: true },
   { connectionId: "c", lineRef: "us", name: "US line", market: "US", zone: "America/New_York", isCounted: true },
+  { connectionId: "c", lineRef: "jp", name: "JP line", market: "JP", zone: "Asia/Tokyo", isCounted: true },
   { connectionId: "c", lineRef: "test", name: "Test line", market: "NL", zone: "Europe/Amsterdam", isCounted: false },
 ];
 const oCall = (sourceId, direction, startMs, talk, lineRef, tagRefs = [], ended = true) => ({
@@ -274,25 +276,25 @@ const oCalls = [
   oCall("o4", "outbound", min(30), 120, "nl", ["nr"]), oCall("o5", "outbound", min(40), null, "nl"), oCall("o6", "outbound", min(50), 300, "nl"),
   oCall("i1", "inbound", min(60), 45, "nl"), oCall("t1", "outbound", min(70), 60, "test"),
   oCall("u1", "outbound", Date.parse("2026-10-06T23:30:00Z"), 60, "us"), oCall("u2", "outbound", Date.parse("2026-10-06T01:00:00Z"), 60, "us"),
-  oCall("y1", "outbound", D - 86_400_000, 60, "nl"),
+  oCall("y1", "outbound", D - 86_400_000, 60, "nl"), oCall("j1", "outbound", Date.parse("2026-10-05T21:30:00Z"), 60, "jp"),
 ];
 const oTags = [{ connectionId: "c", tagRef: "nr", name: "Not reached", isCounted: true, meaning: "not_reached" }];
 const outboundOn = (date, connectedMin = 0, conversationMin = 30) =>
   outboundToday(callRecords(oCalls, oLines, "Europe/Amsterdam", callRules(connectedMin, conversationMin, oTags)), date);
 const out6 = outboundOn("2026-10-06");
 expect("outbound today: attempts, connected, rate, outbound conversations, talk and its average",
-  out6, { date: "2026-10-06", attempts: 7, connected: 6, connectedRate: 85.7, conversations: 3, talkSeconds: 511, talkAvgSeconds: 102.2 },
-  { date: "2026-10-06", attempts: 8, connected: 7, connectedRate: 87.5, conversations: 4, talkSeconds: 571, talkAvgSeconds: 95.2 });
+  out6, { date: "2026-10-06", attempts: 8, connected: 7, connectedRate: 87.5, conversations: 4, talkSeconds: 571, talkAvgSeconds: 95.2 },
+  { date: "2026-10-06", attempts: 7, connected: 6, connectedRate: 85.7, conversations: 3, talkSeconds: 511, talkAvgSeconds: 102.2 });
 expect("the outbound tiles in order with their values",
   OUTBOUND_TILES.map((k) => [k, outboundTileValue(out6, k)]),
-  [["attempts", { kind: "count", value: 7 }], ["connected", { kind: "count", value: 6 }], ["connectedRate", { kind: "rate", value: 85.7 }],
-    ["conversations", { kind: "count", value: 3 }], ["talk", { kind: "talk", value: 511 }], ["talkAvg", { kind: "talk", value: 102.2 }]],
-  [["attempts", { kind: "count", value: 7 }], ["connected", { kind: "count", value: 6 }], ["connectedRate", { kind: "pct", value: 86 }],
-    ["conversations", { kind: "count", value: 3 }], ["talk", { kind: "talk", value: 511 }], ["talkAvg", { kind: "talk", value: 102.2 }]]);
+  [["attempts", { kind: "count", value: 8 }], ["connected", { kind: "count", value: 7 }], ["connectedRate", { kind: "rate", value: 87.5 }],
+    ["conversations", { kind: "count", value: 4 }], ["talk", { kind: "talk", value: 571 }], ["talkAvg", { kind: "talk", value: 95.2 }]],
+  [["attempts", { kind: "count", value: 8 }], ["connected", { kind: "count", value: 7 }], ["connectedRate", { kind: "pct", value: 88 }],
+    ["conversations", { kind: "count", value: 4 }], ["talk", { kind: "talk", value: 571 }], ["talkAvg", { kind: "talk", value: 95.2 }]]);
 expect("the settings move the figures: connected from 5 s; a conversation from 31 s",
   [outboundOn("2026-10-06", 5), outboundOn("2026-10-06", 0, 31).conversations],
-  [{ date: "2026-10-06", attempts: 7, connected: 4, connectedRate: 57.1, conversations: 3, talkSeconds: 510, talkAvgSeconds: 127.5 }, 2],
-  [{ date: "2026-10-06", attempts: 7, connected: 6, connectedRate: 85.7, conversations: 3, talkSeconds: 511, talkAvgSeconds: 102.2 }, 3]);
+  [{ date: "2026-10-06", attempts: 8, connected: 5, connectedRate: 62.5, conversations: 4, talkSeconds: 570, talkAvgSeconds: 114 }, 3],
+  [{ date: "2026-10-06", attempts: 8, connected: 7, connectedRate: 87.5, conversations: 4, talkSeconds: 571, talkAvgSeconds: 95.2 }, 4]);
 expect("each call on its day in its line's zone: the 5th counts its two calls",
   outboundOn("2026-10-05"), { date: "2026-10-05", attempts: 2, connected: 2, connectedRate: 100, conversations: 2, talkSeconds: 120, talkAvgSeconds: 60 },
   { date: "2026-10-05", attempts: 1, connected: 1, connectedRate: 100, conversations: 1, talkSeconds: 60, talkAvgSeconds: 60 });
@@ -302,7 +304,7 @@ expect("a day without an attempt: zeros, no rate, no average",
   { date: "2026-10-01", attempts: 0, connected: 0, connectedRate: 0, conversations: 0, talkSeconds: 0, talkAvgSeconds: 0 });
 expect("the connected rate with one decimal, a dash without an attempt; the average's dash",
   [fmtRate1(out6.connectedRate, "en"), fmtRate1(57.1, "nl"), fmtRate1(100, "en"), fmtRate1(none.connectedRate, "en"), fmtTalk(none.talkAvgSeconds, "en"), fmtTalk(none.talkSeconds, "en")],
-  ["85.7%", "57,1%", "100.0%", "–", "–", "0 s"], ["86%", "57%", "100%", "0%", "0 s", "–"]);
+  ["87.5%", "57,1%", "100.0%", "–", "–", "0 s"], ["88%", "57%", "100%", "0%", "0 s", "–"]);
 // Longest waiting is gone everywhere the web holds its keys: the copy's (inboundLongestWaiting, liveLongestWaiting and
 // nobodyWaiting, en and nl), the registry's and the catalog's (live.inbound.longest_waiting), the field and the tile
 const gone = ["src/lib/copy.ts", "src/lib/metrics.ts", "src/lib/metrics-catalog.json", "src/lib/data/types.ts", "src/components/InboundLive.tsx"]

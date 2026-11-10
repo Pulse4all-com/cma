@@ -4,8 +4,8 @@
 -- =============================================================================================
 -- Universal: no seed is assumed. Block S checks the addition, the functions and the grants. Block B works on a throwaway
 -- tenant inside a subtransaction that is always rolled back, so nothing stays: synthetic people (example.invalid) and
--- fixed test calls on Tuesday 6 October 2026 (Europe/Amsterdam, with a second line in America/New_York and a line that
--- does not count), read at a fixed instant (cma.outbound_today_of's p_now), so the verdict never depends on the time it
+-- fixed test calls on Tuesday 6 October 2026 (Europe/Amsterdam, with a line in America/New_York, west of the tenant, a
+-- line in Asia/Tokyo, east of it, and a line that does not count), read at a fixed instant (cma.outbound_today_of's p_now), so the verdict never depends on the time it
 -- runs; cma.outbound_now() and cma.inbound_now(), which read now(), get three calls of the running day. Block E compares,
 -- per active tenant on the database it runs in and as the application acting as the tenant's first person holding
 -- monitoring.live, today's outbound figures with Reports → Calls' (cma.calls_figures_of) and cma.inbound_now() with
@@ -19,16 +19,18 @@
 --   S2  cma.outbound_today_of(uuid, timestamptz) and cma.outbound_now(): SQL, stable, the caller's rights, owned by
 --       cma_owner, jit off, executable by the application only; outbound_today_of's seven columns; cma.inbound_now():
 --       plpgsql, stable, jsonb, the application's only, its text taking longest_waiting_seconds out of today
---   B1  the fixed calls of 6 October: 7 attempts (an unanswered one, one in progress, one on the New York line that
---       started on 7 October in Amsterdam), 6 connected, 85.7, 3 conversations (not under the talk threshold, not with
---       a tag meaning not_reached, not the inbound one), 511 s of talk, 102.2 on average; the line that does not count,
---       the day before and the New York line's call of 5 October (6 October in Amsterdam) are left out
+--   B1  the fixed calls of 6 October: 8 attempts (an unanswered one, one in progress, one on the New York line that
+--       started on 7 October in Amsterdam, one on the Tokyo line that started on 5 October in Amsterdam: both ends of
+--       the window), 7 connected, 87.5, 4 conversations (not under the talk threshold, not with a tag meaning
+--       not_reached, not the inbound one), 571 s of talk, 95.2 on average; the day before and the New York line's call
+--       of 5 October (6 October in Amsterdam) are left out; so is the call sent on the line that does not count, which
+--       the ingest write does not store (0008f), so it proves the write's rule here, not the read's
 --   B2  the same as cma.calls_figures_of for that day where both define them: outbound, connected, connected_rate,
 --       outbound_talk_seconds, outbound_talk_avg
 --   B3  the conversations equal the count of the day's outbound calls that cma.is_conversation calls one, computed here
 --       from the stored calls
---   B4  the settings move the figures as they move the report's: telephony.connected_min_seconds 5 (4 connected, 57.1,
---       510 s, 127.5), calls.conversation_min_talk_seconds 31 (2 conversations); B2 and B3 hold under each
+--   B4  the settings move the figures as they move the report's: telephony.connected_min_seconds 5 (5 connected, 62.5,
+--       570 s, 114.0), calls.conversation_min_talk_seconds 31 (3 conversations); B2 and B3 hold under each
 --   B5  another day and a day without a call: 5 October counts its two calls; 1 October answers 0 attempts, no rate
 --       (null, the tile's dash), 0 conversations, 0 s, no average
 --   B6  cma.outbound_now(): an agent is refused (CMA06); a supervisor reads the seven keys, equal to
@@ -42,7 +44,9 @@
 --   E3  per active tenant: cma.outbound_now() no slower than cma.inbound_now(): the best of verify.timing_runs runs
 --       each, at most inbound's best plus verify.slack_ms. This is the brief's comparison, not the poll's budget:
 --       131_time_all.sql part a holds that (the rows 'outbound now' and 'live board calls (one statement)', 20 ms)
--- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
+-- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
+-- comparisons are provoked by a deliberate difference, not by the switch alone: B7 and E1 then compare with 0008zx's
+-- JSON with longest_waiting_seconds left in, B2 with the report's figures of the day before.
 -- =============================================================================================
 
 do $$
@@ -274,13 +278,15 @@ begin
     -- line in each, a line that does not count, the tag's meaning
     perform set_config('app.user_id', v_ing::text, true);
     perform cma.ingest_upsert_telephony_catalog(v_tel, 'number', '[{"numberRef": "n-nl", "name": "Verify NL line", "digits": "+31000000001"},
-      {"numberRef": "n-us", "name": "Verify US line", "digits": "+10000000001"}, {"numberRef": "n-test", "name": "Verify test line", "digits": "+31000000002"}]');
+      {"numberRef": "n-us", "name": "Verify US line", "digits": "+10000000001"}, {"numberRef": "n-jp", "name": "Verify JP line", "digits": "+810000000001"}, {"numberRef": "n-test", "name": "Verify test line", "digits": "+31000000002"}]');
     perform cma.ingest_upsert_telephony_catalog(v_tel, 'tag', '[{"tagRef": "tg-nr", "name": "Not Reached"}]');
     perform set_config('app.user_id', v_admin::text, true);
     perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
     perform cma.upsert_market('US', 'United States', 'America/New_York', 'en', 'USD');
     perform cma.set_telephony_number(v_tel, 'n-nl', 'NL', true);
     perform cma.set_telephony_number(v_tel, 'n-us', 'US', true);
+    perform cma.upsert_market('JP', 'Japan', 'Asia/Tokyo', 'ja', 'JPY');
+    perform cma.set_telephony_number(v_tel, 'n-jp', 'JP', true);
     perform cma.set_telephony_number(v_tel, 'n-test', 'NL', false);
     perform cma.set_telephony_tag_meaning(v_tel, 'tg-nr', 'not_reached');
 
@@ -297,7 +303,9 @@ begin
       pg_temp.v0009h_call('o5', 'outbound', v_d + interval '40 minutes', null, null, 'n-nl'),       -- an attempt, not connected
       pg_temp.v0009h_call('o6', 'outbound', v_d + interval '50 minutes', 5, 300,  'n-nl'),          -- a conversation
       pg_temp.v0009h_call('i1', 'inbound',  v_d + interval '60 minutes', 5, 45,   'n-nl'),          -- an inbound conversation: not outbound
-      pg_temp.v0009h_call('t1', 'outbound', v_d + interval '70 minutes', 5, 60,   'n-test'),        -- a line that does not count
+      pg_temp.v0009h_call('t1', 'outbound', v_d + interval '70 minutes', 5, 60,   'n-test'),        -- a line that does not count: not stored
+      -- the Tokyo line: 5 October 23:30 in Amsterdam is 6 October 06:30 there (counts for the 6th: the window's start)
+      pg_temp.v0009h_call('j1', 'outbound', timestamptz '2026-10-05 21:30:00+00', 5, 60, 'n-jp'),
       -- the New York line: 7 October 01:30 in Amsterdam is 6 October 19:30 there (counts for the 6th); 6 October 03:00 in
       -- Amsterdam is 5 October 21:00 there (counts for the 5th)
       pg_temp.v0009h_call('u1', 'outbound', timestamptz '2026-10-06 23:30:00+00', 5, 60, 'n-us'),
@@ -312,26 +320,26 @@ begin
 
     -- B1. the day's figures
     v_txt := pg_temp.v0009h_fig(v_t, v_now);
-    rows_ := rows_ || pg_temp.v0009h_row(11, 'B1 the fixed calls of 6 October: 7 attempts, 6 connected, 85.7, 3 conversations, 511 s, 102.2 on average',
-      case when v_txt = '2026-10-06|7|6|85.7|3|511|102.2' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row'));
+    rows_ := rows_ || pg_temp.v0009h_row(11, 'B1 the fixed calls of 6 October: 8 attempts, 7 connected, 87.5, 4 conversations, 571 s, 95.2 on average',
+      case when v_txt = '2026-10-06|8|7|87.5|4|571|95.2' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row'));
 
     -- B2. the same as Reports → Calls where both define them
     v_txt := pg_temp.v0009h_shared(v_t, v_now);
     rows_ := rows_ || pg_temp.v0009h_row(12, 'B2 outbound, connected, connected rate and outbound talk the same as cma.calls_figures_of for the day',
-      case when v_txt is not null and v_txt = pg_temp.v0009h_report(v_t, v_day) and not v_provoke then 'PASS' else 'FAIL' end,
-      format('%s against %s', coalesce(v_txt, 'no row'), coalesce(pg_temp.v0009h_report(v_t, v_day), 'no row')));
+      case when v_txt is not null and v_txt = pg_temp.v0009h_report(v_t, case when v_provoke then v_day - 1 else v_day end) then 'PASS' else 'FAIL' end,
+      format('%s against %s', coalesce(v_txt, 'no row'), coalesce(pg_temp.v0009h_report(v_t, case when v_provoke then v_day - 1 else v_day end), 'no row')));
 
     -- B3. the conversations are the outbound calls cma.is_conversation calls one
     select o.conversations::text into v_txt from cma.outbound_today_of(v_t, v_now) o;
     rows_ := rows_ || pg_temp.v0009h_row(13, 'B3 the conversations equal the count of the day''s outbound calls that are a Conversation by cma.is_conversation',
-      case when v_txt = '3' and v_txt = pg_temp.v0009h_conversations(v_t, v_day)::text and not v_provoke then 'PASS' else 'FAIL' end,
+      case when v_txt = '4' and v_txt = pg_temp.v0009h_conversations(v_t, v_day)::text and not v_provoke then 'PASS' else 'FAIL' end,
       format('%s against %s', coalesce(v_txt, 'no row'), pg_temp.v0009h_conversations(v_t, v_day)));
 
     -- B4. the settings move the figures, and B2 and B3 hold under each
     v_bad := '';
     perform cma.set_tenant_setting('telephony.connected_min_seconds', '5');
     v_txt := pg_temp.v0009h_fig(v_t, v_now);
-    if v_txt is distinct from '2026-10-06|7|4|57.1|3|510|127.5' then v_bad := v_bad || 'connected from 5 s: ' || coalesce(v_txt, 'no row') || '; '; end if;
+    if v_txt is distinct from '2026-10-06|8|5|62.5|4|570|114.0' then v_bad := v_bad || 'connected from 5 s: ' || coalesce(v_txt, 'no row') || '; '; end if;
     if pg_temp.v0009h_shared(v_t, v_now) is distinct from pg_temp.v0009h_report(v_t, v_day) then v_bad := v_bad || 'connected from 5 s: not the report''s; '; end if;
     if (select o.conversations from cma.outbound_today_of(v_t, v_now) o) is distinct from pg_temp.v0009h_conversations(v_t, v_day) then
       v_bad := v_bad || 'connected from 5 s: not is_conversation''s count; ';
@@ -339,13 +347,13 @@ begin
     perform cma.set_tenant_setting('telephony.connected_min_seconds', null);
     perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '31');
     v_txt := pg_temp.v0009h_fig(v_t, v_now);
-    if v_txt is distinct from '2026-10-06|7|6|85.7|2|511|102.2' then v_bad := v_bad || 'threshold 31: ' || coalesce(v_txt, 'no row') || '; '; end if;
+    if v_txt is distinct from '2026-10-06|8|7|87.5|3|571|95.2' then v_bad := v_bad || 'threshold 31: ' || coalesce(v_txt, 'no row') || '; '; end if;
     if pg_temp.v0009h_shared(v_t, v_now) is distinct from pg_temp.v0009h_report(v_t, v_day) then v_bad := v_bad || 'threshold 31: not the report''s; '; end if;
     if (select o.conversations from cma.outbound_today_of(v_t, v_now) o) is distinct from pg_temp.v0009h_conversations(v_t, v_day) then
       v_bad := v_bad || 'threshold 31: not is_conversation''s count; ';
     end if;
     perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', null);
-    rows_ := rows_ || pg_temp.v0009h_row(14, 'B4 connected from 5 s: 4 connected, 57.1, 510 s, 127.5; the Conversation threshold at 31 s: 2; the report''s and is_conversation''s under each',
+    rows_ := rows_ || pg_temp.v0009h_row(14, 'B4 connected from 5 s: 5 connected, 62.5, 570 s, 114.0; the Conversation threshold at 31 s: 3; the report''s and is_conversation''s under each',
       case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
     -- B5. another day, and a day without a call
@@ -386,7 +394,8 @@ begin
     v_bad := '';
     j := cma.inbound_now();
     j_old := pg_temp.inbound_now_0008zx();
-    if j is distinct from (j_old #- '{today,longest_waiting_seconds}') then v_bad := v_bad || 'not 0008zx''s JSON without the key; '; end if;
+    -- provoked: the key left in 0008zx's answer, which the comparison must then report
+    if j is distinct from (case when v_provoke then j_old else j_old #- '{today,longest_waiting_seconds}' end) then v_bad := v_bad || 'not 0008zx''s JSON without the key; '; end if;
     if j -> 'today' ? 'longest_waiting_seconds' then v_bad := v_bad || 'today still holds the key; '; end if;
     if jsonb_typeof(j_old -> 'today' -> 'longest_waiting_seconds') is distinct from 'number' then v_bad := v_bad || '0008zx''s today holds no longest wait: nothing proven; '; end if;
     if (select array_agg(k order by k collate "C") from jsonb_object_keys(j -> 'today') k) is distinct from
@@ -396,7 +405,7 @@ begin
     end if;
     if (j -> 'today' ->> 'waiting_now') is distinct from '1' then v_bad := v_bad || 'waiting now is ' || coalesce(j -> 'today' ->> 'waiting_now', 'null') || '; '; end if;
     rows_ := rows_ || pg_temp.v0009h_row(17, 'B7 inbound_now(): 0008zx''s JSON without longest_waiting_seconds; the fourteen other keys of today, one call waiting',
-      case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
+      case when v_bad = '' then 'PASS' else 'FAIL' end, v_bad);
 
     raise exception using errcode = 'CMAOK';
   exception
@@ -444,9 +453,10 @@ begin
     -- E1. inbound now: 0008zx's answer without the key
     v_ord := v_ord + 1;
     begin
-      select cma.inbound_now() is not distinct from (pg_temp.inbound_now_0008zx() #- '{today,longest_waiting_seconds}') into v_same;
+      -- provoked: the key left in 0008zx's answer, which the comparison must then report
+      select cma.inbound_now() is not distinct from (case when v_provoke then pg_temp.inbound_now_0008zx() else pg_temp.inbound_now_0008zx() #- '{today,longest_waiting_seconds}' end) into v_same;
       insert into verify_0009h values (v_ord, 'E1 inbound_now(): the same JSON as 0008zx''s without longest_waiting_seconds (' || t.slug || ')',
-        case when v_same and not v_provoke then 'PASS' else 'FAIL' end, case when v_same then 'the same today, callbacks and summary' else 'the JSON differs' end);
+        case when v_same then 'PASS' else 'FAIL' end, case when v_same then 'the same today, callbacks and summary' else 'the JSON differs' end);
     exception when others then
       insert into verify_0009h values (v_ord, 'E1 inbound_now() (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
     end;
