@@ -8,10 +8,11 @@
 -- there, then the verifies that read cma.inbound_now() again: 133_verify_perf.sql (unchanged, still PASS: its A5 reads
 -- today, callbacks and summary, of today only offered), 145_verify_held_kinds_restore.sql and
 -- 165_verify_live_outbound.sql, which this change edits (145's A10 and E6, 165's B7 and E1 compare cma.inbound_now()
--- with an earlier definition's JSON; they now take the new key out of the new answer before comparing, and 165's B7
--- lists it among today's keys); then 131_time_all.sql part a, unchanged: the web's statements are the same, and its rows
--- 'inbound now (one statement)' (prod 15.7 ms on 10 November 2026, before 168) and 'live board calls (one statement)'
--- time the read below inside them; 169's E4 holds the new poll to 164's time. Prod the same, before the merge: 168, 169,
+-- with an earlier definition's JSON; they now take the new key out of the new answer before comparing, which changes
+-- nothing on a database without 168, so both read the same before and after it); then 131_time_all.sql part a,
+-- unchanged: the web's statements are the same, and its rows 'inbound now (one statement)' (prod 15.7 ms on 10 November
+-- 2026, before 168) and 'live board calls (one statement)' time the read below inside them; 169's E4 holds the new poll
+-- to 164's time. Prod the same, before the merge: 168, 169,
 -- 133, 145, 165, 131 part a; then the merge.
 -- Release order (Martin, 10 November 2026; as #260): the database first. cma.inbound_now() keeps waiting_now and
 -- longest_waiting_seconds (always null, since 164) in today exactly as now, so main's web runs unchanged on a database
@@ -47,11 +48,13 @@
 --                        before
 --                      One pass: cma.inbound_calls_of once over the instants the date covers in the tenant's zones (as
 --                      cma.outbound_today_of's window: from the date's first midnight to its last; for a tenant in one
---                      zone, the day itself; during the running day the end lies ahead, so the same calls are read as
---                      before), each call marked in or out of the tenant's day; the talk time of an answered call of
---                      the date read by the primary key of cma.telephony_call (cma.inbound_calls_of does not return
---                      it), only for those calls (an aggregate's filter is evaluated before its argument), no second
---                      scan of the day. sql, stable, jit off, rows 1, the application's only
+--                      zone, the day itself; for markets in the tenant's zone or west of it the window starts at the
+--                      tenant's midnight and its end lies ahead during the running day, so the same calls are read as
+--                      before; a market east of the tenant starts it at that zone's midnight, which reads the evening
+--                      before too, with the same answer), each call marked in or out of the tenant's day; the talk
+--                      time of an answered call of the date read by the primary key of cma.telephony_call
+--                      (cma.inbound_calls_of does not return it), only for those calls (an aggregate's filter is
+--                      evaluated before its argument), no second scan of the day. sql, stable, jit off, rows 1, the application's only
 -- What it changes
 --   cma.inbound_now()  (based on 164): today from cma.inbound_today_live_of instead of cma.inbound_today_of, so it gains
 --                      the key inbound_talk_seconds; longest_waiting_seconds still always null, waiting_now as before;

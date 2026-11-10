@@ -420,7 +420,7 @@ begin
       select (q.j -> 'today' ->> 'inbound_talk_seconds')::bigint, (q.j -> 'today' ->> 'business_date')::date,
              pg_temp.v0009j_report(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end)
         into v_talk, v_date, v_ref
-      from (select cma.inbound_now() as j) q;
+      from (select cma.inbound_now() as j offset 0) q;  -- offset 0: the board read once, not once per reference
       if v_min > 0 then
         insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time against Reports → Calls (' || t.slug || ')',
           case when v_provoke then 'FAIL' else 'skip' end,
@@ -438,7 +438,7 @@ begin
       select (q.j -> 'today' ->> 'inbound_talk_seconds')::bigint, (q.j -> 'today' ->> 'business_date')::date,
              pg_temp.v0009j_per_agent(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end)
         into v_talk, v_date, v_per
-      from (select cma.inbound_now() as j) q;
+      from (select cma.inbound_now() as j offset 0) q;
       insert into verify_0009j values (v_ord, 'E3 today''s inbound talk time equals Calls per agent''s inbound talk time (' || t.slug || ')',
         case when v_talk is not null and v_per is not null and v_per = v_talk and not v_provoke then 'PASS' else 'FAIL' end,
         format('%s s on %s against %s s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_per::text, 'no row')));
