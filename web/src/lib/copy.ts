@@ -3814,7 +3814,7 @@ const en = {
     c_related_id: "Related record",
     c_state: "State",
   },
-  // Assets → Installed base as the "now" view (addition 0009f): the page's own words; the tiles, columns and measures keep flash.*
+  // Assets → Pledge lists (addition 0009j): the page's words; the file's headers are the original's, in lib/pledges
   pledges: {
     title: "Pledge lists",
     intro: "The pledge lists of the early-stage investors' loans: per loan, the devices it secures with their values. A quarter file is frozen on the first day of every quarter and downloads unchanged at any later time; today's version shows what the next file would hold now.",
@@ -3862,6 +3862,7 @@ const en = {
     hintToday: "Current value is the acquisition value less the full months since the first shipment times the depreciation per month, never below zero.",
     hintChecks: "These devices are in the next file with an empty value, or not at all when their loan is unknown.",
   },
+  // Assets → Installed base as the "now" view (addition 0009f): the page's own words; the tiles, columns and measures keep flash.*
   installedBase: {
     intro: "The asset register now: devices in the field and in stock, their maintenance items due, per market and model. The figures are stored and refreshed every few minutes; the lists are read when you open them.",
     statusFilter: "Operational status",
@@ -7707,7 +7708,7 @@ const nl: Copy = {
     colDownload: "Download",
     downloadFile: "Downloaden",
     todayCard: "Vandaag",
-    todayIntro: "Gewaardeerd op {date}, uit het apparatenregister en de abonnementen zoals de Workspace ze nu heeft.",
+    todayIntro: "Gewaardeerd op {date}, uit het Assetregister en de abonnementen zoals de Workspace ze nu heeft.",
     todayEmpty: "Vandaag geen verpand apparaat",
     colLoan: "Lening",
     colLender: "Geldgever",
@@ -7719,7 +7720,7 @@ const nl: Copy = {
     downloadToday: "Versie van vandaag downloaden",
     downloadTodayHint: "Het bestand zoals het vandaag zou worden vastgelegd (de naam eindigt op preview)",
     checksCard: "Controleer voor het volgende bestand",
-    checksIntro: "Apparaten om in het apparatenregister of de configuratie recht te zetten voor het volgende kwartaalbestand. Een aantal opent de serienummers.",
+    checksIntro: "Apparaten om in het Assetregister of de configuratie recht te zetten voor het volgende kwartaalbestand. Een aantal opent de serienummers.",
     checksNone: "Niets te controleren",
     check_unknown_loan: "Leningwaarden zonder lening in de catalogus",
     check_no_model_values: "Verpande apparaten zonder modelwaarden",

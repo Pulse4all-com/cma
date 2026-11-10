@@ -278,14 +278,14 @@
   {
     "path": "/reports/pledge-lists",
     "subject": "admin",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 13
   },
   {
     "path": "/reports/pledge-lists?check=no_language",
     "subject": "admin",
-    "tx": 2,
-    "rt": 10
+    "tx": 3,
+    "rt": 14
   },
   {
     "path": "/api/v1/reports/pledge-lists",
@@ -297,7 +297,7 @@
     "path": "/api/v1/reports/pledge-lists/files/today",
     "subject": "admin",
     "tx": 2,
-    "rt": 10
+    "rt": 9
   },
   {
     "path": "/api/v1/reports/flash/rows?overview=installed_base&f_without_subscription_ref=true&limit=50",

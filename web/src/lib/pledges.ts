@@ -137,7 +137,11 @@ function sheetOf(name: string, columns: readonly Column[], rows: readonly Pledge
  */
 export function pledgeBook(rows: readonly PledgeFileRow[], valuationDate: string): XlsxBook | null {
   const loans = new Map<number, PledgeFileRow[]>();
-  for (const r of rows) loans.set(r.loanNumber, [...(loans.get(r.loanNumber) ?? []), r]);
+  for (const r of rows) {
+    const list = loans.get(r.loanNumber);
+    if (list) list.push(r);
+    else loans.set(r.loanNumber, [r]);
+  }
   const sheets: XlsxSheet[] = [];
   for (const number of [...loans.keys()].sort((a, b) => a - b)) {
     const list = loans.get(number) ?? [];
@@ -159,11 +163,8 @@ export function fileDateParam(value: string): string | "today" | null {
   return m ? value : null;
 }
 
-/** The sum of decimal texts as text with two decimals, without a float (the page's figures come summed from the database) */
+/** A sum in EUR for the page (decimal text from the database), in the locale's currency format (€1,250.00; € 1.250,00) */
 export function fmtAmount(v: string, locale: "en" | "nl"): string {
-  const [whole = "0", frac = ""] = v.split(".");
-  const neg = whole.startsWith("-");
-  const digits = neg ? whole.slice(1) : whole;
-  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, locale === "nl" ? "." : ",");
-  return `${neg ? "-" : ""}€ ${grouped}${locale === "nl" ? "," : "."}${(frac + "00").slice(0, 2)}`;
+  return new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    .format(Number(v));
 }

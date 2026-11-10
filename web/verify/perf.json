@@ -158,6 +158,17 @@
       "class": "report"
     },
     {
+      "path": "/reports/pledge-lists?check=no_language",
+      "subject": "admin",
+      "class": "report",
+      "html_kb": 48
+    },
+    {
+      "path": "/api/v1/reports/pledge-lists/files/today",
+      "subject": "admin",
+      "class": "report"
+    },
+    {
       "path": "/reports/reviews?range=all",
       "subject": "manager",
       "class": "report"

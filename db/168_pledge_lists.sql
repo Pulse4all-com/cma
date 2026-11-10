@@ -7,12 +7,14 @@
 -- 166_live_outbound_direct.sql (0009i). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own
 -- IAM login: dev first, then 169_verify_pledge_lists.sql there (and its provoked run), then the verifies that read what
 -- this changes: 27 (the scheduler role gains pledges.snapshot: its verify.job_permissions is edited by this change),
--- 113 (cma.device_raw_ok, the staging; its A2 is edited by this change: the two columns), 115 (the staging, the load and
+-- 77, 107 and 113 (cma.audit_row(): 113 also cma.device_raw_ok and the staging; its A2 is edited by this change: the two
+-- columns), 115 (the staging, the load and
 -- the connection fields' checks as text), 117 (dev and local only: the load; its A2 is edited by this change, the load's
 -- row types gain two attributes), 123 (cma.ensure_scheduler_user's text), 85, 99 and 137 (the connection fields' checks
 -- as text) and 161 (the installed base and data quality read the devices this load writes; nothing of theirs changes);
 -- then the data map's schema refresh from dev on this branch; then prod: the point-in-time recovery check, 168, 169, 27,
--- 113, 115, 123, 85, 99, 137 and 161, before the merge. The ingest of main sends rows
+-- 77, 107, 113, 115, 123, 85, 99, 137 and 161, before the merge. 131_time_all.sql is edited by this change (the three
+-- pledge reads in part b; it refuses a database without 0009j). The ingest of main sends rows
 -- without the two new keys, which this script's chunk load still takes (a missing key is an empty value); the ingest of
 -- this change sends both keys, which the database before this script refuses, so in prod this script runs before that
 -- ingest is deployed (Martin's steps). The web of main reads nothing this adds; the web of this change reads it.
@@ -49,7 +51,9 @@
 --   loan catalog       cma.pledge_loan (key: the register's loan reference; number 1 to 999, the file's LOAN SPV and tab
 --                      prefix; lender_label, area_label, name_suffix: the tab name's parts; layout 1 or 2; is_active) and
 --                      cma.set_pledge_loan(...) (tenant.configure). Lender names are investors' personal data: set in
---                      Studio only, never in a seed, a fixture or a log (D8)
+--                      Studio only, never in a seed, a fixture or a log (D8). cma.audit_row() (from 112) leaves the label
+--                      out of pledge_loan's audit images (lender_label_changed on an update instead), as it keeps a
+--                      staged device row's keys only; a quarter file keeps its frozen copy (the file's tab names, D5)
 --   model values       cma.pledge_model_value (model_key, type_label, acquisition_value, depreciation_per_month, receipts)
 --                      and cma.set_pledge_model_value(...) (tenant.configure)
 --   settings           pledges.snapshot_local_time ('HH:MM' in the tenant's zone, default 00:05; 24:00 refused) and
@@ -739,6 +743,67 @@ as $$
      and (p_apostrophe or strpos(p_value, '''') = 0)
 $$;
 
+-- The audit image of a loan keeps no lender label (D8): as 0008zi (112) left cma.audit_row(), plus a branch for
+-- cma.pledge_loan that leaves lender_label out of both images and, on an update, says whether it changed
+-- based on: 112_assets.sql
+create or replace function cma.audit_row()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_old jsonb := case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) end;
+  v_new jsonb := case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end;
+begin
+  if tg_op = 'DELETE' and tg_table_schema = 'cma'
+     and tg_table_name in ('telephony_call', 'telephony_call_tag', 'call_link')
+     and coalesce(current_setting('cma.audit_keys_only', true), '') = 'uncounted_line' then
+    v_old := jsonb_strip_nulls(jsonb_build_object(
+      'id', v_old -> 'id', 'tenant_id', v_old -> 'tenant_id', 'connection_id', v_old -> 'connection_id',
+      'source_id', v_old -> 'source_id', 'call_source_id', v_old -> 'call_source_id', 'tag_ref', v_old -> 'tag_ref',
+      'telephony_call_id', v_old -> 'telephony_call_id', 'crm_call_id', v_old -> 'crm_call_id',
+      'reason', 'uncounted_line'));
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'invitation' then
+    v_old := v_old - 'token_hash';
+    v_new := v_new - 'token_hash';
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'ingest_event' then
+    v_old := v_old - 'raw';
+    v_new := v_new - 'raw';
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'review' then
+    v_old := cma.review_image_without_at_reference(v_old);
+    v_new := cma.review_image_without_at_reference(v_new);
+  end if;
+  -- 0009j: a loan's lender label is an investor's name (D8): never in the log. Both images leave it out; a change of it
+  -- is recorded as changed, never as its value
+  if tg_table_schema = 'cma' and tg_table_name = 'pledge_loan' then
+    if v_old is not null and v_new is not null then
+      v_new := v_new || jsonb_build_object('lender_label_changed', (v_old ->> 'lender_label') is distinct from (v_new ->> 'lender_label'));
+    end if;
+    v_old := v_old - 'lender_label';
+    v_new := v_new - 'lender_label';
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'device_import_row' then
+    v_old := case when v_old is not null then jsonb_build_object('id', v_old -> 'id', 'tenant_id', v_old -> 'tenant_id',
+                                                                 'batch_key', v_old -> 'batch_key', 'source_row', v_old -> 'source_row') end;
+    v_new := case when v_new is not null then jsonb_build_object('id', v_new -> 'id', 'tenant_id', v_new -> 'tenant_id',
+                                                                 'batch_key', v_new -> 'batch_key', 'source_row', v_new -> 'source_row') end;
+  end if;
+  insert into cma.audit_log (tenant_id, table_name, action, old_row, new_row, actor_user_id, actor_label)
+  values (
+    (coalesce(v_new, v_old) ->> 'tenant_id')::uuid,
+    tg_table_name,
+    lower(tg_op),
+    v_old,
+    v_new,
+    cma.current_user_id(),
+    cma.current_actor_label()
+  );
+  return null;   -- after trigger, return value is ignored
+end
+$$;
+
 create table if not exists cma.pledge_loan (
   id            uuid primary key default uuidv7(),
   tenant_id     uuid not null default cma.current_tenant_id() references cma.tenant (id),
@@ -758,7 +823,7 @@ create table if not exists cma.pledge_loan (
 comment on table cma.pledge_loan is 'The loans devices secure (Assets → Pledge lists): the register''s loan reference (key), the loan''s number (LOAN SPV and the tab prefix), the tab name''s parts and the file''s layout. The lender label is an investor''s personal data: set in Studio only. Tenant configuration (0009j)';
 comment on column cma.pledge_loan.key is 'The value of cma.device.pledge_ref that names this loan (Pulse4all: the option name of maatje_id, such as 2)';
 comment on column cma.pledge_loan.number is 'The loan''s number: the file''s LOAN SPV and its tabs'' prefix (1 to 999)';
-comment on column cma.pledge_loan.lender_label is 'The lender''s name in the tab names (1 to 60 characters, no @ and none of [ ] : * ? / \); personal data, never in the repository, a seed, a fixture, a log or a record (D8)';
+comment on column cma.pledge_loan.lender_label is 'The lender''s name in the tab names (1 to 60 characters, no @ and none of [ ] : * ? / \); personal data, never in the repository, a seed, a fixture, a log or a record (D8): cma.audit_row() leaves it out of the audit images. A quarter file keeps its copy, frozen (cma.pledge_snapshot_row)';
 comment on column cma.pledge_loan.layout is 'The column order of the loan''s a- and b-tabs: 1 or 2, as the original file lays them out';
 comment on column cma.pledge_loan.is_active is 'false: the loan''s devices are left out of the files and the checks (a repaid loan)';
 create or replace trigger set_updated_at before update on cma.pledge_loan
@@ -1043,12 +1108,14 @@ create table if not exists cma.pledge_snapshot (
   taken_by        uuid not null,
   loans           integer not null check (loans >= 0),
   devices         integer not null check (devices between 0 and 50000),
+  file_name_prefix text not null default 'Pledge_Lists' check (file_name_prefix ~ '^[A-Za-z0-9_-]{1,60}$'),
   sources         jsonb not null default '{}'::jsonb check (jsonb_typeof(sources) = 'object' and strpos(sources::text, '@') = 0),
   unique (tenant_id, id),
   unique (tenant_id, valuation_date),
   foreign key (tenant_id, taken_by) references cma.app_user (tenant_id, id)
 );
 comment on table cma.pledge_snapshot is 'A quarter file of the pledge lists: its valuation date (a quarter''s first day), when and by whom it was taken, its loans and devices, and the sources'' last reads at the take (cma.flash_sources_of). Written by the take only; frozen (0009j)';
+comment on column cma.pledge_snapshot.file_name_prefix is 'pledges.file_name_prefix at the take: the file''s name stays the one it was taken with';
 comment on column cma.pledge_snapshot.taken_by is 'The acting user of the take: the scheduler''s system user, or the person who ran cma.pledge_snapshot_take_current()';
 
 create table if not exists cma.pledge_snapshot_row (
@@ -1159,8 +1226,9 @@ begin
   if v_rows > 50000 then
     raise exception 'a pledge-list file holds at most 50,000 rows, this one % (nothing taken)', v_rows using errcode = 'CMA04';
   end if;
-  insert into cma.pledge_snapshot (id, tenant_id, valuation_date, taken_at, taken_by, loans, devices, sources)
-  values (v_snap, p_tenant_id, p_valuation_date, now(), v_user, v_loans, v_rows, cma.flash_sources_of(p_tenant_id));
+  insert into cma.pledge_snapshot (id, tenant_id, valuation_date, taken_at, taken_by, loans, devices, file_name_prefix, sources)
+  values (v_snap, p_tenant_id, p_valuation_date, now(), v_user, v_loans, v_rows, cma.setting_of(p_tenant_id, 'pledges.file_name_prefix'),
+          cma.flash_sources_of(p_tenant_id));
   return jsonb_build_object('answer', 'taken', 'valuation_date', p_valuation_date, 'taken_at', now(), 'loans', v_loans, 'devices', v_rows);
 end
 $$;
@@ -1352,12 +1420,13 @@ $$;
 
 -- A file's rows (pledges.view): the quarter file of p_valuation_date as it was taken (CMA02 when none), or today's
 -- version for null (the rows now, valued at the tenant's today, with the active loans' labels and layouts). By loan
--- number and serial; at most 50,000 rows (CMA04 above)
+-- number and serial; at most 50,000 rows (CMA04 above). file_name_prefix on every row: the stored file's, or the
+-- setting's for today's version
 create or replace function cma.pledge_file(p_valuation_date date default null)
 returns table (valuation_date date, taken_at timestamptz, loan_number integer, lender_label text, area_label text, name_suffix text,
                layout smallint, serial text, type_label text, market text, language text, customer_id text, start_date date,
                first_shipped_on date, months_depreciating integer, depreciation_per_month numeric, acquisition_value numeric,
-               receipts numeric, current_value numeric)
+               receipts numeric, current_value numeric, file_name_prefix text)
 language plpgsql stable
 rows 1000
 as $$
@@ -1365,15 +1434,17 @@ declare
   v_tenant uuid := cma.current_tenant_id();
   v_today  date;
   v_n      bigint;
+  v_prefix text;
   s        record;
 begin
   perform cma.assert_permission('pledges.view');
   if p_valuation_date is null then
     v_today := cma.tenant_today_of(v_tenant);
+    v_prefix := cma.setting_of(v_tenant, 'pledges.file_name_prefix');
     return query
       select v_today, null::timestamptz, r.loan_number, l.lender_label, l.area_label, l.name_suffix, l.layout, r.serial, r.type_label,
              r.market, r.language, r.customer_id, r.start_date, r.first_shipped_on, r.months_depreciating, r.depreciation_per_month,
-             r.acquisition_value, r.receipts, r.current_value
+             r.acquisition_value, r.receipts, r.current_value, v_prefix
       from cma.pledge_rows_of(v_tenant, v_today) r
       join cma.pledge_loan l on l.tenant_id = v_tenant and l.number = r.loan_number
       order by r.loan_number, r.serial nulls last, r.source_id;
@@ -1384,14 +1455,14 @@ begin
     end if;
     return;
   end if;
-  select x.id, x.taken_at into s from cma.pledge_snapshot x where x.tenant_id = v_tenant and x.valuation_date = p_valuation_date;
+  select x.id, x.taken_at, x.file_name_prefix into s from cma.pledge_snapshot x where x.tenant_id = v_tenant and x.valuation_date = p_valuation_date;
   if not found then
     raise exception 'no quarter file of %', p_valuation_date using errcode = 'CMA02';
   end if;
   return query
     select p_valuation_date, s.taken_at, x.loan_number, x.lender_label, x.area_label, x.name_suffix, x.layout, x.serial, x.type_label,
            x.market, x.language, x.customer_id, x.start_date, x.first_shipped_on, x.months_depreciating, x.depreciation_per_month,
-           x.acquisition_value, x.receipts, x.current_value
+           x.acquisition_value, x.receipts, x.current_value, s.file_name_prefix
     from cma.pledge_snapshot_row x
     where x.tenant_id = v_tenant and x.snapshot_id = s.id
     order by x.loan_number, x.serial nulls last, x.id;
@@ -1424,6 +1495,12 @@ begin
   execute 'revoke execute on function cma.pledge_snapshot_take_at(uuid,timestamptz) from public, cma_app';
   -- the staging trigger's function: nobody's (it runs whoever writes the row)
   execute 'revoke execute on function cma.device_import_staging_insert() from public';
+  -- JIT off for the reads and the take, as 0008zn (section 14 of 122): a read of thousands of rows otherwise pays JIT's
+  -- compilation on a session's first calls. The SQL helpers stay without a setting, so their callers inline them
+  foreach f in array array['cma.pledge_page()', 'cma.pledge_finding_rows(text,integer)', 'cma.pledge_file(date)',
+                           'cma.pledge_snapshot_write(uuid,date)'] loop
+    execute format('alter function %s set jit = off', f);
+  end loop;
 end
 $$;
 

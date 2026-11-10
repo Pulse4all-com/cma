@@ -2472,7 +2472,7 @@ export interface PledgeFileRow {
   receipts: string | null;
   currentValue: string | null;
 }
-/** A file: its rows, and the tenant's pledges.file_name_prefix for its name (read in the same transaction) */
+/** A file: its rows, and its name's prefix (the stored file's own, frozen with it; the tenant's setting for today's version) */
 export interface PledgeFile {
   fileNamePrefix: string;
   rows: PledgeFileRow[];

@@ -17,7 +17,8 @@
  * serial with & < > " ' and a control character); the file name (prefix, English month, year; _preview; an unsafe
  * prefix replaced).
  */
-import { inflateRawSync } from "node:zlib";
+import { createHash } from "node:crypto";
+import { crc32 as nativeCrc32, inflateRawSync } from "node:zlib";
 import { crc32, xlsxFile, xmlText } from "../src/lib/xlsx.ts";
 import { cellOf, customerCell, dateSerial, H, LAYOUTS, pledgeBook, pledgeFileName, tabName, WIDTHS } from "../src/lib/pledges.ts";
 
@@ -81,6 +82,13 @@ const WANT_PARTS = ["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl
 
 expect("Z1 the zip: every part, deflated, each CRC-32 and size right",
   [parts.map((x) => x.name), parts.every((x) => x.crcOk && x.sizeOk && x.method === 8)], [WANT_PARTS, true], [[], false]);
+// The bytes of this fixed book, pinned: a change of the writer (or of zlib's deflate) that would change a frozen quarter
+// file's download fails here first. Update the digest only on a change meant to alter every file's bytes, and say so
+const PINNED = process.env.PLEDGES_PRINT_DIGEST ? null : "89a989235497f0de0bdb312a7e6598b3854d2303486ae3e9de9fe49e8fac94aa";
+const digest = createHash("sha256").update(bytes).digest("hex");
+if (!PINNED) console.log(`digest ${digest}`);
+expect("Z3 the fixed book's bytes are the pinned ones (SHA-256); the native CRC-32 the JavaScript one",
+  [digest === PINNED, parts.every((x) => nativeCrc32(Buffer.from(x.data, "utf8")) >>> 0 === crc32(Buffer.from(x.data, "utf8")))], [true, true], [false, false]);
 expect("Z2 the same book gives the same bytes (a frozen file downloads unchanged)",
   Buffer.compare(bytes, xlsxFile(pledgeBook(ROWS, "2026-10-01"))) === 0 && Buffer.compare(bytes, xlsxFile(pledgeBook(ROWS, "2027-01-01"))) !== 0, true, false);
 

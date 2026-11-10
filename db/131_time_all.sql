@@ -305,7 +305,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'pledge lists now', 'pledge page', $q$select cma.pledge_page()$q$, 'overview', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge check serials', $q$select * from cma.pledge_finding_rows('no_language', 500)$q$, 'list', array['pledges.view']),
-('b', 'pledge lists now', 'pledge file today', $q$select * from cma.pledge_file(null)$q$, 'overview', array['pledges.view']);
+('b', 'pledge lists now', 'pledge file today', $q$select * from cma.pledge_file(null)$q$, 'overview', array['pledges.view']),
+('b', 'pledge lists now', 'pledge file stored', $q$select * from cma.pledge_file(coalesce((select max(s.valuation_date) from cma.pledge_snapshot s), date '2000-01-01'))$q$, 'overview', array['pledges.view']);
 
 -- An as-of read of a date without a snapshot has nothing to time (CMA02): skip with that reason, never a FAIL
 update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'
@@ -313,9 +314,12 @@ where page = 'installed base as of month end';
 -- A page that loads in two parts: its set is the first paint's reads; the records read keeps its own list row
 update pg_temp.reads_0131 set in_set = false
 where page in ('installed base', 'installed base as of month end') and cls = 'list';
--- Pledge lists (addition 0009j): today's file is a download of its own, outside the page's set
+-- Pledge lists (addition 0009j): the files are downloads of their own, outside the page's set; the stored file's read
+-- has nothing to time while the tenant holds no quarter file (CMA02)
 update pg_temp.reads_0131 set in_set = false
-where page = 'pledge lists now' and name = 'pledge file today';
+where page = 'pledge lists now' and name in ('pledge file today', 'pledge file stored');
+update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no quarter file yet'
+where page = 'pledge lists now' and name = 'pledge file stored';
 
 do $$
 declare

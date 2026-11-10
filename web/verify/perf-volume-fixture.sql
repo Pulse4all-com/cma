@@ -2,7 +2,8 @@
 -- verify/perf-volume-fixture.sql: a prod-scale volume for the speed work on a LOCAL database built from db/00 with the
 -- dev seed (night N06, 5 November 2026): every busy table of the CMA at a multiple of prod's volume as of the morning of
 -- 5 November 2026, so the time scripts (db/131_time_all.sql, db/124_time_flash.sql), verify/perf.mjs and
--- verify/round-trips.mjs measure the reads on something like prod, three times over
+-- verify/round-trips.mjs measure the reads on something like prod, three times over; since addition 0009j also the
+-- pledge lists (a block of its own at the end, once 168 has run)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, refuses a database without
 -- the dev seed, and refuses a Cloud SQL instance (the role cloudsqladmin exists there). Every id is invented (perf-…,
@@ -395,6 +396,56 @@ begin
   alter table cma.message_delivery enable trigger audit;
   raise notice 'perf volume fixture written in % s: % events, % runs, % subscriptions, % subscription events, % devices, % deals, % tickets, % tasks, % contacts, % customers, % orders, % telephony calls, % crm calls, % reviews',
     round(extract(epoch from clock_timestamp() - t0)), n_ev, n_run, n_sub, n_sev, n_dev, n_deal, n_tick, n_task, n_con, n_cust, n_ord, n_tc, n_cc, n_rev;
+end
+$$;
+reset role;
+
+-- Addition 0009j: Assets → Pledge lists at volume, so 131's pledge rows, perf.mjs and round-trips.mjs measure something.
+-- Two thirds of the fixture's devices pledged: loan 2 (active, layout 1), loan 3 (inactive: its devices left out) and the
+-- unknown reference 99; a language label in raw on every pledged device, its code through one alias but on a tenth; the
+-- pledge values of the seed's two models; one quarter file of the current quarter (taken as the scheduler). Lender labels
+-- are fake (Lender A, Lender B). Rerunnable: a second run finds loan 2 and stops. Runs only once 168 has run.
+set role cma_owner;
+do $$
+declare
+  v_subs uuid; v_sched uuid; t0 timestamptz := clock_timestamp(); n bigint;
+begin
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
+  if to_regclass('cma.pledge_loan') is null then
+    raise notice 'pledge lists not present (168 not run): no pledges written';
+    return;
+  end if;
+  select id into v_subs from cma.tenant where slug = 'pulse4all-subscriptions';
+  if exists (select 1 from cma.pledge_loan where tenant_id = v_subs and key = '2' and lender_label = 'Lender A'
+             and exists (select 1 from cma.device d where d.tenant_id = v_subs and d.source_system = 'perfreg' and d.pledge_ref is not null)) then
+    raise notice 'perf pledges already present';
+    return;
+  end if;
+  insert into cma.pledge_loan (tenant_id, key, number, lender_label, area_label, name_suffix, layout, is_active) values
+    (v_subs, '2', 2, 'Lender A', 'UK', 'EUR', 1, true), (v_subs, '3', 3, 'Lender B', 'NL', 'EUR LTD', 2, false)
+  on conflict (tenant_id, key) do nothing;
+  insert into cma.pledge_model_value (tenant_id, model_key, type_label, acquisition_value, depreciation_per_month, receipts) values
+    (v_subs, 'hs1', 'HS1', 845.00, 5.03, 120.00), (v_subs, 'frx', 'FRx', 900.00, 7.76, 99.50)
+  on conflict (tenant_id, model_key) do nothing;
+  insert into cma.device_language_alias (tenant_id, alias, code) values (v_subs, 'english', 'en') on conflict (tenant_id, alias) do nothing;
+  alter table cma.device disable trigger audit;
+  update cma.device d
+     set pledge_ref = case when x.g % 9 = 0 then '99' when x.g % 3 = 1 then '3' else '2' end,
+         language = case when x.g % 10 = 0 then null else 'en' end,
+         raw = d.raw || jsonb_build_object('pledge_ref', case when x.g % 9 = 0 then '99' when x.g % 3 = 1 then '3' else '2' end,
+                                           'language', case when x.g % 10 = 0 then 'Klingonese' else 'English' end)
+    from (select id, row_number() over (order by source_id) as g from cma.device where tenant_id = v_subs and source_system = 'perfreg') x
+   where d.id = x.id and x.g % 3 <> 0;
+  get diagnostics n = row_count;
+  alter table cma.device enable trigger audit;
+  analyze cma.device;
+  -- one quarter file of the current quarter, as the scheduler takes it (the owner's writer, the scheduler's permission)
+  select u.id into v_sched from cma.app_user u where u.tenant_id = v_subs and u.email = 'scheduler@system.invalid';
+  perform set_config('app.tenant_id', v_subs::text, true), set_config('app.user_id', v_sched::text, true);
+  perform cma.pledge_snapshot_write(v_subs, date_trunc('quarter', cma.tenant_today_of(v_subs))::date);
+  raise notice 'perf pledges written in % s: % devices pledged', round(extract(epoch from clock_timestamp() - t0), 1), n;
 end
 $$;
 reset role;

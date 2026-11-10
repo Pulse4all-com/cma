@@ -10,7 +10,7 @@
  * Cells: null (an empty cell), { t: "s", v } a string, { t: "n", v, s } a number as decimal text with its style
  * ("money", "date" for an Excel date serial, "int" for format 0, "general"). The header row's strings are bold.
  */
-import { deflateRawSync } from "node:zlib";
+import { crc32 as nativeCrc32, deflateRawSync } from "node:zlib";
 
 export type XlsxNumberStyle = "money" | "date" | "int" | "general";
 export type XlsxCell = null | { t: "s"; v: string } | { t: "n"; v: string; s: XlsxNumberStyle };
@@ -36,6 +36,8 @@ const STYLE = { plain: 0, header: 1, money: 2, date: 3, int: 4, general: 0 } as 
 
 /** A string as XML text: the five entities escaped, the control characters XML 1.0 refuses removed */
 export function xmlText(value: string): string {
+  // the common case first: nothing to escape or strip
+  if (!/[&<>"'\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/.test(value)) return value;
   return value
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
@@ -63,7 +65,8 @@ function cellXml(cell: XlsxCell, ref: string): string {
 }
 
 function sheetXml(sheet: XlsxSheet): string {
-  const width = Math.max(sheet.header.length, ...sheet.rows.map((r) => r.length), 1);
+  // every row is as wide as the header (the caller builds them from one column list)
+  const width = Math.max(sheet.header.length, 1);
   const lastRow = sheet.rows.length + 1;
   const header = `<row r="1">${sheet.header.map((h, i) => `<c r="${columnName(i)}1" t="inlineStr" s="${STYLE.header}"><is><t xml:space="preserve">${xmlText(h)}</t></is></c>`).join("")}</row>`;
   const body = sheet.rows.map((r, i) => `<row r="${i + 2}">${r.map((c, j) => cellXml(c, `${columnName(j)}${i + 2}`)).join("")}</row>`).join("");
@@ -145,7 +148,7 @@ const CRC_TABLE = (() => {
   return t;
 })();
 
-/** CRC-32 (the zip's: polynomial 0xEDB88320) of a buffer */
+/** CRC-32 (the zip's: polynomial 0xEDB88320) of a buffer, in JavaScript: verify/pledges.mjs checks the native one against it */
 export function crc32(buf: Uint8Array): number {
   let c = 0xffffffff;
   for (let i = 0; i < buf.length; i += 1) c = (CRC_TABLE[(c ^ (buf[i] ?? 0)) & 0xff] ?? 0) ^ (c >>> 8);
@@ -167,7 +170,7 @@ export function zip(files: readonly [string, Uint8Array][], date: string): Buffe
   for (const [name, data] of files) {
     const nameBuf = Buffer.from(name, "utf8");
     const packed = deflateRawSync(data, { level: 6 });
-    const crc = crc32(data);
+    const crc = nativeCrc32(data) >>> 0;
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);

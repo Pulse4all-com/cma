@@ -8,7 +8,7 @@
 -- customer's name, address, email or phone number, and nothing of a real tenant is read or printed. Fixed instants and
 -- valuation dates, so the verdict never depends on the day it runs (take_current's quarter is computed from today and
 -- checked against it). Cloud SQL Studio shows no notices: a check that fails raises "FAIL …" and stops its block; every
--- check that passed writes one row, and the last row is the verdict: "PASS | 22 PASS, 0 FAIL" (provoked: "PROVOKED, NOT
+-- check that passed writes one row, and the last row is the verdict: "PASS | 23 PASS, 0 FAIL" (provoked: "PROVOKED, NOT
 -- A PASS"). A block that stopped counts its checks as FAIL; the verdict is reached only when the client goes on after an
 -- error (psql -v ON_ERROR_STOP=0, as the provoked run does). Run as your own IAM login after 168_pledge_lists.sql; then
 -- 27, 113, 115, 117 (dev and local only), 123, 85, 99, 137 and 161 again.
@@ -42,7 +42,8 @@
 --       without tenant.configure, the takes without their permission or for another tenant, the bodies not the
 --       application's; no assignable role of a new tenant holds either permission
 --   A7  the catalogs' setters and the settings: every refusal of set_pledge_loan and set_pledge_model_value, the upserts,
---       the settings' forms; the register's two fields mapped on an asset register connection only
+--       the settings' forms; the register's two fields mapped on an asset register connection only; the loan's audit
+--       images without the lender label (cma.audit_row(), D8)
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
@@ -749,16 +750,21 @@ begin
     end if;
     v_rows := v_rows || array['61', 'A6 a check''s serials with their values and total; an unknown check or a limit outside 1 to 1,000 refused', 'PASS', v_bad];
 
+    perform set_config('role', 'cma_owner', true);
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'pledges.file_name_prefix', 'P4A_Pledge_Lists_Maatjes');
+    perform pg_temp.v0009j_as(x, 'viewer');
     v_bad := concat_ws(' ', (select count(*)::text from cma.pledge_file('2026-10-01')),
+                       (select min(f.file_name_prefix) || '/' || max(f.file_name_prefix) from cma.pledge_file('2026-10-01') f),
+                       (select min(f.file_name_prefix) from cma.pledge_file(null) f),
                        (select string_agg(f.loan_number || ':' || f.serial, ',' order by f.loan_number, f.serial) from cma.pledge_file('2026-10-01') f where f.serial in ('SN-0001', 'SN-0012')),
                        (select f.lender_label || '/' || f.layout from cma.pledge_file('2026-10-01') f where f.serial = 'SN-0011'),
                        (select count(*) from cma.pledge_file(null)) = (select count(*) from cma.pledge_rows_of(v_t, v_today)),
                        (select bool_and(f.valuation_date = v_today and f.taken_at is null) from cma.pledge_file(null) f),
                        pg_temp.v0009j_code('select * from cma.pledge_file(''2026-07-01'')'));
-    if v_bad is distinct from '9 2:SN-0001,3:SN-0012 Lender B/2 t t CMA02' then
+    if v_bad is distinct from '9 Pledge_Lists/Pledge_Lists P4A_Pledge_Lists_Maatjes 2:SN-0001,3:SN-0012 Lender B/2 t t CMA02' then
       raise exception 'FAIL A6: the files %', v_bad;
     end if;
-    v_rows := v_rows || array['62', 'A6 a stored file by loan and serial with its labels and layout; today''s file valued today; no file of a date: CMA02', 'PASS', v_bad];
+    v_rows := v_rows || array['62', 'A6 a stored file by loan and serial with its labels, layout and the name prefix it was taken with; today''s valued today with today''s prefix; no file of a date: CMA02', 'PASS', v_bad];
 
     -- every refusal
     perform pg_temp.v0009j_as(x, 'admin');
@@ -861,6 +867,33 @@ begin
       raise exception 'FAIL A7: the settings or the mapping %', v_bad;
     end if;
     v_rows := v_rows || array['72', 'A7 the settings'' forms (24:00 and a space refused); the two fields mapped on an asset register only', 'PASS', v_bad];
+
+    -- the loan's audit images keep no lender label (D8): the insert, the updates (one changing the label, one not) and
+    -- no image anywhere in the tenant's audit holding a label this block wrote
+    perform set_config('role', 'cma_owner', true);
+    v_bad := concat_ws(' ',
+      (select count(*)::text from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'pledge_loan'),
+      (select count(*)::text from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'pledge_loan'
+         and ((a.old_row ? 'lender_label') or (a.new_row ? 'lender_label'))),
+      (select count(*)::text from cma.audit_log a where a.tenant_id = v_t and strpos(coalesce(a.old_row::text, '') || coalesce(a.new_row::text, ''), 'Lender A') > 0),
+      (select string_agg(coalesce(a.new_row ->> 'lender_label_changed', '-'), ',' order by a.id) from cma.audit_log a
+       where a.tenant_id = v_t and a.table_name = 'pledge_loan'));
+    if v_bad is distinct from '2 0 0 -,false' then
+      raise exception 'FAIL A7: the loan''s audit images %', v_bad;
+    end if;
+    perform pg_temp.v0009j_as(x, 'admin');
+    perform cma.set_pledge_loan('2', 2, 'Lender Z', 'UK', 'EUR LTD', 2, false);
+    perform set_config('role', 'cma_owner', true);
+    v_bad := concat_ws(' ',
+      (select string_agg(coalesce(a.new_row ->> 'lender_label_changed', '-'), ',' order by a.id) from cma.audit_log a
+       where a.tenant_id = v_t and a.table_name = 'pledge_loan'),
+      (select count(*)::text from cma.audit_log a where a.tenant_id = v_t and strpos(coalesce(a.old_row::text, '') || coalesce(a.new_row::text, ''), 'Lender') > 0),
+      (select l.lender_label from cma.pledge_loan l where l.tenant_id = v_t));
+    if v_bad is distinct from '-,false,true 0 Lender Z' then
+      raise exception 'FAIL A7: a label''s change in the audit %', v_bad;
+    end if;
+    v_rows := v_rows || array['73', 'A7 the loan''s audit images keep no lender label (D8): lender_label_changed on an update instead', 'PASS',
+      '3 audit rows, none with a label; changed: -, false, true'];
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
   end;
@@ -869,16 +902,16 @@ begin
 end
 $$;
 
--- Verdict: one row per check that passed, then the verdict (22 checks; a block that stopped counts its checks as FAIL)
+-- Verdict: one row per check that passed, then the verdict (23 checks; a block that stopped counts its checks as FAIL)
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0009j
       union all
       select 999, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009j where result = 'PASS') = 22 then 'PASS'
+                  when (select count(*) from verify_0009j where result = 'PASS') = 23 then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0009j where result = 'PASS'),
-                                        22 - (select count(*) from verify_0009j where result = 'PASS'))) x
+                                        23 - (select count(*) from verify_0009j where result = 'PASS'))) x
 order by ord;
 drop function if exists pg_temp.v0009j_pledges(jsonb);
 drop function if exists pg_temp.v0009j_tenant(text);

@@ -1033,7 +1033,7 @@ type PledgeFileDbRow = {
   valuation_date: string; taken_at: Date | string | null; loan_number: number; lender_label: string; area_label: string; name_suffix: string; layout: number;
   serial: string | null; type_label: string | null; market: string | null; language: string | null; customer_id: string | null; start_date: string | null;
   first_shipped_on: string | null; months_depreciating: number; depreciation_per_month: string | null; acquisition_value: string | null;
-  receipts: string | null; current_value: string | null;
+  receipts: string | null; current_value: string | null; file_name_prefix: string;
 };
 type MaintenancePageDb = {
   current_month: string; bundle_window_days: number; is_set_up: boolean; buckets: string[]; component_kinds: { key: string; name: string }[];
@@ -2791,10 +2791,9 @@ export const postgresData: CmaData = {
   async getPledgeFile(me, valuationDate): Promise<PledgeFile> {
     return withTenant(ctx(me), async (q) => {
       // the function checks pledges.view (CMA06), the file's date (CMA02 when none) and its 50,000 rows (CMA04) (addition 0009j);
-      // the file's name prefix (tenant configuration) in the same transaction
+      // every row carries the file's name prefix: the stored file's own, or the tenant's setting for today's version
       const r = await q.query<PledgeFileDbRow>(`select * from cma.pledge_file($1::date)`, [valuationDate]);
-      const prefix = one((await q.query<{ p: string }>(`select cma.setting_of(cma.current_tenant_id(), 'pledges.file_name_prefix') as p`)).rows, "file_name_prefix").p;
-      return { fileNamePrefix: prefix, rows: r.rows.map((x) => ({
+      return { fileNamePrefix: r.rows[0]?.file_name_prefix ?? "Pledge_Lists", rows: r.rows.map((x) => ({
         valuationDate: x.valuation_date, takenAt: x.taken_at === null ? null : new Date(x.taken_at).toISOString(), loanNumber: x.loan_number,
         lenderLabel: x.lender_label, areaLabel: x.area_label, nameSuffix: x.name_suffix, layout: x.layout === 2 ? 2 : 1, serial: x.serial,
         typeLabel: x.type_label, market: x.market, language: x.language, customerId: x.customer_id, startDate: x.start_date,
