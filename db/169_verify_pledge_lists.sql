@@ -11,7 +11,7 @@
 -- check that passed writes one row, and the last row is the verdict: "PASS | 23 PASS, 0 FAIL" (provoked: "PROVOKED, NOT
 -- A PASS"). A block that stopped counts its checks as FAIL; the verdict is reached only when the client goes on after an
 -- error (psql -v ON_ERROR_STOP=0, as the provoked run does). Run as your own IAM login after 168_pledge_lists.sql; then
--- 27, 113, 115, 117 (dev and local only), 123, 85, 99, 137 and 161 again.
+-- 27, 77, 107, 113, 115, 117 (dev and local only), 123, 85, 99, 137 and 161 again.
 --   S1  0009j recorded after 0009i; the five tables with row-level security and the tenant policy, the audit trigger on
 --       all but the quarter files' rows, the frozen triggers (update, delete, truncate) on both quarter-file tables; the
 --       application reads the quarter files and writes neither; the readers see none of the five

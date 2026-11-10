@@ -13,7 +13,7 @@
 -- row types gain two attributes), 123 (cma.ensure_scheduler_user's text), 85, 99 and 137 (the connection fields' checks
 -- as text) and 161 (the installed base and data quality read the devices this load writes; nothing of theirs changes);
 -- then the data map's schema refresh from dev on this branch; then prod: the point-in-time recovery check, 168, 169, 27,
--- 77, 107, 113, 115, 123, 85, 99, 137 and 161, before the merge. 131_time_all.sql is edited by this change (the three
+-- 77, 107, 113, 115, 123, 85, 99, 137 and 161, before the merge. 131_time_all.sql is edited by this change (the four
 -- pledge reads in part b; it refuses a database without 0009j). The ingest of main sends rows
 -- without the two new keys, which this script's chunk load still takes (a missing key is an empty value); the ingest of
 -- this change sends both keys, which the database before this script refuses, so in prod this script runs before that
