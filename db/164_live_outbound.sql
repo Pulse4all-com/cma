@@ -1,6 +1,6 @@
 -- =============================================================================================
--- 164_live_outbound.sql: addition 0009h, the Live board's Outbound today; the inbound figure Longest waiting leaves
--- cma.inbound_now()
+-- 164_live_outbound.sql: addition 0009h, the Live board's Outbound today; the inbound figure Longest waiting is always
+-- null in cma.inbound_now()
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: the thresholds are the tenant's settings
 -- (telephony.connected_min_seconds, calls.conversation_min_talk_seconds), the lines, markets, zones and tag meanings its
@@ -133,7 +133,7 @@ $$;
 alter function cma.outbound_now() set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
--- 2. Inbound now without Longest waiting
+-- 2. Inbound now with Longest waiting always null
 -- ---------------------------------------------------------------------------------------------
 -- As 0008zx (144): the same answer, today's longest_waiting_seconds always null (the key kept for one release, so main's
 -- web shows "Nobody waiting" until this branch's web, which ignores it, is live)
