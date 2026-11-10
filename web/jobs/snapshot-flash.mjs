@@ -4,7 +4,14 @@
  * computation's rows, the id lists at a month end, the watch), as each tenant's own Scheduler user (flash.snapshot).
  * Since addition 0009e (Decision log, 8 November 2026) each run first refreshes the tenant's current takes that are due
  * (cma.flash_current_refresh: the now of each overview of flash.current_overviews, Installed base by default, taken again
- * when older than flash.current_refresh_minutes), which the page reads with its Refreshed at.
+ * when older than flash.current_refresh_minutes), which the page reads with its Refreshed at. Since addition 0009j
+ * (Decision log, 10 November 2026, D5) each run then takes the tenant's pledge-list quarter file when it is due
+ * (cma.pledge_snapshot_take: on the tenant's local first day of a quarter from pledges.snapshot_local_time, once; it
+ * answers taken, already_taken, not_due or no_pledges), after Flash's take: no job or schedule of its own. Its failure is
+ * caught per tenant and never stops Flash's take, which has run already: the tenant's run row fails with
+ * "pledge_take <code>" (unless Flash's take failed, whose code comes first), so System health shows it; the counts carry
+ * pledge_taken, pledge_already, pledge_not_due, pledge_no_pledges, pledge_failed and pledge_devices. A dropped
+ * connection retries the unit as before; the take is idempotent (a retry finds the file: already_taken).
  *
  * Runs as a Cloud Run job on the web image (command: node jobs/snapshot-flash.mjs), started by Cloud Scheduler every
  * minute since 0009e (hourly at minute 20 in UTC before it; docs/scheduler/deploy-flash.sh). Each run visits every
@@ -170,13 +177,27 @@ export function currentCountsOf(c) {
 }
 
 /**
- * The run row's outcome from the take's answer and the current refresh's: failed with the take's code when the take
- * failed, else with "current_take <code>" when a current take could not be refreshed; null when it succeeded
+ * The pledge take's counts (addition 0009j) of cma.pledge_snapshot_take's answer, whole numbers: one of taken, already,
+ * not_due, no_pledges or failed 1, and the devices of a file taken; all 0 without an answer
  */
-export function runErrorOf(answer, current) {
+export const PLEDGE_COUNTS = ["pledge_taken", "pledge_already", "pledge_not_due", "pledge_no_pledges", "pledge_failed", "pledge_devices"];
+export function pledgeCountsOf(p) {
+  const a = p?.answer;
+  const n = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : 0);
+  return { pledge_taken: a === "taken" ? 1 : 0, pledge_already: a === "already_taken" ? 1 : 0, pledge_not_due: a === "not_due" ? 1 : 0,
+    pledge_no_pledges: a === "no_pledges" ? 1 : 0, pledge_failed: a === "failed" ? 1 : 0, pledge_devices: a === "taken" ? n(p?.devices) : 0 };
+}
+
+/**
+ * The run row's outcome from the take's answer, the current refresh's and the pledge take's: failed with the take's code
+ * when the take failed, else with "current_take <code>" when a current take could not be refreshed, else with
+ * "pledge_take <code>" when the pledge take failed (addition 0009j); null when it succeeded
+ */
+export function runErrorOf(answer, current, pledge = null) {
   if (answer?.reason === "failed") return String(answer.error ?? "failed").slice(0, 60);
   if (answer?.reason === "backoff") return `take_backoff ${String(answer.error ?? "failed")}`.slice(0, 60);
   if (currentCountsOf(current).current_failed > 0) return `current_take ${String(current?.current_error ?? "failed")}`.slice(0, 60);
+  if (pledge?.answer === "failed") return `pledge_take ${String(pledge.error ?? "failed")}`.slice(0, 60);
   return null;
 }
 
@@ -193,13 +214,13 @@ export async function snapshotTenants({ connect, log }) {
   let failed = 0;
   // The tenant's one log line from the answers the unit holds (the take's, the current refresh's); note: what a retry
   // found the first attempt had done
-  const report = (tenant_id, r, current, note = null) => {
+  const report = (tenant_id, r, current, pledge, note = null) => {
     const counts = countsOf(r);
     const cur = currentCountsOf(current);
-    const error = runErrorOf(r, current);
+    const error = runErrorOf(r, current, pledge);
     log(error ? "ERROR" : r?.watch_error ? "WARNING" : "INFO", { tenant_id, date: r?.date ?? null, taken: Boolean(r?.taken),
       reason: r?.reason ?? null, rows: counts.rows, ids: counts.ids, watch_opened: counts.watch_opened, duration_ms: counts.duration_ms,
-      current_refreshed: cur.current_refreshed, current_failed: cur.current_failed,
+      current_refreshed: cur.current_refreshed, current_failed: cur.current_failed, pledge: pledge?.answer ?? null,
       ...(error ? { error } : {}), ...(r?.watch_error ? { watch_error: r.watch_error } : {}), ...(note ? { retry: note } : {}) });
     return error ? 1 : 0;
   };
@@ -209,6 +230,7 @@ export async function snapshotTenants({ connect, log }) {
     let me = null;
     let current = null;      // the current refresh's answer once received (0009e): final for this unit, never sent again
     let answer = null;       // the take's answer once received: final for this unit, the take never sent again
+    let pledge = null;       // the pledge take's answer once received (0009j): final for this unit
     let takeSent = false;    // a take went out: a retry without its answer cannot know whether its commit landed
     let finishSent = false;  // the run row's finish went out and no answer came back: likewise
     let note = null;
@@ -260,9 +282,21 @@ export async function snapshotTenants({ connect, log }) {
           answer = lost ? ownTakeOf(taken, unitAt) : taken;
           if (lost && answer !== taken) note = "taken by the first attempt, its answer lost";
         }
+        // 4b. The pledge-list quarter file (addition 0009j), after Flash's take: due on the tenant's local first day of a
+        // quarter, taken once (idempotent: a retry finds it, already_taken). A database error is this step's failure, caught
+        // here so it never stops Flash, whose take ran already; a lost connection retries the unit
+        if (!pledge) {
+          try {
+            pledge = (await asScheduler(client, tenant_id, me, "select cma.pledge_snapshot_take(cma.current_tenant_id()) as r")).rows[0]?.r
+              ?? { answer: "failed", error: "no_answer" };
+          } catch (e) {
+            if (isConnectionError(e)) throw e;
+            pledge = { answer: "failed", error: codeOf(e) };
+          }
+        }
         // 5. The run row's finish; after a finish whose answer was lost, CMA03 means it landed: the first counts stand
-        const counts = { ...countsOf(answer), ...currentCountsOf(current) };
-        const runError = runErrorOf(answer, current);
+        const counts = { ...countsOf(answer), ...currentCountsOf(current), ...pledgeCountsOf(pledge) };
+        const runError = runErrorOf(answer, current, pledge);
         const lostFinish = finishSent;
         finishSent = true;
         try {
@@ -285,7 +319,7 @@ export async function snapshotTenants({ connect, log }) {
         }
         return answer;
       }), { log, fields: { tenant_id } });
-      failed += report(tenant_id, r, current, note);
+      failed += report(tenant_id, r, current, pledge, note);
     } catch (e) {
       // the run row failed with the code, unless the unit's finish whose answer was lost had landed (CMA03 at once):
       // then the unit's answer stands. CMA03 after this finish's own lost answer is this finish landing
@@ -310,7 +344,7 @@ export async function snapshotTenants({ connect, log }) {
           });
       }
       if (done) {
-        failed += report(tenant_id, answer, current, "run row finished by an earlier attempt, its answer lost");
+        failed += report(tenant_id, answer, current, pledge, "run row finished by an earlier attempt, its answer lost");
       } else {
         failed += 1;
         log("ERROR", { tenant_id, date: null, taken: false, rows: 0, duration_ms: 0, error: codeOf(e) });

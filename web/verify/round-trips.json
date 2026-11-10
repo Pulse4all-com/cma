@@ -276,6 +276,30 @@
     "firstRt": 9
   },
   {
+    "path": "/reports/pledge-lists",
+    "subject": "admin",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/pledge-lists?check=no_language",
+    "subject": "admin",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "path": "/api/v1/reports/pledge-lists",
+    "subject": "admin",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/pledge-lists/files/today",
+    "subject": "admin",
+    "tx": 2,
+    "rt": 10
+  },
+  {
     "path": "/api/v1/reports/flash/rows?overview=installed_base&f_without_subscription_ref=true&limit=50",
     "subject": "manager",
     "tx": 3,

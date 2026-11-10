@@ -63,6 +63,8 @@ export type ShellPage =
   | "courtesy"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
+  /** Pledge lists (addition 0009j): the quarter files of the loans' pledged devices, and today's version */
+  | "pledge-lists"
   /** Installed base (addition 0008zw): Flash's Installed base overview as a page of the Assets group, the same read and files */
   | "installed-base"
   /** Flash (addition 0008zn, brief B21): ten overviews and Data quality, one click each, now or as of a snapshot's date */
@@ -83,7 +85,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | `/live/${string}` | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/maintenance"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/maintenance" | "/reports/pledge-lists"
   | "/reports/installed-base" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
@@ -283,6 +285,9 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // Maintenance (addition 0008zi; in Customers from 0008zv to 0008zw): the asset register's devices' due components
         // and end of life per month, market and model, bundled into planned exchanges, with the device list of a cell
         { page: "maintenance", href: "/reports/maintenance", label: copy.nav.maintenance, permission: ["reports.view", "performance.team"] },
+        // Pledge lists (addition 0009j, Martin, 10 November 2026): the quarter files of the early-stage investors' loans, frozen
+        // on each quarter's first day, and today's version; pledges.view alone, a permission no default role holds (D7)
+        { page: "pledge-lists", href: "/reports/pledge-lists", label: copy.nav.pledgeLists, permission: "pledges.view" },
       ],
     },
     {

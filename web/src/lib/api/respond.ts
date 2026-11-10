@@ -160,6 +160,22 @@ export function csvFile(text: string, filename: string): NextResponse {
   });
 }
 
+/**
+ * An .xlsx file as the answer (addition 0009j): downloaded, never cached. The name holds only ASCII characters the caller
+ * chose (a configured prefix, an English month, a year), never a person's name.
+ */
+export function xlsxFile(bytes: Buffer, filename: string): NextResponse {
+  return new NextResponse(new Uint8Array(bytes), {
+    status: 200,
+    headers: {
+      ...NO_STORE,
+      "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="${filename.replace(/[^A-Za-z0-9._-]/g, "_")}"`,
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 /** from, to (at most maxDays) and an optional userId from a team or export query */
 export function teamRangeParams(sp: URLSearchParams, maxDays: number): { from: string; to: string; userId: string | null } {
   const from = dateParam(sp.get("from"), "from");

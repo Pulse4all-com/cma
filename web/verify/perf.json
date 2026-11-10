@@ -153,6 +153,11 @@
       "html_kb": 32
     },
     {
+      "path": "/reports/pledge-lists",
+      "subject": "admin",
+      "class": "report"
+    },
+    {
       "path": "/reports/reviews?range=all",
       "subject": "manager",
       "class": "report"
@@ -235,7 +240,8 @@
     "/reports/courtesy": 30,
     "/reports/data-quality": 16,
     "/configuration/sources": 78,
-    "/configuration/health": 21
+    "/configuration/health": 21,
+    "/reports/pledge-lists": 24
   },
   "js_kb": {
     "/": 170,
@@ -259,6 +265,7 @@
     "/reports/courtesy": 169,
     "/reports/data-quality": 167,
     "/configuration/sources": 173,
-    "/configuration/health": 167
+    "/configuration/health": 167,
+    "/reports/pledge-lists": 168
   }
 }

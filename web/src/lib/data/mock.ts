@@ -26,7 +26,7 @@ import type {
   Journey, JourneyStatus, CallbackOwner, CallbacksKept, DashboardData,
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
-  ReviewsReport, MaintenanceFilter, MaintenanceReport, MaintenanceRows, MaintenanceView, LeadCohortsReport,
+  ReviewsReport, MaintenanceFilter, MaintenanceReport, PledgeFile, PledgeFileRow, PledgePage, MaintenanceRows, MaintenanceView, LeadCohortsReport,
   CourtesyReport,
 } from "./types";
 import {
@@ -118,6 +118,42 @@ function assertAny(me: Principal, permissions: string[]): void {
 
 function assertReportRange(range: { from: DateKey; to: DateKey }): void {
   if (rangeProblem(range.from, range.to)) throw new CmaDbError("CMA04", "the range must run forward and cover at most 92 days");
+}
+
+/** Pledge lists (addition 0009j): the database's answer for a caller without pledges.view (CMA06) */
+function assertPledges(me: Principal): void {
+  if (!me.permissions.includes("pledges.view")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+/** Whole months from a first shipment to a valuation date, as cma.pledge_months_of counts them; 0 without one or after it */
+function mockMonths(shipped: string | null, valuation: string): number {
+  if (shipped === null || shipped > valuation) return 0;
+  const [y1 = 0, m1 = 1, d1 = 1] = shipped.split("-").map(Number);
+  const [y2 = 0, m2 = 1, d2 = 1] = valuation.split("-").map(Number);
+  return (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0);
+}
+
+/** The invented pledge rows of a valuation date: two loans (Lender A, layout 1; Lender B, layout 2), seven devices */
+function mockPledgeRows(valuation: DateKey): PledgeFileRow[] {
+  const values = { HS1: ["845.00", "5.03", "120.00"], G5: ["1000.00", "10.00", "99.50"] } as const;
+  const loans = { 2: ["Lender A", "UK", "EUR", 1], 3: ["Lender B", "NL", "EUR LTD", 2] } as const;
+  const devices: [number, string, "HS1" | "G5", string, string | null, string, string | null, string | null][] = [
+    [2, "MOCK-SN-0101", "HS1", "GB", "EN", "C1001", "2025-08-10", "2025-08-09"],
+    [2, "MOCK-SN-0102", "HS1", "GB", "EN", "In Storage", null, "2024-01-22"],
+    [2, "MOCK-SN-0103", "HS1", "GB", "EN", "C1003", null, "2025-09-17"],
+    [2, "MOCK-SN-0104", "G5", "GB", "EN", "In Storage", null, null],
+    [2, "MOCK-SN-0105", "G5", "GB", null, "7000000105", "2024-03-01", "2025-01-01"],
+    [3, "MOCK-SN-0201", "G5", "NL", "NL", "123456789012345", "2024-07-01", "2016-01-01"],
+    [3, "MOCK-SN-0202", "HS1", "NL", "NL", "C2002", "2025-11-02", "2025-10-02"],
+  ];
+  return devices.map(([loan, serial, model, market, language, customerId, startDate, shipped]) => {
+    const [acq, dep, rec] = values[model];
+    const months = mockMonths(shipped, valuation);
+    const cur = Math.max(0, Math.round(Number(acq) * 100 - months * Math.round(Number(dep) * 100)) / 100).toFixed(2);
+    const [lenderLabel, areaLabel, nameSuffix, layout] = loans[loan as 2 | 3];
+    return { valuationDate: valuation, takenAt: null, loanNumber: loan, lenderLabel, areaLabel, nameSuffix, layout, serial, typeLabel: model, market, language,
+      customerId, startDate, firstShippedOn: shipped, monthsDepreciating: months, depreciationPerMonth: dep, acquisitionValue: acq, receipts: rec, currentValue: cur };
+  });
 }
 
 function mockToday(me: Principal): DateKey {
@@ -4780,6 +4816,41 @@ export const mockData: CmaData = {
     assertMaintenance(me, filter);
     const { devices, catalog } = mockMaintenance(me);
     return maintenanceReport(devices, catalog, filter, mockToday(me), me.tenantId !== MOCK_TENANT_2);
+  },
+
+  // ---- Assets → Pledge lists (addition 0009j): invented loans, labels and devices; pledges.view as the database checks it
+  async getPledgePage(me, check, limit): Promise<PledgePage> {
+    assertPledges(me);
+    const today = mockToday(me);
+    const rows = mockPledgeRows(today);
+    const loans = [...new Set(rows.map((r) => r.loanNumber))].sort((a, b) => a - b).map((n) => {
+      const of = rows.filter((r) => r.loanNumber === n);
+      const sum = (k: "acquisitionValue" | "currentValue" | "receipts") => (of.reduce((s, r) => s + Math.round(Number(r[k] ?? 0) * 100), 0) / 100).toFixed(2);
+      return { number: n, lenderLabel: of[0]?.lenderLabel ?? "", devices: of.length, inStorage: of.filter((r) => r.customerId === "In Storage").length,
+        acquisitionValue: sum("acquisitionValue"), currentValue: sum("currentValue"), receipts: sum("receipts") };
+    });
+    const checks: Record<string, number> = { unknown_loan: 1, no_model_values: 0, no_first_shipped: 1, no_language: 1, customer_ref_invalid: 0, no_start_date: 1 };
+    const serials: Record<string, { serial: string; sourceId: string; value: string | null }[]> = {
+      unknown_loan: [{ serial: "MOCK-SN-0901", sourceId: "recMock0901", value: "9" }],
+      no_first_shipped: [{ serial: "MOCK-SN-0104", sourceId: "recMock0104", value: null }],
+      no_language: [{ serial: "MOCK-SN-0105", sourceId: "recMock0105", value: "Klingonese" }],
+      no_start_date: [{ serial: "MOCK-SN-0103", sourceId: "recMock0103", value: null }],
+    };
+    if (check !== null && !Object.hasOwn(checks, check)) throw new CmaDbError("CMA04", "unknown check");
+    const quarterStart = `${today.slice(0, 5)}${String(Math.floor((Number(today.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+    return {
+      files: [{ valuationDate: "2026-10-01", takenAt: "2026-09-30T22:05:01.000Z", loans: loans.length, devices: rows.length }],
+      today: { valuationDate: today, loans }, checks, unmappedLanguages: [{ label: "Klingonese", devices: 1 }],
+      quarter: { start: quarterStart, taken: quarterStart === "2026-10-01", due: true }, fileNamePrefix: "Pledge_Lists", isSetUp: true,
+      checkRows: check === null ? null : { check, total: (serials[check] ?? []).length, rows: (serials[check] ?? []).slice(0, limit) },
+    };
+  },
+
+  async getPledgeFile(me, valuationDate): Promise<PledgeFile> {
+    assertPledges(me);
+    if (valuationDate !== null && valuationDate !== "2026-10-01") throw new CmaDbError("CMA02", "no quarter file of that date");
+    return { fileNamePrefix: "Pledge_Lists",
+      rows: mockPledgeRows(valuationDate ?? mockToday(me)).map((r) => ({ ...r, takenAt: valuationDate === null ? null : "2026-09-30T22:05:01.000Z" })) };
   },
 
   // ---- Reports → Flash (addition 0008zn): the invented fixture of ./mock-flash, computed as the database computes it
