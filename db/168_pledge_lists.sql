@@ -7,10 +7,12 @@
 -- 166_live_outbound_direct.sql (0009i). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own
 -- IAM login: dev first, then 169_verify_pledge_lists.sql there (and its provoked run), then the verifies that read what
 -- this changes: 27 (the scheduler role gains pledges.snapshot: its verify.job_permissions is edited by this change),
--- 113 and 115 (the load they prove is made again with the same answers), 117 (dev and local only: its A2 is edited by this
--- change, the load's row types gain two attributes) and 161 (cma.data_quality_of and the installed base read the devices
--- this load writes; nothing of theirs changes); then the data map's schema refresh from dev on this branch; then prod:
--- the point-in-time recovery check, 168, 169, 27, 113, 115 and 161, before the merge. The ingest of main sends rows
+-- 113 (cma.device_raw_ok, the staging; its A2 is edited by this change: the two columns), 115 (the staging, the load and
+-- the connection fields' checks as text), 117 (dev and local only: the load; its A2 is edited by this change, the load's
+-- row types gain two attributes), 123 (cma.ensure_scheduler_user's text), 85, 99 and 137 (the connection fields' checks
+-- as text) and 161 (the installed base and data quality read the devices this load writes; nothing of theirs changes);
+-- then the data map's schema refresh from dev on this branch; then prod: the point-in-time recovery check, 168, 169, 27,
+-- 113, 115, 123, 85, 99, 137 and 161, before the merge. The ingest of main sends rows
 -- without the two new keys, which this script's chunk load still takes (a missing key is an empty value); the ingest of
 -- this change sends both keys, which the database before this script refuses, so in prod this script runs before that
 -- ingest is deployed (Martin's steps). The web of main reads nothing this adds; the web of this change reads it.
@@ -53,10 +55,11 @@
 --   settings           pledges.snapshot_local_time ('HH:MM' in the tenant's zone, default 00:05; 24:00 refused) and
 --                      pledges.file_name_prefix (letters, digits, _ and -, 1 to 60, default Pledge_Lists), checked by their
 --                      own trigger beside cma.check_tenant_setting() (as 132's data-quality setting)
---   the link           cma.linkable_subscriptions_of(tenant, source ids): the subscriptions a device's subscription
---                      reference can name, Installed base's rule (cma.flash_devices_of, 136): a subscription the CMA holds
---                      of a store of the device's market, the first by id when two share the reference; optionally only
---                      the given references. 169 proves it links every device as cma.flash_devices_of does
+--   the link           cma.linkable_subscriptions_of(tenant): the subscriptions a device's subscription reference can
+--                      name, Installed base's rule (cma.flash_devices_of, 136): a subscription the CMA holds of a store of
+--                      the device's market, the first by id when two share the reference. Read whole and hash-joined (a
+--                      narrowing by an array of references was measured at 2.8 s for 15,000 against 42 ms whole, at
+--                      30,000 subscriptions). 169 proves it links every device as cma.flash_devices_of does
 --   the rows           cma.pledge_rows_of(tenant, valuation date): every device the register still holds whose loan
 --                      reference is an active loan's key, with SN AED, Type AED, the market, the language in capitals,
 --                      LOAN SPV, Customer ID (the customer reference, or In Storage when the register holds none; empty
@@ -84,6 +87,10 @@
 --                      today's sums per loan, the checks before the next file, the quarter's state),
 --                      cma.pledge_finding_rows(check, limit) (a check's serials), cma.pledge_file(valuation date or null
 --                      for today) (a file's rows, at most 50,000: CMA04 above)
+--
+-- Measured locally (a throwaway tenant of 30,000 devices, 15,000 of them pledged to five active loans, 30,000
+-- subscriptions; three times prod's register): cma.pledge_rows_of 88 ms, cma.pledge_page 218 ms, a check's serials 93 ms,
+-- today's file 210 ms, the take 350 ms, a stored file 13 ms; the take before its day answers not_due in 0.3 ms.
 --
 -- Not made: no cma_read view of the loan catalog or the quarter files (lender names stay in the CMA's own tables); the
 -- installed base's own copies of the link rule (cma.flash_devices_of, cma.data_quality_of) are not moved onto
@@ -949,9 +956,8 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- The subscriptions a device's subscription reference can name, by Installed base's rule (cma.flash_devices_of, 136):
 -- the register names no connection, so a reference is matched among the subscriptions the CMA holds (not missing from
--- the latest full read) of the stores of the device's market, the first by id when two share it. p_source_ids narrows
--- the read to those references (by the subscriptions' unique index), null reads them all
-create or replace function cma.linkable_subscriptions_of(p_tenant_id uuid, p_source_ids text[] default null)
+-- the latest full read) of the stores of the device's market, the first by id when two share it
+create or replace function cma.linkable_subscriptions_of(p_tenant_id uuid)
 returns table (market text, source_id text, subscription_id uuid, status text, source_created_at timestamptz)
 language sql stable
 rows 1000
@@ -960,7 +966,6 @@ as $$
   from cma.subscription x
   join (select y.connection_id, y.market from cma.flash_subscription_stores_of(p_tenant_id) y offset 0) sm on sm.connection_id = x.connection_id
   where x.tenant_id = p_tenant_id and x.source_deleted_at is null
-    and (p_source_ids is null or x.source_id = any (p_source_ids))
   order by sm.market, x.source_id, x.id
 $$;
 
@@ -987,12 +992,14 @@ $$;
 -- Every device the register still holds whose loan reference is an active loan's key, as the file's rows (see the
 -- header). customer_id: the customer reference, In Storage when the register holds none, null for a reference that is
 -- no id (customer_ref_invalid: a check before the next file). start_date: the linked subscription's creation date in the
--- tenant's zone, only for a device with a customer reference. The values null for a model without pledge values (a check)
+-- tenant's zone, only for a device with a customer reference. The values null for a model without pledge values (a check).
+-- checks: the checks before the next file the device fails, each rule here once (no_model_values, no_first_shipped,
+-- no_language, customer_ref_invalid, no_start_date; unknown_loan is a device's without a row, cma.pledge_unknown_loans_of)
 create or replace function cma.pledge_rows_of(p_tenant_id uuid, p_valuation_date date)
 returns table (device_id uuid, source_id text, loan_number integer, loan_key text, serial text, type_label text, market text,
                language text, customer_id text, start_date date, first_shipped_on date, months_depreciating integer,
                depreciation_per_month numeric, acquisition_value numeric, receipts numeric, current_value numeric,
-               customer_ref_invalid boolean, has_values boolean, subscription_ref text, language_label text, model_key text)
+               customer_ref_invalid boolean, has_values boolean, subscription_ref text, language_label text, model_key text, checks text[])
 language sql stable
 rows 1000
 as $$
@@ -1004,7 +1011,7 @@ as $$
     where dv.tenant_id = p_tenant_id and dv.pledge_ref is not null and dv.source_deleted_at is null
   ), sub as materialized (
     select s.market, s.source_id, s.source_created_at
-    from cma.linkable_subscriptions_of(p_tenant_id, array(select distinct d.subscription_ref from d where d.subscription_ref is not null)) s
+    from cma.linkable_subscriptions_of(p_tenant_id) s
   ), z as (
     select t.timezone as zone from cma.tenant t where t.id = p_tenant_id
   )
@@ -1014,7 +1021,12 @@ as $$
          d.first_shipped_on, cma.pledge_months_of(d.first_shipped_on, p_valuation_date),
          mv.depreciation_per_month, mv.acquisition_value, mv.receipts,
          cma.pledge_current_value_of(mv.acquisition_value, mv.depreciation_per_month, cma.pledge_months_of(d.first_shipped_on, p_valuation_date)),
-         d.customer_ref_invalid, mv.model_key is not null, d.subscription_ref, d.language_label, d.model_key
+         d.customer_ref_invalid, mv.model_key is not null, d.subscription_ref, d.language_label, d.model_key,
+         array_remove(array[case when mv.model_key is null then 'no_model_values' end,
+                            case when d.first_shipped_on is null then 'no_first_shipped' end,
+                            case when d.language is null then 'no_language' end,
+                            case when d.customer_ref_invalid then 'customer_ref_invalid' end,
+                            case when d.customer_ref is not null and sub.source_created_at is null then 'no_start_date' end], null)
   from d
   left join cma.pledge_model_value mv on mv.tenant_id = p_tenant_id and mv.model_key = d.model_key
   left join sub on sub.market = d.market and sub.source_id = d.subscription_ref
@@ -1103,8 +1115,9 @@ create trigger frozen_truncate before truncate on cma.pledge_snapshot_row
 -- 10. The take
 -- ---------------------------------------------------------------------------------------------
 -- The file of a valuation date, written once under the tenant's lock (the owner's alone: the takes below call it with
--- their own permission checked). Answers taken (with loans and devices), already_taken (the file held, its counts) or
--- no_pledges (no row: no active loan or no pledged device the register holds); CMA04 above 50,000 rows
+-- their own permission checked; it checks again, as Flash's writers do: pledges.snapshot or tenant.configure, and the
+-- session's tenant). Answers taken (with loans and devices), already_taken (the file held, its counts) or no_pledges (no
+-- row: no active loan or no pledged device the register holds); CMA04 above 50,000 rows
 create or replace function cma.pledge_snapshot_write(p_tenant_id uuid, p_valuation_date date)
 returns jsonb
 language plpgsql
@@ -1116,6 +1129,10 @@ declare
   v_loans integer;
   s       record;
 begin
+  perform cma.assert_any_permission(array['pledges.snapshot', 'tenant.configure']);
+  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() then
+    raise exception 'a quarter file is taken for the current tenant only' using errcode = 'CMA06';
+  end if;
   perform pg_advisory_xact_lock(hashtextextended(p_tenant_id::text || '/pledge_snapshot', 0));
   select x.id, x.taken_at, x.loans, x.devices into s from cma.pledge_snapshot x
   where x.tenant_id = p_tenant_id and x.valuation_date = p_valuation_date;
@@ -1216,31 +1233,35 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 11. The reads (pledges.view)
 -- ---------------------------------------------------------------------------------------------
--- The checks before the next file over the devices the register holds, each row a device: unknown_loan (a loan
--- reference no loan of the catalog has as its key; its value), and of the pledged devices (an active loan's):
--- no_model_values (its model has no pledge values; the model's key, or none), no_first_shipped, no_language (the
--- register's label, or none), customer_ref_invalid (a customer reference that is no id) and no_start_date (a customer
--- reference without a linked subscription's creation date)
+-- The devices the register holds whose loan reference no loan of the catalog has as its key (the check unknown_loan),
+-- with the reference; an inactive loan's are no finding (the loan is in the catalog)
+create or replace function cma.pledge_unknown_loans_of(p_tenant_id uuid)
+returns table (serial text, source_id text, pledge_ref text)
+language sql stable
+rows 100
+as $$
+  select dv.serial, dv.source_id, dv.pledge_ref
+  from cma.device dv
+  where dv.tenant_id = p_tenant_id and dv.pledge_ref is not null and dv.source_deleted_at is null
+    and not exists (select 1 from cma.pledge_loan l where l.tenant_id = p_tenant_id and l.key = dv.pledge_ref)
+$$;
+
+-- The checks before the next file, each row a device and a check it fails: unknown_loan (cma.pledge_unknown_loans_of;
+-- the reference as its value), and of the pledged devices (an active loan's) the checks of cma.pledge_rows_of:
+-- no_model_values (the model's key as its value, or none), no_first_shipped, no_language (the register's label, or none),
+-- customer_ref_invalid (a customer reference that is no id) and no_start_date (a customer reference without a linked
+-- subscription's creation date)
 create or replace function cma.pledge_findings_of(p_tenant_id uuid, p_valuation_date date)
 returns table (check_key text, serial text, source_id text, value text)
 language sql stable
 rows 100
 as $$
-  with r as materialized (select * from cma.pledge_rows_of(p_tenant_id, p_valuation_date))
-  select 'unknown_loan', dv.serial, dv.source_id, dv.pledge_ref
-  from cma.device dv
-  where dv.tenant_id = p_tenant_id and dv.pledge_ref is not null and dv.source_deleted_at is null
-    and not exists (select 1 from cma.pledge_loan l where l.tenant_id = p_tenant_id and l.key = dv.pledge_ref)
+  select 'unknown_loan', u.serial, u.source_id, u.pledge_ref from cma.pledge_unknown_loans_of(p_tenant_id) u
   union all
-  select 'no_model_values', r.serial, r.source_id, r.model_key from r where not r.has_values
-  union all
-  select 'no_first_shipped', r.serial, r.source_id, null from r where r.first_shipped_on is null
-  union all
-  select 'no_language', r.serial, r.source_id, r.language_label from r where r.language is null
-  union all
-  select 'customer_ref_invalid', r.serial, r.source_id, null from r where r.customer_ref_invalid
-  union all
-  select 'no_start_date', r.serial, r.source_id, null from r where r.customer_id is not null and r.customer_id <> 'In Storage' and r.start_date is null
+  select c.k, r.serial, r.source_id,
+         case c.k when 'no_model_values' then r.model_key when 'no_language' then r.language_label end
+  from cma.pledge_rows_of(p_tenant_id, p_valuation_date) r
+  cross join lateral unnest(r.checks) as c(k)
 $$;
 
 create or replace function cma.pledge_check_keys()
@@ -1271,8 +1292,11 @@ begin
   v_today := cma.tenant_today_of(v_tenant);
   v_quarter := date_trunc('quarter', v_today)::date;
   v_local := now() at time zone (select t.timezone from cma.tenant t where t.id = v_tenant);
+  -- the rows once: today's sums and the checks they fail; the unknown loans apart (devices without a row)
   with r as materialized (select * from cma.pledge_rows_of(v_tenant, v_today)),
-       f as materialized (select * from cma.pledge_findings_of(v_tenant, v_today))
+       f as materialized (select 'unknown_loan' as check_key, u.pledge_ref as value from cma.pledge_unknown_loans_of(v_tenant) u
+                          union all
+                          select c.k, case when c.k = 'no_language' then r.language_label end from r cross join lateral unnest(r.checks) as c(k))
   select jsonb_build_object(
     'files', coalesce((select jsonb_agg(jsonb_build_object('valuation_date', s.valuation_date, 'taken_at', s.taken_at, 'loans', s.loans,
                                                             'devices', s.devices) order by s.valuation_date desc)
@@ -1387,8 +1411,8 @@ begin
     'cma.ingest_load_device_chunk(uuid,jsonb)',
     'cma.pledge_label_ok(text,integer,boolean)', 'cma.set_pledge_loan(text,integer,text,text,text,integer,boolean)',
     'cma.set_pledge_model_value(text,text,numeric,numeric,numeric)',
-    'cma.linkable_subscriptions_of(uuid,text[])', 'cma.pledge_months_of(date,date)', 'cma.pledge_current_value_of(numeric,numeric,integer)',
-    'cma.pledge_rows_of(uuid,date)', 'cma.pledge_findings_of(uuid,date)', 'cma.pledge_check_keys()',
+    'cma.linkable_subscriptions_of(uuid)', 'cma.pledge_months_of(date,date)', 'cma.pledge_current_value_of(numeric,numeric,integer)',
+    'cma.pledge_rows_of(uuid,date)', 'cma.pledge_unknown_loans_of(uuid)', 'cma.pledge_findings_of(uuid,date)', 'cma.pledge_check_keys()',
     'cma.pledge_page()', 'cma.pledge_finding_rows(text,integer)', 'cma.pledge_file(date)',
     'cma.pledge_snapshot_take(uuid)', 'cma.pledge_snapshot_take_current()'
   ] loop

@@ -11,7 +11,7 @@
 -- check that passed writes one row, and the last row is the verdict: "PASS | 22 PASS, 0 FAIL" (provoked: "PROVOKED, NOT
 -- A PASS"). A block that stopped counts its checks as FAIL; the verdict is reached only when the client goes on after an
 -- error (psql -v ON_ERROR_STOP=0, as the provoked run does). Run as your own IAM login after 168_pledge_lists.sql; then
--- 27, 113, 115, 117 (dev and local only) and 161 again.
+-- 27, 113, 115, 117 (dev and local only), 123, 85, 99, 137 and 161 again.
 --   S1  0009j recorded after 0009i; the five tables with row-level security and the tenant policy, the audit trigger on
 --       all but the quarter files' rows, the frozen triggers (update, delete, truncate) on both quarter-file tables; the
 --       application reads the quarter files and writes neither; the readers see none of the five
@@ -301,8 +301,8 @@ begin
     'cma.device_rows_apply(uuid,cma.device_load_row[],boolean)', 'cma.device_snapshot_apply(text,uuid,boolean)',
     'cma.ingest_load_device_chunk(uuid,jsonb)', 'cma.pledge_label_ok(text,integer,boolean)',
     'cma.set_pledge_loan(text,integer,text,text,text,integer,boolean)', 'cma.set_pledge_model_value(text,text,numeric,numeric,numeric)',
-    'cma.linkable_subscriptions_of(uuid,text[])', 'cma.pledge_months_of(date,date)', 'cma.pledge_current_value_of(numeric,numeric,integer)',
-    'cma.pledge_rows_of(uuid,date)', 'cma.pledge_findings_of(uuid,date)', 'cma.pledge_check_keys()',
+    'cma.linkable_subscriptions_of(uuid)', 'cma.pledge_months_of(date,date)', 'cma.pledge_current_value_of(numeric,numeric,integer)',
+    'cma.pledge_rows_of(uuid,date)', 'cma.pledge_unknown_loans_of(uuid)', 'cma.pledge_findings_of(uuid,date)', 'cma.pledge_check_keys()',
     'cma.pledge_page()', 'cma.pledge_finding_rows(text,integer)', 'cma.pledge_file(date)'] loop
     select * into p from pg_proc where oid = to_regprocedure(v_fn);
     if p.oid is null or p.prosecdef or p.proowner <> 'cma_owner'::regrole::oid
@@ -337,7 +337,7 @@ begin
     raise exception 'FAIL S3: %', coalesce(nullif(v_bad, ''), 'provoked');
   end if;
   insert into verify_0009j values (3, 'S3 every function the application''s and invoker; the takes definer and pinned; their bodies the owner''s', 'PASS',
-    '17 invoker functions, 2 definer takes, 2 bodies; the load and the scheduler user 0009j''s');
+    '18 invoker functions, 2 definer takes, 2 bodies; the load and the scheduler user 0009j''s');
 end
 $$;
 
@@ -548,20 +548,18 @@ begin
     v_rows := v_rows || array['40', 'A4 the rows: two active loans, In Storage, Start date in the tenant''s zone, months and values, an empty model', 'PASS',
       '9 rows of loans 2 and 3; d-4 (inactive loan), d-5 (unknown loan), d-9 (missing), d-13 (no loan) left out; s-dup by the first id'];
 
-    -- the link: for every device the register holds, the subscription the rows link (all references and the narrowed
-    -- read) is the installed base's (cma.flash_devices_of)
+    -- the link: for every device the register holds, the subscription the rows link is the installed base's
+    -- (cma.flash_devices_of)
     v_today := cma.tenant_today_of(v_t);
     select string_agg(f.source_id, ' ' order by f.source_id) into v_bad
     from cma.flash_devices_of(v_t, v_today) f
     join cma.device dv on dv.id = f.device_id
-    where f.subscription_id is distinct from (select l.subscription_id from cma.linkable_subscriptions_of(v_t, null) l
-                                              where l.market = dv.market and l.source_id = dv.subscription_ref)
-       or f.subscription_id is distinct from (select l.subscription_id from cma.linkable_subscriptions_of(v_t, array[dv.subscription_ref]) l
+    where f.subscription_id is distinct from (select l.subscription_id from cma.linkable_subscriptions_of(v_t) l
                                               where l.market = dv.market and l.source_id = dv.subscription_ref);
     if v_bad is not null or (select count(*) from cma.flash_devices_of(v_t, v_today) f where f.subscription_id is not null) <> 7 then
       raise exception 'FAIL A4: the link differs from the installed base''s for %', coalesce(v_bad, 'the count of linked devices');
     end if;
-    v_rows := v_rows || array['41', 'A4 the link equals the installed base''s for every device (all references and the narrowed read)', 'PASS',
+    v_rows := v_rows || array['41', 'A4 the link equals the installed base''s for every device', 'PASS',
       '12 devices held, 7 linked; d-3 (nope) and d-12 (s-1 in NL) unlinked'];
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;

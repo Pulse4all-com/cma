@@ -152,10 +152,10 @@ export function pledgeBook(rows: readonly PledgeFileRow[], valuationDate: string
   return sheets.length ? { sheets, date: valuationDate } : null;
 }
 
-/** A valuation date in a file's path: YYYY-MM-DD, a real date, the first day of a quarter; "today" for today's version */
+/** A valuation date in a file's path: the first day of a quarter as YYYY-MM-DD, years 2000 to 2999; "today" for today's version */
 export function fileDateParam(value: string): string | "today" | null {
   if (value === "today") return "today";
-  const m = /^(\d{4})-(01|04|07|10)-01$/.exec(value);
+  const m = /^(2\d{3})-(01|04|07|10)-01$/.exec(value);
   return m ? value : null;
 }
 
