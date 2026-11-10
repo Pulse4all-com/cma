@@ -216,7 +216,7 @@ begin
     end if;
     if (select l.lanname || ':' || p.provolatile::text || ':' || p.prosecdef::text || ':' || pg_get_userbyid(p.proowner) || ':' || coalesce(array_to_string(p.proconfig, ','), '')
         from pg_proc p join pg_language l on l.oid = p.prolang where p.oid = v_fn)
-       is distinct from case when v_sig = 'cma.inbound_now()' then 'plpgsql:s:false:cma_owner:' else 'sql:s:false:cma_owner:jit=off' end then
+       is distinct from (case when v_sig = 'cma.inbound_now()' then 'plpgsql:s:false:cma_owner:' else 'sql:s:false:cma_owner:jit=off' end) then
       v_bad := v_bad || v_sig || ': language, volatility, rights, owner or jit; ';
     end if;
     if not has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
