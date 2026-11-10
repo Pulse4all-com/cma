@@ -8,6 +8,9 @@
 -- does not depend on the day it runs. Every check writes one row, ok or FAIL, and the last row is the verdict (0008zi
 -- verified), because Cloud SQL Studio shows no notices. Run as your own IAM login after 112_assets.sql, dev first, then
 -- prod; in dev then 105, 75, 41 and 107 again.
+-- Adjusted 10 November 2026 (addition 0009j, 168_pledge_lists.sql): A2 expects cma.device and cma.device_import_row to end
+-- with pledge_ref and language once 0009j is recorded (before it, the columns of 0008zi alone), so the script passes on a
+-- database either side of 168.
 --   A  structure and privileges: the addition row after 0008zh; the tables' columns; keys and checks (the raw's key
 --      allow-list and no @, the named ids, the customer reference, one current component per kind, the reserved kind
 --      device, the status flags); the connection kind assets, the job assets_import, the setting; row-level security with
@@ -163,12 +166,14 @@ begin
     'device=id:uuid:NO,tenant_id:uuid:NO,connection_id:uuid:NO,source_system:text:NO,source_id:text:NO,serial:text:YES,model_key:text:YES,market:text:YES,'
       || 'device_status_key:text:YES,warehouse_ref:text:YES,customer_ref:text:YES,customer_ref_invalid:bool:NO,subscription_ref:text:YES,order_ref:text:YES,'
       || 'first_shipped_on:date:YES,stock_received_on:date:YES,last_shipped_on:date:YES,warranty_until:date:YES,end_of_life_on:date:YES,'
-      || 'external_refs:jsonb:NO,raw:jsonb:NO,source_deleted_at:timestamptz:YES,first_seen_at:timestamptz:NO,synced_at:timestamptz:NO',
+      || 'external_refs:jsonb:NO,raw:jsonb:NO,source_deleted_at:timestamptz:YES,first_seen_at:timestamptz:NO,synced_at:timestamptz:NO'
+      || case when exists (select 1 from cma.schema_migration where version = '0009j') then ',pledge_ref:text:YES,language:text:YES' else '' end,
     'device_component=id:uuid:NO,tenant_id:uuid:NO,device_id:uuid:NO,component_key:text:NO,serial:text:YES,expires_on:date:YES,first_seen_at:timestamptz:NO,replaced_at:timestamptz:YES',
     'device_import_row=id:uuid:NO,tenant_id:uuid:NO,batch_key:text:NO,source_row:int4:YES,source_id:text:YES,serial:text:YES,model:text:YES,status:text:YES,'
       || 'country:text:YES,warehouse_ref:text:YES,customer_ref:text:YES,subscription_ref:text:YES,order_ref:text:YES,first_shipped_on:text:YES,'
       || 'stock_received_on:text:YES,last_shipped_on:text:YES,warranty_until:text:YES,end_of_life_on:text:YES,components:text:YES,external_refs:text:YES,'
-      || 'staged_at:timestamptz:NO'] loop
+      || 'staged_at:timestamptz:NO'
+      || case when exists (select 1 from cma.schema_migration where version = '0009j') then ',pledge_ref:text:YES,language:text:YES' else '' end] loop
     if (select string_agg(column_name || ':' || udt_name || ':' || is_nullable, ',' order by ordinal_position)
         from information_schema.columns where table_schema = 'cma' and table_name = split_part(v_t, '=', 1))
        is distinct from split_part(v_t, '=', 2) then

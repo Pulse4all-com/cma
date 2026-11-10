@@ -79,11 +79,13 @@ export function clientFor(connection, settings, budget, { full = false } = {}) {
  * The mapped fields (ids) checked against the base's schema and the types the connection recorded:
  * { list, names, types, tableFields, unknown, changed, unrecorded }. list: the table's fields ({ id, name, type }, the
  * dry run's); names and types: each mapped field's name and type (lower case) by id; unknown: the mapped ids the table
- * lacks; changed: the mapped fields whose type differs from the recorded one ({ id, name, was, now }); unrecorded: the
+ * lacks; changed: the mapped fields whose type differs from the recorded one, or is none of the types its column takes
+ * ({ id, name, was, now }; was the recorded type, or the allowed ones joined by " or "); unrecorded: the
  * mapped fields without a recorded type ({ property, type }, for cma.ingest_record_field_types). SourceError
- * unknown_table when no table has the setting's id. recorded: a Map of property → recorded type (null for none).
+ * unknown_table when no table has the setting's id. recorded: a Map of property → recorded type (null for none);
+ * allowed: a Map of field id → the types its column takes (map.mjs allowedTypesOf, addition 0009j), none for the rest.
  */
-export function checkFields(tables, tableId, ids, recorded = new Map()) {
+export function checkFields(tables, tableId, ids, recorded = new Map(), allowed = new Map()) {
   const table = tables.find((t) => t.id === tableId);
   if (!table) throw new SourceError("unknown_table");
   const byId = new Map(table.fields.map((f) => [f.id, f]));
@@ -95,8 +97,9 @@ export function checkFields(tables, tableId, ids, recorded = new Map()) {
     types: new Map(known.map((id) => [id, typeOf(id)])),
     tableFields: table.fields.length,
     unknown: ids.filter((id) => !byId.has(id)),
-    changed: known.filter((id) => recorded.get(id) && recorded.get(id) !== typeOf(id))
-      .map((id) => ({ id, name: byId.get(id).name, was: recorded.get(id), now: typeOf(id) })),
+    changed: known.filter((id) => (recorded.get(id) && recorded.get(id) !== typeOf(id)) || (allowed.has(id) && !allowed.get(id).includes(typeOf(id))))
+      .map((id) => ({ id, name: byId.get(id).name,
+        was: recorded.get(id) && recorded.get(id) !== typeOf(id) ? recorded.get(id) : allowed.get(id).join(" or "), now: typeOf(id) })),
     unrecorded: known.filter((id) => !recorded.get(id)).map((id) => ({ property: id, type: typeOf(id) })),
   };
 }
