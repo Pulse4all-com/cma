@@ -406,9 +406,12 @@ begin
     --     they are on none of the days compared above), which makes the bounds worth an index to the planner
     if v_small then
       perform set_config('app.user_id', v_ing::text, true);
-      perform cma.ingest_upsert_telephony_calls(v_tel,
-        (select jsonb_agg(pg_temp.v0009i_call('f' || g, 'outbound', timestamptz '2026-08-03 00:00:00+00' + make_interval(mins => g), 5, 60, 'n-nl'))
-         from generate_series(1, 3000) g));
+      -- six writes of 500: the ingest write takes at most 500 calls at a time (CMA04 above that)
+      for v_batch in 0 .. 5 loop
+        perform cma.ingest_upsert_telephony_calls(v_tel,
+          (select jsonb_agg(pg_temp.v0009i_call('f' || g, 'outbound', timestamptz '2026-08-03 00:00:00+00' + make_interval(mins => g), 5, 60, 'n-nl'))
+           from generate_series(v_batch * 500 + 1, v_batch * 500 + 500) g));
+      end loop;
       perform set_config('app.user_id', v_admin::text, true);
     end if;
     v_plan := pg_temp.v0009i_plan(v_t, case when v_provoke then 'no_such_column' else 'started_at' end, false);
