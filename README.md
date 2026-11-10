@@ -83,6 +83,7 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | Data model: workday sessions (addition 0008zp) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: sources last read (addition 0008zq) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: Flash insights (addition 0008zt) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
+| Data model: pledge lists (addition 0009j) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Device import: a snapshot of the asset register's CSV export (addition 0008zi; the fallback since 0008zj) | [docs/import/devices.md](docs/import/devices.md) |
 | API: the web app's data layer (since 5 October 2026) | [docs/architecture/api.md](docs/architecture/api.md) |
 | **Source of truth** | README.md (this file) |
@@ -272,6 +273,7 @@ Every data type has exactly one system that owns it. Postgres mirrors and combin
 | Call transcripts, sentiment, playbook results | Telephony AI (Aircall AI) |
 | Customer App interactions: self-service orders and changes, service requests, in-app messages | Customer App, synced as activity events and tickets into the CRM where they need follow-up |
 | Devices, installations, service status, battery and pad expiry, replacements | The tenant's asset register: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry the NetSuite Internal ID (required once NetSuite holds the devices, a missing one is then a data issue the CMA flags; which other fields Airtable or NetSuite owns is open). Mirrored read-only in Postgres since addition 0008zi (`cma.device`, `cma.device_component`), read through its API since addition 0008zj (the changed records every 15 minutes, a full snapshot nightly; its CSV export the fallback); the CMA never writes it, and observed component replacements count from the first load |
+| Which device secures which loan | The asset register's `maatje_id` (read, never written); the loan catalog, the per-model pledge values and the language aliases: CMA configuration |
 | Payments, days to pay, dunning stages | NetSuite (not read by the CMA; only the two ids, through HubSpot and the asset register) |
 | Subscriptions, terms, cancellations | Shopify and Juo, synced into HubSpot; since addition 0008zl Juo's subscriptions and their events are read directly per store and mirrored in Postgres (`cma.subscription`, `cma.subscription_event`, each subscription's payment state: the renewal state in Juo, while NetSuite still owns payments), never written; one connection and one key per store, 12 stores (the GB pilot of 29 October 2026, the other 11 live stores with Juo from 5 November 2026 with `ingest-backfill --adapter juo`, PROD_RUNBOOK 15.10, addition 0008zq; NO joins once Juo is installed there, CH once it is live); HubSpot's Juo events stay as they are |
 | Reviews | Trusted Shops (Pulse4all Subscriptions), polled hourly into Postgres; other business lines to decide |

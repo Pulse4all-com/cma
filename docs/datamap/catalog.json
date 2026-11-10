@@ -162,8 +162,8 @@
       "tables": [
         {
           "name": "device",
-          "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi)",
-          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, the next chunk half the size (at least 100) after a call slower than a third of the ingest's statement timeout and a chunk the timeout cancels sent again once at half its size, and a full snapshot ends with cma.ingest_mark_devices_missing in slices of assets_load_chunk record ids, each slice its own call (0008zk); the whole table is read, never a view; CSV fallback a person loads in one call with cma.load_device_snapshot"
+          "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, the loan it secures (pledge_ref: the register's maatje_id as an id, null for none) and its language (a two-letter code through the language aliases, null when unmapped), named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi, 0009j)",
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, the next chunk half the size (at least 100) after a call slower than a third of the ingest's statement timeout and a chunk the timeout cancels sent again once at half its size, and a full snapshot ends with cma.ingest_mark_devices_missing in slices of assets_load_chunk record ids, each slice its own call (0008zk); the whole table is read, never a view; CSV fallback a person loads in one call with cma.load_device_snapshot; pledge_ref and language come from the register's maatje_id and language fields, mapped on the connection (sent only while mapped) or in the import's map (0009j)"
         },
         {
           "name": "device_component",
@@ -172,7 +172,7 @@
         },
         {
           "name": "device_import_row",
-          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi)",
+          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi); pledge_ref and language join the mapped columns (0009j)",
           "how": "CSV fallback only (0008zk): staged by tools/devices-to-staging.mjs and psql \\copy, read, loaded and emptied by cma.load_device_snapshot in one call; the Airtable API read stages nothing, it loads in chunks by cma.ingest_load_device_chunk"
         },
         {
@@ -194,6 +194,31 @@
           "name": "device_status",
           "what": "Device statuses with the flags in the field, in stock and tracked (forecast), and the labels the register writes for each; reporting reads the flags, never a name (0008zi)",
           "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every load of the register, by the API (0008zj) or from its CSV export"
+        },
+        {
+          "name": "device_language_alias",
+          "what": "The register's language labels (an option name such as English, matched lower-cased and trimmed) and the two-letter code each maps to; the pledge file writes the code in capitals (0009j)",
+          "how": "Tenant configuration set in Studio (cma.set_device_language_alias), no seed; read by every load of the register, by the API or from its CSV export"
+        },
+        {
+          "name": "pledge_loan",
+          "what": "The loans the pledge lists cover: the register's loan reference as key, the loan's number, layout (1 or 2), whether it is active, and the parts of the file's tab names (lender_label, area_label, name_suffix). lender_label is personal data (an investor's name): set in Studio only and kept out of the audit log's images (the audit row says lender_label_changed instead) (0009j)",
+          "how": "Tenant configuration set in Studio (cma.set_pledge_loan), no seed; read by the pledge lists, today's file and each quarter's take"
+        },
+        {
+          "name": "pledge_model_value",
+          "what": "Per model, as the pledge file shows it: the type label, the acquisition value, the depreciation per month and the receipts (0009j)",
+          "how": "Tenant configuration set in Studio (cma.set_pledge_model_value), no seed; read by the pledge lists, today's file and each quarter's take"
+        },
+        {
+          "name": "pledge_snapshot",
+          "what": "A quarter file's header: its valuation date (unique per tenant), when and by whom it was taken, the counts of loans and devices and the sources' last reads; frozen, an update, delete or truncate is refused (0009j)",
+          "how": "Taken once per quarter by cma.pledge_snapshot_take in the Flash snapshot job (web/jobs/snapshot-flash.mjs, every minute) on the quarter's first day after pledges.snapshot_local_time in the tenant's zone, or by cma.pledge_snapshot_take_current; the application can only read it"
+        },
+        {
+          "name": "pledge_snapshot_row",
+          "what": "A quarter file's rows as the file showed them, with the loan's number, lender label, area label, name suffix and layout copied in at the take, so a later change of the catalog never alters an old file; lender_label here is personal data, kept with the file for its retention (0009j)",
+          "how": "Filled with its header by cma.pledge_snapshot_take on a quarter's first day (the Flash snapshot job) or by cma.pledge_snapshot_take_current; frozen, no update or delete, and no path to delete a quarter file"
         }
       ]
     },

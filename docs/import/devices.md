@@ -29,6 +29,7 @@ What happens to the export:
   device's current component of that kind (no new row). A kind whose expiry does not parse (counted in
   `date_parse_failures`) is not read as emptied: with a serial it is written with the serial only, without one it is
   left out, so nothing is closed on a date the tool could not read.
+- Since addition 0009j the staging file also holds `pledge_ref` (the register's `maatje_id`: the loan a device secures, the option's name) and `language` (the language field's label), after `end_of_life_on`; the map example maps `maatje_id` and `language`, while `spv_id` and `language_ns_id` stay ignored. The load maps the language label through `cma.device_language_alias` and keeps the loan reference only when it is an id. A staging file made before it must be converted again with the current tool.
 - The staging file is copied into `cma.device_import_staging` (`docs/import/copy-devices-staging.psql`), then
   `cma.load_device_snapshot(batch, connection, is_full)` loads it: a device per register record (the record id),
   model, status and country mapped through the catalogs' aliases (unmapped: null, and a data-quality finding), the

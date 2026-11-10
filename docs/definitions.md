@@ -570,7 +570,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 |---|---|
 | Term | Device (nl: Apparaat) |
 | Key | `device`; API `devices`, `deviceId`; SQL `cma.device`, `cma_read.device` |
-| Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
+| Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, language, the loan it secures (`pledge_ref`), references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
 | Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0", read through its API by the ingest (addition 0008zj: the changed records by the poll, the full snapshot nightly) and loaded in chunks by `cma.ingest_load_device_chunk`, a full snapshot reading the whole table, never a view, and ending with `cma.ingest_mark_devices_missing` in slices (addition 0008zk), or through its CSV export by a person with `cma.load_device_snapshot` (the fallback); both run the one load, `cma.device_rows_apply`, into `cma.device` (one row per register record id and connection) |
 | Counts / does not count | Assets → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
 | Unit and display | A count (`maintenance.devices`, "{n} tracked devices"); the list shows a device by its serial number and its register record id, never a customer's name |
@@ -715,6 +715,234 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Bundling window" |
 | Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Assets → Maintenance |
 | As built today | `cma.check_tenant_setting` and `cma.maintenance_items_of` (`112`). Matches the definition |
+
+### Pledge list
+
+| Field | Value |
+|---|---|
+| Term | Pledge list (nl: Pandlijst) |
+| Key | `pledge_list`; API `/api/v1/reports/pledge-lists`; copy group `pledges` |
+| Definition | The list of the devices that secure one loan, with their values at a valuation date; one .xlsx file holds the lists of every active loan, three tabs per loan, exactly as the file Pulse4all sends every quarter (the same tabs, columns, headers and formats; the format lives in `web/src/lib/pledges.ts`). |
+| Source | `cma.pledge_rows_of(tenant, valuation date)`: the devices of the asset register that are pledged devices, with the subscriptions' link and the per-model values; the one implementation of the page, the take and today's file |
+| Counts / does not count | Counts every pledged device of an active loan. A device the register no longer holds, one with no loan reference and one whose loan is unknown or inactive are not in the file; the checks before the next file list the ones that need putting right |
+| Unit and display | Assets → Pledge lists (`/reports/pledge-lists`): Quarter files, Today and Check before the next file; downloads as .xlsx (`GET /api/v1/reports/pledge-lists/files/{yyyy-mm-dd or today}`), at most 50,000 rows |
+| Time rule | Valued at one date: a Quarter file's valuation date, or today in the tenant's zone for today's version (its name ends in preview) |
+| Scope | The tenant; needs `pledges.view`, a permission no default role holds |
+| Equivalent in the source system | None; the register holds the devices and their loan reference, not the list |
+| Not to use | "Collateral list" or "asset list" in a label; a lender's name in a key |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Assets → Pledge lists: the download is exactly the current file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Assets → Pledge lists; the checks of that page (`unknown_loan`, `no_model_values`, `no_first_shipped`, `no_language`, `customer_ref_invalid`, `no_start_date`) |
+| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
+
+### Loan
+
+| Field | Value |
+|---|---|
+| Term | Loan (nl: Lening); in code a pledge loan |
+| Key | `pledge_loan`: `key`, `number`, `lender_label`, `area_label`, `name_suffix`, `layout`, `is_active`; SQL `cma.pledge_loan`, `cma.set_pledge_loan` |
+| Definition | A loan whose security the pledge lists show: its key is the register's loan reference (the option name of the device's loan field, such as "2"), its number (1 to 999) is the file's LOAN SPV and tab prefix, its lender label, area label and name suffix make the tab names, its layout (1 or 2) the tab's columns, and an inactive loan is left out of the files. |
+| Source | The tenant's loan catalog, set in Studio (`tenant.configure`); no value is seeded. The lender label is an investor's name, which is personal data: it lives only in this table and in a Quarter file's frozen copy, never in the repository, a seed, a fixture, a verify output, a log or an audit image (the audit log writes `lender_label_changed` instead) |
+| Counts / does not count | A device counts for the loan whose key equals its loan reference and which is active |
+| Unit and display | The loan's number; the lender label shows to `pledges.view` holders on the page and in the file's tab names, nowhere else |
+| Time rule | None; a Quarter file keeps the labels as they were at its take |
+| Scope | The tenant |
+| Equivalent in the source system | The register's loan reference (Airtable: `maatje_id`); the register's `spv_id` is not read |
+| Not to use | "SPV" or "maatje" in a label or key (the file's header LOAN SPV is its own word); a lender's name anywhere in the repository |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Which loan a device secures is the register's field maatje_id", "Lender names are investors' personal data" and "The audit log keeps no lender label" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | `cma.pledge_rows_of`, Assets → Pledge lists |
+| As built today | `cma.pledge_loan` (`168`); `cma.audit_row` leaves `lender_label` out of its images. Matches the definition |
+
+### Pledged device
+
+| Field | Value |
+|---|---|
+| Term | Pledged device |
+| Key | `pledge_ref` on `cma.device`; API `pledgeRef` |
+| Definition | A device the register still holds whose loan reference (`pledge_ref`) is an active loan's key. |
+| Source | The register's loan field, `maatje_id` (a single select whose option name is the loan's number; the empty option means no pledge), read by the ingest or the CSV import into `cma.device.pledge_ref`; the register owns it, the CMA reads it and never writes it (README, Source of truth) |
+| Counts / does not count | A device missing from the latest full snapshot (`source_deleted_at`) does not count; a loan reference that is no id is dropped (`refs_dropped`) and counts for no loan |
+| Unit and display | A serial number (SN AED) and its register record id; never a customer's name |
+| Time rule | As of the latest read; the Quarter file freezes it at its take |
+| Scope | As Device |
+| Equivalent in the source system | The device whose `maatje_id` option is set |
+| Not to use | "Secured device" or "collateral" in a label |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Which loan a device secures is the register's field maatje_id" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | `cma.pledge_rows_of`, the pledge checks, Assets → Pledge lists |
+| As built today | `cma.device.pledge_ref` and the index `device_pledge_idx` (`168`). Matches the definition |
+
+### Quarter file
+
+| Field | Value |
+|---|---|
+| Term | Quarter file (nl: Kwartaalbestand) |
+| Key | `pledge_snapshot`, `pledge_snapshot_row`; API `files` |
+| Definition | The pledge list as it stood on a quarter's first day: taken once, frozen, and downloaded again unchanged at any later time. |
+| Source | `cma.pledge_snapshot_take`, run in the Flash snapshot job (`web/jobs/snapshot-flash.mjs`) after Flash's take, every minute, on the tenant's local 1 January, 1 April, 1 July or 1 October from `pledges.snapshot_local_time` (default 00:05); `cma.pledge_snapshot_take_current` takes the current quarter's file by hand (`tenant.configure`) |
+| Counts / does not count | One file per valuation date and tenant; the rows copy the loan's number, lender label, area label, name suffix and layout, so a later catalog change never alters an old file. A quarter with no pledged device takes no file (`no_pledges`) |
+| Unit and display | A row of the Quarter files card: Valuation date, Taken at, Loans, Devices, Download |
+| Time rule | The tenant's zone; the valuation date is the quarter's first day |
+| Scope | The tenant; `pledges.view` |
+| Equivalent in the source system | None |
+| Not to use | "Snapshot" in a label for this file (Flash's snapshots are another thing); "export" |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "A quarter file is taken automatically on the first day of each quarter" and "A quarter file keeps its own frozen copy" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Assets → Pledge lists (Quarter files) |
+| As built today | `cma.pledge_snapshot` and `cma.pledge_snapshot_row` (`168`): update, delete and truncate are refused and the application holds no write on them; there is no path to delete a quarter file. Matches the definition |
+
+### Valuation date
+
+| Field | Value |
+|---|---|
+| Term | Valuation date |
+| Key | `valuation_date`; API `valuationDate` |
+| Definition | The date a pledge list's Months depreciating and Current value are computed for: a Quarter file's first day of the quarter, or today for today's version. |
+| Source | `cma.pledge_snapshot.valuation_date`; the tenant's today for today's version |
+| Counts / does not count | Months depreciating counts whole months from First Shipment Date to this date |
+| Unit and display | A date; a Quarter file's name carries it |
+| Time rule | The tenant's zone |
+| Scope | The tenant |
+| Equivalent in the source system | None |
+| Not to use | "As of" (the period bars' word), "report date" |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "A quarter file is taken automatically on the first day of each quarter" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | `cma.pledge_rows_of`; Assets → Pledge lists |
+| As built today | Matches the definition |
+
+### Acquisition value
+
+| Field | Value |
+|---|---|
+| Term | Acquisition value |
+| Key | `acquisition_value`; API `acquisitionValue`; SQL `cma.pledge_model_value.acquisition_value` |
+| Definition | The value a device is bought at, configured per model; every device of a model has the same one. |
+| Source | The tenant's per-model values, set in Studio (`cma.set_pledge_model_value`); a model without values leaves the device's values empty (check `no_model_values`) |
+| Counts / does not count | One amount per model; no per-device exception exists |
+| Unit and display | An amount with two decimals, in the file's format |
+| Time rule | None |
+| Scope | The tenant |
+| Equivalent in the source system | The file's column of the same name |
+| Not to use | "Price" or "cost" in a label |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Values per model, as in the file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Current value; Assets → Pledge lists |
+| As built today | `cma.pledge_model_value` (`168`). Matches the definition |
+
+### Current value
+
+| Field | Value |
+|---|---|
+| Term | Current value (pledge lists) |
+| Key | `current_value`; API `currentValue` |
+| Definition | round(Acquisition value − Months depreciating × Depreciation per month, 2), never below 0; empty when the device's model has no values. |
+| Source | `cma.pledge_rows_of` |
+| Counts / does not count | Six loan-9 units once valued at €7.76 a month now follow their model's rule; no per-device exception is built |
+| Unit and display | An amount with two decimals; the page's hint explains the rule |
+| Time rule | As of the Valuation date |
+| Scope | The tenant; pledge lists only. The word is not used for another figure |
+| Equivalent in the source system | The file's column Current value |
+| Not to use | "Book value", "residual value" |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Values per model, as in the file" and "Current value is never below 0" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Assets → Pledge lists (Today, the files) |
+| As built today | Matches the definition; the valuation rule is to be confirmed (docs/open-decisions.md) |
+
+### Depreciation per month
+
+| Field | Value |
+|---|---|
+| Term | Depreciation per month (the file's header: Depreciation / Month) |
+| Key | `depreciation_per_month`; API `depreciationPerMonth` |
+| Definition | The amount a device of a model loses in value for each whole month from its First Shipment Date, configured per model. |
+| Source | The tenant's per-model values (`cma.pledge_model_value`), set in Studio |
+| Counts / does not count | One amount per model |
+| Unit and display | An amount with two decimals |
+| Time rule | Per whole month |
+| Scope | The tenant |
+| Equivalent in the source system | The file's column Depreciation / Month |
+| Not to use | "Amortisation" |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Values per model, as in the file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Current value; Assets → Pledge lists |
+| As built today | Matches the definition |
+
+### Months depreciating
+
+| Field | Value |
+|---|---|
+| Term | Months depreciating (the file's header spells it "Months Depriciating", verbatim) |
+| Key | `months_depreciating`; API `monthsDepreciating` |
+| Definition | The whole months from a device's First Shipment Date to the Valuation date (age()'s years × 12 + months); 0 without a First Shipment Date or when it lies after the Valuation date. |
+| Source | `cma.device.first_shipped_on` and the Valuation date, in `cma.pledge_rows_of` |
+| Counts / does not count | A part of a month does not count; a device without a First Shipment Date counts 0 and is listed in the check `no_first_shipped` |
+| Unit and display | A whole number |
+| Time rule | Calendar months; the tenant's zone for today's version |
+| Scope | Pledge lists |
+| Equivalent in the source system | The file's column Months Depriciating |
+| Not to use | The header's spelling in any label of the UI or the API (the file keeps it, the format being D1's exception) |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Values per model, as in the file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Current value; Assets → Pledge lists |
+| As built today | Matches the definition |
+
+### Receipts
+
+| Field | Value |
+|---|---|
+| Term | Receipts (pledge lists) |
+| Key | `receipts`; API `receipts` |
+| Definition | An amount configured per model that the file shows in its Receipts column; it is never a sum of collected payments. |
+| Source | The tenant's per-model values (`cma.pledge_model_value.receipts`), set in Studio |
+| Counts / does not count | Does not count any payment, renewal or order; the CMA does not read payments (README, Source of truth) |
+| Unit and display | An amount with two decimals |
+| Time rule | None |
+| Scope | Pledge lists only |
+| Equivalent in the source system | The file's column Receipts |
+| Not to use | "Payment", "paid" (they mean what NetSuite owns) |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Values per model, as in the file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Assets → Pledge lists |
+| As built today | Matches the definition |
+
+### In Storage
+
+| Field | Value |
+|---|---|
+| Term | In Storage (pledge lists) |
+| Key | `in_storage` (the page's count of devices); the file's Customer ID cell |
+| Definition | The file's Customer ID of a pledged device for which the register holds no customer reference; otherwise the Customer ID is the customer reference. |
+| Source | `cma.device.customer_ref` in `cma.pledge_rows_of` |
+| Counts / does not count | A customer reference that is no id gives an empty Customer ID, not In Storage, and the check `customer_ref_invalid`; a Customer ID with a leading zero stays text |
+| Unit and display | The words "In Storage" in the file; a count in the Today card's In Storage column |
+| Time rule | As of the Valuation date's rows |
+| Scope | Pledge lists; not the device status In Stock |
+| Equivalent in the source system | The file's own convention |
+| Not to use | "In stock" (a device status flag, Device status) |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Where an AED is: its Customer ID, or In Storage" and "An invalid customer reference gives an empty Customer ID" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | Assets → Pledge lists |
+| As built today | Matches the definition |
+
+### Language
+
+| Field | Value |
+|---|---|
+| Term | Language (device; nl: Taal) |
+| Key | `language`; SQL `cma.device.language`, `cma.device_language_alias`, `cma.device_language_code_of` |
+| Definition | A device's language as a two-letter code (lower case in the database), mapped from the register's language field through the device language alias catalog; the pledge file writes it in capitals (EN). Null when the label is empty or no alias maps it. |
+| Source | The register's language field (a single select such as "English", or text), matched lower-cased and trimmed against the tenant's aliases (`cma.set_device_language_alias`, `tenant.configure`), as models, statuses and markets are mapped; the label stays in `raw` |
+| Counts / does not count | An unmapped label leaves the language empty and is counted in the load's answer as `unmapped_language` (not in the run's counts); the page's check `no_language` lists those devices. The register's `language_ns_id` is not read |
+| Unit and display | A code in capitals in the pledge file |
+| Time rule | As of the latest read |
+| Scope | As Device; the Installed base Language filter is not built yet |
+| Equivalent in the source system | The register's language field (Airtable: `language`) |
+| Not to use | "Locale" for a device's language (a review channel's locale is another term) |
+| Status | Decided |
+| Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Language is the register's language field" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
+| Used by | `no_language`; Assets → Pledge lists |
+| As built today | `cma.device.language` and the alias table (`168`); the 0009f D3 data prerequisite is met for the import. Matches the definition |
 
 ## Subscription terms
 
@@ -1668,9 +1896,9 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Assets (nl: Assets), a rail group label |
 | Key | Copy key `nav.assets`; group id `assets` |
-| Definition | The rail group of the pages about the devices the asset register holds: Installed base and Maintenance. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
+| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Maintenance and Pledge lists. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
-| Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/maintenance`) and its permission (`reports.view` or `performance.team`); a group with no page the person may see is absent |
+| Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/maintenance`, `/reports/pledge-lists`) and its permission (`reports.view` or `performance.team`; `pledges.view` for Pledge lists); a group with no page the person may see is absent |
 | Unit and display | A group with a box icon, after Customers. Installed base is a "now" view of its own with no As of, light by default (the filters, the tiles, In the field per model as a donut, Per market stacked per model, from the stored current take) and its breakdowns, lists and serial search loaded only when asked as address state (`panel=`, `serial=`; addition 0009f); Flash keeps its own Installed base overview, with As of and history |
 | Time rule | None |
 | Scope | The rail of every tenant |
@@ -1678,7 +1906,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Not to use | "Assets" for one device or a count of devices (Device); "Customers → Maintenance" (Maintenance moved here) |
 | Status | Decided |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
-| Used by | `flash.installed_base.*`, `maintenance.*`; Assets → Installed base, Maintenance |
+| Used by | `flash.installed_base.*`, `maintenance.*`; Assets → Installed base, Maintenance, Pledge lists |
 | As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash) |
 
 ## Time terms
