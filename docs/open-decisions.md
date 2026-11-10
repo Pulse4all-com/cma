@@ -239,3 +239,11 @@ Part of the CMA documentation (README.md, Documentation map). Moved verbatim fro
   - Funnel: 53 (manager, by week) and 48 (reader, by day).
 
   No hint is missing; the minimums depend on the date. Two ways to fix it: give these cases a fixed span (as Courtesy's cases use last month since 0009c), or have the mock hold won and lost deals early in every month. Neither is in PR #243.
+
+- The Live board's UX and speed pass (10 November 2026, #261), for Martin, the steps left:
+  - Outbound per hour on the board needs a new read; none exists today, so the chart shows inbound only.
+  - Tighten `web/verify/perf.json` `html_kb` and `js_kb` for `/live/newco` from your `verify:perf --observed`: they stay at 114 and 178 because at volume the full missed list still rides in the page's data.
+  - The poll still sends every missed caller every 10 seconds. Cap it in the API with a count and a "Show all" on demand: a migration that re-creates `cma.inbound_now()`, the same one that removes the kept keys (`waiting_now`, `longest_waiting_seconds`).
+  - The chart's running-hour mark uses the viewer's zone while its columns are each line's hours; the web has no tenant zone.
+  - The one-second tick relayouts the people's table; fixed-width cells would contain it.
+  - A generic-plan guard for 168's primary-key probe, as 167 B3.
