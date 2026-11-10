@@ -1054,7 +1054,9 @@ async function expectLiveBoard() {
           const order = [...document.querySelectorAll('[data-testid="inbound-live"], [data-testid="outbound-live"], [data-testid="follow-up-live"]')].map((el) => el.getAttribute("data-testid"));
           return order.join(",") === "inbound-live,outbound-live,follow-up-live";
         })(),
-        longestWaiting: (document.querySelector("main")?.textContent ?? "").includes("Longest waiting") || !!document.querySelector('[data-testid="inbound-longestWaiting"]'),
+        // the tile and the tiles' labels only: the page's text may say "longest waiting" elsewhere (a follow-up hint does)
+        longestWaiting: !!document.querySelector('[data-testid="inbound-longestWaiting"]')
+          || [...document.querySelectorAll("[data-tile] p")].some((el) => (el.firstChild?.textContent ?? "").trim() === "Longest waiting"),
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
         // the call parts and the follow-up strip stay tenant-wide on a contact center's board and say so (addition 0008zv)
         scopes: [...document.querySelectorAll('[data-testid="inbound-scope"], [data-testid="outbound-scope"], [data-testid="missed-scope"], [data-testid="follow-up-scope"]')].map((el) => el.textContent ?? ""),
