@@ -160,9 +160,10 @@ export function LiveHours({ date, copy, locale, timeZone, scope }: {
               </div>
             )}
             {tip ? (
+              // beside the hovered column, inside the plot: never over the column itself or the card's title
               <div role="tooltip" data-testid="inbound-hours-tip"
-                className="pointer-events-none absolute bottom-full z-10 mb-2 w-max rounded-input border border-p4a-border bg-white px-3 py-2 text-small text-p4a-body shadow-[0_1px_2px_rgba(11,19,61,0.06)]"
-                style={tip.hour < 3 ? { left: `${(100 * tip.hour) / 24}%` } : tip.hour > 20 ? { right: `${(100 * (23 - tip.hour)) / 24}%` } : { left: `${(100 * (tip.hour + 0.5)) / 24}%`, transform: "translateX(-50%)" }}>
+                className="pointer-events-none absolute top-0 z-10 w-max rounded-input border border-p4a-border bg-white px-3 py-2 text-small text-p4a-body shadow-[0_1px_2px_rgba(11,19,61,0.06)]"
+                style={tip.hour < 12 ? { left: `calc(${(100 * (tip.hour + 1)) / 24}% + 8px)` } : { right: `calc(${(100 * (24 - tip.hour)) / 24}% + 8px)` }}>
                 <p className="text-caption text-p4a-grey">{range(tip.hour)}</p>
                 <p><strong className="tabular">{fmtCount(tip.offered, locale)}</strong> {t.inboundOffered.toLowerCase()}</p>
                 <p className="flex items-center gap-2"><span aria-hidden="true" className="inline-block h-0.5 w-3 bg-p4a-deepblue" /><strong className="tabular">{fmtCount(tip.answered, locale)}</strong> {t.inboundAnswered.toLowerCase()}</p>
