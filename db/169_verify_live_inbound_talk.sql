@@ -43,9 +43,10 @@
 --   B5  a tenant without a call: today's date, 0 calls, no rate or average, {}, 0 waiting now and 0 s of talk time;
 --       inbound_now() without the new key the same as 0009h's; acting as it, cma.inbound_today_live_of for the first
 --       tenant reads no call of the first tenant (row-level security under the explicit tenant)
---   B6  waiting now in the same read: with telephony.waiting_max_minutes at 1440, the call ringing since two hours
---       before the tenant's midnight counts in waiting now (2) and in none of the day's figures; without the new key
---       the same JSON as 0009h's, whose second read counted it
+--   B6  waiting now in the same read: with telephony.waiting_max_minutes at 2880 (two days, so the call is inside the
+--       limit at any hour of the running day), the call ringing since two hours before the tenant's midnight counts in
+--       waiting now (2) and in none of the day's figures; without the new key the same JSON as 0009h's, whose second
+--       read counted it
 --   E1  per active tenant: cma.inbound_now() without inbound_talk_seconds the same JSON as 0009h's
 --   E2  per active tenant whose telephony.connected_min_seconds is 0 (Pulse4all's value and the default): today's
 --       inbound_talk_seconds equals cma.calls_figures_of's talk_seconds_total minus outbound_talk_seconds for the date;
@@ -57,7 +58,7 @@
 --       "inbound now (one statement)" must not get slower; 168 reads the calls once where 164 read them twice).
 --       131_time_all.sql part a holds the poll's budget (20 ms)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
--- comparisons are provoked by a deliberate difference, not by the switch alone: B4, B5 and E1 then compare with
+-- comparisons are provoked by a deliberate difference, not by the switch alone: B4, B5, B6 and E1 then compare with
 -- 0009h's JSON with waiting_now taken out, B2, E2 and E3 with the reports' figures of the day before (E2 and E3 also
 -- take the switch: a tenant without a call answers 0 on both days).
 -- =============================================================================================
@@ -368,9 +369,9 @@ begin
     v_bad := '';
     perform set_config('app.tenant_id', v_t::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    perform cma.set_tenant_setting('telephony.waiting_max_minutes', '1440');
+    perform cma.set_tenant_setting('telephony.waiting_max_minutes', '2880');
     v_txt := pg_temp.v0009j_fig(v_t);
-    if v_txt is distinct from format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|2|20|1440|215', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
+    if v_txt is distinct from format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|2|20|2880|215', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
     perform set_config('app.user_id', v_sup::text, true);
     j := cma.inbound_now();
     if (j #- '{today,inbound_talk_seconds}') is distinct from (case when v_provoke then pg_temp.inbound_now_0009h() #- '{today,waiting_now}' else pg_temp.inbound_now_0009h() end) then
@@ -378,7 +379,7 @@ begin
     end if;
     perform set_config('app.user_id', v_admin::text, true);
     perform cma.set_tenant_setting('telephony.waiting_max_minutes', null);
-    rows_ := rows_ || pg_temp.v0009j_row(16, 'B6 the waiting limit at 1440 minutes: the call ringing since the evening before counts in waiting now (2), not in the day''s figures; 0009h''s JSON without the new key',
+    rows_ := rows_ || pg_temp.v0009j_row(16, 'B6 the waiting limit at 2880 minutes: the call ringing since the evening before counts in waiting now (2), not in the day''s figures; 0009h''s JSON without the new key',
       case when v_bad = '' then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
 
     raise exception using errcode = 'CMAOK';
