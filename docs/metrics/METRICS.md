@@ -1512,7 +1512,7 @@ Total talk time over today's answered inbound calls (Talk time), from the answer
 **Formula as computed**
 
 ```
-inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on counted lines, each call dated in its line's market zone (else the tenant's), 0 with none; the tile shows a dash while Answered and the talk time are both 0, else fmtTalk (as Outbound today's Talk time). One read with the other Inbound today figures (cma.inbound_today_live_of): cma.inbound_calls_of once, the talk time of each answered call of the date by the primary key of cma.telephony_call.
+inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on counted lines, each call dated in its line's market zone (else the tenant's), 0 with none; the tile shows a dash while Answered and the talk time are both 0, else fmtTalk (as Outbound today's Talk time). One read with the other Inbound today figures and the calls waiting now (cma.inbound_today_live_of): cma.inbound_calls_of once, the talk time of each answered call of the date by the primary key of cma.telephony_call.
 ```
 
 **Unit** seconds · **Grain** now · **Status** cadence_unconfirmed
@@ -1544,7 +1544,7 @@ inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) select coalesce(sum(tc.talk_seconds), 0)::bigint as inbound_talk_seconds from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null and tc.answered_at is not null and coalesce(n.is_counted, true) and (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date = (now() at time zone s.tz)::date
+with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) select coalesce(sum(tc.talk_seconds), 0)::bigint as inbound_talk_seconds from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null and tc.answered_at is not null and coalesce(n.is_counted, true) and tc.started_at >= now() - interval '2 days' and (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date = (now() at time zone s.tz)::date
 ```
 
 **Fixture check** Not run here: this session has no database. db/169_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today; Martin runs it and this query in Studio.

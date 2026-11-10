@@ -30,7 +30,8 @@
 --       10.0 s on average, 13.0 s at the 80th percentile, {"unknown": 1}, 1 waiting now, 20 s and 30 min; the talk time
 --       215 s: the two ended NL calls (45 + 100) and the Tokyo line's call 10 seconds before the tenant's midnight,
 --       which is the date there (70); not the New York call (60, the day before in its zone), not the call in progress
---       (no talk time yet), not the unanswered or the waiting one, not the day before's (50), not the outbound one (30)
+--       (no talk time yet), not the unanswered or the waiting one, not the day before's (50), not the outbound one (30);
+--       a call ringing since two hours before the tenant's midnight is in none of them (outside the waiting limit: B6)
 --   B2  that talk time equals Reports → Calls' talk time minus its outbound talk time for the date
 --       (cma.calls_figures_of: 245 − 30) and Calls per agent's inbound talk time (cma.calls_per_person_of's total row)
 --   B3  telephony.connected_min_seconds 40: the outbound call (30 s) is no longer Connected; the talk time stays 215 and
@@ -42,14 +43,19 @@
 --   B5  a tenant without a call: today's date, 0 calls, no rate or average, {}, 0 waiting now and 0 s of talk time;
 --       inbound_now() without the new key the same as 0009h's; acting as it, cma.inbound_today_live_of for the first
 --       tenant reads no call of the first tenant (row-level security under the explicit tenant)
+--   B6  waiting now in the same read: with telephony.waiting_max_minutes at 1440, the call ringing since two hours
+--       before the tenant's midnight counts in waiting now (2) and in none of the day's figures; without the new key
+--       the same JSON as 0009h's, whose second read counted it
 --   E1  per active tenant: cma.inbound_now() without inbound_talk_seconds the same JSON as 0009h's
 --   E2  per active tenant whose telephony.connected_min_seconds is 0 (Pulse4all's value and the default): today's
 --       inbound_talk_seconds equals cma.calls_figures_of's talk_seconds_total minus outbound_talk_seconds for the date;
 --       skip above 0 (B3)
 --   E3  per active tenant: today's inbound_talk_seconds equals cma.calls_per_person_of's total inbound_talk_seconds
---   E4  per active tenant: cma.inbound_now() no slower than 0009h's: the best of verify.timing_runs runs each,
---       alternating, at most 0009h's best plus verify.slack_ms (the brief: "inbound now (one statement)" must not get
---       slower). 131_time_all.sql part a holds the poll's budget (20 ms)
+--   E4  per active tenant: cma.inbound_now() no slower than 0009h's: six untimed calls of each first (so both run the
+--       plans a pooled connection keeps after its fifth call), then the best of verify.timing_runs runs each,
+--       alternating, at most 0009h's best plus the larger of verify.slack_ms and verify.slack_ratio of it (the brief:
+--       "inbound now (one statement)" must not get slower; 168 reads the calls once where 164 read them twice).
+--       131_time_all.sql part a holds the poll's budget (20 ms)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
 -- comparisons are provoked by a deliberate difference, not by the switch alone: B4, B5 and E1 then compare with
 -- 0009h's JSON with waiting_now taken out, B2, E2 and E3 with the reports' figures of the day before (E2 and E3 also
@@ -65,8 +71,9 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every check fail
-select set_config('verify.timing_runs', '8', false);                 -- runs per read in E4 (the seventh call of a session included)
-select set_config('verify.slack_ms', '1', false);                    -- E4: what the new poll may take above 0009h's best (measurement noise)
+select set_config('verify.timing_runs', '8', false);                 -- timed runs per read in E4, after six untimed ones each
+select set_config('verify.slack_ms', '0.5', false);                  -- E4: what the new poll may take above 0009h's best (measurement noise),
+select set_config('verify.slack_ratio', '0.03', false);              --     or this share of 0009h's best when that is more
 
 drop table if exists pg_temp.verify_0009j;
 create temporary table verify_0009j (ord integer, check_name text, result text, detail text);
@@ -280,6 +287,7 @@ begin
       pg_temp.v0009j_call('o1', 'outbound', v_t0 + interval '6 seconds', 5,    30,   'n-nl'),       -- connected outbound, 30 s
       pg_temp.v0009j_call('o2', 'outbound', v_t0 + interval '7 seconds', null, null, 'n-nl'),       -- outbound, not connected
       pg_temp.v0009j_call('y1', 'inbound',  v_t0 - interval '23 hours',  5,    50,   'n-nl'),       -- the day before
+      pg_temp.v0009j_call('w0', 'inbound',  v_t0 - interval '2 hours',   null, null, 'n-nl', true),  -- ringing since the evening before (B6)
       pg_temp.v0009j_call('w1', 'inbound',  greatest(v_t0 + interval '8 seconds', now() - interval '1 minute'), null, null, 'n-nl', true)));  -- waiting
     perform set_config('app.user_id', v_admin::text, true);
 
@@ -356,6 +364,23 @@ begin
     rows_ := rows_ || pg_temp.v0009j_row(15, 'B5 a tenant without a call: today''s date, 0 calls, no rate or average, {}, 0 waiting now, 0 s; 0009h''s JSON without the new key; the first tenant''s calls out of its reach',
       case when v_bad = '' then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
 
+    -- B6. waiting now in the same read: a call ringing since before the tenant's midnight, inside the waiting limit
+    v_bad := '';
+    perform set_config('app.tenant_id', v_t::text, true);
+    perform set_config('app.user_id', v_admin::text, true);
+    perform cma.set_tenant_setting('telephony.waiting_max_minutes', '1440');
+    v_txt := pg_temp.v0009j_fig(v_t);
+    if v_txt is distinct from format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|2|20|1440|215', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
+    perform set_config('app.user_id', v_sup::text, true);
+    j := cma.inbound_now();
+    if (j #- '{today,inbound_talk_seconds}') is distinct from (case when v_provoke then pg_temp.inbound_now_0009h() #- '{today,waiting_now}' else pg_temp.inbound_now_0009h() end) then
+      v_bad := v_bad || 'without the new key, not 0009h''s JSON; ';
+    end if;
+    perform set_config('app.user_id', v_admin::text, true);
+    perform cma.set_tenant_setting('telephony.waiting_max_minutes', null);
+    rows_ := rows_ || pg_temp.v0009j_row(16, 'B6 the waiting limit at 1440 minutes: the call ringing since the evening before counts in waiting now (2), not in the day''s figures; 0009h''s JSON without the new key',
+      case when v_bad = '' then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
+
     raise exception using errcode = 'CMAOK';
   exception
     when sqlstate 'CMAOK' then null;
@@ -370,7 +395,7 @@ begin
   -- a block that ended early counts the checks it did not reach as FAIL
   insert into verify_0009j (ord, check_name, result, detail)
   select o, 'B' || (o - 10) || ' not reached', 'FAIL', 'the block ended before this check'
-  from generate_series(11, 15) o
+  from generate_series(11, 16) o
   where not exists (select 1 from verify_0009j v where v.ord = o);
 end
 $$;
@@ -383,6 +408,7 @@ declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_runs  integer := current_setting('verify.timing_runs')::integer;
   v_slack numeric := current_setting('verify.slack_ms')::numeric;
+  v_ratio numeric := current_setting('verify.slack_ratio')::numeric;
   t record;
   v_user uuid; v_ord integer := 100; v_same boolean; v_talk bigint; v_ref text; v_per bigint; v_date date; v_min integer;
   v_t0 timestamptz; v_ms numeric; v_new numeric; v_old numeric; v_err boolean;
@@ -450,6 +476,11 @@ begin
     v_ord := v_ord + 1;
     v_new := null; v_old := null; v_err := false;
     begin
+      -- past the fifth call on this connection, both sides on the plans a pooled connection keeps
+      for i in 1 .. 6 loop
+        perform cma.inbound_now();
+        perform pg_temp.inbound_now_0009h();
+      end loop;
       for i in 1 .. greatest(1, v_runs) loop
         v_t0 := clock_timestamp();
         perform cma.inbound_now();
@@ -464,9 +495,10 @@ begin
       v_err := true;
     end;
     insert into verify_0009j values (v_ord, 'E4 inbound_now() no slower than 0009h''s, as the application (' || t.slug || ')',
-      case when not v_err and round(v_new, 1) <= round(v_old, 1) + v_slack and not v_provoke then 'PASS' else 'FAIL' end,
+      case when not v_err and round(v_new, 2) <= round(v_old, 2) + greatest(v_slack, v_ratio * v_old) and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_err then 'a read raised an error'
-           else format('%s ms against 0009h''s %s ms (best of %s each, alternating, %s ms of slack)', round(v_new, 1), round(v_old, 1), v_runs, v_slack) end);
+           else format('%s ms against 0009h''s %s ms (best of %s each after six untimed, alternating, %s ms of slack)', round(v_new, 2), round(v_old, 2), v_runs,
+                       round(greatest(v_slack, v_ratio * v_old), 2)) end);
   end loop;
   perform set_config('role', 'cma_owner', true);
 end

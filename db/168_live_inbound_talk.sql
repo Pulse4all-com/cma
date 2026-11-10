@@ -34,8 +34,8 @@
 --                      Talk time of today's answered inbound calls on counted lines (0 without one). Two days in one
 --                      read, on purpose:
 --                      - every figure cma.inbound_today_of answers counts the calls started in the tenant's day (its
---                        zone's midnight to the next, Day), as before; waiting_now is read as before (the calls waiting
---                        now, also before midnight)
+--                        zone's midnight to the next, Day), as before; waiting_now counts as before (the calls waiting
+--                        now, also before midnight), in the same read
 --                      - inbound_talk_seconds dates each call in its own line's zone (the line's market's, else the
 --                        tenant's), as Reports → Calls (cma.calls_of) and Outbound today (cma.outbound_today_of) date a
 --                        call, so Inbound today's Talk time is Reports → Calls' talk time minus its outbound talk time
@@ -46,15 +46,18 @@
 --                        today and its talk time on the line's date before; for a line east of it, a call answered
 --                        before the tenant's midnight counts in the talk time of the date and in Answered of the day
 --                        before
---                      One pass: cma.inbound_calls_of once over the instants the date covers in the tenant's zones (as
---                      cma.outbound_today_of's window: from the date's first midnight to its last; for a tenant in one
---                      zone, the day itself; for markets in the tenant's zone or west of it the window starts at the
---                      tenant's midnight and its end lies ahead during the running day, so the same calls are read as
---                      before; a market east of the tenant starts it at that zone's midnight, which reads the evening
---                      before too, with the same answer), each call marked in or out of the tenant's day; the talk
---                      time of an answered call of the date read by the primary key of cma.telephony_call
---                      (cma.inbound_calls_of does not return it), only for those calls (an aggregate's filter is
---                      evaluated before its argument), no second scan of the day. sql, stable, jit off, rows 1, the application's only
+--                      One pass: cma.inbound_calls_of once, from the earlier of the date's first midnight in the
+--                      tenant's zones (as cma.outbound_today_of's window) and the waiting limit (now() less
+--                      telephony.waiting_max_minutes), with no end; 60 read the calls twice, the day and then the
+--                      calls waiting now. For markets in the tenant's zone or west of it the read starts at the
+--                      tenant's midnight (or the waiting limit, in the first minutes of the day), so it reads the
+--                      calls 60's two reads read; a market east of the tenant starts it at that zone's midnight, which
+--                      reads the evening before too, with the same answer. Each call is marked in or out of the
+--                      tenant's day; waiting_now counts every call read that is waiting (is_waiting holds the limit);
+--                      the talk time of an answered call of the date is read by the primary key of
+--                      cma.telephony_call (cma.inbound_calls_of does not return it), only for those calls (an
+--                      aggregate's filter is evaluated before its argument), no second scan of the day. sql, stable,
+--                      jit off, rows 1, the application's only
 -- What it changes
 --   cma.inbound_now()  (based on 164): today from cma.inbound_today_live_of instead of cma.inbound_today_of, so it gains
 --                      the key inbound_talk_seconds; longest_waiting_seconds still always null, waiting_now as before;
@@ -88,10 +91,12 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 1. Inbound today for the Live board, with Talk time
 -- ---------------------------------------------------------------------------------------------
--- The expressions of cma.inbound_today_of (60) over the calls of the tenant's day (in_day below), the talk time over
--- the answered calls of the date in their line's zone. w: the tenant's day, and the window that holds both (no row when
--- the tenant is not found, so nothing is read, as 60 answers no row then); the calls are read once, laterally from w's
--- one row, as 60 reads them from s
+-- The expressions of cma.inbound_today_of (60) over the calls of the tenant's day (in_day below), the calls waiting now
+-- over every call read (inbound_calls_of's is_waiting holds the waiting limit itself, as 60's second read used it), the
+-- talk time over the answered calls of the date in their line's zone. w: the tenant's day, and where the one read
+-- starts: the earlier of the date's first midnight in the tenant's zones and the waiting limit, with no end, so it holds
+-- the three (no row when the tenant is not found, so nothing is read, as 60 answers no row then); the calls are read
+-- once, laterally from w's one row, as 60 reads them from s
 create or replace function cma.inbound_today_live_of(p_tenant_id uuid)
 returns table (
   business_date            date,
@@ -121,24 +126,17 @@ as $$
   ),
   w as (
     select s.today::timestamp at time zone s.zone as day_from, (s.today + 1)::timestamp at time zone s.zone as day_to,
-           min(s.today::timestamp at time zone z.zone) as from_at, max((s.today + 1)::timestamp at time zone z.zone) as to_at
+           least(min(s.today::timestamp at time zone z.zone), now() - make_interval(mins => s.waiting_max)) as from_at
     from s
     cross join lateral (select s.zone
                         union
                         select m.time_zone from cma.market m where m.tenant_id = p_tenant_id and m.time_zone is not null) z
-    group by s.today, s.zone
+    group by s.today, s.zone, s.waiting_max
   ),
   c as (
     select x.*, (x.started_at >= w.day_from and x.started_at < w.day_to) as in_day
     from w
-    cross join lateral cma.inbound_calls_of(p_tenant_id, w.from_at, w.to_at) x
-  ),
-  -- the calls waiting now, also before midnight, as 60 counts them
-  q as (
-    select count(*)::integer as n
-    from s
-    cross join lateral cma.inbound_calls_of(p_tenant_id, now() - make_interval(mins => s.waiting_max), null) x
-    where x.is_waiting
+    cross join lateral cma.inbound_calls_of(p_tenant_id, w.from_at, null) x
   )
   select (select s.today from s),
          (count(*) filter (where c.in_day))::integer,
@@ -155,7 +153,8 @@ as $$
                    from (select r as code, count(*)::integer as n
                          from unnest(array_agg(c.reason_code) filter (where c.in_day and c.reason_code is not null)) r
                          group by r) u), '{}'::jsonb),
-         (select q.n from q),
+         -- waiting now: the calls waiting, also before midnight, as 60 counts them (is_waiting starts at the limit)
+         (count(*) filter (where c.is_waiting))::integer,
          (select s.sl from s),
          (select s.waiting_max from s),
          -- Talk time (docs/definitions.md): of the answered calls of the date in their line's zone; one primary-key
