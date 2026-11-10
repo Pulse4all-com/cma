@@ -3,7 +3,7 @@
  * Every column header with visible text on Speed to lead (the summary in each of the four groups
  * and the open deals), Intake, Inbound (each of its four groups, addition 0008i) and Data quality,
  * every tile on the Dashboard (the Intake row and the time tiles), the Live board's inbound part
- * (its seven tiles and the missed calls' headers), and since addition 0008j every tile and tag-table header
+ * (its six tiles, the outbound row's six since addition 0009h and the missed calls' headers), and since addition 0008j every tile and tag-table header
  * of Calls in each grouping and every header of Calls per agent, and since addition 0008p every tile and header of
  * Forms, since addition 0008t every tile and header of Email and Email per agent, and since addition 0008u every tile, header and
  * level bar of First orders and every header of Orders per person, and since addition 0008w the Callbacks kept tile and the
@@ -113,8 +113,10 @@ const cases = [
   ["manager", "/reports/inbound?range=month&group=market", 13, 0],
   ["manager", "/reports/inbound?range=month&group=line", 13, 0],
   ["manager", "/reports/inbound?range=month&group=hour", 13, 0],
-  // The Live board's inbound part only: its seven tiles; the missed calls' six headers, the board's last section since 0008z
-  ["supervisor", "/live/newco", 0, 7, '[data-testid="inbound-live"]'],
+  // The Live board's inbound part only: its six tiles (Longest waiting left with addition 0009h); the outbound row's six
+  // (addition 0009h); the missed calls' six headers, the board's last section since 0008z
+  ["supervisor", "/live/newco", 0, 6, '[data-testid="inbound-live"]'],
+  ["supervisor", "/live/newco", 0, 6, '[data-testid="outbound-live"]'],
   ["supervisor", "/live/newco", 6, 0, '[data-testid="missed-live"]'],
   // Calls (addition 0008j): eight tiles (four with the change, three outbound, the untagged share) and the tag
   // table's headers: the group, conversations, the top twelve tags, Other and Untagged, in each grouping

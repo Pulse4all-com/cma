@@ -275,6 +275,12 @@ export function fmtPct(pct: number | null, locale: string): string {
   return pct > 0 && pct < 0.5 ? `< ${f.format(0.01)}` : f.format(pct / 100);
 }
 
+/** A rate of 0 to 100 with one decimal and the locale ("57,1%"), a dash for none: the Live board's connected rate */
+export function fmtRate1(pct: number | null, locale: string): string {
+  if (pct === null) return "–";
+  return new Intl.NumberFormat(intlLocale[locale] ?? locale, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(pct / 100);
+}
+
 // ---- Inbound service (addition 0008i, brief B15) -------------------------------------------------
 //
 // The figures come from the database (cma.inbound_service, cma.inbound_today); the functions below

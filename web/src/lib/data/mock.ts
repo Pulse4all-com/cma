@@ -15,7 +15,7 @@ import type {
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
-  InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
+  InboundFigures, InboundGroup, InboundNow, OutboundNow, InboundService, MissedReason, SourceMissedReason,
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
@@ -59,7 +59,7 @@ import {
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
   type CallRecord, type CallRules, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
-import { missedCallbacks, type CallerCall } from "@/lib/live";
+import { missedCallbacks, outboundToday, type CallerCall } from "@/lib/live";
 import {
   cancellationRecords, cancellationsReport, DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION, dealsPerPerson, FUNNEL_GROUPS, funnelDeals, funnelFilter,
   funnelLists, funnelPrevious, funnelReport, lostReasonsReport, parseFunnelFilter, reasonStateOf, type CancellationTicketFixture, type FunnelDeal,
@@ -1283,6 +1283,33 @@ function mockSourceReasons(me: Principal, nowMs: number): { reasons: SourceMisse
   return { reasons, sampleCallId: newest?.sourceId ?? null };
 }
 
+/**
+ * Today's outbound for the Live board (addition 0009h): six calls of today on the NL line, relative to now and never
+ * before today's midnight: two conversations, a connected call under the conversation threshold, a connected call
+ * tagged Voicemail (t-6, which means not reached: connected, no conversation) and two attempts that did not connect.
+ * Figured as the database does (lib/live outboundToday over lib/reports callRecords); null without telephony
+ */
+function mockOutboundNow(me: Principal): OutboundNow | null {
+  if (!connectionsOf(me).telephony) return null;
+  const now = Date.now();
+  const today = mockToday(me);
+  const midnight = localMs(today, "00:00", me.timeZone);
+  const call = (sourceId: string, minutesAgo: number, talk: number | null, tagRefs: string[] = []): TelephonyCallFixture => {
+    const started = Math.max(midnight, now - minutesAgo * 60_000);
+    return {
+      sourceId, connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM, direction: "outbound", startedAt: new Date(started).toISOString(),
+      answeredAt: talk === null ? null : new Date(started + 6000).toISOString(),
+      endedAt: new Date(started + (talk === null ? 20_000 : 6000 + talk * 1000)).toISOString(),
+      missedReason: null, lineRef: "l-1", userRef: null, tagRefs,
+    };
+  };
+  const calls = [
+    call("920000001", 170, 312, ["t-1"]), call("920000002", 140, null), call("920000003", 95, 8), call("920000004", 60, 47, ["t-6"]),
+    call("920000005", 35, null), call("920000006", 12, 184),
+  ];
+  return outboundToday(callRecords(calls, MOCK_INBOUND_LINES, me.timeZone, mockCallRules(me)), today);
+}
+
 function noFigures(): InboundFigures {
   return { offered: 0, answered: 0, unanswered: 0, waiting: 0, answeredWithinTarget: 0, serviceLevelBase: 0, serviceLevelPct: null,
     avgAnswerSeconds: null, p80AnswerSeconds: null, unansweredByReason: {} };
@@ -1299,11 +1326,10 @@ function mockInboundNow(me: Principal): InboundNow {
   const waiting = inboundCalls(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, now).filter((c) => c.isWaiting);
   const { rows, anonymousCount } = missedCallbacks(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, MOCK_LOOKBACK_DAYS, now,
     mockBusinessSeconds, (connectionId, sourceId) => mockCallUrl(me, connectionId, sourceId));
-  const longest = waiting.reduce<number | null>((m, c) => Math.max(m ?? 0, Math.floor((now - Date.parse(c.startedAt)) / 1000)), null);
   return {
     telephony: true,
     today: { ...(todays.length ? inboundFigures(todays, MOCK_SL_SECONDS) : noFigures()), date: today, waitingNow: waiting.length,
-      longestWaitingSeconds: longest, serviceLevelSeconds: MOCK_SL_SECONDS, waitingMaxMinutes: MOCK_WAITING_MAX },
+      serviceLevelSeconds: MOCK_SL_SECONDS, waitingMaxMinutes: MOCK_WAITING_MAX },
     callbacks: rows,
     anonymousCount,
     lookbackDays: MOCK_LOOKBACK_DAYS,
@@ -4331,13 +4357,15 @@ export const mockData: CmaData = {
       mockData.getTeamNow(me), mockData.listTeamMembersNow(me), mockData.getRosterToday(me), mockData.listSettings(me),
       mockData.getInboundNow(me), mockData.getFollowUpSummary(me),
     ]);
+    const outbound = mockOutboundNow(me);
     const numberSetting = (key: string): number | null => {
       const v = settings.find((x) => x.key === key)?.value;
       return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
     };
     return {
-      now, memberships, shifts, inbound, followUp, readAt: new Date().toISOString(),
-      settings: { adherenceToleranceMinutes: numberSetting("roster.adherence_tolerance_minutes") ?? 5, targetMinutes: numberSetting("speed_to_lead.target_minutes"), warningPct: numberSetting("tickets.sla_warning_pct") },
+      now, memberships, shifts, inbound, outbound, followUp, readAt: new Date().toISOString(),
+      settings: { adherenceToleranceMinutes: numberSetting("roster.adherence_tolerance_minutes") ?? 5, targetMinutes: numberSetting("speed_to_lead.target_minutes"), warningPct: numberSetting("tickets.sla_warning_pct"),
+        connectedMinSeconds: numberSetting("telephony.connected_min_seconds"), conversationMinSeconds: numberSetting("calls.conversation_min_talk_seconds") },
     };
   },
 

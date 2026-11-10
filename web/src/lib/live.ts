@@ -13,11 +13,11 @@
  * change by the second take the instant as an argument, so a tab left open ticks without polling
  * and the server's rows stay equal between two reads of an unchanged team.
  */
-import type { Instant, InboundToday, MissedCallback, MissedReason, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
+import type { DateKey, Instant, InboundToday, MissedCallback, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
 import { GROUPS, groupOf, type Group } from "./dashboard.ts";
-import { inboundCalls, unansweredPct, type InboundLine, type TelephonyCallFixture } from "./reports.ts";
+import { callsFigures, inboundCalls, unansweredPct, type CallRecord, type InboundLine, type TelephonyCallFixture } from "./reports.ts";
 
 export type LiveGroup = Group | "clockedOut" | "notClockedIn";
 
@@ -125,7 +125,7 @@ export interface OrganisationScoped {
  * One contact center's board (addition 0008zv, /live/<key> and GET /api/v1/live/board?organisation=<key>): only the
  * people whose organisation has the key (a person without one is on no contact center's board), and only their team
  * memberships and today's shifts, so the tiles, the groups, the statuses, the team filter and the shift column all
- * follow from them. Everything else stays as read: the tenant's status flags (configuration), and the inbound, missed
+ * follow from them. Everything else stays as read: the tenant's status flags (configuration), and the inbound, outbound, missed
  * and follow-up figures, tenant-wide until a line maps to an organisation (Open decisions). Pure, so the page's first
  * render and every poll's answer are filtered by one function
  */
@@ -178,8 +178,8 @@ export function fmtSeconds(s: number): string {
 // ---- Inbound today and the missed calls not called back (addition 0008i, brief B15) ---------------
 
 /** The tiles of the inbound row, in order; each a figure of cma.inbound_today */
-export type InboundTileKey = "offered" | "answered" | "unansweredPct" | "serviceLevel" | "avgAnswer" | "waitingNow" | "longestWaiting";
-export const INBOUND_TILES: readonly InboundTileKey[] = ["offered", "answered", "unansweredPct", "serviceLevel", "avgAnswer", "waitingNow", "longestWaiting"];
+export type InboundTileKey = "offered" | "answered" | "unansweredPct" | "serviceLevel" | "avgAnswer" | "waitingNow";
+export const INBOUND_TILES: readonly InboundTileKey[] = ["offered", "answered", "unansweredPct", "serviceLevel", "avgAnswer", "waitingNow"];
 
 /** A tile's value, before formatting: a count, a percentage (0 to 100), seconds, or nothing yet */
 export type InboundTileValue = { kind: "count"; value: number } | { kind: "pct"; value: number | null } | { kind: "seconds"; value: number | null };
@@ -192,8 +192,40 @@ export function inboundTileValue(today: InboundToday, key: InboundTileKey): Inbo
     case "serviceLevel": return { kind: "pct", value: today.serviceLevelPct };
     case "avgAnswer": return { kind: "seconds", value: today.avgAnswerSeconds };
     case "waitingNow": return { kind: "count", value: today.waitingNow };
-    case "longestWaiting": return { kind: "seconds", value: today.longestWaitingSeconds };
   }
+}
+
+// ---- Outbound today (addition 0009h) -----------------------------------------------------------
+
+/** The tiles of the outbound row, in order; each a figure of cma.outbound_now */
+export type OutboundTileKey = "attempts" | "connected" | "connectedRate" | "conversations" | "talk" | "talkAvg";
+export const OUTBOUND_TILES: readonly OutboundTileKey[] = ["attempts", "connected", "connectedRate", "conversations", "talk", "talkAvg"];
+
+/** A tile's value, before formatting: a count, a rate (0 to 100, one decimal; null without an attempt) or talk seconds */
+export type OutboundTileValue = { kind: "count"; value: number } | { kind: "rate"; value: number | null } | { kind: "talk"; value: number | null };
+
+export function outboundTileValue(today: OutboundNow, key: OutboundTileKey): OutboundTileValue {
+  switch (key) {
+    case "attempts": return { kind: "count", value: today.attempts };
+    case "connected": return { kind: "count", value: today.connected };
+    case "connectedRate": return { kind: "rate", value: today.connectedRate };
+    case "conversations": return { kind: "count", value: today.conversations };
+    case "talk": return { kind: "talk", value: today.talkSeconds };
+    case "talkAvg": return { kind: "talk", value: today.talkAvgSeconds };
+  }
+}
+
+/**
+ * Today's outbound figures as cma.outbound_today_of computes them: of the calls as cma.calls_of classifies them
+ * (lib/reports callRecords: counted lines, each call's date in its line's zone), the outbound ones of the date; the
+ * figures are Reports → Calls' own (callsFigures) over that set, so the conversations are the outbound ones only
+ */
+export function outboundToday(calls: readonly CallRecord[], date: DateKey): OutboundNow {
+  const f = callsFigures(calls.filter((c) => c.direction === "outbound" && c.date === date));
+  return {
+    date, attempts: f.outbound, connected: f.connected, connectedRate: f.connectedRate, conversations: f.conversations,
+    talkSeconds: f.outboundTalkSeconds, talkAvgSeconds: f.outboundTalkAvgSeconds,
+  };
 }
 
 /** A telephony call of the fixture with the caller as an opaque key, standing in for the hash (never shown) */

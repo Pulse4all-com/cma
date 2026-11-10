@@ -18,13 +18,19 @@
  * no caller in any answer, and the times missed counted since the latest callback (61 B15). Since the IT audit of
  * 17 October 2026 also when the waiting figure reads Closed (no office time since the call) instead of 0 min. Since
  * addition 0008zv also one contact center's board (boardOfOrganisation): its people only, with their memberships and
- * shifts, a person without an organisation on no board, the status flags, inbound and follow-up as read.
+ * shifts, a person without an organisation on no board, the status flags, inbound and follow-up as read. Since addition
+ * 0009h also Outbound today as 165 proves it in the database: the attempts, connected, the connected rate with one
+ * decimal and its dash without an attempt, the outbound conversations only (not under the talk threshold, not with a
+ * tag meaning not reached, never an inbound one), the talk time of the connected calls and its average, each call on
+ * its day in its line's zone, a line that does not count left out, the settings moving the figures; and the absence
+ * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog.
  */
 import {
-  INBOUND_TILES, LIVE_GROUPS, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
-  secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
+  INBOUND_TILES, LIVE_GROUPS, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
+  outboundTileValue, outboundToday, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
-import { personalDataIn } from "../src/lib/reports.ts";
+import { callRecords, callRules, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
+import { readFileSync } from "node:fs";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -169,14 +175,16 @@ expect("the format drops the hour below one", [fmtSeconds(5), fmtSeconds(3599), 
 
 // ---- inbound today and the missed calls not called back (addition 0008i) -------------------------
 const today = { offered: 28, answered: 17, unanswered: 10, waiting: 1, answeredWithinTarget: 11, serviceLevelBase: 25, serviceLevelPct: 44,
-  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", waitingNow: 1, longestWaitingSeconds: 120,
+  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", waitingNow: 1,
   serviceLevelSeconds: 20, waitingMaxMinutes: 30 };
 expect("the inbound tiles in order with their values",
   INBOUND_TILES.map((k) => inboundTileValue(today, k)),
   [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 37 }, { kind: "pct", value: 44 },
-    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }, { kind: "seconds", value: 120 }],
+    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }],
   [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 35.7 }, { kind: "pct", value: 44 },
-    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }, { kind: "seconds", value: 120 }]);
+    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }]);
+expect("six inbound tiles, Waiting now the last, no Longest waiting", [INBOUND_TILES.length, INBOUND_TILES.at(-1), INBOUND_TILES.includes("longestWaiting")],
+  [6, "waitingNow", false], [7, "longestWaiting", true]);
 // The calls of 61 B6 to B10 (invented ids; callers are opaque keys standing in for the hash)
 const NOW = Date.parse("2026-10-14T12:00:00Z");
 const ago = (minutes) => new Date(NOW - minutes * 60_000).toISOString();
@@ -243,6 +251,63 @@ expect("times missed counts the missed calls since the latest callback",
 expect("oldest first, then by the call's id",
   sortCallbacks([{ startedAt: ago(10), sourceId: "b" }, { startedAt: ago(20), sourceId: "z" }, { startedAt: ago(10), sourceId: "a" }]).map((r) => r.sourceId),
   ["z", "a", "b"], ["a", "b", "z"]);
+
+// ---- Outbound today (addition 0009h) --------------------------------------------------------------
+// The calls of 165 B (invented ids): 6 October 2026 on the NL line (Amsterdam), five seconds of ringing, then the talk;
+// a New York line whose call of 7 October 01:30 in Amsterdam is still the 6th there and whose call of 6 October 03:00
+// in Amsterdam is the 5th there; a line that does not count; the tag nr means not reached
+const D = Date.parse("2026-10-06T08:00:00Z");
+const oLines = [
+  { connectionId: "c", lineRef: "nl", name: "NL line", market: "NL", zone: "Europe/Amsterdam", isCounted: true },
+  { connectionId: "c", lineRef: "us", name: "US line", market: "US", zone: "America/New_York", isCounted: true },
+  { connectionId: "c", lineRef: "test", name: "Test line", market: "NL", zone: "Europe/Amsterdam", isCounted: false },
+];
+const oCall = (sourceId, direction, startMs, talk, lineRef, tagRefs = [], ended = true) => ({
+  sourceId, connectionId: "c", sourceSystem: "tel", direction, startedAt: new Date(startMs).toISOString(),
+  answeredAt: talk === null ? null : new Date(startMs + 5000).toISOString(),
+  endedAt: !ended ? null : new Date(startMs + (talk === null ? 20_000 : 5000 + talk * 1000)).toISOString(),
+  missedReason: null, lineRef, tagRefs,
+});
+const min = (n) => D + n * 60_000;
+const oCalls = [
+  oCall("o1", "outbound", min(0), 1, "nl"), oCall("o2", "outbound", min(10), 0, "nl", [], false), oCall("o3", "outbound", min(20), 30, "nl"),
+  oCall("o4", "outbound", min(30), 120, "nl", ["nr"]), oCall("o5", "outbound", min(40), null, "nl"), oCall("o6", "outbound", min(50), 300, "nl"),
+  oCall("i1", "inbound", min(60), 45, "nl"), oCall("t1", "outbound", min(70), 60, "test"),
+  oCall("u1", "outbound", Date.parse("2026-10-06T23:30:00Z"), 60, "us"), oCall("u2", "outbound", Date.parse("2026-10-06T01:00:00Z"), 60, "us"),
+  oCall("y1", "outbound", D - 86_400_000, 60, "nl"),
+];
+const oTags = [{ connectionId: "c", tagRef: "nr", name: "Not reached", isCounted: true, meaning: "not_reached" }];
+const outboundOn = (date, connectedMin = 0, conversationMin = 30) =>
+  outboundToday(callRecords(oCalls, oLines, "Europe/Amsterdam", callRules(connectedMin, conversationMin, oTags)), date);
+const out6 = outboundOn("2026-10-06");
+expect("outbound today: attempts, connected, rate, outbound conversations, talk and its average",
+  out6, { date: "2026-10-06", attempts: 7, connected: 6, connectedRate: 85.7, conversations: 3, talkSeconds: 511, talkAvgSeconds: 102.2 },
+  { date: "2026-10-06", attempts: 8, connected: 7, connectedRate: 87.5, conversations: 4, talkSeconds: 571, talkAvgSeconds: 95.2 });
+expect("the outbound tiles in order with their values",
+  OUTBOUND_TILES.map((k) => [k, outboundTileValue(out6, k)]),
+  [["attempts", { kind: "count", value: 7 }], ["connected", { kind: "count", value: 6 }], ["connectedRate", { kind: "rate", value: 85.7 }],
+    ["conversations", { kind: "count", value: 3 }], ["talk", { kind: "talk", value: 511 }], ["talkAvg", { kind: "talk", value: 102.2 }]],
+  [["attempts", { kind: "count", value: 7 }], ["connected", { kind: "count", value: 6 }], ["connectedRate", { kind: "pct", value: 86 }],
+    ["conversations", { kind: "count", value: 3 }], ["talk", { kind: "talk", value: 511 }], ["talkAvg", { kind: "talk", value: 102.2 }]]);
+expect("the settings move the figures: connected from 5 s; a conversation from 31 s",
+  [outboundOn("2026-10-06", 5), outboundOn("2026-10-06", 0, 31).conversations],
+  [{ date: "2026-10-06", attempts: 7, connected: 4, connectedRate: 57.1, conversations: 3, talkSeconds: 510, talkAvgSeconds: 127.5 }, 2],
+  [{ date: "2026-10-06", attempts: 7, connected: 6, connectedRate: 85.7, conversations: 3, talkSeconds: 511, talkAvgSeconds: 102.2 }, 3]);
+expect("each call on its day in its line's zone: the 5th counts its two calls",
+  outboundOn("2026-10-05"), { date: "2026-10-05", attempts: 2, connected: 2, connectedRate: 100, conversations: 2, talkSeconds: 120, talkAvgSeconds: 60 },
+  { date: "2026-10-05", attempts: 1, connected: 1, connectedRate: 100, conversations: 1, talkSeconds: 60, talkAvgSeconds: 60 });
+const none = outboundOn("2026-10-01");
+expect("a day without an attempt: zeros, no rate, no average",
+  none, { date: "2026-10-01", attempts: 0, connected: 0, connectedRate: null, conversations: 0, talkSeconds: 0, talkAvgSeconds: null },
+  { date: "2026-10-01", attempts: 0, connected: 0, connectedRate: 0, conversations: 0, talkSeconds: 0, talkAvgSeconds: 0 });
+expect("the connected rate with one decimal, a dash without an attempt; the average's dash",
+  [fmtRate1(out6.connectedRate, "en"), fmtRate1(57.1, "nl"), fmtRate1(100, "en"), fmtRate1(none.connectedRate, "en"), fmtTalk(none.talkAvgSeconds, "en"), fmtTalk(none.talkSeconds, "en")],
+  ["85.7%", "57,1%", "100.0%", "–", "–", "0 s"], ["86%", "57%", "100%", "0%", "0 s", "–"]);
+// Longest waiting is gone everywhere the web holds its keys: the copy's (inboundLongestWaiting, liveLongestWaiting and
+// nobodyWaiting, en and nl), the registry's and the catalog's (live.inbound.longest_waiting), the field and the tile
+const gone = ["src/lib/copy.ts", "src/lib/metrics.ts", "src/lib/metrics-catalog.json", "src/lib/data/types.ts", "src/components/InboundLive.tsx"]
+  .filter((f) => /longestWaiting|LongestWaiting|longest_waiting|nobodyWaiting/.test(readFileSync(new URL(`../${f}`, import.meta.url), "utf8")));
+expect("no Longest waiting in the copy, the registry, the catalog, the types or the component", gone, [], ["src/lib/copy.ts"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
