@@ -11,9 +11,10 @@
 -- A10 and E6 compare cma.inbound_now() with 0008zr's definition kept inside 145; that side now has the key
 -- longest_waiting_seconds taken out of today before the comparison); then the merge; then prod right after the merge:
 -- 164, then 133 and 145, without 165 unless Martin wants it there (it writes nothing that stays).
--- Either order of database and web works: main's web on a database with 164 reads no longest_waiting_seconds and shows
--- "Nobody waiting" on that tile; this branch's web on a database without 164 fails the Live board's read (the function
--- cma.outbound_now() does not exist), so 164 runs in prod before or right after the merge, before the build finishes.
+-- Neither order of database and web is clean, so 164 runs in prod right after the merge, while the build runs: main's
+-- web on a database with 164 reads no longest_waiting_seconds and shows "NaN:NaN" on the Longest waiting tile (nothing
+-- else changes) until the new web is live, a few minutes; this branch's web on a database without 164 fails the Live
+-- board's read (the function cma.outbound_now() does not exist), which is the worse of the two.
 -- No table, view, column or setting changes: the data map's schema does not change.
 --
 -- Why (Martin, 10 November 2026; Decision log, 10 Nov 2026, Live board: Outbound today): the Live board showed inbound
@@ -29,11 +30,13 @@
 --                      attempt), conversations (the outbound calls that are a Conversation, cma.is_conversation through
 --                      cma.calls_of), outbound_talk_seconds (the talk time of the connected calls, 0 without one) and
 --                      outbound_talk_avg (its average over the connected calls with talk time, one decimal; null
---                      without one). Today is Day: the calls whose business date in their own line's zone (the line's
+--                      without one). Today as Reports → Calls dates a call: the calls whose business date in their own line's zone (the line's
 --                      market's, else the tenant's) is that date, read from cma.calls_of over the instants the date covers
 --                      in the tenant's zones and counted as cma.calls_figures_of (100) counts a day, so the figures
 --                      equal Reports → Calls for today
---                      (outbound, connected, connected_rate, outbound_talk_seconds, outbound_talk_avg). Counted lines
+--                      (outbound, connected, connected_rate, outbound_talk_seconds, outbound_talk_avg). docs/definitions.md
+--                      defines Day in the tenant's zone and lists cma.calls_of's line zone as a gap; this read inherits
+--                      that gap on purpose, to equal the report, and moves with cma.calls_of when the gap closes. Counted lines
 --                      only (cma.calls_of), every line of the tenant. p_now is now() for the application; a verifier
 --                      gives a fixed instant (as cma.calls_overview_of). The zone and the date as scalar subqueries
 --                      (night N06). jit off, rows 1

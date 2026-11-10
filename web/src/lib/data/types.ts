@@ -1014,8 +1014,8 @@ export interface InboundToday extends InboundFigures {
 }
 
 /**
- * Today's outbound for the Live board (cma.outbound_now, addition 0009h): the outbound calls on counted lines whose Day
- * (the call's date in its line's zone) is today in the tenant's zone, as Reports → Calls counts them
+ * Today's outbound for the Live board (cma.outbound_now, addition 0009h): the outbound calls on counted lines whose
+ * date in their line's zone is today's date in the tenant's zone, as Reports → Calls dates a call
  */
 export interface OutboundNow {
   date: DateKey;

@@ -1636,10 +1636,10 @@ attempts = count(outbound calls of cma.calls_of whose business_date is the tenan
 - tenant: RLS plus the explicit tenant of cma.outbound_today_of (cma.current_tenant_id())
 - direction = outbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
-- today: the calls whose business date in their line's market zone (else the tenant's) is the tenant's date now
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls counts a day. Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Who may see it** `monitoring.live`
 
@@ -1655,7 +1655,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time, Day; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
 
 **Notes**
 
@@ -1689,10 +1689,10 @@ connected = count(is_connected_outbound) over today's outbound calls, cma.is_con
 - tenant: RLS plus the explicit tenant of cma.outbound_today_of (cma.current_tenant_id())
 - direction = outbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
-- today: the calls whose business date in their line's market zone (else the tenant's) is the tenant's date now
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls counts a day. Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1714,7 +1714,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time, Day; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
 
 **Notes**
 
@@ -1748,10 +1748,10 @@ connected_rate = round1(100 * connected / attempts); null (a dash) without an at
 - tenant: RLS plus the explicit tenant of cma.outbound_today_of (cma.current_tenant_id())
 - direction = outbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
-- today: the calls whose business date in their line's market zone (else the tenant's) is the tenant's date now
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls counts a day. Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1773,7 +1773,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time, Day; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
 
 **Notes**
 
@@ -1809,10 +1809,10 @@ conversations = count(is_conversation) over today's outbound calls; cma.is_conve
 - tenant: RLS plus the explicit tenant of cma.outbound_today_of (cma.current_tenant_id())
 - direction = outbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
-- today: the calls whose business date in their line's market zone (else the tenant's) is the tenant's date now
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls counts a day. Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1835,7 +1835,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time, Day; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
 
 **Notes**
 
@@ -1869,10 +1869,10 @@ outbound_talk_seconds = sum(talk_seconds) over today's connected outbound calls 
 - tenant: RLS plus the explicit tenant of cma.outbound_today_of (cma.current_tenant_id())
 - direction = outbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
-- today: the calls whose business date in their line's market zone (else the tenant's) is the tenant's date now
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls counts a day. Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1894,7 +1894,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time, Day; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
 
 **Notes**
 
@@ -1928,10 +1928,10 @@ outbound_talk_avg = round1(avg(talk_seconds) over today's connected outbound cal
 - tenant: RLS plus the explicit tenant of cma.outbound_today_of (cma.current_tenant_id())
 - direction = outbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
-- today: the calls whose business date in their line's market zone (else the tenant's) is the tenant's date now
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls counts a day. Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1953,7 +1953,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time, Day; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
 
 **Notes**
 

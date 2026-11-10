@@ -1,8 +1,8 @@
 /**
  * The Live board's Outbound today (addition 0009h; Martin, 10 November 2026): six tiles under Inbound today and above
  * Follow-up now, from cma.outbound_now: attempts, connected, the connected rate, the outbound conversations, the talk
- * time of the connected calls and its average. Today is Day: each call's date in its line's zone, so the figures are
- * Reports → Calls' for today. Tenant-wide on every contact center's board, captioned as covering all lines, as the
+ * time of the connected calls and its average. Today as Reports → Calls dates a call (its date in its line's zone, the
+ * gap docs/definitions.md lists under Day; one zone for a tenant with one), so the figures are Reports → Calls' for today. Tenant-wide on every contact center's board, captioned as covering all lines, as the
  * inbound tiles (addition 0008zv). Counts and durations only. Nothing for a tenant without telephony: the inbound part
  * above already says "No telephony connected". Tiles as InboundLive's (docs/style/Pulse4all-Style.md 7.3), three to a
  * row at 1280 px and six from 1536 px, as the follow-up strip. Rendered by LiveBoardLive, so the board's 10-second poll
