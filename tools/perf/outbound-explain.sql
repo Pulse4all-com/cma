@@ -17,7 +17,8 @@
 -- Parts
 --   0  context: the tenant and acting user (ids), the functions' settings, row counts that size the problem
 --   1  the poll as the board runs it: cma.outbound_now(), twice (the second is the warm one)
---   2  cma.outbound_today_of's body (164) written out as a plain query, calling cma.calls_of: how much of the time is
+--   2  cma.outbound_today_of's body as 164 had it (the read through cma.calls_of; 166 replaced it with part 4's read)
+--      written out as a plain query: how much of the time is
 --      inside cma.calls_of (one Function Scan node) and how much around it
 --   3  cma.calls_of's body (152) written out for that window, as a prepared statement with the function's parameters,
 --      once with a custom plan and once with the generic plan (a function's statements run on the generic plan after
@@ -106,7 +107,7 @@ explain (analyze, buffers, settings) select cma.outbound_now();
 explain (analyze, buffers, settings) select cma.outbound_now();
 
 \echo
-\echo ==== 2. cma.outbound_today_of written out, calling cma.calls_of (164's body) ====
+\echo ==== 2. cma.outbound_today_of written out, calling cma.calls_of (the body of 164) ====
 prepare outbound_via_calls_of(uuid, timestamptz) as
   with s as (
     select t.timezone as zone, ($2 at time zone t.timezone)::date as today
@@ -134,7 +135,7 @@ explain (analyze, buffers, settings) execute outbound_via_calls_of(:'tenant_id',
 explain (analyze, buffers, settings) execute outbound_via_calls_of(:'tenant_id', now());
 
 \echo
-\echo ==== 3. cma.calls_of written out for the same window (152's body), custom plan then generic plan ====
+\echo ==== 3. cma.calls_of written out for the same window (the body of 152), custom plan then generic plan ====
 -- the window outbound_today_of passes, computed once here so the statement takes it as parameters, as the function does
 select min(x.today::timestamp at time zone z.zone) as from_at, max((x.today + 1)::timestamp at time zone z.zone) as to_at
 from (select t.timezone as zone, (now() at time zone t.timezone)::date as today from cma.tenant t where t.id = :'tenant_id') x
@@ -202,7 +203,7 @@ set local plan_cache_mode = force_generic_plan;
 explain (analyze, buffers, settings) execute calls_of_body(:'tenant_id', :'from_at', :'to_at', null, null);
 
 \echo
-\echo ==== 4. The direct alternative: today's outbound calls from cma.telephony_call, without cma.calls_of ====
+\echo ==== 4. The direct alternative: the outbound calls of today from cma.telephony_call, without cma.calls_of ====
 prepare outbound_direct(uuid, timestamptz) as
   with s as (
     select t.timezone as zone, ($2 at time zone t.timezone)::date as today,

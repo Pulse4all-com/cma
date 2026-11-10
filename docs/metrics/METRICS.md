@@ -1618,7 +1618,7 @@ Outbound calls made today on the organisation's counted lines, connected or not 
 **Formula as computed**
 
 ```
-attempts = count(outbound calls of cma.calls_of whose business_date is the tenant's date today). Every outbound call is an attempt, whatever its outcome.
+attempts = count(outbound telephony calls, not deleted, with a start, on a counted line, whose date in their line's zone is the tenant's date today). Every outbound call is an attempt, whatever its outcome.
 ```
 
 **Unit** count · **Grain** now · **Status** cadence_unconfirmed
@@ -1639,13 +1639,13 @@ attempts = count(outbound calls of cma.calls_of whose business_date is the tenan
 - today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.outbound_today_of's own read of cma.telephony_call since 0009i), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day, D34; this read and cma.calls_of change together when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Who may see it** `monitoring.live`
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
 
-**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009h); `cma.calls_of` (0009b); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1653,13 +1653,13 @@ attempts = count(outbound calls of cma.calls_of whose business_date is the tenan
 with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'telephony.connected_min_seconds'), (select default_value from cma.setting where key = 'telephony.connected_min_seconds'))::int) as cm, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'calls.conversation_min_talk_seconds'), (select default_value from cma.setting where key = 'calls.conversation_min_talk_seconds'))::int) as vm from cma.tenant t where t.id = :tenant_id), c0 as (select tc.direction, tc.talk_seconds, tc.user_ref, tc.source_system, tc.connection_id, tc.source_id, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::time as ltime, (tc.direction = 'inbound' and tc.answered_at is not null) as ain, (tc.direction = 'outbound' and tc.answered_at is not null and (s.cm = 0 or coalesce(tc.talk_seconds >= s.cm, false))) as cout, s.vm, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged, exists (select 1 from cma.telephony_call_tag ct join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null and tg.meaning in ('not_reached', 'incorrect_data')) as not_reached from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)), c as (select c0.*, ((c0.ain or c0.cout) and coalesce(c0.talk_seconds >= c0.vm, false) and not c0.not_reached) as conv from c0) select count(*) as attempts from c cross join s where c.direction = 'outbound' and c.bdate = (now() at time zone s.tz)::date
 ```
 
-**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql and db/167_verify_live_outbound_direct.sql prove the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today); decisions.md 10 Nov 2026 (Outbound today reads cma.telephony_call directly)
 
 **Notes**
 
-Same figure as Reports → Calls for today (calls.outbound, the Outbound tile): the same cma.calls_of rows and the same expression (165 B2, E2). Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.attempts.
+Same figure as Reports → Calls for today (calls.outbound, the Outbound tile): the same calls and the same rules, read directly from cma.telephony_call since 0009i (165 B2 and E2 pin it to cma.calls_figures_of; 167 to 164's read through cma.calls_of). Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.attempts.
 
 #### `live.outbound.connected`
 
@@ -1692,7 +1692,7 @@ connected = count(is_connected_outbound) over today's outbound calls, cma.is_con
 - today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.outbound_today_of's own read of cma.telephony_call since 0009i), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day, D34; this read and cma.calls_of change together when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1704,7 +1704,7 @@ connected = count(is_connected_outbound) over today's outbound calls, cma.is_con
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
 
-**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009h); `cma.calls_of` (0009b); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1712,13 +1712,13 @@ connected = count(is_connected_outbound) over today's outbound calls, cma.is_con
 with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'telephony.connected_min_seconds'), (select default_value from cma.setting where key = 'telephony.connected_min_seconds'))::int) as cm, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'calls.conversation_min_talk_seconds'), (select default_value from cma.setting where key = 'calls.conversation_min_talk_seconds'))::int) as vm from cma.tenant t where t.id = :tenant_id), c0 as (select tc.direction, tc.talk_seconds, tc.user_ref, tc.source_system, tc.connection_id, tc.source_id, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::time as ltime, (tc.direction = 'inbound' and tc.answered_at is not null) as ain, (tc.direction = 'outbound' and tc.answered_at is not null and (s.cm = 0 or coalesce(tc.talk_seconds >= s.cm, false))) as cout, s.vm, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged, exists (select 1 from cma.telephony_call_tag ct join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null and tg.meaning in ('not_reached', 'incorrect_data')) as not_reached from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)), c as (select c0.*, ((c0.ain or c0.cout) and coalesce(c0.talk_seconds >= c0.vm, false) and not c0.not_reached) as conv from c0) select count(*) filter (where c.cout) as connected from c cross join s where c.direction = 'outbound' and c.bdate = (now() at time zone s.tz)::date
 ```
 
-**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql and db/167_verify_live_outbound_direct.sql prove the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today); decisions.md 10 Nov 2026 (Outbound today reads cma.telephony_call directly)
 
 **Notes**
 
-Same figure as Reports → Calls for today (calls.outbound_connected): the same cma.calls_of rows and the same expression (165 B2, E2). The hint is callsConnected, or callsConnectedMin with {threshold} when the tenant set the threshold above 0. Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.connected.
+Same figure as Reports → Calls for today (calls.outbound_connected): the same calls and the same rules, read directly from cma.telephony_call since 0009i (165 B2 and E2 pin it to cma.calls_figures_of; 167 to 164's read through cma.calls_of). The hint is callsConnected, or callsConnectedMin with {threshold} when the tenant set the threshold above 0. Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.connected.
 
 #### `live.outbound.connected_rate`
 
@@ -1751,7 +1751,7 @@ connected_rate = round1(100 * connected / attempts); null (a dash) without an at
 - today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.outbound_today_of's own read of cma.telephony_call since 0009i), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day, D34; this read and cma.calls_of change together when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1763,7 +1763,7 @@ connected_rate = round1(100 * connected / attempts); null (a dash) without an at
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
 
-**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009h); `cma.calls_of` (0009b); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1771,13 +1771,13 @@ connected_rate = round1(100 * connected / attempts); null (a dash) without an at
 with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'telephony.connected_min_seconds'), (select default_value from cma.setting where key = 'telephony.connected_min_seconds'))::int) as cm, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'calls.conversation_min_talk_seconds'), (select default_value from cma.setting where key = 'calls.conversation_min_talk_seconds'))::int) as vm from cma.tenant t where t.id = :tenant_id), c0 as (select tc.direction, tc.talk_seconds, tc.user_ref, tc.source_system, tc.connection_id, tc.source_id, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::time as ltime, (tc.direction = 'inbound' and tc.answered_at is not null) as ain, (tc.direction = 'outbound' and tc.answered_at is not null and (s.cm = 0 or coalesce(tc.talk_seconds >= s.cm, false))) as cout, s.vm, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged, exists (select 1 from cma.telephony_call_tag ct join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null and tg.meaning in ('not_reached', 'incorrect_data')) as not_reached from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)), c as (select c0.*, ((c0.ain or c0.cout) and coalesce(c0.talk_seconds >= c0.vm, false) and not c0.not_reached) as conv from c0) select round(100.0 * count(*) filter (where c.cout) / nullif(count(*), 0), 1) as connected_rate from c cross join s where c.direction = 'outbound' and c.bdate = (now() at time zone s.tz)::date
 ```
 
-**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql and db/167_verify_live_outbound_direct.sql prove the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today); decisions.md 10 Nov 2026 (Outbound today reads cma.telephony_call directly)
 
 **Notes**
 
-Same figure as Reports → Calls for today (calls.outbound_connected_rate): the same cma.calls_of rows and the same expression (165 B2, E2). The board shows one decimal where the report rounds to whole percents. Voicemail answers count as connected, so the rate is no contact rate. Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.connectedRate.
+Same figure as Reports → Calls for today (calls.outbound_connected_rate): the same calls and the same rules, read directly from cma.telephony_call since 0009i (165 B2 and E2 pin it to cma.calls_figures_of; 167 to 164's read through cma.calls_of). The board shows one decimal where the report rounds to whole percents. Voicemail answers count as connected, so the rate is no contact rate. Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.connectedRate.
 
 #### `live.outbound.conversations`
 
@@ -1812,7 +1812,7 @@ conversations = count(is_conversation) over today's outbound calls; cma.is_conve
 - today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.outbound_today_of's own read of cma.telephony_call since 0009i), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day, D34; this read and cma.calls_of change together when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1825,7 +1825,7 @@ conversations = count(is_conversation) over today's outbound calls; cma.is_conve
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
 
-**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009h); `cma.calls_of` (0009b); `cma.is_conversation` (0008zc); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_conversation` (0008zc); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1833,9 +1833,9 @@ conversations = count(is_conversation) over today's outbound calls; cma.is_conve
 with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'telephony.connected_min_seconds'), (select default_value from cma.setting where key = 'telephony.connected_min_seconds'))::int) as cm, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'calls.conversation_min_talk_seconds'), (select default_value from cma.setting where key = 'calls.conversation_min_talk_seconds'))::int) as vm from cma.tenant t where t.id = :tenant_id), c0 as (select tc.direction, tc.talk_seconds, tc.user_ref, tc.source_system, tc.connection_id, tc.source_id, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::time as ltime, (tc.direction = 'inbound' and tc.answered_at is not null) as ain, (tc.direction = 'outbound' and tc.answered_at is not null and (s.cm = 0 or coalesce(tc.talk_seconds >= s.cm, false))) as cout, s.vm, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged, exists (select 1 from cma.telephony_call_tag ct join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null and tg.meaning in ('not_reached', 'incorrect_data')) as not_reached from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)), c as (select c0.*, ((c0.ain or c0.cout) and coalesce(c0.talk_seconds >= c0.vm, false) and not c0.not_reached) as conv from c0) select count(*) filter (where c.conv) as conversations from c cross join s where c.direction = 'outbound' and c.bdate = (now() at time zone s.tz)::date
 ```
 
-**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql and db/167_verify_live_outbound_direct.sql prove the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today); decisions.md 10 Nov 2026 (Outbound today reads cma.telephony_call directly)
 
 **Notes**
 
@@ -1872,7 +1872,7 @@ outbound_talk_seconds = sum(talk_seconds) over today's connected outbound calls 
 - today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.outbound_today_of's own read of cma.telephony_call since 0009i), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day, D34; this read and cma.calls_of change together when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1884,7 +1884,7 @@ outbound_talk_seconds = sum(talk_seconds) over today's connected outbound calls 
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
 
-**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009h); `cma.calls_of` (0009b); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1892,13 +1892,13 @@ outbound_talk_seconds = sum(talk_seconds) over today's connected outbound calls 
 with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'telephony.connected_min_seconds'), (select default_value from cma.setting where key = 'telephony.connected_min_seconds'))::int) as cm, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'calls.conversation_min_talk_seconds'), (select default_value from cma.setting where key = 'calls.conversation_min_talk_seconds'))::int) as vm from cma.tenant t where t.id = :tenant_id), c0 as (select tc.direction, tc.talk_seconds, tc.user_ref, tc.source_system, tc.connection_id, tc.source_id, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::time as ltime, (tc.direction = 'inbound' and tc.answered_at is not null) as ain, (tc.direction = 'outbound' and tc.answered_at is not null and (s.cm = 0 or coalesce(tc.talk_seconds >= s.cm, false))) as cout, s.vm, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged, exists (select 1 from cma.telephony_call_tag ct join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null and tg.meaning in ('not_reached', 'incorrect_data')) as not_reached from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)), c as (select c0.*, ((c0.ain or c0.cout) and coalesce(c0.talk_seconds >= c0.vm, false) and not c0.not_reached) as conv from c0) select coalesce(sum(c.talk_seconds) filter (where c.cout), 0)::bigint as outbound_talk_seconds from c cross join s where c.direction = 'outbound' and c.bdate = (now() at time zone s.tz)::date
 ```
 
-**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql and db/167_verify_live_outbound_direct.sql prove the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today); decisions.md 10 Nov 2026 (Outbound today reads cma.telephony_call directly)
 
 **Notes**
 
-Same figure as Reports → Calls for today (calls.outbound_talk): the same cma.calls_of rows and the same expression (165 B2, E2). A connected call still in progress has no talk time yet and adds nothing until it ends. Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.talkSeconds.
+Same figure as Reports → Calls for today (calls.outbound_talk): the same calls and the same rules, read directly from cma.telephony_call since 0009i (165 B2 and E2 pin it to cma.calls_figures_of; 167 to 164's read through cma.calls_of). A connected call still in progress has no talk time yet and adds nothing until it ends. Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.talkSeconds.
 
 #### `live.outbound.talk_avg`
 
@@ -1931,7 +1931,7 @@ outbound_talk_avg = round1(avg(talk_seconds) over today's connected outbound cal
 - today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.calls_of), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day; this figure moves with cma.calls_of when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
+**Time** Today = the tenant's date at the database's now() (cma.outbound_today_of); a call counts when its business date in its line's market zone, else the tenant's, is that date (cma.outbound_today_of's own read of cma.telephony_call since 0009i), exactly as Reports → Calls dates a call (the line-zone gap docs/definitions.md lists under Day, D34; this read and cma.calls_of change together when it closes). Inbound today on the same board windows on the tenant's midnight instead (cross-page note)
 
 **Settings**
 
@@ -1943,7 +1943,7 @@ outbound_talk_avg = round1(avg(talk_seconds) over today's connected outbound cal
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
 
-**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009h); `cma.calls_of` (0009b); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1951,13 +1951,13 @@ outbound_talk_avg = round1(avg(talk_seconds) over today's connected outbound cal
 with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'telephony.connected_min_seconds'), (select default_value from cma.setting where key = 'telephony.connected_min_seconds'))::int) as cm, greatest(0, coalesce((select value from cma.tenant_setting x where x.tenant_id = :tenant_id and x.key = 'calls.conversation_min_talk_seconds'), (select default_value from cma.setting where key = 'calls.conversation_min_talk_seconds'))::int) as vm from cma.tenant t where t.id = :tenant_id), c0 as (select tc.direction, tc.talk_seconds, tc.user_ref, tc.source_system, tc.connection_id, tc.source_id, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::time as ltime, (tc.direction = 'inbound' and tc.answered_at is not null) as ain, (tc.direction = 'outbound' and tc.answered_at is not null and (s.cm = 0 or coalesce(tc.talk_seconds >= s.cm, false))) as cout, s.vm, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged, exists (select 1 from cma.telephony_call_tag ct join cma.telephony_tag tg on tg.tenant_id = ct.tenant_id and tg.connection_id = ct.connection_id and tg.tag_ref = ct.tag_ref where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null and tg.meaning in ('not_reached', 'incorrect_data')) as not_reached from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)), c as (select c0.*, ((c0.ain or c0.cout) and coalesce(c0.talk_seconds >= c0.vm, false) and not c0.not_reached) as conv from c0) select round(avg(c.talk_seconds) filter (where c.cout), 1) as outbound_talk_avg from c cross join s where c.direction = 'outbound' and c.bdate = (now() at time zone s.tz)::date
 ```
 
-**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql proves the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/165_verify_live_outbound.sql and db/167_verify_live_outbound_direct.sql prove the figure on fixed test calls and, per tenant, against cma.calls_figures_of for today; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read (outbound, 0009h); definitions.md, Attempt, Connected, Connected rate, Conversation, Talk time; data-model/0008.md, Calls overview (0008j); decisions.md 10 Nov 2026 (Live board: Outbound today); decisions.md 10 Nov 2026 (Outbound today reads cma.telephony_call directly)
 
 **Notes**
 
-Same figure as Reports → Calls for today (calls.outbound_talk_avg): the same cma.calls_of rows and the same expression (165 B2, E2). Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.talkAvgSeconds.
+Same figure as Reports → Calls for today (calls.outbound_talk_avg): the same calls and the same rules, read directly from cma.telephony_call since 0009i (165 B2 and E2 pin it to cma.calls_figures_of; 167 to 164's read through cma.calls_of). Tenant without telephony: the row is not shown (Inbound today says 'No telephony connected'). API field: outbound.talkAvgSeconds.
 
 #### `live.missed.listed`
 
