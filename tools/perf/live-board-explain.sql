@@ -144,14 +144,18 @@ declare
     $q$select cma.inbound_now() as j, cma.outbound_now() as o$q$,
     $q$select * from cma.follow_up_summary()$q$];
   v_name text[] := array['team now', 'status flags', 'team members', 'roster today', 'settings', 'connections', 'calls (inbound and outbound now)', 'follow-up summary'];
-  v_t0 timestamptz; v_ms numeric; v_first numeric; v_seventh numeric; v_best numeric;
+  v_t0 timestamptz; v_ms numeric; v_first numeric; v_seventh numeric; v_best numeric; r record;
   v_sum_first numeric := 0; v_sum_seventh numeric := 0; v_sum_best numeric := 0;
 begin
   for i in 1 .. array_length(v_sql, 1) loop
     v_best := null;
     for run in 1 .. 7 loop
       v_t0 := clock_timestamp();
-      execute format('select count(*) from (%s) x', v_sql[i]);
+      -- every row and every column fetched, as 131 times a read: a count over the statement would let the planner drop
+      -- the stable columns it never reads (the calls statement's two functions) and time nothing
+      for r in execute v_sql[i] loop
+        null;
+      end loop;
       v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 2);
       if run = 1 then v_first := v_ms; end if;
       if run = 7 then v_seventh := v_ms; end if;

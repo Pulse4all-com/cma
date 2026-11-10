@@ -18,7 +18,8 @@
 -- Edited by addition 0009j (168_live_inbound_talk.sql): cma.inbound_now()'s today holds inbound_talk_seconds, a key
 -- 0008zx never had, so B7 and E1 take it out of the new answer before comparing, and B7 counts today's other keys (the
 -- fifteen it had); taking out a key that is not there changes nothing, so 165 reads the same before and after 168. 169
--- proves the key itself.
+-- proves the key itself. E3's timer now fetches every row and column of a read: it wrapped the read in a count, which
+-- lets the planner drop a stable function's column unread, so the two polls were not timed at all.
 --   S1  the addition 0009h is recorded once, after 0009g
 --   S2  cma.outbound_today_of(uuid, timestamptz) and cma.outbound_now(): SQL, stable, the caller's rights, owned by
 --       cma_owner, jit off, executable by the application only; outbound_today_of's seven columns; cma.inbound_now():
@@ -182,11 +183,15 @@ returns numeric
 language plpgsql
 as $$
 declare
-  v_t0 timestamptz; v_ms numeric; v_best numeric;
+  v_t0 timestamptz; v_ms numeric; v_best numeric; r record;
 begin
   for i in 1 .. greatest(1, p_runs) loop
     v_t0 := clock_timestamp();
-    execute format('select count(*) from (%s) a', p_sql);
+    -- every row and column fetched (edited by 0009j: a count over the statement let the planner drop the stable
+    -- function it never read, so E3 timed nothing)
+    for r in execute p_sql loop
+      null;
+    end loop;
     v_ms := extract(epoch from clock_timestamp() - v_t0) * 1000;
     v_best := least(coalesce(v_best, v_ms), v_ms);
   end loop;
