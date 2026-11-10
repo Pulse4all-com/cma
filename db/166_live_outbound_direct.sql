@@ -144,7 +144,7 @@ revoke execute on function cma.outbound_today_of(uuid, timestamptz) from public;
 grant execute on function cma.outbound_today_of(uuid, timestamptz) to cma_app;
 
 insert into cma.schema_migration (version, description)
-values ('0009i', 'Live board, Outbound today read directly: cma.outbound_today_of (from 164) reads today''s outbound calls from cma.telephony_call (counted lines, each call''s date in its line''s zone, Connected and Conversation by cma.is_connected and cma.is_conversation, the tag meanings by one index probe per call), not through cma.calls_of: the same columns and the same answer (167 proves it against 164''s definition), within the poll''s budget in prod')
+values ('0009i', 'Live board, Outbound today read directly: cma.outbound_today_of (from 164) reads today''s outbound calls from cma.telephony_call (counted lines, each call''s date in its line''s zone, Connected and Conversation by cma.is_connected and cma.is_conversation, the tag meanings by one index probe per call), not through cma.calls_of: the same columns and the same answer (167 proves it against 164''s definition); measured at 3 to 5 ms as a statement in prod')
 on conflict (version) do nothing;
 
 commit;

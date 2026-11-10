@@ -26,7 +26,7 @@
 --       without a call, 7 October, the running day) and at 6 October under two settings
 --       (telephony.connected_min_seconds 5, calls.conversation_min_talk_seconds 31)
 --   B3  the plan of the function's own statement, as the application, in the generic plan: cma.telephony_call is read
---       by an index with a condition on started_at, never by a sequential scan (with enable_seqscan off: the throwaway
+--       by an index with the window's lower bound on started_at in its condition, never by a sequential scan (with enable_seqscan off: the throwaway
 --       tenant is too small for the planner to prefer an index otherwise; what is proven is that the bounds reach the
 --       index under row-level security in a generic plan, which is where 0008zr's reads lost it, see 144)
 --   E1  per active tenant: the same row as 0009h's definition for the live day (now)
@@ -56,7 +56,7 @@ create temporary table verify_0009i (ord integer, check_name text, result text, 
 grant select, insert on pg_temp.verify_0009i to cma_app;
 
 -- cma.outbound_today_of as 0009h (164) defined it, verbatim: the read through cma.calls_of
-create function pg_temp.outbound_today_of_0009h(p_tenant_id uuid, p_now timestamptz)
+create or replace function pg_temp.outbound_today_of_0009h(p_tenant_id uuid, p_now timestamptz)
 returns table (
   business_date          date,
   attempts               integer,
@@ -145,7 +145,8 @@ as $$
 $$;
 
 -- The plan of the function's own statement for a tenant, as the caller, in the generic plan with sequential scans
--- switched off: null when cma.telephony_call is read by an index with a condition on p_column and by no sequential scan,
+-- switched off: null when cma.telephony_call is read by an index with the lower bound on p_column in its condition
+-- (p_column >= ...) and by no sequential scan,
 -- else what is wrong. The statement is the function's text with its two parameters as $1 and $2
 create or replace function pg_temp.v0009i_plan(p_tenant uuid, p_column text)
 returns text
@@ -168,10 +169,11 @@ begin
   perform set_config('enable_seqscan', 'on', true);
   perform set_config('plan_cache_mode', 'auto', true);
   execute 'deallocate v0009i_p';
-  -- like_regex takes a literal pattern, so the column's name is written into the path (a plain identifier)
-  if not jsonb_path_exists(v_plan, format('$.** ? (@."Index Name" like_regex "^telephony_call_" && @."Index Cond" like_regex "%s")',
+  -- like_regex takes a literal pattern, so the column's name is written into the path (a plain identifier). The lower
+  -- bound itself must be in the index condition: "started_at IS NOT NULL" alone is one too, and proves nothing
+  if not jsonb_path_exists(v_plan, format('$.** ? (@."Index Name" like_regex "^telephony_call_" && @."Index Cond" like_regex "%s >= ")',
                                           regexp_replace(p_column, '[^a-z_]', '', 'g'))::jsonpath) then
-    v_bad := v_bad || 'no index on cma.telephony_call with a condition on ' || p_column || '; ';
+    v_bad := v_bad || 'no index on cma.telephony_call with the lower bound on ' || p_column || ' in its condition; ';
   end if;
   if jsonb_path_exists(v_plan, '$.** ? (@."Node Type" == "Seq Scan" && @."Relation Name" == "telephony_call")') then
     v_bad := v_bad || 'a sequential scan of cma.telephony_call; ';
@@ -372,7 +374,7 @@ begin
     -- B3. the plan: an index on started_at, no sequential scan of the calls (provoked: an index on a column none has)
     v_txt := pg_temp.v0009i_plan(v_t, case when v_provoke then 'no_such_column' else 'started_at' end);
     rows_ := rows_ || pg_temp.v0009i_row(13, 'B3 the generic plan as the application reads cma.telephony_call by an index on started_at, never sequentially',
-      case when v_txt is null then 'PASS' else 'FAIL' end, coalesce(v_txt, 'an index with a condition on started_at'));
+      case when v_txt is null then 'PASS' else 'FAIL' end, coalesce(v_txt, 'an index with the lower bound on started_at in its condition'));
 
     raise exception using errcode = 'CMAOK';
   exception
@@ -422,8 +424,8 @@ begin
     --     tenant without outbound calls answers the same zeros on both days but for the date)
     v_ord := v_ord + 1;
     begin
-      v_a := pg_temp.v0009i_new(t.id, now());
-      v_b := pg_temp.v0009i_old(t.id, now() - v_shift);
+      -- both reads in one statement, so on one snapshot: a call that arrives between two statements would differ falsely
+      select pg_temp.v0009i_new(t.id, now()), pg_temp.v0009i_old(t.id, now() - v_shift) into v_a, v_b;
       insert into verify_0009i values (v_ord, 'E1 outbound today: the same row as 0009h''s definition for the live day (' || t.slug || ')',
         case when v_a is not null and v_a = v_b and not v_provoke then 'PASS' else 'FAIL' end,
         case when v_a = v_b then 'the same seven figures' else 'the rows differ (date|attempts|connected|rate|conversations|talk|average)' end);
@@ -439,7 +441,7 @@ begin
     v_ord := v_ord + 1;
     v_a := pg_temp.v0009i_plan(t.id, case when v_provoke then 'no_such_column' else 'started_at' end);
     insert into verify_0009i values (v_ord, 'E2 the generic plan as the application reads cma.telephony_call by an index on started_at, never sequentially (' || t.slug || ')',
-      case when v_a is null then 'PASS' else 'FAIL' end, coalesce(v_a, 'an index with a condition on started_at'));
+      case when v_a is null then 'PASS' else 'FAIL' end, coalesce(v_a, 'an index with the lower bound on started_at in its condition'));
 
     v_ord := v_ord + 1;
     insert into verify_0009i values (v_ord, 'E3 no slower than 0009h''s definition, as the application (' || t.slug || ')',
