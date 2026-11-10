@@ -2,6 +2,8 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 9 November 2026: project hooks (.claude/settings.json, .claude/hooks/guard.mjs: no push to main, no merge by Claude, records/ checked before a commit or push, reminders for cloudbuild.yaml and edited db/ scripts) and two skills (.claude/skills/new-migration, pr-description); CLAUDE.md (Subagents); docs/decisions.md.
+- 9 November 2026: five read-only project subagents added in .claude/agents/ (cma-db-reviewer, cma-security-reviewer, cma-performance, cma-migration-impact, cma-advisor); CLAUDE.md (Subagents) and docs/RUNBOOK.md say when each runs; docs/decisions.md.
 - 9 November 2026: Remove day's confirmation takes over the reason already typed in the day editor.
 - 9 November 2026: the desktop-only gate scales the 1280 px layout to fit windows of 1152 to 1279 px and shows the gate below 1152 px, with how to fix it (DesktopOnly.tsx, layout.tsx, globals.css, copy.ts, verify/layout.mjs; docs/decisions.md).
 - 9 November 2026 (verify output from prod): 07's blocks E, H and K run in dev only (`verify.is_dev`, as the dev-only verifies set it) and print one line each in prod; 07's and 10's additions list and 04's audit summary print `<you>` or `<another login>`, never the login; 04's people lines in block D run in dev only; `tools/check-records.mjs` (unit test `tools/check-records.test.mjs`) names file and line of a real person's address or the operator's login in raw outputs, and `run_migration` runs it; docs/RUNBOOK.md Setup step 8 and CLAUDE.md (records): no raw prod output is committed before the check passes.
