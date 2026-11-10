@@ -147,10 +147,15 @@ export function Notice({ tone, children }: { tone: "info" | "warning"; children:
 }
 
 /* Page title with the thin Deep Blue divider that echoes the deck header (7.1) */
-export function PageTitle({ children }: { children: ReactNode }) {
+export function PageTitle({ children, aside }: {
+  children: ReactNode;
+  /** Something small at the right of the title row, on its baseline (the Live board's freshness, 10 November 2026) */
+  aside?: ReactNode;
+}) {
   return (
-    <header className="mb-6 border-b border-p4a-deepblue pb-3">
+    <header className={`mb-6 border-b border-p4a-deepblue pb-3 ${aside ? "flex items-baseline justify-between gap-4" : ""}`}>
       <h1 className="text-title font-bold text-p4a-heading">{children}</h1>
+      {aside}
     </header>
   );
 }

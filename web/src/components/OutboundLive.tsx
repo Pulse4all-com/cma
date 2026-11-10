@@ -4,20 +4,21 @@
  * time of the connected calls and its average. Today as Reports → Calls dates a call (its date in its line's zone, the
  * gap docs/definitions.md lists under Day; one zone for a tenant with one), so the figures are Reports → Calls' for today. Tenant-wide on every contact center's board, captioned as covering all lines, as the
  * inbound tiles (addition 0008zv). Counts and durations only. Nothing for a tenant without telephony: the inbound part
- * above already says "No telephony connected". Tiles as InboundLive's (docs/style/Pulse4all-Style.md 7.3), three to a
- * row at 1280 px and six from 1536 px, as the follow-up strip. Rendered by LiveBoardLive, so the board's 10-second poll
- * refreshes it.
+ * above already says "No telephony connected". One panel of six figures as Inbound today's (StatPanel, the Live board's
+ * UX pass of 10 November 2026; docs/style/Pulse4all-Style.md 7.3), its Talk time in the column of Inbound today's.
+ * Rendered by LiveBoardLive, so the board's 10-second poll refreshes it.
  */
 import type { Copy, Locale } from "@/lib/copy";
 import type { OutboundNow } from "@/lib/data";
 import { OUTBOUND_TILES, outboundTileValue, type OutboundTileKey } from "@/lib/live";
+import type { LiveHints } from "@/lib/live";
 import { metricsHref } from "@/lib/metrics";
 import { fillHint, fmtCount, fmtRate1, fmtTalk } from "@/lib/reports";
-import { Tile } from "./InboundLive";
+import { Stat, StatPanel } from "./StatPanel";
 
 export function OutboundLive({ outbound, copy, locale, connectedMinSeconds, conversationMinSeconds, canOpenMetrics = false, scope }: {
   /** Null for a tenant without telephony: nothing is shown */
-  outbound: OutboundNow | null; copy: Pick<Copy, "live" | "hints">; locale: Locale;
+  outbound: OutboundNow | null; copy: Pick<Copy, "live"> & { hints: LiveHints }; locale: Locale;
   /** telephony.connected_min_seconds and calls.conversation_min_talk_seconds, for the hints */
   connectedMinSeconds: number | null; conversationMinSeconds: number | null;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
@@ -50,16 +51,10 @@ export function OutboundLive({ outbound, copy, locale, connectedMinSeconds, conv
   };
 
   return (
-    <section aria-labelledby="outbound-today" className="flex flex-col gap-4" data-testid="outbound-live">
-      <div>
-        <h2 id="outbound-today" className="text-panel font-semibold text-p4a-heading">{t.outboundTitle}</h2>
-        {scope ? <p className="mt-1 text-small text-p4a-muted" data-testid="outbound-scope">{scope}</p> : null}
-      </div>
-      <div className="grid grid-cols-3 gap-4 2xl:grid-cols-6" data-testid="outbound-tiles">
-        {OUTBOUND_TILES.map((key) => (
-          <Tile key={key} testId={`outbound-${key}`} label={tiles[key].label} info={info(key)} value={shown(key)} />
-        ))}
-      </div>
-    </section>
+    <StatPanel id="outbound-today" title={t.outboundTitle} scope={scope} scopeTestId="outbound-scope" testId="outbound-live" figuresTestId="outbound-tiles">
+      {OUTBOUND_TILES.map((key) => (
+        <Stat key={key} testId={`outbound-${key}`} label={tiles[key].label} info={info(key)} value={shown(key)} locale={locale} />
+      ))}
+    </StatPanel>
   );
 }

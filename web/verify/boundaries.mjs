@@ -26,7 +26,9 @@ import { join, relative } from "node:path";
 
 const root = new URL("../src/", import.meta.url).pathname;
 const PURE = ["csv", "dashboard", "team", "roster", "live", "reports", "messages", "configuration", "follow-up",
-  "invitations", "sources", "period", "time", "nav", "alertRules", "corrections", "logout", "origin", "health", "email", "first-orders", "callbacks", "attempts", "funnel", "metrics", "reviews", "maintenance", "cohorts", "courtesy", "pledges"];
+  "invitations", "sources", "period", "time", "nav", "alertRules", "corrections", "logout", "origin", "health", "email", "first-orders", "callbacks", "attempts", "funnel", "metrics", "reviews", "maintenance", "cohorts", "courtesy", "pledges",
+  // the cached Intl formatters (the Live board's speed review, 10 November 2026): no imports, read by time and reports
+  "intl"];
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {

@@ -27,14 +27,21 @@
  * addition 0009j Inbound today's Talk time in place of Waiting now, as 169 proves it in the database: the six tiles in
  * their order, Talk time in the column of Outbound today's, a dash without an answered call, the talk time of the
  * answered inbound calls dated in their line's zone (Reports → Calls' talk time minus its outbound talk time), and no
- * Waiting now key in the copy, the registry, the catalog, the types, the component, the mock or the mapping.
+ * Waiting now key in the copy, the registry, the catalog, the types, the component, the mock or the mapping. Since the
+ * Live board's UX and speed pass (10 November 2026): Inbound today by hour's 24 columns from Reports → Inbound's hour
+ * rows (the total row left out), the axis' clean top, the board's word on its own freshness (old after two failed polls,
+ * never after one; a poll gives up before the next is due), and the board's words: exactly the hints and follow-up words
+ * the board shows, each in English and Dutch, a small part of the whole hints object.
  */
 import {
-  INBOUND_TILES, LIVE_GROUPS, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTalkToday, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
+  INBOUND_TILES, LIVE_FOLLOW_UP_KEYS, LIVE_GROUPS, LIVE_HINT_KEYS, LIVE_POLL_TIMEOUT_MS, LIVE_STALE_AFTER_FAILURES, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting,
+  employersOf, filterRows, fmtSeconds, inboundHours, inboundTalkToday, inboundTileValue, isStale, liveBoardWords, liveGroupOf, liveRows, missedCallbacks, niceCeiling,
   outboundTileValue, outboundToday, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
 import { callRecords, callRules, callsFigures, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
 import { readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { copy } from "../src/lib/copy.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -351,6 +358,40 @@ const keysGone = [
 expect("no Waiting now in the copy, the registry, the catalog, the types, the component, the tiles, the mock or the mapping", keysGone, [],
   ["src/lib/copy.ts"]);
 expect("email's Waiting now stays (another figure)", /waitingTitle: "Waiting now"/.test(readFileSync(new URL("../src/lib/copy.ts", import.meta.url), "utf8")), true, false);
+
+// ---- Inbound today by hour, the board's freshness and its words (the Live board's UX and speed pass) ----------------
+const hourRows = [
+  { groupKey: "09", offered: 5, answered: 3, unanswered: 2, waiting: 0, serviceLevelPct: 60 },
+  { groupKey: "14", offered: 2, answered: 1, unanswered: 0, waiting: 1, serviceLevelPct: 100 },
+  { groupKey: null, offered: 7, answered: 4, unanswered: 2, waiting: 1, serviceLevelPct: 66.7 },   // the total row
+  { groupKey: "7", offered: 9, answered: 9, unanswered: 0, waiting: 0, serviceLevelPct: 100 },     // no hour key
+];
+const hrs = inboundHours(hourRows);
+expect("inbound today by hour: 24 columns 00 to 23, the hours with calls in place, the total row and a bad key left out",
+  [hrs.length, hrs[0].hour, hrs[23].hour, hrs[9].offered, hrs[9].unanswered, hrs[14].waiting, hrs[7].offered, hrs.reduce((n, h) => n + h.offered, 0)],
+  [24, 0, 23, 5, 2, 1, 0, 7], [24, 0, 23, 5, 2, 1, 9, 23]);
+expect("the axis' top: a clean whole step at or above the tallest column, at least 4",
+  [0, 3, 5, 7, 11, 23, 26, 51, 120].map(niceCeiling), [4, 4, 5, 8, 15, 25, 30, 60, 150], [1, 3, 5, 7, 11, 23, 26, 51, 120]);
+expect("the board says its figures are old after two failed polls in a row, never after one; a poll gives up before the next is due",
+  [isStale(0), isStale(1), isStale(LIVE_STALE_AFTER_FAILURES), isStale(5), LIVE_POLL_TIMEOUT_MS < 10_000],
+  [false, false, true, true, true], [false, true, true, true, true]);
+const words = liveBoardWords(copy.en);
+const wordsNl = liveBoardWords(copy.nl);
+const hintKeys = Object.keys(words.hints).sort();
+expect("the board's words: exactly its hints and follow-up words, every one in English and Dutch",
+  [hintKeys.join(",") === [...LIVE_HINT_KEYS].sort().join(","), Object.keys(words.followUp).length === LIVE_FOLLOW_UP_KEYS.length,
+    [...LIVE_HINT_KEYS].every((k) => typeof words.hints[k] === "string" && words.hints[k] !== "" && typeof wordsNl.hints[k] === "string" && wordsNl.hints[k] !== ""),
+    LIVE_FOLLOW_UP_KEYS.every((k) => typeof wordsNl.followUp[k] === "string" && wordsNl.followUp[k] !== "")],
+  [true, true, true, true], [false, true, true, true]);
+const sliceKb = gzipSync(JSON.stringify(words.hints)).length / 1024;
+const wholeKb = gzipSync(JSON.stringify(copy.en.hints)).length / 1024;
+expect("the board's hints are a small part of the whole hints object (gzip, in the page's payload)",
+  sliceKb < wholeKb / 4, true, false);
+// The missed callers' first page: the component shows MISSED_SHOWN before "Show all"
+const inboundLive = readFileSync(new URL("../src/components/InboundLive.tsx", import.meta.url), "utf8");
+expect("the missed callers show the oldest 20 first, the rest on request",
+  [/export const MISSED_SHOWN = 20;/.test(inboundLive), /inbound\.callbacks\.slice\(0, MISSED_SHOWN\)/.test(inboundLive), /data-testid="missed-more"/.test(inboundLive)],
+  [true, true, true], [false, true, true]);
 
 // Longest waiting is gone everywhere the web holds its keys: the copy's (inboundLongestWaiting, liveLongestWaiting and
 // nobodyWaiting, en and nl), the registry's and the catalog's (live.inbound.longest_waiting), the field and the tile

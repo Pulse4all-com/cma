@@ -2740,6 +2740,115 @@
       ]
     },
     {
+      "key": "live.inbound.hours",
+      "surface": "live",
+      "page": "/live/board",
+      "tile": "Inbound today by hour",
+      "title": {
+        "en": "Inbound today by hour",
+        "nl": "Inkomend vandaag per uur"
+      },
+      "definition": "Today's inbound calls per hour of the day, answered and unanswered, as a column per hour from 00 to 23; waiting calls and the service level per hour on hover or focus.",
+      "formula": "Per hour h (00 to 23) of today: answered and unanswered as cma.inbound_service(today, today, 'hour') answers them (the hour rows; the total row left out), stacked, answered Deep Blue under unanswered Warning amber; the axis' top niceCeiling(max(answered + unanswered)); an hour without calls is an empty column. Read by the board's client from GET /api/v1/reports/inbound?from=today&to=today&group=hour after the first paint and every 60 s while the tab is visible, not in the 10-second poll.",
+      "unit": "count",
+      "grain": [
+        "now"
+      ],
+      "sources": [
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "direction",
+            "started_at",
+            "source_deleted_at",
+            "number_ref"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (one event per call change; VENDOR_SETUP \u00a72.3) \u2192 ingest service POST /<adapter>/<key> (adapter aircall) \u2192 read-back GET /v1/calls/{id} \u2192 cma.ingest_upsert_telephony_calls() (0007a, skip rule 0008f); the Cloud Run job ingest-reconcile re-reads the look-back nightly and the manual backfill writes through the same function",
+          "cadence": "event-driven; the webhook subscription is configured outside the repo: the Aircall dashboard (ingest-reconcile checks it each run), to confirm; reconcile 03:30 Europe/Amsterdam with a 26 h look-back (docs/ingest/deploy.sh, default '30 3 * * *')"
+        },
+        {
+          "table": "cma.telephony_number",
+          "columns": [
+            "connection_id",
+            "number_ref",
+            "name",
+            "market",
+            "is_counted"
+          ],
+          "owner": "Aircall",
+          "fed_by": "GET /v1/numbers \u2192 cma.ingest_upsert_telephony_catalog(), refreshed inside the Cloud Run job ingest-sweep at most hourly per connection; is_counted and market set on Configuration \u2192 Sources (cma.set_telephony_number())",
+          "cadence": "ingest-sweep every minute (docs/ingest/deploy.sh '* * * * *'); the catalog refresh inside it at most hourly per connection"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write path: Configuration \u2192 Markets",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS plus the explicit tenant of cma.inbound_service_of (cma.current_tenant_id())",
+        "as live.inbound.offered: inbound, not deleted, with a start, counted lines",
+        "today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date, each in the hour of its line's zone, as Reports \u2192 Inbound groups by hour",
+        "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)",
+        "shown only to a holder of reports.view or performance.team (the report's permission); a viewer without it sees no chart"
+      ],
+      "time": "Today = the tenant's date (the board's Inbound today date); each call on its date and hour in its line's market zone, else the tenant's (cma.inbound_calls_of), as Reports \u2192 Inbound's hour view: the hours are each line's own, the running hour marked in the viewer's zone. Inbound today's tiles window on the tenant's midnight instead (cross-page note)",
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "After the board's first paint and every 60 s while the tab is visible, once more when it comes back (LiveHours); never in the 10-second poll; a failed read keeps the last chart",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.inbound_service",
+            "migration": "0008i"
+          },
+          {
+            "object": "cma.inbound_service_of",
+            "migration": "0008i"
+          },
+          {
+            "object": "cma.inbound_calls_of",
+            "migration": "0008zx"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/live.ts",
+            "export": "inboundHours"
+          },
+          {
+            "file": "src/components/LiveHours.tsx",
+            "export": "LiveHours"
+          }
+        ]
+      },
+      "verify_sql": "select group_key as hour, offered, answered, unanswered, waiting, service_level_pct from cma.inbound_service_of(:tenant_id, (now() at time zone (select timezone from cma.tenant where id = :tenant_id))::date, (now() at time zone (select timezone from cma.tenant where id = :tenant_id))::date, 'hour') where group_key is not null order by group_key",
+      "prerequisites": [],
+      "docs": [
+        "features.md \u00a75, Live board (the Live board's UX pass, 10 Nov 2026)",
+        "api.md, GET /api/v1/reports/inbound (group=hour)",
+        "definitions.md, Inbound call, Day (D4)"
+      ],
+      "notes": "The same figures as Reports \u2192 Inbound grouped by hour for today. Colours: Deep Blue and Warning amber pass the palette validator on white (lightness, chroma, colour-blind and normal-vision separation); amber's contrast warning is met by the legend, the tooltip on hover and focus, and a table view for screen readers. Waiting calls (only ever in the running hour) are in the tooltip, not drawn.",
+      "fixture_check": "Not run here: this session has no database. The query is Reports \u2192 Inbound's own read for today grouped by hour; Martin compares it with the chart in Studio.",
+      "comparison": null,
+      "settings": [],
+      "status": [
+        "cadence_unconfirmed"
+      ]
+    },
+    {
       "key": "live.outbound.attempts",
       "surface": "live",
       "page": "/live/board",

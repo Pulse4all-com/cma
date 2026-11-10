@@ -116,6 +116,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "live.inbound.service_level",
     "live.inbound.talk",
     "live.inbound.avg_answer",
+    "live.inbound.hours",
     "live.outbound.attempts",
     "live.outbound.connected",
     "live.outbound.connected_rate",

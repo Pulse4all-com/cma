@@ -10,8 +10,12 @@ import { RAIL_COOKIE } from "@/lib/nav";
  * 2026), and the rail's links prefetch it, so the frame is on screen
  * while the page's reads run. It reads the rail's cookie, as the Shell does, so the frame comes up folded or expanded
  * in the person's state and nothing jumps when the page replaces it; no data.
+ *
+ * shape "liveBoard" (the Live board's UX pass, 10 November 2026): the board's own outline, the freshness line, four
+ * panels of six figures (Inbound today, Outbound today, Follow-up now, the team's groups) and the people's rows, so the
+ * wait reads as the board arriving and nothing moves when it does.
  */
-export async function RouteSkeleton() {
+export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "liveBoard" } = {}) {
   const collapsed = (await cookies()).get(RAIL_COOKIE)?.value === "collapsed";
   const bar = (w: string, h = "h-4") => <div className={`${h} ${w} animate-pulse rounded-input bg-p4a-border`} aria-hidden="true" />;
   return (
@@ -34,6 +38,22 @@ export async function RouteSkeleton() {
         <div className="max-w-screen-2xl">
           {bar("w-72", "h-8")}
           <div className="mt-3">{bar("w-96", "h-3")}</div>
+          {shape === "liveBoard" ? (
+            <div className="mt-6 flex flex-col gap-6" data-skeleton-shape="liveBoard">
+              <div className="flex justify-end">{bar("w-80", "h-3")}</div>
+              {[0, 1, 2, 3].map((i) => (
+                <section key={i} className="rounded-card border border-p4a-border bg-white p-6">
+                  {bar("w-56", "h-5")}
+                  <div className="mt-5 grid grid-cols-6 divide-x divide-p4a-border">
+                    {[0, 1, 2, 3, 4, 5].map((j) => (
+                      <div key={j} className="flex flex-col gap-2 px-4 first:pl-0 last:pr-0">{bar("w-3/4", "h-3")}{bar("w-1/2", "h-6")}</div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+              <div className="flex flex-col gap-3">{[0, 1, 2, 3].map((i) => <div key={i}>{bar("w-full", "h-8")}</div>)}</div>
+            </div>
+          ) : (
           <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">
             <div className="flex flex-col gap-6">
               {[0, 1].map((i) => (
@@ -50,6 +70,7 @@ export async function RouteSkeleton() {
               </section>
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>

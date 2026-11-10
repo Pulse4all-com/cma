@@ -13,6 +13,7 @@
  * change by the second take the instant as an argument, so a tab left open ticks without polling
  * and the server's rows stay equal between two reads of an unchanged team.
  */
+import type { Copy } from "./copy";
 import type { DateKey, Instant, InboundToday, MissedCallback, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
@@ -317,4 +318,83 @@ export function callbackWaiting(r: Pick<MissedCallback, "waitingBusinessSeconds"
   return r.waitingBusinessSeconds === null
     ? { kind: "elapsed", seconds: r.waitingSeconds, closed: false }
     : { kind: "business", seconds: r.waitingBusinessSeconds, closed: r.waitingBusinessSeconds === 0 && r.waitingSeconds > 0 };
+}
+
+// ---- Inbound today by hour (the Live board's UX pass, 10 November 2026) -----------------------------
+
+/** One hour of today's inbound calls, as Reports → Inbound's hour rows give them (each call's hour in its line's zone) */
+export interface InboundHour {
+  hour: number;
+  offered: number;
+  answered: number;
+  unanswered: number;
+  waiting: number;
+  serviceLevelPct: number | null;
+}
+
+/**
+ * The 24 hours 00 to 23 from cma.inbound_service's hour rows (group key "00" to "23"; the total row, with no key, left
+ * out), an hour without calls at 0, so the chart's columns never move
+ */
+export function inboundHours(rows: readonly { groupKey: string | null; offered: number; answered: number; unanswered: number; waiting: number; serviceLevelPct: number | null }[]): InboundHour[] {
+  const byHour = new Map<number, InboundHour>();
+  for (const r of rows) {
+    if (r.groupKey === null || !/^([01]\d|2[0-3])$/.test(r.groupKey)) continue;
+    const hour = Number(r.groupKey);
+    byHour.set(hour, { hour, offered: r.offered, answered: r.answered, unanswered: r.unanswered, waiting: r.waiting, serviceLevelPct: r.serviceLevelPct });
+  }
+  return Array.from({ length: 24 }, (_, hour) => byHour.get(hour) ?? { hour, offered: 0, answered: 0, unanswered: 0, waiting: 0, serviceLevelPct: null });
+}
+
+/**
+ * The axis' top for counts: the largest value rounded up to a clean whole step (1, 1.5, 2, 2.5, 3, 4, 5, 6, 8 or 10 times
+ * a power of ten), at least 4, so the tallest column fills most of the plot
+ */
+export function niceCeiling(max: number): number {
+  const m = Math.max(4, Math.ceil(max));
+  const p = 10 ** Math.floor(Math.log10(m));
+  for (const f of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (f * p >= m && Number.isInteger(f * p)) return f * p;
+  return 10 * p;
+}
+
+// ---- The board's poll state and its words (the Live board's UX and speed pass, 10 November 2026) ---------
+
+/** A poll that has not answered after this long is given up and counts as failed (the Live board's UX pass, 10 November 2026) */
+export const LIVE_POLL_TIMEOUT_MS = 8_000;
+
+/**
+ * Whether the board says its figures are old: after two failed polls in a row (at least 30 seconds without a new read,
+ * the wait doubling), never after one, which the next poll usually mends unseen (the Live board's UX pass)
+ */
+export const LIVE_STALE_AFTER_FAILURES = 2;
+export function isStale(failures: number): boolean {
+  return failures >= LIVE_STALE_AFTER_FAILURES;
+}
+
+/**
+ * The hints and follow-up words the board shows, the only ones the page sends with it (the Live board's speed review, 10
+ * November 2026: the whole hints object, 447 entries, weighed about 12 kB gzip in every board's page, of which the board
+ * shows about thirty). The board's components take these types, so a hint used and not sent fails the build
+ */
+export const LIVE_HINT_KEYS = [
+  "about", "howComputed", "officeHours",
+  "liveOffered", "liveAnswered", "unansweredPct", "serviceLevel", "liveInboundTalk", "avgAnswer", "liveHours",
+  "liveOutboundAttempts", "callsConnected", "callsConnectedMin", "callsConnectedRate", "liveOutboundConversations", "liveOutboundTalk", "liveOutboundAvgTalk",
+  "fuLeadsOpen", "fuLeadsPast", "fuTicketsAtRisk", "fuTicketsBreached", "fuTasksOverdue", "fuTasksToday",
+  "missedCallbacks", "missedLine", "missedMarket", "missedReason", "missedAt", "missedWaiting", "missedTimes",
+] as const satisfies readonly (keyof Copy["hints"])[];
+export type LiveHints = Pick<Copy["hints"], (typeof LIVE_HINT_KEYS)[number]>;
+export const LIVE_FOLLOW_UP_KEYS = [
+  "tileLeadsOpen", "tileLeadsPast", "tileTicketsAtRisk", "tileTicketsBreached", "tileTasksOverdue", "tileTasksToday",
+] as const satisfies readonly (keyof Copy["followUp"])[];
+export type LiveFollowUpWords = Pick<Copy["followUp"], (typeof LIVE_FOLLOW_UP_KEYS)[number]>;
+
+/** The board's slice of the copy object: these keys of hints and followUp, the other parts whole (they are small) */
+export type LiveBoardWords = Pick<Copy, "live" | "inbound" | "reports" | "dashboard"> & { hints: LiveHints; followUp: LiveFollowUpWords };
+export function liveBoardWords(copy: Copy): LiveBoardWords {
+  const pick = <T extends object, K extends keyof T>(o: T, keys: readonly K[]) => Object.fromEntries(keys.map((k) => [k, o[k]])) as Pick<T, K>;
+  return {
+    live: copy.live, inbound: copy.inbound, reports: copy.reports, dashboard: copy.dashboard,
+    hints: pick(copy.hints, LIVE_HINT_KEYS), followUp: pick(copy.followUp, LIVE_FOLLOW_UP_KEYS),
+  };
 }

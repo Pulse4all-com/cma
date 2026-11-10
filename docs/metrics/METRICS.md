@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-614 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 116 · cadence_unconfirmed 73.
+615 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 116 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -1604,6 +1604,58 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 **Notes**
 
 An average, as labelled (audit rule 6); the 80th percentile is returned by the API but not shown (15 Oct 2026 decision; catalogued by agent api-health). Formatted by fmtAnswerSeconds ('17 s' / '1m 05s'). Cross-page: this tile windows calls by started_at in the TENANT'S zone (since its midnight), while Reports → Inbound grouped by day puts each call on its business date in the LINE'S market zone, so for a line in another zone today's row there can differ from this tile (intentional and stated in the hint 'in the organisation's time zone' / the report's intro; see findings). Measures themselves are the same code path (cma.inbound_calls_of + identical aggregates). Tenant without telephony: the whole row is replaced by 'No telephony connected', never 0; with telephony and no calls, 0 is shown.
+
+#### `live.inbound.hours`
+
+**Inbound today by hour** on /live/board · Inbound today by hour (Inkomend vandaag per uur)
+
+Today's inbound calls per hour of the day, answered and unanswered, as a column per hour from 00 to 23; waiting calls and the service level per hour on hover or focus.
+
+**Formula as computed**
+
+```
+Per hour h (00 to 23) of today: answered and unanswered as cma.inbound_service(today, today, 'hour') answers them (the hour rows; the total row left out), stacked, answered Deep Blue under unanswered Warning amber; the axis' top niceCeiling(max(answered + unanswered)); an hour without calls is an empty column. Read by the board's client from GET /api/v1/reports/inbound?from=today&to=today&group=hour after the first paint and every 60 s while the tab is visible, not in the 10-second poll.
+```
+
+**Unit** count · **Grain** now · **Status** cadence_unconfirmed
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.telephony_call` | direction, started_at, source_deleted_at, number_ref | Aircall | Aircall webhook (one event per call change; VENDOR_SETUP §2.3) → ingest service POST /<adapter>/<key> (adapter aircall) → read-back GET /v1/calls/{id} → cma.ingest_upsert_telephony_calls() (0007a, skip rule 0008f); the Cloud Run job ingest-reconcile re-reads the look-back nightly and the manual backfill writes through the same function | event-driven; the webhook subscription is configured outside the repo: the Aircall dashboard (ingest-reconcile checks it each run), to confirm; reconcile 03:30 Europe/Amsterdam with a 26 h look-back (docs/ingest/deploy.sh, default '30 3 * * *') |
+| `cma.telephony_number` | connection_id, number_ref, name, market, is_counted | Aircall | GET /v1/numbers → cma.ingest_upsert_telephony_catalog(), refreshed inside the Cloud Run job ingest-sweep at most hourly per connection; is_counted and market set on Configuration → Sources (cma.set_telephony_number()) | ingest-sweep every minute (docs/ingest/deploy.sh '* * * * *'); the catalog refresh inside it at most hourly per connection |
+| `cma.market` | code, time_zone | CMA | the Workspace's own write path: Configuration → Markets | on change |
+
+**Filters**
+
+- tenant: RLS plus the explicit tenant of cma.inbound_service_of (cma.current_tenant_id())
+- as live.inbound.offered: inbound, not deleted, with a start, counted lines
+- today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date, each in the hour of its line's zone, as Reports → Inbound groups by hour
+- tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
+- shown only to a holder of reports.view or performance.team (the report's permission); a viewer without it sees no chart
+
+**Time** Today = the tenant's date (the board's Inbound today date); each call on its date and hour in its line's market zone, else the tenant's (cma.inbound_calls_of), as Reports → Inbound's hour view: the hours are each line's own, the running hour marked in the viewer's zone. Inbound today's tiles window on the tenant's midnight instead (cross-page note)
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** After the board's first paint and every 60 s while the tab is visible, once more when it comes back (LiveHours); never in the 10-second poll; a failed read keeps the last chart
+
+**Computed in** `cma.inbound_service` (0008i); `cma.inbound_service_of` (0008i); `cma.inbound_calls_of` (0008zx); `inboundHours` in src/lib/live.ts; `LiveHours` in src/components/LiveHours.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select group_key as hour, offered, answered, unanswered, waiting, service_level_pct from cma.inbound_service_of(:tenant_id, (now() at time zone (select timezone from cma.tenant where id = :tenant_id))::date, (now() at time zone (select timezone from cma.tenant where id = :tenant_id))::date, 'hour') where group_key is not null order by group_key
+```
+
+**Fixture check** Not run here: this session has no database. The query is Reports → Inbound's own read for today grouped by hour; Martin compares it with the chart in Studio.
+
+**Documented in** features.md §5, Live board (the Live board's UX pass, 10 Nov 2026); api.md, GET /api/v1/reports/inbound (group=hour); definitions.md, Inbound call, Day (D4)
+
+**Notes**
+
+The same figures as Reports → Inbound grouped by hour for today. Colours: Deep Blue and Warning amber pass the palette validator on white (lightness, chroma, colour-blind and normal-vision separation); amber's contrast warning is met by the legend, the tooltip on hover and focus, and a table view for screen readers. Waiting calls (only ever in the running hour) are in the tooltip, not drawn.
 
 #### `live.outbound.attempts`
 

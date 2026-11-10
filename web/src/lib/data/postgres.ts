@@ -84,12 +84,13 @@ type DayRow = HeaderRow & {
  * A day's sessions (addition 0008zp), for the day `w` stands for: its effective clock-ins, the latest
  * one's start, the tenant's workday.clock_in_again, and cma.workday_can_clock_in_again at the
  * database's now (the rule the clock-in checks, so the card and the write never disagree).
- * `w` is a workday id expression of the enclosing query, never caller text.
+ * `w` is a workday id expression of the enclosing query, never caller text. The tenant's setting is a scalar subquery,
+ * read once per statement, not once per row of the team now (the Live board's speed review, 10 November 2026; night N06)
  */
 const SESSIONS = (w: string) => `
             coalesce(se.sessions, 0)::int            as sessions,
             se.session_started_at,
-            coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false) as clock_in_again,
+            (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)) as clock_in_again,
             cma.workday_can_clock_in_again(${w})     as can_clock_in_again`;
 const SESSIONS_JOIN = (w: string) => `
        left join lateral (

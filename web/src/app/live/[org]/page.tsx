@@ -3,7 +3,8 @@ import { LiveBoardLive } from "@/components/LiveBoardLive";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
-import { boardOfOrganisation } from "@/lib/live";
+import { boardOfOrganisation, liveBoardWords } from "@/lib/live";
+import { REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
@@ -67,19 +68,17 @@ export default async function LiveBoardPage({ params }: { params: Promise<{ org:
   // One read, one transaction: the team now, the memberships, today's shifts, the settings, inbound, outbound and follow-up;
   // then this contact center's people only
   const board = boardOfOrganisation(await data().getLiveBoard(me), center.key);
-  // The board's words only (a slice of the copy object; the whole one weighed about 90 kB in every poll's page before)
-  const liveCopy = { live: copy.live, hints: copy.hints, inbound: copy.inbound, reports: copy.reports, followUp: copy.followUp, dashboard: copy.dashboard };
+  // The board's words only (a slice of the copy object; the whole one weighed about 90 kB in every poll's page before; since
+  // the Live board's speed review of 10 November 2026 only the hints and follow-up words the board shows)
+  const liveCopy = liveBoardWords(copy);
 
   return (
     <Shell copy={copy} me={me} active="live-board" activeHref={href} wide>
-      <PageTitle>
-        {t.title}
-        <span className="ml-3 text-small font-normal text-p4a-muted">{fmtDate(dateKeyInZone(new Date(), me.timeZone), me.locale)}</span>
-      </PageTitle>
-      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
-
+      {/* the board draws the title row and the intro itself, so its freshness sits on the title's line */}
       <LiveBoardLive initial={board} organisation={center} viewer={{ locale: me.locale, timeZone: me.timeZone }} copy={liveCopy}
-        canOpenMetrics={me.permissions.includes("tenant.configure")} />
+        heading={{ date: fmtDate(dateKeyInZone(new Date(), me.timeZone), me.locale) }}
+        canOpenMetrics={me.permissions.includes("tenant.configure")}
+        canReadHours={REPORT_PERMISSIONS.some((p) => me.permissions.includes(p))} />
 
       {dataIsMock ? (
         <div className="mt-6">

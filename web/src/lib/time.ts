@@ -4,6 +4,7 @@
  */
 import type { DateKey, Instant } from "@/lib/data/types";
 import type { Locale } from "@/lib/copy";
+import { dateTimeFormat, numberFormat } from "./intl.ts";
 
 const keyFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -20,7 +21,7 @@ export function dateKeyInZone(instant: Instant | Date, timeZone: string): DateKe
 
 /** The hour (0 to 23) of an instant in a zone, for a greeting by time of day */
 export function hourInZone(instant: Instant | Date, timeZone: string): number {
-  const part = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "numeric", hourCycle: "h23" })
+  const part = dateTimeFormat("en-GB", { timeZone, hour: "numeric", hourCycle: "h23" })
     .formatToParts(typeof instant === "string" ? new Date(instant) : instant)
     .find((p) => p.type === "hour")?.value;
   return Number(part ?? 0) % 24;
@@ -67,7 +68,7 @@ const intlLocale: Record<Locale, string> = { en: "en-GB", nl: "nl-NL" };
 
 /** 08:02 */
 export function fmtTime(instant: Instant, timeZone: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(instant));
+  return dateTimeFormat(intlLocale[locale], { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(instant));
 }
 
 /**
@@ -81,7 +82,7 @@ export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | 
   // writes "Sat 17 Oct", a browser "Sat, 17 Oct"), and a client component that formats a date on the server
   // and again in the browser must render the same text, or React regenerates the tree (the IT audit of
   // 17 October 2026, React error 418 on Messages, the roster planner and Alert rules)
-  return new Intl.DateTimeFormat(intlLocale[locale], {
+  return dateTimeFormat(intlLocale[locale], {
     timeZone: "UTC",
     weekday: style === "short" ? undefined : "short",
     day: "numeric",
@@ -116,18 +117,18 @@ export function fmtLastRead(instant: Instant, now: Instant | Date, timeZone: str
  * image since 4 November 2026) English writes 12 – 18 October 2026, Dutch still 12–18 oktober 2026
  */
 export function fmtDateRange(from: DateKey, to: DateKey, locale: Locale): string {
-  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" })
+  return dateTimeFormat(intlLocale[locale], { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" })
     .formatRange(toUtcDate(from), toUtcDate(to));
 }
 
 /** 21 October 2026, 14:05 / 21 oktober 2026 om 14:05: an instant with its date, for an expiry */
 export function fmtDateTime(instant: Instant, timeZone: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, dateStyle: "long", timeStyle: "short" }).format(new Date(instant));
+  return dateTimeFormat(intlLocale[locale], { timeZone, dateStyle: "long", timeStyle: "short" }).format(new Date(instant));
 }
 
 /** The zone's short name at an instant (CEST, BST), for times shown in someone else's zone */
 export function fmtZoneShort(instant: Instant, timeZone: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, timeZoneName: "short" })
+  return dateTimeFormat(intlLocale[locale], { timeZone, timeZoneName: "short" })
     .formatToParts(new Date(instant))
     .find((p) => p.type === "timeZoneName")?.value ?? timeZone;
 }
@@ -135,7 +136,7 @@ export function fmtZoneShort(instant: Instant, timeZone: string, locale: Locale)
 /** True when two zones show the same clock time at an instant (Madrid and Amsterdam do, London does not) */
 export function sameOffset(instant: Instant, zoneA: string, zoneB: string): boolean {
   const offset = (timeZone: string) =>
-    new Intl.DateTimeFormat("en", { timeZone, timeZoneName: "longOffset" })
+    dateTimeFormat("en", { timeZone, timeZoneName: "longOffset" })
       .formatToParts(new Date(instant))
       .find((p) => p.type === "timeZoneName")?.value ?? timeZone;
   return offset(zoneA) === offset(zoneB);
@@ -151,6 +152,6 @@ export function fmtMinutes(minutes: number): string {
 /** 82%, whole percents; "< 1%" for a small share that is not zero; a dash when there is nothing to divide by */
 export function fmtPercent(share: number | null, locale: Locale): string {
   if (share === null) return "–";
-  const f = new Intl.NumberFormat(intlLocale[locale], { style: "percent", maximumFractionDigits: 0 });
+  const f = numberFormat(intlLocale[locale], { style: "percent", maximumFractionDigits: 0 });
   return share > 0 && share < 0.005 ? `< ${f.format(0.01)}` : f.format(share);
 }

@@ -80,8 +80,8 @@
   {
     "path": "/live/newco",
     "subject": "manager",
-    "tx": 7,
-    "rt": 33
+    "tx": 2,
+    "rt": 16
   },
   {
     "path": "/team/hours",
@@ -386,8 +386,8 @@
   {
     "path": "/live/newco",
     "subject": "supervisor",
-    "tx": 7,
-    "rt": 33
+    "tx": 2,
+    "rt": 16
   },
   {
     "path": "/team/hours",
