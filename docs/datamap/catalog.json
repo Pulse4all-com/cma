@@ -212,7 +212,7 @@
         },
         {
           "name": "pledge_snapshot",
-          "what": "A quarter file's header: its valuation date (unique per tenant), when and by whom it was taken, the counts of loans and devices and the sources' last reads; frozen, an update, delete or truncate is refused (0009j)",
+          "what": "A quarter file's header: its valuation date (unique per tenant), when and by whom it was taken, the counts of loans and devices, the sources' last reads and file_name_prefix (pledges.file_name_prefix frozen at the take, so the file keeps its name); frozen, an update, delete or truncate is refused (0009j)",
           "how": "Taken once per quarter by cma.pledge_snapshot_take in the Flash snapshot job (web/jobs/snapshot-flash.mjs, every minute) on the quarter's first day after pledges.snapshot_local_time in the tenant's zone, or by cma.pledge_snapshot_take_current; the application can only read it"
         },
         {
