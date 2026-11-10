@@ -29,11 +29,13 @@
 --                      cma.call_not_reached_of's own exists() (cma.tag_meaning_excludes_conversation), one index probe
 --                      per call. sql, stable, jit off, rows 1, the application's only, as 164
 --   cma.outbound_now() is not touched: it reads cma.outbound_today_of
--- Two reads now hold the calls rule for a day: cma.calls_of (Reports → Calls) and this one. 167 compares this one row
--- for row with 164's cma.calls_of version, kept there as a temporary function, and 165's B2 and B3 pin it to
--- cma.calls_figures_of and cma.is_conversation: a change to cma.calls_of's rule that this read does not follow fails
--- 165 (CLAUDE.md: a migration that re-creates cma.calls_of reruns the verifies of its callers; 165 and 167 are run with
--- them from now on).
+-- Two reads now hold the calls rule for a day: cma.calls_of (Reports → Calls) and this one. 167 is the guard for all
+-- seven figures: it compares this read row for row with 164's read through cma.calls_of, kept there as a temporary
+-- function, so a change to cma.calls_of's rule that this read does not follow fails 167. 165 guards five of them against
+-- the report (B2 and E2: outbound, connected, connected rate and the outbound talk figures equal cma.calls_figures_of)
+-- and the conversations against cma.is_conversation over the stored calls (B3), not against cma.calls_of. Both name
+-- cma.calls_of, so the rerun rule (grep -lw 'cma\.calls_of' db/*verify*.sql) lists them for a migration that re-creates
+-- it.
 --
 -- SQLSTATEs as before.
 --

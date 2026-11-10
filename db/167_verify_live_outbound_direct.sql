@@ -22,9 +22,9 @@
 --       cma.is_connected, cma.is_conversation and cma.tag_meaning_excludes_conversation, and does not call cma.calls_of
 --   B1  the fixed calls of 6 October: 11 attempts, 10 connected, 90.9, 5 conversations (not with a current tag meaning
 --       not_reached, counted or not, nor incorrect_data; again once the tag is removed), 751 s, 83.4 on average
---   B2  the same row as 0009h's definition at seven instants: 6 October, the day before (two calls), 1 October (no
---       call), 7 October, the running day, and 6 October with telephony.connected_min_seconds 5 and with
---       calls.conversation_min_talk_seconds 31
+--   B2  the same row as 0009h's definition at five instants (6 October, the day before with its two calls, 1 October
+--       without a call, 7 October, the running day) and at 6 October under two settings
+--       (telephony.connected_min_seconds 5, calls.conversation_min_talk_seconds 31)
 --   B3  the plan of the function's own statement, as the application, in the generic plan: cma.telephony_call is read
 --       by an index with a condition on started_at, never by a sequential scan (with enable_seqscan off: the throwaway
 --       tenant is too small for the planner to prefer an index otherwise; what is proven is that the bounds reach the
@@ -180,6 +180,9 @@ begin
 exception when others then
   perform set_config('enable_seqscan', 'on', true);
   perform set_config('plan_cache_mode', 'auto', true);
+  if exists (select 1 from pg_prepared_statements where name = 'v0009i_p') then
+    execute 'deallocate v0009i_p';
+  end if;
   return 'error ' || sqlstate || ': ' || left(sqlerrm, 120);
 end
 $$;
