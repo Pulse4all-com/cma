@@ -398,3 +398,14 @@ export function liveBoardWords(copy: Copy): LiveBoardWords {
     hints: pick(copy.hints, LIVE_HINT_KEYS), followUp: pick(copy.followUp, LIVE_FOLLOW_UP_KEYS),
   };
 }
+
+/** How often Inbound today by hour is read again while the tab is visible: the hours change by the call, not the second */
+export const LIVE_HOURS_MS = 60_000;
+
+/**
+ * Whether the hours are due for a read: never read (0), or read at least LIVE_HOURS_MS ago. A tab that comes back
+ * within the minute keeps its chart and waits for the rest of the minute (cma-performance, 10 November 2026)
+ */
+export function hoursDue(lastReadMs: number, nowMs: number): boolean {
+  return lastReadMs === 0 || nowMs - lastReadMs >= LIVE_HOURS_MS;
+}

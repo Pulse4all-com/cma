@@ -14,7 +14,8 @@
 -- tenant's first active person holding monitoring.live), under row-level security, as the board's poll does
 -- (web/src/lib/data/postgres.ts getLiveBoard, one transaction). Output: ids, counts, plans and milliseconds only; no
 -- person's name, no call, number or hash is selected or printed (the plans show conditions and constants, never a
--- row's content).
+-- row's content). The output file holds the tenant's and the acting person's ids: a prod output is never committed to
+-- records/ before node tools/check-records.mjs records/<dir> passes (CLAUDE.md, Git and release).
 --
 -- Parts
 --   0  context: the tenant and acting user (ids), the sizes that drive the poll (people on the board, today's calls,
@@ -27,7 +28,8 @@
 --      (per row: the day's end, the clock-ins, workday_can_clock_in_again) is known
 --   3  inbound now taken apart: the missed callers with their record links as cma.inbound_now() builds them, the
 --      anonymous count, today's figures (cma.inbound_today_live_of, 168), and outbound now
---   4  each statement run seven times more on this connection, every row and column fetched: the first of them (the
+--   4  each statement run seven times more on this connection, every row and column fetched (and, apart from the
+--      poll's sum, Inbound today by hour's read, which the board makes once a minute): the first of them (the
 --      statement's second call, part 1 was its first), the seventh (its eighth, past a pooled connection's switch to
 --      the generic plan after five calls) and the best, and their sum: the poll's database time against the 20 ms budget
 -- =============================================================================================
@@ -174,6 +176,24 @@ begin
     raise notice '%: first % ms, seventh % ms, best % ms', rpad(v_name[i], 34), v_first, v_seventh, v_best;
   end loop;
   raise notice '%: first % ms, seventh % ms, best % ms (the budget: 20 ms of database time per poll)', rpad('the poll, summed', 34), v_sum_first, v_sum_seventh, v_sum_best;
+  -- the chart's read, once a minute, not in the poll's sum (the acting person may lack its permission: then it says so)
+  v_best := null;
+  begin
+  for run in 1 .. 7 loop
+    v_t0 := clock_timestamp();
+    for r in execute $q$select * from cma.inbound_service((now() at time zone (select t.timezone from cma.tenant t where t.id = cma.current_tenant_id()))::date,
+                                                          (now() at time zone (select t.timezone from cma.tenant t where t.id = cma.current_tenant_id()))::date, 'hour')$q$ loop
+      null;
+    end loop;
+    v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 2);
+    if run = 1 then v_first := v_ms; end if;
+    if run = 7 then v_seventh := v_ms; end if;
+    v_best := least(coalesce(v_best, v_ms), v_ms);
+  end loop;
+  raise notice '%: first % ms, seventh % ms, best % ms (once a minute, outside the poll)', rpad('inbound today by hour (chart)', 34), v_first, v_seventh, v_best;
+  exception when sqlstate 'CMA06' then
+    raise notice '%: not timed, the acting person holds neither reports.view nor performance.team', rpad('inbound today by hour (chart)', 34);
+  end;
 end
 $$;
 

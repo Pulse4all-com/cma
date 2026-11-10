@@ -35,7 +35,8 @@
  */
 import {
   INBOUND_TILES, LIVE_FOLLOW_UP_KEYS, LIVE_GROUPS, LIVE_HINT_KEYS, LIVE_POLL_TIMEOUT_MS, LIVE_STALE_AFTER_FAILURES, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting,
-  employersOf, filterRows, fmtSeconds, inboundHours, inboundTalkToday, inboundTileValue, isStale, liveBoardWords, liveGroupOf, liveRows, missedCallbacks, niceCeiling,
+  employersOf, filterRows, fmtSeconds, hoursDue, inboundHours, inboundTalkToday, inboundTileValue, isStale, LIVE_HOURS_MS, liveBoardWords, liveGroupOf, liveRows,
+  missedCallbacks, niceCeiling,
   outboundTileValue, outboundToday, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
 import { callRecords, callRules, callsFigures, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
@@ -375,6 +376,9 @@ expect("the axis' top: a clean whole step at or above the tallest column, at lea
 expect("the board says its figures are old after two failed polls in a row, never after one; a poll gives up before the next is due",
   [isStale(0), isStale(1), isStale(LIVE_STALE_AFTER_FAILURES), isStale(5), LIVE_POLL_TIMEOUT_MS < 10_000],
   [false, false, true, true, true], [false, true, true, true, true]);
+expect("the hours are read when never read or a minute old; a tab back within the minute waits",
+  [hoursDue(0, 5_000), hoursDue(1_000, 1_000 + LIVE_HOURS_MS - 1), hoursDue(1_000, 1_000 + LIVE_HOURS_MS), LIVE_HOURS_MS],
+  [true, false, true, 60_000], [true, true, true, 60_000]);
 const words = liveBoardWords(copy.en);
 const wordsNl = liveBoardWords(copy.nl);
 const hintKeys = Object.keys(words.hints).sort();

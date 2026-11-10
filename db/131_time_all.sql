@@ -174,6 +174,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'polls', 'inbound now (one statement)', $q$select cma.inbound_now()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'outbound now', $q$select cma.outbound_now()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'live board calls (one statement)', $q$select cma.inbound_now() as j, cma.outbound_now() as o$q$, 'poll', array['monitoring.live']),
+-- Inbound today by hour, the Live board's chart (10 November 2026): Reports → Inbound's read for today, once a minute per open board
+('a', 'polls', 'inbound today by hour (the board chart)', $q$select * from cma.inbound_service('{today}', '{today}', 'hour')$q$, 'poll', array['reports.view', 'performance.team']),
 ('a', 'polls', 'shifts today', $q$select * from cma.roster_today()$q$, 'poll', array['monitoring.live']),
 -- agent pages
 ('a', 'welcome agent', 'own day today', $q$select s.business_date, s.status, s.started_at, s.ended_at, ws.key, ws.name, coalesce(c.closed_seconds, 0)::int, c.running_since, c.status_since,

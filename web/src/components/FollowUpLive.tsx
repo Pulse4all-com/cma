@@ -3,8 +3,7 @@
  * cma.follow_up_summary: leads not called and past the target, tickets at risk and over their response
  * time, tasks overdue and due today. Counts only; the Follow-up report has the rows. One panel of six figures as the call
  * panels (StatPanel, the Live board's UX pass of 10 November 2026; docs/style/Pulse4all-Style.md 7.3), each with its hint,
- * no figure a filled red tile. A server component:
- * the page's poll (LiveRefresh) reads it again every 10 seconds. On a contact center's board (addition 0008zv) a caption
+ * no figure a filled red tile. Rendered by the board's poll (LiveBoardLive), which reads it again every 10 seconds. On a contact center's board (addition 0008zv) a caption
  * under the title says the counts cover the whole business line (Martin, 5 November 2026).
  */
 import Link from "next/link";

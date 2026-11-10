@@ -8,7 +8,7 @@
  * (Martin, 20 October 2026), one row per caller, oldest first, with the line, market, reason, the
  * time of the latest missed call, the waiting time in office time of the line's market, how often the
  * caller was missed and a link icon only when the connection has a call link template; then the count
- * of anonymous missed calls. A server component: the page's poll (LiveRefresh) reads it again every 10
+ * of anonymous missed calls. Rendered by the board's poll (LiveBoardLive), which reads it again every 10
  * seconds. Ids, codes, line names and counts only: no number, no name, never the caller's hash. A tenant
  * without telephony sees "No telephony connected", never 0. Tiles are white cards with Deep Blue figures
  * and Muted labels (docs/style/Pulse4all-Style.md 7.3: radius 15px, padding 24px); since the Live board's UX pass (10

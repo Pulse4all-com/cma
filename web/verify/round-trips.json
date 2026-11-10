@@ -366,6 +366,12 @@
     "rt": 16
   },
   {
+    "path": "/api/v1/reports/inbound?from=2026-10-14&to=2026-10-14&group=hour",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 12
+  },
+  {
     "path": "/api/v1/live/board?organisation=newco",
     "subject": "manager",
     "tx": 2,

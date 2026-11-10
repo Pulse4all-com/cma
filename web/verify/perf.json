@@ -227,6 +227,11 @@
       "path": "/api/v1/live/board?organisation=newco",
       "subject": "manager",
       "class": "poll"
+    },
+    {
+      "path": "/api/v1/reports/inbound?from=2026-10-14&to=2026-10-14&group=hour",
+      "subject": "manager",
+      "class": "poll"
     }
   ],
   "html_kb": {

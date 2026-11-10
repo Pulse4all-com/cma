@@ -127,7 +127,7 @@ export function LiveBoard({
                   {isGroup(tile.group) ? <Swatch group={tile.group} /> : null}
                   {label(tile.group).label}
                 </p>
-                <p className="mt-auto pt-1 text-title font-bold text-p4a-heading">{tile.count}</p>
+                <p className="tabular mt-auto pt-1 text-title font-bold text-p4a-heading">{tile.count}</p>
               </button>
             </div>
           ))}

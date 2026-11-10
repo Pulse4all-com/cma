@@ -89,4 +89,3 @@ export const LIVE_POLL_MAX_MS = 60_000;
 export function nextPollMs(failures: number): number {
   return Math.min(LIVE_POLL_MAX_MS, LIVE_POLL_MS * 2 ** failures);
 }
-

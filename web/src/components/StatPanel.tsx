@@ -5,8 +5,8 @@
  * figures took two rows each at 1280 px; one panel each puts every figure of the board on the first screen. The columns
  * line up from panel to panel, so Inbound today's Talk time sits above Outbound today's. Cards per
  * docs/style/Pulse4all-Style.md 7.3 (radius 15px, padding 24px, white with the border), dividers per 7.1, the title an
- * h4 (18px Semi Bold Deep Blue), the dense scale of 3.3 (labels 13px Muted, figures 24px Bold Deep Blue, proportional
- * figures, as the dataviz rule for a standalone value). A label wraps, and a long Dutch word is hyphenated in its
+ * h4 (18px Semi Bold Deep Blue), the dense scale of 3.3 (labels 13px Muted, figures 24px Bold Deep Blue in tabular
+ * figures, as the tiles before: a figure that changes with every poll keeps its width). A label wraps, and a long Dutch word is hyphenated in its
  * language ("Verbindingspercentage"), never cut off. The data-testid and data-tile hooks are the tiles' before
  * (verify:layout, verify:live).
  */
@@ -60,7 +60,8 @@ export function Stat({ label, info, value, testId, locale }: {
         <HeaderHint label={info.about} text={info.text} more={info.more} />
       </p>
       {/* at the cell's foot, so the figures of a row line up when a label takes two lines */}
-      <div className="mt-auto whitespace-nowrap pt-1 text-title font-bold text-p4a-heading">{value}</div>
+      {/* tabular figures, as the tiles before: a figure that changes every poll keeps its width */}
+      <div className="tabular mt-auto whitespace-nowrap pt-1 text-title font-bold text-p4a-heading">{value}</div>
     </div>
   );
 }

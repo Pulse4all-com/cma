@@ -36,17 +36,22 @@ export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "live
       </nav>
       <main className="min-h-0 overflow-hidden bg-p4a-sand px-10 py-8">
         <div className="max-w-screen-2xl">
-          {bar("w-72", "h-8")}
-          <div className="mt-3">{bar("w-96", "h-3")}</div>
+          {shape === "liveBoard" ? (
+            // the board's own title row (the freshness on it, as LiveBoardLive draws it) and its two-line intro, then the
+            // panels at their heights: a title line of 25px, labels of 18px, figures of 31px
+            <div className="mb-6 flex items-end justify-between border-b border-p4a-border pb-3">{bar("w-72", "h-8")}{bar("w-80", "h-3")}</div>
+          ) : (
+            bar("w-72", "h-8")
+          )}
+          <div className="mt-3 flex flex-col gap-2">{bar("w-96", "h-3")}{shape === "liveBoard" ? bar("w-80", "h-3") : null}</div>
           {shape === "liveBoard" ? (
             <div className="mt-6 flex flex-col gap-6" data-skeleton-shape="liveBoard">
-              <div className="flex justify-end">{bar("w-80", "h-3")}</div>
               {[0, 1, 2, 3].map((i) => (
                 <section key={i} className="rounded-card border border-p4a-border bg-white p-6">
-                  {bar("w-56", "h-5")}
-                  <div className="mt-5 grid grid-cols-6 divide-x divide-p4a-border">
+                  {bar("w-56", "h-6")}
+                  <div className="mt-4 grid grid-cols-6 divide-x divide-p4a-border">
                     {[0, 1, 2, 3, 4, 5].map((j) => (
-                      <div key={j} className="flex flex-col gap-2 px-4 first:pl-0 last:pr-0">{bar("w-3/4", "h-3")}{bar("w-1/2", "h-6")}</div>
+                      <div key={j} className="flex flex-col gap-1 px-4 first:pl-0 last:pr-0">{bar("w-3/4", "h-4")}{bar("w-1/2", "h-8")}</div>
                     ))}
                   </div>
                 </section>

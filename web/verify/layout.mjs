@@ -1187,8 +1187,12 @@ async function expectLiveBoard() {
       const stale = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
       const sp = await stale.newPage();
       await sp.clock.install();
+      // the chart's read fails from the start too: it says so calmly instead of loading for ever
+      if (!provoke) await sp.route("**/api/v1/reports/inbound**", (r) => r.abort());
       await sp.goto(BASE + "/live/newco");
       await settle(sp);
+      const hoursFailed = await sp.locator('[data-testid="inbound-hours-failed"]').waitFor({ state: "visible", timeout: 10_000 }).then(() => true, () => false);
+      if (!hoursFailed) problems.push(`${subject} /live/newco: no word that Inbound today by hour could not be read`);
       if (!provoke) await sp.route("**/api/v1/live/board**", (r) => r.abort());
       // in steps, so each failed poll's answer lands before the clock moves on (polls at 10 s, then 30 s: the wait doubles)
       for (let i = 0; i < 4; i++) {

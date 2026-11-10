@@ -53,7 +53,7 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
   canOpenMetrics: boolean;
   /** True for a holder of reports.view or performance.team: Inbound today by hour, from Reports → Inbound's read */
   canReadHours?: boolean;
-  /** The page's title, today's date and the intro: the board draws its title row, so its freshness sits on it */
+  /** Today's date for the title row: the board draws its title row and intro, so its freshness sits on the title's line */
   heading: { date: string };
 }) {
   const [data, setData] = useState(initial);
@@ -168,10 +168,9 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
         />
       )}
 
+      {/* its own top margin, so a chart that hides itself (no permission after all, no telephony) leaves no gap */}
       {canReadHours && data.inbound.telephony && data.inbound.today ? (
-        <div className="mt-6">
-          <LiveHours date={data.inbound.today.date} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines} />
-        </div>
+        <LiveHours date={data.inbound.today.date} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines} />
       ) : null}
 
       <div className="mt-6">
