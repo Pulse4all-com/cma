@@ -30,8 +30,9 @@
 --                      cma.calls_of), outbound_talk_seconds (the talk time of the connected calls, 0 without one) and
 --                      outbound_talk_avg (its average over the connected calls with talk time, one decimal; null
 --                      without one). Today is Day: the calls whose business date in their own line's zone (the line's
---                      market's, else the tenant's) is that date, read from cma.calls_of a day on each side, exactly as
---                      cma.calls_figures_of (100) reads a period, so the figures equal Reports → Calls for today
+--                      market's, else the tenant's) is that date, read from cma.calls_of over the instants the date covers
+--                      in the tenant's zones and counted as cma.calls_figures_of (100) counts a day, so the figures
+--                      equal Reports → Calls for today
 --                      (outbound, connected, connected_rate, outbound_talk_seconds, outbound_talk_avg). Counted lines
 --                      only (cma.calls_of), every line of the tenant. p_now is now() for the application; a verifier
 --                      gives a fixed instant (as cma.calls_overview_of). The zone and the date as scalar subqueries
@@ -71,9 +72,10 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 1. Outbound today
 -- ---------------------------------------------------------------------------------------------
--- The same calls and the same expressions as cma.calls_figures_of (100) for the one date: a day on each side of the
--- tenant's date, so a line in another zone than the tenant's keeps its whole date; the tenant's zone and date as scalar
--- subqueries, never a joined one-row relation (night N06)
+-- The same calls and the same expressions as cma.calls_figures_of (100) for the one date. That function reads a day on
+-- each side of a period; this one is a poll, so it reads only the instants the date covers in the tenant's zones (w
+-- below), which holds every call of the date and, for a tenant in one zone, nothing else. The date and the window as
+-- scalar subqueries, never a joined one-row relation (night N06)
 create or replace function cma.outbound_today_of(p_tenant_id uuid, p_now timestamptz default now())
 returns table (
   business_date          date,
@@ -90,6 +92,16 @@ as $$
   with s as (
     select t.timezone as zone, (p_now at time zone t.timezone)::date as today
     from cma.tenant t where t.id = p_tenant_id
+  ),
+  -- the instants the date covers in any zone a call of the tenant can have (cma.calls_of: the line's market's, else the
+  -- tenant's): from the date's first midnight to its last. A call whose business date is the date started inside its own
+  -- zone's day, so inside this window; for a tenant in one zone the window is the day itself
+  w as (
+    select min(s.today::timestamp at time zone z.zone) as from_at, max((s.today + 1)::timestamp at time zone z.zone) as to_at
+    from s
+    cross join lateral (select s.zone
+                        union
+                        select m.time_zone from cma.market m where m.tenant_id = p_tenant_id and m.time_zone is not null) z
   )
   select (select s.today from s),
          count(*)::integer,
@@ -98,9 +110,7 @@ as $$
          (count(*) filter (where c.is_conversation))::integer,
          coalesce(sum(c.talk_seconds) filter (where c.is_connected_outbound), 0)::bigint,
          round(avg(c.talk_seconds) filter (where c.is_connected_outbound), 1)
-  from cma.calls_of(p_tenant_id,
-                    ((select s.today from s) - 1)::timestamp at time zone (select s.zone from s),
-                    ((select s.today from s) + 2)::timestamp at time zone (select s.zone from s), null, null) c
+  from cma.calls_of(p_tenant_id, (select w.from_at from w), (select w.to_at from w), null, null) c
   where c.direction = 'outbound'
     and c.business_date = (select s.today from s)
 $$;

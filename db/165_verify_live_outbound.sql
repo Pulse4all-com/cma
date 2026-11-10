@@ -40,7 +40,8 @@
 --   E1  per active tenant: cma.inbound_now() the same as 0008zx's without the key
 --   E2  per active tenant: today's outbound figures the same as cma.calls_figures_of for the tenant's date
 --   E3  per active tenant: cma.outbound_now() no slower than cma.inbound_now(): the best of verify.timing_runs runs
---       each, alternating, at most inbound's best plus verify.slack_ms
+--       each, at most inbound's best plus verify.slack_ms. This is the brief's comparison, not the poll's budget:
+--       131_time_all.sql part a holds that (the rows 'outbound now' and 'live board calls (one statement)', 20 ms)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
