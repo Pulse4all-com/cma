@@ -198,8 +198,10 @@ export function inboundTileValue(today: InboundToday, key: InboundTileKey): Inbo
     case "answered": return { kind: "count", value: today.answered };
     case "unansweredPct": return { kind: "pct", value: unansweredPct(today) };
     case "serviceLevel": return { kind: "pct", value: today.serviceLevelPct };
-    // a dash without an answered call (Martin, 10 November 2026); Outbound today's Talk time shows 0 s without a connected one
-    case "talk": return { kind: "talk", value: today.answered > 0 ? today.inboundTalkSeconds : null };
+    // a dash without an answered call (Martin, 10 November 2026); Outbound today's Talk time shows 0 s without a connected
+    // one. Answered counts the tenant's day and the talk time each call's day in its line's zone, so the dash needs both at
+    // 0: a call on a line east of the tenant can carry talk time before the tenant's first answered call of the day
+    case "talk": return { kind: "talk", value: today.answered === 0 && today.inboundTalkSeconds === 0 ? null : today.inboundTalkSeconds };
     case "avgAnswer": return { kind: "seconds", value: today.avgAnswerSeconds };
   }
 }

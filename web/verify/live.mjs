@@ -191,10 +191,13 @@ expect("six inbound tiles, Talk time the fifth, in the column of Outbound today'
   [INBOUND_TILES.length, INBOUND_TILES.indexOf("talk"), INBOUND_TILES.indexOf("talk") === OUTBOUND_TILES.indexOf("talk"),
     INBOUND_TILES.includes("waitingNow"), INBOUND_TILES.includes("longestWaiting")],
   [6, 4, true, false, false], [6, 5, false, true, false]);
-expect("Talk time as Outbound today's shows it, a dash without an answered call",
+// the dash needs no answered call and no talk time: a line east of the tenant can carry talk time on the date before the
+// tenant's first answered call of the day (Answered counts the tenant's day, the talk time each call's line-zone day)
+expect("Talk time as Outbound today's shows it, a dash without an answered call and without talk time",
   [fmtTalk(inboundTileValue(today, "talk").value, "en"), inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk"),
-    fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk").value, "nl"), fmtTalk(inboundTileValue({ ...today, inboundTalkSeconds: 0 }, "talk").value, "en")],
-  ["20m 34s", { kind: "talk", value: null }, "–", "0 s"], ["1234 s", { kind: "talk", value: 0 }, "0 s", "–"]);
+    fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk").value, "nl"), fmtTalk(inboundTileValue({ ...today, inboundTalkSeconds: 0 }, "talk").value, "en"),
+    fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 70 }, "talk").value, "en")],
+  ["20m 34s", { kind: "talk", value: null }, "–", "0 s", "1m 10s"], ["1234 s", { kind: "talk", value: 0 }, "0 s", "–", "–"]);
 // The calls of 61 B6 to B10 (invented ids; callers are opaque keys standing in for the hash)
 const NOW = Date.parse("2026-10-14T12:00:00Z");
 const ago = (minutes) => new Date(NOW - minutes * 60_000).toISOString();

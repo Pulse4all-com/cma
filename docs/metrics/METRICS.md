@@ -1309,7 +1309,7 @@ offered = count(telephony calls with direction='inbound', source_deleted_at null
 
 **Filters**
 
-- tenant: RLS plus the explicit tenant of cma.inbound_today_of (cma.current_tenant_id())
+- tenant: RLS plus the explicit tenant of cma.inbound_today_live_of (cma.inbound_today_of's before 0009j) (cma.current_tenant_id())
 - direction = inbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
 - today window on started_at in the tenant's zone (not on the business date)
@@ -1512,7 +1512,7 @@ Total talk time over today's answered inbound calls (Talk time), from the answer
 **Formula as computed**
 
 ```
-inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on counted lines, each call dated in its line's market zone (else the tenant's), 0 with none; the tile shows a dash while Answered is 0, else fmtTalk (as Outbound today's Talk time). One read with the other Inbound today figures (cma.inbound_today_live_of): cma.inbound_calls_of once, the talk time of each answered call of the date by the primary key of cma.telephony_call.
+inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on counted lines, each call dated in its line's market zone (else the tenant's), 0 with none; the tile shows a dash while Answered and the talk time are both 0, else fmtTalk (as Outbound today's Talk time). One read with the other Inbound today figures (cma.inbound_today_live_of): cma.inbound_calls_of once, the talk time of each answered call of the date by the primary key of cma.telephony_call.
 ```
 
 **Unit** seconds · **Grain** now · **Status** cadence_unconfirmed
@@ -1553,7 +1553,7 @@ with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) se
 
 **Notes**
 
-Reports → Calls' talk time minus its outbound talk time for today (calls.talk_total − calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and in every case Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total): db/169 B2, B3, E2 and E3 pin it to both. In the column of Outbound today's Talk time (live.outbound.talk); the two add up to Reports → Calls' talk time for today. An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered is 0. API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.
+Reports → Calls' talk time minus its outbound talk time for today (calls.talk_total − calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and in every case Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total): db/169 B2, B3, E2 and E3 pin it to both. In the column of Outbound today's Talk time (live.outbound.talk); the two add up to Reports → Calls' talk time for today. An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0 (Answered counts the tenant's day, the talk time each call's line-zone day). API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.
 
 #### `live.inbound.avg_answer`
 

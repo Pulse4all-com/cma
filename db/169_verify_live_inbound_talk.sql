@@ -16,8 +16,9 @@
 -- 145_verify_held_kinds_restore.sql and 165_verify_live_outbound.sql again (they read cma.inbound_now(); 145 and 165 are
 -- edited by this change), then 131_time_all.sql part a. Expected verdict: "PASS | 169_verify_live_inbound_talk: <n>
 -- PASS, 0 FAIL, <k> skip" (a skip is an active tenant without a person holding monitoring.live, or E2 for a tenant whose
--- telephony.connected_min_seconds is above 0); provoked (verify.provoke true below): every check reads FAIL and the
--- verdict "PROVOKED, NOT A PASS".
+-- telephony.connected_min_seconds is above 0); provoked (verify.provoke true below): every check reads FAIL (E2's skip
+-- for a threshold above 0 too; a tenant without a person holding monitoring.live stays skip, nothing runs for it) and
+-- the verdict "PROVOKED, NOT A PASS".
 --   S1  the addition 0009j is recorded once, after 0009i
 --   S2  cma.inbound_today_live_of(uuid): SQL, stable, the caller's rights, owned by cma_owner, jit off, rows 1, its
 --       fifteen columns, executable by the application only; cma.inbound_now(): plpgsql, stable, jsonb, the
@@ -39,7 +40,8 @@
 --       longest_waiting_seconds null, the sixteen keys (inbound_talk_seconds 215), and, without the new key, the same
 --       JSON as 0009h's definition (today, callbacks and summary)
 --   B5  a tenant without a call: today's date, 0 calls, no rate or average, {}, 0 waiting now and 0 s of talk time;
---       inbound_now() without the new key the same as 0009h's
+--       inbound_now() without the new key the same as 0009h's; acting as it, cma.inbound_today_live_of for the first
+--       tenant reads no call of the first tenant (row-level security under the explicit tenant)
 --   E1  per active tenant: cma.inbound_now() without inbound_talk_seconds the same JSON as 0009h's
 --   E2  per active tenant whose telephony.connected_min_seconds is 0 (Pulse4all's value and the default): today's
 --       inbound_talk_seconds equals cma.calls_figures_of's talk_seconds_total minus outbound_talk_seconds for the date;
@@ -347,7 +349,11 @@ begin
     if (j #- '{today,inbound_talk_seconds}') is distinct from (case when v_provoke then pg_temp.inbound_now_0009h() #- '{today,waiting_now}' else pg_temp.inbound_now_0009h() end) then
       v_bad := v_bad || 'without the new key, not 0009h''s JSON; ';
     end if;
-    rows_ := rows_ || pg_temp.v0009j_row(15, 'B5 a tenant without a call: today''s date, 0 calls, no rate or average, {}, 0 waiting now, 0 s; 0009h''s JSON without the new key',
+    -- acting as the second tenant, the first tenant's calls stay out of reach (row-level security under the explicit
+    -- tenant): its row reads as a day without a call
+    v_txt := pg_temp.v0009j_fig(v_t);
+    if v_txt is distinct from format('%s|0|0|0|0|0|0||||{}|0|20|30|0', v_today) then v_bad := v_bad || 'the first tenant read as the second: ' || coalesce(v_txt, 'no row') || '; '; end if;
+    rows_ := rows_ || pg_temp.v0009j_row(15, 'B5 a tenant without a call: today''s date, 0 calls, no rate or average, {}, 0 waiting now, 0 s; 0009h''s JSON without the new key; the first tenant''s calls out of its reach',
       case when v_bad = '' then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
 
     raise exception using errcode = 'CMAOK';
@@ -416,7 +422,8 @@ begin
         into v_talk, v_date, v_ref
       from (select cma.inbound_now() as j) q;
       if v_min > 0 then
-        insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time against Reports → Calls (' || t.slug || ')', 'skip',
+        insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time against Reports → Calls (' || t.slug || ')',
+          case when v_provoke then 'FAIL' else 'skip' end,
           format('telephony.connected_min_seconds is %s: the report''s difference also holds outbound calls answered under it (B3); E3 compares', v_min));
       else
         insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time equals Reports → Calls'' talk time minus its outbound talk time (' || t.slug || ')',

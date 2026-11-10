@@ -23,7 +23,7 @@
 -- telephony_call_started_idx (34) through cma.inbound_calls_of, and the primary key of cma.telephony_call.
 --
 -- Why (Martin, 10 November 2026; Decision log, 10 Nov 2026, Live board, Inbound today: Waiting now replaced by Talk
--- time): Pulse4all's telephony gives no usable live queue data, so the inbound tile Waiting now gives way to Talk time
+-- time): the telephony gives no usable live queue data, so the inbound tile Waiting now gives way to Talk time
 -- (docs/definitions.md), in the column of Outbound today's Talk time.
 --
 -- What it adds
@@ -40,9 +40,11 @@
 --                        call, so Inbound today's Talk time is Reports → Calls' talk time minus its outbound talk time
 --                        for the date, and Outbound today's Talk time and this one add up to the report's. That is the
 --                        gap docs/definitions.md lists under Day (D34), inherited to equal the report; it moves with
---                        cma.calls_of when the gap closes. For a line west of the tenant (UK Sales from Amsterdam) a
---                        call answered between the tenant's midnight and the line's counts in Answered today and its
---                        talk time on the line's date before
+--                        cma.calls_of when the gap closes. For a line west of the tenant (a line in London for a tenant
+--                        in Amsterdam) a call answered between the tenant's midnight and the line's counts in Answered
+--                        today and its talk time on the line's date before; for a line east of it, a call answered
+--                        before the tenant's midnight counts in the talk time of the date and in Answered of the day
+--                        before
 --                      One pass: cma.inbound_calls_of once over the instants the date covers in the tenant's zones (as
 --                      cma.outbound_today_of's window: from the date's first midnight to its last; for a tenant in one
 --                      zone, the day itself; during the running day the end lies ahead, so the same calls are read as
