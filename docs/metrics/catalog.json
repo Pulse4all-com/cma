@@ -2081,13 +2081,13 @@
         }
       ],
       "filters": [
-        "tenant: RLS plus the explicit tenant of cma.inbound_today_live_of (cma.inbound_today_of's before 0009j) (cma.current_tenant_id())",
+        "tenant: RLS plus the explicit tenant of cma.inbound_today_live_of (cma.inbound_today_of's before 0009k) (cma.current_tenant_id())",
         "direction = inbound; source_deleted_at is null; started_at not null",
         "counted lines only (telephony_number.is_counted; a line not in the catalog counts)",
         "today window on started_at in the tenant's zone (not on the business date)",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2099,11 +2099,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -2196,7 +2196,7 @@
         "answered_at is not null",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2208,11 +2208,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -2315,7 +2315,7 @@
         "denominator: calls with an outcome only (waiting calls excluded from numerator and denominator)",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2334,11 +2334,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -2456,7 +2456,7 @@
         "denominator: answered calls plus unanswered calls whose reason counts_in_service_level (catalog per tenant and source system; default true)",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2480,11 +2480,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -2580,7 +2580,7 @@
         "today: the calls started in the tenant's day, as the row's other figures (Martin, 10 November 2026)",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of, 0009j), as every other Inbound today tile (Day). Reports \u2192 Calls dates each call in its line's market zone instead (gap D34), so for a line in another zone the report's date can hold a call this tile counts on another day (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of, 0009k), as every other Inbound today tile (Day). Reports \u2192 Calls dates each call in its line's market zone instead (gap D34), so for a line in another zone the report's date can hold a call this tile counts on another day (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2593,11 +2593,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -2617,14 +2617,14 @@
       },
       "verify_sql": "with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) select coalesce(sum(tc.talk_seconds), 0)::bigint as inbound_talk_seconds from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref where tc.tenant_id = :tenant_id and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null and tc.answered_at is not null and coalesce(n.is_counted, true) and tc.started_at >= (now() at time zone s.tz)::date::timestamp at time zone s.tz and tc.started_at < ((now() at time zone s.tz)::date + 1)::timestamp at time zone s.tz",
       "docs": [
-        "features.md \u00a75, Live board, and api.md \u00a7Live board in one read and GET /api/v1/telephony/inbound-now (0009j)",
+        "features.md \u00a75, Live board, and api.md \u00a7Live board in one read and GET /api/v1/telephony/inbound-now (0009k)",
         "definitions.md, Talk time, Inbound call, Day (the talk time follows Day; only its comparison with Reports → Calls meets gap D34)",
-        "data-model/0008.md, Live board: Inbound today with Talk time (0009j)",
+        "data-model/0008.md, Live board: Inbound today with Talk time (0009k)",
         "decisions.md 10 Nov 2026 (Live board, Inbound today: Waiting now replaced by Talk time)",
         "decisions.md 10 Nov 2026 (Inbound today's Talk time counts the calls started in the organisation's day)"
       ],
-      "notes": "Reports \u2192 Calls' talk time minus its outbound talk time for today (calls.talk_total \u2212 calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total), in both cases but for the answered inbound calls whose day in their line's zone differs from the tenant's day (gap D34): db/169 B2, B3, E2 and E3 accept that difference only, naming the calls. In the column of Outbound today's Talk time (live.outbound.talk). An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0. API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.",
-      "fixture_check": "Not run here: this session has no database. db/169_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today, naming the calls on another day in their line's zone; Martin runs it and this query in Studio.",
+      "notes": "Reports \u2192 Calls' talk time minus its outbound talk time for today (calls.talk_total \u2212 calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total), in both cases but for the answered inbound calls whose day in their line's zone differs from the tenant's day (gap D34): db/171 B2, B3, E2 and E3 accept that difference only, naming the calls. In the column of Outbound today's Talk time (live.outbound.talk). An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0. API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.",
+      "fixture_check": "Not run here: this session has no database. db/171_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today, naming the calls on another day in their line's zone; Martin runs it and this query in Studio.",
       "comparison": null,
       "prerequisites": [],
       "status": [
@@ -2689,7 +2689,7 @@
         "answered calls only",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2701,11 +2701,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -83843,7 +83843,7 @@
       "filters": [
         "as live.inbound.offered"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -83867,11 +83867,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -83959,7 +83959,7 @@
       "filters": [
         "as live.inbound.offered"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -83983,11 +83983,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -84008,7 +84008,7 @@
         "api.md, GET /api/v1/telephony/inbound-now",
         "data-model/0008.md, Inbound service and callbacks (0008i)"
       ],
-      "notes": "Today's calls still waiting (the today row's waiting, returned by the API); no tile shows it. cma.inbound_now() still answers waiting_now (the calls waiting now, also before midnight) for one release; the web no longer reads it since addition 0009j (Waiting now gave way to Talk time).",
+      "notes": "Today's calls still waiting (the today row's waiting, returned by the API); no tile shows it. cma.inbound_now() still answers waiting_now (the calls waiting now, also before midnight) for one release; the web no longer reads it since addition 0009k (Waiting now gave way to Talk time).",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "comparison": null,
       "prerequisites": [],
@@ -84075,7 +84075,7 @@
       "filters": [
         "as live.inbound.offered"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -84099,11 +84099,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",
@@ -84191,7 +84191,7 @@
       "filters": [
         "as live.inbound.offered"
       ],
-      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -84215,11 +84215,11 @@
         "sql": [
           {
             "object": "cma.inbound_now",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_today_live_of",
-            "migration": "0009j"
+            "migration": "0009k"
           },
           {
             "object": "cma.inbound_calls_of",

@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 169_verify_live_inbound_talk.sql: verifies addition 0009j, the Live board's Inbound today with Talk time
+-- 171_verify_live_inbound_talk.sql: verifies addition 0009k, the Live board's Inbound today with Talk time
 -- =============================================================================================
 -- Universal: no seed is assumed. Block S checks the addition, the functions and the grants. Block B works on two
 -- throwaway tenants inside a subtransaction that is always rolled back, so nothing stays: synthetic people
@@ -9,17 +9,17 @@
 -- midnight, so the verdict does not depend on the time it runs (but in the first eight seconds of a day). Block E
 -- compares, per active tenant on the database it runs in and as the application acting as the tenant's first person
 -- holding monitoring.live: cma.inbound_now() with 0009h's definition (164, kept here verbatim as a temporary function;
--- the functions it calls are not changed by 168), today's inbound talk time with Reports → Calls' (cma.calls_figures_of)
+-- the functions it calls are not changed by 170), today's inbound talk time with Reports → Calls' (cma.calls_figures_of)
 -- and with Calls per agent's (cma.calls_per_person_of), each comparison in one statement, so one snapshot; then times
 -- the poll against 164's. Every check writes one row, PASS, FAIL or skip, and the last row is the verdict, because
--- Cloud SQL Studio shows no notices. Run as your own IAM login after 168_live_inbound_talk.sql; then 133_verify_perf.sql,
+-- Cloud SQL Studio shows no notices. Run as your own IAM login after 170_live_inbound_talk.sql; then 133_verify_perf.sql,
 -- 145_verify_held_kinds_restore.sql and 165_verify_live_outbound.sql again (they read cma.inbound_now(); 145 and 165 are
--- edited by this change), then 131_time_all.sql part a. Expected verdict: "PASS | 169_verify_live_inbound_talk: <n>
+-- edited by this change), then 131_time_all.sql part a. Expected verdict: "PASS | 171_verify_live_inbound_talk: <n>
 -- PASS, 0 FAIL, <k> skip" (a skip is an active tenant without a person holding monitoring.live, or E2 for a tenant whose
 -- telephony.connected_min_seconds is above 0); provoked (verify.provoke true below): every check reads FAIL (E2's skip
 -- for a threshold above 0 too; a tenant without a person holding monitoring.live stays skip, nothing runs for it) and
 -- the verdict "PROVOKED, NOT A PASS".
---   S1  the addition 0009j is recorded once, after 0009i
+--   S1  the addition 0009k is recorded once, after 0009j
 --   S2  cma.inbound_today_live_of(uuid): SQL, stable, the caller's rights, owned by cma_owner, jit off, rows 1, its
 --       fifteen columns, executable by the application only; cma.inbound_now(): plpgsql, stable, jsonb, the
 --       application's only, its text reading cma.inbound_today_live_of (not cma.inbound_today_of) and setting today's
@@ -61,7 +61,7 @@
 --   E4  per active tenant: cma.inbound_now() no slower than 0009h's: six untimed calls of each first (so both run the
 --       plans a pooled connection keeps after its fifth call), then the best of verify.timing_runs runs each,
 --       alternating, at most 0009h's best plus the larger of verify.slack_ms and verify.slack_ratio of it (the brief:
---       "inbound now (one statement)" must not get slower; 168 reads the calls once where 164 read them twice).
+--       "inbound now (one statement)" must not get slower; 170 reads the calls once where 164 read them twice).
 --       131_time_all.sql part a holds the poll's budget (20 ms)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
 -- comparisons are provoked by a deliberate difference, not by the switch alone: B4, B5, B6 and E1 then compare with
@@ -82,12 +82,12 @@ select set_config('verify.timing_runs', '8', false);                 -- timed ru
 select set_config('verify.slack_ms', '0.5', false);                  -- E4: what the new poll may take above 0009h's best (measurement noise),
 select set_config('verify.slack_ratio', '0.03', false);              --     or this share of 0009h's best when that is more
 
-drop table if exists pg_temp.verify_0009j;
-create temporary table verify_0009j (ord integer, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0009k;
+create temporary table verify_0009k (ord integer, check_name text, result text, detail text);
 -- block E writes its rows while acting as the application
-grant select, insert on pg_temp.verify_0009j to cma_app;
+grant select, insert on pg_temp.verify_0009k to cma_app;
 
--- cma.inbound_now() as 0009h (164) defined it, verbatim; the functions it calls are not changed by 168
+-- cma.inbound_now() as 0009h (164) defined it, verbatim; the functions it calls are not changed by 170
 create function pg_temp.inbound_now_0009h()
 returns jsonb
 language plpgsql stable
@@ -112,11 +112,11 @@ end
 $$;
 
 -- A check row kept as four texts, for the block whose subtransaction is rolled back (its rows must outlive it)
-create or replace function pg_temp.v0009j_row(p_ord integer, p_name text, p_result text, p_detail text)
+create or replace function pg_temp.v0009k_row(p_ord integer, p_name text, p_result text, p_detail text)
 returns text[] language sql immutable as $$ select array[p_ord::text, p_name, p_result, p_detail] $$;
 
 -- The tenant's first active person (the oldest) holding a permission, as the time scripts pick it
-create or replace function pg_temp.v0009j_user(p_tenant uuid, p_perm text)
+create or replace function pg_temp.v0009k_user(p_tenant uuid, p_perm text)
 returns uuid
 language sql
 as $$
@@ -128,7 +128,7 @@ $$;
 -- One telephony call as the ingest write takes it (as 165): answered p_ring seconds after the start (null: never), ended
 -- p_talk seconds after the answer (null: not ended; for a call never answered, ended after 20 seconds unless p_open), on
 -- the line p_number, an invented hash from the id
-create or replace function pg_temp.v0009j_call(p_src text, p_dir text, p_start timestamptz, p_ring integer, p_talk integer,
+create or replace function pg_temp.v0009k_call(p_src text, p_dir text, p_start timestamptz, p_ring integer, p_talk integer,
                                                p_number text, p_open boolean default false)
 returns jsonb
 language sql immutable
@@ -145,7 +145,7 @@ $$;
 
 -- The Live board's today of a tenant, as one text: date|offered|answered|unanswered|waiting|within|base|level|average|
 -- p80|reasons|waiting now|seconds|minutes|talk (a null is empty)
-create or replace function pg_temp.v0009j_fig(p_tenant uuid)
+create or replace function pg_temp.v0009k_fig(p_tenant uuid)
 returns text
 language sql stable
 as $$
@@ -157,7 +157,7 @@ $$;
 
 -- Reports → Calls' talk time minus its outbound talk time for a date (cma.calls_figures_of's total row), and its talk
 -- time and outbound talk time as text
-create or replace function pg_temp.v0009j_report(p_tenant uuid, p_date date)
+create or replace function pg_temp.v0009k_report(p_tenant uuid, p_date date)
 returns text
 language sql stable
 as $$
@@ -167,7 +167,7 @@ as $$
 $$;
 
 -- Calls per agent's inbound talk time for a date (cma.calls_per_person_of's total row)
-create or replace function pg_temp.v0009j_per_agent(p_tenant uuid, p_date date)
+create or replace function pg_temp.v0009k_per_agent(p_tenant uuid, p_date date)
 returns bigint
 language sql stable
 as $$
@@ -179,7 +179,7 @@ $$;
 -- and not the line's (counted by Inbound today, not by the reports for the date), minus, of those in the line's day and
 -- not the tenant's (the other way round), and the calls named by id and line, + or −, for the check's detail (the first
 -- ten by call id, then 'and n more')
-create or replace function pg_temp.v0009j_zone_diff(p_tenant uuid, p_date date)
+create or replace function pg_temp.v0009k_zone_diff(p_tenant uuid, p_date date)
 returns table (plus bigint, minus bigint, calls text)
 language sql stable
 as $$
@@ -211,7 +211,7 @@ as $$
   from c
 $$;
 -- jit off: not inlined into E2's and E3's lateral call, so p_date stays a parameter and the bounds stay on the index
-alter function pg_temp.v0009j_zone_diff(uuid, date) set jit = off;
+alter function pg_temp.v0009k_zone_diff(uuid, date) set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
 -- S. Structure and privileges
@@ -224,10 +224,10 @@ declare
   v_src text;
   v_bad text := '';
 begin
-  -- S1. the addition is recorded once, after 0009i
-  insert into verify_0009j values (1, 'S1 addition 0009j recorded once, after 0009i',
-    case when (select count(*) from cma.schema_migration where version = '0009j') = 1
-              and exists (select 1 from cma.schema_migration where version = '0009i') and not v_provoke then 'PASS' else 'FAIL' end,
+  -- S1. the addition is recorded once, after 0009j
+  insert into verify_0009k values (1, 'S1 addition 0009k recorded once, after 0009j',
+    case when (select count(*) from cma.schema_migration where version = '0009k') = 1
+              and exists (select 1 from cma.schema_migration where version = '0009j') and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
   -- S2. the new function and cma.inbound_now()
@@ -264,7 +264,7 @@ begin
       v_bad := v_bad || 'inbound_now''s result, or its text does not read inbound_today_live_of with longest_waiting_seconds null; ';
     end if;
   end if;
-  insert into verify_0009j values (2, 'S2 inbound_today_live_of: SQL, stable, invoker, cma_owner, jit off, rows 1, fifteen columns; inbound_now reads it with the key null; the application''s only',
+  insert into verify_0009k values (2, 'S2 inbound_today_live_of: SQL, stable, invoker, cma_owner, jit off, rows 1, fifteen columns; inbound_now reads it with the key null; the application''s only',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 end
 $$;
@@ -284,7 +284,7 @@ declare
 begin
   begin
     -- the tenant, its people and its telephony connection (as the owner)
-    v_t := cma.create_tenant('verify-0009j', 'Verify 0009j', 'Europe/Amsterdam');
+    v_t := cma.create_tenant('verify-0009k', 'Verify 0009k', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-admin@example.invalid', 'admin') returning id into v_admin;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-sup@example.invalid', 'sup') returning id into v_sup;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-agent@example.invalid', 'agent') returning id into v_agent;
@@ -294,9 +294,9 @@ begin
     join cma.app_role ar on ar.tenant_id = v_t and ar.key = x.role_key;
     select x.user_id into v_ing from cma.app_user_external_id x where x.tenant_id = v_t and x.system = 'ingest';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
-    values (v_t, 'verifytel', 'Verify 0009j telephony', 'tel-1', 'telephony') returning id into v_tel;
+    values (v_t, 'verifytel', 'Verify 0009k telephony', 'tel-1', 'telephony') returning id into v_tel;
     -- a second tenant without a call (B5), with its admin
-    v_t2 := cma.create_tenant('verify-0009j-empty', 'Verify 0009j empty', 'Europe/Amsterdam');
+    v_t2 := cma.create_tenant('verify-0009k-empty', 'Verify 0009k empty', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t2, 'verify-admin2@example.invalid', 'admin') returning id into v_admin2;
     insert into cma.user_role (tenant_id, user_id, role_id)
     select ar.tenant_id, v_admin2, ar.id from cma.app_role ar where ar.tenant_id = v_t2 and ar.key = 'admin';
@@ -322,33 +322,33 @@ begin
     v_t0 := v_today::timestamp at time zone 'Europe/Amsterdam';
     perform set_config('app.user_id', v_ing::text, true);
     perform cma.ingest_upsert_telephony_calls(v_tel, jsonb_build_array(
-      pg_temp.v0009j_call('i1', 'inbound',  v_t0 + interval '1 second',  5,    45,   'n-nl'),       -- answered in 5 s, 45 s of talk
-      pg_temp.v0009j_call('i2', 'inbound',  v_t0 + interval '2 seconds', 25,   100,  'n-nl'),       -- answered in 25 s (over 20), 100 s
-      pg_temp.v0009j_call('i3', 'inbound',  v_t0 + interval '3 seconds', 5,    null, 'n-nl'),       -- answered, in progress: no talk time yet
-      pg_temp.v0009j_call('i4', 'inbound',  v_t0 + interval '4 seconds', null, null, 'n-nl'),       -- unanswered (no reason: unknown)
+      pg_temp.v0009k_call('i1', 'inbound',  v_t0 + interval '1 second',  5,    45,   'n-nl'),       -- answered in 5 s, 45 s of talk
+      pg_temp.v0009k_call('i2', 'inbound',  v_t0 + interval '2 seconds', 25,   100,  'n-nl'),       -- answered in 25 s (over 20), 100 s
+      pg_temp.v0009k_call('i3', 'inbound',  v_t0 + interval '3 seconds', 5,    null, 'n-nl'),       -- answered, in progress: no talk time yet
+      pg_temp.v0009k_call('i4', 'inbound',  v_t0 + interval '4 seconds', null, null, 'n-nl'),       -- unanswered (no reason: unknown)
       -- the New York line: 5 seconds after the tenant's midnight is 18:00 the day before there
-      pg_temp.v0009j_call('u1', 'inbound',  v_t0 + interval '5 seconds', 5,    60,   'n-us'),
+      pg_temp.v0009k_call('u1', 'inbound',  v_t0 + interval '5 seconds', 5,    60,   'n-us'),
       -- the Tokyo line: 10 seconds before the tenant's midnight is 07:59:50 (winter) on the date there
-      pg_temp.v0009j_call('j1', 'inbound',  v_t0 - interval '10 seconds', 5,   70,   'n-jp'),
-      pg_temp.v0009j_call('o1', 'outbound', v_t0 + interval '6 seconds', 5,    30,   'n-nl'),       -- connected outbound, 30 s
-      pg_temp.v0009j_call('o2', 'outbound', v_t0 + interval '7 seconds', null, null, 'n-nl'),       -- outbound, not connected
-      pg_temp.v0009j_call('y1', 'inbound',  v_t0 - interval '23 hours',  5,    50,   'n-nl'),       -- the day before
-      pg_temp.v0009j_call('w0', 'inbound',  v_t0 - interval '2 hours',   null, null, 'n-nl', true),  -- ringing since the evening before (B6)
-      pg_temp.v0009j_call('w1', 'inbound',  greatest(v_t0 + interval '8 seconds', now() - interval '1 minute'), null, null, 'n-nl', true)));  -- waiting
+      pg_temp.v0009k_call('j1', 'inbound',  v_t0 - interval '10 seconds', 5,   70,   'n-jp'),
+      pg_temp.v0009k_call('o1', 'outbound', v_t0 + interval '6 seconds', 5,    30,   'n-nl'),       -- connected outbound, 30 s
+      pg_temp.v0009k_call('o2', 'outbound', v_t0 + interval '7 seconds', null, null, 'n-nl'),       -- outbound, not connected
+      pg_temp.v0009k_call('y1', 'inbound',  v_t0 - interval '23 hours',  5,    50,   'n-nl'),       -- the day before
+      pg_temp.v0009k_call('w0', 'inbound',  v_t0 - interval '2 hours',   null, null, 'n-nl', true),  -- ringing since the evening before (B6)
+      pg_temp.v0009k_call('w1', 'inbound',  greatest(v_t0 + interval '8 seconds', now() - interval '1 minute'), null, null, 'n-nl', true)));  -- waiting
     perform set_config('app.user_id', v_admin::text, true);
 
     -- B1. the day's figures and its talk time
-    v_txt := pg_temp.v0009j_fig(v_t);
-    rows_ := rows_ || pg_temp.v0009j_row(11, 'B1 the tenant''s day: 6 calls, 4 answered, 1 unanswered, 1 waiting, 3 within 20 s of 5, 60.0, 10.0 s, 13.0 s, 1 waiting now; talk time 205 s (the tenant''s day)',
+    v_txt := pg_temp.v0009k_fig(v_t);
+    rows_ := rows_ || pg_temp.v0009k_row(11, 'B1 the tenant''s day: 6 calls, 4 answered, 1 unanswered, 1 waiting, 3 within 20 s of 5, 60.0, 10.0 s, 13.0 s, 1 waiting now; talk time 205 s (the tenant''s day)',
       case when v_txt = format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|1|20|30|205', v_today) and not v_provoke then 'PASS' else 'FAIL' end,
       coalesce(v_txt, 'no row'));
 
     -- B2. the same as Reports → Calls' talk time minus its outbound talk time, and as Calls per agent's inbound talk time
     select x.inbound_talk_seconds into v_talk from cma.inbound_today_live_of(v_t) x;
-    v_rep := pg_temp.v0009j_report(v_t, case when v_provoke then v_today - 1 else v_today end);
-    v_per := pg_temp.v0009j_per_agent(v_t, case when v_provoke then v_today - 1 else v_today end);
-    select * into z from pg_temp.v0009j_zone_diff(v_t, v_today);
-    rows_ := rows_ || pg_temp.v0009j_row(12, 'B2 the talk time is Reports → Calls'' talk time minus its outbound talk time (245 − 30) and Calls per agent''s, but for the calls on another day in their line''s zone (+60 New York, −70 Tokyo), named',
+    v_rep := pg_temp.v0009k_report(v_t, case when v_provoke then v_today - 1 else v_today end);
+    v_per := pg_temp.v0009k_per_agent(v_t, case when v_provoke then v_today - 1 else v_today end);
+    select * into z from pg_temp.v0009k_zone_diff(v_t, v_today);
+    rows_ := rows_ || pg_temp.v0009k_row(12, 'B2 the talk time is Reports → Calls'' talk time minus its outbound talk time (245 − 30) and Calls per agent''s, but for the calls on another day in their line''s zone (+60 New York, −70 Tokyo), named',
       case when v_talk is not null and v_rep = '215 (245 − 30)' and v_per = 215 and z.plus = 60 and z.minus = 70
                 and v_talk = split_part(v_rep, ' ', 1)::bigint + z.plus - z.minus and v_talk = v_per + z.plus - z.minus then 'PASS' else 'FAIL' end,
       format('%s against the report''s %s and Calls per agent''s %s; on another day in their line''s zone: %s', coalesce(v_talk::text, 'no row'),
@@ -357,10 +357,10 @@ begin
     -- B3. the Connected threshold moves the report's difference, not the talk time
     perform cma.set_tenant_setting('telephony.connected_min_seconds', '40');
     select x.inbound_talk_seconds into v_talk from cma.inbound_today_live_of(v_t) x;
-    v_rep := pg_temp.v0009j_report(v_t, v_today);
-    v_per := pg_temp.v0009j_per_agent(v_t, v_today);
+    v_rep := pg_temp.v0009k_report(v_t, v_today);
+    v_per := pg_temp.v0009k_per_agent(v_t, v_today);
     perform cma.set_tenant_setting('telephony.connected_min_seconds', null);
-    rows_ := rows_ || pg_temp.v0009j_row(13, 'B3 Connected from 40 s: the talk time stays 205 and Calls per agent''s (215) with it; the report''s difference becomes 245 (245 − 0)',
+    rows_ := rows_ || pg_temp.v0009k_row(13, 'B3 Connected from 40 s: the talk time stays 205 and Calls per agent''s (215) with it; the report''s difference becomes 245 (245 − 0)',
       case when v_talk = 205 and v_per = 215 and v_rep = '245 (245 − 0)' and not v_provoke then 'PASS' else 'FAIL' end,
       format('%s; Calls per agent %s; the report %s', coalesce(v_talk::text, 'no row'), coalesce(v_per::text, 'no row'), coalesce(v_rep, 'no row')));
 
@@ -393,14 +393,14 @@ begin
       v_bad := v_bad || 'without the new key, not 0009h''s JSON; ';
     end if;
     if jsonb_array_length(j -> 'callbacks') < 1 then v_bad := v_bad || 'no missed caller listed: callbacks not compared on a row; '; end if;
-    rows_ := rows_ || pg_temp.v0009j_row(14, 'B4 inbound_now(): an agent refused (CMA06); a supervisor reads inbound_today_live_of''s row, the sixteen keys, 205 s, and 0009h''s JSON without the new key',
+    rows_ := rows_ || pg_temp.v0009k_row(14, 'B4 inbound_now(): an agent refused (CMA06); a supervisor reads inbound_today_live_of''s row, the sixteen keys, 205 s, and 0009h''s JSON without the new key',
       case when v_bad = '' then 'PASS' else 'FAIL' end, v_bad);
 
     -- B5. a tenant without a call
     v_bad := '';
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_admin2::text, true);
-    v_txt := pg_temp.v0009j_fig(v_t2);
+    v_txt := pg_temp.v0009k_fig(v_t2);
     if v_txt is distinct from format('%s|0|0|0|0|0|0||||{}|0|20|30|0', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
     j := cma.inbound_now();
     if (j #- '{today,inbound_talk_seconds}') is distinct from (case when v_provoke then pg_temp.inbound_now_0009h() #- '{today,waiting_now}' else pg_temp.inbound_now_0009h() end) then
@@ -408,9 +408,9 @@ begin
     end if;
     -- acting as the second tenant, the first tenant's calls stay out of reach (row-level security under the explicit
     -- tenant): its row reads as a day without a call
-    v_txt := pg_temp.v0009j_fig(v_t);
+    v_txt := pg_temp.v0009k_fig(v_t);
     if v_txt is distinct from format('%s|0|0|0|0|0|0||||{}|0|20|30|0', v_today) then v_bad := v_bad || 'the first tenant read as the second: ' || coalesce(v_txt, 'no row') || '; '; end if;
-    rows_ := rows_ || pg_temp.v0009j_row(15, 'B5 a tenant without a call: today''s date, 0 calls, no rate or average, {}, 0 waiting now, 0 s; 0009h''s JSON without the new key; the first tenant''s calls out of its reach',
+    rows_ := rows_ || pg_temp.v0009k_row(15, 'B5 a tenant without a call: today''s date, 0 calls, no rate or average, {}, 0 waiting now, 0 s; 0009h''s JSON without the new key; the first tenant''s calls out of its reach',
       case when v_bad = '' then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
 
     -- B6. waiting now in the same read: a call ringing since before the tenant's midnight, inside the waiting limit
@@ -418,7 +418,7 @@ begin
     perform set_config('app.tenant_id', v_t::text, true);
     perform set_config('app.user_id', v_admin::text, true);
     perform cma.set_tenant_setting('telephony.waiting_max_minutes', '2880');
-    v_txt := pg_temp.v0009j_fig(v_t);
+    v_txt := pg_temp.v0009k_fig(v_t);
     if v_txt is distinct from format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|2|20|2880|205', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
     perform set_config('app.user_id', v_sup::text, true);
     j := cma.inbound_now();
@@ -427,25 +427,25 @@ begin
     end if;
     perform set_config('app.user_id', v_admin::text, true);
     perform cma.set_tenant_setting('telephony.waiting_max_minutes', null);
-    rows_ := rows_ || pg_temp.v0009j_row(16, 'B6 the waiting limit at 2880 minutes: the call ringing since the evening before counts in waiting now (2), not in the day''s figures; 0009h''s JSON without the new key',
+    rows_ := rows_ || pg_temp.v0009k_row(16, 'B6 the waiting limit at 2880 minutes: the call ringing since the evening before counts in waiting now (2), not in the day''s figures; 0009h''s JSON without the new key',
       case when v_bad = '' then 'PASS' else 'FAIL' end, case when v_bad = '' then v_txt else v_bad end);
 
     raise exception using errcode = 'CMAOK';
   exception
     when sqlstate 'CMAOK' then null;
     when others then
-      rows_ := rows_ || pg_temp.v0009j_row(99, 'B block ended early', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 160));
+      rows_ := rows_ || pg_temp.v0009k_row(99, 'B block ended early', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 160));
   end;
   perform set_config('role', 'cma_owner', true);
   perform set_config('app.tenant_id', '', true);
   perform set_config('app.user_id', '', true);
-  insert into verify_0009j (ord, check_name, result, detail)
+  insert into verify_0009k (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
   -- a block that ended early counts the checks it did not reach as FAIL
-  insert into verify_0009j (ord, check_name, result, detail)
+  insert into verify_0009k (ord, check_name, result, detail)
   select o, 'B' || (o - 10) || ' not reached', 'FAIL', 'the block ended before this check'
   from generate_series(11, 16) o
-  where not exists (select 1 from verify_0009j v where v.ord = o);
+  where not exists (select 1 from verify_0009k v where v.ord = o);
 end
 $$;
 
@@ -467,11 +467,11 @@ begin
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', t.id::text, true);
     perform set_config('app.user_id', '', true);
-    v_user := pg_temp.v0009j_user(t.id, 'monitoring.live');
+    v_user := pg_temp.v0009k_user(t.id, 'monitoring.live');
     v_min := greatest(0, cma.setting_of(t.id, 'telephony.connected_min_seconds')::integer);
     if v_user is null then
       v_ord := v_ord + 1;
-      insert into verify_0009j values (v_ord, 'E1-E4 ' || t.slug, 'skip', 'no active person holds monitoring.live: nothing compared or timed');
+      insert into verify_0009k values (v_ord, 'E1-E4 ' || t.slug, 'skip', 'no active person holds monitoring.live: nothing compared or timed');
       continue;
     end if;
     perform set_config('role', 'cma_app', true);
@@ -483,10 +483,10 @@ begin
       -- provoked: waiting_now taken out of 0009h's answer, which the comparison must then report
       select (cma.inbound_now() #- '{today,inbound_talk_seconds}') is not distinct from
              (case when v_provoke then pg_temp.inbound_now_0009h() #- '{today,waiting_now}' else pg_temp.inbound_now_0009h() end) into v_same;
-      insert into verify_0009j values (v_ord, 'E1 inbound_now() without inbound_talk_seconds: the same JSON as 0009h''s (' || t.slug || ')',
+      insert into verify_0009k values (v_ord, 'E1 inbound_now() without inbound_talk_seconds: the same JSON as 0009h''s (' || t.slug || ')',
         case when v_same then 'PASS' else 'FAIL' end, case when v_same then 'the same today, callbacks and summary' else 'the JSON differs' end);
     exception when others then
-      insert into verify_0009j values (v_ord, 'E1 inbound_now() (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
+      insert into verify_0009k values (v_ord, 'E1 inbound_now() (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
     end;
 
     -- E2 and E3. today's inbound talk time against Reports → Calls and Calls per agent for the board's date, each in
@@ -494,36 +494,36 @@ begin
     v_ord := v_ord + 1;
     begin
       select (q.j -> 'today' ->> 'inbound_talk_seconds')::bigint, (q.j -> 'today' ->> 'business_date')::date,
-             pg_temp.v0009j_report(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end),
+             pg_temp.v0009k_report(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end),
              z.plus, z.minus, z.calls
         into v_talk, v_date, v_ref, v_plus, v_minus, v_calls
       from (select cma.inbound_now() as j offset 0) q
-      cross join lateral pg_temp.v0009j_zone_diff(t.id, (q.j -> 'today' ->> 'business_date')::date) z;  -- offset 0: the board read once, not once per reference
+      cross join lateral pg_temp.v0009k_zone_diff(t.id, (q.j -> 'today' ->> 'business_date')::date) z;  -- offset 0: the board read once, not once per reference
       if v_min > 0 then
-        insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time against Reports → Calls (' || t.slug || ')',
+        insert into verify_0009k values (v_ord, 'E2 today''s inbound talk time against Reports → Calls (' || t.slug || ')',
           case when v_provoke then 'FAIL' else 'skip' end,
           format('telephony.connected_min_seconds is %s: the report''s difference also holds outbound calls answered under it (B3); E3 compares', v_min));
       else
-        insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time is Reports → Calls'' talk time minus its outbound talk time but for calls on another day in their line''s zone (' || t.slug || ')',
+        insert into verify_0009k values (v_ord, 'E2 today''s inbound talk time is Reports → Calls'' talk time minus its outbound talk time but for calls on another day in their line''s zone (' || t.slug || ')',
           case when v_talk is not null and v_ref is not null and v_talk = split_part(v_ref, ' ', 1)::bigint + v_plus - v_minus and not v_provoke then 'PASS' else 'FAIL' end,
           format('%s s on %s against the report''s %s; on another day in their line''s zone: %s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_ref, 'no row'), v_calls));
       end if;
     exception when others then
-      insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
+      insert into verify_0009k values (v_ord, 'E2 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
     end;
     v_ord := v_ord + 1;
     begin
       select (q.j -> 'today' ->> 'inbound_talk_seconds')::bigint, (q.j -> 'today' ->> 'business_date')::date,
-             pg_temp.v0009j_per_agent(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end),
+             pg_temp.v0009k_per_agent(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end),
              z.plus, z.minus, z.calls
         into v_talk, v_date, v_per, v_plus, v_minus, v_calls
       from (select cma.inbound_now() as j offset 0) q
-      cross join lateral pg_temp.v0009j_zone_diff(t.id, (q.j -> 'today' ->> 'business_date')::date) z;
-      insert into verify_0009j values (v_ord, 'E3 today''s inbound talk time is Calls per agent''s inbound talk time but for calls on another day in their line''s zone (' || t.slug || ')',
+      cross join lateral pg_temp.v0009k_zone_diff(t.id, (q.j -> 'today' ->> 'business_date')::date) z;
+      insert into verify_0009k values (v_ord, 'E3 today''s inbound talk time is Calls per agent''s inbound talk time but for calls on another day in their line''s zone (' || t.slug || ')',
         case when v_talk is not null and v_per is not null and v_talk = v_per + v_plus - v_minus and not v_provoke then 'PASS' else 'FAIL' end,
         format('%s s on %s against %s s; on another day in their line''s zone: %s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_per::text, 'no row'), v_calls));
     exception when others then
-      insert into verify_0009j values (v_ord, 'E3 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
+      insert into verify_0009k values (v_ord, 'E3 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
     end;
 
     -- E4. the poll no slower than 0009h's: alternating runs, the best of each
@@ -548,7 +548,7 @@ begin
     exception when others then
       v_err := true;
     end;
-    insert into verify_0009j values (v_ord, 'E4 inbound_now() no slower than 0009h''s, as the application (' || t.slug || ')',
+    insert into verify_0009k values (v_ord, 'E4 inbound_now() no slower than 0009h''s, as the application (' || t.slug || ')',
       case when not v_err and round(v_new, 2) <= round(v_old, 2) + greatest(v_slack, v_ratio * v_old) and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_err then 'a read raised an error'
            else format('%s ms against 0009h''s %s ms (best of %s each after six untimed, alternating, %s ms of slack)', round(v_new, 2), round(v_old, 2), v_runs,
@@ -558,25 +558,25 @@ begin
 end
 $$;
 
-drop function if exists pg_temp.v0009j_zone_diff(uuid, date);
-drop function if exists pg_temp.v0009j_per_agent(uuid, date);
-drop function if exists pg_temp.v0009j_report(uuid, date);
-drop function if exists pg_temp.v0009j_fig(uuid);
-drop function if exists pg_temp.v0009j_call(text, text, timestamptz, integer, integer, text, boolean);
-drop function if exists pg_temp.v0009j_user(uuid, text);
-drop function if exists pg_temp.v0009j_row(integer, text, text, text);
+drop function if exists pg_temp.v0009k_zone_diff(uuid, date);
+drop function if exists pg_temp.v0009k_per_agent(uuid, date);
+drop function if exists pg_temp.v0009k_report(uuid, date);
+drop function if exists pg_temp.v0009k_fig(uuid);
+drop function if exists pg_temp.v0009k_call(text, text, timestamptz, integer, integer, text, boolean);
+drop function if exists pg_temp.v0009k_user(uuid, text);
+drop function if exists pg_temp.v0009k_row(integer, text, text, text);
 drop function if exists pg_temp.inbound_now_0009h();
 
 select check_name, result, detail
-from (select ord, check_name, result, detail from pg_temp.verify_0009j
+from (select ord, check_name, result, detail from pg_temp.verify_0009k
       union all
       select 1000000, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when exists (select 1 from pg_temp.verify_0009j where result = 'FAIL') then 'FAIL'
-                  when not exists (select 1 from pg_temp.verify_0009j where result = 'PASS') then 'FAIL'
+                  when exists (select 1 from pg_temp.verify_0009k where result = 'FAIL') then 'FAIL'
+                  when not exists (select 1 from pg_temp.verify_0009k where result = 'PASS') then 'FAIL'
                   else 'PASS' end,
-             format('169_verify_live_inbound_talk: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0009j where result = 'PASS'),
-                    (select count(*) from pg_temp.verify_0009j where result = 'FAIL'), (select count(*) from pg_temp.verify_0009j where result = 'skip'))) x
+             format('171_verify_live_inbound_talk: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0009k where result = 'PASS'),
+                    (select count(*) from pg_temp.verify_0009k where result = 'FAIL'), (select count(*) from pg_temp.verify_0009k where result = 'skip'))) x
 order by ord;
-drop table if exists pg_temp.verify_0009j;
+drop table if exists pg_temp.verify_0009k;
 reset role;

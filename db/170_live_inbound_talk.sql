@@ -1,25 +1,29 @@
 -- =============================================================================================
--- 168_live_inbound_talk.sql: addition 0009j, the Live board's Inbound today with Talk time
+-- 170_live_inbound_talk.sql: addition 0009k, the Live board's Inbound today with Talk time
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: the thresholds are the tenant's settings
 -- (telephony.service_level_seconds, telephony.waiting_max_minutes), the lines, markets, zones and missed reasons its
--- catalogs. Runs unchanged in every database, after 166_live_outbound_direct.sql (0009i). Rerunnable, forward-only, in
--- one transaction with a lock timeout. Run as your own IAM login: dev first, then 169_verify_live_inbound_talk.sql
+-- catalogs. Runs unchanged in every database, after 168_pledge_lists.sql (0009j). Rerunnable, forward-only, in
+-- one transaction with a lock timeout. Run as your own IAM login: dev first, then 171_verify_live_inbound_talk.sql
 -- there, then the verifies that read cma.inbound_now() again: 133_verify_perf.sql (unchanged, still PASS: its A5 reads
 -- today, callbacks and summary, of today only offered), 145_verify_held_kinds_restore.sql and
 -- 165_verify_live_outbound.sql, which this change edits (145's A10 and E6, 165's B7 and E1 compare cma.inbound_now()
 -- with an earlier definition's JSON; they now take the new key out of the new answer before comparing, which changes
--- nothing on a database without 168, so both read the same before and after it); then 131_time_all.sql part a,
+-- nothing on a database without 170, so both read the same before and after it); then 131_time_all.sql part a,
 -- unchanged: the web's statements are the same, and its rows 'inbound now (one statement)' (prod 15.7 ms on 10 November
--- 2026, before 168) and 'live board calls (one statement)' time the read below inside them; 169's E4 holds the new poll
--- to 164's time. Prod the same, before the merge: 168, 169,
+-- 2026, before 170) and 'live board calls (one statement)' time the read below inside them; 171's E4 holds the new poll
+-- to 164's time. Prod the same, before the merge: 170, 171,
 -- 133, 145, 165, 131 part a; then the merge.
 -- Release order (Martin, 10 November 2026; as #260): the database first. cma.inbound_now() keeps waiting_now and
 -- longest_waiting_seconds (always null, since 164) in today exactly as now, so main's web runs unchanged on a database
--- with 168: it ignores the new key and its Waiting now tile reads waiting_now as before. This branch's web reads
--- inbound_talk_seconds and no longer reads waiting_now or longest_waiting_seconds; on a database without 168 its Talk
--- time tile would read a missing key, which is why 168 runs in prod before the merge. The two kept keys leave in the
+-- with 170: it ignores the new key and its Waiting now tile reads waiting_now as before. This branch's web reads
+-- inbound_talk_seconds and no longer reads waiting_now or longest_waiting_seconds; on a database without 170 its Talk
+-- time tile would read a missing key, which is why 170 runs in prod before the merge. The two kept keys leave in the
 -- migration that brings the combined Live read under 20 ms (Open decisions).
+-- Numbering (Martin, 11 November 2026): written as 168 and addition 0009j, renumbered 170 and 0009k because #262 (Assets
+-- → Pledge lists) took 168, 169 and 0009j first. In dev the earlier 168 of this change ran after #262's 0009j: it
+-- replaced the two functions below and recorded no addition (0009j was already #262's). 170 replaces them again, whatever
+-- version ran there, and records 0009k; 171 then verifies the database as it stands.
 -- No table, view, column or setting changes: the data map's schema does not change. No index is added: the read uses
 -- telephony_call_started_idx (34) through cma.inbound_calls_of, and the primary key of cma.telephony_call.
 --
@@ -39,7 +43,7 @@
 --                      call on a line west of the tenant (a line in London for a tenant in Amsterdam) between the
 --                      tenant's midnight and the line's counts here today and in the report on the day before; one on a
 --                      line east of it before the tenant's midnight counts in the report's date and here the day before.
---                      169 names such calls when they explain a difference. waiting_now counts as before (the calls
+--                      171 names such calls when they explain a difference. waiting_now counts as before (the calls
 --                      waiting now, also before midnight), in the same read
 --                      One pass: cma.inbound_calls_of once, from the earlier of the tenant's midnight and the waiting
 --                      limit (now() less telephony.waiting_max_minutes), with no end; 60 read the calls twice, the day
@@ -52,7 +56,7 @@
 -- What it changes
 --   cma.inbound_now()  (based on 164): today from cma.inbound_today_live_of instead of cma.inbound_today_of, so it gains
 --                      the key inbound_talk_seconds; longest_waiting_seconds still always null, waiting_now as before;
---                      callbacks and summary, and every other key of today, as before (169 proves it against 164's
+--                      callbacks and summary, and every other key of today, as before (171 proves it against 164's
 --                      definition). cma.inbound_today_of and cma.inbound_today (60) are not touched
 --
 -- SQLSTATEs as before: CMA01 no acting user, CMA06 not permitted.
@@ -73,8 +77,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009i') then
-    raise exception 'addition 0009i (166_live_outbound_direct.sql) must run before 0009j';
+  if not exists (select 1 from cma.schema_migration where version = '0009j') then
+    raise exception 'addition 0009j (168_pledge_lists.sql) must run before 0009k';
   end if;
 end
 $$;
@@ -199,7 +203,7 @@ end
 $$;
 
 insert into cma.schema_migration (version, description)
-values ('0009j', 'Live board, Inbound today with Talk time: cma.inbound_today_live_of(tenant) answers cma.inbound_today_of''s figures of the tenant''s day (but longest_waiting_seconds) and inbound_talk_seconds, the talk time of the answered inbound calls on counted lines of the tenant''s day, as the row''s other figures (Reports → Calls'' talk time minus its outbound talk time but for calls whose line-zone day differs, gap D34), in one read of cma.inbound_calls_of; cma.inbound_now() (from 164) reads it, so today gains inbound_talk_seconds; waiting_now and longest_waiting_seconds (null) kept as they are for one release; everything else as before')
+values ('0009k', 'Live board, Inbound today with Talk time: cma.inbound_today_live_of(tenant) answers cma.inbound_today_of''s figures of the tenant''s day (but longest_waiting_seconds) and inbound_talk_seconds, the talk time of the answered inbound calls on counted lines of the tenant''s day, as the row''s other figures (Reports → Calls'' talk time minus its outbound talk time but for calls whose line-zone day differs, gap D34), in one read of cma.inbound_calls_of; cma.inbound_now() (from 164) reads it, so today gains inbound_talk_seconds; waiting_now and longest_waiting_seconds (null) kept as they are for one release; everything else as before')
 on conflict (version) do nothing;
 
 commit;

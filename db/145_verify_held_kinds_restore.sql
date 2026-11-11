@@ -13,8 +13,8 @@
 -- Cloud SQL Studio shows no notices. Run as your own IAM login after 144_held_kinds_restore.sql, dev first, then prod.
 -- Edited by addition 0009h (164_live_outbound.sql): cma.inbound_now() answers today's longest_waiting_seconds as null, so
 -- A10 and E6 set that key to null in 0008zr's answer before comparing; every other key is compared as before.
--- Edited by addition 0009j (168_live_inbound_talk.sql): cma.inbound_now()'s today holds inbound_talk_seconds, a key
--- 0008zr never had, so A10 and E6 take it out of the new answer before comparing (169 proves the key itself).
+-- Edited by addition 0009k (170_live_inbound_talk.sql): cma.inbound_now()'s today holds inbound_talk_seconds, a key
+-- 0008zr never had, so A10 and E6 take it out of the new answer before comparing (171 proves the key itself).
 -- Expected verdict, in dev and in prod: "0008zx verified | 145_verify_held_kinds_restore: <n> ok, 0 FAIL, <k> skip" (the
 -- skips are active tenants without a person holding tenant.configure, or monitoring.live, whose E rows cannot run as the
 -- application); provoked (verify.provoke true at the top): every row reads FAIL (block E's comparisons lose the previous

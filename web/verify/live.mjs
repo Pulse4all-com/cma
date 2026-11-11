@@ -24,7 +24,7 @@
  * tag meaning not reached, never an inbound one), the talk time of the connected calls and its average, each call on
  * its day in its line's zone, a line that does not count left out, the settings moving the figures; and the absence
  * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog. Since
- * addition 0009j Inbound today's Talk time in place of Waiting now, as 169 proves it in the database: the six tiles in
+ * addition 0009k Inbound today's Talk time in place of Waiting now, as 171 proves it in the database: the six tiles in
  * their order, Talk time in the column of Outbound today's, a dash without an answered call, the talk time of the
  * answered inbound calls of the tenant's day (Reports → Calls' talk time minus its outbound talk time but for calls on
  * another day in their line's zone), and no
@@ -327,8 +327,8 @@ expect("a day without an attempt: zeros, no rate, no average",
 expect("the connected rate with one decimal, a dash without an attempt; the average's dash",
   [fmtRate1(out6.connectedRate, "en"), fmtRate1(57.1, "nl"), fmtRate1(100, "en"), fmtRate1(none.connectedRate, "en"), fmtTalk(none.talkAvgSeconds, "en"), fmtTalk(none.talkSeconds, "en")],
   ["87.5%", "57,1%", "100.0%", "–", "–", "0 s"], ["88%", "57%", "100%", "0%", "0 s", "–"]);
-// ---- Inbound today's Talk time (addition 0009j) ----------------------------------------------------
-// The calls of 169 B (invented ids), on 10 November 2026 around the tenant's midnight (Europe/Amsterdam, 23:00 UTC the
+// ---- Inbound today's Talk time (addition 0009k) ----------------------------------------------------
+// The calls of 171 B (invented ids), on 10 November 2026 around the tenant's midnight (Europe/Amsterdam, 23:00 UTC the
 // day before): two ended NL calls (45 and 100 s), one answered and in progress, one unanswered; the New York line's
 // answered call 5 seconds after the tenant's midnight (18:00 the day before there); the Tokyo line's call 10 seconds
 // before it (07:59:50 on the date there); a connected outbound call (30 s), an outbound one not connected; the day before

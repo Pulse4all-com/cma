@@ -1309,19 +1309,19 @@ offered = count(telephony calls with direction='inbound', source_deleted_at null
 
 **Filters**
 
-- tenant: RLS plus the explicit tenant of cma.inbound_today_live_of (cma.inbound_today_of's before 0009j) (cma.current_tenant_id())
+- tenant: RLS plus the explicit tenant of cma.inbound_today_live_of (cma.inbound_today_of's before 0009k) (cma.current_tenant_id())
 - direction = inbound; source_deleted_at is null; started_at not null
 - counted lines only (telephony_number.is_counted; a line not in the catalog counts)
 - today window on started_at in the tenant's zone (not on the business date)
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Who may see it** `monitoring.live`
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1365,13 +1365,13 @@ answered = count(today's inbound calls as live.inbound.offered with answered_at 
 - answered_at is not null
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Who may see it** `monitoring.live`
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1416,7 +1416,7 @@ unanswered = count(not answered and not waiting); waiting = not answered, not en
 - denominator: calls with an outcome only (waiting calls excluded from numerator and denominator)
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Settings**
 
@@ -1428,7 +1428,7 @@ unanswered = count(not answered and not waiting); waiting = not answered, not en
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `unansweredPct` in src/lib/reports.ts; `inboundTileValue` in src/lib/live.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `unansweredPct` in src/lib/reports.ts; `inboundTileValue` in src/lib/live.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1474,7 +1474,7 @@ numerator = count(answered and answer_seconds <= telephony.service_level_seconds
 - denominator: answered calls plus unanswered calls whose reason counts_in_service_level (catalog per tenant and source system; default true)
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Settings**
 
@@ -1487,7 +1487,7 @@ numerator = count(answered and answer_seconds <= telephony.service_level_seconds
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1533,13 +1533,13 @@ inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on 
 - today: the calls started in the tenant's day, as the row's other figures (Martin, 10 November 2026)
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of, 0009j), as every other Inbound today tile (Day). Reports → Calls dates each call in its line's market zone instead (gap D34), so for a line in another zone the report's date can hold a call this tile counts on another day (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of, 0009k), as every other Inbound today tile (Day). Reports → Calls dates each call in its line's market zone instead (gap D34), so for a line in another zone the report's date can hold a call this tile counts on another day (cross-page note)
 
 **Who may see it** `monitoring.live`
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008zx); `inboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008zx); `inboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1547,13 +1547,13 @@ inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on 
 with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) select coalesce(sum(tc.talk_seconds), 0)::bigint as inbound_talk_seconds from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref where tc.tenant_id = :tenant_id and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null and tc.answered_at is not null and coalesce(n.is_counted, true) and tc.started_at >= (now() at time zone s.tz)::date::timestamp at time zone s.tz and tc.started_at < ((now() at time zone s.tz)::date + 1)::timestamp at time zone s.tz
 ```
 
-**Fixture check** Not run here: this session has no database. db/169_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today, naming the calls on another day in their line's zone; Martin runs it and this query in Studio.
+**Fixture check** Not run here: this session has no database. db/171_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today, naming the calls on another day in their line's zone; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read and GET /api/v1/telephony/inbound-now (0009j); definitions.md, Talk time, Inbound call, Day (the talk time follows Day; only its comparison with Reports → Calls meets gap D34); data-model/0008.md, Live board: Inbound today with Talk time (0009j); decisions.md 10 Nov 2026 (Live board, Inbound today: Waiting now replaced by Talk time); decisions.md 10 Nov 2026 (Inbound today's Talk time counts the calls started in the organisation's day)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read and GET /api/v1/telephony/inbound-now (0009k); definitions.md, Talk time, Inbound call, Day (the talk time follows Day; only its comparison with Reports → Calls meets gap D34); data-model/0008.md, Live board: Inbound today with Talk time (0009k); decisions.md 10 Nov 2026 (Live board, Inbound today: Waiting now replaced by Talk time); decisions.md 10 Nov 2026 (Inbound today's Talk time counts the calls started in the organisation's day)
 
 **Notes**
 
-Reports → Calls' talk time minus its outbound talk time for today (calls.talk_total − calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total), in both cases but for the answered inbound calls whose day in their line's zone differs from the tenant's day (gap D34): db/169 B2, B3, E2 and E3 accept that difference only, naming the calls. In the column of Outbound today's Talk time (live.outbound.talk). An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0. API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.
+Reports → Calls' talk time minus its outbound talk time for today (calls.talk_total − calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total), in both cases but for the answered inbound calls whose day in their line's zone differs from the tenant's day (gap D34): db/171 B2, B3, E2 and E3 accept that difference only, naming the calls. In the column of Outbound today's Talk time (live.outbound.talk). An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0. API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.
 
 #### `live.inbound.avg_answer`
 
@@ -1583,13 +1583,13 @@ avg_answer_seconds = round1(avg(answered_at − started_at in seconds, floored a
 - answered calls only
 - tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Who may see it** `monitoring.live`
 
 **Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -45865,7 +45865,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 - as live.inbound.offered
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Settings**
 
@@ -45878,7 +45878,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -45920,7 +45920,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 - as live.inbound.offered
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Settings**
 
@@ -45933,7 +45933,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -45947,7 +45947,7 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 
 **Notes**
 
-Today's calls still waiting (the today row's waiting, returned by the API); no tile shows it. cma.inbound_now() still answers waiting_now (the calls waiting now, also before midnight) for one release; the web no longer reads it since addition 0009j (Waiting now gave way to Talk time).
+Today's calls still waiting (the today row's waiting, returned by the API); no tile shows it. cma.inbound_now() still answers waiting_now (the calls waiting now, also before midnight) for one release; the web no longer reads it since addition 0009k (Waiting now gave way to Talk time).
 
 #### `live.inbound.answered_within_target`
 
@@ -45975,7 +45975,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 - as live.inbound.offered
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Settings**
 
@@ -45988,7 +45988,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -46030,7 +46030,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 - as live.inbound.offered
 
-**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009j, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
+**Time** Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of since 0009k, with cma.inbound_today_of's expressions); waiting is relative to the database's now(); the business date each call would get on the report is its line's market zone instead (cross-page note)
 
 **Settings**
 
@@ -46043,7 +46043,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009j); `cma.inbound_today_live_of` (0009j); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

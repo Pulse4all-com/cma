@@ -19,7 +19,7 @@
  * keycaps, a hint on its right-most reason column, its table scrolling inside its card and no text on a
  * Light Blue or Soft Rose reason mark, the not-connected state for a tenant without telephony; the
  * Live board for every identity that holds it, with the inbound tiles, the missed calls and a tile's
- * hint inside the viewport, or the not-connected state, and no horizontal scrolling; since addition 0009j the six
+ * hint inside the viewport, or the not-connected state, and no horizontal scrolling; since addition 0009k the six
  * inbound tiles in their order by test id (Inbound, Answered, Unanswered, Service level, Talk time, Average to answer),
  * no Waiting now, and Talk time in the column of Outbound today's Talk time at 1280 and 1536 px; since the Live board's
  * UX pass (10 November 2026) at 1280 x 800 every call and follow-up figure on the first screen, each panel one row with
@@ -1017,7 +1017,7 @@ async function expectForms() {
   }
 }
 
-// Inbound today's tiles in their order (addition 0009j; Martin, 10 November 2026), by test id, not by text
+// Inbound today's tiles in their order (addition 0009k; Martin, 10 November 2026), by test id, not by text
 const INBOUND_ORDER = ["offered", "answered", "unansweredPct", "serviceLevel", "talk", "avgAnswer"].map((k) => `inbound-${k}`).join(",");
 
 // The Live board per identity (addition 0008i): at 1280 px the inbound tiles, the missed calls and the
@@ -1051,7 +1051,7 @@ async function expectLiveBoard() {
     if (provoke && subject === "supervisor") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-tiles"]'); if (t) t.style.width = "2400px"; });
     // --provoke puts Missed, not called back back above the team (where it sat before 0008z)
     if (provoke && subject === "analyst") await p.evaluate(() => { const m = document.querySelector('[data-testid="missed-live"]'); const t = document.querySelector('[data-testid="inbound-live"]'); if (m && t) t.after(m); });
-    // --provoke moves Inbound today's Talk time to the end of its row (where Waiting now sat before 0009j)
+    // --provoke moves Inbound today's Talk time to the end of its row (where Waiting now sat before 0009k)
     if (provoke && subject === "admin") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-talk"]'); t?.parentElement?.append(t); });
     const m = await p.evaluate((strip) => {
       const main = document.querySelector("main");
@@ -1061,7 +1061,7 @@ async function expectLiveBoard() {
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
-        // Inbound today since addition 0009j: the six tiles in their order by test id, Talk time in place of Waiting now
+        // Inbound today since addition 0009k: the six tiles in their order by test id, Talk time in place of Waiting now
         inboundOrder: [...document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]')].map((el) => el.getAttribute("data-testid")).join(","),
         waitingNow: !!document.querySelector('[data-testid="inbound-waitingNow"]'),
         // Outbound today (addition 0009h): six tiles between Inbound today and Follow-up now; no Longest waiting anywhere

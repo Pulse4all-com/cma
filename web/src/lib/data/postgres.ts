@@ -1569,7 +1569,7 @@ async function readFollowUpSummary(q: Querier): Promise<FollowUpSummaryAt> {
 
 /**
  * cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives
- * them. Today's inbound_talk_seconds since addition 0009j; its waiting_now and longest_waiting_seconds are not read
+ * them. Today's inbound_talk_seconds since addition 0009k; its waiting_now and longest_waiting_seconds are not read
  */
 type InboundNowDb = {
   today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; inbound_talk_seconds: number;

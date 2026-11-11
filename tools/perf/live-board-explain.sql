@@ -5,7 +5,7 @@
 -- Measures, writes nothing that stays: one transaction that is always rolled back (not read only: the follow-up
 -- summary computes a missing snapshot once as it reads, which a read-only transaction refuses, as 131 notes). Run by
 -- Martin in his own terminal, as his own IAM login, against the database to measure (after 164; part 3c only after
--- 168_live_inbound_talk.sql, skipped without it):
+-- 170_live_inbound_talk.sql, skipped without it):
 --
 --   cd ~/cma && cma_db prod && psql "$PGCONN" -X -f tools/perf/live-board-explain.sql > /tmp/live-board-explain-prod.txt 2>&1
 --
@@ -27,7 +27,7 @@
 --   2  team now taken apart: cma.team_now() alone against the web's statement, so the share of the sessions' columns
 --      (per row: the day's end, the clock-ins, workday_can_clock_in_again) is known
 --   3  inbound now taken apart: the missed callers with their record links as cma.inbound_now() builds them, the
---      anonymous count, today's figures (cma.inbound_today_live_of, 168), and outbound now
+--      anonymous count, today's figures (cma.inbound_today_live_of, 170), and outbound now
 --   4  each statement run seven times more on this connection, every row and column fetched (and, apart from the
 --      poll's sum, Inbound today by hour's read, which the board makes once a minute): the first of them (the
 --      statement's second call, part 1 was its first), the seventh (its eighth, past a pooled connection's switch to
@@ -69,7 +69,7 @@ select (select u.id
   \quit
 \endif
 select :'tenant_id' as tenant_id, :'user_id' as acting_user_id, current_setting('server_version') as server_version;
-select to_regprocedure('cma.inbound_today_live_of(uuid)') is not null as has_0009j
+select to_regprocedure('cma.inbound_today_live_of(uuid)') is not null as has_0009k
 \gset
 select (select count(*) from cma.app_user u where u.tenant_id = :'tenant_id' and u.status = 'active' and u.kind = 'person') as active_people,
        (select count(*) from cma.telephony_call tc, cma.tenant t where t.id = :'tenant_id' and tc.tenant_id = t.id
@@ -126,11 +126,11 @@ explain (analyze, buffers)
 \echo -- 3b the anonymous missed calls of the lookback
 explain (analyze, buffers)
   select cma.anonymous_missed_calls_of(:'tenant_id', now() - make_interval(days => greatest(0, cma.setting_of(:'tenant_id', 'telephony.callback_lookback_days')::integer)));
-\if :has_0009j
-\echo -- 3c today's figures (168)
+\if :has_0009k
+\echo -- 3c today's figures (170)
 explain (analyze, buffers) select * from cma.inbound_today_live_of(:'tenant_id');
 \else
-\echo -- 3c needs 168 (addition 0009j): skipped
+\echo -- 3c needs 170 (addition 0009k): skipped
 \endif
 \echo -- 3d outbound now
 explain (analyze, buffers) select cma.outbound_now();
