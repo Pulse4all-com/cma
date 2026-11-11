@@ -1,6 +1,6 @@
 /**
  * Customers → Active (addition 0009l, brief B35 with addendum A, Martin, 11 November 2026; docs/definitions.md, Active
- * customer terms): the pure logic of the page. The database computes every figure (cma.active_page, cma.active_rows);
+ * customer terms): the pure logic of the page. The database computes every figure (cma.active_top, cma.active_rest, cma.active_rows);
  * this module holds what the screen, the API's parameter checks, the file and the mock share: the filter and its
  * address, the range and the cohort grouping, the list's sort keys, the placeholders with what will feed them, and the
  * arithmetic the charts need (a change line, a sparkline's path, the heatmap's colour step, a difference's tone). It also

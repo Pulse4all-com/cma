@@ -7,7 +7,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * Customers → Active (cma.active_page, addition 0009l) for ?fromMonth (the history's first month, YYYY-MM-01; as far back
+ * Customers → Active (cma.active_top and cma.active_rest side by side, addition 0009l) for ?fromMonth (the history's first month, YYYY-MM-01; as far back
  * as customers.history_months allows when left out, which also caps an earlier one), &grouping=month|quarter (the customer
  * cohorts) and the optional &market, &segment and &channel (indirect, direct or unknown) filters: the active customer base
  * in one document. `setUp` says whether the store and the subscriptions are connected; while either is not, `figures` is
@@ -20,7 +20,11 @@ export const dynamic = "force-dynamic";
  * `inflowByChannel`, outflow, net, amounts per currency; the running month is `isNow` and equals the headline); `markets`
  * with `marketsTotal`; `comparison` (the first two segments side by side: a, b, unknown, difference and ratio per measure);
  * `survival` (Kaplan–Meier per segment, per channel and over all); `ageBands`; `cohorts` with `cohortSplits`; `mix`;
- * `notes`; `filters` (the choices); `settings`. Amounts are per currency and never added across currencies. Team figures
+ * `notes`; `filters` (the choices); `settings`. The tiles' present figures are live; everything over time is read from
+ * the stored take the scheduler refreshes (decision D13): `take` says when it was computed (`computedAt`), whether it is
+ * `stale` (a setting it depends on changed since) or `late` (older than customers.history_notice_minutes), and `history`
+ * is false while no take exists yet: then the present is answered and every figure over time is null or empty ("History
+ * is being prepared", never zeros). Amounts are per currency and never added across currencies. Team figures
  * only: counts, codes, dates and amounts, never a customer's name, email, phone or address. Needs reports.view or
  * performance.team, here and again in the database.
  */

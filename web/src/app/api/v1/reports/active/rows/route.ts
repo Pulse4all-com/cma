@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
  * The customer list of Customers → Active (cma.active_rows, addition 0009l): the active customers under &market, &segment
  * and &channel, sorted by &sort (monthly_amount, clv, store_customer, store, market, segment, customer_start, age_months,
  * subscriptions, devices, channel or level; monthly_amount when left out) and &dir (desc when left out), &limit rows (1 to
- * 200; 50 when left out) from &offset. `total` (the customers there are) and `rows`: the store's id of the customer, store,
+ * 200; 50 when left out) after &after or before &before (the `next` or `prev` cursor of a page, never both: keyset paging
+ * through the sort key's index, no offset; a cursor that is not one is 400 invalid_after or invalid_before, both together 400 invalid_cursor). Read from the stored take
+ * (decision D13; `take` and `history` as the report's), only the worst payment state live for the page's rows. `total`
+ * (the customers there are; null while no take exists), `next`, `prev` and `rows`: the store's id of the customer, store,
  * market, segment, Customer start, Customer age in months, subscriptions, devices, the Monthly recurring amount in its
  * currency, Customer lifetime value (realised) in the store's currency, the worst payment state, the acquisition channel
  * with First orders' level, and the CRM contact's id with its record link. Ids, codes, dates, amounts and links only: never

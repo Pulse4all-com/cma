@@ -19,7 +19,8 @@ const KINDS: Partial<Record<(typeof ACTIVE_FILE_COLUMNS)[number], FlashFileColum
  * as_of, the second the filters, then the list's columns under the API's snake_case names. Ids, codes, dates and amounts
  * only: no name, email, phone or address exists to write, and the contact's link is not written (its id is). Every file
  * read is recorded in the audit log (cma.active_file_record: who, which filters, how many rows; never a row). Needs
- * reports.view or performance.team, here and again in the database. A source not set up gives no file (409 not_set_up).
+ * reports.view or performance.team, here and again in the database. A source not set up gives no file (409 not_set_up),
+ * and neither does a tenant without a stored take yet (409 history_not_ready).
  */
 export async function GET(request: Request) {
   return forPrincipal(async (me) => {

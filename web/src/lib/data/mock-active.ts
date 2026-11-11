@@ -182,7 +182,7 @@ function assertAllowed(me: Principal): void {
   if (!REPORT.some((p) => me.permissions.includes(p))) throw new CmaDbError("CMA06", "not permitted");
 }
 
-/** Customers → Active for the mock: the document cma.active_page answers, computed from the invented base */
+/** Customers → Active for the mock: the document cma.active_top and cma.active_rest answer together, computed from the invented base */
 export function mockActive(me: Principal, fromMonth: string | null, filter: ActiveFilter, grouping: ActiveGrouping): ActiveReport {
   assertAllowed(me);
   const now = Date.now();
