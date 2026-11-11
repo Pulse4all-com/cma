@@ -1869,7 +1869,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Status | Decided |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zv, #235) |
 | Used by | `live.*` (`live.outbound.*` for Outbound today, `live.inbound.talk` for Inbound today's Talk time); the Live group; `GET /api/v1/live/board`; `live.inbound.hours` for the chart (copy key `live.hoursTitle`); the title row's Updated (`live.updatedAt`) |
-| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption is "All lines, not only {organisation}'s: a line is not tied to a contact center yet." (nl: "Alle lijnen, niet alleen die van {organisation}: een lijn hoort nog niet bij een contactcenter."). The Follow-up now strip's caption is "The whole business line, not only {organisation}'s." (nl: "De hele businesslijn, niet alleen die van {organisation}."; copy key `live.followUpWholeBusinessLine`). The mapping of lines to an organisation is an Open decision |
+| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption is "All counted lines, not only {organisation}'s: a line is not tied to a contact center yet." (nl: "Alle meetellende lijnen, niet alleen die van {organisation}: een lijn hoort nog niet bij een contactcenter."). The Follow-up now strip's caption is "The whole business line, not only {organisation}'s." (nl: "De hele businesslijn, niet alleen die van {organisation}."; copy key `live.followUpWholeBusinessLine`). The mapping of lines to an organisation is an Open decision |
 
 ### Sales (rail group)
 
