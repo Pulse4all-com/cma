@@ -223,7 +223,9 @@
     "path": "/reports/active",
     "subject": "manager",
     "tx": 3,
-    "rt": 13
+    "rt": 13,
+    "firstTx": 1,
+    "firstRt": 5
   },
   {
     "path": "/reports/installed-base",

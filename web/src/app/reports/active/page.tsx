@@ -4,7 +4,7 @@ import type { Route } from "next";
 import { ActiveFilters } from "@/components/ActiveFilters";
 import { Bars, FLOW_BG, FlowChart, Legend, LineChart, type LineSeries } from "@/components/ActiveCharts";
 import {
-  ActiveTile, type ActiveHref, ChangeLine, CohortHeatmap, ComparisonTable, CustomerList, DataNote, LinkSwitch, MARKET_SORTS, type MarketSort,
+  type ActivePageCopy, ActiveTile, type ActiveHref, ChangeLine, CohortHeatmap, ComparisonTable, CustomerList, DataNote, LinkSwitch, MARKET_SORTS, type MarketSort,
   MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets,
 } from "@/components/ActiveParts";
 import { fmtAmount, fmtNumber } from "@/components/FlashParts";
@@ -18,9 +18,9 @@ import {
   ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_RANGES, ACTIVE_SLOTS, type ActiveCohortSplitChoice, type ActiveSplit,
   activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, fromMonthOf, matureCohorts, monthLabel, monthsBack, parseActiveFilter,
 } from "@/lib/active";
-import { data, dataIsMock } from "@/lib/data";
+import { data, dataIsMock, requestDbTrace, streamed } from "@/lib/data";
 import type { ActiveCurve, ActiveList, ActiveReport } from "@/lib/data";
-import type { Copy } from "@/lib/copy";
+import { activeCopy, type Copy } from "@/lib/copy";
 import type { Principal } from "@/lib/auth/identity";
 import { flashHref } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
@@ -51,7 +51,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const r = await resolve();
   if (!r.ok) return r.page;
   const { me, copy } = r;
-  const t = copy.active;
+  const t = activeCopy[me.locale];
 
   if (!holdsAny(me, REPORT_PERMISSIONS)) {
     return (
@@ -75,8 +75,10 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   // on the screen waits, and the report is read again on every request (no report is cached across requests), so those
   // clicks show nothing until then. A mark inside the clicked link would need client code beyond the filters (decision
   // D6): left open in the pull request of 0009l
-  const reportRead = data().getActive(me, fromMonthOf(range, today), filter, grouping);
-  const listRead = data().getActiveRows(me, { filter, sort, descending, offset: (pageNo - 1) * ACTIVE_PAGE_SIZE, limit: ACTIVE_PAGE_SIZE });
+  // (streamed(): their cost is counted apart from the first paint's, which here is the identity alone; each part writes
+  // the request's cost once its read is there, for verify:round-trips)
+  const reportRead = streamed(() => data().getActive(me, fromMonthOf(range, today), filter, grouping));
+  const listRead = streamed(() => data().getActiveRows(me, { filter, sort, descending, offset: (pageNo - 1) * ACTIVE_PAGE_SIZE, limit: ACTIVE_PAGE_SIZE }));
   // a read that fails is reported by the part that waits for it; the other part may never get to wait for its own
   reportRead.catch(() => undefined);
   listRead.catch(() => undefined);
@@ -85,7 +87,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   return (
     <Shell copy={copy} me={me} active="active" wide>
       <div data-print="report" data-testid="active-page">
-        <Suspense key={figuresKey} fallback={(
+        <Suspense key={`report|${figuresKey}`} fallback={(
           <>
             <PageTitle>{t.title}</PageTitle>
             <p className="-mt-2 mb-6 max-w-4xl text-small text-p4a-muted">{t.intro}</p>
@@ -94,7 +96,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
         )}>
           <ActiveBody me={me} copy={copy} view={view} read={reportRead} />
         </Suspense>
-        <Suspense key={figuresKey} fallback={(
+        <Suspense key={`list|${figuresKey}`} fallback={(
           <div className="mt-6" data-testid="active-list-loading">
             <Card><ListSkeleton label={t.listCard} rows={ACTIVE_PAGE_SIZE} /></Card>
           </div>
@@ -151,21 +153,25 @@ function viewOf(sp: Record<string, One>) {
 type ActiveView = ReturnType<typeof viewOf>;
 type Part<T> = { me: Principal; copy: Copy; view: ActiveView; read: Promise<T> };
 
-/** The words and helpers both parts use */
-function wordsOf(me: Principal, copy: Copy) {
-  const t = copy.active;
+/** The words and helpers both parts use: the shared words with the page's own beside them, for the page's parts */
+function wordsOf(me: Principal, shared: Copy) {
+  const t = activeCopy[me.locale];
+  const copy: ActivePageCopy = { ...shared, active: t };
   const hints = Object.fromEntries(Object.entries(t).filter(([k]) => k.startsWith("mh_"))) as Record<string, string>;
   const more = (key: string) => metricsMore(me.permissions, key, copy.hints.howComputed);
-  return { t, hints, more };
+  return { t, hints, more, copy };
 }
 
 /** The customer list (3.10), waiting for its own read: nothing where the sources are not set up (the report says so) */
-async function ActiveListPanel({ me, copy, view, read }: Part<ActiveList>) {
+async function ActiveListPanel({ me, copy: shared, view, read }: Part<ActiveList>) {
   const list = await read;
-  if (!list.setUp) return null;
-  const { t, hints, more } = wordsOf(me, copy);
+  const dbTrace = requestDbTrace();
+  const trace = dbTrace ? <meta name="cma-db" content={dbTrace} /> : null;
+  if (!list.setUp) return trace;
+  const { t, hints, more, copy } = wordsOf(me, shared);
   return (
     <div className="mt-6">
+      {trace}
       <Card>
         <PanelTitle label={t.listCard} hint={hints.mh_list!} more={more("active.list")} copy={copy} />
         {list.total === 0 ? <p className="text-body text-p4a-muted">{t.emptyList}</p>
@@ -176,9 +182,10 @@ async function ActiveListPanel({ me, copy, view, read }: Part<ActiveList>) {
 }
 
 /** The report (3.0 to 3.9), waiting for its own read */
-async function ActiveBody({ me, copy, view, read }: Part<ActiveReport>) {
+async function ActiveBody({ me, copy: shared, view, read }: Part<ActiveReport>) {
   const report = await read;
-  const { t, hints, more } = wordsOf(me, copy);
+  const dbTrace = requestDbTrace();
+  const { t, hints, more, copy } = wordsOf(me, shared);
   const { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, href, keep, fileQuery } = view;
 
   const locale = me.locale;
@@ -276,6 +283,7 @@ async function ActiveBody({ me, copy, view, read }: Part<ActiveReport>) {
 
   return (
     <>
+        {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
         <PageTitle aside={(
           <div className="flex items-center gap-4">
             <span className="text-small text-p4a-muted" data-testid="active-updated">{t.updated.replace("{time}", updated)}</span>

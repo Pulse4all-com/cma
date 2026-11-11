@@ -12,13 +12,13 @@
 import type { Route } from "next";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Copy } from "@/lib/copy";
+import type { ActiveCopy } from "@/lib/copy";
 import { ACTIVE_CHANNELS, activeQuery } from "@/lib/active";
 import type { ActiveChannel, ActiveFilter } from "@/lib/data";
 import { Keycap } from "./primitives";
 
 /** The filters' own words: the labels, the three "all" choices and the channels' names (not the page's whole copy: it rides to the browser) */
-export type ActiveFilterWords = Pick<Copy["active"], "marketFilter" | "allMarkets" | "segmentFilter" | "allSegments" | "unknownSegment" | "channel" | "allChannels"
+export type ActiveFilterWords = Pick<ActiveCopy, "marketFilter" | "allMarkets" | "segmentFilter" | "allSegments" | "unknownSegment" | "channel" | "allChannels"
   | "channel_indirect" | "channel_direct" | "channel_unknown">;
 
 export function ActiveFilters({ markets, segments, filter, keep, t, unknownMarket }: {

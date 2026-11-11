@@ -10,7 +10,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import type { ReactNode } from "react";
-import type { Copy, Locale } from "@/lib/copy";
+import type { ActiveCopy, Copy as SharedCopy, Locale } from "@/lib/copy";
 import type {
   ActiveCohort, ActiveComparisonRow, ActiveGrouping, ActiveList, ActiveMarketRow, ActiveMeasure, ActiveReport, ActiveSlotKey, ActiveSort,
 } from "@/lib/data";
@@ -24,7 +24,10 @@ import { HintLabel } from "./HintLabel";
 import { RecordLink } from "./RecordLink";
 import { Badge } from "./primitives";
 
-type T = Copy["active"];
+/** The words these parts read: the shared ones with the page's own beside them (the page puts the two together; neither part hands it to a client component) */
+export type ActivePageCopy = SharedCopy & { active: ActiveCopy };
+type Copy = ActivePageCopy;
+type T = ActiveCopy;
 export type ActiveHref = (change: Record<string, string | null>) => { pathname: Route; query: Record<string, string> };
 
 const th = "h-10 px-2 py-1 align-bottom font-semibold";

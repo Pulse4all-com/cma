@@ -4153,9 +4153,20 @@ const en = {
   },
 } satisfies Record<string, Record<string, string>>;
 
-export type Copy = Deep<typeof en>;
+/** Every word of the Workspace in one language: the dictionaries of this file, `active` among them */
+type AllCopy = Deep<typeof en>;
 
-const nl: Copy = {
+/**
+ * The words the pages share. Customers → Active's own words (the section `active`, the largest of the file) are not in
+ * it: several client components take the whole of this object, so every word in it rides to the browser in those
+ * routes' HTML (verify/perf.json's html_kb). Only the Active page reads its words, through activeCopy below; they stay
+ * in the two dictionaries here, so verify:copy checks them like every other word
+ */
+export type Copy = Omit<AllCopy, "active">;
+/** The words of Customers → Active (addition 0009l), read by its page alone */
+export type ActiveCopy = AllCopy["active"];
+
+const nl = {
   app: {
     name: "Workspace",
     tagline: "Pulse4all contactcenter",
@@ -8272,9 +8283,16 @@ const nl: Copy = {
     title: "De Workspace heeft een breder scherm nodig",
     body: "Maak het venster zo groot mogelijk, sluit het zijpaneel van de browser of zoom uit met Ctrl en min. De Workspace heeft een venster van minstens {px} pixels breed nodig.",
   },
-};
+} satisfies AllCopy;
 
-export const copy: Record<Locale, Copy> = { en, nl };
+function shared(all: AllCopy): Copy {
+  const rest: Partial<AllCopy> = { ...all };
+  delete rest.active;
+  return rest as Copy;
+}
+
+export const copy: Record<Locale, Copy> = { en: shared(en), nl: shared(nl) };
+export const activeCopy: Record<Locale, ActiveCopy> = { en: en.active, nl: nl.active };
 export function t(locale: Locale): Copy {
   return copy[locale];
 }

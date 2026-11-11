@@ -38213,7 +38213,7 @@ retention(a) = survival(a) = product over ages <= a of (1 - events / at_risk) (c
 
 **Notes**
 
-One entry for every age (the ages are the tenant's setting). Retention at an age counts a spell that ends during the month after that age as retained at it. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+One entry for every age (the ages are the tenant's setting). Retention at an age is the survival through that age: a spell that ends at exactly that length no longer counts, so a curve crosses 50 % at its median. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
 
 #### `active.clv_realised_average`
 

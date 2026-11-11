@@ -32,7 +32,7 @@ import {
   activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, curveOf, differenceTone, fromMonthOf, heatStep, kaplanMeier, matureCohorts, monthsBack,
   niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor,
 } from "../src/lib/active.ts";
-import { copy } from "../src/lib/copy.ts";
+import { activeCopy, copy } from "../src/lib/copy.ts";
 import { mockActive, mockActiveRows } from "../src/lib/data/mock-active.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -244,7 +244,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
 {
   const pageFiles = ["app/reports/active/page.tsx", "components/ActiveParts.tsx", "components/ActiveFilters.tsx"];
   const text = pageFiles.map(src).join("\n");
-  // every t.<key> the page reads (t is copy.active in all three files), every hints.mh_<key>, and the list's header keys
+  // every t.<key> the page reads (t is activeCopy[locale] in all three files), every hints.mh_<key>, and the list's header keys
   const used = new Set([...text.matchAll(/\bt\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]));
   for (const m of text.matchAll(/hints\.(mh_[a-z0-9_]+)/g)) used.add(m[1]);
   for (const m of text.matchAll(/head\("([A-Za-z]+)"/g)) used.add(m[1]);
@@ -254,18 +254,18 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
     ...["paid", "in_retry", "failed", "paused"].map((p) => `pay_${p}`), ...["monthly", "yearly", "other", "unknown"].map((b) => `billing_${b}`), "grouping_month", "grouping_quarter",
   ];
   const wanted = [...used, ...dynamic];
-  const missing = (lang) => wanted.filter((k) => typeof copy[lang].active[k] !== "string" || copy[lang].active[k] === "");
+  const missing = (lang) => wanted.filter((k) => typeof activeCopy[lang][k] !== "string" || activeCopy[lang][k] === "");
   expect("T1 every key the page reads, and every channel, slot, measure, reason, payment state and billing word, has its words in en and nl",
-    [wanted.length > 150, missing("en"), missing("nl"), copy.en.nav.active, copy.nl.nav.active, copy.en.active.title, copy.nl.active.title],
+    [wanted.length > 150, missing("en"), missing("nl"), copy.en.nav.active, copy.nl.nav.active, activeCopy.en.title, activeCopy.nl.title],
     [true, [], [], "Active", "Actief", "Active customers", "Actieve klanten"], [true, ["provoked"], ["provoked"], "Active", "Actief", "Active", "Actief"]);
   expect("T2 the labels of decision D9, and Unknown never worded as direct",
-    [copy.en.active.channel, copy.nl.active.channel, copy.en.active.channel_indirect, copy.nl.active.channel_indirect, copy.en.active.channel_direct, copy.nl.active.channel_direct,
-      copy.en.active.channel_unknown, copy.nl.active.channel_unknown],
+    [activeCopy.en.channel, activeCopy.nl.channel, activeCopy.en.channel_indirect, activeCopy.nl.channel_indirect, activeCopy.en.channel_direct, activeCopy.nl.channel_direct,
+      activeCopy.en.channel_unknown, activeCopy.nl.channel_unknown],
     ["Direct / Indirect", "Direct / Indirect", "Indirect · call center", "Indirect · callcenter", "Direct · self-service", "Direct · selfservice", "Unknown", "Onbekend"],
     ["Channel", "Kanaal", "Assisted", "Geholpen", "Direct", "Direct", "Direct", "Direct"]);
   const retired = /\b(tenure|lifetime value|churn rate %)\b/i;
   expect("T3 the page says Customer age, never tenure; First orders' hints name Indirect and Direct on Customers, Active",
-    [Object.values(copy.en.active).filter((v) => /\btenure\b/i.test(v)).length, retired.test(copy.en.active.customerAge), /Indirect/.test(copy.en.hints.foCallCenter),
+    [Object.values(activeCopy.en).filter((v) => /\btenure\b/i.test(v)).length, retired.test(activeCopy.en.customerAge), /Indirect/.test(copy.en.hints.foCallCenter),
       /Direct/.test(copy.en.hints.foSelfService), /Indirect/.test(copy.nl.hints.foCallCenter), /Direct/.test(copy.nl.hints.foSelfService)],
     [0, false, true, true, true, true], [1, true, false, false, false, false]);
 }
@@ -290,8 +290,8 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
 
 // ---- X. The placeholders render no digit --------------------------------------------------------------------------------------
 {
-  const words = (lang) => [...ACTIVE_SLOTS.flatMap((s) => [copy[lang].active[`slot_${s.key}`], ...s.fedBy.map((f) => copy[lang].active[`feed_${f}`])]),
-    copy[lang].active.notConnected, copy[lang].active.fedBy, copy[lang].flash.status_Pending];
+  const words = (lang) => [...ACTIVE_SLOTS.flatMap((s) => [activeCopy[lang][`slot_${s.key}`], ...s.fedBy.map((f) => activeCopy[lang][`feed_${f}`])]),
+    activeCopy[lang].notConnected, activeCopy[lang].fedBy, copy[lang].flash.status_Pending];
   const parts = src("components/ActiveParts.tsx");
   const card = parts.slice(parts.indexOf("export function PlaceholderCard"), parts.indexOf("/** A quiet note above a panel"));
   const doc = mockActive({ tenantId: "t1", permissions: ["reports.view"] }, null, { market: null, segment: null, channel: null }, "month");
