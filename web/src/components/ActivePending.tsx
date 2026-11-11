@@ -3,7 +3,7 @@
 /**
  * The one small client component of Customers → Active beside its filters (decision D14 of addendum B, 11 November 2026,
  * which narrows D6): it marks a link while its navigation is pending, and it knows when every streamed part of the page
- * is on the screen. No fetch of its own, no data: Next's link status and three marks the server's parts leave behind.
+ * is on the screen. No fetch of its own, no data: Next's link status and the marks the server's parts leave behind.
  *
  * LinkMark     inside a <Link>: a dot that shows from the click until the answer is on the screen (CLAUDE.md,
  *              Performance: a click shows something within 100 ms). It keeps its place while idle, so nothing moves

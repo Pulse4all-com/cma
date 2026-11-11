@@ -812,7 +812,7 @@
     },
     {
       "name": "active_customer_month",
-      "what": "Per tenant, calendar month, market, customer segment and acquisition channel: the active customers and the holding subscriptions at the month's end as reconstructed from the subscriptions' created and ended times (the running month as of now; a past pause counts as holding), and the customers' inflow and outflow of the month; counts only, no customer and no contact (0009l). A plain view of the stored take (cma.active_month), so it is as of the take's History as of, refreshed by the job cma-refresh-active-customers"
+      "what": "Per tenant, calendar month, market, customer segment and acquisition channel: the active customers and the holding subscriptions at the month's end as reconstructed from the subscriptions' created and ended times (the running month as of the take; a past pause counts as holding), and the customers' inflow and outflow of the month; counts only, no customer and no contact (0009l). A plain view of the stored take (cma.active_month), so it is as of the take's History as of, refreshed by the job cma-refresh-active-customers"
     },
     {
       "name": "customer_cohort",

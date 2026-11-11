@@ -46,7 +46,8 @@ export function activeRowsParams(sp: URLSearchParams, opts: { file?: boolean } =
     if (!/^\d{1,6}$/.test(raw) || n < min || n > max) throw new ApiError(400, `invalid_${name}`, `${name} must be a whole number from ${min} to ${max}`);
     return n;
   };
-  // a cursor is opaque (the database wrote it and checks it): base64 text of bounded length, here; anything else is a 400
+  // a cursor is the CMA's own id of a customer, as the database wrote it (and checks it: one that names no customer of the
+  // tenant's take is refused there); anything out of that form is a 400 here
   const cursor = (name: "after" | "before") => {
     const raw = sp.get(name);
     if (raw === null || raw === "") return null;

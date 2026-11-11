@@ -808,6 +808,8 @@ async function expectActiveLayers() {
         filters: document.querySelectorAll('[data-testid="active-filters"] select').length,
         // a panel of a fixed height either fits its figures or is one of the four that scroll inside (and can be focused)
         cut: bodies.filter((el) => el.scrollHeight > el.clientHeight + 1 && el.getAttribute("tabindex") !== "0").map((el) => `${el.getAttribute("data-panel-body")} ${el.scrollHeight}>${el.clientHeight}`),
+        // a tile fits its figures too (it may scroll inside itself, which nobody would find)
+        cutTiles: [...document.querySelectorAll("[data-tile]")].filter((el) => el.scrollHeight > el.clientHeight + 1).map((el) => `${el.getAttribute("data-testid")} ${el.scrollHeight}>${el.clientHeight}`),
         cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => /\d/.test(el.textContent ?? "")),
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
       };
@@ -824,6 +826,7 @@ async function expectActiveLayers() {
     if (m.present !== "live" || m.updated !== "live") problems.push(`${tag}: after the page streamed the tiles are ${m.present} and the title row says ${m.updated}, expected the live present in both`);
     if (m.filters !== 3) problems.push(`${tag}: ${m.filters} filter boxes after the page streamed, expected 3`);
     if (m.cut.length > 0) problems.push(`${tag}: a panel cuts off its figures at its fixed height: ${m.cut.join(", ")}`);
+    if (m.cutTiles.length > 0) problems.push(`${tag}: a tile cuts off its figures: ${m.cutTiles.join(", ")}`);
     if (m.scrollX) problems.push(`${tag}: the page scrolls horizontally`);
     // a click shows its mark within 100 ms, before the answer is there (decision D14): a panel's toggle, the list's sort, the
     // list's next page. The answer is held back so the mark's moment can be read
@@ -865,6 +868,7 @@ async function expectActiveLayers() {
           channelSplit: has('[data-testid="active-split-channel"]'), tiles: document.querySelectorAll("[data-tile]").length,
           customers: text('[data-testid="active-tile-customers"]'), preparing: document.querySelectorAll('[data-testid="active-history-preparing"]').length,
           lateNote: has('[data-testid="active-note-late"]'), outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length,
+          presentPreparing: has('[data-testid="active-present-preparing"]'),
           tilesPanel: text('[data-panel-body="tiles"]'),
         };
       });
@@ -875,7 +879,8 @@ async function expectActiveLayers() {
       problems.push(`${where}?take=none: without a take the page must show the live tiles, no churn count, no split by channel and "History is being prepared" (${JSON.stringify(none).slice(0, 300)})`);
     }
     const noneChannel = await read("take=none&channel=direct");
-    if (noneChannel.tiles !== 2 || noneChannel.outlinesLeft !== 0 || /\b0\b/.test(noneChannel.tilesPanel) || noneChannel.preparing < 5 || /\d/.test(noneChannel.customers)) {
+    if (noneChannel.tiles !== 2 || noneChannel.outlinesLeft !== 0 || /\b0\b/.test(noneChannel.tilesPanel) || noneChannel.preparing < 5 || /\d/.test(noneChannel.customers)
+      || !noneChannel.presentPreparing) {
       problems.push(`${where}?take=none&channel=direct: a channel filter without a take must show no tile of the present and no zero (${JSON.stringify(noneChannel).slice(0, 300)})`);
     }
     const stale = await read("take=stale");
@@ -883,6 +888,19 @@ async function expectActiveLayers() {
     const late = await read("take=late");
     if (late.history !== "late" || !late.lateNote || late.tiles !== 6) problems.push(`${where}?take=late: a late take is not shown as such (${JSON.stringify(late).slice(0, 200)})`);
     await ctx.close();
+    // a tenant whose store or subscriptions are not set up: every part says so (never zeros) and the page still settles,
+    // so the Print button becomes ready (every part streamed, the present's too)
+    const ctx2 = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "invest-analyst" } });
+    const p2 = await ctx2.newPage();
+    await p2.goto(BASE + "/reports/active");
+    await settle(p2);
+    const ready = await p2.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).then(() => true, () => false);
+    const m2 = await p2.evaluate(() => ({ notSetUp: document.querySelectorAll('[data-testid="active-not-set-up"]').length, tiles: document.querySelectorAll("[data-tile]").length,
+      outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length }));
+    if (!ready || (provoke ? m2.notSetUp > 0 : m2.notSetUp === 0) || m2.tiles !== 0 || m2.outlinesLeft !== 0) {
+      problems.push(`invest-analyst /reports/active: a tenant that is not set up must say so in every part and let the Print button become ready (ready ${ready}, ${JSON.stringify(m2)})`);
+    }
+    await ctx2.close();
   }
 }
 

@@ -2265,7 +2265,7 @@ export interface CourtesyReport {
 
 /**
  * Customers → Active (addition 0009l, brief B35 with addendum A; docs/definitions.md, Active customer terms): the active
- * customer base, its state and its movement, in one read (cma.active_page) and its customer list (cma.active_rows).
+ * customer base, its state and its movement, in one read (cma.active_top / cma.active_rest) and its customer list (cma.active_rows).
  * Ids, codes, counts, dates, amounts and links only: no field of these types holds what identifies a customer in words.
  * An acquisition channel: indirect (the call center), direct (self-service) or unknown
  */

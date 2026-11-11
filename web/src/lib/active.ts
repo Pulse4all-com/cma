@@ -36,7 +36,7 @@ export const ACTIVE_PANEL_HEIGHT = {
   cohortTable: 424, cohortCurves: 348, mix: 232, list: 656,
 } as const;
 export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
-/** The three streamed parts of the page (decision D15): above the fold, below it, the customer list */
+/** The streamed parts of the page (decisions D15 and D16): above the fold, the live present of the tiles, below the fold, the customer list */
 export const ACTIVE_PARTS = ["top", "now", "rest", "list"] as const;
 /** The panels whose table can be longer than the panel's fixed height: they scroll inside it (and can be reached with the keyboard); every other panel fits */
 export const ACTIVE_SCROLLING: readonly ActivePanel[] = ["markets", "comparison", "cohortTable", "list"];

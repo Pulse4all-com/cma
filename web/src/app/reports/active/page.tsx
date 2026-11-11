@@ -292,7 +292,7 @@ function viewOf(sp: Record<string, One>) {
   const after = cursor(one(sp.after));
   const before = after ? null : cursor(one(sp.before));
   const pageNo = after || before ? Math.max(1, Math.min(100_000, Number.parseInt(one(sp.page) ?? "1", 10) || 1)) : 1;
-  const take = one(sp.take);
+  const take = (ACTIVE_TAKE_STATES as readonly string[]).includes(one(sp.take) ?? "") ? one(sp.take) : undefined;
 
   // the address: only what differs from the page's defaults, so a view can be shared; a toggle changes its own key
   const state: Record<string, string> = {
@@ -333,7 +333,7 @@ type Ctx = ReturnType<typeof wordsOf> & { me: Principal; view: ActiveView; viewK
  * A data panel (decision D15): its outline while its read is on its way, its body once the read is there, both at the
  * panel's own height (ACTIVE_PANEL_HEIGHT), so nothing moves. Keyed on what changes the figures: a new filter shows the
  * outline at once. mark: the last panel of its part tells the page that the part is on the screen (the Print button
- * waits for all three). plain: a line of text, no box around the outline
+ * waits for all four). plain: a line of text, no box around the outline
  */
 function Layer<T>({ id, k, part, viewKey, read, children, mark = false, plain = false, label }: {
   id: ActivePanel; k: string; part: string; viewKey: string; read: Promise<T>; children: (value: T) => ReactNode; mark?: boolean; plain?: boolean;
@@ -470,7 +470,8 @@ async function ComparisonTitle({ ctx, read }: { ctx: Ctx; read: Promise<ActiveRe
  */
 function Tiles({ ctx, top, nowRead }: { ctx: Ctx; top: ActiveReport; nowRead: Promise<ActiveNow> }) {
   const g = gap(ctx, top, false);
-  if (g) return g;
+  // a source not set up: no present to wait for, so this part is on the screen as it is (the Print button waits for it)
+  if (g) return <>{g}<Streamed part="now" view={ctx.viewKey} /></>;
   return (
     <section className="grid h-full grid-cols-3 gap-4 xl:grid-cols-6 [&>div]:overflow-y-auto" aria-label={ctx.t.headline} data-testid="active-tiles">
       <Suspense key={`now|${ctx.viewKey}`} fallback={<PresentTiles ctx={ctx} top={top} settled={false} />}>
@@ -509,15 +510,18 @@ function PresentTiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; sett
     return (
       <>
         {marker}
-        {settled ? <div className="col-span-3 xl:col-span-4">{gap(ctx, top, true)}</div>
+        {settled ? <div className="col-span-3 xl:col-span-4"><Notice tone="info"><span data-testid="active-present-preparing">{t.historyPreparing}</span></Notice></div>
           : <div data-panel-skeleton="tiles" aria-busy="true" className="col-span-3 animate-pulse rounded-input bg-p4a-bgblue xl:col-span-4" />}
       </>
     );
   }
   const n = (x: number) => fmtCount(x, locale);
   const pct = (x: number | null) => fmtShare(x, locale);
-  const whenMonth = monthEndText(monthsBack(top.today, 1), locale, t);
-  const whenYear = monthEndText(monthsBack(top.today, 13), locale, t);
+  // what a change line compares with: the month ends of the date the figures are of (the take's business date for the
+  // stored tiles, today for the live ones), so the label names the right month across a month's first minutes too
+  const of = live ? top.today : (top.take?.businessDate ?? top.today);
+  const whenMonth = monthEndText(monthsBack(of, 1), locale, t);
+  const whenYear = monthEndText(monthsBack(of, 13), locale, t);
   const segOrder = [...top.settings.segments, "unknown"];
   const segLabel = (s: string) => (s === "unknown" ? t.unknownSegment : s);
   const dash = <span className="text-p4a-muted">–</span>;
@@ -584,8 +588,9 @@ function TakeTiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
   const clv = top.tiles?.clv ?? null;
   const pct = (x: number | null) => fmtShare(x, locale);
   const months = (x: number, digits = 0) => t.monthsValue.replace("{n}", fmtNumber(x, locale, digits));
-  const whenMonth = monthEndText(monthsBack(top.today, 1), locale, t);
-  const whenYear = monthEndText(monthsBack(top.today, 13), locale, t);
+  const of = top.take?.businessDate ?? top.today;
+  const whenMonth = monthEndText(monthsBack(of, 1), locale, t);
+  const whenYear = monthEndText(monthsBack(of, 13), locale, t);
   const dash = <span className="text-p4a-muted">–</span>;
   return (
     <>

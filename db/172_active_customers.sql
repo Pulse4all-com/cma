@@ -2708,7 +2708,7 @@ $$;
 -- currency (the others beside it), its realised value and the contact's id and link; ids, codes, dates and amounts only.
 -- Keyset paging: the rows after (p_after) or before (p_before) a row's cursor in the sort's order, read through the
 -- index of the sort key (never an offset); next and prev are the cursors of the page's ends where there is more. A
--- cursor is the CMA's own id of a customer of the list and nothing else (no store id, no amount: it rides in the
+-- cursor is the CMA's own id of a customer of the tenant's take and nothing else (no store id, no amount: it rides in the
 -- address, which the request log keeps); the row's sort values are read from the take under row-level security, so a
 -- cursor of another tenant, of a customer the take no longer holds or of no customer at all is refused (CMA04). A sort
 -- key orders by its value and then by the store customer's id; the amounts sort within their currency (a customer
