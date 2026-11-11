@@ -2,7 +2,7 @@
  * The Live board's Outbound today (addition 0009h; Martin, 10 November 2026): six tiles under Inbound today and above
  * Follow-up now, from cma.outbound_now: attempts, connected, the connected rate, the outbound conversations, the talk
  * time of the connected calls and its average. Today as Reports → Calls dates a call (its date in its line's zone, the
- * gap docs/definitions.md lists under Day; one zone for a tenant with one), so the figures are Reports → Calls' for today. Tenant-wide on every contact center's board, captioned as covering all lines, as the
+ * gap docs/definitions.md lists under Day; one zone for a tenant with one), so the figures are Reports → Calls' for today. Tenant-wide on every contact center's board, captioned as covering all its counted lines, as the
  * inbound tiles (addition 0008zv). Counts and durations only. Nothing for a tenant without telephony: the inbound part
  * above already says "No telephony connected". One panel of six figures as Inbound today's (StatPanel, the Live board's
  * UX pass of 10 November 2026; docs/style/Pulse4all-Style.md 7.3), its Talk time in the column of Inbound today's.
@@ -23,7 +23,7 @@ export function OutboundLive({ outbound, copy, locale, connectedMinSeconds, conv
   connectedMinSeconds: number | null; conversationMinSeconds: number | null;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
   canOpenMetrics?: boolean;
-  /** A caption under the title on what the figures cover (a contact center's Live board: all lines) */
+  /** A caption under the title on what the figures cover (a contact center's Live board: all its counted lines) */
   scope?: string;
 }) {
   if (!outbound) return null;

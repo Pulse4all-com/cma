@@ -8,7 +8,8 @@
  * used for the first render), so a poll costs one transaction instead of the page's render (eight transactions and 26
  * statements before). The filters the board holds survive every poll: they are the board's own state. Since addition
  * 0008zv the board is one contact center's: the poll asks for its organisation (?organisation=<key>), and the inbound,
- * outbound and missed-call parts, which stay tenant-wide, say they cover all lines, and the follow-up strip the whole business line.
+ * outbound and missed-call parts, which stay tenant-wide, say they cover all the organisation's counted lines (it answers
+ * every counted line today; Martin, 11 November 2026), and the follow-up strip the whole business line.
  *
  * The Live board's UX pass (10 November 2026): the board says when it read last ("Updated 14:32:05") and, after two failed
  * polls in a row, that its figures are old and it keeps trying, calmly (docs/style/Pulse4all-Style.md 2.3 and 5), so
@@ -61,7 +62,8 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
   const [failed, setFailed] = useState(0);
   const t = copy.live;
   const organisationKey = organisation.key;
-  // The call parts count every line of the tenant, not only this contact center's (addition 0008zv)
+  // The call parts count every counted line of the tenant (addition 0008zv); the caption names this contact center,
+  // which answers every counted line today (Martin, 11 November 2026)
   const allLines = t.callsAllLines.replace("{organisation}", organisation.name);
   // and the follow-up counts the whole business line's leads, tickets and tasks (Martin, 5 November 2026)
   const wholeBusinessLine = t.followUpWholeBusinessLine.replace("{organisation}", organisation.name);

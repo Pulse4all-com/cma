@@ -18,7 +18,7 @@ export function StatPanel({ id, title, scope, scopeTestId, action, testId, figur
   /** The heading's id, for the section's name */
   id: string;
   title: string;
-  /** A caption after the title on what the figures cover (a contact center's board: all lines, the whole business line) */
+  /** A caption after the title on what the figures cover (a contact center's board: all its counted lines, the whole business line) */
   scope?: string;
   scopeTestId?: string;
   /** A link at the right of the title row (Follow-up now's "Open Follow-up") */

@@ -40,7 +40,7 @@ export function LiveHours({ date, copy, locale, timeZone, scope }: {
   locale: Locale;
   /** The viewer's zone, for the running hour's mark */
   timeZone: string;
-  /** A caption after the title on what the chart covers (a contact center's board: all lines) */
+  /** A caption after the title on what the chart covers (a contact center's board: all its counted lines) */
   scope?: string;
 }) {
   const t = copy.live;
