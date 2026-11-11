@@ -87,7 +87,9 @@ create temporary table verify_0009k (ord integer, check_name text, result text, 
 -- block E writes its rows while acting as the application
 grant select, insert on pg_temp.verify_0009k to cma_app;
 
--- cma.inbound_now() as 0009h (164) defined it, verbatim; the functions it calls are not changed by 170
+-- cma.inbound_now() as 0009h (164) defined it, verbatim; the functions it calls are not changed by 170. Dropped first, as
+-- the other helpers are at the end: a run stopped part-way earlier in the same session leaves it behind
+drop function if exists pg_temp.inbound_now_0009h();
 create function pg_temp.inbound_now_0009h()
 returns jsonb
 language plpgsql stable

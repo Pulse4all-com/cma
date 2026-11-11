@@ -13,7 +13,8 @@
 -- unchanged: the web's statements are the same, and its rows 'inbound now (one statement)' (prod 15.7 ms on 10 November
 -- 2026, before 170) and 'live board calls (one statement)' time the read below inside them; 171's E4 holds the new poll
 -- to 164's time. Prod the same, before the merge: 170, 171,
--- 133, 145, 165, 131 part a; then the merge.
+-- 133, 145, 165, 131 part a; then the merge. Prod holds #262's 0009j (168_pledge_lists.sql) first: 170 refuses a
+-- database without it, as main's 131 does.
 -- Release order (Martin, 10 November 2026; as #260): the database first. cma.inbound_now() keeps waiting_now and
 -- longest_waiting_seconds (always null, since 164) in today exactly as now, so main's web runs unchanged on a database
 -- with 170: it ignores the new key and its Waiting now tile reads waiting_now as before. This branch's web reads
