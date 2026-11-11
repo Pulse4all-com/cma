@@ -31,30 +31,21 @@
 --   cma.inbound_today_live_of(p_tenant_id)
 --                      the Live board's today of a tenant, one row: the fourteen columns cma.inbound_today_of (60)
 --                      answers but longest_waiting_seconds, with the same values, and inbound_talk_seconds: the total
---                      Talk time of today's answered inbound calls on counted lines (0 without one). Two days in one
---                      read, on purpose:
---                      - every figure cma.inbound_today_of answers counts the calls started in the tenant's day (its
---                        zone's midnight to the next, Day), as before; waiting_now counts as before (the calls waiting
---                        now, also before midnight), in the same read
---                      - inbound_talk_seconds dates each call in its own line's zone (the line's market's, else the
---                        tenant's), as Reports → Calls (cma.calls_of) and Outbound today (cma.outbound_today_of) date a
---                        call, so Inbound today's Talk time is Reports → Calls' talk time minus its outbound talk time
---                        for the date, and Outbound today's Talk time and this one add up to the report's. That is the
---                        gap docs/definitions.md lists under Day (D34), inherited to equal the report; it moves with
---                        cma.calls_of when the gap closes. For a line west of the tenant (a line in London for a tenant
---                        in Amsterdam) a call answered between the tenant's midnight and the line's counts in Answered
---                        today and its talk time on the line's date before; for a line east of it, a call answered
---                        before the tenant's midnight counts in the talk time of the date and in Answered of the day
---                        before
---                      One pass: cma.inbound_calls_of once, from the earlier of the date's first midnight in the
---                      tenant's zones (as cma.outbound_today_of's window) and the waiting limit (now() less
---                      telephony.waiting_max_minutes), with no end; 60 read the calls twice, the day and then the
---                      calls waiting now. For markets in the tenant's zone or west of it the read starts at the
---                      tenant's midnight (or the waiting limit, in the first minutes of the day), so it reads the
---                      calls 60's two reads read; a market east of the tenant starts it at that zone's midnight, which
---                      reads the evening before too, with the same answer. Each call is marked in or out of the
---                      tenant's day; waiting_now counts every call read that is waiting (is_waiting holds the limit);
---                      the talk time of an answered call of the date is read by the primary key of
+--                      Talk time of today's answered inbound calls on counted lines (0 without one), over the same calls
+--                      as every other figure of the row: the calls started in the tenant's day (its zone's midnight to
+--                      the next, Day; Martin, 10 November 2026). So it is Reports → Calls' talk time minus its outbound
+--                      talk time for the date but for the calls whose day in their line's zone differs from the
+--                      tenant's day (the line-zone date of cma.calls_of, gap D34 of docs/definitions.md): an answered
+--                      call on a line west of the tenant (a line in London for a tenant in Amsterdam) between the
+--                      tenant's midnight and the line's counts here today and in the report on the day before; one on a
+--                      line east of it before the tenant's midnight counts in the report's date and here the day before.
+--                      169 names such calls when they explain a difference. waiting_now counts as before (the calls
+--                      waiting now, also before midnight), in the same read
+--                      One pass: cma.inbound_calls_of once, from the earlier of the tenant's midnight and the waiting
+--                      limit (now() less telephony.waiting_max_minutes), with no end; 60 read the calls twice, the day
+--                      and then the calls waiting now, and this reads the calls those two read. Each call is marked in
+--                      or out of the tenant's day; waiting_now counts every call read that is waiting (is_waiting holds
+--                      the limit); the talk time of an answered call of the day is read by the primary key of
 --                      cma.telephony_call (cma.inbound_calls_of does not return it), only for those calls (an
 --                      aggregate's filter is evaluated before its argument), no second scan of the day. sql, stable,
 --                      jit off, rows 1, the application's only
@@ -91,12 +82,11 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 1. Inbound today for the Live board, with Talk time
 -- ---------------------------------------------------------------------------------------------
--- The expressions of cma.inbound_today_of (60) over the calls of the tenant's day (in_day below), the calls waiting now
--- over every call read (inbound_calls_of's is_waiting holds the waiting limit itself, as 60's second read used it), the
--- talk time over the answered calls of the date in their line's zone. w: the tenant's day, and where the one read
--- starts: the earlier of the date's first midnight in the tenant's zones and the waiting limit, with no end, so it holds
--- the three (no row when the tenant is not found, so nothing is read, as 60 answers no row then); the calls are read
--- once, laterally from w's one row, as 60 reads them from s
+-- The expressions of cma.inbound_today_of (60) and the talk time over the calls of the tenant's day (in_day below), the
+-- calls waiting now over every call read (inbound_calls_of's is_waiting holds the waiting limit itself, as 60's second
+-- read used it). w: the tenant's day, and where the one read starts: the earlier of the tenant's midnight and the
+-- waiting limit, with no end, so it holds both (no row when the tenant is not found, so nothing is read, as 60 answers no
+-- row then); the calls are read once, laterally from w's one row, as 60 reads them from s
 create or replace function cma.inbound_today_live_of(p_tenant_id uuid)
 returns table (
   business_date            date,
@@ -126,12 +116,8 @@ as $$
   ),
   w as (
     select s.today::timestamp at time zone s.zone as day_from, (s.today + 1)::timestamp at time zone s.zone as day_to,
-           least(min(s.today::timestamp at time zone z.zone), now() - make_interval(mins => s.waiting_max)) as from_at
+           least(s.today::timestamp at time zone s.zone, now() - make_interval(mins => s.waiting_max)) as from_at
     from s
-    cross join lateral (select s.zone
-                        union
-                        select m.time_zone from cma.market m where m.tenant_id = p_tenant_id and m.time_zone is not null) z
-    group by s.today, s.zone, s.waiting_max
   ),
   c as (
     select x.*, (x.started_at >= w.day_from and x.started_at < w.day_to) as in_day
@@ -157,10 +143,10 @@ as $$
          (count(*) filter (where c.is_waiting))::integer,
          (select s.sl from s),
          (select s.waiting_max from s),
-         -- Talk time (docs/definitions.md): of the answered calls of the date in their line's zone; one primary-key
-         -- probe per such call, evaluated only for the rows the filter keeps
+         -- Talk time (docs/definitions.md): of the answered calls of the tenant's day, as the row's other figures; one
+         -- primary-key probe per such call, evaluated only for the rows the filter keeps
          coalesce(sum((select tc.talk_seconds from cma.telephony_call tc where tc.tenant_id = p_tenant_id and tc.id = c.call_id))
-                  filter (where c.is_answered and c.business_date = (select s.today from s)), 0)::bigint
+                  filter (where c.in_day and c.is_answered), 0)::bigint
   from c
   having (select s.today from s) is not null
 $$;
@@ -213,7 +199,7 @@ end
 $$;
 
 insert into cma.schema_migration (version, description)
-values ('0009j', 'Live board, Inbound today with Talk time: cma.inbound_today_live_of(tenant) answers cma.inbound_today_of''s figures of the tenant''s day (but longest_waiting_seconds) and inbound_talk_seconds, the talk time of the answered inbound calls on counted lines whose date in their line''s zone is the tenant''s date (Reports → Calls'' talk time minus its outbound talk time), in one read of cma.inbound_calls_of; cma.inbound_now() (from 164) reads it, so today gains inbound_talk_seconds; waiting_now and longest_waiting_seconds (null) kept as they are for one release; everything else as before')
+values ('0009j', 'Live board, Inbound today with Talk time: cma.inbound_today_live_of(tenant) answers cma.inbound_today_of''s figures of the tenant''s day (but longest_waiting_seconds) and inbound_talk_seconds, the talk time of the answered inbound calls on counted lines of the tenant''s day, as the row''s other figures (Reports → Calls'' talk time minus its outbound talk time but for calls whose line-zone day differs, gap D34), in one read of cma.inbound_calls_of; cma.inbound_now() (from 164) reads it, so today gains inbound_talk_seconds; waiting_now and longest_waiting_seconds (null) kept as they are for one release; everything else as before')
 on conflict (version) do nothing;
 
 commit;

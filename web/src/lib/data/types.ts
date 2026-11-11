@@ -1009,8 +1009,9 @@ export interface InboundService {
 export interface InboundToday extends InboundFigures {
   date: DateKey;
   /**
-   * Talk time of today's answered inbound calls on counted lines, in seconds, 0 without one; each call dated in its line's
-   * zone, as Reports → Calls dates it (addition 0009j), so it is Reports → Calls' talk time minus its outbound talk time
+   * Talk time of today's answered inbound calls on counted lines, in seconds, 0 without one, over the tenant's day as the
+   * row's other figures (addition 0009j): Reports → Calls' talk time minus its outbound talk time but for the calls whose
+   * day in their line's zone differs (gap D34)
    */
   inboundTalkSeconds: number;
   serviceLevelSeconds: number;

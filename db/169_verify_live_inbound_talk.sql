@@ -28,17 +28,21 @@
 --       progress, one unanswered, the New York line's answered call 5 seconds after the tenant's midnight, which is the
 --       day before there, and one waiting), 4 answered, 1 unanswered, 1 waiting, 3 within 20 s, a base of 5, 60.0,
 --       10.0 s on average, 13.0 s at the 80th percentile, {"unknown": 1}, 1 waiting now, 20 s and 30 min; the talk time
---       215 s: the two ended NL calls (45 + 100) and the Tokyo line's call 10 seconds before the tenant's midnight,
---       which is the date there (70); not the New York call (60, the day before in its zone), not the call in progress
---       (no talk time yet), not the unanswered or the waiting one, not the day before's (50), not the outbound one (30);
---       a call ringing since two hours before the tenant's midnight is in none of them (outside the waiting limit: B6)
---   B2  that talk time equals Reports → Calls' talk time minus its outbound talk time for the date
---       (cma.calls_figures_of: 245 − 30) and Calls per agent's inbound talk time (cma.calls_per_person_of's total row)
---   B3  telephony.connected_min_seconds 40: the outbound call (30 s) is no longer Connected; the talk time stays 215 and
---       Calls per agent's with it, while the report's difference becomes 245 (it then also holds the talk time of
+--       205 s, over the tenant's day as the row's other figures (Martin, 10 November 2026): the two ended NL calls
+--       (45 + 100) and the New York call (60); not the Tokyo line's call 10 seconds before the tenant's midnight (70, the
+--       day before in the tenant's zone), not the call in progress (no talk time yet), not the unanswered or the waiting
+--       one, not the day before's (50), not the outbound one (30); a call ringing since two hours before the tenant's
+--       midnight is in none of them (outside the waiting limit: B6)
+--   B2  that talk time is Reports → Calls' talk time minus its outbound talk time for the date (cma.calls_figures_of:
+--       245 − 30 = 215) and Calls per agent's inbound talk time (cma.calls_per_person_of's total row, 215), but for the
+--       calls whose day in their line's zone differs from the tenant's day (gap D34), which the detail names: + the New
+--       York call (60 s, the tenant's day, not the line's), − the Tokyo call (70 s, the line's day, not the tenant's);
+--       no other difference is accepted
+--   B3  telephony.connected_min_seconds 40: the outbound call (30 s) is no longer Connected; the talk time stays 205 and
+--       Calls per agent's (215) with it, while the report's difference becomes 245 (it then also holds the talk time of
 --       outbound calls answered under the threshold), which is why E2 compares only at 0
 --   B4  cma.inbound_now(): an agent is refused (CMA06); a supervisor reads today as cma.inbound_today_live_of's row with
---       longest_waiting_seconds null, the sixteen keys (inbound_talk_seconds 215), and, without the new key, the same
+--       longest_waiting_seconds null, the sixteen keys (inbound_talk_seconds 205), and, without the new key, the same
 --       JSON as 0009h's definition (today, callbacks and summary)
 --   B5  a tenant without a call: today's date, 0 calls, no rate or average, {}, 0 waiting now and 0 s of talk time;
 --       inbound_now() without the new key the same as 0009h's; acting as it, cma.inbound_today_live_of for the first
@@ -49,9 +53,11 @@
 --       read counted it
 --   E1  per active tenant: cma.inbound_now() without inbound_talk_seconds the same JSON as 0009h's
 --   E2  per active tenant whose telephony.connected_min_seconds is 0 (Pulse4all's value and the default): today's
---       inbound_talk_seconds equals cma.calls_figures_of's talk_seconds_total minus outbound_talk_seconds for the date;
---       skip above 0 (B3)
---   E3  per active tenant: today's inbound_talk_seconds equals cma.calls_per_person_of's total inbound_talk_seconds
+--       inbound_talk_seconds is cma.calls_figures_of's talk_seconds_total minus outbound_talk_seconds for the date, but
+--       for the answered inbound calls whose day in their line's zone differs from the tenant's day, named in the
+--       detail (none: exactly equal); skip above 0 (B3)
+--   E3  per active tenant: today's inbound_talk_seconds is cma.calls_per_person_of's total inbound_talk_seconds, but for
+--       the same calls, named
 --   E4  per active tenant: cma.inbound_now() no slower than 0009h's: six untimed calls of each first (so both run the
 --       plans a pooled connection keeps after its fifth call), then the best of verify.timing_runs runs each,
 --       alternating, at most 0009h's best plus the larger of verify.slack_ms and verify.slack_ratio of it (the brief:
@@ -168,6 +174,33 @@ as $$
   select p.inbound_talk_seconds from cma.calls_per_person_of(p_tenant, p_date, p_date, null, null) p where p.row_kind = 'total'
 $$;
 
+-- The answered inbound calls on counted lines whose day in their line's zone (the line's market's, else the tenant's:
+-- cma.calls_of's date, gap D34) differs from the tenant's day at a date: plus, the talk time of those in the tenant's day
+-- and not the line's (counted by Inbound today, not by the reports for the date), minus, of those in the line's day and
+-- not the tenant's (the other way round), and the calls named by id and line, + or −, for the check's detail
+create or replace function pg_temp.v0009j_zone_diff(p_tenant uuid, p_date date)
+returns table (plus bigint, minus bigint, calls text)
+language sql stable
+as $$
+  with c as (
+    select tc.source_id, tc.number_ref, tc.talk_seconds,
+           (tc.started_at at time zone t.timezone)::date = p_date as in_day,
+           (tc.started_at at time zone coalesce(m.time_zone, t.timezone))::date = p_date as on_line_day
+    from cma.telephony_call tc
+    join cma.tenant t on t.id = tc.tenant_id
+    left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref
+    left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market
+    where tc.tenant_id = p_tenant and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null
+      and tc.answered_at is not null and coalesce(n.is_counted, true)
+      and tc.started_at >= (p_date - 1)::timestamp at time zone t.timezone and tc.started_at < (p_date + 2)::timestamp at time zone t.timezone
+  )
+  select coalesce(sum(c.talk_seconds) filter (where c.in_day and not c.on_line_day), 0)::bigint,
+         coalesce(sum(c.talk_seconds) filter (where c.on_line_day and not c.in_day), 0)::bigint,
+         coalesce(string_agg(format('%s %s s call %s (line %s)', case when c.in_day then '+' else '−' end, c.talk_seconds, c.source_id, coalesce(c.number_ref, 'none')),
+                             ', ' order by c.source_id) filter (where c.in_day <> c.on_line_day and c.talk_seconds is not null), 'none')
+  from c
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- S. Structure and privileges
 -- ---------------------------------------------------------------------------------------------
@@ -232,7 +265,7 @@ declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   rows_   text[] := '{}';
   v_t uuid; v_admin uuid; v_sup uuid; v_agent uuid; v_ing uuid; v_tel uuid; v_t2 uuid; v_admin2 uuid;
-  v_txt text; v_bad text; v_err text; v_rep text; v_per bigint; v_talk bigint;
+  v_txt text; v_bad text; v_err text; v_rep text; v_per bigint; v_talk bigint; z record;
   j jsonb; j_old jsonb;
   v_today date;
   v_t0    timestamptz;
@@ -294,17 +327,20 @@ begin
 
     -- B1. the day's figures and its talk time
     v_txt := pg_temp.v0009j_fig(v_t);
-    rows_ := rows_ || pg_temp.v0009j_row(11, 'B1 the tenant''s day: 6 calls, 4 answered, 1 unanswered, 1 waiting, 3 within 20 s of 5, 60.0, 10.0 s, 13.0 s, 1 waiting now; talk time 215 s (the date in each line''s zone)',
-      case when v_txt = format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|1|20|30|215', v_today) and not v_provoke then 'PASS' else 'FAIL' end,
+    rows_ := rows_ || pg_temp.v0009j_row(11, 'B1 the tenant''s day: 6 calls, 4 answered, 1 unanswered, 1 waiting, 3 within 20 s of 5, 60.0, 10.0 s, 13.0 s, 1 waiting now; talk time 205 s (the tenant''s day)',
+      case when v_txt = format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|1|20|30|205', v_today) and not v_provoke then 'PASS' else 'FAIL' end,
       coalesce(v_txt, 'no row'));
 
     -- B2. the same as Reports → Calls' talk time minus its outbound talk time, and as Calls per agent's inbound talk time
     select x.inbound_talk_seconds into v_talk from cma.inbound_today_live_of(v_t) x;
     v_rep := pg_temp.v0009j_report(v_t, case when v_provoke then v_today - 1 else v_today end);
     v_per := pg_temp.v0009j_per_agent(v_t, case when v_provoke then v_today - 1 else v_today end);
-    rows_ := rows_ || pg_temp.v0009j_row(12, 'B2 the talk time equals Reports → Calls'' talk time minus its outbound talk time (245 − 30) and Calls per agent''s inbound talk time',
-      case when v_talk is not null and v_rep = format('%s (245 − 30)', v_talk) and v_per = v_talk then 'PASS' else 'FAIL' end,
-      format('%s against the report''s %s and Calls per agent''s %s', coalesce(v_talk::text, 'no row'), coalesce(v_rep, 'no row'), coalesce(v_per::text, 'no row')));
+    select * into z from pg_temp.v0009j_zone_diff(v_t, v_today);
+    rows_ := rows_ || pg_temp.v0009j_row(12, 'B2 the talk time is Reports → Calls'' talk time minus its outbound talk time (245 − 30) and Calls per agent''s, but for the calls on another day in their line''s zone (+60 New York, −70 Tokyo), named',
+      case when v_talk is not null and v_rep = '215 (245 − 30)' and v_per = 215 and z.plus = 60 and z.minus = 70
+                and v_talk = split_part(v_rep, ' ', 1)::bigint + z.plus - z.minus and v_talk = v_per + z.plus - z.minus then 'PASS' else 'FAIL' end,
+      format('%s against the report''s %s and Calls per agent''s %s; on another day in their line''s zone: %s', coalesce(v_talk::text, 'no row'),
+             coalesce(v_rep, 'no row'), coalesce(v_per::text, 'no row'), z.calls));
 
     -- B3. the Connected threshold moves the report's difference, not the talk time
     perform cma.set_tenant_setting('telephony.connected_min_seconds', '40');
@@ -312,8 +348,8 @@ begin
     v_rep := pg_temp.v0009j_report(v_t, v_today);
     v_per := pg_temp.v0009j_per_agent(v_t, v_today);
     perform cma.set_tenant_setting('telephony.connected_min_seconds', null);
-    rows_ := rows_ || pg_temp.v0009j_row(13, 'B3 Connected from 40 s: the talk time stays 215 and Calls per agent''s with it; the report''s difference becomes 245 (245 − 0)',
-      case when v_talk = 215 and v_per = 215 and v_rep = '245 (245 − 0)' and not v_provoke then 'PASS' else 'FAIL' end,
+    rows_ := rows_ || pg_temp.v0009j_row(13, 'B3 Connected from 40 s: the talk time stays 205 and Calls per agent''s (215) with it; the report''s difference becomes 245 (245 − 0)',
+      case when v_talk = 205 and v_per = 215 and v_rep = '245 (245 − 0)' and not v_provoke then 'PASS' else 'FAIL' end,
       format('%s; Calls per agent %s; the report %s', coalesce(v_talk::text, 'no row'), coalesce(v_per::text, 'no row'), coalesce(v_rep, 'no row')));
 
     -- B4. cma.inbound_now(): the permission, the row, the keys, 0009h's answer
@@ -338,14 +374,14 @@ begin
              'waiting_max_minutes', 'waiting_now'] then
       v_bad := v_bad || 'today''s keys: ' || (select string_agg(k, ',' order by k) from jsonb_object_keys(j -> 'today') k) || '; ';
     end if;
-    if (j -> 'today' ->> 'inbound_talk_seconds') is distinct from '215' then v_bad := v_bad || 'the talk time is ' || coalesce(j -> 'today' ->> 'inbound_talk_seconds', 'null') || '; '; end if;
+    if (j -> 'today' ->> 'inbound_talk_seconds') is distinct from '205' then v_bad := v_bad || 'the talk time is ' || coalesce(j -> 'today' ->> 'inbound_talk_seconds', 'null') || '; '; end if;
     if (j -> 'today' -> 'longest_waiting_seconds') is distinct from 'null'::jsonb then v_bad := v_bad || 'longest_waiting_seconds is not a null key; '; end if;
     -- provoked: waiting_now taken out of 0009h's answer, which the comparison must then report
     if (j #- '{today,inbound_talk_seconds}') is distinct from (case when v_provoke then j_old #- '{today,waiting_now}' else j_old end) then
       v_bad := v_bad || 'without the new key, not 0009h''s JSON; ';
     end if;
     if jsonb_array_length(j -> 'callbacks') < 1 then v_bad := v_bad || 'no missed caller listed: callbacks not compared on a row; '; end if;
-    rows_ := rows_ || pg_temp.v0009j_row(14, 'B4 inbound_now(): an agent refused (CMA06); a supervisor reads inbound_today_live_of''s row, the sixteen keys, 215 s, and 0009h''s JSON without the new key',
+    rows_ := rows_ || pg_temp.v0009j_row(14, 'B4 inbound_now(): an agent refused (CMA06); a supervisor reads inbound_today_live_of''s row, the sixteen keys, 205 s, and 0009h''s JSON without the new key',
       case when v_bad = '' then 'PASS' else 'FAIL' end, v_bad);
 
     -- B5. a tenant without a call
@@ -371,7 +407,7 @@ begin
     perform set_config('app.user_id', v_admin::text, true);
     perform cma.set_tenant_setting('telephony.waiting_max_minutes', '2880');
     v_txt := pg_temp.v0009j_fig(v_t);
-    if v_txt is distinct from format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|2|20|2880|215', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
+    if v_txt is distinct from format('%s|6|4|1|1|3|5|60.0|10.0|13.0|{"unknown": 1}|2|20|2880|205', v_today) then v_bad := v_bad || 'the row: ' || coalesce(v_txt, 'no row') || '; '; end if;
     perform set_config('app.user_id', v_sup::text, true);
     j := cma.inbound_now();
     if (j #- '{today,inbound_talk_seconds}') is distinct from (case when v_provoke then pg_temp.inbound_now_0009h() #- '{today,waiting_now}' else pg_temp.inbound_now_0009h() end) then
@@ -412,6 +448,7 @@ declare
   v_ratio numeric := current_setting('verify.slack_ratio')::numeric;
   t record;
   v_user uuid; v_ord integer := 100; v_same boolean; v_talk bigint; v_ref text; v_per bigint; v_date date; v_min integer;
+  v_plus bigint; v_minus bigint; v_calls text;
   v_t0 timestamptz; v_ms numeric; v_new numeric; v_old numeric; v_err boolean;
 begin
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
@@ -445,17 +482,19 @@ begin
     v_ord := v_ord + 1;
     begin
       select (q.j -> 'today' ->> 'inbound_talk_seconds')::bigint, (q.j -> 'today' ->> 'business_date')::date,
-             pg_temp.v0009j_report(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end)
-        into v_talk, v_date, v_ref
-      from (select cma.inbound_now() as j offset 0) q;  -- offset 0: the board read once, not once per reference
+             pg_temp.v0009j_report(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end),
+             z.plus, z.minus, z.calls
+        into v_talk, v_date, v_ref, v_plus, v_minus, v_calls
+      from (select cma.inbound_now() as j offset 0) q
+      cross join lateral pg_temp.v0009j_zone_diff(t.id, (q.j -> 'today' ->> 'business_date')::date) z;  -- offset 0: the board read once, not once per reference
       if v_min > 0 then
         insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time against Reports → Calls (' || t.slug || ')',
           case when v_provoke then 'FAIL' else 'skip' end,
           format('telephony.connected_min_seconds is %s: the report''s difference also holds outbound calls answered under it (B3); E3 compares', v_min));
       else
-        insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time equals Reports → Calls'' talk time minus its outbound talk time (' || t.slug || ')',
-          case when v_talk is not null and v_ref is not null and split_part(v_ref, ' ', 1) = v_talk::text and not v_provoke then 'PASS' else 'FAIL' end,
-          format('%s s on %s against the report''s %s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_ref, 'no row')));
+        insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time is Reports → Calls'' talk time minus its outbound talk time but for calls on another day in their line''s zone (' || t.slug || ')',
+          case when v_talk is not null and v_ref is not null and v_talk = split_part(v_ref, ' ', 1)::bigint + v_plus - v_minus and not v_provoke then 'PASS' else 'FAIL' end,
+          format('%s s on %s against the report''s %s; on another day in their line''s zone: %s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_ref, 'no row'), v_calls));
       end if;
     exception when others then
       insert into verify_0009j values (v_ord, 'E2 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
@@ -463,12 +502,14 @@ begin
     v_ord := v_ord + 1;
     begin
       select (q.j -> 'today' ->> 'inbound_talk_seconds')::bigint, (q.j -> 'today' ->> 'business_date')::date,
-             pg_temp.v0009j_per_agent(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end)
-        into v_talk, v_date, v_per
-      from (select cma.inbound_now() as j offset 0) q;
-      insert into verify_0009j values (v_ord, 'E3 today''s inbound talk time equals Calls per agent''s inbound talk time (' || t.slug || ')',
-        case when v_talk is not null and v_per is not null and v_per = v_talk and not v_provoke then 'PASS' else 'FAIL' end,
-        format('%s s on %s against %s s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_per::text, 'no row')));
+             pg_temp.v0009j_per_agent(t.id, (q.j -> 'today' ->> 'business_date')::date - case when v_provoke then 1 else 0 end),
+             z.plus, z.minus, z.calls
+        into v_talk, v_date, v_per, v_plus, v_minus, v_calls
+      from (select cma.inbound_now() as j offset 0) q
+      cross join lateral pg_temp.v0009j_zone_diff(t.id, (q.j -> 'today' ->> 'business_date')::date) z;
+      insert into verify_0009j values (v_ord, 'E3 today''s inbound talk time is Calls per agent''s inbound talk time but for calls on another day in their line''s zone (' || t.slug || ')',
+        case when v_talk is not null and v_per is not null and v_talk = v_per + v_plus - v_minus and not v_provoke then 'PASS' else 'FAIL' end,
+        format('%s s on %s against %s s; on another day in their line''s zone: %s', coalesce(v_talk::text, 'no value'), v_date, coalesce(v_per::text, 'no row'), v_calls));
     exception when others then
       insert into verify_0009j values (v_ord, 'E3 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
     end;
@@ -505,6 +546,7 @@ begin
 end
 $$;
 
+drop function if exists pg_temp.v0009j_zone_diff(uuid, date);
 drop function if exists pg_temp.v0009j_per_agent(uuid, date);
 drop function if exists pg_temp.v0009j_report(uuid, date);
 drop function if exists pg_temp.v0009j_fig(uuid);

@@ -26,7 +26,8 @@
  * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog. Since
  * addition 0009j Inbound today's Talk time in place of Waiting now, as 169 proves it in the database: the six tiles in
  * their order, Talk time in the column of Outbound today's, a dash without an answered call, the talk time of the
- * answered inbound calls dated in their line's zone (Reports → Calls' talk time minus its outbound talk time), and no
+ * answered inbound calls of the tenant's day (Reports → Calls' talk time minus its outbound talk time but for calls on
+ * another day in their line's zone), and no
  * Waiting now key in the copy, the registry, the catalog, the types, the component, the mock or the mapping. Since the
  * Live board's UX and speed pass (10 November 2026): Inbound today by hour's 24 columns from Reports → Inbound's hour
  * rows (the total row left out), the axis' clean top, the board's word on its own freshness (old after two failed polls,
@@ -343,10 +344,13 @@ const reportDiff = (connectedMin, date) => {
   const f = callsFigures(tRecords(connectedMin).filter((c) => c.date === date));
   return f.talkSeconds - f.outboundTalkSeconds;
 };
-expect("inbound talk today: the ended NL calls and the Tokyo call (its date there), not the New York call (the day before there)",
-  [inboundTalkToday(tRecords(0), "2026-11-10"), inboundTalkToday(tRecords(0), "2026-11-09")], [215, 110], [275, 50]);
-expect("it equals Reports → Calls' talk time minus its outbound talk time while Connected needs no talk time; above it, the report's difference holds more",
-  [reportDiff(0, "2026-11-10"), inboundTalkToday(tRecords(40), "2026-11-10"), reportDiff(40, "2026-11-10")], [215, 215, 245], [245, 245, 215]);
+// the tenant's day (Martin, 10 November 2026): the row's own calls, as the other inbound figures
+const DAY_MS = 86_400_000;
+const talkOn = (fromMs) => inboundTalkToday(tCalls, oLines, fromMs, fromMs + DAY_MS);
+expect("inbound talk today over the tenant's day: the ended NL calls and the New York call, not the Tokyo call (the day before in the tenant's zone)",
+  [talkOn(MIDNIGHT), talkOn(MIDNIGHT - DAY_MS)], [205, 120], [215, 110]);
+expect("it is Reports → Calls' talk time minus its outbound talk time but for the calls on another day in their line's zone (+60 New York, −70 Tokyo); above the Connected threshold the report's difference holds more",
+  [reportDiff(0, "2026-11-10"), talkOn(MIDNIGHT) === reportDiff(0, "2026-11-10") + 60 - 70, reportDiff(40, "2026-11-10")], [215, true, 245], [205, false, 215]);
 // Waiting now is gone everywhere the web held its keys: the copy's (inboundWaitingNow, liveWaitingNow, en and nl), the
 // registry's and the catalog's (live.inbound.waiting_now), the field, the tile, the mock and the database mapping (no
 // waiting_now read). Email's own "Waiting now" (email.waitingTitle) is another figure and stays

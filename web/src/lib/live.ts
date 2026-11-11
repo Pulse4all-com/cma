@@ -208,13 +208,23 @@ export function inboundTileValue(today: InboundToday, key: InboundTileKey): Inbo
 }
 
 /**
- * Today's inbound talk time as cma.inbound_today_live_of computes it (addition 0009j): the talk time of the answered
- * inbound calls whose date in their line's zone is the date (lib/reports callRecords: counted lines, the line's zone, as
- * Reports → Calls dates a call), 0 without one. It equals callsFigures' talk time minus its outbound talk time for the
- * date while Connected needs no minimum talk time (telephony.connected_min_seconds 0)
+ * Today's inbound talk time as cma.inbound_today_live_of computes it (addition 0009j): the talk time (ended − answered,
+ * whole seconds) of the answered inbound calls on counted lines (a line not in the catalog counts) started in the
+ * tenant's day [fromMs, toMs), the same calls as the row's other figures (Martin, 10 November 2026), 0 without one. It
+ * is Reports → Calls' talk time minus its outbound talk time for the date (while Connected needs no minimum talk time)
+ * but for the calls whose day in their line's zone differs from the tenant's day (gap D34)
  */
-export function inboundTalkToday(calls: readonly CallRecord[], date: DateKey): number {
-  return calls.reduce((n, c) => n + (c.isAnsweredInbound && c.date === date && c.talkSeconds !== null ? c.talkSeconds : 0), 0);
+export function inboundTalkToday(calls: readonly TelephonyCallFixture[], lines: readonly InboundLine[], fromMs: number, toMs: number): number {
+  let n = 0;
+  for (const c of calls) {
+    if (c.direction !== "inbound" || c.deleted || !c.startedAt || c.answeredAt === null || c.endedAt === null) continue;
+    const line = lines.find((l) => l.connectionId === c.connectionId && l.lineRef === c.lineRef);
+    if (line && !line.isCounted) continue;
+    const started = Date.parse(c.startedAt);
+    if (started < fromMs || started >= toMs) continue;
+    n += Math.max(0, Math.floor((Date.parse(c.endedAt) - Date.parse(c.answeredAt)) / 1000));
+  }
+  return n;
 }
 
 // ---- Outbound today (addition 0009h) -----------------------------------------------------------

@@ -1359,8 +1359,8 @@ function mockInboundNow(me: Principal): InboundNow {
   const live = mockLiveCalls(now);
   const reasons = mockReasons(me);
   const todays = inboundCalls(live.filter((c) => Date.parse(c.startedAt) >= midnight), MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, now);
-  // the talk time as the database dates it (addition 0009j): each call in its line's zone, as Reports → Calls
-  const talk = inboundTalkToday(callRecords(live, MOCK_INBOUND_LINES, me.timeZone, mockCallRules(me)), today);
+  // the talk time over the tenant's day, as the database counts it (addition 0009j): the row's own calls
+  const talk = inboundTalkToday(live, MOCK_INBOUND_LINES, midnight, localMs(addDays(today, 1), "00:00", me.timeZone));
   const { rows, anonymousCount } = missedCallbacks(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, MOCK_LOOKBACK_DAYS, now,
     mockBusinessSeconds, (connectionId, sourceId) => mockCallUrl(me, connectionId, sourceId));
   return {

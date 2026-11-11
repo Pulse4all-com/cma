@@ -2515,7 +2515,7 @@
         "nl": "Gesprekstijd"
       },
       "definition": "Total talk time over today's answered inbound calls (Talk time), from the answer to the end.",
-      "formula": "inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on counted lines, each call dated in its line's market zone (else the tenant's), 0 with none; the tile shows a dash while Answered and the talk time are both 0, else fmtTalk (as Outbound today's Talk time). One read with the other Inbound today figures and the calls waiting now (cma.inbound_today_live_of): cma.inbound_calls_of once, the talk time of each answered call of the date by the primary key of cma.telephony_call.",
+      "formula": "inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on counted lines started in the tenant's day (its zone's midnight to the next), the row's own calls, 0 with none; the tile shows a dash while Answered and the talk time are both 0, else fmtTalk (as Outbound today's Talk time). One read with the other Inbound today figures and the calls waiting now (cma.inbound_today_live_of): cma.inbound_calls_of once, the talk time of each answered call of the day by the primary key of cma.telephony_call.",
       "unit": "seconds",
       "grain": [
         "now"
@@ -2564,10 +2564,10 @@
         "tenant: RLS plus the explicit tenant of cma.inbound_today_live_of (cma.current_tenant_id())",
         "direction = inbound; source_deleted_at is null; started_at not null; answered_at not null",
         "counted lines only (telephony_number.is_counted; a line not in the catalog counts)",
-        "today: the calls whose date in their line's market zone (else the tenant's) is the tenant's date now, read over the instants that date covers in the tenant's zones",
+        "today: the calls started in the tenant's day, as the row's other figures (Martin, 10 November 2026)",
         "tenant-wide on every contact center's board: a line is not tied to an organisation yet, so the board captions it as covering all lines (addition 0008zv)"
       ],
-      "time": "Today = the tenant's date at the database's now() (cma.inbound_today_live_of, 0009j); a call counts when its business date in its line's market zone, else the tenant's, is that date, exactly as Reports → Calls and Outbound today date a call (the line-zone gap docs/definitions.md lists under Day, D34; it moves with cma.calls_of when the gap closes). The other Inbound today tiles window on the tenant's midnight instead (cross-page note): an answered call on a line west of the tenant between the tenant's midnight and the line's counts in Answered today and in the talk time of the date before",
+      "time": "Today = calls started in [tenant midnight, next midnight) in the tenant's zone (cma.inbound_today_live_of, 0009j), as every other Inbound today tile (Day). Reports → Calls dates each call in its line's market zone instead (gap D34), so for a line in another zone the report's date can hold a call this tile counts on another day (cross-page note)",
       "permissions": {
         "anyOf": [
           "monitoring.live"
@@ -2602,15 +2602,15 @@
           }
         ]
       },
-      "verify_sql": "with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) select coalesce(sum(tc.talk_seconds), 0)::bigint as inbound_talk_seconds from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null and tc.answered_at is not null and coalesce(n.is_counted, true) and tc.started_at >= now() - interval '2 days' and (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date = (now() at time zone s.tz)::date",
+      "verify_sql": "with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) select coalesce(sum(tc.talk_seconds), 0)::bigint as inbound_talk_seconds from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref where tc.tenant_id = :tenant_id and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null and tc.answered_at is not null and coalesce(n.is_counted, true) and tc.started_at >= (now() at time zone s.tz)::date::timestamp at time zone s.tz and tc.started_at < ((now() at time zone s.tz)::date + 1)::timestamp at time zone s.tz",
       "docs": [
         "features.md §5, Live board, and api.md §Live board in one read and GET /api/v1/telephony/inbound-now (0009j)",
         "definitions.md, Talk time, Inbound call, Day (D34)",
         "data-model/0008.md, Live board: Inbound today with Talk time (0009j)",
         "decisions.md 10 Nov 2026 (Live board, Inbound today: Waiting now replaced by Talk time)"
       ],
-      "notes": "Reports → Calls' talk time minus its outbound talk time for today (calls.talk_total − calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and in every case Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total): db/169 B2, B3, E2 and E3 pin it to both. In the column of Outbound today's Talk time (live.outbound.talk); the two add up to Reports → Calls' talk time for today. An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0 (Answered counts the tenant's day, the talk time each call's line-zone day). API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.",
-      "fixture_check": "Not run here: this session has no database. db/169_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today; Martin runs it and this query in Studio.",
+      "notes": "Reports → Calls' talk time minus its outbound talk time for today (calls.talk_total − calls.outbound_talk) while telephony.connected_min_seconds is 0 (Pulse4all's value and the default; above 0 the report's difference also holds outbound calls answered under the threshold), and Calls per agent's inbound talk time total for today (calls_per_agent.inbound_talk_total), in both cases but for the answered inbound calls whose day in their line's zone differs from the tenant's day (gap D34): db/169 B2, B3, E2 and E3 accept that difference only, naming the calls. In the column of Outbound today's Talk time (live.outbound.talk). An answered call still in progress has no talk time yet and adds nothing until it ends. A dash while Answered and the talk time are both 0. API field: inbound.today.inboundTalkSeconds (0 without an answered call). Tenant without telephony: the row reads 'No telephony connected'.",
+      "fixture_check": "Not run here: this session has no database. db/169_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today, naming the calls on another day in their line's zone; Martin runs it and this query in Studio.",
       "comparison": null,
       "prerequisites": [],
       "status": [
