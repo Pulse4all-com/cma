@@ -3,7 +3,9 @@
 -- dev seed (night N06, 5 November 2026): every busy table of the CMA at a multiple of prod's volume as of the morning of
 -- 5 November 2026, so the time scripts (db/131_time_all.sql, db/124_time_flash.sql), verify/perf.mjs and
 -- verify/round-trips.mjs measure the reads on something like prod, three times over; since addition 0009j also the
--- pledge lists (a block of its own at the end, once 168 has run)
+-- pledge lists (a block of its own at the end, once 168 has run); since addition 0009l the active customer base (a block
+-- of its own after it, once 172 has run: the subscriptions linked to their store's customers over 60 months, segments,
+-- a year of first orders with their deals, and most failed renewals closed)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, refuses a database without
 -- the dev seed, and refuses a Cloud SQL instance (the role cloudsqladmin exists there). Every id is invented (perf-…,
