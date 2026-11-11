@@ -38,7 +38,7 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, sco
   inbound: InboundNow; copy: InboundCopy; locale: Locale;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
   canOpenMetrics?: boolean;
-  /** A caption under the title on what the figures cover (a contact center's Live board: all lines, addition 0008zv) */
+  /** A caption under the title on what the figures cover (a contact center's Live board: all its counted lines, addition 0008zv) */
   scope?: string;
 }) {
   const t = copy.live;
@@ -99,7 +99,7 @@ export const MISSED_SHOWN = 20;
 
 export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
   inbound: InboundNow; copy: InboundCopy; locale: Locale; timeZone: string;
-  /** A caption after the intro on what the list covers (a contact center's Live board: all lines, addition 0008zv) */
+  /** A caption after the title on what the list covers (a contact center's Live board: all its counted lines, addition 0008zv) */
   scope?: string;
 }) {
   const [all, setAll] = useState(false);
@@ -123,11 +123,14 @@ export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
   return (
     <section aria-labelledby="missed-title" data-testid="missed-live">
       <Card>
-        <h2 id="missed-title" className="mb-1 flex items-start text-panel font-semibold text-p4a-heading" data-hint-anchor="">
-          {t.missedTitle}
-          {hint(t.missedTitle, h.missedCallbacks)}
-        </h2>
-        <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}{scope ? <> <span data-testid="missed-scope">{scope}</span></> : null}</p>
+        <div className="mb-1 flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id="missed-title" className="flex items-start text-panel font-semibold text-p4a-heading" data-hint-anchor="">
+            {t.missedTitle}
+            {hint(t.missedTitle, h.missedCallbacks)}
+          </h2>
+          {scope ? <p className="text-small text-p4a-muted" data-testid="missed-scope">{scope}</p> : null}
+        </div>
+        <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}</p>
         {inbound.callbacks.length === 0 ? (
           <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
         ) : (
