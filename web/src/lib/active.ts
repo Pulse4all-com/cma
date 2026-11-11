@@ -426,19 +426,27 @@ const TOP_NOTES = ["noEndedTime", "noCreatedTime", "unmatchedSubscriptions", "re
 export function activeNowFromDb(j: Record<string, unknown>): import("@/lib/data").ActiveNow {
   const c = convert(j, false) as Record<string, unknown>;
   const figures = c.figures === true;
-  return { figures, computedAt: String(c.computedAt ?? ""), tiles: figures ? ((c.tiles as import("@/lib/data").ActiveNow["tiles"] | undefined) ?? null) : null };
+  return {
+    figures, computedAt: String(c.computedAt ?? ""), tiles: figures ? ((c.tiles as import("@/lib/data").ActiveNow["tiles"] | undefined) ?? null) : null,
+    now: figures ? ((c.now as import("@/lib/data").ActiveNow["now"] | undefined) ?? null) : null,
+  };
 }
 /**
  * The stored answer with the live present in the places of the tiles that state it (decision D16): Active customers,
  * Total subscriptions, the Monthly recurring amount and the indicative euros; the take's own tiles (Customer age,
- * Customer lifetime, the realised value) stay. Without a live present the stored answer as it is
+ * Customer lifetime, the realised value) stay. The series' running point follows (the current point is "now" and equals
+ * the headline), and with it the note on the reconstruction's difference. Without a live present the stored answer as it is
  */
 export function withActiveNow(top: import("@/lib/data").ActiveReport, now: import("@/lib/data").ActiveNow | null): import("@/lib/data").ActiveReport {
   if (!now || !now.figures || !now.tiles) return top;
   const stored = top.tiles;
+  const point = now.now;
+  const was = top.months.find((m) => m.isNow);
   return {
     ...top, presentAt: now.computedAt,
     tiles: { customerAge: stored?.customerAge ?? null, lifetime: stored?.lifetime ?? null, clv: stored?.clv ?? null, ...now.tiles },
+    months: point ? top.months.map((m) => (m.isNow ? { ...m, customers: point.customers, subscriptions: point.subscriptions, bySegment: point.bySegment } : m)) : top.months,
+    notes: point && was && top.notes ? { ...top.notes, reconstructionGap: top.notes.reconstructionGap + was.customers - point.customers } : top.notes,
   };
 }
 /** The states of a take the mock can show (the page's ?take= in test data): none yet, marked stale, or late by its age */

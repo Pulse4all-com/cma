@@ -222,10 +222,10 @@
   {
     "path": "/reports/active",
     "subject": "manager",
-    "tx": 6,
-    "rt": 25,
-    "firstTx": 3,
-    "firstRt": 13
+    "tx": 5,
+    "rt": 21,
+    "firstTx": 1,
+    "firstRt": 5
   },
   {
     "path": "/reports/installed-base",

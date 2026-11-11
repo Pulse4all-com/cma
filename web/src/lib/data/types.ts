@@ -2340,6 +2340,8 @@ export interface ActiveNow {
   computedAt: Instant;
   /** Null without a present to state: a source not set up, or a channel filter while there is no take yet (the channel is the take's) */
   tiles: Pick<ActiveTiles, "activeCustomers" | "totalSubscriptions" | "amounts" | "eur"> | null;
+  /** The headline's figures as the series' running point (the current point is "now" and equals the headline) */
+  now: { customers: number; subscriptions: number; bySegment: Record<string, number> } | null;
 }
 /** The stored take the history is read from (decision D13): when it was computed (History as of), and whether the page says it is old */
 export interface ActiveTake {

@@ -22,19 +22,23 @@
  *   P  no field of the page's types could hold a name, an email, a phone number or an address
  *   X  the placeholders render no digit: their labels, their badge, their sources and the mock's slots carry none, and the
  *      placeholder card writes no number
+ *   N  the stored take, the reads and the list's cursors (decisions D13 to D15): each read its own part, the take on every
+ *      read, keyset paging with a cursor that is an id alone, the page's client code, the streamed parts and heights
+ *   O  the table first, the live present after (decision D16): the live tiles in the places of the stored ones, nothing a
+ *      zero without a take, a stale and a late take saying so, the frame reading nothing from the database
  *   M  the mock's document: net change = inflow − outflow = this month end − the previous one, the running month equals
  *      the headline, the three channels and the segments add up to the unfiltered totals, a tenant without a store shows
  *      nothing (never zeros), a person without the report permissions is refused
  */
 import { readFileSync } from "node:fs";
 import {
-  ACTIVE_BETTER_UP, ACTIVE_CHANNELS, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_SLOTS, ACTIVE_SORTS, HEAT_CLASSES, activeFileName,
-  activeFromDb, activePartOf,
+  ACTIVE_BETTER_UP, ACTIVE_CHANNELS, ACTIVE_CURSOR, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_SCROLLING, ACTIVE_SLOTS, ACTIVE_SORTS,
+  HEAT_CLASSES, activeFileName, activeFromDb, activeInTakeState, activeListInTakeState, activeNowFromDb, activeNowInTakeState, activePartOf, withActiveNow,
   activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, curveOf, differenceTone, fromMonthOf, heatStep, kaplanMeier, matureCohorts, monthsBack,
   mergeActive, niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor,
 } from "../src/lib/active.ts";
 import { activeCopy, copy } from "../src/lib/copy.ts";
-import { mockActive, mockActiveRows } from "../src/lib/data/mock-active.ts";
+import { mockActive, mockActiveNow, mockActiveRows } from "../src/lib/data/mock-active.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -369,10 +373,18 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
   } catch (e) {
     badCursor = e.sqlState;
   }
-  expect("N3 keyset paging: pages chained by next hold every row once in order; the first has no prev, the last no next; prev leads back; a cursor that is not one is refused",
+  let strangerCursor = "ok";
+  try {
+    mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7, after: "00000000-0000-4000-8000-00000fffffff" });
+  } catch (e) {
+    strangerCursor = e.sqlState;
+  }
+  expect("N3 keyset paging: pages chained by next hold every row once in order; the first has no prev, the last no next; prev leads back; a cursor is an id alone, one that is none is refused",
     [chained.length === all.total, same(chained.slice(0, 200), all.rows.map((r) => r.storeCustomer)), firstPrev, pages[pages.length - 1].next,
-      beforeLast ? same(beforeLast.rows, pages[pages.length - 2].rows) : false, badCursor, "offset" in (all ?? {})],
-    [true, true, null, null, true, "CMA04", false], [false, false, "x", "x", false, "ok", true]);
+      beforeLast ? same(beforeLast.rows, pages[pages.length - 2].rows) : false, badCursor, strangerCursor, "offset" in (all ?? {}),
+      pages.every((x) => (x.next === null || ACTIVE_CURSOR.test(x.next)) && (x.prev === null || ACTIVE_CURSOR.test(x.prev))),
+      ACTIVE_CURSOR.test("bm90IGEgY3Vyc29y"), ACTIVE_CURSOR.test("eyJrIjpbXSwicyI6IjEifQ==")],
+    [true, true, null, null, true, "CMA04", "CMA04", false, true, false, false], [false, false, "x", "x", false, "ok", "ok", true, false, true, true]);
   const pending = src("components/ActivePending.tsx");
   const pageSrc = src("app/reports/active/page.tsx");
   const clientFiles = ["components/ActiveFilters.tsx", "components/ActivePending.tsx"];
@@ -381,11 +393,54 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
       /useLinkStatus/.test(pending), (src("components/ActiveParts.tsx").match(/<LinkMark \/>/g) ?? []).length >= 6,
       ["components/ActiveCharts.tsx", "components/ActiveParts.tsx", "app/reports/active/page.tsx"].some((f) => src(f).startsWith('"use client"'))],
     [true, false, true, true, false], [false, true, false, false, true]);
-  expect("N5 three streamed parts and a fixed height for every data panel (D15): the page names each panel once, the Print button waits for all three parts",
+  expect("N5 four streamed parts and a fixed height for every data panel (D15, D16): the page names each panel once, the Print button waits for all four parts",
     [ACTIVE_PARTS.join(","), Object.keys(ACTIVE_PANEL_HEIGHT).filter((id) => !new RegExp(`layer\\("${id}", "(top|rest|list)"\\)`).test(pageSrc)),
       Object.values(ACTIVE_PANEL_HEIGHT).every((h) => Number.isInteger(h) && h > 0), /PrintWhenReady[^>]*parts=\{ACTIVE_PARTS\}/.test(pageSrc),
-      ["top", "rest", "list"].every((part) => new RegExp(`layer\\("[a-zA-Z]+", "${part}"\\)\\} read=\\{[a-zA-Z]+\\} mark`).test(pageSrc))],
-    ["top,rest,list", [], true, true, true], ["top", ["tiles"], false, false, false]);
+      ["top", "rest", "list"].every((part) => new RegExp(`layer\\("[a-zA-Z]+", "${part}"\\)\\} read=\\{[a-zA-Z]+\\} mark`).test(pageSrc)),
+      /<Streamed part="now" view=\{ctx\.viewKey\} \/>/.test(pageSrc), ACTIVE_SCROLLING.every((id) => id in ACTIVE_PANEL_HEIGHT)],
+    ["top,now,rest,list", [], true, true, true, true, true], ["top", ["tiles"], false, false, false, false, false]);
+
+  // ---- O. the table first, the live present after (decision D16) ---------------------------------------------------------
+  const live = mockActiveNow(me, none);
+  const moved = { ...live, computedAt: "2031-01-01T00:00:00.000Z", now: { ...live.now, customers: live.now.customers + 3, subscriptions: 1 },
+    tiles: { ...live.tiles, activeCustomers: { ...live.tiles.activeCustomers, value: live.tiles.activeCustomers.value + 3 }, totalSubscriptions: { ...live.tiles.totalSubscriptions, value: 1 } } };
+  const merged = withActiveNow(top, moved);
+  expect("O1 the live present takes the places of the four tiles that state it and nothing else: the take's own tiles, the series and the take stay; its moment is said",
+    [merged.tiles.activeCustomers.value - top.tiles.activeCustomers.value, merged.tiles.totalSubscriptions.value, same(merged.tiles.customerAge, top.tiles.customerAge),
+      same(merged.tiles.lifetime, top.tiles.lifetime), same(merged.tiles.clv, top.tiles.clv),
+      // the series: only its running point moves, to the live headline; the note on the reconstruction's difference with it
+      same(merged.months.filter((m) => !m.isNow), top.months.filter((m) => !m.isNow)) && merged.months.find((m) => m.isNow).customers === moved.now.customers
+        && merged.notes.reconstructionGap - top.notes.reconstructionGap === top.months.find((m) => m.isNow).customers - moved.now.customers, same(merged.take, top.take),
+      top.presentAt === top.take.computedAt, merged.presentAt, same(withActiveNow(top, null), top), same(withActiveNow(top, { figures: true, computedAt: "x", tiles: null, now: null }), top),
+      Object.keys(live.tiles).sort().join(","), same(activeNowFromDb({ figures: true, computed_at: "t", tiles: { active_customers: { value: 4, by_segment: { B2B: 4 }, by_channel: null } } }),
+        { figures: true, computedAt: "t", tiles: { activeCustomers: { value: 4, bySegment: { B2B: 4 }, byChannel: null } }, now: null })],
+    [3, 1, true, true, true, true, true, true, "2031-01-01T00:00:00.000Z", true, true, "activeCustomers,amounts,eur,totalSubscriptions", true],
+    [0, 0, false, false, false, false, false, false, "", false, false, "", false]);
+  const noTake = activeInTakeState(top, "none");
+  const noTakeNow = activeNowInTakeState(live, "none", null);
+  const noTakeView = withActiveNow(noTake, noTakeNow);
+  const staleTop = activeInTakeState(top, "stale");
+  const lateTop = activeInTakeState(top, "late");
+  expect("O2 without a take nothing is a zero: the stored answer holds no tile, no churn count and no month, the filters' choices stay; the live present has no split by channel, and none under a channel filter",
+    [noTake.history, noTake.take, noTake.tiles, noTake.unitEconomics, noTake.months.length, noTake.filters.markets.length > 0, noTake.presentAt,
+      noTakeView.tiles.activeCustomers.value > 0, noTakeView.tiles.activeCustomers.byChannel, noTakeView.tiles.customerAge, noTakeView.tiles.lifetime, noTakeView.tiles.clv,
+      activeNowInTakeState(live, "none", "direct").tiles, same(withActiveNow(noTake, activeNowInTakeState(live, "none", "direct")), noTake),
+      activeListInTakeState(mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7 }), "none").total,
+      activeListInTakeState(mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7 }), "none").rows.length,
+      same(activeInTakeState(two, "none"), two)],
+    [false, null, null, null, 0, true, null, true, null, null, null, null, null, true, null, 0, true],
+    [true, {}, {}, {}, 1, false, "", false, {}, {}, {}, {}, {}, false, 0, 1, false]);
+  expect("O3 a stale take and a late one say so and keep their figures; the stored tiles are of the take's moment",
+    [staleTop.take.stale, staleTop.take.late, lateTop.take.stale, lateTop.take.late, lateTop.take.ageMinutes, same(staleTop.tiles, top.tiles), same(lateTop.months, top.months),
+      lateTop.presentAt === lateTop.take.computedAt, same(activeInTakeState(top, null), top)],
+    [true, true, false, true, 20, true, true, true, true], [false, false, true, false, 0, false, false, false, false]);
+  const copySrc = src("lib/copy.ts");
+  expect("O4 the frame reads nothing from the database (D15): no awaited read before the page returns; the filters and the comparison's title wait for the stored answer in their own slots; the live tiles' boundary is a new one on every view",
+    [/await (Promise\.all\(\[)?data\(\)\./.test(pageSrc.slice(0, pageSrc.indexOf("function viewOf("))), /getActiveMarkets|listSettings/.test(pageSrc),
+      /<Suspense fallback=\{<FiltersOutline t=\{t\} \/>\}>/.test(pageSrc), /<ComparisonTitle ctx=\{ctx\} read=\{topRead\} \/>/.test(pageSrc),
+      /<Suspense key=\{`now\|\$\{ctx\.viewKey\}`\} fallback=\{<PresentTiles ctx=\{ctx\} top=\{top\} settled=\{false\} \/>\}>/.test(pageSrc),
+      /dataIsMock && \(ACTIVE_TAKE_STATES/.test(pageSrc), ["tilesAsOf", "historyStaleBody", "comparisonCardPlain", "printLoading"].every((k) => (copySrc.match(new RegExp(`\\b${k}: "`, "g")) ?? []).length === 2)],
+    [false, false, true, true, true, true, true], [true, true, false, false, false, false, false]);
 }
 
 const n = results.length;

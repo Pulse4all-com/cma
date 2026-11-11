@@ -186,9 +186,11 @@ function assertAllowed(me: Principal): void {
 export function mockActiveNow(me: Principal, filter: ActiveFilter): ActiveNow {
   const r = mockActive(me, null, filter, "month");
   const t = r.tiles;
+  const point = r.months.find((m) => m.isNow);
   return {
     figures: r.figures, computedAt: new Date().toISOString(),
     tiles: t ? { activeCustomers: t.activeCustomers, totalSubscriptions: t.totalSubscriptions, amounts: t.amounts, eur: t.eur } : null,
+    now: t ? { customers: t.activeCustomers.value, subscriptions: t.totalSubscriptions.value, bySegment: point?.bySegment ?? t.activeCustomers.bySegment } : null,
   };
 }
 /** Customers → Active for the mock: the document cma.active_top and cma.active_rest answer together, computed from the invented base */

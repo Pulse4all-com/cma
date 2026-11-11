@@ -778,7 +778,11 @@ async function expectActiveLayers() {
   if (firstFigures >= 0 && lastOutline > firstFigures) problems.push(`${where}: a panel's figures are sent before the frame is complete`);
   if (firstFigures < 0) problems.push(`${where}: no panel's figures in the stream`);
   if (cards.length !== 6) problems.push(`${where}: ${cards.length} placeholder cards sent with the frame, expected 6 before any figure`);
-  if (!sentBefore('data-testid="active-filters"')) problems.push(`${where}: the filters are not sent with the frame`);
+  if (!sentBefore('data-testid="active-filters-outline"')) problems.push(`${where}: the filters' outline is not sent with the frame`);
+  // the table first, the live present after (decision D16): the stored tiles are in the stream before the live ones
+  const storedAt = html.indexOf('data-present="stored"');
+  const liveAt = html.indexOf('data-present="live"');
+  if (storedAt < 0 || liveAt < 0 || storedAt > liveAt) problems.push(`${where}: the stored tiles (${storedAt}) are not sent before the live ones (${liveAt})`);
   const titlesBefore = [...html.matchAll(/data-panel-title=""/g)].filter((m) => firstFigures < 0 || m.index < firstFigures).length;
   if (titlesBefore < 10) problems.push(`${where}: only ${titlesBefore} panel titles sent with the frame, expected every panel's`);
   const print = html.match(/<button[^>]*data-testid="active-print"[^>]*>/)?.[0] ?? "";
@@ -791,7 +795,7 @@ async function expectActiveLayers() {
     await p.goto(BASE + "/reports/active");
     await settle(p);
     await p.waitForLoadState("networkidle");
-    await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: the Print button did not become ready after the three parts streamed`));
+    await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: the Print button did not become ready after the four parts streamed`));
     const m = await p.evaluate((stretch) => {
       const bodies = [...document.querySelectorAll("[data-panel-body]")];
       if (stretch && bodies[0]) bodies[0].style.height = `${bodies[0].getBoundingClientRect().height + 1}px`;
@@ -799,6 +803,11 @@ async function expectActiveLayers() {
         bodies: Object.fromEntries(bodies.map((el) => [el.getAttribute("data-panel-body"), el.getBoundingClientRect().height])),
         outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length,
         tiles: document.querySelectorAll("[data-tile]").length,
+        present: document.querySelector('[data-testid="active-present"]')?.getAttribute("data-present") ?? null,
+        updated: document.querySelector('[data-testid="active-updated"]')?.getAttribute("data-present") ?? null,
+        filters: document.querySelectorAll('[data-testid="active-filters"] select').length,
+        // a panel of a fixed height either fits its figures or is one of the four that scroll inside (and can be focused)
+        cut: bodies.filter((el) => el.scrollHeight > el.clientHeight + 1 && el.getAttribute("tabindex") !== "0").map((el) => `${el.getAttribute("data-panel-body")} ${el.scrollHeight}>${el.clientHeight}`),
         cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => /\d/.test(el.textContent ?? "")),
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
       };
@@ -812,16 +821,67 @@ async function expectActiveLayers() {
     }
     if (m.outlinesLeft !== 0) problems.push(`${tag}: ${m.outlinesLeft} outlines still on the screen after the page streamed`);
     if (m.tiles !== 6) problems.push(`${tag}: ${m.tiles} tiles, expected 6`);
+    if (m.present !== "live" || m.updated !== "live") problems.push(`${tag}: after the page streamed the tiles are ${m.present} and the title row says ${m.updated}, expected the live present in both`);
+    if (m.filters !== 3) problems.push(`${tag}: ${m.filters} filter boxes after the page streamed, expected 3`);
+    if (m.cut.length > 0) problems.push(`${tag}: a panel cuts off its figures at its fixed height: ${m.cut.join(", ")}`);
     if (m.scrollX) problems.push(`${tag}: the page scrolls horizontally`);
-    // a panel's toggle: the clicked link shows its mark before the answer is there (decision D14)
-    const toggle = p.locator('[data-testid="active-survival-split"] a').nth(1);
-    await toggle.scrollIntoViewIfNeeded();
-    await p.route("**/reports/active?**", async (route) => { await new Promise((r) => setTimeout(r, 400)); await route.continue(); });
-    await toggle.click();
-    const marked = await p.waitForSelector('[data-testid="active-survival-split"] a [data-link-pending="true"]', { timeout: 300, state: "attached" }).then(() => true, () => false);
-    if (!marked) problems.push(`${tag}: a click on a panel's toggle did not mark the link within 300 ms`);
-    await p.unroute("**/reports/active?**");
-    await p.waitForURL(/survival=channel/, { timeout: 10_000 }).catch(() => problems.push(`${tag}: the toggle did not change the address`));
+    // a click shows its mark within 100 ms, before the answer is there (decision D14): a panel's toggle, the list's sort, the
+    // list's next page. The answer is held back so the mark's moment can be read
+    for (const [name, selector, after] of [
+      ["a panel's toggle", '[data-testid="active-survival-split"] a >> nth=1', /survival=channel/],
+      ["the list's sort", '[data-testid="active-sort-age_months"]', /sort=age_months/],
+      ["the list's next page", '[data-testid="active-pager"] a >> nth=-1', /after=/],
+    ]) {
+      const link = p.locator(selector);
+      if (await link.count() === 0) { problems.push(`${tag}: ${name} is not on the page`); continue; }
+      await link.scrollIntoViewIfNeeded();
+      await p.route("**/reports/active?**", async (route) => { await new Promise((r) => setTimeout(r, provoke ? 0 : 500)); await route.continue().catch(() => undefined); });
+      const t0 = Date.now();
+      await link.click();
+      const marked = await link.locator('[data-link-pending="true"]').waitFor({ timeout: 400, state: "attached" }).then(() => Date.now() - t0, () => null);
+      if (marked === null || marked > 100) problems.push(`${tag}: a click on ${name} ${marked === null ? "did not mark the link" : `marked the link after ${marked} ms`} (within 100 ms)`);
+      await p.unroute("**/reports/active?**", { behavior: "ignoreErrors" });
+      await p.waitForURL(after, { timeout: 10_000 }).catch(() => problems.push(`${tag}: ${name} did not change the address`));
+      await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: after ${name} the page did not settle`));
+    }
+    await ctx.close();
+  }
+
+  // the take's states, shown by test data (?take=): without a take nothing is a zero and the page says the history is being
+  // prepared; a stale take and a late one say so (decision D13)
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    const read = async (query) => {
+      await p.goto(BASE + "/reports/active?" + query);
+      await settle(p);
+      await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${where}?${query}: the page did not settle`));
+      return p.evaluate(() => {
+        const has = (sel) => document.querySelector(sel) !== null;
+        const text = (sel) => document.querySelector(sel)?.textContent ?? "";
+        return {
+          history: document.querySelector('[data-testid="active-history"]')?.getAttribute("data-history") ?? null,
+          churned: has('[data-testid="active-churned"]'), churnedPreparing: has('[data-testid="active-churned-preparing"]'),
+          channelSplit: has('[data-testid="active-split-channel"]'), tiles: document.querySelectorAll("[data-tile]").length,
+          customers: text('[data-testid="active-tile-customers"]'), preparing: document.querySelectorAll('[data-testid="active-history-preparing"]').length,
+          lateNote: has('[data-testid="active-note-late"]'), outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length,
+          tilesPanel: text('[data-panel-body="tiles"]'),
+        };
+      });
+    };
+    const none = await read("take=none");
+    if (none.history !== "none" || none.churned || !none.churnedPreparing || none.channelSplit || none.tiles !== 6 || none.outlinesLeft !== 0 || none.preparing < 5
+      || !/[1-9]/.test(none.customers) || (provoke && none.history === "none")) {
+      problems.push(`${where}?take=none: without a take the page must show the live tiles, no churn count, no split by channel and "History is being prepared" (${JSON.stringify(none).slice(0, 300)})`);
+    }
+    const noneChannel = await read("take=none&channel=direct");
+    if (noneChannel.tiles !== 2 || noneChannel.outlinesLeft !== 0 || /\b0\b/.test(noneChannel.tilesPanel) || noneChannel.preparing < 5 || /\d/.test(noneChannel.customers)) {
+      problems.push(`${where}?take=none&channel=direct: a channel filter without a take must show no tile of the present and no zero (${JSON.stringify(noneChannel).slice(0, 300)})`);
+    }
+    const stale = await read("take=stale");
+    if (stale.history !== "stale" || !stale.lateNote || stale.tiles !== 6 || !stale.churned) problems.push(`${where}?take=stale: a stale take is not shown as such (${JSON.stringify(stale).slice(0, 200)})`);
+    const late = await read("take=late");
+    if (late.history !== "late" || !late.lateNote || late.tiles !== 6) problems.push(`${where}?take=late: a late take is not shown as such (${JSON.stringify(late).slice(0, 200)})`);
     await ctx.close();
   }
 }

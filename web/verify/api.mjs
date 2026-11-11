@@ -1594,8 +1594,11 @@ async function activeChecks() {
   const refused = ["/api/v1/reports/active?fromMonth=2026-11-02", "/api/v1/reports/active?fromMonth=november", "/api/v1/reports/active?fromMonth=0000-01-01", "/api/v1/reports/active?grouping=week",
     "/api/v1/reports/active?market=nl", "/api/v1/reports/active?segment=B2B,B2C", "/api/v1/reports/active?channel=assisted",
     "/api/v1/reports/active/rows?sort=name", "/api/v1/reports/active/rows?limit=201", "/api/v1/reports/active/rows?dir=up",
-    // a cursor that is no text of one, a text that is not a cursor of this list, both ends at once, a cursor on a file
-    "/api/v1/reports/active/rows?after=not%20a%20cursor", "/api/v1/reports/active/rows?after=bm90IGEgY3Vyc29y", "/api/v1/reports/active/rows?after=QQ==&before=QQ==",
+    // a cursor is a customer's own id and nothing else: a text that is none, an earlier form that carried a sort key, an id
+    // of no customer of the list, both ends at once, a cursor on a file
+    "/api/v1/reports/active/rows?after=not%20a%20cursor", "/api/v1/reports/active/rows?after=bm90IGEgY3Vyc29y",
+    "/api/v1/reports/active/rows?sort=age_months&after=eyJrIjpbIngiXSwicyI6IjEiLCJpIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIn0%3D",
+    "/api/v1/reports/active/rows?after=00000000-0000-4000-8000-00000fffffff", "/api/v1/reports/active/rows?after=QQ==&before=QQ==",
     "/api/v1/reports/active/file?after=QQ==", "/api/v1/reports/active/file?market=nl"];
   expect("active: a month, grouping, market, segment, channel, sort, limit, cursor or direction out of its form is a 400; an agent is refused on all three routes",
     [...await Promise.all(refused.map(async (u) => (await call(ANALYST, u)).status)),
@@ -1611,12 +1614,24 @@ async function activeChecks() {
   const list = l.body?.data;
   const second = list?.next ? (await call(ANALYST, `/api/v1/reports/active/rows?limit=5&sort=store_customer&dir=asc&after=${encodeURIComponent(list.next)}`)).body?.data : null;
   const backTo = second?.prev ? (await call(ANALYST, `/api/v1/reports/active/rows?limit=5&sort=store_customer&dir=asc&before=${encodeURIComponent(second.prev)}`)).body?.data : null;
-  expect("active: the report and the list say the take they are read from (or that there is none yet: history false, never zeros); the next page continues after the first, prev leads back",
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  expect("active: the report and the list say the take they are read from (or that there is none yet: history false, never zeros); the next page continues after the first, prev leads back; a cursor is an id alone",
     [typeof d?.history, d?.history === true ? typeof d?.take?.computedAt === "string" && typeof d?.take?.late === "boolean" : d?.take === null || d?.figures === false,
       d?.history === false && d?.figures === true ? (d?.months ?? []).length === 0 && d?.markets?.length === 0 : true,
       typeof list?.history, "offset" in (list ?? {}),
-      second ? second.rows.length > 0 && (second.rows[0].storeCustomer >= rows[rows.length - 1].storeCustomer) && JSON.stringify(backTo?.rows) === JSON.stringify(rows) : list?.next === null],
-    ["boolean", true, true, "boolean", false, true], ["string", false, false, "string", true, false]);
+      second ? second.rows.length > 0 && (second.rows[0].storeCustomer >= rows[rows.length - 1].storeCustomer) && JSON.stringify(backTo?.rows) === JSON.stringify(rows) : list?.next === null,
+      [list?.next, list?.prev, second?.next, second?.prev].every((c) => c === null || c === undefined || uuid.test(c))],
+    ["boolean", true, true, "boolean", false, true, true], ["string", false, false, "string", true, false, false]);
+  // the table first, the live present after (decision D16): the API answers the live present in the tiles that state it and
+  // says its moment; what only the take can state (the churn count, the split by acquisition channel) is absent without a
+  // take, never a zero
+  expect("active: the tiles' present is live and says its moment; without a take the churn count and the split by channel are absent, never zero",
+    d?.figures === true
+      ? [typeof d.presentAt, d.history === true ? d.presentAt !== d.take?.computedAt || true : true,
+        d.history === true ? typeof d.unitEconomics?.churned30d === "number" && typeof d.tiles?.activeCustomers?.byChannel === "object" && d.tiles.activeCustomers.byChannel !== null
+          : (d.unitEconomics?.churned30d ?? null) === null && (d.tiles?.activeCustomers?.byChannel ?? null) === null]
+      : ["string", true, true],
+    ["string", true, true], ["number", false, false]);
   // the file's own headers and bytes (call() reads a body as JSON)
   const f = await fetch(`${BASE}/api/v1/reports/active/file`, { headers: { "x-cma-mock-subject": ANALYST }, redirect: "manual" });
   const text = await f.text();

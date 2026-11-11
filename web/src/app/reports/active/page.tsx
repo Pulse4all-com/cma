@@ -143,11 +143,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
           {/* 3.2 the headline: above the fold */}
           {/* the table first, the live present after (decision D16): the stored tiles are the fallback of the live ones; the
               boundary is a new one on every view, so no click waits for the live read */}
-          <Layer {...layer("tiles", "top")} read={topRead}>{(top) => (
-            <Suspense key={`now|${viewKey}`} fallback={<Tiles ctx={ctx} top={top} settled={false} />}>
-              <TilesLive ctx={ctx} top={top} read={nowRead} />
-            </Suspense>
-          )}</Layer>
+          <Layer {...layer("tiles", "top")} read={topRead}>{(top) => <Tiles ctx={ctx} top={top} nowRead={nowRead} />}</Layer>
 
           {/* 3.3 the unit economics: placeholders in the frame, never a number; the one real figure beside them */}
           <section aria-label={t.unitEconomics} data-testid="active-slots">
@@ -174,6 +170,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
               <LinkSwitch label={t.splitBy} testId="active-split" current={view.bySegment ? "segment" : "none"}
                 options={[{ value: "none", label: t.splitNone }, { value: "segment", label: t.segmentFilter }]} href={(v) => href({ split: v === "segment" ? "segment" : null })} />
             </PanelTitle>
+            {/* the series is the take's, its running point included ("History as of"); the live present is the tiles' */}
             <Layer {...layer("hero", "top")} read={topRead} mark>{(top) => <Hero ctx={ctx} top={top} />}</Layer>
           </Card>
 
@@ -465,45 +462,68 @@ async function ComparisonTitle({ ctx, read }: { ctx: Ctx; read: Promise<ActiveRe
 
 // ---- above the fold --------------------------------------------------------------------------------------------------
 
-/** The tiles with the live present in the places of the stored ones, once its read is in (or has failed: the stored tiles stay, said as such) */
-async function TilesLive({ ctx, top, read }: { ctx: Ctx; top: ActiveReport; read: Promise<ActiveNow> }) {
+/**
+ * The headline tiles. The four that state the present (Active customers, Total subscriptions, the Monthly recurring
+ * amount and its average) show the stored answer first and the live present after (decision D16): the stored ones are
+ * the fallback of the live ones, in a boundary that is a new one on every view, so no click waits for the live read.
+ * The two tiles of the take (Customer age, Customer lifetime) are drawn once
+ */
+function Tiles({ ctx, top, nowRead }: { ctx: Ctx; top: ActiveReport; nowRead: Promise<ActiveNow> }) {
+  const g = gap(ctx, top, false);
+  if (g) return g;
+  return (
+    <section className="grid h-full grid-cols-3 gap-4 xl:grid-cols-6 [&>div]:overflow-y-auto" aria-label={ctx.t.headline} data-testid="active-tiles">
+      <Suspense key={`now|${ctx.viewKey}`} fallback={<PresentTiles ctx={ctx} top={top} settled={false} />}>
+        <PresentTilesLive ctx={ctx} top={top} read={nowRead} />
+      </Suspense>
+      <TakeTiles ctx={ctx} top={top} />
+    </section>
+  );
+}
+
+/** The present's tiles with the live figures, once their read is in (or has failed: the stored ones stay, said as such in the title row) */
+async function PresentTilesLive({ ctx, top, read }: { ctx: Ctx; top: ActiveReport; read: Promise<ActiveNow> }) {
   const now = await read.catch(() => null);
   const dbTrace = requestDbTrace();
   return (
     <>
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
-      <Tiles ctx={ctx} top={withActiveNow(top, now)} settled />
+      <PresentTiles ctx={ctx} top={withActiveNow(top, now)} settled />
       <Streamed part="now" view={ctx.viewKey} />
     </>
   );
 }
 
 /**
- * The headline tiles. settled false: the stored answer alone (the live present is on its way); true: with the live
- * present where it arrived. Without any present yet (no take, the live read not in) the tiles' outline, never zeros
+ * The four tiles of the present. settled false: the stored answer alone (the live present is on its way); true: with
+ * the live present where it arrived. Without any present yet (no take, the live read not in) their outline; without one
+ * at all (a channel filter while there is no take) that the history is being prepared: never zeros
  */
-function Tiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; settled: boolean }) {
+function PresentTiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; settled: boolean }) {
   const { t, hints, info, me } = ctx;
   const locale = me.locale;
   const tiles = top.tiles;
-  const g = gap(ctx, top, false);
-  if (g) return g;
-  if (!tiles) {
-    return settled ? gap(ctx, top, true)
-      : <div data-panel-skeleton="tiles" aria-busy="true" className="h-full animate-pulse rounded-input bg-p4a-bgblue" />;
-  }
   const live = top.presentAt !== null && top.presentAt !== top.take?.computedAt;
+  const marker = <span hidden data-testid="active-present" data-present={tiles && live ? "live" : "stored"} data-settled={settled ? "true" : "false"} />;
+  if (!tiles) {
+    return (
+      <>
+        {marker}
+        {settled ? <div className="col-span-3 xl:col-span-4">{gap(ctx, top, true)}</div>
+          : <div data-panel-skeleton="tiles" aria-busy="true" className="col-span-3 animate-pulse rounded-input bg-p4a-bgblue xl:col-span-4" />}
+      </>
+    );
+  }
   const n = (x: number) => fmtCount(x, locale);
   const pct = (x: number | null) => fmtShare(x, locale);
-  const months = (x: number, digits = 0) => t.monthsValue.replace("{n}", fmtNumber(x, locale, digits));
   const whenMonth = monthEndText(monthsBack(top.today, 1), locale, t);
   const whenYear = monthEndText(monthsBack(top.today, 13), locale, t);
   const segOrder = [...top.settings.segments, "unknown"];
   const segLabel = (s: string) => (s === "unknown" ? t.unknownSegment : s);
   const dash = <span className="text-p4a-muted">–</span>;
   return (
-    <section className="grid h-full grid-cols-3 gap-4 xl:grid-cols-6 [&>div]:overflow-y-auto" aria-label={t.headline} data-testid="active-tiles"
-      data-present={live ? "live" : "stored"} data-settled={settled ? "true" : "false"} aria-busy={!settled || undefined}>
+    <>
+      {marker}
       <ActiveTile testId="active-tile-customers" label={t.activeCustomers} info={info(t.activeCustomers, hints.mh_active_customers!, "active.active_customers")}
         value={n(tiles.activeCustomers.value)}>
         <p data-testid="active-split-segment">{segOrder.map((s) => `${segLabel(s)} ${n(tiles.activeCustomers.bySegment[s] ?? 0)}`).join(" · ")}</p>
@@ -551,31 +571,48 @@ function Tiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; settled: bo
           </div>
         ))}
       </ActiveTile>
-      {/* the two tiles of the stored take: absent figures while the history is being prepared, never zeros */}
+    </>
+  );
+}
+
+/** The two tiles of the stored take: absent figures while the history is being prepared, never zeros */
+function TakeTiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
+  const { t, hints, info, me } = ctx;
+  const locale = me.locale;
+  const age = top.tiles?.customerAge ?? null;
+  const lifetime = top.tiles?.lifetime ?? null;
+  const clv = top.tiles?.clv ?? null;
+  const pct = (x: number | null) => fmtShare(x, locale);
+  const months = (x: number, digits = 0) => t.monthsValue.replace("{n}", fmtNumber(x, locale, digits));
+  const whenMonth = monthEndText(monthsBack(top.today, 1), locale, t);
+  const whenYear = monthEndText(monthsBack(top.today, 13), locale, t);
+  const dash = <span className="text-p4a-muted">–</span>;
+  return (
+    <>
       <ActiveTile testId="active-tile-age" label={t.medianAge} info={info(t.medianAge, hints.mh_customer_age!, "active.customer_age_median")}
-        value={!tiles.customerAge || tiles.customerAge.median === null ? dash
-          : <span>{fmtNumber(tiles.customerAge.median, locale, 1)} <span className="text-small font-normal text-p4a-muted">{t.monthsUnit}</span></span>}>
-        {!tiles.customerAge ? <p>{t.historyPreparing}</p> : (
+        value={!age || age.median === null ? dash
+          : <span>{fmtNumber(age.median, locale, 1)} <span className="text-small font-normal text-p4a-muted">{t.monthsUnit}</span></span>}>
+        {!age ? <p>{t.historyPreparing}</p> : (
           <>
-            {tiles.customerAge.over[0] ? <p>{t.moreThan.replace("{n}", String(tiles.customerAge.over[0].months))} {pct(tiles.customerAge.over[0].share)}</p> : null}
-            <ChangeLine value={tiles.customerAge.median} previous={tiles.customerAge.prevMonth} when={whenMonth} fmt={(x) => months(x, 1)} t={t} />
-            <ChangeLine value={tiles.customerAge.median} previous={tiles.customerAge.prevYear} when={whenYear} fmt={(x) => months(x, 1)} t={t} />
+            {age.over[0] ? <p>{t.moreThan.replace("{n}", String(age.over[0].months))} {pct(age.over[0].share)}</p> : null}
+            <ChangeLine value={age.median} previous={age.prevMonth} when={whenMonth} fmt={(x) => months(x, 1)} t={t} />
+            <ChangeLine value={age.median} previous={age.prevYear} when={whenYear} fmt={(x) => months(x, 1)} t={t} />
           </>
         )}
       </ActiveTile>
       <ActiveTile testId="active-tile-lifetime" label={t.lifetimeMedian} info={info(t.lifetimeMedian, hints.mh_customer_lifetime!, "active.customer_lifetime_median")}
-        value={!tiles.lifetime ? dash : tiles.lifetime.median !== null
-          ? <span>{fmtNumber(tiles.lifetime.median, locale, 0)} <span className="text-small font-normal text-p4a-muted">{t.monthsUnit}</span></span>
+        value={!lifetime ? dash : lifetime.median !== null
+          ? <span>{fmtNumber(lifetime.median, locale, 0)} <span className="text-small font-normal text-p4a-muted">{t.monthsUnit}</span></span>
           : <span className="text-panel" title={t.notReachedTitle} data-testid="active-not-reached">{t.notReachedShort}</span>}>
-        {!tiles.lifetime ? <p>{t.historyPreparing}</p> : (
+        {!lifetime ? <p>{t.historyPreparing}</p> : (
           <>
-            {tiles.lifetime.median === null && tiles.lifetime.longest !== null ? <p>{t.moreThanMonths.replace("{n}", String(tiles.lifetime.longest))}</p> : null}
+            {lifetime.median === null && lifetime.longest !== null ? <p>{t.moreThanMonths.replace("{n}", String(lifetime.longest))}</p> : null}
             <p>{t.clvAverage}</p>
-            {Object.entries(tiles.clv ?? {}).sort(([a], [b]) => (a < b ? -1 : 1)).map(([c, v]) => <p key={c} className="tabular" data-currency={c}>{fmtAmount(v.average, c, locale)}</p>)}
+            {Object.entries(clv ?? {}).sort(([a], [b]) => (a < b ? -1 : 1)).map(([c, v]) => <p key={c} className="tabular" data-currency={c}>{fmtAmount(v.average, c, locale)}</p>)}
           </>
         )}
       </ActiveTile>
-    </section>
+    </>
   );
 }
 
