@@ -66,7 +66,8 @@
 --       131_time_all.sql part a holds the poll's budget (20 ms)
 -- Edited after its first prod run (Martin, 11 November 2026): E4 allowed 0.5 ms or 3 % and failed in prod at 5.45 ms
 -- against 0009h's 4.50 ms; the cost of the Talk time sum is accepted, so E4 now allows 1.5 ms or 30 %, whichever is
--- larger, and still fails beyond that, so it holds on reruns. Nothing else changed.
+-- larger, and still fails beyond that, so it holds on reruns. Nothing else changed: a rerun needs 171 alone (no function
+-- and no other verify changed, so 170, 133, 145, 165 and 131 are not run again).
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
 -- comparisons are provoked by a deliberate difference, not by the switch alone: B4, B5, B6 and E1 then compare with
 -- 0009h's JSON with waiting_now taken out, B2, E2 and E3 with the reports' figures of the day before (E2 and E3 also
