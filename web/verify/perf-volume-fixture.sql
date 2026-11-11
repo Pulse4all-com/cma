@@ -449,3 +449,158 @@ begin
 end
 $$;
 reset role;
+
+-- Addition 0009l: Customers → Active at volume, so 131's active rows, perf.mjs and round-trips.mjs measure something. The
+-- fixture's subscriptions above name customers of other stores and were all created within 700 days; this block shapes
+-- them into a customer base with a history (rows changed, none added to cma.subscription; events, orders and deals added):
+--   subscriptions     each linked to a customer of its own store (1,500 customers per store, about a quarter of them with
+--                     two subscriptions), created over 60 months (20 to 1,820 days back); the first store's subscriptions
+--                     older than 730 days all carry the day 730 days back (subscriptions moved into the subscription app
+--                     carry the date they moved: the dominant cohort); a canceled one's canceled_at and a paused one's
+--                     paused_at between its creation and now; an expired one gets its status_changed event to expired
+--                     (one in five hundred none: the subscriptions in an ended status without an Ended time); the failed
+--                     renewals above all stayed open, which no store shows: fourteen of fifteen subscriptions with failed
+--                     renewals get a later renewal (events added: pase…, pasr…), so about 1,000 × m / 3 failed renewals stay
+--                     open on 74 × m / 3 subscriptions In retry (Flash's subscriptions overview reads the same events)
+--   devices           a device with a subscription reference takes that subscription's market and customer, so a
+--                     customer's devices are found (the register names no store: Flash matches within a market)
+--   segments          the contacts' segment: a fifth B2B, three fifths B2C, a fifth none (crm.customer_segments B2B,B2C)
+--   order deals       an order pipeline (perf-orders, won stage po8) and, for each linked customer whose first
+--                     subscription is at most 365 days old, a first store order (paord…) at that moment and a won order
+--                     deal (pad…) of its contact at the same moment: about 1,500 × m / 3 first orders over a year
+-- The acquisition channel reads cma.first_orders_of from the attribution's history start, which is intake.start_date
+-- (60 days back above) plus attribution.window_days (90): in the future on this fixture as loaded, so every customer is
+-- Unknown (before_history) and the read is empty. To time the channel over a year of first orders, move the start inside a
+-- transaction and roll it back:  begin; set local role cma_owner; update cma.tenant_setting set value = (current_date - 455)::text
+-- where key = 'intake.start_date' and tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions'); … ; rollback;
+-- Every id is invented; no name, address, email or phone. Rerunnable: a second run finds the pipeline perf-orders and stops.
+set role cma_owner;
+do $$
+declare
+  v_subs uuid; v_crm uuid; t0 timestamptz := clock_timestamp(); n_s bigint; n_d bigint; n_o bigint;
+begin
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
+  select id into v_subs from cma.tenant where slug = 'pulse4all-subscriptions';
+  select id into v_crm from cma.integration_connection where tenant_id = v_subs and adapter = 'perfcrm';
+  if v_crm is null then
+    raise notice 'the perf volume fixture is not present: nothing shaped for the active customers';
+    return;
+  end if;
+  if exists (select 1 from cma.connection_pipeline where tenant_id = v_subs and connection_id = v_crm and source_pipeline_id = 'perf-orders') then
+    raise notice 'perf active customers already present';
+    return;
+  end if;
+  perform set_config('lock_timeout', '0', true);
+  alter table cma.subscription disable trigger audit;
+  alter table cma.subscription_event disable trigger audit;
+  alter table cma.device disable trigger audit;
+  alter table cma.crm_contact disable trigger audit;
+  alter table cma.crm_record disable trigger audit;
+  alter table cma.commerce_order disable trigger audit;
+
+  -- the subscriptions: a customer of their own store, a creation over 60 months, the times of their status
+  with sm as (
+    select c.id as connection_id, x.store_connection_id,
+           row_number() over (order by c.name) as store_no
+    from cma.integration_connection c
+    cross join lateral cma.subscription_store_connection_of(v_subs, c.id) x
+    where c.tenant_id = v_subs and c.adapter = 'perfsubs'
+  ), cu as (
+    select k.connection_id, k.source_id, row_number() over (partition by k.connection_id order by k.source_id collate "C") as rn
+    from cma.commerce_customer k where k.tenant_id = v_subs and k.source_system = 'perfshop'
+  ), sb as (
+    select s.id, substr(s.source_id, 5)::integer as g, sm.store_connection_id, sm.store_no,
+           row_number() over (partition by s.connection_id order by substr(s.source_id, 5)::integer) as rn
+    from cma.subscription s join sm on sm.connection_id = s.connection_id
+    where s.tenant_id = v_subs and s.source_system = 'perfsubs'
+  ), x as (
+    select sb.id, sb.g, cu.source_id as customer,
+           now() - make_interval(days => case when sb.store_no = 1 and 20 + (sb.g * 37) % 1800 > 730 then 730 else 20 + (sb.g * 37) % 1800 end) as created
+    from sb join cu on cu.connection_id = sb.store_connection_id and cu.rn = 1 + (sb.rn * 7) % 1500
+  )
+  update cma.subscription s
+     set customer_source_id = x.customer, source_created_at = x.created,
+         canceled_at = case when s.status = 'canceled' then x.created + (now() - x.created) * (((x.g * 13) % 90 + 5) / 100.0) end,
+         paused_at = case when s.status = 'paused' then x.created + (now() - x.created) * 0.8 end
+    from x where s.id = x.id;
+  get diagnostics n_s = row_count;
+  analyze cma.subscription;
+  insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at,
+                                      status_from, status_to)
+  select s.tenant_id, s.connection_id, 'perfsubs', 'pase' || substr(s.source_id, 5), s.source_id, 'status_changed',
+         s.source_created_at + (now() - s.source_created_at) * (((substr(s.source_id, 5)::integer * 17) % 90 + 5) / 100.0), 'active', 'expired'
+  from cma.subscription s
+  where s.tenant_id = v_subs and s.source_system = 'perfsubs' and s.status = 'expired' and substr(s.source_id, 5)::integer % 500 <> 9;
+  -- a failed renewal is mostly followed by a renewal: fourteen of fifteen subscriptions with failed renewals get a renewal of
+  -- their last cycle an hour ago (above, every failed renewal stayed open: 15,000 × m / 3 on 1,107 × m / 3 subscriptions)
+  insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at, cycle_index)
+  select v_subs, f.connection_id, 'perfsubs', 'pasr' || substr(f.subscription_source_id, 5), f.subscription_source_id, 'renewed', now() - interval '1 hour', 1000
+  from (select distinct e.connection_id, e.subscription_source_id from cma.subscription_event e
+        where e.tenant_id = v_subs and e.source_system = 'perfsubs' and e.event_type = 'renew_failed') f
+  where (substr(f.subscription_source_id, 5)::integer / 20) % 15 <> 0;
+  analyze cma.subscription_event;
+
+  -- the devices of a subscription: its market and its customer
+  update cma.device d
+     set market = st.market, customer_ref = s.customer_source_id
+    from cma.subscription s
+    join cma.integration_connection c on c.tenant_id = s.tenant_id and c.id = s.connection_id
+    cross join lateral cma.subscription_store_connection_of(v_subs, c.id) x
+    join cma.commerce_store st on st.tenant_id = s.tenant_id and st.id = x.store_id
+   where d.tenant_id = v_subs and d.source_system = 'perfreg' and d.subscription_ref = s.source_id
+     and s.tenant_id = v_subs and s.source_system = 'perfsubs';
+  get diagnostics n_d = row_count;
+  analyze cma.device;
+
+  -- the contacts' segments
+  update cma.crm_contact k
+     set segment = case (substr(k.source_id, 3)::integer / 3) % 5 when 0 then 'B2B' when 4 then null else 'B2C' end
+   where k.tenant_id = v_subs and k.connection_id = v_crm and k.source_system = 'perfcrm';
+  analyze cma.crm_contact;
+
+  -- the order pipeline, and a first order with its won order deal per linked customer of the last 365 days
+  insert into cma.connection_pipeline (tenant_id, connection_id, record_type, source_pipeline_id, label, is_counted, is_lead, is_order)
+  values (v_subs, v_crm, 'deal', 'perf-orders', 'Perf orders', true, false, true);
+  insert into cma.connection_stage (tenant_id, connection_id, record_type, source_pipeline_id, source_stage_id, label, display_order, is_closed,
+                                    outcome, outcome_source)
+  values (v_subs, v_crm, 'deal', 'perf-orders', 'po8', 'Won', 8, true, 'won', 'person');
+  with f as (
+    select cu.connection_id, cu.source_id, cu.crm_contact_source_id as contact, cu.amount_currency, min(s.source_created_at) as t,
+           row_number() over (order by cu.source_id collate "C") as n
+    from cma.subscription s
+    join cma.integration_connection c on c.tenant_id = s.tenant_id and c.id = s.connection_id
+    cross join lateral cma.subscription_store_connection_of(v_subs, c.id) x
+    join cma.commerce_customer cu on cu.tenant_id = s.tenant_id and cu.connection_id = x.store_connection_id and cu.source_id = s.customer_source_id
+    where s.tenant_id = v_subs and s.source_system = 'perfsubs' and cu.crm_contact_source_id is not null
+    group by 1, 2, 3, 4
+    having min(s.source_created_at) >= now() - interval '365 days'
+  ), o as (
+    insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, customer_source_id, source_created_at, processed_at,
+                                    is_test, currency, total_amount, financial_status, fulfillment_status, order_kind)
+    select v_subs, f.connection_id, 'perfshop', 'paord' || f.n, '#PA' || f.n, f.source_id, f.t, f.t, false, f.amount_currency, 40 + f.n % 60, 'paid',
+           'fulfilled', 'first'
+    from f
+    returning 1
+  )
+  insert into cma.crm_record (tenant_id, connection_id, source_system, record_type, source_id, pipeline_id, stage_id, owner_ref, contact_source_id,
+                              is_closed, closed_at, source_created_at, source_updated_at, amount, currency)
+  select v_subs, v_crm, 'perfcrm', 'deal', 'pad' || f.n, 'perf-orders', 'po8', 'po-' || (1 + f.n % 8), f.contact, true, f.t, f.t, f.t, 40 + f.n % 60,
+         f.amount_currency
+  from f;
+  get diagnostics n_o = row_count;
+  analyze cma.commerce_order;
+  analyze cma.crm_record;
+
+  alter table cma.subscription enable trigger audit;
+  alter table cma.subscription_event enable trigger audit;
+  alter table cma.device enable trigger audit;
+  alter table cma.crm_contact enable trigger audit;
+  alter table cma.crm_record enable trigger audit;
+  alter table cma.commerce_order enable trigger audit;
+  raise notice 'perf active customers written in % s: % subscriptions linked to their store''s customers, % devices moved to their subscription''s market, % first orders with their order deal',
+    round(extract(epoch from clock_timestamp() - t0), 1), n_s, n_d, n_o;
+end
+$$;
+reset role;

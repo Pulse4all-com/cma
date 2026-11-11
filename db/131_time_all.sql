@@ -12,7 +12,8 @@
 -- cma.organisation.is_contact_center), after 140_live_per_organisation.sql; since addition 0008zw (Reviews' period All),
 -- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql; since
 -- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql; since
--- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql. Prod is the proof; dev's shared core is for
+-- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
+-- 172_active_customers.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
@@ -82,6 +83,10 @@ begin
   -- Assets → Pledge lists (cma.pledge_page, cma.pledge_file) since addition 0009j
   if not exists (select 1 from cma.schema_migration where version = '0009j') then
     raise exception 'addition 0009j (168_pledge_lists.sql) has not run in this database';
+  end if;
+  -- Customers → Active (cma.active_page, cma.active_rows) since addition 0009l
+  if not exists (select 1 from cma.schema_migration where version = '0009l') then
+    raise exception 'addition 0009l (172_active_customers.sql) has not run in this database';
   end if;
 end
 $$;
@@ -305,6 +310,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'forms {P}', 'forms whole period', $q$select * from cma.forms_report('{f}', '{t}', 'week', null, null, null) where period = 'current' and group_key is null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+-- Customers → Active (addition 0009l): the page's two reads, the document (the whole history the tenant keeps, no filter,
+-- cohorts by month: the page's widest read) and the list's first page as the page asks it; stocks at now, so timed once
+('b', 'active customers now', 'active page', $q$select cma.active_page(null, null, null, null, 'month')$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'active customers now', 'active list first page', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, 0, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'pledge lists now', 'pledge page', $q$select cma.pledge_page()$q$, 'overview', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge check serials', $q$select * from cma.pledge_finding_rows('no_language', 500)$q$, 'list', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge file today', $q$select * from cma.pledge_file(null)$q$, 'overview', array['pledges.view']),
