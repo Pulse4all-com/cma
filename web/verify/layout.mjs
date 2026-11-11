@@ -2377,8 +2377,8 @@ async function expectFrame() {
   // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
   // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
   // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it; since
-  // 0008zw Installed base (Assets)
-  for (const [subject, pages] of [["manager", 32], ["agent-one", 5]]) {
+  // 0008zw Installed base (Assets); since 0009a Courtesy (Customers)
+  for (const [subject, pages] of [["manager", 33], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");

@@ -2,6 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 11 November 2026 (#266): `verify:layout` expects 33 pages in the manager's rail with an ignored preview cookie (was 32), because #241 (addition 0009a) added Courtesy (Customers) after #236 set the count and did not raise it; Pledge lists stays out of the manager's rail (Martin; `web/verify/layout.mjs`, test only; no app, copy, permission, query or schema change).
 - 11 November 2026 (#265): My account → What your role allows shows plain words for `pledges.view`, "See and download the pledge lists" (nl "De pandlijsten zien en downloaden"), because #262 (addition 0009j) added the permission without an `allow.pledges.view` label and the page fell back to the raw key (Martin; copy only, `allow.pledges.view`; no query, schema or permission change).
 - 11 November 2026 (#264): the Live board's call caption says "All counted {organisation} lines" (nl "Alle meetellende lijnen van {organisation}"), because every counted line is answered by Newco today (Martin; `live.callsAllLines`, without a trailing period by the style rule; the missed callers' caption moves to the title row; no query, schema or permission change); the docs: decisions, definitions (Live board), api.md, open-decisions, features, data-model 0008.
 - 11 November 2026 (#263): the Live board's call captions say "All counted lines, not only {organisation}'s" (nl "Alle meetellende lijnen"), because "All lines" read as including uncounted lines (Martin; copy only, `live.callsAllLines`).
