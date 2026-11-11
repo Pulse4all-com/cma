@@ -108,6 +108,10 @@ insert into cma.setting (key, value_type, allowed_values, default_value, descrip
      'The bounds in months of the Customer age bands on Customers → Active: one to ten increasing whole numbers; the first three are the ages of "More than" and of Retention'),
   ('customers.history_months', 'integer', null, '60',
      'The months of history Customers → Active shows at most (its range All), 12 to 120'),
+  ('customers.refresh_minutes', 'integer', null, '5',
+     'The minutes a tenant''s stored take of Customers → Active may be old before the scheduler''s next minute refreshes it, 1 to 1440'),
+  ('customers.history_notice_minutes', 'integer', null, '15',
+     'The minutes after which Customers → Active says its history is older than it should be, 1 to 1440'),
   ('reports.fx_eur_rates', 'text', null, '{}',
      'Indicative rates for an approximate euro total: a JSON object of currency codes with the euros one unit is worth and the date they are of, such as {"as_of": "2026-11-01", "GBP": 1.15}; {} shows no euro total')
 on conflict (key) do update
@@ -393,6 +397,9 @@ begin
   elsif new.key = 'customers.history_months'
         and (case when length(new.value) > 3 then true else new.value::integer not between 12 and 120 end) then
     raise exception 'Setting % takes a whole number of months from 12 to 120', new.key using errcode = 'CMA04';
+  elsif new.key in ('customers.refresh_minutes', 'customers.history_notice_minutes')
+        and (case when length(new.value) > 4 then true else new.value::integer not between 1 and 1440 end) then
+    raise exception 'Setting % takes a whole number of minutes from 1 to 1440', new.key using errcode = 'CMA04';
   elsif new.key = 'reports.fx_eur_rates' then
     if not cma.active_fx_ok(new.value) then
       raise exception 'Setting % takes a JSON object of currency codes (three capitals) with the euros one unit is worth (a number above 0) and the date they are of, such as {"as_of": "2026-11-01", "GBP": 1.15}, or {}', new.key
@@ -406,7 +413,31 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 2. The settings as values, and the pure functions (no table read: arrays in, rows out)
+-- 2. Earlier forms of this script (the pull request's first rounds; they may have run in dev, never in prod)
+-- ---------------------------------------------------------------------------------------------
+-- A function whose arguments or answer changed since cannot be replaced in place, and one that is gone would stay behind:
+-- they are dropped here, so a database that ran an earlier form ends up as one that never did. Nothing main reads
+drop view if exists cma_read.active_customer_month;
+drop view if exists cma_read.customer_cohort;
+drop function if exists cma_read.active_customer_month_rows();
+drop function if exists cma_read.customer_cohort_rows();
+drop function if exists cma.active_page(date, text, text, text, text);
+drop function if exists cma.active_page_of(uuid, date, text, text, text, text, timestamptz);
+drop function if exists cma.active_rows(text, text, text, text, boolean, integer, integer, boolean);
+drop function if exists cma.active_rows_of(uuid, text, text, text, text, boolean, integer, integer, timestamptz);
+drop function if exists cma.active_survival_of(uuid, text);
+drop function if exists cma.active_km_json(integer[], boolean[]);
+drop function if exists cma.active_km_from(integer[], boolean[]);
+drop function if exists cma.active_months_of(uuid, timestamptz);
+drop function if exists cma.active_cohorts_of(uuid, text, timestamptz);
+drop function if exists cma.active_spell_lengths_of(uuid, timestamptz, boolean);
+drop function if exists cma.active_channel_of(uuid);
+drop function if exists cma.active_spells_of(uuid);
+drop function if exists cma.active_customers_of(uuid, timestamptz, boolean);
+drop function if exists cma.active_base_of(uuid, timestamptz, boolean, date, boolean);
+
+-- ---------------------------------------------------------------------------------------------
+-- 3. The settings as values, and the pure functions (no table read: arrays in, rows out)
 -- ---------------------------------------------------------------------------------------------
 -- reports.fx_eur_rates' form: a JSON object, {} or an "as_of" date (YYYY-MM-DD, a real date) with at least one currency
 -- code (three capitals) and its rate, a number above 0: the euros one unit of that currency is worth. Never an @
@@ -642,7 +673,7 @@ as $$
   from cma.active_km_from(p_length, p_ended) k
 $$;
 -- ---------------------------------------------------------------------------------------------
--- 3. The base: the subscriptions with their holding interval, their store customer and its acquisition channel
+-- 3b. The base: the subscriptions with their holding interval, their store customer and its acquisition channel
 -- ---------------------------------------------------------------------------------------------
 -- One row per subscription the latest full read still returns (merged and never-subscribed left out unless the tenant
 -- counts them as device-holding), read once per request; the page, the list, the spells, the channel, the survival and
@@ -683,7 +714,7 @@ returns table (subscription_id uuid, connection_id uuid, source_id text, store t
                started_at timestamptz, ended_at timestamptz, in_history boolean, left_out text,
                customer_id uuid, customer_connection_id uuid, customer_source_id text, segment text, crm_connection_id uuid,
                contact_source_id text, customer_start timestamptz, customer_holding integer, customer_devices integer, clv numeric,
-               clv_currency text, channel text, level text, unknown_reason text, first_order_at timestamptz)
+               clv_currency text, channel text, level text, unknown_reason text, first_order_at timestamptz, device_models jsonb)
 language sql stable
 rows 10000   -- a tenant's subscriptions (CLAUDE.md, Performance: a set-returning function says its rows)
 as $$
@@ -697,10 +728,15 @@ as $$
   ), ps as materialized (
     select p.subscription_id, p.payment_state from cma.subscription_payment_state_of(p_tenant_id) p where p_with_payment
   ), dev as (
-    select d.subscription_ref, d.market, count(*) filter (where coalesce(ds.is_in_field, false))::integer as n_field
-    from cma.device d
-    left join cma.device_status ds on ds.tenant_id = d.tenant_id and ds.key = d.device_status_key
-    where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.subscription_ref is not null
+    -- a subscription's devices in the field, and how many of each model (the subscription mix's models)
+    select q.subscription_ref, q.market, sum(q.n_field)::integer as n_field,
+           jsonb_object_agg(q.model_key, q.n_field) filter (where q.n_field > 0) as models
+    from (select d.subscription_ref, d.market, coalesce(d.model_key, 'unknown') as model_key,
+                 count(*) filter (where coalesce(ds.is_in_field, false))::integer as n_field
+          from cma.device d
+          left join cma.device_status ds on ds.tenant_id = d.tenant_id and ds.key = d.device_status_key
+          where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.subscription_ref is not null
+          group by 1, 2, 3) q
     group by 1, 2
   ), s0 as materialized (
     select x.id, x.connection_id, x.source_id, x.customer_source_id, x.status, x.currency, x.amount_per_cycle, x.billing_interval,
@@ -737,7 +773,7 @@ as $$
                 when x.status = 'paused' then coalesce(x.paused_at, ev.at)
                 when x.is_ended then coalesce(x.canceled_at, ev.at)
                 else ev.at end as ended_at,
-           coalesce(dev.n_field, 0) as devices_in_field
+           coalesce(dev.n_field, 0) as devices_in_field, dev.models as device_models
     from s0 x
     left join sm on sm.connection_id = x.connection_id
     left join ev on ev.id = x.id
@@ -794,7 +830,7 @@ as $$
               when oth.customer_id is not null then 'no_first_order'
               when unm.contact_source_id is not null then 'order_not_matched'
               else 'no_order_deal' end,
-         a.created_at
+         a.created_at, sb.device_models
   from sb
   left join ps on ps.subscription_id = sb.id
   left join cu on cu.connection_id = sb.store_connection_id and cu.source_id = sb.customer_source_id
@@ -923,37 +959,631 @@ begin
   end if;
 end
 $$;
+
 -- ---------------------------------------------------------------------------------------------
--- 4. Customers → Active in one read
+-- 4. The stored take: the history read from stored results (decision D13, addendum B)
 -- ---------------------------------------------------------------------------------------------
--- The page as one JSON document, in one statement over the base read once (cma.active_base_of with the channel and the
--- payment state), narrowed by market, segment and acquisition channel. Keys:
---   set_up            commerce and subscriptions (cma.flash_source_set_up_of); while either is false nothing else is
---                     computed (figures null: "Not set up", never zeros)
---   tiles             active_customers (Flash's Active customers: the store customers with a subscription in a
---                     device-holding status, cma.flash_customer_figures_of) with its split by segment and by channel;
---                     total_subscriptions (Flash's Total subscriptions) with its split by status; amounts per currency
---                     (the Monthly recurring amount, the customers with a holding subscription in the currency, their
---                     average), the indicative euros (eur: only when reports.fx_eur_rates holds a rate for every currency
---                     shown); customer_age (median, and the customers of at least each of the first three ages of
---                     customers.age_months); lifetime (Kaplan–Meier over the spells; no change line: the curve as of a past
---                     month end is not computed); clv per currency (the store's amount spent is today's: no change line).
---                     The others with prev_month and prev_year: the value at the previous month's end and at the month end
---                     twelve months before that, null where the history does not reach
---   unit_economics    the placeholders' keys with status pending and no figure, and churned_30d (Flash's Churn
---                     (subscription) over the last 30 business dates, cma.flash_churn_of)
---   months            per month end from from_month: customers (with by_segment), subscriptions, inflow (with
---                     inflow_by_channel), outflow, amounts per currency and eur; the running month's row is "now" and
---                     carries the present (tiles), its inflow and outflow the month to date
---   markets, markets_total   per market and over all: the present figures, churned and net change over 30 days, the
---                     indirect share, and the customers at the last twelve month ends and now (spark)
---   comparison        the first two segments of crm.customer_segments side by side with unknown: one row per measure
---                     (and currency) with a, b, unknown, difference (a - b) and ratio (a / b, only when both are above 0)
---   survival          the Kaplan–Meier curves per segment, per channel and over all
---   age_bands, cohorts, cohort_splits, mix, notes, filters, settings
--- Amounts are per currency and never added across currencies; the euros are indicative and absent without every rate
-create or replace function cma.active_page_of(p_tenant_id uuid, p_from_month date, p_market text, p_segment text, p_channel text,
-                                              p_grouping text, p_now timestamptz)
+-- The history of Customers → Active is read from stored results, refreshed by the scheduler every minute where a
+-- tenant's take is older than customers.refresh_minutes or marked stale; the present stays live (cma.active_present_of).
+-- Six tenant tables, ids, codes, amounts and times only (no name, address, email or phone; the contact's id as Flash's
+-- customer list already shows it), each with cma.setup_tenant_table() (row-level security, the tenant policy, the
+-- application's grants) and without the audit trigger (as 0008s's and 0008zr's stored results: a row image per row per
+-- refresh would fill the audit log with computed values; the sources they are computed from are audited where they are
+-- written):
+--   cma.active_take       one row per tenant: when the take was computed ("History as of"), the business date its ages
+--                         and lengths are of, how long the refresh took, whether a settings change marked it stale
+--   cma.active_base       the base as cma.active_base_of answers it: one row per subscription with its holding interval,
+--                         its store customer and that customer's figures and acquisition channel
+--   cma.active_customer   one row per store customer of the base: the list's columns, with an index per sort key
+--   cma.active_spell      a store customer's active spells with their length in whole months as of the take
+--   cma.active_month      the month ends: per month, market, segment and acquisition channel the customers (kind
+--                         customers), the subscriptions (subscriptions), the Monthly recurring amount per currency
+--                         (amount), for the two month ends a change line compares with the customers with a
+--                         subscription in a currency (currency_customers), and Flash's churn count of the last 30
+--                         business dates (churned_30d)
+--   cma.active_cohort     the customer cohorts per month and per quarter, market, segment, channel and age
+-- A refresh writes only what changed: the base and the customers row by row (a row that reads the same is not written
+-- again), the spells, the month ends and the cohorts only when the part of the base they are computed from, the
+-- business date or a setting they read changed. So a quiet tenant costs a read every five minutes, not a rewrite.
+create table if not exists cma.active_take (
+  tenant_id         uuid primary key default cma.current_tenant_id() references cma.tenant (id),
+  computed_at       timestamptz not null,
+  business_date     date not null,
+  duration_ms       integer not null check (duration_ms >= 0),
+  history_key       text not null,
+  customers         integer not null check (customers >= 0),
+  subscriptions     integer not null check (subscriptions >= 0),
+  attribution_start date,
+  stale             boolean not null default false,
+  stale_since       timestamptz
+);
+comment on table cma.active_take is 'When one tenant''s stored take of Customers → Active was computed (addition 0009l; History as of), the business date its ages are of, how long the refresh took and whether a settings change marked it stale';
+
+create table if not exists cma.active_base (
+  tenant_id uuid not null default cma.current_tenant_id() references cma.tenant (id),
+  subscription_id uuid,
+  connection_id uuid,
+  source_id text,
+  store text,
+  market text,
+  status text,
+  is_holding boolean,
+  is_paying boolean,
+  payment_state text,
+  currency text,
+  monthly_amount numeric,
+  billing text,
+  devices_in_field integer,
+  started_at timestamptz,
+  ended_at timestamptz,
+  in_history boolean,
+  left_out text,
+  customer_id uuid,
+  customer_connection_id uuid,
+  customer_source_id text,
+  segment text,
+  crm_connection_id uuid,
+  contact_source_id text,
+  customer_start timestamptz,
+  customer_holding integer,
+  customer_devices integer,
+  clv numeric,
+  clv_currency text,
+  channel text,
+  level text,
+  unknown_reason text,
+  first_order_at timestamptz,
+  device_models jsonb,
+  primary key (tenant_id, subscription_id)
+);
+comment on table cma.active_base is 'The base of Customers → Active as stored by the refresh (addition 0009l): one row per subscription with its holding interval, its store customer, that customer''s figures and its acquisition channel; ids, codes, amounts and times only';
+create index if not exists active_base_customer_idx on cma.active_base (tenant_id, customer_id);
+
+create table if not exists cma.active_customer (
+  tenant_id uuid not null default cma.current_tenant_id() references cma.tenant (id),
+  customer_id uuid,
+  connection_id uuid,
+  source_id text,
+  store text,
+  market text,
+  segment text,
+  channel text,
+  level text,
+  unknown_reason text,
+  first_order_at timestamptz,
+  customer_start timestamptz,
+  age_months integer,
+  is_active boolean,
+  holding integer,
+  devices integer,
+  clv numeric,
+  clv_currency text,
+  crm_connection_id uuid,
+  contact_source_id text,
+  currency text,
+  amount numeric,
+  other_amounts jsonb,
+  primary key (tenant_id, customer_id)
+);
+comment on table cma.active_customer is 'The store customers of Customers → Active as stored by the refresh (addition 0009l): Customer start and age, segment, acquisition channel with its level and Unknown reason, realised value and the list''s columns; ids, codes, amounts and times only';
+-- the list's keyset paging: an index per sort key over the active customers, each ending in the customer's ids
+create index if not exists active_customer_amount_idx on cma.active_customer (tenant_id, (coalesce(currency, '')), (coalesce(amount, -1)), source_id, customer_id) where is_active;
+create index if not exists active_customer_clv_idx on cma.active_customer (tenant_id, (coalesce(clv_currency, '')), (coalesce(clv, -1)), source_id, customer_id) where is_active;
+create index if not exists active_customer_source_idx on cma.active_customer (tenant_id, source_id, customer_id) where is_active;
+create index if not exists active_customer_store_idx on cma.active_customer (tenant_id, store, source_id, customer_id) where is_active;
+create index if not exists active_customer_market_idx on cma.active_customer (tenant_id, market, source_id, customer_id) where is_active;
+create index if not exists active_customer_segment_idx on cma.active_customer (tenant_id, segment, source_id, customer_id) where is_active;
+create index if not exists active_customer_start_idx on cma.active_customer (tenant_id, (coalesce(customer_start, '-infinity'::timestamptz)), source_id, customer_id) where is_active;
+create index if not exists active_customer_age_idx on cma.active_customer (tenant_id, (coalesce(age_months, -1)), source_id, customer_id) where is_active;
+create index if not exists active_customer_holding_idx on cma.active_customer (tenant_id, holding, source_id, customer_id) where is_active;
+create index if not exists active_customer_devices_idx on cma.active_customer (tenant_id, devices, source_id, customer_id) where is_active;
+create index if not exists active_customer_channel_idx on cma.active_customer (tenant_id, channel, source_id, customer_id) where is_active;
+create index if not exists active_customer_level_idx on cma.active_customer (tenant_id, (coalesce(level, '')), source_id, customer_id) where is_active;
+
+create table if not exists cma.active_spell (
+  tenant_id      uuid not null default cma.current_tenant_id() references cma.tenant (id),
+  customer_id    uuid not null,
+  market         text not null,
+  segment        text not null,
+  channel        text not null,
+  customer_start timestamptz,
+  spell_start    timestamptz not null,
+  spell_end      timestamptz,
+  len            integer not null,
+  ended          boolean not null,
+  primary key (tenant_id, customer_id, spell_start)
+);
+comment on table cma.active_spell is 'The active spells of a store customer as stored by the refresh (addition 0009l): a maximal stretch in which at least one of its subscriptions holds, with its length in whole months as of the take';
+
+create table if not exists cma.active_month (
+  tenant_id uuid not null default cma.current_tenant_id() references cma.tenant (id),
+  kind      text not null check (kind in ('customers', 'subscriptions', 'amount', 'currency_customers', 'churned_30d')),
+  month     date not null,
+  market    text not null,
+  segment   text not null,
+  channel   text not null,
+  currency  text not null default '',
+  inflow    numeric not null,
+  outflow   numeric not null,
+  at_end    numeric not null,
+  primary key (tenant_id, kind, month, market, segment, channel, currency)
+);
+comment on table cma.active_month is 'The month ends of Customers → Active as stored by the refresh (addition 0009l): per month, market, segment and acquisition channel the customers, the subscriptions and the Monthly recurring amount per currency that started, ended and held';
+
+create table if not exists cma.active_cohort (
+  tenant_id    uuid not null default cma.current_tenant_id() references cma.tenant (id),
+  period       text not null check (period in ('month', 'quarter')),
+  cohort       date not null,
+  market       text not null,
+  segment      text not null,
+  channel      text not null,
+  age_months   integer not null,
+  started      bigint not null,
+  still_active bigint not null,
+  mature       boolean not null,
+  primary key (tenant_id, period, cohort, market, segment, channel, age_months)
+);
+comment on table cma.active_cohort is 'The customer cohorts of Customers → Active as stored by the refresh (addition 0009l): per month or quarter of the Customer start, market, segment, acquisition channel and age, the customers started, those still active at the age and whether the row is Mature';
+
+select cma.setup_tenant_table('cma.active_take');
+select cma.setup_tenant_table('cma.active_base');
+select cma.setup_tenant_table('cma.active_customer');
+select cma.setup_tenant_table('cma.active_spell');
+select cma.setup_tenant_table('cma.active_month');
+select cma.setup_tenant_table('cma.active_cohort');
+drop trigger if exists audit on cma.active_take;
+drop trigger if exists audit on cma.active_base;
+drop trigger if exists audit on cma.active_customer;
+drop trigger if exists audit on cma.active_spell;
+drop trigger if exists audit on cma.active_month;
+drop trigger if exists audit on cma.active_cohort;
+
+-- A settings change the stored rows depend on marks the tenant's take stale, in the setting's own transaction; it never
+-- refreshes there. The refresh that follows (the job's next minute) rewrites the take and clears the mark. Owner's
+-- rights with a pinned search path, as 0009e's cma.flash_current_forget: a settings write of any role marks the take
+create or replace function cma.active_setting_marks_stale(p_key text)
+returns boolean
+language sql immutable
+as $$
+  select p_key like 'attribution.%' or p_key like 'customers.%'
+      or p_key in ('crm.customer_segments', 'flash.device_holding_statuses', 'flash.ended_subscription_statuses',
+                   'flash.active_subscription_statuses', 'intake.start_date')
+$$;
+
+create or replace function cma.active_take_mark_stale()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, cma, pg_temp
+as $$
+declare
+  v_tenant uuid := coalesce(new.tenant_id, old.tenant_id);
+  v_key    text := coalesce(new.key, old.key);
+begin
+  if cma.active_setting_marks_stale(v_key) and (tg_op <> 'UPDATE' or new.value is distinct from old.value) then
+    update cma.active_take t set stale = true, stale_since = coalesce(t.stale_since, now()) where t.tenant_id = v_tenant;
+  end if;
+  return null;
+end
+$$;
+alter function cma.active_take_mark_stale() owner to cma_owner;
+revoke execute on function cma.active_take_mark_stale() from public;
+drop trigger if exists mark_active_take_stale on cma.tenant_setting;
+create trigger mark_active_take_stale after insert or update or delete on cma.tenant_setting
+  for each row execute function cma.active_take_mark_stale();
+
+-- The permission of the refresh: the scheduler's system user only, as follow_up.refresh and data_quality.refresh
+insert into cma.permission (key, description) values
+  ('customers.refresh', 'Recompute the stored take of Customers → Active (the scheduler''s system user only; no default role)')
+on conflict (key) do update set description = excluded.description;
+
+-- 0005a's scheduler user, now with its six permissions
+-- based on: 168_pledge_lists.sql
+create or replace function cma.ensure_scheduler_user(p_tenant_id uuid)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_role uuid;
+  v_user uuid;
+begin
+  insert into cma.app_role (tenant_id, key, name, is_system, is_assignable)
+  values (p_tenant_id, 'scheduler', 'Scheduler', true, false)
+  on conflict (tenant_id, key) do update set is_assignable = false, is_system = true
+  returning id into v_role;
+  if v_role is null then
+    select id into v_role from cma.app_role where tenant_id = p_tenant_id and key = 'scheduler';
+  end if;
+  insert into cma.role_permission (tenant_id, role_id, permission_key)
+  values (p_tenant_id, v_role, 'workday.close_forgotten'), (p_tenant_id, v_role, 'follow_up.refresh'), (p_tenant_id, v_role, 'flash.snapshot'),
+         (p_tenant_id, v_role, 'data_quality.refresh'), (p_tenant_id, v_role, 'pledges.snapshot'), (p_tenant_id, v_role, 'customers.refresh')
+  on conflict do nothing;
+
+  insert into cma.app_user (tenant_id, email, display_name, status, kind)
+  values (p_tenant_id, 'scheduler@system.invalid', 'Scheduler', 'active', 'system')
+  on conflict (tenant_id, email) do update set kind = 'system', status = 'active'
+  returning id into v_user;
+  if v_user is null then
+    select id into v_user from cma.app_user where tenant_id = p_tenant_id and email = 'scheduler@system.invalid';
+  end if;
+  insert into cma.user_role (tenant_id, user_id, role_id)
+  values (p_tenant_id, v_user, v_role)
+  on conflict do nothing;
+  insert into cma.app_user_external_id (tenant_id, user_id, system, external_id)
+  values (p_tenant_id, v_user, 'scheduler', 'scheduler')
+  on conflict do nothing;
+  return v_user;
+end
+$$;
+revoke execute on function cma.ensure_scheduler_user(uuid) from public;
+
+do $$
+declare
+  t record;
+begin
+  for t in select id from cma.tenant loop
+    perform cma.ensure_scheduler_user(t.id);
+  end loop;
+end
+$$;
+
+-- The job refresh_active_customers joins the list, without a connection (as 0008s, 0008zn and 0008zr); sync_run's two
+-- constraints come last in this script (section 10: the lock they take is held to the commit)
+-- based on: 132_perf.sql
+create or replace function cma.job_permission_of(p_job text)
+returns text
+language sql immutable
+as $$
+  select case p_job when 'close_forgotten_workdays' then 'workday.close_forgotten' when 'refresh_follow_up' then 'follow_up.refresh'
+                    when 'flash_snapshot' then 'flash.snapshot' when 'refresh_data_quality' then 'data_quality.refresh'
+                    when 'refresh_active_customers' then 'customers.refresh' end
+$$;
+
+-- 0008s's start, its message naming the fifth job
+-- based on: 132_perf.sql
+create or replace function cma.job_run_start(p_job text)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_id uuid;
+begin
+  if cma.job_permission_of(p_job) is null then
+    raise exception 'job must be close_forgotten_workdays, refresh_follow_up, flash_snapshot, refresh_data_quality or refresh_active_customers' using errcode = 'CMA04';
+  end if;
+  perform cma.assert_permission(cma.job_permission_of(p_job));
+  insert into cma.sync_run (tenant_id, connection_id, job, stream, from_at, to_at, started_at)
+  values (cma.current_tenant_id(), null, p_job, null, clock_timestamp(), clock_timestamp(), clock_timestamp())
+  returning id into v_id;
+  return v_id;
+end
+$$;
+
+create or replace function cma.active_take_lock_key(p_tenant_id uuid)
+returns bigint
+language sql immutable
+as $$
+  select hashtextextended(p_tenant_id::text || '/active_take', 0)
+$$;
+
+-- The refresh of one tenant's take, in the caller's transaction (the caller's tenant only: row-level security holds every
+-- write to it). p_force: also when the take is fresh, and everything is written again. p_now: the moment the take is
+-- of (now when left out; a verify script pins it). Answers refreshed (false with the reason fresh, running or not_set_up),
+-- the rows written per table and duration_ms. Set-based: the base is read once (cma.active_base_of, First orders'
+-- attribution among it) and everything else is computed from the rows just stored.
+create or replace function cma.active_refresh_of(p_tenant_id uuid, p_force boolean default false, p_now timestamptz default null)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_now    timestamptz := coalesce(p_now, clock_timestamp());
+  v_t0     timestamptz := clock_timestamp();
+  v_zone   text := (select t.timezone from cma.tenant t where t.id = p_tenant_id);
+  v_today  date;
+  v_month  date;
+  v_prev   date;
+  v_year   date;
+  v_ages   integer[] := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'customers.cohort_ages_months'));
+  v_every  integer := cma.setting_of(p_tenant_id, 'customers.refresh_minutes')::integer;
+  v_attr   date;
+  v_take   cma.active_take;
+  v_found  boolean;
+  v_all    boolean;
+  v_key    text;
+  n_base   integer := 0;
+  n_gone   integer := 0;
+  n_cust   integer := 0;
+  n_hist   integer := 0;
+  n_subs   integer;
+  n_active integer;
+begin
+  if p_tenant_id is distinct from cma.current_tenant_id() then
+    raise exception 'a take is refreshed for the current tenant only' using errcode = 'CMA04';
+  end if;
+  select * into v_take from cma.active_take t where t.tenant_id = p_tenant_id;
+  v_found := found;
+  if not (coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false)
+          and coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false)) then
+    -- nothing to take: a tenant whose sources are not set up holds no rows (the page says Not set up, never zeros)
+    if v_found then
+      delete from cma.active_cohort x where x.tenant_id = p_tenant_id;
+      delete from cma.active_month x where x.tenant_id = p_tenant_id;
+      delete from cma.active_spell x where x.tenant_id = p_tenant_id;
+      delete from cma.active_customer x where x.tenant_id = p_tenant_id;
+      delete from cma.active_base x where x.tenant_id = p_tenant_id;
+      delete from cma.active_take x where x.tenant_id = p_tenant_id;
+    end if;
+    return jsonb_build_object('refreshed', false, 'reason', 'not_set_up');
+  end if;
+  if not p_force and v_found and not v_take.stale and v_now - v_take.computed_at < make_interval(mins => v_every) then
+    return jsonb_build_object('refreshed', false, 'reason', 'fresh');
+  end if;
+  if not pg_try_advisory_xact_lock(cma.active_take_lock_key(p_tenant_id)) then
+    return jsonb_build_object('refreshed', false, 'reason', 'running');
+  end if;
+  v_today := (v_now at time zone v_zone)::date;
+  v_month := date_trunc('month', v_today)::date;
+  v_prev := (v_month - interval '1 month')::date;
+  v_year := (v_month - interval '13 months')::date;
+  v_attr := (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h);
+  -- everything is written again when asked, on a first take, after a settings change and on a new business date
+  v_all := p_force or not v_found or v_take.stale or v_take.business_date is distinct from v_today;
+
+  -- 1. the base, row by row: a row that reads the same is not written again; a subscription no longer in it goes
+  with n as materialized (
+    select * from cma.active_base_of(p_tenant_id, v_now, true, v_attr, true)
+  ), up as (
+    insert into cma.active_base as a (tenant_id, subscription_id, connection_id, source_id, store, market, status, is_holding, is_paying,
+                                      payment_state, currency, monthly_amount, billing, devices_in_field, started_at, ended_at,
+                                      in_history, left_out, customer_id, customer_connection_id, customer_source_id, segment,
+                                      crm_connection_id, contact_source_id, customer_start, customer_holding, customer_devices, clv,
+                                      clv_currency, channel, level, unknown_reason, first_order_at, device_models)
+    select p_tenant_id, n.subscription_id, n.connection_id, n.source_id, n.store, n.market, n.status, n.is_holding, n.is_paying,
+           n.payment_state, n.currency, n.monthly_amount, n.billing, n.devices_in_field, n.started_at, n.ended_at,
+           n.in_history, n.left_out, n.customer_id, n.customer_connection_id, n.customer_source_id, n.segment,
+           n.crm_connection_id, n.contact_source_id, n.customer_start, n.customer_holding, n.customer_devices, n.clv,
+           n.clv_currency, n.channel, n.level, n.unknown_reason, n.first_order_at, n.device_models
+    from n
+    on conflict (tenant_id, subscription_id) do update
+      set (connection_id, source_id, store, market, status, is_holding, is_paying, payment_state, currency,
+           monthly_amount, billing, devices_in_field, started_at, ended_at, in_history, left_out, customer_id,
+           customer_connection_id, customer_source_id, segment, crm_connection_id, contact_source_id, customer_start,
+           customer_holding, customer_devices, clv, clv_currency, channel, level, unknown_reason, first_order_at, device_models)
+        = (excluded.connection_id, excluded.source_id, excluded.store, excluded.market, excluded.status,
+           excluded.is_holding, excluded.is_paying, excluded.payment_state, excluded.currency, excluded.monthly_amount,
+           excluded.billing, excluded.devices_in_field, excluded.started_at, excluded.ended_at, excluded.in_history,
+           excluded.left_out, excluded.customer_id, excluded.customer_connection_id, excluded.customer_source_id,
+           excluded.segment, excluded.crm_connection_id, excluded.contact_source_id, excluded.customer_start,
+           excluded.customer_holding, excluded.customer_devices, excluded.clv, excluded.clv_currency, excluded.channel,
+           excluded.level, excluded.unknown_reason, excluded.first_order_at, excluded.device_models)
+      where (a.*) is distinct from (excluded.*)
+    returning 1
+  ), gone as (
+    delete from cma.active_base a
+    where a.tenant_id = p_tenant_id and not exists (select 1 from n where n.subscription_id = a.subscription_id)
+    returning 1
+  )
+  select (select count(*) from up), (select count(*) from gone) into n_base, n_gone;
+
+  -- 2. the customers, row by row, from the base just stored: one row per store customer with the list's columns (a
+  --    customer's Monthly recurring amount in its largest currency, the others beside it)
+  with b as materialized (
+    select * from cma.active_base x where x.tenant_id = p_tenant_id and x.customer_id is not null
+  ), amt as (
+    select q.customer_id, q.currency, q.amount, row_number() over (partition by q.customer_id order by q.amount desc, q.currency) as rn
+    from (select b.customer_id, b.currency, sum(b.monthly_amount) as amount
+          from b where b.is_holding and b.is_paying and b.currency is not null and b.monthly_amount is not null group by 1, 2) q
+  ), oth as (
+    select o.customer_id, jsonb_object_agg(o.currency, round(o.amount, 2)) as j from amt o where o.rn > 1 group by 1
+  ), n as materialized (
+    select distinct on (b.customer_id) b.customer_id, b.customer_connection_id as connection_id, b.customer_source_id as source_id, b.store,
+           b.market, b.segment, b.channel, b.level, b.unknown_reason, b.first_order_at, b.customer_start,
+           cma.flash_age_months_of(b.customer_start, v_zone, v_today) as age_months,
+           coalesce(b.customer_holding, 0) > 0 as is_active, coalesce(b.customer_holding, 0) as holding, coalesce(b.customer_devices, 0) as devices,
+           b.clv, b.clv_currency, b.crm_connection_id, b.contact_source_id, a.currency, a.amount, coalesce(oth.j, '{}'::jsonb) as other_amounts
+    from b
+    left join amt a on a.customer_id = b.customer_id and a.rn = 1
+    left join oth on oth.customer_id = b.customer_id
+    order by b.customer_id
+  ), up as (
+    insert into cma.active_customer as a (tenant_id, customer_id, connection_id, source_id, store, market, segment, channel, level, unknown_reason,
+                                          first_order_at, customer_start, age_months, is_active, holding, devices, clv, clv_currency,
+                                          crm_connection_id, contact_source_id, currency, amount, other_amounts)
+    select p_tenant_id, n.customer_id, n.connection_id, n.source_id, n.store, n.market, n.segment, n.channel, n.level,
+           n.unknown_reason, n.first_order_at, n.customer_start, n.age_months, n.is_active, n.holding, n.devices, n.clv,
+           n.clv_currency, n.crm_connection_id, n.contact_source_id, n.currency, n.amount, n.other_amounts
+    from n
+    on conflict (tenant_id, customer_id) do update
+      set (connection_id, source_id, store, market, segment, channel, level, unknown_reason, first_order_at,
+           customer_start, age_months, is_active, holding, devices, clv, clv_currency, crm_connection_id,
+           contact_source_id, currency, amount, other_amounts)
+        = (excluded.connection_id, excluded.source_id, excluded.store, excluded.market, excluded.segment,
+           excluded.channel, excluded.level, excluded.unknown_reason, excluded.first_order_at, excluded.customer_start,
+           excluded.age_months, excluded.is_active, excluded.holding, excluded.devices, excluded.clv,
+           excluded.clv_currency, excluded.crm_connection_id, excluded.contact_source_id, excluded.currency,
+           excluded.amount, excluded.other_amounts)
+      where (a.*) is distinct from (excluded.*)
+    returning 1
+  ), gone as (
+    delete from cma.active_customer a
+    where a.tenant_id = p_tenant_id and not exists (select 1 from n where n.customer_id = a.customer_id)
+    returning 1
+  )
+  select (select count(*) from up) + (select count(*) from gone) into n_cust;
+
+  -- 3. the history (the spells, the month ends, the cohorts): only when what it is computed from changed. Its key is a
+  --    digest of the base's columns it reads, with the zone and the cohort ages
+  select md5(coalesce(string_agg(md5(concat_ws('|', x.subscription_id, x.customer_id, x.market, x.segment, x.channel, x.started_at, x.ended_at,
+                                           x.in_history, x.customer_start, x.currency, x.monthly_amount, x.is_holding, x.is_paying)),
+                                 '' order by x.subscription_id), '') || '|' || v_zone || '|' || array_to_string(v_ages, ','))
+  into v_key
+  from cma.active_base x where x.tenant_id = p_tenant_id;
+  if v_all or v_key is distinct from v_take.history_key then
+    delete from cma.active_cohort x where x.tenant_id = p_tenant_id;
+    delete from cma.active_month x where x.tenant_id = p_tenant_id;
+    delete from cma.active_spell x where x.tenant_id = p_tenant_id;
+
+    insert into cma.active_spell (tenant_id, customer_id, market, segment, channel, customer_start, spell_start, spell_end, len, ended)
+    select p_tenant_id, c.customer_id, c.market, c.segment, c.channel, c.customer_start, x.spell_start, x.spell_end,
+           greatest(0, cma.flash_age_months_of(x.spell_start, v_zone, coalesce((x.spell_end at time zone v_zone)::date, v_today))),
+           x.spell_end is not null
+    from (select array_agg(b.customer_id::text) as k, array_agg(b.started_at) as s, array_agg(b.ended_at) as e
+          from cma.active_base b where b.tenant_id = p_tenant_id and b.customer_id is not null and b.in_history) a
+    cross join lateral cma.active_spells_from(a.k, a.s, a.e) x
+    join cma.active_customer c on c.tenant_id = p_tenant_id and c.customer_id = x.key::uuid;
+    get diagnostics n_hist = row_count;
+
+    -- the customers per month end (from the spells), the subscriptions and the amounts (from the base's intervals)
+    insert into cma.active_month (tenant_id, kind, month, market, segment, channel, currency, inflow, outflow, at_end)
+    select p_tenant_id, 'customers', x.month, x.d1, x.d2, x.d3, '', x.inflow, x.outflow, x.at_end
+    from (select array_agg(sp.market) as a, array_agg(sp.segment) as b, array_agg(sp.channel) as c, array_agg(1::numeric) as w,
+                 array_agg(sp.spell_start) as s, array_agg(sp.spell_end) as e
+          from cma.active_spell sp where sp.tenant_id = p_tenant_id) a
+    cross join lateral cma.active_month_cube_from(a.a, a.b, a.c, a.w, a.s, a.e, v_zone, v_now) x
+    union all
+    select p_tenant_id, 'subscriptions', x.month, x.d1, x.d2, x.d3, '', x.inflow, x.outflow, x.at_end
+    from (select array_agg(b.market) as a, array_agg(b.segment) as b, array_agg(b.channel) as c, array_agg(1::numeric) as w,
+                 array_agg(b.started_at) as s, array_agg(b.ended_at) as e
+          from cma.active_base b where b.tenant_id = p_tenant_id and b.in_history) a
+    cross join lateral cma.active_month_cube_from(a.a, a.b, a.c, a.w, a.s, a.e, v_zone, v_now) x
+    union all
+    -- the Monthly recurring amount: the subscriptions holding then at their amount today; one that holds today without
+    -- paying is left out throughout. The currency rides with the channel through the cube's third dimension
+    select p_tenant_id, 'amount', x.month, x.d1, x.d2, split_part(x.d3, '~', 1), split_part(x.d3, '~', 2), x.inflow, x.outflow, x.at_end
+    from (select array_agg(b.market) as a, array_agg(b.segment) as b, array_agg(b.channel || '~' || b.currency) as c, array_agg(b.monthly_amount) as w,
+                 array_agg(b.started_at) as s, array_agg(b.ended_at) as e
+          from cma.active_base b
+          where b.tenant_id = p_tenant_id and b.in_history and b.currency is not null and b.monthly_amount is not null
+            and (not b.is_holding or b.is_paying)) a
+    cross join lateral cma.active_month_cube_from(a.a, a.b, a.c, a.w, a.s, a.e, v_zone, v_now) x
+    union all
+    -- the customers with a subscription in a currency at the two month ends a change line compares with
+    select p_tenant_id, 'currency_customers', q.m, q.market, q.segment, q.channel, q.currency, 0, 0, count(*)
+    from (select distinct x.m, b.market, b.segment, b.channel, b.currency, b.customer_id
+          from cma.active_base b
+          cross join (values (v_prev, v_month::timestamp at time zone v_zone),
+                             (v_year, (v_year + interval '1 month')::timestamp at time zone v_zone)) x(m, at)
+          where b.tenant_id = p_tenant_id and b.customer_id is not null and b.in_history and b.currency is not null
+            and b.started_at < x.at and (b.ended_at is null or b.ended_at >= x.at)) q
+    group by q.m, q.market, q.segment, q.channel, q.currency
+    union all
+    -- Flash's Churn (subscription) over the last 30 business dates (the unit economics' one figure, the markets' column):
+    -- a churned subscription under its store's market and the base's segment and channel of it
+    select p_tenant_id, 'churned_30d', v_month, x.market, coalesce(b.segment, 'unknown'), coalesce(b.channel, 'unknown'), '', 0, 0, count(*)
+    from cma.flash_churn_of(p_tenant_id, v_today - 29, v_today) x
+    left join cma.active_base b on b.tenant_id = p_tenant_id and b.subscription_id = x.subscription_id
+    group by x.market, coalesce(b.segment, 'unknown'), coalesce(b.channel, 'unknown');
+
+    insert into cma.active_cohort (tenant_id, period, cohort, market, segment, channel, age_months, started, still_active, mature)
+    select p_tenant_id, g.period, x.cohort, x.d1, x.d2, x.d3, x.age_months, x.started, x.still_active, x.mature
+    from (select array_agg(sp.customer_id::text) as k, array_agg(sp.market) as a, array_agg(sp.segment) as b, array_agg(sp.channel) as c,
+                 array_agg(sp.customer_start) as cs, array_agg(sp.spell_start) as s, array_agg(sp.spell_end) as e
+          from cma.active_spell sp where sp.tenant_id = p_tenant_id) a
+    cross join (values ('month'), ('quarter')) g(period)
+    cross join lateral cma.active_cohort_cube_from(a.k, a.a, a.b, a.c, a.cs, a.s, a.e, v_ages, g.period, v_zone, v_now) x;
+  end if;
+
+  select count(*) filter (where b.is_holding), count(distinct b.customer_id) filter (where coalesce(b.customer_holding, 0) > 0)
+  into n_subs, n_active
+  from cma.active_base b where b.tenant_id = p_tenant_id;
+  insert into cma.active_take as t (tenant_id, computed_at, business_date, duration_ms, history_key, customers, subscriptions, attribution_start, stale, stale_since)
+  values (p_tenant_id, v_now, v_today, (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer, v_key, n_active, n_subs, v_attr, false, null)
+  on conflict (tenant_id) do update
+    set computed_at = excluded.computed_at, business_date = excluded.business_date, duration_ms = excluded.duration_ms,
+        history_key = excluded.history_key, customers = excluded.customers, subscriptions = excluded.subscriptions,
+        attribution_start = excluded.attribution_start, stale = false, stale_since = null;
+  return jsonb_build_object('refreshed', true, 'base_rows', n_base + n_gone, 'customer_rows', n_cust, 'history_rows', n_hist,
+                            'rows', n_base + n_gone + n_cust + n_hist,
+                            'duration_ms', (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer);
+end
+$$;
+alter function cma.active_refresh_of(uuid, boolean, timestamptz) set jit = off;
+
+-- The job's entry: the scheduler's system user (customers.refresh) refreshes the current tenant
+create or replace function cma.active_refresh()
+returns jsonb
+language plpgsql
+as $$
+begin
+  perform cma.assert_permission('customers.refresh');
+  return cma.active_refresh_of(cma.current_tenant_id());
+end
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 5. Customers → Active in three reads (decision D15): above the fold, below it, and the list (section 6)
+-- ---------------------------------------------------------------------------------------------
+-- The present, live (decisions D2 and D13): the subscriptions in a device-holding status, each with its amount turned
+-- into a month, its store's market and Flash's own figures of its store customer (cma.flash_customer_figures_of: the
+-- customer, its segment and whether it is an Active customer). No event, no device and no attribution is read: those are
+-- the take's. A subscription whose customer the store does not hold has no customer and the segment unknown
+create or replace function cma.active_present_of(p_tenant_id uuid)
+returns table (subscription_id uuid, status text, is_paying boolean, currency text, monthly_amount numeric, customer_id uuid,
+               is_active boolean, market text, segment text)
+language sql stable
+rows 10000
+as $$
+  with s as materialized (
+    select cma.flash_holding_statuses_of(p_tenant_id) as holding, cma.flash_active_statuses_of(p_tenant_id) as paying
+  ), sm as materialized (
+    select * from cma.flash_subscription_stores_of(p_tenant_id)
+  ), s0 as materialized (
+    select x.id, x.connection_id, x.customer_source_id, x.status, x.currency,
+           x.amount_per_cycle * cma.active_month_factor_of(x.billing_interval, x.billing_interval_count) as monthly_amount,
+           x.status = any ((select s.paying from s)::text[]) as is_paying
+    from cma.subscription x
+    where x.tenant_id = p_tenant_id and x.source_deleted_at is null and x.status = any ((select s.holding from s)::text[])
+  ), cust as materialized (
+    -- the store customers of these subscriptions
+    select distinct c.id
+    from s0 x
+    join sm on sm.connection_id = x.connection_id
+    join cma.commerce_customer c
+      on c.tenant_id = p_tenant_id and c.connection_id = sm.store_connection_id and c.source_id = x.customer_source_id
+     and c.source_deleted_at is null
+  ), fig as materialized (
+    -- Flash's own figures of these customers (D2), read through the customers' primary key: the function is inlined and
+    -- the ids reach its scan of the store's customers (as cma.active_base_of reads it)
+    select f.customer_id, f.connection_id, f.source_id, f.segment, f.holding_subscriptions
+    from cma.flash_customer_figures_of(p_tenant_id) f
+    where f.customer_id = any (array(select cust.id from cust))
+  )
+  select x.id, x.status, x.is_paying, x.currency, x.monthly_amount, f.customer_id, coalesce(f.holding_subscriptions, 0) > 0,
+         coalesce(sm.market, 'unknown'), coalesce(f.segment, 'unknown')
+  from s0 x
+  left join sm on sm.connection_id = x.connection_id
+  left join fig f on f.connection_id = sm.store_connection_id and f.source_id = x.customer_source_id
+$$;
+alter function cma.active_present_of(uuid) set jit = off;
+
+-- A tenant's take as the page states it: when it was computed (History as of), whether a settings change marked it stale,
+-- its age in whole minutes and whether the page says so (late: stale, or older than customers.history_notice_minutes);
+-- null while there is none yet (the page says the history is being prepared, never zeros)
+create or replace function cma.active_take_of(p_tenant_id uuid, p_now timestamptz)
+returns jsonb
+language plpgsql stable
+as $$
+declare
+  v_take jsonb;
+begin
+  -- plpgsql, not SQL: its statement is planned again when the role changes (a take is read under row-level security)
+  select jsonb_build_object(
+           'computed_at', t.computed_at, 'business_date', t.business_date, 'stale', t.stale,
+           'age_minutes', greatest(0, floor(extract(epoch from p_now - t.computed_at) / 60))::integer,
+           'late', t.stale or p_now - t.computed_at
+                              > make_interval(mins => cma.setting_of(p_tenant_id, 'customers.history_notice_minutes')::integer))
+  into v_take
+  from cma.active_take t where t.tenant_id = p_tenant_id;
+  return v_take;
+end
+$$;
+
+-- Above the fold: the headline tiles, the unit economics' one figure and the hero series. The present is live (the
+-- tiles' own figures: cma.active_present_of, which reads Flash's customer figures); Flash's churn count, what a tile
+-- compares with, the Customer age, the Customer lifetime, the realised value and the series' past month ends are the
+-- stored take's. Without a take yet the present is still answered and the take's parts are null (history false)
+create or replace function cma.active_top_of(p_tenant_id uuid, p_from_month date, p_market text, p_segment text, p_channel text,
+                                             p_now timestamptz)
 returns jsonb
 language plpgsql stable
 as $$
@@ -968,15 +1598,16 @@ declare
   v_hist         integer := cma.setting_of(p_tenant_id, 'customers.history_months')::integer;
   v_fx           jsonb := cma.active_fx_of(p_tenant_id);
   v_segments     text[] := cma.flash_list_of(cma.setting_of(p_tenant_id, 'crm.customer_segments'));
-  v_device_bands integer[] := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'flash.device_bands'));
   v_from         date;
   v_head         jsonb;
   v_doc          jsonb;
   v_commerce     boolean := coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false);
   v_subs         boolean := coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false);
-  -- the attribution's history start, read once: the header names it and the base reads First orders from it
-  v_attr         date := (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h);
+  v_take         jsonb := cma.active_take_of(p_tenant_id, p_now);
+  v_has          boolean;
+  v_attr         date := (select t.attribution_start from cma.active_take t where t.tenant_id = p_tenant_id);
 begin
+  v_has := v_take is not null;
   v_today := (p_now at time zone v_zone)::date;
   v_month := date_trunc('month', v_today)::date;
   v_prev := (v_month - interval '1 month')::date;
@@ -985,76 +1616,306 @@ begin
   v_from := least(v_month, greatest(coalesce(p_from_month, date '0001-01-01'), (v_month - make_interval(months => v_hist))::date));
   v_head := jsonb_build_object(
     'set_up', jsonb_build_object('commerce', v_commerce, 'subscriptions', v_subs),
-    'computed_at', p_now, 'time_zone', v_zone, 'today', v_today, 'month', v_month, 'from_month', v_from, 'grouping', p_grouping,
+    'computed_at', p_now, 'time_zone', v_zone, 'today', v_today, 'month', v_month, 'from_month', v_from,
+    'take', v_take, 'history', v_has,
     'filter', jsonb_build_object('market', p_market, 'segment', p_segment, 'channel', p_channel),
     'settings', jsonb_build_object('cohort_ages_months', to_jsonb(v_ages), 'age_months', to_jsonb(v_bands), 'history_months', v_hist,
                                    'fx', case when v_fx = '{}'::jsonb then null else v_fx end, 'segments', to_jsonb(v_segments),
                                    'statuses', cma.flash_status_settings_of(p_tenant_id),
                                    'attribution', jsonb_build_object(
                                      'assisted_levels', to_jsonb(coalesce(string_to_array(nullif(cma.setting_of(p_tenant_id, 'attribution.assisted_levels'), ''), ','), '{}'::text[])),
-                                     'history_start', v_attr)));
+                                     'history_start', case when v_has then v_attr
+                                                           else (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h) end)));
   if not (v_commerce and v_subs) then
     return v_head || jsonb_build_object('figures', false);
   end if;
 
-  with b0 as materialized (
-    select * from cma.active_base_of(p_tenant_id, p_now, true, v_attr, true)
+  with b0 as (
+    -- the stored base (cma.active_base, the refresh's)
+    select * from cma.active_base x where x.tenant_id = p_tenant_id
   ), b as materialized (
     select * from b0 x
     where (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
       and (p_channel is null or x.channel = p_channel)
   ), c as materialized (
-    -- the store customers, one row each (a customer's subscriptions share its store, segment and channel)
-    select distinct on (b.customer_id) b.customer_id, b.market, b.segment, b.channel, b.unknown_reason, b.customer_start,
-           coalesce(b.customer_holding, 0) > 0 as is_active, coalesce(b.customer_holding, 0) as holding,
-           coalesce(b.customer_devices, 0) as devices, b.clv, b.clv_currency,
-           cma.flash_age_months_of(b.customer_start, v_zone, v_today) as age
-    from b where b.customer_id is not null
-    order by b.customer_id
+    -- the store customers, one row each, as the refresh stored them (the age as of the take's business date)
+    select x.customer_id, x.market, x.segment, x.channel, x.unknown_reason, x.customer_start, x.is_active, x.holding, x.devices,
+           x.clv, x.clv_currency, x.age_months as age
+    from cma.active_customer x
+    where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
   ), sp as materialized (
-    -- their active spells, with the length in whole months (to the end, or to today while the spell lasts)
-    select c.customer_id, c.market, c.segment, c.channel, c.customer_start, x.spell_start, x.spell_end,
-           greatest(0, cma.flash_age_months_of(x.spell_start, v_zone, coalesce((x.spell_end at time zone v_zone)::date, v_today))) as len,
-           x.spell_end is not null as ended
-    from (select array_agg(b.customer_id::text) as k, array_agg(b.started_at) as s, array_agg(b.ended_at) as e
-          from b where b.customer_id is not null and b.in_history) a
-    cross join lateral cma.active_spells_from(a.k, a.s, a.e) x
-    join c on c.customer_id = x.key::uuid
+    -- their active spells, with the length in whole months as of the take
+    select x.customer_id, x.market, x.segment, x.channel, x.customer_start, x.spell_start, x.spell_end, x.len, x.ended
+    from cma.active_spell x
+    where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
+  ), mcell as materialized (
+    -- the stored month ends under the filters; each series below starts with its own first month, as a series computed
+    -- from the filtered rows alone would
+    select x.kind, x.month, x.market, x.segment, x.channel, x.currency, x.inflow, x.outflow, x.at_end
+    from cma.active_month x
+    where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
   ), mc as materialized (
     -- the customers per month end, by market, segment and channel
-    select x.month, x.d1 as market, x.d2 as segment, x.d3 as channel, x.inflow, x.outflow, x.at_end
-    from (select array_agg(sp.market) as a, array_agg(sp.segment) as b, array_agg(sp.channel) as c, array_agg(1::numeric) as w,
-                 array_agg(sp.spell_start) as s, array_agg(sp.spell_end) as e from sp) a
-    cross join lateral cma.active_month_cube_from(a.a, a.b, a.c, a.w, a.s, a.e, v_zone, p_now) x
+    select x.month, x.market, x.segment, x.channel, x.inflow, x.outflow, x.at_end
+    from mcell x
+    where x.kind = 'customers' and x.month >= (select min(y.month) from mcell y where y.kind = 'customers' and y.inflow <> 0)
   ), ms as materialized (
     -- the subscriptions holding at each month end, by the reconstruction
-    select x.month, x.at_end
-    from (select array_agg(''::text) as n, array_agg(1::numeric) as w, array_agg(b.started_at) as s, array_agg(b.ended_at) as e
-          from b where b.in_history) a
-    cross join lateral cma.active_month_cube_from(a.n, a.n, a.n, a.w, a.s, a.e, v_zone, p_now) x
+    select x.month, sum(x.at_end) as at_end
+    from mcell x
+    where x.kind = 'subscriptions' and x.month >= (select min(y.month) from mcell y where y.kind = 'subscriptions' and y.inflow <> 0)
+    group by 1
   ), ma as materialized (
-    -- the Monthly recurring amount per month end and currency: the subscriptions holding then at their amount today; one
-    -- that holds today without paying (a status outside flash.active_subscription_statuses) is left out throughout
-    select x.month, x.d1 as currency, x.at_end
-    from (select array_agg(b.currency) as a, array_agg(''::text) as n, array_agg(b.monthly_amount) as w, array_agg(b.started_at) as s,
-                 array_agg(b.ended_at) as e
-          from b where b.in_history and b.currency is not null and b.monthly_amount is not null and (not b.is_holding or b.is_paying)) a
-    cross join lateral cma.active_month_cube_from(a.a, a.n, a.n, a.w, a.s, a.e, v_zone, p_now) x
+    -- the Monthly recurring amount per month end and currency
+    select x.month, x.currency, sum(x.at_end) as at_end
+    from mcell x
+    where x.kind = 'amount' and x.month >= (select min(y.month) from mcell y where y.kind = 'amount' and (y.inflow <> 0 or y.at_end <> 0))
+    group by 1, 2
   ), mk as materialized (
-    -- the customers with a subscription in a currency at the two month ends a change line compares with (the previous
-    -- month's end and the one twelve months before it): those whose subscription in it held then
-    select x.m as month, b.currency, count(distinct b.customer_id) as at_end
-    from b
-    cross join (values (v_prev, v_month::timestamp at time zone v_zone),
-                       (v_year, (v_year + interval '1 month')::timestamp at time zone v_zone)) x(m, at)
-    where b.customer_id is not null and b.in_history and b.currency is not null
-      and b.started_at < x.at and (b.ended_at is null or b.ended_at >= x.at)
+    -- the customers with a subscription in a currency at the two month ends a change line compares with
+    select x.month, x.currency, sum(x.at_end) as at_end
+    from mcell x
+    where x.kind = 'currency_customers' and x.month in (v_prev, v_year)
     group by 1, 2
   ), mt as materialized (
     select mc.month, sum(mc.at_end) as customers, sum(mc.inflow) as inflow, sum(mc.outflow) as outflow from mc group by 1
   ), mseg as (
     select q.month, jsonb_object_agg(q.segment, q.n) as j
     from (select mc.month, mc.segment, sum(mc.at_end) as n from mc group by 1, 2) q group by 1
+  ), mam as (
+    select ma.month, jsonb_object_agg(ma.currency, round(ma.at_end, 2)) as j,
+           bool_and(ma.currency = 'EUR' or coalesce(jsonb_typeof(v_fx -> ma.currency) = 'number', false)) as fx_ok,
+           round(sum(cma.active_eur_of(ma.at_end, ma.currency, v_fx)), 2) as eur
+    from ma group by 1
+  ), g_c as materialized (
+    select case when grouping(c.market) = 0 then 'market' when grouping(c.segment) = 0 then 'segment' else 'all' end as dim,
+           coalesce(c.market, c.segment, '*') as key,
+           count(*) as customers, sum(c.devices) as devices, sum(c.holding) as holding,
+           percentile_cont(0.5) within group (order by c.age) as median_age,
+           count(*) filter (where c.channel = 'indirect') as indirect, count(*) filter (where c.channel = 'direct') as direct,
+           count(*) filter (where c.channel = 'unknown') as unknown_channel,
+           count(*) filter (where c.age >= v_bands[1]) as over1, count(*) filter (where c.age >= v_bands[2]) as over2,
+           count(*) filter (where c.age >= v_bands[3]) as over3
+    from c where c.is_active
+    group by grouping sets ((c.market), (c.segment), ())
+  ), g_clv as (
+    select q.dim, q.key,
+           jsonb_object_agg(q.currency, jsonb_build_object('average', q.average, 'median', q.median, 'per_month', q.per_month, 'customers', q.n)) as j
+    from (select case when grouping(c.market) = 0 then 'market' when grouping(c.segment) = 0 then 'segment' else 'all' end as dim,
+                 coalesce(c.market, c.segment, '*') as key, c.clv_currency as currency, count(*) as n, round(avg(c.clv), 2) as average,
+                 round((percentile_cont(0.5) within group (order by c.clv))::numeric, 2) as median,
+                 round(avg(c.clv / greatest(c.age, 1)), 2) as per_month
+          from c where c.is_active and c.clv is not null and c.clv_currency is not null
+          group by grouping sets ((c.market, c.clv_currency), (c.segment, c.clv_currency), (c.clv_currency))) q
+    group by 1, 2
+  ), ch as materialized (
+    -- Flash's Churn (subscription) over the 30 business dates to the take's, as the refresh stored it per market, segment and channel
+    select x.market, x.at_end as n
+    from mcell x
+    where x.kind = 'churned_30d'
+  ), lp as materialized (
+    -- the present, live (decision D2): the subscriptions in a device-holding status with Flash's own figures of their customer
+    select * from cma.active_present_of(p_tenant_id)
+  ), lb as materialized (
+    -- under the filters; a customer's acquisition channel is the stored take's (unknown until the take holds the customer)
+    select x.subscription_id, x.status, x.is_paying, x.currency, x.monthly_amount, x.customer_id, x.is_active, x.market, x.segment,
+           coalesce(k.channel, 'unknown') as channel
+    from lp x
+    left join cma.active_customer k on k.tenant_id = p_tenant_id and k.customer_id = x.customer_id
+    where (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or coalesce(k.channel, 'unknown') = p_channel)
+  ), lc as materialized (
+    -- the active customers, one row each (a customer's subscriptions share its segment and channel)
+    select lb.customer_id, min(lb.segment) as segment, min(lb.channel) as channel
+    from lb where lb.customer_id is not null and lb.is_active
+    group by lb.customer_id
+  ), l_amt as materialized (
+    select lb.currency, sum(lb.monthly_amount) filter (where lb.is_paying) as amount, count(distinct lb.customer_id) as customers
+    from lb where lb.currency is not null
+    group by 1
+  ), l_now as materialized (
+    select (select count(*) from lc) as customers, (select count(*) from lb) as subscriptions,
+           (select coalesce(jsonb_object_agg(q.segment, q.n), '{}'::jsonb) from (select lc.segment, count(*) as n from lc group by 1) q) as by_segment
+  ), km_all as materialized (
+    select cma.active_km_json(array_agg(sp.len), array_agg(sp.ended)) as j from sp
+  )
+  select jsonb_build_object(
+    'figures', true,
+    'filters', jsonb_build_object(
+      'markets', (select coalesce(jsonb_agg(q.market order by q.market = 'unknown', q.market), '[]'::jsonb)
+                  from (select distinct lb0.market from lp lb0
+                        union select st.market from cma.commerce_store st where st.tenant_id = p_tenant_id
+                        union select distinct x.market from cma.active_customer x where x.tenant_id = p_tenant_id) q),
+      'segments', to_jsonb(v_segments || array['unknown']),
+      'channels', '["indirect", "direct", "unknown"]'::jsonb),
+    'tiles', jsonb_build_object(
+      'active_customers', jsonb_build_object(
+        'value', (select n.customers from l_now n),
+        'by_segment', (select n.by_segment from l_now n),
+        'by_channel', (select jsonb_build_object('indirect', count(*) filter (where lc.channel = 'indirect'),
+                                                 'direct', count(*) filter (where lc.channel = 'direct'),
+                                                 'unknown', count(*) filter (where lc.channel = 'unknown')) from lc),
+        'prev_month', (select mt.customers from mt where mt.month = v_prev),
+        'prev_year', (select mt.customers from mt where mt.month = v_year)),
+      'total_subscriptions', jsonb_build_object(
+        'value', (select n.subscriptions from l_now n),
+        'by_status', (select coalesce(jsonb_object_agg(q.status, q.n), '{}'::jsonb)
+                      from (select lb.status, count(*) as n from lb group by 1) q),
+        'prev_month', (select ms.at_end from ms where ms.month = v_prev),
+        'prev_year', (select ms.at_end from ms where ms.month = v_year)),
+      'amounts', (select coalesce(jsonb_agg(jsonb_build_object(
+                           'currency', a.currency, 'amount', round(coalesce(a.amount, 0), 2), 'customers', a.customers,
+                           'average', case when a.customers > 0 then round(coalesce(a.amount, 0) / a.customers, 2) end,
+                           'prev_month', (select round(ma.at_end, 2) from ma where ma.month = v_prev and ma.currency = a.currency),
+                           'prev_year', (select round(ma.at_end, 2) from ma where ma.month = v_year and ma.currency = a.currency),
+                           'average_prev_month', (select case when mk.at_end > 0 then round(ma.at_end / mk.at_end, 2) end
+                                                  from ma join mk on mk.month = ma.month and mk.currency = ma.currency
+                                                  where ma.month = v_prev and ma.currency = a.currency),
+                           'average_prev_year', (select case when mk.at_end > 0 then round(ma.at_end / mk.at_end, 2) end
+                                                 from ma join mk on mk.month = ma.month and mk.currency = ma.currency
+                                                 where ma.month = v_year and ma.currency = a.currency)) order by a.currency), '[]'::jsonb)
+                  from l_amt a),
+      'eur', (select case when v_fx <> '{}'::jsonb and count(*) > 0
+                               and bool_and(q.currency = 'EUR' or coalesce(jsonb_typeof(v_fx -> q.currency) = 'number', false))
+                          then jsonb_build_object(
+                                 'amount', round(sum(cma.active_eur_of(q.amount, q.currency, v_fx)), 2), 'as_of', v_fx ->> 'as_of',
+                                 'prev_month', (select case when m.fx_ok then m.eur end from mam m where m.month = v_prev),
+                                 'prev_year', (select case when m.fx_ok then m.eur end from mam m where m.month = v_year)) end
+              from l_amt q),
+      'customer_age', case when v_has then
+                      (select jsonb_build_object(
+                         'median', round(g.median_age::numeric, 1),
+                         'over', (select coalesce(jsonb_agg(jsonb_build_object('months', x.m, 'customers', x.n,
+                                                                             'share', case when g.customers > 0 then round(x.n::numeric / g.customers, 4) end)
+                                                           order by x.m), '[]'::jsonb)
+                                  from (values (v_bands[1], g.over1), (v_bands[2], g.over2), (v_bands[3], g.over3)) x(m, n) where x.m is not null),
+                         'prev_month', (select round((percentile_cont(0.5) within group (
+                                                        order by cma.flash_age_months_of(sp.customer_start, v_zone, v_month - 1)))::numeric, 1)
+                                        from sp
+                                        where sp.spell_start < (v_month::timestamp at time zone v_zone)
+                                          and (sp.spell_end is null or sp.spell_end >= (v_month::timestamp at time zone v_zone))
+                                          and exists (select 1 from mt where mt.month = v_prev)),
+                         'prev_year', (select round((percentile_cont(0.5) within group (
+                                                       order by cma.flash_age_months_of(sp.customer_start, v_zone, (v_year + interval '1 month')::date - 1)))::numeric, 1)
+                                       from sp
+                                       where sp.spell_start < ((v_year + interval '1 month')::timestamp at time zone v_zone)
+                                         and (sp.spell_end is null or sp.spell_end >= ((v_year + interval '1 month')::timestamp at time zone v_zone))
+                                         and exists (select 1 from mt where mt.month = v_year)))
+                       from g_c g where g.dim = 'all') end,
+      'lifetime', case when v_has then (select k.j - 'curve' from km_all k) end,
+      'clv', case when v_has then coalesce((select g.j from g_clv g where g.dim = 'all'), '{}'::jsonb) end),
+    'unit_economics', jsonb_build_object(
+      'churned_30d', (select coalesce(sum(ch.n), 0) from ch),
+      'slots', (select jsonb_agg(jsonb_build_object('key', x.key, 'status', 'pending') order by x.ord)
+                from (values ('churn_rate', 1), ('cac', 2), ('cost_per_subscription', 3), ('clv_projected', 4), ('clv_to_cac', 5),
+                             ('payback_months', 6)) x(key, ord))),
+    'months', (select coalesce(jsonb_agg(jsonb_build_object(
+                        'month', mt.month, 'is_now', mt.month = v_month,
+                        'customers', case when mt.month = v_month then (select n.customers from l_now n) else mt.customers end,
+                        'by_segment', case when mt.month = v_month then (select n.by_segment from l_now n) else coalesce(mseg.j, '{}'::jsonb) end,
+                        'subscriptions', case when mt.month = v_month then (select n.subscriptions from l_now n)::numeric else coalesce(ms.at_end, 0) end)
+                        order by mt.month), '[]'::jsonb)
+               from mt
+               left join mseg on mseg.month = mt.month
+               left join ms on ms.month = mt.month
+               where mt.month >= v_from),
+    'notes', case when v_has then jsonb_build_object(
+      'no_ended_time', (select count(*) from b where b.left_out = 'no_ended_time'),
+      'no_created_time', (select count(*) from b where b.left_out = 'no_created_time'),
+      'unmatched_subscriptions', (select count(*) from b where b.is_holding and b.customer_id is null),
+      'reconstruction_gap', coalesce((select mt.customers from mt where mt.month = v_month), 0) - (select n.customers from l_now n),
+      'history_starts', (select coalesce(jsonb_agg(jsonb_build_object('store', q.store, 'market', q.market, 'date', q.d) order by q.d, q.store), '[]'::jsonb)
+                         from (select b.store, b.market, (min(b.started_at) at time zone v_zone)::date as d
+                               from b where b.started_at is not null group by 1, 2) q)) end)
+  into v_doc;
+  return v_head || v_doc;
+end
+$$;
+-- JIT off (as cma.courtesy_page_of, 150): the statement is one of many small joins and aggregates, and a session's first
+-- compiled call costs more than the read
+alter function cma.active_top_of(uuid, date, text, text, text, timestamptz) set jit = off;
+
+-- Below the fold, from the stored take alone: inflow and outflow and the Monthly recurring amount per month end, the
+-- markets, the two segments compared, the survival curves, the Customer age bands, the customer cohorts, the
+-- subscription mix and the notes that go with them; nothing live. Without a take: history false and nothing else (the page says the history is being prepared)
+create or replace function cma.active_rest_of(p_tenant_id uuid, p_from_month date, p_market text, p_segment text, p_channel text,
+                                              p_grouping text, p_now timestamptz)
+returns jsonb
+language plpgsql stable
+as $$
+declare
+  v_zone         text := (select t.timezone from cma.tenant t where t.id = p_tenant_id);
+  v_today        date;
+  v_month        date;
+  v_ages         integer[] := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'customers.cohort_ages_months'));
+  v_bands        integer[] := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'customers.age_months'));
+  v_hist         integer := cma.setting_of(p_tenant_id, 'customers.history_months')::integer;
+  v_fx           jsonb := cma.active_fx_of(p_tenant_id);
+  v_segments     text[] := cma.flash_list_of(cma.setting_of(p_tenant_id, 'crm.customer_segments'));
+  v_device_bands integer[] := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'flash.device_bands'));
+  v_from         date;
+  v_head         jsonb;
+  v_doc          jsonb;
+  v_commerce     boolean := coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false);
+  v_subs         boolean := coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false);
+  v_take         jsonb := cma.active_take_of(p_tenant_id, p_now);
+begin
+  v_today := (p_now at time zone v_zone)::date;
+  v_month := date_trunc('month', v_today)::date;
+  v_from := least(v_month, greatest(coalesce(p_from_month, date '0001-01-01'), (v_month - make_interval(months => v_hist))::date));
+  v_head := jsonb_build_object(
+    'set_up', jsonb_build_object('commerce', v_commerce, 'subscriptions', v_subs),
+    'take', v_take, 'history', v_take is not null, 'month', v_month, 'from_month', v_from, 'grouping', p_grouping);
+  if not (v_commerce and v_subs) then
+    return v_head || jsonb_build_object('figures', false);
+  end if;
+  if v_take is null then
+    return v_head || jsonb_build_object('figures', true);
+  end if;
+
+  with b0 as (
+    -- the stored base (cma.active_base, the refresh's)
+    select * from cma.active_base x where x.tenant_id = p_tenant_id
+  ), b as materialized (
+    select * from b0 x
+    where (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
+  ), c as materialized (
+    -- the store customers, one row each, as the refresh stored them (the age as of the take's business date)
+    select x.customer_id, x.market, x.segment, x.channel, x.unknown_reason, x.customer_start, x.is_active, x.holding, x.devices,
+           x.clv, x.clv_currency, x.age_months as age
+    from cma.active_customer x
+    where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
+  ), sp as materialized (
+    -- their active spells, with the length in whole months as of the take
+    select x.customer_id, x.market, x.segment, x.channel, x.customer_start, x.spell_start, x.spell_end, x.len, x.ended
+    from cma.active_spell x
+    where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
+  ), mcell as materialized (
+    -- the stored month ends under the filters; each series below starts with its own first month, as a series computed
+    -- from the filtered rows alone would
+    select x.kind, x.month, x.market, x.segment, x.channel, x.currency, x.inflow, x.outflow, x.at_end
+    from cma.active_month x
+    where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
+  ), mc as materialized (
+    -- the customers per month end, by market, segment and channel
+    select x.month, x.market, x.segment, x.channel, x.inflow, x.outflow, x.at_end
+    from mcell x
+    where x.kind = 'customers' and x.month >= (select min(y.month) from mcell y where y.kind = 'customers' and y.inflow <> 0)
+  ), ma as materialized (
+    -- the Monthly recurring amount per month end and currency
+    select x.month, x.currency, sum(x.at_end) as at_end
+    from mcell x
+    where x.kind = 'amount' and x.month >= (select min(y.month) from mcell y where y.kind = 'amount' and (y.inflow <> 0 or y.at_end <> 0))
+    group by 1, 2
+  ), mt as materialized (
+    select mc.month, sum(mc.at_end) as customers, sum(mc.inflow) as inflow, sum(mc.outflow) as outflow from mc group by 1
   ), mchan as (
     select q.month, jsonb_object_agg(q.channel, q.n) as j
     from (select mc.month, mc.channel, sum(mc.inflow) as n from mc group by 1, 2) q group by 1
@@ -1063,9 +1924,7 @@ begin
            bool_and(ma.currency = 'EUR' or coalesce(jsonb_typeof(v_fx -> ma.currency) = 'number', false)) as fx_ok,
            round(sum(cma.active_eur_of(ma.at_end, ma.currency, v_fx)), 2) as eur
     from ma group by 1
-  ),
-  -- ---- the present, per market, per segment and over all (dim market, segment, all; key '*' for all) --------------
-  g_c as materialized (
+  ), g_c as materialized (
     select case when grouping(c.market) = 0 then 'market' when grouping(c.segment) = 0 then 'segment' else 'all' end as dim,
            coalesce(c.market, c.segment, '*') as key,
            count(*) as customers, sum(c.devices) as devices, sum(c.holding) as holding,
@@ -1118,14 +1977,12 @@ begin
            - count(*) filter (where sp.spell_end > p_now - interval '30 days' and sp.spell_end <= p_now) as net
     from sp group by grouping sets ((sp.market), ())
   ), ch as materialized (
-    -- Flash's Churn (subscription) over the last 30 business dates, under the same filters
-    select x.market
-    from cma.flash_churn_of(p_tenant_id, v_today - 29, v_today) x
-    left join b0 on b0.subscription_id = x.subscription_id
-    where (p_market is null or x.market = p_market) and (p_segment is null or coalesce(b0.segment, 'unknown') = p_segment)
-      and (p_channel is null or coalesce(b0.channel, 'unknown') = p_channel)
+    -- Flash's Churn (subscription) over the 30 business dates to the take's, as the refresh stored it per market, segment and channel
+    select x.market, x.at_end as n
+    from mcell x
+    where x.kind = 'churned_30d'
   ), g_ch as (
-    select case when grouping(ch.market) = 0 then 'market' else 'all' end as dim, coalesce(ch.market, '*') as key, count(*) as churned
+    select case when grouping(ch.market) = 0 then 'market' else 'all' end as dim, coalesce(ch.market, '*') as key, sum(ch.n) as churned
     from ch group by grouping sets ((ch.market), ())
   ), g_spark as (
     select q.market, jsonb_agg(q.n order by q.month) as j
@@ -1160,9 +2017,7 @@ begin
     left join g_clv gv on gv.dim = k.dim and gv.key = k.key
     left join g_ch gh on gh.dim = k.dim and gh.key = k.key
     left join g_30 g3 on g3.dim = k.dim and g3.key = k.key
-  ),
-  -- ---- the comparison: the first two segments side by side, long then wide ------------------------------------------
-  cmp_long as (
+  ), cmp_long as (
     select 'customers'::text as measure, null::integer as months, null::text as currency, 10 as ord, s.key, s.customers::numeric as v, null::integer as longest
     from stat s where s.dim = 'segment'
     union all
@@ -1200,14 +2055,12 @@ begin
            max(l.longest) filter (where l.key = 'unknown') as u_longest
     from cmp_long l
     group by 1, 2, 3
-  ),
-  -- ---- the cohorts ---------------------------------------------------------------------------------------------
-  cc as materialized (
-    select x.cohort, x.d2 as segment, x.d3 as channel, x.age_months, x.started, x.still_active, x.mature
-    from (select array_agg(sp.customer_id::text) as k, array_agg(sp.market) as a, array_agg(sp.segment) as b, array_agg(sp.channel) as c,
-                 array_agg(sp.customer_start) as cs, array_agg(sp.spell_start) as s, array_agg(sp.spell_end) as e from sp) a
-    cross join lateral cma.active_cohort_cube_from(a.k, a.a, a.b, a.c, a.cs, a.s, a.e, v_ages, p_grouping, v_zone, p_now) x
-    where x.cohort >= date_trunc(p_grouping, v_from::timestamp)::date
+  ), cc as materialized (
+    select x.cohort, x.segment, x.channel, x.age_months, x.started, x.still_active, x.mature
+    from cma.active_cohort x
+    where x.tenant_id = p_tenant_id and x.period = p_grouping and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
+      and (p_channel is null or x.channel = p_channel)
+      and x.cohort >= date_trunc(p_grouping, v_from::timestamp)::date
   ), co as materialized (
     select q.cohort, max(q.started) as started,
            jsonb_agg(jsonb_build_object('age', q.age_months, 'still_active', q.still_active, 'mature', q.mature) order by q.age_months) as ages
@@ -1226,77 +2079,8 @@ begin
   )
   select jsonb_build_object(
     'figures', true,
-    'filters', jsonb_build_object(
-      'markets', (select coalesce(jsonb_agg(q.market order by q.market = 'unknown', q.market), '[]'::jsonb)
-                  from (select distinct b0.market from b0
-                        union select st.market from cma.commerce_store st where st.tenant_id = p_tenant_id) q),
-      'segments', to_jsonb(v_segments || array['unknown']),
-      'channels', '["indirect", "direct", "unknown"]'::jsonb),
-    'tiles', jsonb_build_object(
-      'active_customers', jsonb_build_object(
-        'value', (select s.customers from stat s where s.dim = 'all'),
-        'by_segment', (select s.j -> 'by_segment' from stat s where s.dim = 'all'),
-        'by_channel', (select jsonb_build_object('indirect', s.j -> 'indirect', 'direct', s.j -> 'direct', 'unknown', s.j -> 'unknown_channel')
-                       from stat s where s.dim = 'all'),
-        'prev_month', (select mt.customers from mt where mt.month = v_prev),
-        'prev_year', (select mt.customers from mt where mt.month = v_year)),
-      'total_subscriptions', jsonb_build_object(
-        'value', (select (s.j ->> 'subscriptions')::bigint from stat s where s.dim = 'all'),
-        'by_status', (select coalesce(jsonb_object_agg(q.status, q.n), '{}'::jsonb)
-                      from (select b.status, count(*) as n from b where b.is_holding group by 1) q),
-        'prev_month', (select ms.at_end from ms where ms.month = v_prev),
-        'prev_year', (select ms.at_end from ms where ms.month = v_year)),
-      'amounts', (select coalesce(jsonb_agg(jsonb_build_object(
-                           'currency', e.key, 'amount', e.value -> 'amount', 'customers', e.value -> 'customers', 'average', e.value -> 'average',
-                           'prev_month', (select round(ma.at_end, 2) from ma where ma.month = v_prev and ma.currency = e.key),
-                           'prev_year', (select round(ma.at_end, 2) from ma where ma.month = v_year and ma.currency = e.key),
-                           'average_prev_month', (select case when mk.at_end > 0 then round(ma.at_end / mk.at_end, 2) end
-                                                  from ma join mk on mk.month = ma.month and mk.currency = ma.currency
-                                                  where ma.month = v_prev and ma.currency = e.key),
-                           'average_prev_year', (select case when mk.at_end > 0 then round(ma.at_end / mk.at_end, 2) end
-                                                 from ma join mk on mk.month = ma.month and mk.currency = ma.currency
-                                                 where ma.month = v_year and ma.currency = e.key)) order by e.key), '[]'::jsonb)
-                  from stat s cross join jsonb_each(s.j -> 'amounts') e where s.dim = 'all'),
-      'eur', (select case when v_fx <> '{}'::jsonb and count(*) > 0
-                               and bool_and(q.currency = 'EUR' or coalesce(jsonb_typeof(v_fx -> q.currency) = 'number', false))
-                          then jsonb_build_object(
-                                 'amount', round(sum(cma.active_eur_of(q.amount, q.currency, v_fx)), 2), 'as_of', v_fx ->> 'as_of',
-                                 'prev_month', (select case when m.fx_ok then m.eur end from mam m where m.month = v_prev),
-                                 'prev_year', (select case when m.fx_ok then m.eur end from mam m where m.month = v_year)) end
-              from g_amt0 q where q.dim = 'all'),
-      'customer_age', (select jsonb_build_object(
-                         'median', round(g.median_age::numeric, 1),
-                         'over', (select coalesce(jsonb_agg(jsonb_build_object('months', x.m, 'customers', x.n,
-                                                                             'share', case when g.customers > 0 then round(x.n::numeric / g.customers, 4) end)
-                                                           order by x.m), '[]'::jsonb)
-                                  from (values (v_bands[1], g.over1), (v_bands[2], g.over2), (v_bands[3], g.over3)) x(m, n) where x.m is not null),
-                         'prev_month', (select round((percentile_cont(0.5) within group (
-                                                        order by cma.flash_age_months_of(sp.customer_start, v_zone, v_month - 1)))::numeric, 1)
-                                        from sp
-                                        where sp.spell_start < (v_month::timestamp at time zone v_zone)
-                                          and (sp.spell_end is null or sp.spell_end >= (v_month::timestamp at time zone v_zone))
-                                          and exists (select 1 from mt where mt.month = v_prev)),
-                         'prev_year', (select round((percentile_cont(0.5) within group (
-                                                       order by cma.flash_age_months_of(sp.customer_start, v_zone, (v_year + interval '1 month')::date - 1)))::numeric, 1)
-                                       from sp
-                                       where sp.spell_start < ((v_year + interval '1 month')::timestamp at time zone v_zone)
-                                         and (sp.spell_end is null or sp.spell_end >= ((v_year + interval '1 month')::timestamp at time zone v_zone))
-                                         and exists (select 1 from mt where mt.month = v_year)))
-                       from g_c g where g.dim = 'all'),
-      'lifetime', (select g.j - 'curve' from g_km g where g.dim = 'all'),
-      'clv', (select s.j -> 'clv' from stat s where s.dim = 'all')),
-    'unit_economics', jsonb_build_object(
-      'churned_30d', (select coalesce((s.j ->> 'churned_30d')::bigint, 0) from stat s where s.dim = 'all'),
-      'slots', (select jsonb_agg(jsonb_build_object('key', x.key, 'status', 'pending') order by x.ord)
-                from (values ('churn_rate', 1), ('cac', 2), ('cost_per_subscription', 3), ('clv_projected', 4), ('clv_to_cac', 5),
-                             ('payback_months', 6)) x(key, ord))),
     'months', (select coalesce(jsonb_agg(jsonb_build_object(
                         'month', mt.month, 'is_now', mt.month = v_month,
-                        'customers', case when mt.month = v_month then (select s.customers from stat s where s.dim = 'all') else mt.customers end,
-                        'by_segment', case when mt.month = v_month then (select s.j -> 'by_segment' from stat s where s.dim = 'all')
-                                           else coalesce(mseg.j, '{}'::jsonb) end,
-                        'subscriptions', case when mt.month = v_month then (select (s.j ->> 'subscriptions')::numeric from stat s where s.dim = 'all')
-                                              else coalesce(ms.at_end, 0) end,
                         'inflow', mt.inflow, 'inflow_by_channel', coalesce(mchan.j, '{}'::jsonb), 'outflow', mt.outflow, 'net', mt.inflow - mt.outflow,
                         'amounts', case when mt.month = v_month
                                         then (select coalesce(jsonb_object_agg(q.currency, round(coalesce(q.amount, 0), 2)), '{}'::jsonb)
@@ -1309,9 +2093,7 @@ begin
                                           from g_amt0 q where q.dim = 'all')
                                     when mam.fx_ok then mam.eur end) order by mt.month), '[]'::jsonb)
                from mt
-               left join mseg on mseg.month = mt.month
                left join mchan on mchan.month = mt.month
-               left join ms on ms.month = mt.month
                left join mam on mam.month = mt.month
                where mt.month >= v_from),
     'markets', (select coalesce(jsonb_agg(s.j || jsonb_build_object(
@@ -1365,25 +2147,16 @@ begin
                       left join (select cma.flash_count_band_of(b.devices_in_field, v_device_bands) as band, count(*) as n
                                  from b where b.is_holding group by 1) q on q.band = w.band),
       'model', (select coalesce(jsonb_agg(jsonb_build_object('key', q.model_key, 'name', q.name, 'devices', q.n) order by q.n desc, q.model_key), '[]'::jsonb)
-                from (select coalesce(d.model_key, 'unknown') as model_key, max(m.name) as name, count(*) as n
-                      from cma.device d
-                      join b on b.source_id = d.subscription_ref and b.market = d.market and b.is_holding
-                      join cma.device_status ds on ds.tenant_id = d.tenant_id and ds.key = d.device_status_key and ds.is_in_field
-                      left join cma.device_model m on m.tenant_id = d.tenant_id and m.key = d.model_key
-                      where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.subscription_ref is not null
+                from (select e.key as model_key, (select m.name from cma.device_model m where m.tenant_id = p_tenant_id and m.key = e.key) as name,
+                             sum(e.value::bigint) as n
+                      from b cross join jsonb_each_text(coalesce(b.device_models, '{}'::jsonb)) e
+                      where b.is_holding
                       group by 1) q),
       'payment_state', (select coalesce(jsonb_agg(jsonb_build_object('key', x.state, 'subscriptions', coalesce(q.n, 0)) order by x.ord), '[]'::jsonb)
                         from (values ('paid', 1), ('in_retry', 2), ('failed', 3), ('paused', 4)) x(state, ord)
                         left join (select b.payment_state, count(*) as n from b group by 1) q on q.payment_state = x.state)),
     'notes', jsonb_build_object(
-      'no_ended_time', (select count(*) from b where b.left_out = 'no_ended_time'),
-      'no_created_time', (select count(*) from b where b.left_out = 'no_created_time'),
       'no_amount', (select count(*) from b where b.is_holding and b.is_paying and (b.monthly_amount is null or b.currency is null)),
-      'unmatched_subscriptions', (select count(*) from b where b.is_holding and b.customer_id is null),
-      'reconstruction_gap', coalesce((select mt.customers from mt where mt.month = v_month), 0) - (select s.customers from stat s where s.dim = 'all'),
-      'history_starts', (select coalesce(jsonb_agg(jsonb_build_object('store', q.store, 'market', q.market, 'date', q.d) order by q.d, q.store), '[]'::jsonb)
-                         from (select b.store, b.market, (min(b.started_at) at time zone v_zone)::date as d
-                               from b where b.started_at is not null group by 1, 2) q),
       'unknown_channel', jsonb_build_object(
         'customers', (select count(*) from c where c.is_active and c.channel = 'unknown'),
         'reasons', (select coalesce(jsonb_object_agg(q.unknown_reason, q.n), '{}'::jsonb)
@@ -1397,23 +2170,32 @@ begin
   return v_head || v_doc;
 end
 $$;
--- JIT off and a custom plan (as cma.courtesy_page_of, 150): the statement is one of many small joins and aggregates, and a
--- session's first compiled call costs more than the read; the generic plan after five calls on a connection is the wrong one
--- for the filters it then no longer sees (CLAUDE.md, Performance)
-alter function cma.active_page_of(uuid, date, text, text, text, text, timestamptz) set jit = off;
-alter function cma.active_page_of(uuid, date, text, text, text, text, timestamptz) set plan_cache_mode = force_custom_plan;
+alter function cma.active_rest_of(uuid, date, text, text, text, text, timestamptz) set jit = off;
 
--- Customers → Active in one read (reports.view or performance.team, CMA06). p_from_month the history's first month (a
--- month's first day; null: as far back as customers.history_months allows, which also caps an earlier one), p_market a
--- market's code or unknown, p_segment a segment's code or unknown, p_channel indirect, direct or unknown, p_grouping month
--- or quarter (the customer cohorts); anything else CMA04. Team figures only: no person is named or counted
-create or replace function cma.active_page(p_from_month date default null, p_market text default null, p_segment text default null,
+-- The page's two reads of the report (reports.view or performance.team, CMA06), each its own transaction. p_from_month
+-- the history's first month (a month's first day; null: as far back as customers.history_months allows, which also caps
+-- an earlier one), p_market a market's code or unknown, p_segment a segment's code or unknown, p_channel indirect, direct
+-- or unknown, p_grouping month or quarter (the customer cohorts); anything else CMA04. Team figures only
+create or replace function cma.active_top(p_from_month date default null, p_market text default null, p_segment text default null,
+                                          p_channel text default null)
+returns jsonb
+language plpgsql stable
+as $$
+begin
+  perform cma.assert_any_permission(array['reports.view', 'performance.team']);
+  perform cma.assert_active_filter(p_market, p_segment, p_channel);
+  if p_from_month is not null and p_from_month <> date_trunc('month', p_from_month)::date then
+    raise exception 'the history starts on the first day of a month' using errcode = 'CMA04';
+  end if;
+  return cma.active_top_of(cma.current_tenant_id(), p_from_month, p_market, p_segment, p_channel, now());
+end
+$$;
+
+create or replace function cma.active_rest(p_from_month date default null, p_market text default null, p_segment text default null,
                                            p_channel text default null, p_grouping text default 'month')
 returns jsonb
 language plpgsql stable
 as $$
-declare
-  v_tenant uuid := cma.current_tenant_id();
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   perform cma.assert_active_filter(p_market, p_segment, p_channel);
@@ -1421,113 +2203,154 @@ begin
     raise exception 'the history starts on the first day of a month' using errcode = 'CMA04';
   end if;
   if p_grouping is null or p_grouping not in ('month', 'quarter') then
-    raise exception 'the cohorts are grouped by month or quarter, not %', coalesce(p_grouping, 'none') using errcode = 'CMA04';
+    raise exception 'the cohorts are grouped by month or quarter' using errcode = 'CMA04';
   end if;
-  return cma.active_page_of(v_tenant, p_from_month, p_market, p_segment, p_channel, p_grouping, now());
+  return cma.active_rest_of(cma.current_tenant_id(), p_from_month, p_market, p_segment, p_channel, p_grouping, now());
 end
 $$;
+
 -- ---------------------------------------------------------------------------------------------
--- 5. The customer list, its file's record
+-- 6. The customer list, its file's record
 -- ---------------------------------------------------------------------------------------------
--- The active customers under the page's filters, one page of them: total (the customers there are) and rows, each the
--- store's customer id, store, market, segment, Customer start (a date in the tenant's zone), Customer age in months, its
--- holding subscriptions and devices (Flash's figures), its Monthly recurring amount in its currency (the currency of its
--- highest amount; any further currency under other_amounts), its Customer lifetime value (realised) in the store's
--- currency, the worst payment state of its subscriptions (failed, then in_retry, then paused, then paid;
--- cma.subscription_payment_state_of for the page's subscriptions alone), its acquisition channel with First orders'
--- level, and its CRM contact's id with its record link. Ids, codes, dates and amounts only: no name, email, phone or
--- address exists to answer. Sorted in the database: monthly_amount (within currency), clv (within currency),
--- store_customer, store, market, segment, customer_start, age_months, subscriptions, devices, channel or level; ties by
--- the customer's id
+-- The active customers under the page's filters, one page of them, from the stored take (cma.active_customer): total
+-- (the customers there are) and rows, each the store customer's id, its store, market, segment, acquisition channel with
+-- its level, Customer start and age, its subscriptions and devices, its Monthly recurring amount in its largest
+-- currency (the others beside it), its realised value and the contact's id and link; ids, codes, dates and amounts only.
+-- Keyset paging: the rows after (p_after) or before (p_before) a row's cursor in the sort's order, read through the
+-- index of the sort key (never an offset); next and prev are the cursors of the page's ends where there is more. A sort
+-- key orders by its value and then by the store customer's id; the amounts sort within their currency (a customer
+-- without an amount as the smallest). Only the worst Payment state is read live, for the page's customers alone
 create or replace function cma.active_rows_of(p_tenant_id uuid, p_market text, p_segment text, p_channel text, p_sort text,
-                                              p_descending boolean, p_offset integer, p_limit integer, p_now timestamptz)
+                                              p_descending boolean, p_after text, p_before text, p_limit integer, p_now timestamptz)
 returns jsonb
 language plpgsql stable
-as $$
+as $fn$
 declare
-  v_zone  text := (select t.timezone from cma.tenant t where t.id = p_tenant_id);
-  v_today date;
-  v_doc   jsonb;
+  v_zone   text := (select t.timezone from cma.tenant t where t.id = p_tenant_id);
+  v_take   jsonb := cma.active_take_of(p_tenant_id, p_now);
+  v_keys   text[];
+  v_types  text[];
+  v_cursor jsonb;
+  v_back   boolean := p_before is not null;
+  v_desc   boolean;
+  v_at     text := '';
+  v_order  text;
+  v_rows   jsonb;
+  v_more   boolean;
+  v_total  bigint;
+  i        integer;
 begin
-  v_today := (p_now at time zone v_zone)::date;
   if not (coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false)
           and coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false)) then
-    return jsonb_build_object('set_up', false, 'as_of', p_now, 'time_zone', v_zone, 'total', 0, 'rows', '[]'::jsonb);
+    return jsonb_build_object('set_up', false, 'history', false, 'take', null, 'time_zone', v_zone, 'total', 0, 'rows', '[]'::jsonb,
+                              'next', null, 'prev', null);
   end if;
-  with b as materialized (
-    select * from cma.active_base_of(p_tenant_id, p_now, true, (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h), false) x
-    where x.customer_id is not null and coalesce(x.customer_holding, 0) > 0
-      and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
-      and (p_channel is null or x.channel = p_channel)
-  ), amt as (
-    -- a customer's Monthly recurring amount per currency, the highest first
-    select q.customer_id, q.currency, q.amount, row_number() over (partition by q.customer_id order by q.amount desc, q.currency) as rn
-    from (select b.customer_id, b.currency, sum(b.monthly_amount) as amount
-          from b where b.is_holding and b.is_paying and b.currency is not null and b.monthly_amount is not null group by 1, 2) q
-  ), oth as (
-    select o.customer_id, jsonb_object_agg(o.currency, round(o.amount, 2)) as j from amt o where o.rn > 1 group by 1
-  ), c as materialized (
-    select distinct on (b.customer_id) b.customer_id, b.customer_connection_id, b.customer_source_id, b.store, b.market, b.segment, b.channel,
-           b.level, b.customer_start, b.customer_holding, coalesce(b.customer_devices, 0) as devices, b.clv, b.clv_currency,
-           b.crm_connection_id, b.contact_source_id, cma.flash_age_months_of(b.customer_start, v_zone, v_today) as age,
-           a.currency, a.amount, coalesce(oth.j, '{}'::jsonb) as other_amounts
-    from b
-    left join amt a on a.customer_id = b.customer_id and a.rn = 1
-    left join oth on oth.customer_id = b.customer_id
-    order by b.customer_id
-  ), k as (
-    select c.*,
-           case p_sort when 'monthly_amount' then c.amount when 'clv' then c.clv when 'age_months' then c.age::numeric
-                       when 'subscriptions' then c.customer_holding::numeric when 'devices' then c.devices::numeric
-                       when 'customer_start' then extract(epoch from c.customer_start)::numeric end as num_key,
-           case p_sort when 'store_customer' then c.customer_source_id when 'store' then c.store when 'market' then c.market
-                       when 'segment' then c.segment when 'channel' then c.channel when 'level' then c.level end as txt_key,
-           case p_sort when 'monthly_amount' then c.currency when 'clv' then c.clv_currency end as cur_key
-    from c
-  ), page as materialized (
-    select k.*, row_number() over (order by k.cur_key asc nulls last,
-                                            case when not p_descending then k.num_key end asc nulls last,
-                                            case when p_descending then k.num_key end desc nulls last,
-                                            case when not p_descending then k.txt_key end asc nulls last,
-                                            case when p_descending then k.txt_key end desc nulls last,
-                                            k.customer_source_id, k.customer_id) as pos
-    from k
-    order by pos
-    offset p_offset limit p_limit
-  ), ps as (
-    -- the worst payment state of each customer on the page: its subscriptions' states, for these subscriptions alone
-    select b.customer_id,
-           (array['failed', 'in_retry', 'paused', 'paid'])[min(array_position(array['failed', 'in_retry', 'paused', 'paid'], p.payment_state))] as worst
-    from b
-    join cma.subscription_payment_state_of(p_tenant_id, array(select b2.subscription_id from b b2 join page on page.customer_id = b2.customer_id)) p
-      on p.subscription_id = b.subscription_id
-    group by 1
-  )
-  select jsonb_build_object(
-    'set_up', true, 'as_of', p_now, 'time_zone', v_zone,
-    'total', (select count(*) from c),
-    'rows', (select coalesce(jsonb_agg(jsonb_build_object(
-                      'store_customer', page.customer_source_id, 'store', page.store, 'market', page.market, 'segment', page.segment,
-                      'customer_start', (page.customer_start at time zone v_zone)::date, 'age_months', page.age,
-                      'subscriptions', page.customer_holding, 'devices', page.devices, 'currency', page.currency,
-                      'monthly_amount', round(page.amount, 2), 'other_amounts', page.other_amounts,
-                      'clv', page.clv, 'clv_currency', page.clv_currency, 'payment_state', ps.worst, 'channel', page.channel, 'level', page.level,
-                      'contact_id', page.contact_source_id,
-                      'contact_url', cma.record_url(page.crm_connection_id, 'contact', page.contact_source_id)) order by page.pos), '[]'::jsonb)
-             from page left join ps on ps.customer_id = page.customer_id))
-  into v_doc;
-  return v_doc;
+  if v_take is null then
+    return jsonb_build_object('set_up', true, 'history', false, 'take', null, 'time_zone', v_zone, 'total', null, 'rows', '[]'::jsonb,
+                              'next', null, 'prev', null);
+  end if;
+  -- the sort's key: expressions over cma.active_customer, each with its index (active_customer_*_idx). A fixed list:
+  -- nothing of the caller's text reaches the statement but through parameters
+  case p_sort
+    when 'monthly_amount' then v_keys := array[$k$coalesce(c.currency, '')$k$, 'coalesce(c.amount, -1)']; v_types := array['text', 'numeric'];
+    when 'clv' then v_keys := array[$k$coalesce(c.clv_currency, '')$k$, 'coalesce(c.clv, -1)']; v_types := array['text', 'numeric'];
+    when 'store_customer' then v_keys := '{}'; v_types := '{}';
+    when 'store' then v_keys := array['c.store']; v_types := array['text'];
+    when 'market' then v_keys := array['c.market']; v_types := array['text'];
+    when 'segment' then v_keys := array['c.segment']; v_types := array['text'];
+    when 'channel' then v_keys := array['c.channel']; v_types := array['text'];
+    when 'level' then v_keys := array[$k$coalesce(c.level, '')$k$]; v_types := array['text'];
+    when 'customer_start' then v_keys := array[$k$coalesce(c.customer_start, '-infinity'::timestamptz)$k$]; v_types := array['timestamptz'];
+    when 'age_months' then v_keys := array['coalesce(c.age_months, -1)']; v_types := array['integer'];
+    when 'subscriptions' then v_keys := array['c.holding']; v_types := array['integer'];
+    when 'devices' then v_keys := array['c.devices']; v_types := array['integer'];
+    else raise exception 'not a sort key of the list' using errcode = 'CMA04';
+  end case;
+  -- a cursor is a row's key as this function wrote it: the sort's values, the store customer's id and the customer's id
+  if p_after is not null or p_before is not null then
+    begin
+      v_cursor := convert_from(decode(coalesce(p_after, p_before), 'base64'), 'UTF8')::jsonb;
+      if jsonb_typeof(v_cursor -> 'k') <> 'array' or jsonb_array_length(v_cursor -> 'k') <> cardinality(v_keys)
+         or (v_cursor ->> 's') is null or (v_cursor ->> 'i')::uuid is null then
+        raise exception 'bad cursor';
+      end if;
+    exception when others then
+      raise exception 'a cursor is the next or prev of a page of this list in this sort' using errcode = 'CMA04';
+    end;
+  end if;
+  -- the scan's direction: the sort's, turned around to read the rows before a cursor
+  v_desc := p_descending <> v_back;
+  v_order := (select string_agg(k || case when v_desc then ' desc' else ' asc' end, ', ' order by o)
+              from unnest(v_keys || array['c.source_id', 'c.customer_id']) with ordinality u(k, o));
+  if v_cursor is not null then
+    v_at := ' and (' || array_to_string(v_keys || array['c.source_id', 'c.customer_id'], ', ') || ')'
+            || case when v_desc then ' < ' else ' > ' end || '('
+            || coalesce((select string_agg(format($f$($6 -> 'k' ->> %s)::%s$f$, o - 1, t), ', ' order by o) || ', '
+                         from unnest(v_types) with ordinality u(t, o)), '')
+            || $f$$6 ->> 's', ($6 ->> 'i')::uuid)$f$;
+  end if;
+  execute format($q$
+    with page as materialized (
+      select c.*, row_number() over (order by %3$s) as pos,
+             jsonb_build_object('k', jsonb_build_array(%1$s), 's', c.source_id, 'i', c.customer_id) as cur
+      from cma.active_customer c
+      where c.tenant_id = $1 and c.is_active
+        and ($2::text is null or c.market = $2) and ($3::text is null or c.segment = $3) and ($4::text is null or c.channel = $4)%2$s
+      order by %3$s
+      limit $5 + 1
+    ), ps as (
+      -- the worst payment state of each customer on the page: its subscriptions' states, read live for these alone
+      select b.customer_id,
+             (array['failed', 'in_retry', 'paused', 'paid'])[min(array_position(array['failed', 'in_retry', 'paused', 'paid'], p.payment_state))] as worst
+      from cma.active_base b
+      join cma.subscription_payment_state_of($1, array(select b2.subscription_id from cma.active_base b2
+                                                       where b2.tenant_id = $1 and b2.customer_id in (select page.customer_id from page))) p
+        on p.subscription_id = b.subscription_id
+      where b.tenant_id = $1 and b.customer_id in (select page.customer_id from page)
+      group by 1
+    )
+    select coalesce(jsonb_agg(jsonb_build_object(
+             'store_customer', page.source_id, 'store', page.store, 'market', page.market, 'segment', page.segment,
+             'customer_start', (page.customer_start at time zone $7)::date, 'age_months', page.age_months,
+             'subscriptions', page.holding, 'devices', page.devices, 'currency', page.currency,
+             'monthly_amount', round(page.amount, 2), 'other_amounts', page.other_amounts,
+             'clv', page.clv, 'clv_currency', page.clv_currency, 'payment_state', ps.worst, 'channel', page.channel, 'level', page.level,
+             'contact_id', page.contact_source_id,
+             'contact_url', cma.record_url(page.crm_connection_id, 'contact', page.contact_source_id),
+             'cursor', translate(encode(convert_to(page.cur::text, 'UTF8'), 'base64'), E'\n', '')) order by page.pos), '[]'::jsonb)
+    from page left join ps on ps.customer_id = page.customer_id
+  $q$, array_to_string(v_keys, ', '), v_at, v_order)
+    into v_rows
+    using p_tenant_id, p_market, p_segment, p_channel, p_limit, v_cursor, v_zone;
+  v_more := jsonb_array_length(v_rows) > p_limit;
+  if v_more then
+    v_rows := v_rows - p_limit;                       -- the one row read beyond the page
+  end if;
+  if v_back then
+    -- read backwards from the cursor: put the page back in the sort's order
+    v_rows := (select coalesce(jsonb_agg(e.value order by e.ord desc), '[]'::jsonb) from jsonb_array_elements(v_rows) with ordinality e(value, ord));
+  end if;
+  select count(*) into v_total
+  from cma.active_customer c
+  where c.tenant_id = p_tenant_id and c.is_active
+    and (p_market is null or c.market = p_market) and (p_segment is null or c.segment = p_segment) and (p_channel is null or c.channel = p_channel);
+  i := jsonb_array_length(v_rows);
+  return jsonb_build_object(
+    'set_up', true, 'history', true, 'take', v_take, 'as_of', v_take -> 'computed_at', 'time_zone', v_zone, 'total', v_total,
+    'next', case when i > 0 and (v_back or v_more) then v_rows -> (i - 1) -> 'cursor' end,
+    'prev', case when i > 0 and ((not v_back and v_cursor is not null) or (v_back and v_more)) then v_rows -> 0 -> 'cursor' end,
+    'rows', (select coalesce(jsonb_agg(e.value - 'cursor' order by e.ord), '[]'::jsonb) from jsonb_array_elements(v_rows) with ordinality e(value, ord)));
 end
-$$;
-alter function cma.active_rows_of(uuid, text, text, text, text, boolean, integer, integer, timestamptz) set jit = off;
-alter function cma.active_rows_of(uuid, text, text, text, text, boolean, integer, integer, timestamptz) set plan_cache_mode = force_custom_plan;
+$fn$;
+alter function cma.active_rows_of(uuid, text, text, text, text, boolean, text, text, integer, timestamptz) set jit = off;
 
--- The list's page (reports.view or performance.team, CMA06): the filters of cma.active_page, a sort key of the list
--- (monthly_amount when left out, descending), an offset from 0 and a limit from 1 to 200; for a file (p_file) the offset
--- is 0 and the limit the tenant's flash.file_max_rows. Anything else CMA04
+-- The list's page (reports.view or performance.team, CMA06): the filters of the page's reads, a sort key of the list
+-- (monthly_amount when left out, descending), the cursor of the row to continue after (p_after, a page's next) or to end
+-- before (p_before, a page's prev), never both, and a limit from 1 to 200; for a file (p_file) no cursor and the limit
+-- the tenant's flash.file_max_rows. Anything else CMA04
 create or replace function cma.active_rows(p_market text default null, p_segment text default null, p_channel text default null,
-                                           p_sort text default 'monthly_amount', p_descending boolean default true, p_offset integer default 0,
-                                           p_limit integer default 50, p_file boolean default false)
+                                           p_sort text default 'monthly_amount', p_descending boolean default true, p_after text default null,
+                                           p_before text default null, p_limit integer default 50, p_file boolean default false)
 returns jsonb
 language plpgsql stable
 as $$
@@ -1541,14 +2364,23 @@ begin
     raise exception 'the list sorts by monthly_amount, clv, store_customer, store, market, segment, customer_start, age_months, subscriptions, devices, channel or level'
       using errcode = 'CMA04';
   end if;
+  if p_after is not null and p_before is not null then
+    raise exception 'a page continues after a cursor or ends before one, not both' using errcode = 'CMA04';
+  end if;
+  if coalesce(length(p_after), 0) > 600 or coalesce(length(p_before), 0) > 600 then
+    raise exception 'a cursor is the next or prev of a page of this list in this sort' using errcode = 'CMA04';
+  end if;
   if coalesce(p_file, false) then
-    return cma.active_rows_of(v_tenant, p_market, p_segment, p_channel, p_sort, coalesce(p_descending, true), 0,
+    if p_after is not null or p_before is not null then
+      raise exception 'a file takes no cursor' using errcode = 'CMA04';
+    end if;
+    return cma.active_rows_of(v_tenant, p_market, p_segment, p_channel, p_sort, coalesce(p_descending, true), null, null,
                               cma.setting_of(v_tenant, 'flash.file_max_rows')::integer, now());
   end if;
-  if p_offset is null or p_offset < 0 or p_limit is null or p_limit not between 1 and 200 then
-    raise exception 'a list page starts at 0 or later and holds 1 to 200 rows' using errcode = 'CMA04';
+  if p_limit is null or p_limit not between 1 and 200 then
+    raise exception 'a list page holds 1 to 200 rows' using errcode = 'CMA04';
   end if;
-  return cma.active_rows_of(v_tenant, p_market, p_segment, p_channel, p_sort, coalesce(p_descending, true), p_offset, p_limit, now());
+  return cma.active_rows_of(v_tenant, p_market, p_segment, p_channel, p_sort, coalesce(p_descending, true), p_after, p_before, p_limit, now());
 end
 $$;
 
@@ -1572,7 +2404,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 6. The readers' rows: the month ends and the customer cohorts, by market, segment and acquisition channel
+-- 7. The month ends and the customer cohorts computed afresh, and the readers' views of the stored ones
 -- ---------------------------------------------------------------------------------------------
 -- Per month from the tenant's first subscription to now, market, segment and acquisition channel: the active customers
 -- and the holding subscriptions at the month's end by the reconstruction (the running month's as of p_now), and the
@@ -1645,53 +2477,32 @@ as $$
 $$;
 alter function cma.active_cohorts_of(uuid, text, timestamptz) set jit = off;
 
--- For readers (BigQuery, analytics), over SECURITY DEFINER functions in cma_read (owned by cma_owner, search path pinned,
--- executable by readers only) that read every tenant the reader sees, as cma_read.lead_cohort_rows (120) and
--- cma_read.courtesy_order_rows (150): counts per month, market, segment and acquisition channel, and per customer cohort;
--- no customer, no contact and no attribution level. Off the application's path: the planner never inlines them
-create or replace function cma_read.active_customer_month_rows()
-returns table (tenant_id uuid, month date, market text, segment text, acquisition_channel text, active_customers bigint,
-               holding_subscriptions bigint, inflow bigint, outflow bigint)
-language sql stable security definer
-rows 5000   -- every tenant's months times its markets, segments and channels (CLAUDE.md, Performance: a set-returning function says its rows)
-set search_path = pg_catalog, cma, pg_temp
-as $$
-  select t.id, r.month, r.market, r.segment, r.acquisition_channel, r.active_customers, r.holding_subscriptions, r.inflow, r.outflow
-  from cma.tenant t
-  cross join lateral cma.active_months_of(t.id, now()) r
-  where cma_read.reader_sees(t.id)
-$$;
-revoke execute on function cma_read.active_customer_month_rows() from public;
-grant execute on function cma_read.active_customer_month_rows() to cma_readonly;
-
+-- For readers (BigQuery, analytics): plain views of the stored take (as cma_read.flash_current_take, 158), each tenant
+-- the reader sees: counts per month, market, segment and acquisition channel, and per customer cohort; no customer, no
+-- contact and no attribution level. The two functions above stay the fresh computation the stored rows are verified
+-- against (173)
 create or replace view cma_read.active_customer_month as
-  select * from cma_read.active_customer_month_rows();
+  select m.tenant_id, m.month, m.market, m.segment, m.channel as acquisition_channel,
+         coalesce(sum(m.at_end) filter (where m.kind = 'customers'), 0)::bigint as active_customers,
+         coalesce(sum(m.at_end) filter (where m.kind = 'subscriptions'), 0)::bigint as holding_subscriptions,
+         coalesce(sum(m.inflow) filter (where m.kind = 'customers'), 0)::bigint as inflow,
+         coalesce(sum(m.outflow) filter (where m.kind = 'customers'), 0)::bigint as outflow
+  from cma.active_month m
+  where m.kind in ('customers', 'subscriptions') and cma_read.reader_sees(m.tenant_id)
+  group by m.tenant_id, m.month, m.market, m.segment, m.channel;
 comment on view cma_read.active_customer_month is
   'Per tenant, calendar month (the tenant''s zone), market, customer segment and acquisition channel (0009l): the active customers and the holding subscriptions at the month''s end as reconstructed from the subscriptions'' created and ended times (the running month as of now; a past pause counts as holding), and the customers'' inflow and outflow of the month (active spells starting and ending). Counts only: no customer and no contact';
 
-create or replace function cma_read.customer_cohort_rows()
-returns table (tenant_id uuid, cohort date, "grouping" text, market text, segment text, acquisition_channel text, started bigint,
-               age_months integer, still_active bigint, mature boolean)
-language sql stable security definer
-rows 5000
-set search_path = pg_catalog, cma, pg_temp
-as $$
-  select t.id, r.cohort, g.grouping, r.market, r.segment, r.acquisition_channel, r.started, r.age_months, r.still_active, r.mature
-  from cma.tenant t
-  cross join (values ('month'), ('quarter')) g(grouping)
-  cross join lateral cma.active_cohorts_of(t.id, g.grouping, now()) r
-  where cma_read.reader_sees(t.id)
-$$;
-revoke execute on function cma_read.customer_cohort_rows() from public;
-grant execute on function cma_read.customer_cohort_rows() to cma_readonly;
-
 create or replace view cma_read.customer_cohort as
-  select * from cma_read.customer_cohort_rows();
+  select h.tenant_id, h.cohort, h.period as grouping, h.market, h.segment, h.channel as acquisition_channel, h.started, h.age_months,
+         h.still_active, h.mature
+  from cma.active_cohort h
+  where cma_read.reader_sees(h.tenant_id);
 comment on view cma_read.customer_cohort is
   'Per tenant, customer cohort (the first day of the month or quarter of the Customer start, see grouping), market, customer segment, acquisition channel and age in months of customers.cohort_ages_months (0009l): the customers started, those still in an active spell at their own start plus the age, and whether every customer of the row is that old (mature; until then still_active counts those who are). Counts only: no customer and no contact';
 
 -- ---------------------------------------------------------------------------------------------
--- 7. Grants: the application only (a function made again keeps its grants)
+-- 8. Grants: the application only (a function made again keeps its grants)
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -1705,10 +2516,12 @@ begin
     'cma.active_km_from(integer[],boolean[])', 'cma.active_km_json(integer[],boolean[])',
     'cma.active_base_of(uuid,timestamptz,boolean,date,boolean)', 'cma.active_customers_of(uuid,timestamptz,boolean)', 'cma.active_spells_of(uuid)',
     'cma.active_channel_of(uuid)', 'cma.active_spell_lengths_of(uuid,timestamptz,boolean)', 'cma.active_survival_of(uuid,text,timestamptz)',
-    'cma.assert_active_filter(text,text,text)', 'cma.active_page_of(uuid,date,text,text,text,text,timestamptz)',
-    'cma.active_page(date,text,text,text,text)',
-    'cma.active_rows_of(uuid,text,text,text,text,boolean,integer,integer,timestamptz)',
-    'cma.active_rows(text,text,text,text,boolean,integer,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
+    'cma.assert_active_filter(text,text,text)', 'cma.active_setting_marks_stale(text)', 'cma.active_take_lock_key(uuid)',
+    'cma.active_refresh_of(uuid,boolean,timestamptz)', 'cma.active_refresh()', 'cma.active_present_of(uuid)', 'cma.active_take_of(uuid,timestamptz)',
+    'cma.active_top_of(uuid,date,text,text,text,timestamptz)', 'cma.active_top(date,text,text,text)',
+    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest(date,text,text,text,text)',
+    'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)',
+    'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
     'cma.active_months_of(uuid,timestamptz)', 'cma.active_cohorts_of(uuid,text,timestamptz)'
   ] loop
     execute format('revoke execute on function %s from public', f);
@@ -1718,7 +2531,27 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 8. Record the addition
+-- 9. sync_run's constraints, last: the lock they take is held to the commit
+-- ---------------------------------------------------------------------------------------------
+-- The job refresh_active_customers joins the list, without a connection (as 132's section 10). An alter table that adds
+-- a constraint takes an ACCESS EXCLUSIVE lock on cma.sync_run that the transaction keeps until it commits: placed here,
+-- directly before the record and the commit, the lock lasts the two validations alone (CLAUDE.md, Performance).
+-- cma.job_run_start('refresh_active_customers') is only ever called after the commit (the job's first run)
+alter table cma.sync_run drop constraint if exists sync_run_job_check;
+alter table cma.sync_run add constraint sync_run_job_check
+  check (job in ('backfill', 'reconcile', 'forms_poll', 'subscriptions_check', 'link_calls', 'email_poll', 'close_forgotten_workdays',
+                 'refresh_follow_up', 'reviews_poll', 'legacy_call_import', 'assets_import', 'assets_poll', 'subscriptions_poll',
+                 'flash_snapshot', 'refresh_data_quality', 'refresh_active_customers')) not valid;
+alter table cma.sync_run validate constraint sync_run_job_check;
+alter table cma.sync_run drop constraint if exists sync_run_connection_check;
+alter table cma.sync_run add constraint sync_run_connection_check
+  check ((connection_id is null) = (job in ('close_forgotten_workdays', 'refresh_follow_up', 'flash_snapshot', 'refresh_data_quality',
+                                            'refresh_active_customers'))) not valid;
+alter table cma.sync_run validate constraint sync_run_connection_check;
+
+-- ---------------------------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------------------------
+-- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
 values ('0009l', 'Customers → Active: the settings customers.cohort_ages_months (3,6,12,24,36), customers.age_months (12,24,36,48,60), customers.history_months (60) and reports.fx_eur_rates ({}), checked by cma.check_tenant_setting(); the pure functions cma.active_spells_from (active spells from holding intervals), cma.active_month_cube_from (month ends by running sums), cma.active_cohort_cube_from (customer cohorts by age) and cma.active_km_from (Kaplan–Meier in whole months); cma.active_base_of (the subscriptions with their holding interval from created and ended times, their store customer with Flash''s figures of it, and its acquisition channel from First orders'' attribution of its first order), cma.active_spells_of, cma.active_channel_of, cma.active_survival_of; cma.active_page (the page as one JSON document: tiles with the previous month end and a year before, the month ends, markets with totals, the two segments compared, survival, age bands, cohorts, the subscription mix, the placeholders without a figure, the data notes) and cma.active_rows (the customer list, ids, codes, dates and amounts with the contact''s record link) with cma.active_file_record; cma_read.active_customer_month and cma_read.customer_cohort without a customer or a contact')
