@@ -52,8 +52,9 @@ import { resolve } from "../../access";
  *                      markets, the two segments compared, survival, Customer age, Direct / Indirect, the cohorts, the mix
  *   the list           its own read (cma.active_rows), keyset paging
  * Each read is its own transaction, started before anything waits; the parts stand in document order. A click inside the
- * page waits for the stored reads only (milliseconds): the boundary of the live present is a new one on every view, so
- * the stored tiles show at once and no click waits for the live read. Every toggle is a link; a small client component
+ * page waits for the stored reads only (milliseconds where a stored document answers; a combination of filters is
+ * computed from the take's rows, well inside the layers' budgets): the boundary of the live present is a new one on
+ * every view, so the stored tiles show at once and no click waits for the live read. Every toggle is a link; a small client component
  * marks the clicked link and keeps the Print button waiting for the last part (decision D14). The address keys are
  * range, grouping, market, segment, channel, split, amount, survival, cohort, msort, mdir, sort, dir, after, before, page.
  */

@@ -1719,6 +1719,11 @@ begin
     -- now for no filter, a single one of each kind, a later first month (the months cut, the cohorts of those months)
     -- and a combination (no document: computed from the take's rows); the stored present against the live one, row for row
     perform cma.active_refresh_of(v_t1, true, v_now);
+    -- provoked: one stored document is changed, so the comparison itself must count it
+    if pg_temp.v0009l_p('T7') then
+      update cma.active_document d set doc = d.doc #- '{tiles,total_subscriptions,value}'
+      where d.tenant_id = v_t1 and d.part = 'top' and d.market = '' and d.segment = '' and d.channel = '';
+    end if;
     select format('documents %s (top %s, rest %s) for %s', count(*), count(*) filter (where d.part = 'top'), count(*) filter (where d.part = 'rest'),
                   string_agg(distinct nullif(concat_ws('/', nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, '')), ''), ',')
                   || case when bool_or(d.market = '' and d.segment = '' and d.channel = '') then ' and no filter' else '' end)
@@ -1743,6 +1748,9 @@ begin
                        (select count(*) from ((select * from cma.active_present_of(v_t1) except select * from cma.active_present_stored_of(v_t1))
                                               union all
                                               (select * from cma.active_present_stored_of(v_t1) except select * from cma.active_present_of(v_t1))) x));
+    if pg_temp.v0009l_p('T7') then
+      perform cma.active_refresh_of(v_t1, true, v_now);   -- the changed document is written again
+    end if;
     v_rows := v_rows || array['126', 'T7', '(D16) the stored documents equal a fresh computation: each document against its function, the stored reads against the computed ones, the stored present against the live one', v_txt,
       'documents 18 (top 9, rest 9) for B2B,B2C,GB,NL,direct,indirect,unknown and no filter | differ from fresh 0 | top with the present live differs 0'
       || ' | stored reads equal the computed ones: top 7 of 7, rest 7 of 7 | present_at is the take''s: true | stored present differs from live in 0 rows'];
@@ -1856,7 +1864,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- E. Timings against 131's budgets, as the application
 -- ---------------------------------------------------------------------------------------------
--- Per active tenant with a subscription: the take refreshed (everything written again: the refresh's own time), then the
+-- Per active tenant with a subscription: the take refreshed (the refresh's own time; in a step rolled back at once), then the
 -- page's reads, each called six times untimed (a plpgsql function's statements turn to the generic plan after five calls
 -- on a connection: CLAUDE.md, Performance) and then timed, the best of verify.timing_runs: above and below the fold from
 -- their stored documents, the list's first page, the live present of the tiles, and the two reads computed from the
@@ -1879,10 +1887,21 @@ begin
     begin
       perform set_config('role', 'cma_app', true);
       perform set_config('app.tenant_id', t.id::text, true);
-      v_t0 := clock_timestamp();
-      j := cma.active_refresh_of(t.id, true);
-      v_refresh := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
-      v_refreshed := coalesce((j ->> 'refreshed')::boolean, false);
+      -- the refresh, timed in a step of its own that is rolled back at once: its writes (the take's row among them) are not
+      -- held through the timed reads, so a settings save that marks the take stale does not wait for this script. The
+      -- reads below then read the take the job keeps; a tenant without one yet gets one here, rolled back with this step
+      begin
+        v_t0 := clock_timestamp();
+        j := cma.active_refresh_of(t.id, true);
+        v_refresh := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+        v_refreshed := coalesce((j ->> 'refreshed')::boolean, false);
+        raise exception using errcode = 'CMAOK', message = 'the refresh is timed: rolled back';
+      exception
+        when sqlstate 'CMAOK' then null;
+      end;
+      if not exists (select 1 from cma.active_take k where k.tenant_id = t.id) then
+        perform cma.active_refresh_of(t.id, true);
+      end if;
       v_first := (cma.active_rest_head_of(t.id, null, 'month', now()) ->> 'from_month')::date;
       -- the filters a request passes: the tenant's largest market and, within it, its largest segment (two filters
       -- together have no stored document), and a cursor into that market's list by age

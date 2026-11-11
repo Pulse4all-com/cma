@@ -838,6 +838,16 @@ async function expectActiveLayers() {
       const link = p.locator(selector);
       if (await link.count() === 0) { problems.push(`${tag}: ${name} is not on the page`); continue; }
       await link.scrollIntoViewIfNeeded();
+      // no click waits for the live read (decision D16): after the click the stored tiles are on the screen again before
+      // the live ones (the present's boundary is a new one on every view); seen from inside the page
+      await p.evaluate(() => {
+        window.__sawStored = false;
+        window.__watch?.disconnect();
+        window.__watch = new MutationObserver(() => {
+          if (document.querySelector('[data-testid="active-present"][data-settled="false"]')) window.__sawStored = true;
+        });
+        window.__watch.observe(document.body, { subtree: true, childList: true, attributes: true });
+      });
       await p.route("**/reports/active?**", async (route) => { await new Promise((r) => setTimeout(r, provoke ? 0 : 500)); await route.continue().catch(() => undefined); });
       const t0 = Date.now();
       await link.click();
@@ -846,6 +856,8 @@ async function expectActiveLayers() {
       await p.unroute("**/reports/active?**", { behavior: "ignoreErrors" });
       await p.waitForURL(after, { timeout: 10_000 }).catch(() => problems.push(`${tag}: ${name} did not change the address`));
       await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: after ${name} the page did not settle`));
+      const sawStored = await p.evaluate(() => window.__sawStored === true);
+      if (provoke ? sawStored : !sawStored) problems.push(`${tag}: after ${name} the stored tiles were not shown before the live ones (the click waited for the live read)`);
     }
     await ctx.close();
   }

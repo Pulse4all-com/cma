@@ -1307,7 +1307,7 @@ end
 $$;
 
 -- The job refresh_active_customers joins the list, without a connection (as 0008s, 0008zn and 0008zr); sync_run's two
--- constraints come last in this script (section 10: the lock they take is held to the commit)
+-- constraints come last in this script (section 9: the lock they take is held to the commit)
 -- based on: 132_perf.sql
 create or replace function cma.job_permission_of(p_job text)
 returns text
@@ -1363,9 +1363,10 @@ declare
   v_month  date;
   v_prev   date;
   v_year   date;
-  v_ages   integer[] := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'customers.cohort_ages_months'));
-  v_segments text[] := cma.flash_list_of(cma.setting_of(p_tenant_id, 'crm.customer_segments'));
+  v_ages   integer[];
+  v_segments text[];
   v_every  integer := cma.setting_of(p_tenant_id, 'customers.refresh_minutes')::integer;
+  v_set_up boolean;
   v_attr   date;
   v_take   cma.active_take;
   v_found  boolean;
@@ -1385,10 +1386,16 @@ begin
   end if;
   select * into v_take from cma.active_take t where t.tenant_id = p_tenant_id;
   v_found := found;
-  if not (coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false)
-          and coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false)) then
-    -- nothing to take: a tenant whose sources are not set up holds no rows (the page says Not set up, never zeros)
+  -- a statement, not an expression (as the reads' heads): its plan is made again when the role changes
+  select coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false) and coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false)
+  into v_set_up;
+  if not v_set_up then
+    -- nothing to take: a tenant whose sources are not set up holds no rows (the page says Not set up, never zeros).
+    -- Under the refresh's lock, so a refresh running beside it cannot leave rows without a take
     if v_found then
+      if not pg_try_advisory_xact_lock(cma.active_take_lock_key(p_tenant_id)) then
+        return jsonb_build_object('refreshed', false, 'reason', 'running');
+      end if;
       delete from cma.active_document x where x.tenant_id = p_tenant_id;
       delete from cma.active_cohort x where x.tenant_id = p_tenant_id;
       delete from cma.active_month x where x.tenant_id = p_tenant_id;
@@ -1405,6 +1412,12 @@ begin
   if not pg_try_advisory_xact_lock(cma.active_take_lock_key(p_tenant_id)) then
     return jsonb_build_object('refreshed', false, 'reason', 'running');
   end if;
+  -- under the lock: the take as it is now (a refresh that committed meanwhile is seen), and after it the settings the
+  -- stored rows follow, so every mark counted in this take's row is of a setting read below
+  select * into v_take from cma.active_take t where t.tenant_id = p_tenant_id;
+  v_found := found;
+  v_ages := cma.flash_bounds_of(cma.setting_of(p_tenant_id, 'customers.cohort_ages_months'));
+  v_segments := cma.flash_list_of(cma.setting_of(p_tenant_id, 'crm.customer_segments'));
   v_today := (v_now at time zone v_zone)::date;
   v_month := date_trunc('month', v_today)::date;
   v_prev := (v_month - interval '1 month')::date;
@@ -1584,9 +1597,10 @@ begin
     cross join (values ('month'), ('quarter')) g(period)
     cross join lateral cma.active_cohort_cube_from(a.k, a.a, a.b, a.c, a.cs, a.s, a.e, v_ages, g.period, v_zone, v_now) x;
   else
-    -- the history stays as it was last written (its month ends and cohorts are of that moment: nothing they are
-    -- computed from changed since), but Flash's churn count reads the subscriptions' events, which the key does not
-    -- hold: it is written again at every refresh, where it reads differently
+    -- the history stays as it was last written: its month ends and cohorts are of that moment (no row they are computed
+    -- from changed since; a cohort's maturity is of that moment too, at most a business date old). Flash's churn count
+    -- reads the subscriptions' events, which the key does not hold: it is written again at every refresh, where it
+    -- reads differently
     select coalesce(jsonb_agg(jsonb_build_object('market', q.market, 'segment', q.segment, 'channel', q.channel, 'n', q.n)), '[]'::jsonb)
     into v_churn
     from (select x.market, coalesce(b.segment, 'unknown') as segment, coalesce(b.channel, 'unknown') as channel, count(*) as n
@@ -1609,16 +1623,12 @@ begin
   select count(*) filter (where b.is_holding), count(distinct b.customer_id) filter (where coalesce(b.customer_holding, 0) > 0)
   into n_subs, n_active
   from cma.active_base b where b.tenant_id = p_tenant_id;
-  insert into cma.active_take as t (tenant_id, computed_at, business_date, duration_ms, history_key, customers, subscriptions, attribution_start, stale, stale_since)
-  values (p_tenant_id, v_now, v_today, (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer, v_key, n_active, n_subs, v_attr, false, null)
-  on conflict (tenant_id) do update
-    set computed_at = excluded.computed_at, business_date = excluded.business_date, duration_ms = excluded.duration_ms,
-        history_key = excluded.history_key, customers = excluded.customers, subscriptions = excluded.subscriptions,
-        attribution_start = excluded.attribution_start,
-        -- the mark is cleared only when no setting was saved since this refresh read the take (the row is the one
-        -- committed now: a settings transaction still open is waited for)
-        stale = t.stale_marks is distinct from coalesce(v_take.stale_marks, 0),
-        stale_since = case when t.stale_marks is distinct from coalesce(v_take.stale_marks, 0) then t.stale_since end;
+  -- a first take: its row is there before the documents are computed (they ask whether there is a take). An existing
+  -- take's row is left alone until the documents are computed, so a settings save that marks the take stale does not
+  -- wait for them
+  insert into cma.active_take (tenant_id, computed_at, business_date, duration_ms, history_key, customers, subscriptions, attribution_start, stale, stale_since)
+  values (p_tenant_id, v_now, v_today, 0, v_key, n_active, n_subs, v_attr, false, null)
+  on conflict (tenant_id) do nothing;
 
   -- 4. the documents (decision D16), from the rows just stored and as of this take: above the fold and below it,
   --    without a filter and under each single market, segment and acquisition channel. Computed at
@@ -1660,7 +1670,14 @@ begin
     returning 1
   )
   select (select count(*) from up) + (select count(*) from gone) into n_docs;
-  update cma.active_take t set duration_ms = (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer where t.tenant_id = p_tenant_id;
+  -- the take's row, last: its moment, and the mark cleared only when no setting was saved since this refresh read the
+  -- take (the row is the one committed now: a settings transaction still open is waited for)
+  update cma.active_take t
+  set computed_at = v_now, business_date = v_today, duration_ms = (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer,
+      history_key = v_key, customers = n_active, subscriptions = n_subs, attribution_start = v_attr,
+      stale = t.stale_marks is distinct from coalesce(v_take.stale_marks, 0),
+      stale_since = case when t.stale_marks is distinct from coalesce(v_take.stale_marks, 0) then t.stale_since end
+  where t.tenant_id = p_tenant_id;
 
   return jsonb_build_object('refreshed', true, 'base_rows', n_base + n_gone, 'customer_rows', n_cust, 'history_rows', n_hist,
                             'document_rows', n_docs, 'rows', n_base + n_gone + n_cust + n_hist + n_docs,
@@ -2688,10 +2705,14 @@ declare
   v_tenant uuid := cma.current_tenant_id();
   v_at     timestamptz := now();
   v_doc    jsonb;
+  v_set_up boolean;
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   perform cma.assert_active_filter(p_market, p_segment, p_channel);
-  if not (coalesce(cma.flash_source_set_up_of(v_tenant, 'commerce'), false) and coalesce(cma.flash_source_set_up_of(v_tenant, 'subscriptions'), false)) then
+  -- a statement, not an expression (as the reads' heads): its plan is made again when the role changes
+  select coalesce(cma.flash_source_set_up_of(v_tenant, 'commerce'), false) and coalesce(cma.flash_source_set_up_of(v_tenant, 'subscriptions'), false)
+  into v_set_up;
+  if not v_set_up then
     return jsonb_build_object('figures', false, 'computed_at', v_at);
   end if;
   v_doc := cma.active_now_of(v_tenant, p_market, p_segment, p_channel, v_at, false);
@@ -2712,8 +2733,9 @@ $$;
 -- address, which the request log keeps); the row's sort values are read from the take under row-level security, so a
 -- cursor of another tenant, of a customer the take no longer holds or of no customer at all is refused (CMA04). A sort
 -- key orders by its value and then by the store customer's id; the amounts sort within their currency (a customer
--- without an amount as the smallest). Only the worst Payment state is read live, for the page's customers alone (a page
--- holds at most 200 rows; a file's rows carry the state as the take holds it, of the file's as_of moment)
+-- without an amount as the smallest). Only the worst Payment state is read live, for the page's customers alone: a read
+-- of at most 200 rows (a page's most; a file of a tenant whose flash.file_max_rows is that small reads it live too);
+-- a longer read, a file's, carries the state as the take holds it, of the file's as_of moment
 create or replace function cma.active_rows_of(p_tenant_id uuid, p_market text, p_segment text, p_channel text, p_sort text,
                                               p_descending boolean, p_after text, p_before text, p_limit integer, p_now timestamptz)
 returns jsonb
@@ -2733,9 +2755,12 @@ declare
   v_more   boolean;
   v_total  bigint;
   i        integer;
+  v_set_up boolean;
 begin
-  if not (coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false)
-          and coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false)) then
+  -- a statement, not an expression (as the reads' heads): its plan is made again when the role changes
+  select coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false) and coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false)
+  into v_set_up;
+  if not v_set_up then
     return jsonb_build_object('set_up', false, 'history', false, 'take', null, 'time_zone', v_zone, 'total', 0, 'rows', '[]'::jsonb,
                               'next', null, 'prev', null);
   end if;
@@ -3059,7 +3084,6 @@ alter table cma.sync_run add constraint sync_run_connection_check
                                             'refresh_active_customers'))) not valid;
 alter table cma.sync_run validate constraint sync_run_connection_check;
 
--- ---------------------------------------------------------------------------------------------
 -- ---------------------------------------------------------------------------------------------
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------

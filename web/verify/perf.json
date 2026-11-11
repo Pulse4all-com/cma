@@ -183,10 +183,20 @@
       "subject": "manager",
       "class": "report",
       "layers": {
-        "frame": { "mark": "data-panel-skeleton=\"tiles\"", "p95": 200 },
-        "above_the_fold_stored": { "mark": "data-present=\"stored\"", "p95": 400 },
-        "below_the_fold": { "mark": "data-panel-body=\"markets\"", "p95": 500 },
-        "list": { "mark": "data-panel-body=\"list\"", "p95": 300 },
+        "frame": { "mark": "data-panel-skeleton=\"tiles\"", "p95": 150 },
+        "above_the_fold_stored": { "mark": "data-present=\"stored\"", "p95": 200 },
+        "below_the_fold": { "mark": "data-panel-body=\"markets\"", "p95": 250 },
+        "list": { "mark": "data-panel-body=\"list\"", "p95": 250 },
+        "live_present": { "mark": "data-present=\"live\"", "p95": 350 }
+      }
+    },
+    {
+      "path": "/reports/active?segment=unknown&channel=direct",
+      "subject": "manager",
+      "class": "report",
+      "layers": {
+        "above_the_fold_computed": { "mark": "data-present=\"stored\"", "p95": 400 },
+        "below_the_fold_computed": { "mark": "data-panel-body=\"markets\"", "p95": 500 },
         "live_present": { "mark": "data-present=\"live\"", "p95": 400 }
       }
     },

@@ -19,8 +19,10 @@
  *      over the route's: Assets → Installed base's default view and each panel (addition 0009f).
  *   3. The layers of a page that streams in parts (a row's layers; Customers → Active, addition 0009l, decisions D15 and
  *      D16): when each layer's mark first arrives in the stream, the 95th percentile against the layer's budget in
- *      milliseconds (the frame 200, the stored answer above the fold 400, below it 500, the list 300, the live present
- *      400: targets on the three-times fixture, so not scaled by the container factor).
+ *      milliseconds (measured on the three-times fixture and rounded up, inside the decisions' targets of 200, 400, 500,
+ *      300 and 400 ms; not scaled by the container factor). They time the bytes on the wire: what the browser paints
+ *      follows React's own rule (a part is shown no sooner than about 300 ms after the outline it replaces), which
+ *      verify:layout sees in a browser.
  * Needs the standalone build and a running app in api data mode with mock sign-in (CMA_AUTH_MODE=mock CMA_DATA_MODE=api,
  * the local database with verify/perf-volume-fixture.sql loaded for a figure that means something):
  *
@@ -128,7 +130,9 @@ for (const row of budget.requests) {
     for (const [name, layer] of Object.entries(row.layers)) {
       const sorted = (layerTimes[name] ?? []).slice().sort((a, b) => a - b);
       const l95 = Math.round(percentile(sorted, 95) * 10) / 10;
+      const l50 = Math.round(percentile(sorted, 50) * 10) / 10;
       o.layers[name] = Number.isFinite(l95) ? l95 : null;
+      (o.layers_p50 ??= {})[name] = Number.isFinite(l50) ? l50 : null;
       const max = provoke ? 0 : layer.p95;
       if (!Number.isFinite(l95)) problems.push(`${row.subject} ${row.path}: layer ${name} (${layer.mark}) did not arrive in the stream`);
       else if (l95 > max) problems.push(`${row.subject} ${row.path}: layer ${name} arrives at p95 ${l95} ms, budget ${max} ms`);
@@ -164,7 +168,7 @@ if (observedOnly) {
 console.log(`route (subject): first byte p50 / p95 ms, last byte p50 / p95 ms, HTML kB, JS kB`);
 for (const o of observed) {
   console.log(`  ${o.path} (${o.subject}): ${o.p50} / ${o.p95} ms, ${o.done_p50} / ${o.done_p95} ms, ${o.html_kb ?? "-"} kB, ${o.js_kb ?? "-"} kB`
-    + (o.layers ? `; layers p95 ${Object.entries(o.layers).map(([k, v]) => `${k} ${v ?? "-"} ms`).join(", ")}` : ""));
+    + (o.layers ? `; layers p50 / p95 ${Object.entries(o.layers).map(([k, v]) => `${k} ${o.layers_p50?.[k] ?? "-"} / ${v ?? "-"} ms`).join(", ")}` : ""));
 }
 if (problems.length) {
   for (const p of problems) console.log("  " + p);
