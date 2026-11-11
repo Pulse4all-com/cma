@@ -58,11 +58,15 @@
 --       detail (none: exactly equal); skip above 0 (B3)
 --   E3  per active tenant: today's inbound_talk_seconds is cma.calls_per_person_of's total inbound_talk_seconds, but for
 --       the same calls, named
---   E4  per active tenant: cma.inbound_now() no slower than 0009h's: six untimed calls of each first (so both run the
---       plans a pooled connection keeps after its fifth call), then the best of verify.timing_runs runs each,
---       alternating, at most 0009h's best plus the larger of verify.slack_ms and verify.slack_ratio of it (the brief:
---       "inbound now (one statement)" must not get slower; 170 reads the calls once where 164 read them twice).
+--   E4  per active tenant: cma.inbound_now() within its allowance over 0009h's: six untimed calls of each first (so both
+--       run the plans a pooled connection keeps after its fifth call), then the best of verify.timing_runs runs each,
+--       alternating, at most 0009h's best plus the larger of verify.slack_ms (1.5 ms) and verify.slack_ratio (30 %) of
+--       it; FAIL beyond that. The detail gives both timings and the allowance. 170 reads the calls once where 164 read
+--       them twice, and adds the Talk time sum, about 1 ms in prod, which Martin accepted (11 November 2026).
 --       131_time_all.sql part a holds the poll's budget (20 ms)
+-- Edited after its first prod run (Martin, 11 November 2026): E4 allowed 0.5 ms or 3 % and failed in prod at 5.45 ms
+-- against 0009h's 4.50 ms; the cost of the Talk time sum is accepted, so E4 now allows 1.5 ms or 30 %, whichever is
+-- larger, and still fails beyond that, so it holds on reruns. Nothing else changed.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS. The
 -- comparisons are provoked by a deliberate difference, not by the switch alone: B4, B5, B6 and E1 then compare with
 -- 0009h's JSON with waiting_now taken out, B2, E2 and E3 with the reports' figures of the day before (E2 and E3 also
@@ -79,8 +83,8 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every check fail
 select set_config('verify.timing_runs', '8', false);                 -- timed runs per read in E4, after six untimed ones each
-select set_config('verify.slack_ms', '0.5', false);                  -- E4: what the new poll may take above 0009h's best (measurement noise),
-select set_config('verify.slack_ratio', '0.03', false);              --     or this share of 0009h's best when that is more
+select set_config('verify.slack_ms', '1.5', false);                  -- E4: what the new poll may take above 0009h's best (the Talk time sum,
+select set_config('verify.slack_ratio', '0.30', false);              --     about 1 ms in prod, and noise), or this share of it when that is more
 
 drop table if exists pg_temp.verify_0009k;
 create temporary table verify_0009k (ord integer, check_name text, result text, detail text);
@@ -528,7 +532,7 @@ begin
       insert into verify_0009k values (v_ord, 'E3 today''s inbound talk time (' || t.slug || ')', 'FAIL', 'error ' || sqlstate || ': ' || left(sqlerrm, 120));
     end;
 
-    -- E4. the poll no slower than 0009h's: alternating runs, the best of each
+    -- E4. the poll within its allowance over 0009h's: alternating runs, the best of each
     v_ord := v_ord + 1;
     v_new := null; v_old := null; v_err := false;
     begin
@@ -550,11 +554,12 @@ begin
     exception when others then
       v_err := true;
     end;
-    insert into verify_0009k values (v_ord, 'E4 inbound_now() no slower than 0009h''s, as the application (' || t.slug || ')',
+    insert into verify_0009k values (v_ord, 'E4 inbound_now() within 1.5 ms or 30 % of 0009h''s, as the application (' || t.slug || ')',
       case when not v_err and round(v_new, 2) <= round(v_old, 2) + greatest(v_slack, v_ratio * v_old) and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_err then 'a read raised an error'
-           else format('%s ms against 0009h''s %s ms (best of %s each after six untimed, alternating, %s ms of slack)', round(v_new, 2), round(v_old, 2), v_runs,
-                       round(greatest(v_slack, v_ratio * v_old), 2)) end);
+           else format('%s ms against 0009h''s %s ms, allowed up to %s ms (%s ms more: the larger of %s ms and %s %% of 0009h''s; best of %s each after six untimed, alternating)',
+                       round(v_new, 2), round(v_old, 2), round(v_old, 2) + round(greatest(v_slack, v_ratio * v_old), 2), round(greatest(v_slack, v_ratio * v_old), 2),
+                       v_slack, round(100 * v_ratio), v_runs) end);
   end loop;
   perform set_config('role', 'cma_owner', true);
 end
