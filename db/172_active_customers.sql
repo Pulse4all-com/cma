@@ -5,12 +5,17 @@
 -- length and the indicative rates are the tenant's settings; the stores, markets and models its catalogs. Runs unchanged
 -- in every database, after 170_live_inbound_talk.sql (0009k). Rerunnable, forward-only, additive, in one transaction with
 -- a lock timeout. Run as your own IAM login: dev first, then 173_verify_active_customers.sql there (normal, then
--- provoked), then the verifies that read cma.check_tenant_setting() again, the one function this script re-creates:
--- 14_verify_tenant_settings.sql, 123_verify_flash.sql, 137_verify_flash_insights.sql and 151_verify_courtesy.sql (all
--- unchanged, still PASS: the function keeps every earlier rule and gains four keys); 85_verify_first_orders.sql too
--- (cma.first_orders_of is read here, not re-created; unchanged, still PASS); then 131_time_all.sql part b, which gains
--- the page's two rows; then seed 02 (Pulse4all's three customers settings and the empty rates) and, in dev, seed 03 (the
--- test rates and the synthetic base). Prod the same after the merge, without seed 03.
+-- provoked), then the verifies that read cma.check_tenant_setting() again, the one function this script re-creates.
+-- Directly (grep -lw 'cma\.check_tenant_setting' db/*verify*.sql): 73_verify_follow_up.sql,
+-- 101_verify_definitions_calls.sql, 113_verify_assets.sql, 121_verify_lead_cohorts.sql, 123_verify_flash.sql and
+-- 137_verify_flash_insights.sql (each reads the function's source for the branches 172 keeps). Through its trigger
+-- check_value on cma.tenant_setting, which every cma.set_tenant_setting reaches: 14_verify_tenant_settings.sql and
+-- 151_verify_courtesy.sql (the refusals of 150, the definition 172 starts from). All unchanged, still PASS: the function
+-- keeps every earlier rule in its order and gains four keys; no function or view calls it, so no verify reads it through
+-- a caller, and no existing verify is edited by this change. 85_verify_first_orders.sql is optional (cma.first_orders_of
+-- is read here, not re-created). Then seed 02 (Pulse4all's three customers settings and the empty rates) and, in dev,
+-- seed 03 (the test rates and the synthetic base); then 131_time_all.sql part b, which gains the page's two rows and
+-- refuses to run before 0009l. Prod the same after the merge, without seed 03.
 -- The web of main runs unchanged on it: nothing main reads changes. The web of this change reads cma.active_page and
 -- cma.active_rows, so in prod this script runs before that web is merged.
 --
