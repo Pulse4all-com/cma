@@ -163,7 +163,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'polls', 'messages poll (since now)', $q$select (select count(*) from cma.my_messages(now(), 200)), cma.my_unread_count()$q$, 'poll', array['*']),
 ('a', 'polls', 'team now', $q$select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at,
    coalesce(se.sessions, 0)::int as sessions, se.session_started_at,
-   coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false) as clock_in_again,
+   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)) as clock_in_again,
    cma.workday_can_clock_in_again(n.workday_id) as can_clock_in_again
    from cma.team_now() n left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at
    from cma.time_event_effective e where e.workday_id = n.workday_id and e.kind = 'start') se on true$q$, 'poll', array['monitoring.live']),
@@ -174,11 +174,13 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'polls', 'inbound now (one statement)', $q$select cma.inbound_now()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'outbound now', $q$select cma.outbound_now()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'live board calls (one statement)', $q$select cma.inbound_now() as j, cma.outbound_now() as o$q$, 'poll', array['monitoring.live']),
+-- Inbound today by hour, the Live board's chart (10 November 2026): Reports → Inbound's read for today, once a minute per open board
+('a', 'polls', 'inbound today by hour (the board chart)', $q$select * from cma.inbound_service('{today}', '{today}', 'hour')$q$, 'poll', array['reports.view', 'performance.team']),
 ('a', 'polls', 'shifts today', $q$select * from cma.roster_today()$q$, 'poll', array['monitoring.live']),
 -- agent pages
 ('a', 'welcome agent', 'own day today', $q$select s.business_date, s.status, s.started_at, s.ended_at, ws.key, ws.name, coalesce(c.closed_seconds, 0)::int, c.running_since, c.status_since,
    cma.business_day_end(s.business_date, s.timezone), coalesce(se.sessions, 0)::int, se.session_started_at,
-   coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false), cma.workday_can_clock_in_again(s.workday_id)
+   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)), cma.workday_can_clock_in_again(s.workday_id)
    from cma.workday_summary s left join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
    left join lateral (select sum(i.seconds) filter (where iws.is_working and (not i.is_open or i.is_capped)) as closed_seconds,
      max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped) as running_since,

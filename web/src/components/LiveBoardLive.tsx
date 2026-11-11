@@ -9,19 +9,26 @@
  * statements before). The filters the board holds survive every poll: they are the board's own state. Since addition
  * 0008zv the board is one contact center's: the poll asks for its organisation (?organisation=<key>), and the inbound,
  * outbound and missed-call parts, which stay tenant-wide, say they cover all lines, and the follow-up strip the whole business line.
+ *
+ * The Live board's UX pass (10 November 2026): the board says when it read last ("Updated 14:32:05") and, after two failed
+ * polls in a row, that its figures are old and it keeps trying, calmly (docs/style/Pulse4all-Style.md 2.3 and 5), so
+ * nobody acts on figures that stopped; a poll gives up after LIVE_POLL_TIMEOUT_MS. The parts are panels with a 24px gap,
+ * so every figure fits on the first screen; Inbound today by hour (LiveHours, for a holder of reports.view or
+ * performance.team) sits between the team and the missed callers, which stay last.
  */
 import { useCallback, useEffect, useState } from "react";
 import { FollowUpLive } from "./FollowUpLive";
-import { InboundLive, MissedCallbacks, type InboundCopy } from "./InboundLive";
+import { InboundLive, MissedCallbacks } from "./InboundLive";
 import { LiveBoard } from "./LiveBoard";
 import { OutboundLive } from "./OutboundLive";
-import { Card } from "./primitives";
+import { LiveHours } from "./LiveHours";
+import { Badge, Card, PageTitle } from "./primitives";
 import type { ContactCenter } from "@/lib/auth/identity";
-import type { Copy } from "@/lib/copy";
 import type { LiveBoardData } from "@/lib/data";
 import { type FollowUpTileKey } from "@/lib/follow-up";
-import { employersOf, teamsOf, tiles } from "@/lib/live";
+import { employersOf, isStale, LIVE_POLL_TIMEOUT_MS, teamsOf, tiles, type LiveBoardWords } from "@/lib/live";
 import { boardRowsOf, nextPollMs, type LiveViewer } from "@/lib/live-board";
+import { timeInZone } from "@/lib/reports";
 import { metricsHref } from "@/lib/metrics";
 
 /** The Follow-up now strip's entries in the metric catalog, per tile */
@@ -34,9 +41,9 @@ const STRIP_METRIC: Record<FollowUpTileKey, string> = {
   tasksDueToday: "tasks_due_today",
 };
 
-export type LiveBoardCopy = InboundCopy & Pick<Copy, "followUp" | "dashboard">;
+export type LiveBoardCopy = LiveBoardWords;
 
-export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetrics }: {
+export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetrics, canReadHours = false, heading }: {
   initial: LiveBoardData;
   /** The contact center whose board this is (addition 0008zv): its people only, polled with its key */
   organisation: ContactCenter;
@@ -44,8 +51,14 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
   copy: LiveBoardCopy;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration → Metrics */
   canOpenMetrics: boolean;
+  /** True for a holder of reports.view or performance.team: Inbound today by hour, from Reports → Inbound's read */
+  canReadHours?: boolean;
+  /** Today's date for the title row: the board draws its title row and intro, so its freshness sits on the title's line */
+  heading: { date: string };
 }) {
   const [data, setData] = useState(initial);
+  // Failed polls in a row, for the board's word on its own freshness (the loop keeps its own count for the wait)
+  const [failed, setFailed] = useState(0);
   const t = copy.live;
   const organisationKey = organisation.key;
   // The call parts count every line of the tenant, not only this contact center's (addition 0008zv)
@@ -55,7 +68,8 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
 
   const poll = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}`, { cache: "no-store" });
+      const res = await fetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}`,
+        { cache: "no-store", signal: AbortSignal.timeout(LIVE_POLL_TIMEOUT_MS) });
       if (!res.ok) return false;
       const body = (await res.json()) as { data: LiveBoardData };
       setData(body.data);
@@ -77,6 +91,7 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
       const ok = await poll();
       if (gen !== generation) return;
       failures = ok ? 0 : failures + 1;
+      setFailed(failures);
       if (stopped || document.hidden) { timer = null; return; }
       timer = setTimeout(() => void tick(gen), nextPollMs(failures));
     };
@@ -100,27 +115,46 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
     ? (key: FollowUpTileKey) => ({ href: metricsHref(`live.follow_up_now.${STRIP_METRIC[key]}`), label: copy.hints.howComputed })
     : undefined;
 
+  const readAt = timeInZone(data.readAt, viewer.timeZone);
+  const stale = isStale(failed);
+
   return (
     <div data-live-board-read-at={data.readAt}>
-      <div className="mb-8">
+      <PageTitle aside={
+        <p className="flex shrink-0 items-center gap-2 text-caption font-normal text-p4a-grey" data-testid="live-freshness">
+          {stale ? (
+            <span role="status" className="flex items-center gap-2" data-testid="live-stale">
+              <Badge tone="warning">{t.notUpdatedSince.replace("{time}", readAt)}</Badge>
+              <span className="text-p4a-muted">{t.tryingAgain}</span>
+            </span>
+          ) : (
+            <span><span className="tabular">{t.updatedAt.replace("{time}", readAt)}</span> · {t.refreshHint}</span>
+          )}
+        </p>
+      }>
+        {t.title}
+        <span className="ml-3 text-small font-normal text-p4a-muted">{heading.date}</span>
+      </PageTitle>
+      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
+      <div className="mb-6">
         <InboundLive inbound={data.inbound} copy={copy} locale={viewer.locale} canOpenMetrics={canOpenMetrics} scope={allLines} />
       </div>
 
       {data.outbound ? (
-        <div className="mb-8">
+        <div className="mb-6">
           <OutboundLive outbound={data.outbound} copy={copy} locale={viewer.locale} canOpenMetrics={canOpenMetrics} scope={allLines}
             connectedMinSeconds={data.settings.connectedMinSeconds} conversationMinSeconds={data.settings.conversationMinSeconds} />
         </div>
       ) : null}
 
-      <div className="mb-8">
+      <div className="mb-6">
         <FollowUpLive summary={data.followUp} copy={copy} locale={viewer.locale}
           targetMinutes={data.settings.targetMinutes} warningPct={data.settings.warningPct} moreOf={moreOf} scope={wholeBusinessLine} />
       </div>
 
-      <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>
       {rows.length === 0 ? (
         <Card>
+          <h2 className="mb-2 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>
           <p className="text-body text-p4a-muted">{t.noPeople}</p>
         </Card>
       ) : (
@@ -130,10 +164,16 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
           employers={employersOf(rows)}
           teams={teamsOf(rows, data.memberships)}
           copy={copy}
+          locale={viewer.locale}
         />
       )}
 
-      <div className="mt-8">
+      {/* its own top margin, so a chart that hides itself (no permission after all, no telephony) leaves no gap */}
+      {canReadHours && data.inbound.telephony && data.inbound.today ? (
+        <LiveHours date={data.inbound.today.date} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines} />
+      ) : null}
+
+      <div className="mt-6">
         <MissedCallbacks inbound={data.inbound} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines} />
       </div>
     </div>

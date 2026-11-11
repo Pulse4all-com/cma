@@ -23,14 +23,27 @@
  * decimal and its dash without an attempt, the outbound conversations only (not under the talk threshold, not with a
  * tag meaning not reached, never an inbound one), the talk time of the connected calls and its average, each call on
  * its day in its line's zone, a line that does not count left out, the settings moving the figures; and the absence
- * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog.
+ * of Longest waiting: no such tile, no such field, no such word in the copy, the registry or the catalog. Since
+ * addition 0009k Inbound today's Talk time in place of Waiting now, as 171 proves it in the database: the six tiles in
+ * their order, Talk time in the column of Outbound today's, a dash without an answered call, the talk time of the
+ * answered inbound calls of the tenant's day (Reports → Calls' talk time minus its outbound talk time but for calls on
+ * another day in their line's zone), and no
+ * Waiting now key in the copy, the registry, the catalog, the types, the component, the mock or the mapping. Since the
+ * Live board's UX and speed pass (10 November 2026): Inbound today by hour's 24 columns from Reports → Inbound's hour
+ * rows (the total row left out), the axis' clean top, the board's word on its own freshness (old after two failed polls,
+ * never after one; a poll gives up before the next is due), and the board's words: exactly the hints and follow-up words
+ * the board shows, each in English and Dutch, a small part of the whole hints object.
  */
 import {
-  INBOUND_TILES, LIVE_GROUPS, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
+  INBOUND_TILES, LIVE_FOLLOW_UP_KEYS, LIVE_GROUPS, LIVE_HINT_KEYS, LIVE_POLL_TIMEOUT_MS, LIVE_STALE_AFTER_FAILURES, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting,
+  employersOf, filterRows, fmtSeconds, hoursDue, inboundHours, inboundTalkToday, inboundTileValue, isStale, LIVE_HOURS_MS, liveBoardWords, liveGroupOf, liveRows,
+  missedCallbacks, niceCeiling,
   outboundTileValue, outboundToday, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
-import { callRecords, callRules, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
+import { callRecords, callRules, callsFigures, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
 import { readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+import { copy } from "../src/lib/copy.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -175,16 +188,25 @@ expect("the format drops the hour below one", [fmtSeconds(5), fmtSeconds(3599), 
 
 // ---- inbound today and the missed calls not called back (addition 0008i) -------------------------
 const today = { offered: 28, answered: 17, unanswered: 10, waiting: 1, answeredWithinTarget: 11, serviceLevelBase: 25, serviceLevelPct: 44,
-  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", waitingNow: 1,
+  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", inboundTalkSeconds: 1234,
   serviceLevelSeconds: 20, waitingMaxMinutes: 30 };
 expect("the inbound tiles in order with their values",
-  INBOUND_TILES.map((k) => inboundTileValue(today, k)),
-  [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 37 }, { kind: "pct", value: 44 },
-    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }],
-  [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 35.7 }, { kind: "pct", value: 44 },
-    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }]);
-expect("six inbound tiles, Waiting now the last, no Longest waiting", [INBOUND_TILES.length, INBOUND_TILES.at(-1), INBOUND_TILES.includes("longestWaiting")],
-  [6, "waitingNow", false], [7, "longestWaiting", true]);
+  INBOUND_TILES.map((k) => [k, inboundTileValue(today, k)]),
+  [["offered", { kind: "count", value: 28 }], ["answered", { kind: "count", value: 17 }], ["unansweredPct", { kind: "pct", value: 37 }],
+    ["serviceLevel", { kind: "pct", value: 44 }], ["talk", { kind: "talk", value: 1234 }], ["avgAnswer", { kind: "seconds", value: 17.2 }]],
+  [["offered", { kind: "count", value: 28 }], ["answered", { kind: "count", value: 17 }], ["unansweredPct", { kind: "pct", value: 35.7 }],
+    ["serviceLevel", { kind: "pct", value: 44 }], ["avgAnswer", { kind: "seconds", value: 17.2 }], ["waitingNow", { kind: "count", value: 1 }]]);
+expect("six inbound tiles, Talk time the fifth, in the column of Outbound today's Talk time; no Waiting now, no Longest waiting",
+  [INBOUND_TILES.length, INBOUND_TILES.indexOf("talk"), INBOUND_TILES.indexOf("talk") === OUTBOUND_TILES.indexOf("talk"),
+    INBOUND_TILES.includes("waitingNow"), INBOUND_TILES.includes("longestWaiting")],
+  [6, 4, true, false, false], [6, 5, false, true, false]);
+// the dash needs no answered call and no talk time: both count the calls of the tenant's day, so they are 0 together, and
+// talk time without an answered call (a disagreement the rule rules out) still shows rather than hiding behind a dash
+expect("Talk time as Outbound today's shows it, a dash without an answered call and without talk time",
+  [fmtTalk(inboundTileValue(today, "talk").value, "en"), inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk"),
+    fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk").value, "nl"), fmtTalk(inboundTileValue({ ...today, inboundTalkSeconds: 0 }, "talk").value, "en"),
+    fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 70 }, "talk").value, "en")],
+  ["20m 34s", { kind: "talk", value: null }, "–", "0 s", "1m 10s"], ["1234 s", { kind: "talk", value: 0 }, "0 s", "–", "–"]);
 // The calls of 61 B6 to B10 (invented ids; callers are opaque keys standing in for the hash)
 const NOW = Date.parse("2026-10-14T12:00:00Z");
 const ago = (minutes) => new Date(NOW - minutes * 60_000).toISOString();
@@ -305,6 +327,80 @@ expect("a day without an attempt: zeros, no rate, no average",
 expect("the connected rate with one decimal, a dash without an attempt; the average's dash",
   [fmtRate1(out6.connectedRate, "en"), fmtRate1(57.1, "nl"), fmtRate1(100, "en"), fmtRate1(none.connectedRate, "en"), fmtTalk(none.talkAvgSeconds, "en"), fmtTalk(none.talkSeconds, "en")],
   ["87.5%", "57,1%", "100.0%", "–", "–", "0 s"], ["88%", "57%", "100%", "0%", "0 s", "–"]);
+// ---- Inbound today's Talk time (addition 0009k) ----------------------------------------------------
+// The calls of 171 B (invented ids), on 10 November 2026 around the tenant's midnight (Europe/Amsterdam, 23:00 UTC the
+// day before): two ended NL calls (45 and 100 s), one answered and in progress, one unanswered; the New York line's
+// answered call 5 seconds after the tenant's midnight (18:00 the day before there); the Tokyo line's call 10 seconds
+// before it (07:59:50 on the date there); a connected outbound call (30 s), an outbound one not connected; the day before
+const MIDNIGHT = Date.parse("2026-11-09T23:00:00Z");
+const sec = (n) => MIDNIGHT + n * 1000;
+const tCalls = [
+  oCall("i1", "inbound", sec(1), 45, "nl"), oCall("i2", "inbound", sec(2), 100, "nl"), oCall("i3", "inbound", sec(3), 0, "nl", [], false),
+  oCall("i4", "inbound", sec(4), null, "nl"), oCall("u1", "inbound", sec(5), 60, "us"), oCall("j1", "inbound", sec(-10), 70, "jp"),
+  oCall("o1", "outbound", sec(6), 30, "nl"), oCall("o2", "outbound", sec(7), null, "nl"), oCall("y1", "inbound", sec(-23 * 3600), 50, "nl"),
+];
+const tRecords = (connectedMin) => callRecords(tCalls, oLines, "Europe/Amsterdam", callRules(connectedMin, 30, oTags));
+const reportDiff = (connectedMin, date) => {
+  const f = callsFigures(tRecords(connectedMin).filter((c) => c.date === date));
+  return f.talkSeconds - f.outboundTalkSeconds;
+};
+// the tenant's day (Martin, 10 November 2026): the row's own calls, as the other inbound figures
+const DAY_MS = 86_400_000;
+const talkOn = (fromMs) => inboundTalkToday(tCalls, oLines, fromMs, fromMs + DAY_MS);
+expect("inbound talk today over the tenant's day: the ended NL calls and the New York call, not the Tokyo call (the day before in the tenant's zone)",
+  [talkOn(MIDNIGHT), talkOn(MIDNIGHT - DAY_MS)], [205, 120], [215, 110]);
+expect("it is Reports → Calls' talk time minus its outbound talk time but for the calls on another day in their line's zone (+60 New York, −70 Tokyo); above the Connected threshold the report's difference holds more",
+  [reportDiff(0, "2026-11-10"), talkOn(MIDNIGHT) === reportDiff(0, "2026-11-10") + 60 - 70, reportDiff(40, "2026-11-10")], [215, true, 245], [205, false, 215]);
+// Waiting now is gone everywhere the web held its keys: the copy's (inboundWaitingNow, liveWaitingNow, en and nl), the
+// registry's and the catalog's (live.inbound.waiting_now), the field, the tile, the mock and the database mapping (no
+// waiting_now read). Email's own "Waiting now" (email.waitingTitle) is another figure and stays
+const keysGone = [
+  ["src/lib/copy.ts", /inboundWaitingNow|liveWaitingNow/], ["src/lib/metrics.ts", /live\.inbound\.waiting_now/],
+  ["src/lib/metrics-catalog.json", /"live\.inbound\.waiting_now"/], ["src/lib/data/types.ts", /waitingNow/],
+  ["src/components/InboundLive.tsx", /waitingNow|WaitingNow/], ["src/lib/live.ts", /waitingNow/], ["src/lib/data/mock.ts", /waitingNow/],
+  ["src/lib/data/postgres.ts", /\.waiting_now\b|waiting_now:|\.longest_waiting_seconds\b/],
+].filter(([f, re]) => re.test(readFileSync(new URL(`../${f}`, import.meta.url), "utf8"))).map(([f]) => f);
+expect("no Waiting now in the copy, the registry, the catalog, the types, the component, the tiles, the mock or the mapping", keysGone, [],
+  ["src/lib/copy.ts"]);
+expect("email's Waiting now stays (another figure)", /waitingTitle: "Waiting now"/.test(readFileSync(new URL("../src/lib/copy.ts", import.meta.url), "utf8")), true, false);
+
+// ---- Inbound today by hour, the board's freshness and its words (the Live board's UX and speed pass) ----------------
+const hourRows = [
+  { groupKey: "09", offered: 5, answered: 3, unanswered: 2, waiting: 0, serviceLevelPct: 60 },
+  { groupKey: "14", offered: 2, answered: 1, unanswered: 0, waiting: 1, serviceLevelPct: 100 },
+  { groupKey: null, offered: 7, answered: 4, unanswered: 2, waiting: 1, serviceLevelPct: 66.7 },   // the total row
+  { groupKey: "7", offered: 9, answered: 9, unanswered: 0, waiting: 0, serviceLevelPct: 100 },     // no hour key
+];
+const hrs = inboundHours(hourRows);
+expect("inbound today by hour: 24 columns 00 to 23, the hours with calls in place, the total row and a bad key left out",
+  [hrs.length, hrs[0].hour, hrs[23].hour, hrs[9].offered, hrs[9].unanswered, hrs[14].waiting, hrs[7].offered, hrs.reduce((n, h) => n + h.offered, 0)],
+  [24, 0, 23, 5, 2, 1, 0, 7], [24, 0, 23, 5, 2, 1, 9, 23]);
+expect("the axis' top: a clean whole step at or above the tallest column, at least 4",
+  [0, 3, 5, 7, 11, 23, 26, 51, 120].map(niceCeiling), [4, 4, 5, 8, 15, 25, 30, 60, 150], [1, 3, 5, 7, 11, 23, 26, 51, 120]);
+expect("the board says its figures are old after two failed polls in a row, never after one; a poll gives up before the next is due",
+  [isStale(0), isStale(1), isStale(LIVE_STALE_AFTER_FAILURES), isStale(5), LIVE_POLL_TIMEOUT_MS < 10_000],
+  [false, false, true, true, true], [false, true, true, true, true]);
+expect("the hours are read when never read or a minute old; a tab back within the minute waits",
+  [hoursDue(0, 5_000), hoursDue(1_000, 1_000 + LIVE_HOURS_MS - 1), hoursDue(1_000, 1_000 + LIVE_HOURS_MS), LIVE_HOURS_MS],
+  [true, false, true, 60_000], [true, true, true, 60_000]);
+const words = liveBoardWords(copy.en);
+const wordsNl = liveBoardWords(copy.nl);
+const hintKeys = Object.keys(words.hints).sort();
+expect("the board's words: exactly its hints and follow-up words, every one in English and Dutch",
+  [hintKeys.join(",") === [...LIVE_HINT_KEYS].sort().join(","), Object.keys(words.followUp).length === LIVE_FOLLOW_UP_KEYS.length,
+    [...LIVE_HINT_KEYS].every((k) => typeof words.hints[k] === "string" && words.hints[k] !== "" && typeof wordsNl.hints[k] === "string" && wordsNl.hints[k] !== ""),
+    LIVE_FOLLOW_UP_KEYS.every((k) => typeof wordsNl.followUp[k] === "string" && wordsNl.followUp[k] !== "")],
+  [true, true, true, true], [false, true, true, true]);
+const sliceKb = gzipSync(JSON.stringify(words.hints)).length / 1024;
+const wholeKb = gzipSync(JSON.stringify(copy.en.hints)).length / 1024;
+expect("the board's hints are a small part of the whole hints object (gzip, in the page's payload)",
+  sliceKb < wholeKb / 4, true, false);
+// The missed callers' first page: the component shows MISSED_SHOWN before "Show all"
+const inboundLive = readFileSync(new URL("../src/components/InboundLive.tsx", import.meta.url), "utf8");
+expect("the missed callers show the oldest 20 first, the rest on request",
+  [/export const MISSED_SHOWN = 20;/.test(inboundLive), /inbound\.callbacks\.slice\(0, MISSED_SHOWN\)/.test(inboundLive), /data-testid="missed-more"/.test(inboundLive)],
+  [true, true, true], [false, true, true]);
+
 // Longest waiting is gone everywhere the web holds its keys: the copy's (inboundLongestWaiting, liveLongestWaiting and
 // nobodyWaiting, en and nl), the registry's and the catalog's (live.inbound.longest_waiting), the field and the tile
 const gone = ["src/lib/copy.ts", "src/lib/metrics.ts", "src/lib/metrics-catalog.json", "src/lib/data/types.ts", "src/components/InboundLive.tsx"]

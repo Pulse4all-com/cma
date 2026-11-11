@@ -1005,10 +1005,15 @@ export interface InboundService {
   total: InboundFigures;
 }
 
-/** Today's inbound in the tenant's zone, for the Live board (cma.inbound_today) */
+/** Today's inbound in the tenant's zone, for the Live board (cma.inbound_now's today, cma.inbound_today_live_of since addition 0009k) */
 export interface InboundToday extends InboundFigures {
   date: DateKey;
-  waitingNow: number;
+  /**
+   * Talk time of today's answered inbound calls on counted lines, in seconds, 0 without one, over the tenant's day as the
+   * row's other figures (addition 0009k): Reports → Calls' talk time minus its outbound talk time but for the calls whose
+   * day in their line's zone differs (gap D34)
+   */
+  inboundTalkSeconds: number;
   serviceLevelSeconds: number;
   waitingMaxMinutes: number;
 }

@@ -1,20 +1,21 @@
 /**
- * The Live board's follow-up strip (addition 0008o): six tiles under the inbound ones, from
+ * The Live board's follow-up strip (addition 0008o): six figures under the call panels, from
  * cma.follow_up_summary: leads not called and past the target, tickets at risk and over their response
- * time, tasks overdue and due today. Counts only; the Follow-up report has the rows. Tiles as InboundLive's
- * (docs/style/Pulse4all-Style.md 7.3), each with its hint, no figure a filled red tile. A server component:
- * the page's poll (LiveRefresh) reads it again every 10 seconds. On a contact center's board (addition 0008zv) a caption
+ * time, tasks overdue and due today. Counts only; the Follow-up report has the rows. One panel of six figures as the call
+ * panels (StatPanel, the Live board's UX pass of 10 November 2026; docs/style/Pulse4all-Style.md 7.3), each with its hint,
+ * no figure a filled red tile. Rendered by the board's poll (LiveBoardLive), which reads it again every 10 seconds. On a contact center's board (addition 0008zv) a caption
  * under the title says the counts cover the whole business line (Martin, 5 November 2026).
  */
 import Link from "next/link";
 import type { Copy, Locale } from "@/lib/copy";
 import type { FollowUpSummary } from "@/lib/data";
 import { FOLLOW_UP_TILES, type FollowUpTileKey } from "@/lib/follow-up";
+import type { LiveFollowUpWords, LiveHints } from "@/lib/live";
 import { fillHint, fmtCount } from "@/lib/reports";
-import { HeaderHint } from "./HeaderHint";
+import { Stat, StatPanel } from "./StatPanel";
 
 export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct, moreOf, scope }: {
-  summary: FollowUpSummary; copy: Pick<Copy, "followUp" | "hints" | "live">; locale: Locale; targetMinutes: number | null; warningPct: number | null;
+  summary: FollowUpSummary; copy: Pick<Copy, "live"> & { hints: LiveHints; followUp: LiveFollowUpWords }; locale: Locale; targetMinutes: number | null; warningPct: number | null;
   /** "How this is computed" per tile, to the figure's catalog entry; given only for tenant.configure */
   moreOf?: (key: FollowUpTileKey) => { href: string; label: string } | undefined;
   /** A caption under the title on what the counts cover (a contact center's board: the whole business line) */
@@ -31,26 +32,14 @@ export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct,
     tasksDueToday: { label: t.tileTasksToday, hint: h.fuTasksToday },
   };
   return (
-    <section aria-labelledby="follow-up-now" className="flex flex-col gap-4" data-testid="follow-up-live">
-      <div className="flex items-baseline justify-between gap-4">
-        <div>
-          <h2 id="follow-up-now" className="text-panel font-semibold text-p4a-heading">{copy.live.followUpTitle}</h2>
-          {scope ? <p className="mt-1 text-small text-p4a-muted" data-testid="follow-up-scope">{scope}</p> : null}
-        </div>
-        {/* no prefetch: this card sits on a polled page and would fetch the route again on every refresh (Shell) */}
-        <Link href="/reports/follow-up" prefetch={false} className="text-small font-semibold text-p4a-deepblue hover:underline">{copy.live.openFollowUp}</Link>
-      </div>
-      <div className="grid grid-cols-3 gap-4 2xl:grid-cols-6" data-testid="follow-up-tiles">
-        {FOLLOW_UP_TILES.map((key) => (
-          <div key={key} className="rounded-card border border-p4a-border bg-white p-6" data-testid={`follow-up-${key}`} data-tile="">
-            <p className="flex items-start text-small text-p4a-muted" data-hint-anchor="">
-              {labels[key].label}
-              <HeaderHint label={h.about.replace("{label}", labels[key].label)} text={fillHint(labels[key].hint, { hours: h.officeHours, target: targetMinutes, warning: warningPct }, locale)} more={moreOf?.(key)} />
-            </p>
-            <div className="tabular mt-1 whitespace-nowrap text-title font-bold text-p4a-heading">{fmtCount(summary[key], locale)}</div>
-          </div>
-        ))}
-      </div>
-    </section>
+    <StatPanel id="follow-up-now" title={copy.live.followUpTitle} scope={scope} scopeTestId="follow-up-scope" testId="follow-up-live" figuresTestId="follow-up-tiles"
+      // no prefetch: this card sits on a polled page and would fetch the route again on every refresh (Shell)
+      action={<Link href="/reports/follow-up" prefetch={false} className="shrink-0 text-small font-semibold text-p4a-deepblue hover:underline">{copy.live.openFollowUp}</Link>}>
+      {FOLLOW_UP_TILES.map((key) => (
+        <Stat key={key} testId={`follow-up-${key}`} label={labels[key].label} locale={locale} value={fmtCount(summary[key], locale)}
+          info={{ about: h.about.replace("{label}", labels[key].label),
+            text: fillHint(labels[key].hint, { hours: h.officeHours, target: targetMinutes, warning: warningPct }, locale), more: moreOf?.(key) }} />
+      ))}
+    </StatPanel>
   );
 }

@@ -19,6 +19,7 @@ import type {
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
 import { isoWeek } from "./roster.ts";
+import { numberFormat } from "./intl.ts";
 import { addDays, dateKeyInZone, daysBetween, fmtDate, fmtMinutes, hourInZone, startOfWeek } from "./time.ts";
 
 /** Every report function answers at most 92 days per request; the app refuses a longer range too */
@@ -258,27 +259,27 @@ const intlLocale: Record<string, string> = { en: "en-GB", nl: "nl-NL" };
 
 /** A whole count with the locale's grouping */
 export function fmtCount(n: number, locale: string): string {
-  return new Intl.NumberFormat(intlLocale[locale] ?? locale).format(n);
+  return numberFormat(intlLocale[locale] ?? locale).format(n);
 }
 
 /** Business minutes: "7,5 min" under an hour (one decimal at most), "1h 05m" from an hour, a dash for none */
 export function fmtBusinessMinutes(minutes: number | null, locale: string): string {
   if (minutes === null) return "–";
-  if (minutes < 60) return `${new Intl.NumberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 1 }).format(minutes)} min`;
+  if (minutes < 60) return `${numberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 1 }).format(minutes)} min`;
   return fmtMinutes(Math.round(minutes));
 }
 
 /** A percentage the database gave with one decimal (0 to 100), shown in whole percents; a dash for none */
 export function fmtPct(pct: number | null, locale: string): string {
   if (pct === null) return "–";
-  const f = new Intl.NumberFormat(intlLocale[locale] ?? locale, { style: "percent", maximumFractionDigits: 0 });
+  const f = numberFormat(intlLocale[locale] ?? locale, { style: "percent", maximumFractionDigits: 0 });
   return pct > 0 && pct < 0.5 ? `< ${f.format(0.01)}` : f.format(pct / 100);
 }
 
 /** A rate of 0 to 100 with one decimal and the locale ("57,1%"), a dash for none: the Live board's connected rate */
 export function fmtRate1(pct: number | null, locale: string): string {
   if (pct === null) return "–";
-  return new Intl.NumberFormat(intlLocale[locale] ?? locale, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(pct / 100);
+  return numberFormat(intlLocale[locale] ?? locale, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(pct / 100);
 }
 
 // ---- Inbound service (addition 0008i, brief B15) -------------------------------------------------
@@ -549,7 +550,7 @@ export function inboundGroupDisplay(row: Pick<InboundServiceRow, "groupKey" | "g
 /** Seconds to answer: "17 s" under a minute, "1m 05s" from a minute, a dash for none */
 export function fmtAnswerSeconds(seconds: number | null, locale: string): string {
   if (seconds === null) return "–";
-  if (seconds < 59.5) return `${new Intl.NumberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 0 }).format(seconds)} s`;
+  if (seconds < 59.5) return `${numberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 0 }).format(seconds)} s`;
   const s = Math.round(seconds);
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
 }
@@ -1216,7 +1217,7 @@ export function weekNumber(monday: DateKey): number {
 export function fmtTalk(seconds: number | null, locale: string): string {
   if (seconds === null) return "–";
   const s = Math.round(seconds);
-  if (s < 60) return `${new Intl.NumberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 0 }).format(s)} s`;
+  if (s < 60) return `${numberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 0 }).format(s)} s`;
   if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
   return fmtMinutes(Math.floor(s / 60));
 }
