@@ -5,7 +5,8 @@
 -- verify/round-trips.mjs measure the reads on something like prod, three times over; since addition 0009j also the
 -- pledge lists (a block of its own at the end, once 168 has run); since addition 0009l the active customer base (a block
 -- of its own after it, once 172 has run: the subscriptions linked to their store's customers over 60 months, segments,
--- a year of first orders with their deals, and most failed renewals closed)
+-- a year of first orders with their deals, and most failed renewals closed, then the stored take of Customers → Active
+-- refreshed once)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, refuses a database without
 -- the dev seed, and refuses a Cloud SQL instance (the role cloudsqladmin exists there). Every id is invented (perf-…,
@@ -603,6 +604,29 @@ begin
   alter table cma.commerce_order enable trigger audit;
   raise notice 'perf active customers written in % s: % subscriptions linked to their store''s customers, % devices moved to their subscription''s market, % first orders with their order deal',
     round(extract(epoch from clock_timestamp() - t0), 1), n_s, n_d, n_o;
+end
+$$;
+reset role;
+
+-- The stored take of Customers → Active (decision D13 of addendum B): refreshed once here, as the scheduler's job does
+-- every minute where it runs, so the page, verify/perf.mjs and verify/round-trips.mjs read a take on this local database
+-- too (no job runs here; run  node jobs/refresh-active-customers.mjs  with the local CMA_DB_* to refresh it again). A
+-- rerun of the fixture stops at its guard above and does not reach this block: it runs once, after 172
+set role cma_owner;
+do $$
+declare
+  t record;
+  r jsonb;
+begin
+  if to_regprocedure('cma.active_refresh_of(uuid,boolean,timestamptz)') is null then
+    raise notice 'Customers → Active''s stored take not present (172 not run): no take written';
+    return;
+  end if;
+  for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug loop
+    perform set_config('app.tenant_id', t.id::text, true);
+    r := cma.active_refresh_of(t.id, true);
+    raise notice 'perf active take of %: %', t.slug, r;
+  end loop;
 end
 $$;
 reset role;

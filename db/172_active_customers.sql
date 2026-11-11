@@ -2,32 +2,43 @@
 -- 172_active_customers.sql: addition 0009l, Customers → Active (the active customer base: its state and its movement)
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: the statuses a figure counts, the segments, the ages, the history's
--- length and the indicative rates are the tenant's settings; the stores, markets and models its catalogs. Runs unchanged
--- in every database, after 170_live_inbound_talk.sql (0009k). Rerunnable, forward-only, additive, in one transaction with
--- a lock timeout. Run as your own IAM login: dev first, then 173_verify_active_customers.sql there (normal, then
--- provoked), then the verifies that read cma.check_tenant_setting() again, the one function this script re-creates.
--- Directly (grep -lw 'cma\.check_tenant_setting' db/*verify*.sql): 73_verify_follow_up.sql,
--- 101_verify_definitions_calls.sql, 113_verify_assets.sql, 121_verify_lead_cohorts.sql, 123_verify_flash.sql and
--- 137_verify_flash_insights.sql (each reads the function's source for the branches 172 keeps). Through its trigger
--- check_value on cma.tenant_setting, which every cma.set_tenant_setting reaches: 14_verify_tenant_settings.sql and
--- 151_verify_courtesy.sql (the refusals of 150, the definition 172 starts from). All unchanged, still PASS: the function
--- keeps every earlier rule in its order and gains four keys; no function or view calls it, so no verify reads it through
--- a caller, and no existing verify is edited by this change. 85_verify_first_orders.sql is optional (cma.first_orders_of
--- is read here, not re-created). Then seed 02 (Pulse4all's three customers settings and the empty rates) and, in dev,
--- seed 03 (the test rates and the synthetic base); then 131_time_all.sql part b, which gains the page's two rows and
--- refuses to run before 0009l.
--- Prod: this script just before the merge (docs/RUNBOOK.md's usual order). The web of main runs unchanged on it: nothing
--- main reads changes. The web of this change reads cma.active_page and cma.active_rows, and the merge deploys it, so a
--- merge before this script would leave Customers → Active failing in prod until it has run. After the merge: 173 and
--- the verifies above, seed 02 and 131 part b in prod, without seed 03.
+-- length, the refresh's cadence and the indicative rates are the tenant's settings; the stores, markets and models its
+-- catalogs. Runs unchanged in every database, after 170_live_inbound_talk.sql (0009k). Rerunnable, forward-only, in one
+-- transaction with a lock timeout; an earlier form of this script (the pull request's first rounds, dev only) is
+-- replaced by it. Run as your own IAM login: dev first, then 173_verify_active_customers.sql there (normal, then
+-- provoked), then the verifies that read what this script re-creates:
+--   cma.check_tenant_setting() (from 150): by name 73_verify_follow_up.sql, 101_verify_definitions_calls.sql,
+--     113_verify_assets.sql, 121_verify_lead_cohorts.sql, 123_verify_flash.sql and 137_verify_flash_insights.sql (each
+--     reads the function's source for the branches 172 keeps); through its trigger check_value on cma.tenant_setting
+--     14_verify_tenant_settings.sql and 151_verify_courtesy.sql
+--   cma.ensure_scheduler_user(uuid) (from 168): 27_verify_configuration.sql (edited by this change: its list of the
+--     jobs' permissions gains customers.refresh), 123_verify_flash.sql and 169_verify_pledge_lists.sql
+--   cma.job_permission_of(text) and cma.job_run_start(text) (from 132): 81_verify_follow_up_snapshot.sql,
+--     123_verify_flash.sql and 133_verify_perf.sql
+--   sync_run's constraints sync_run_job_check and sync_run_connection_check (as 132's section 10 wrote them, with one more
+--     job): 79_verify_system_health.sql, 81, 105_verify_reviews.sql, 109_verify_legacy_call_outcome.sql, 113,
+--     115_verify_asset_sync.sql, 119_verify_subscriptions.sql and 123
+-- All but 27 unchanged, still PASS: each function keeps every earlier rule in its order and gains one name, the
+-- constraints one job. 85_verify_first_orders.sql is optional (cma.first_orders_of is read here, not re-created). Then
+-- seed 02 (Pulse4all's customers settings and the empty rates) and, in dev, seed 03 (the test rates and the synthetic
+-- base); then 131_time_all.sql part b, which gains a row per read of the page and one for the refresh, and refuses to
+-- run before 0009l. Then the job: docs/scheduler/deploy-active-customers.sh with the merge's image.
+-- Prod: this script and 173 before the merge (docs/RUNBOOK.md's usual order). The web of main runs unchanged on it:
+-- nothing main reads changes. The web of this change reads cma.active_top, cma.active_rest and cma.active_rows, and the
+-- merge deploys it. The job's image is the merge's, so the job is deployed right after the merge; until its first run a
+-- tenant has no take and the page says "History is being prepared" with the tiles' live figures (never zeros). A first
+-- take can be made by hand before the merge (the pull request's steps: cma.active_refresh() as the scheduler).
 --
--- Why (Martin, 11 November 2026, brief B35 with addendum A; Decision log): the sales director, Kira, Peter and Bas open
--- one page first for the state and the movement of the customer base: who the active customers are, in which markets and
--- segments, direct or indirect, how long they stay, what they are worth, how the base grows and shrinks, how cohorts
--- retain. One fact one source: the store's customers (commerce, 0007b) with their CRM contact (0008h) and its segment
--- (0008zt), the subscription app's subscriptions and events (0008zl), the asset register's devices (0008zi), First
--- orders' attribution (0008u) and the tenant's settings. Flash's population unchanged (0008zu): an Active customer is a
--- store customer with a subscription in a device-holding status; Total subscriptions are the subscriptions in one.
+-- Why (Martin, 11 November 2026, brief B35 with addenda A and B; Decision log): the sales director, Kira, Peter and Bas
+-- open one page first for the state and the movement of the customer base: who the active customers are, in which
+-- markets and segments, direct or indirect, how long they stay, what they are worth, how the base grows and shrinks,
+-- how cohorts retain. One fact one source: the store's customers (commerce, 0007b) with their CRM contact (0008h) and
+-- its segment (0008zt), the subscription app's subscriptions and events (0008zl), the asset register's devices (0008zi),
+-- First orders' attribution (0008u) and the tenant's settings. Flash's population unchanged (0008zu): an Active customer
+-- is a store customer with a subscription in a device-holding status; Total subscriptions are the subscriptions in one.
+-- Addendum B (decisions D13 to D15): reconstructing the history on every request took 1.4 to 2.0 s at three times
+-- prod's volume, so the history is read from a stored take the scheduler refreshes, the present stays live, and the
+-- page reads in three layers (above the fold, below it, the list), each its own transaction.
 --
 -- Definitions (docs/definitions.md, Active customer terms):
 --   Customer start     the earliest of the store customer's creation and the creation of any of its subscriptions here
@@ -48,31 +59,48 @@
 --   Customer lifetime value (realised)   the store's amount spent of a store customer, in the store's currency
 --   Acquisition channel   indirect (First orders' attribution call_center of the customer's first order), direct
 --                      (self_service) or unknown, with the reason
+--   Take               the stored results the history is read from, with the moment they were computed (History as of)
 --
 -- What it adds
 --   settings          customers.cohort_ages_months (3,6,12,24,36; one to eight increasing, each at most 120),
 --                     customers.age_months (12,24,36,48,60; one to ten), customers.history_months (60; 12 to 120),
+--                     customers.refresh_minutes (5; 1 to 1440: how old a take may be before the next minute refreshes
+--                     it), customers.history_notice_minutes (15; 1 to 1440: from when the page says its history is old),
 --                     reports.fx_eur_rates ({}; a JSON object of currency codes with the euros one unit is worth and an
---                     as_of date; cma.active_fx_ok); cma.check_tenant_setting() as 0009a's (150) with the four
+--                     as_of date; cma.active_fx_ok); cma.check_tenant_setting() as 0009a's (150) with the six
 --   pure functions    cma.active_spells_from, cma.active_month_cube_from, cma.active_cohort_cube_from, cma.active_km_from
 --                     (arrays in, rows out: no table read, so 173 proves them on hand-made arrays against brute force),
 --                     cma.active_month_factor_of, cma.active_billing_of, cma.active_eur_of, cma.active_km_json
---   reads             cma.active_base_of (the subscriptions with their holding interval, their store customer with
---                     Flash's own figures of it, and its acquisition channel: read once per request),
---                     cma.active_customers_of, cma.active_spells_of(tenant), cma.active_channel_of(tenant),
---                     cma.active_spell_lengths_of, cma.active_survival_of(tenant, split), cma.active_months_of,
---                     cma.active_cohorts_of
---   page              cma.active_page(from_month, market, segment, channel, grouping) and cma.active_rows(market,
---                     segment, channel, sort, descending, offset, limit, file) (reports.view or performance.team,
---                     CMA06), cma.active_file_record (the audit row of a file read)
---   readers           cma_read.active_customer_month and cma_read.customer_cohort over SECURITY DEFINER functions:
+--   fresh reads       cma.active_base_of (the subscriptions with their holding interval, their store customer with
+--                     Flash's own figures of it, its devices per model and its acquisition channel: First orders'
+--                     attribution is read here alone), cma.active_customers_of, cma.active_spells_of(tenant),
+--                     cma.active_channel_of(tenant), cma.active_spell_lengths_of, cma.active_survival_of(tenant, split),
+--                     cma.active_months_of, cma.active_cohorts_of: what the refresh stores and 173 compares it with
+--   the stored take   six tenant tables (cma.setup_tenant_table(): row-level security, the application's grants; no audit
+--                     trigger, as 0008s's and 0008zr's stored results): cma.active_take (one row per tenant: History as
+--                     of, stale), cma.active_base, cma.active_customer (with an index per sort key of the list),
+--                     cma.active_spell, cma.active_month, cma.active_cohort. Ids, codes, amounts and times only
+--   refresh           cma.active_refresh_of(tenant, force, now) and the job's entry cma.active_refresh() (the new
+--                     permission customers.refresh, the scheduler's system user only): set-based, the base read once,
+--                     only what changed written; the trigger mark_active_take_stale on cma.tenant_setting marks a take
+--                     stale when a setting the stored rows depend on changes (cma.active_setting_marks_stale: attribution.*,
+--                     customers.*, crm.customer_segments, the three flash.*_statuses settings and intake.start_date) and
+--                     never refreshes there; the job refresh_active_customers in the run registry
+--                     (cma.job_permission_of, cma.job_run_start, sync_run's two constraints)
+--   page              three reads (reports.view or performance.team, CMA06), each its own transaction:
+--                     cma.active_top(from_month, market, segment, channel): the tiles' live present
+--                     (cma.active_present_of, which reads cma.flash_customer_figures_of) with the take's history;
+--                     cma.active_rest(from_month, market, segment, channel, grouping): from the take alone;
+--                     cma.active_rows(market, segment, channel, sort, descending, after, before, limit, file): keyset
+--                     paging through the sort key's index, the worst payment state live for the page's rows;
+--                     cma.active_markets() (the market filter's catalog), cma.active_file_record (the audit row of a
+--                     file read)
+--   readers           cma_read.active_customer_month and cma_read.customer_cohort, plain views of the stored take:
 --                     counts per month or cohort, market, segment and acquisition channel; no customer, no contact
--- No table, and no column of a table: every figure is computed when read. No index: the reads use
--- subscription_event_subscription_idx and subscription_event_occurred_idx (118), the customers' unique key and primary
--- key (36) and First orders' own (84, 90).
+-- Indexes: on the new tables only (created with them, empty). No index on an existing table.
 --
--- Everything is SECURITY INVOKER and executable by the application only; the two cma_read functions are SECURITY DEFINER,
--- owned by cma_owner, search path pinned, executable by readers only.
+-- Everything is SECURITY INVOKER and executable by the application only, but the trigger function
+-- cma.active_take_mark_stale() (SECURITY DEFINER, owned by cma_owner, search path pinned, nobody's to call).
 --
 -- SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA04 invalid, CMA06 not permitted.
 --
@@ -2577,7 +2605,7 @@ alter table cma.sync_run validate constraint sync_run_connection_check;
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009l', 'Customers → Active: the settings customers.cohort_ages_months (3,6,12,24,36), customers.age_months (12,24,36,48,60), customers.history_months (60) and reports.fx_eur_rates ({}), checked by cma.check_tenant_setting(); the pure functions cma.active_spells_from (active spells from holding intervals), cma.active_month_cube_from (month ends by running sums), cma.active_cohort_cube_from (customer cohorts by age) and cma.active_km_from (Kaplan–Meier in whole months); cma.active_base_of (the subscriptions with their holding interval from created and ended times, their store customer with Flash''s figures of it, and its acquisition channel from First orders'' attribution of its first order), cma.active_spells_of, cma.active_channel_of, cma.active_survival_of; cma.active_page (the page as one JSON document: tiles with the previous month end and a year before, the month ends, markets with totals, the two segments compared, survival, age bands, cohorts, the subscription mix, the placeholders without a figure, the data notes) and cma.active_rows (the customer list, ids, codes, dates and amounts with the contact''s record link) with cma.active_file_record; cma_read.active_customer_month and cma_read.customer_cohort without a customer or a contact')
+values ('0009l', 'Customers → Active: the settings customers.cohort_ages_months (3,6,12,24,36), customers.age_months (12,24,36,48,60), customers.history_months (60), customers.refresh_minutes (5), customers.history_notice_minutes (15) and reports.fx_eur_rates ({}), checked by cma.check_tenant_setting(); the pure functions cma.active_spells_from, cma.active_month_cube_from, cma.active_cohort_cube_from and cma.active_km_from; the fresh reads cma.active_base_of and its wrappers; the stored take in cma.active_take, cma.active_base, cma.active_customer, cma.active_spell, cma.active_month and cma.active_cohort, refreshed by cma.active_refresh() (customers.refresh, the job refresh_active_customers) and marked stale by a change of a setting it depends on; the page in three reads, cma.active_top (the live present with the take''s history), cma.active_rest (the take alone) and cma.active_rows (keyset paging), with cma.active_markets and cma.active_file_record; the readers'' views cma_read.active_customer_month and cma_read.customer_cohort over the stored take')
 on conflict (version) do nothing;
 
 commit;

@@ -8,15 +8,22 @@
 -- customers, contacts, subscriptions, events, devices, orders and deals with fixed times, every figure counted by hand in
 -- the comments beside it; no row carries a name, an address, an email or a phone number. Block N compares, per tenant of
 -- the database with a stored Flash snapshot, the reconstructed month ends with the snapshots' figures and reports the
--- difference as a notice (info), never a failure: a past pause counts as holding in the reconstruction. Block E times
--- the page and the list per tenant with a subscription against 131's budgets, the seventh call of the session included.
+-- difference as a notice (info), never a failure: a past pause counts as holding in the reconstruction. Block T (inside
+-- block B's subtransaction) proves the stored take: equal to a fresh computation, marked stale by a setting, shown as
+-- stale, late or absent, isolated per tenant, the scheduler's to refresh, read by keyset. Block E times the three reads
+-- and the refresh per tenant with a subscription against 131's budgets, the seventh call of the session included, in a
+-- subtransaction that is rolled back (the take it writes does not stay).
 -- Every check writes one row (PASS, FAIL, info or skip) and the last row is the verdict, because Cloud SQL Studio shows
--- no notices. Run as your own IAM login after 172_active_customers.sql; then the verifies that read
--- cma.check_tenant_setting(), which 172 re-creates: 73, 101, 113, 121, 123 and 137 by name, 14 and 151 through its
--- trigger (all unchanged, still PASS); 85 is optional (cma.first_orders_of is read by 172, not re-created).
--- Expected verdict: "PASS | 173_verify_active_customers: <n> PASS, 0 FAIL, <i> info, <k> skip". E1 and E2 are 131's
--- budgets (500 and 300 ms): on a database where the page's read misses them they FAIL and so does the verdict; the pull
--- request of 0009l states the measured miss at three times prod's volume and what to do then (report the two times).
+-- no notices. Run as your own IAM login after 172_active_customers.sql; then the verifies that read what 172 re-creates
+-- (172's header lists them per function): 27 (edited by 0009l: the jobs' permissions gain customers.refresh), 14, 73,
+-- 79, 81, 101, 105, 109, 113, 115, 119, 121, 123, 133, 137, 151 and 169 (unchanged, still PASS); 85 is optional
+-- (cma.first_orders_of is read by 172, not re-created).
+-- Expected verdict: "PASS | 173_verify_active_customers: <n> PASS, 0 FAIL, <i> info, <k> skip". E1 to E4 are 131's
+-- budgets (400, 500, 300 and 15,000 ms): on a database where a read misses its budget the check FAILs and so does the
+-- verdict (report the times).
+-- The previous live definition of the page (one read that reconstructed the history on every request) is kept below as
+-- pg_temp.v0009l_live_page, as 133's pattern: T1 compares the stored take's two reads with it key by key, and every
+-- B check reads the page through the stored take (refreshed at the check's own "now").
 --   S1  the addition 0009l is recorded, after 0009k
 --   S2  every function of the addition the application's only and in the caller's rights, the set-returning ones saying
 --       their rows, the reads and the refresh with jit off; the trigger function that marks a take stale SECURITY DEFINER,
@@ -65,12 +72,27 @@
 --   B15 the list: its rows' keys (none of a name, an email, a phone or an address), order, paging and cap, the file's
 --       record in the audit log
 --   B16 the settings' refusals and normalisation
+--   T1  (D13) the stored take equals a fresh computation row for row: the two reads against the previous live
+--       definition for nine combinations of period, filters and grouping, and each stored table (spells, months, cohorts,
+--       customers, base) against the function that computes it fresh
+--   T2  (D13) a change of a setting the stored rows depend on marks the take stale in its own transaction and refreshes
+--       nothing; the next refresh clears the mark; another setting marks nothing
+--   T3  (D13) a stale take, a late one (older than customers.history_notice_minutes) and none are shown as such; without
+--       a take the present is answered and the history absent, never zeros
+--   T4  (D13) two tenants are isolated: the other tenant's stored rows are not visible, its reads answer nothing of
+--       them, a refresh of another tenant is refused
+--   T5  (D13) the job's entry is the scheduler's alone (CMA06 for a person); a take younger than
+--       customers.refresh_minutes is kept; the run row is the job's
+--   T6  (D13) keyset paging: pages chained by next read every row once in the sort's order, prev leads back, a cursor
+--       that is not one is refused (CMA04)
 --   N1  (A10) per tenant with stored Flash snapshots of the customers: the reconstructed month end beside the snapshot's
 --       Active customers, the difference as a notice
---   E1, E2  per tenant with a subscription: the page (budget verify.max_overview_ms, 500) and the list's first page
---       (verify.max_list_ms, 300), best of the runs after six untimed calls
+--   E1 to E4  per tenant with a subscription, after a forced refresh: above the fold (verify.max_top_ms, 400), below the
+--       fold (verify.max_overview_ms, 500) and the list's first page (verify.max_list_ms, 300), each the best of the runs
+--       after six untimed calls; the refresh with everything written again, once (verify.max_refresh_ms, 15,000)
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id
--- (S1 … B16, P1 … P6, E1, E2): that check alone compares with a deliberate difference, so the run fails exactly it.
+-- (S1 … B16, P1 … P6, T1 … T6, E1 … E4): that check alone compares with a deliberate difference, so the run fails
+-- exactly it.
 -- =============================================================================================
 
 do $$

@@ -16,6 +16,9 @@
 -- verify.job_permissions below.
 -- Adjusted 10 November 2026 (addition 0009j, 168_pledge_lists.sql): verify.job_permissions gains pledges.snapshot, the
 -- quarter take's right, which cma.ensure_scheduler_user gives the scheduler role since 0009j.
+-- Adjusted 11 November 2026 (addition 0009l, 172_active_customers.sql): verify.job_permissions gains customers.refresh,
+-- the right of the refresh of Customers → Active's stored take, which cma.ensure_scheduler_user gives the scheduler role
+-- since 0009l. Before 172 has run the list names a permission no role holds yet, which A4 accepts.
 -- =============================================================================================
 
 do $$
@@ -28,7 +31,7 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);   -- 'true' to make every block fail
 -- The jobs' permissions: the only ones the scheduler role may hold (A4), each a system job's right, none a person's
-select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh,pledges.snapshot', false);
+select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh,pledges.snapshot,customers.refresh', false);
 
 -- A. Structure and privileges (universal)
 do $$
