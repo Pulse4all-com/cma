@@ -172,7 +172,7 @@ declare
   c       uuid;
   h       text;
 begin
-  if to_regprocedure('cma.active_page(date,text,text,text,text)') is null then
+  if to_regprocedure('cma.active_top(date,text,text,text)') is null then
     raise notice 'Customers → Active does not exist yet (addition 0009l): rerun this seed after 172_active_customers.sql';
     return;
   end if;

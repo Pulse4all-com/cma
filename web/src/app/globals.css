@@ -204,8 +204,9 @@ body {
     page-break-inside: avoid;
   }
   /* On paper a data panel takes its own height (on screen it keeps a fixed one so nothing moves while the page streams,
-     decision D15) and nothing scrolls inside it; an outline still waiting for its read is not printed (the Print button
-     waits for every part) */
+     decision D15) and nothing scrolls inside it. Only a complete page is printed: while an outline still waits for its
+     read (or the tiles for their live present), the report is withheld and one line says so, whatever started the
+     print (the Print button waits for every part; the browser's own print command does not) */
   [data-print="report"] [data-panel-body],
   [data-print="report"] [data-panel-body] * {
     overflow: visible !important;
@@ -215,6 +216,14 @@ body {
   }
   [data-print="report"] [data-panel-skeleton] {
     display: none !important;
+  }
+  [data-print="report"]:has([data-panel-skeleton], [data-settled="false"]) > * {
+    display: none !important;
+  }
+  [data-print="report"]:has([data-panel-skeleton], [data-settled="false"])::before {
+    content: attr(data-print-loading);
+    display: block;
+    font-size: 14pt;
   }
 }
 

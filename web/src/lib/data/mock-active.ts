@@ -14,7 +14,7 @@ import { ACTIVE_CHANNELS, ACTIVE_SLOTS, billingOf, curveOf, monthsBack, retentio
 import { dateKeyInZone } from "@/lib/time";
 import type {
   ActiveAmount, ActiveChannel, ActiveClv, ActiveCohort, ActiveCohortSplit, ActiveComparisonRow, ActiveCurve, ActiveFilter, ActiveGroupStat, ActiveGrouping,
-  ActiveList, ActiveListRow, ActiveMeasure, ActiveMonth, ActiveReport, ActiveRowsRequest,
+  ActiveList, ActiveListRow, ActiveMeasure, ActiveMonth, ActiveNow, ActiveReport, ActiveRowsRequest,
 } from "./types";
 
 const MOCK_TENANT_2 = "00000000-0000-7000-8000-000000000002";
@@ -182,6 +182,15 @@ function assertAllowed(me: Principal): void {
   if (!REPORT.some((p) => me.permissions.includes(p))) throw new CmaDbError("CMA06", "not permitted");
 }
 
+/** The live present of the tiles for the mock (cma.active_now): the same four tiles as the stored answer's, of this moment */
+export function mockActiveNow(me: Principal, filter: ActiveFilter): ActiveNow {
+  const r = mockActive(me, null, filter, "month");
+  const t = r.tiles;
+  return {
+    figures: r.figures, computedAt: new Date().toISOString(),
+    tiles: t ? { activeCustomers: t.activeCustomers, totalSubscriptions: t.totalSubscriptions, amounts: t.amounts, eur: t.eur } : null,
+  };
+}
 /** Customers → Active for the mock: the document cma.active_top and cma.active_rest answer together, computed from the invented base */
 export function mockActive(me: Principal, fromMonth: string | null, filter: ActiveFilter, grouping: ActiveGrouping): ActiveReport {
   assertAllowed(me);
@@ -202,7 +211,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   };
   if (me.tenantId === MOCK_TENANT_2) {
     return {
-      ...head, setUp: { commerce: false, subscriptions: false }, figures: false, history: false, take: null, ageOver: [], filters: { markets: [], segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
+      ...head, setUp: { commerce: false, subscriptions: false }, figures: false, history: false, take: null, presentAt: null, ageOver: [], filters: { markets: [], segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
       tiles: null, unitEconomics: null, months: [], markets: [], marketsTotal: null, comparison: null, survival: null, ageBands: [], cohorts: [], cohortSplits: null,
       mix: null, notes: null,
     };
@@ -354,7 +363,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   }
 
   return {
-    ...head, setUp: { commerce: true, subscriptions: true }, figures: true, history: true, take,
+    ...head, setUp: { commerce: true, subscriptions: true }, figures: true, history: true, take, presentAt: take.computedAt,
     filters: { markets: [...new Set(base.map((c) => c.market))].sort(), segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
     tiles: {
       activeCustomers: {
@@ -442,15 +451,16 @@ export function mockActiveRows(me: Principal, request: ActiveRowsRequest): Activ
     || (a.storeCustomer < b.storeCustomer ? -1 : 1));
   const take = { computedAt: new Date(now).toISOString(), businessDate: key(now), stale: false, ageMinutes: 0, late: false };
   if (request.file) return { setUp: true, history: true, take, timeZone: ZONE, total: rows.length, rows, next: null, prev: null };
-  // keyset paging as the database's: a cursor names a row (here its place in the sorted list), the page continues after it
-  // or ends before it
+  // keyset paging as the database's: a cursor names a row and nothing else (in the database the customer's own id; here an
+  // id made of the row's place in the sorted list), the page continues after it or ends before it
+  const MOCK_ID = "00000000-0000-4000-8000-";
   const at = (cursor: string | null | undefined) => {
     if (!cursor) return null;
-    const i = Number.parseInt(Buffer.from(cursor, "base64").toString("utf8"), 10);
-    if (!Number.isInteger(i) || i < 0 || i >= rows.length) throw new CmaDbError("CMA04", "a cursor is the next or prev of a page of this list in this sort");
+    const i = cursor.startsWith(MOCK_ID) ? Number.parseInt(cursor.slice(MOCK_ID.length), 16) : Number.NaN;
+    if (!Number.isInteger(i) || i < 0 || i >= rows.length) throw new CmaDbError("CMA04", "a cursor is the next or prev of a page of this list");
     return i;
   };
-  const cursorOf = (i: number) => Buffer.from(String(i), "utf8").toString("base64");
+  const cursorOf = (i: number) => MOCK_ID + i.toString(16).padStart(12, "0");
   const after = at(request.after);
   const before = at(request.before);
   const start = before !== null ? Math.max(0, before - request.limit) : after !== null ? after + 1 : 0;

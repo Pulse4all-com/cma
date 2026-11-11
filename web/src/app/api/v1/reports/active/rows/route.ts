@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
  * and &channel, sorted by &sort (monthly_amount, clv, store_customer, store, market, segment, customer_start, age_months,
  * subscriptions, devices, channel or level; monthly_amount when left out) and &dir (desc when left out), &limit rows (1 to
  * 200; 50 when left out) after &after or before &before (the `next` or `prev` cursor of a page, never both: keyset paging
- * through the sort key's index, no offset; a cursor that is not one is 400 invalid_after or invalid_before, both together 400 invalid_cursor). Read from the stored take
+ * through the sort key's index, no offset). A cursor is the CMA's own id of a customer of the list, nothing else; one
+ * out of that form is 400 invalid_after or invalid_before, one that names no customer of the take 400 invalid (the
+ * database's CMA04), both together 400 invalid_cursor. Read from the stored take
  * (decision D13; `take` and `history` as the report's), only the worst payment state live for the page's rows. `total`
  * (the customers there are; null while no take exists), `next`, `prev` and `rows`: the store's id of the customer, store,
  * market, segment, Customer start, Customer age in months, subscriptions, devices, the Monthly recurring amount in its

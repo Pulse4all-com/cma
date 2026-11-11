@@ -2,8 +2,8 @@
 
 /**
  * The filters of Customers → Active (addition 0009l): market (K), segment and Direct / Indirect. The lists come with the
- * page's read (the markets of the base, the tenant's segments and unknown, the three channels), so they need no catalog
- * read; choosing loads the page with the filter in its address, kept with the range, the cohort grouping and the
+ * page's above-the-fold read of the stored answer (the markets of the base, the tenant's segments and unknown, the three
+ * channels), so the frame reads no catalog and shows the filters' outline until they are there; choosing loads the page with the filter in its address, kept with the range, the cohort grouping and the
  * panels' own choices, so a filtered view can be bookmarked and a market's row can link to it. The database runs every
  * filter, on every panel, the list and the file alike. It takes only its own ten strings and the unknown market's name,
  * not the page's copy. A choice is a transition: the three boxes read busy from the click until the page's outline

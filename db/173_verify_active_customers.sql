@@ -10,24 +10,26 @@
 -- the database with a stored Flash snapshot, the reconstructed month ends with the snapshots' figures and reports the
 -- difference as a notice (info), never a failure: a past pause counts as holding in the reconstruction. Block T (inside
 -- block B's subtransaction) proves the stored take: equal to a fresh computation, marked stale by a setting, shown as
--- stale, late or absent, isolated per tenant, the scheduler's to refresh, read by keyset. Block E times the three reads
--- and the refresh per tenant with a subscription against 131's budgets, the seventh call of the session included, in a
+-- stale, late or absent, isolated per tenant, the scheduler's to refresh, read by keyset, its stored documents equal to
+-- the answers computed now, and the live present ahead of it until the next refresh. Block E times the page's reads and
+-- the refresh per tenant with a subscription against 131's budgets, the seventh call of the session included, in a
 -- subtransaction that is rolled back (the take it writes does not stay).
 -- Every check writes one row (PASS, FAIL, info or skip) and the last row is the verdict, because Cloud SQL Studio shows
 -- no notices. Run as your own IAM login after 172_active_customers.sql; then the verifies that read what 172 re-creates
--- (172's header lists them per function): 27 (edited by 0009l: the jobs' permissions gain customers.refresh), 14, 73,
--- 79, 81, 101, 105, 109, 113, 115, 119, 121, 123, 133, 137, 151 and 169 (unchanged, still PASS); 85 is optional
--- (cma.first_orders_of is read by 172, not re-created).
--- Expected verdict: "PASS | 173_verify_active_customers: <n> PASS, 0 FAIL, <i> info, <k> skip". E1 to E4 are 131's
--- budgets (400, 500, 300 and 15,000 ms): on a database where a read misses its budget the check FAILs and so does the
--- verdict (report the times).
+-- (172's header lists them per function): 27 (edited by 0009l: the jobs' permissions gain customers.refresh), 14, 37,
+-- 73, 79, 81, 101, 105, 109, 113, 115, 119, 121, 123, 133, 137, 151, 159 and 169 (unchanged, still PASS); 77, 85 and
+-- 117 are optional.
+-- Expected verdict: "PASS | 173_verify_active_customers: <n> PASS, 0 FAIL, <i> info, <k> skip". E1 to E6 are 131's
+-- budgets (50 ms for a stored document, 300 for the list, 15,000 for the refresh, 400 for the live present and for
+-- above the fold computed, 500 for below the fold computed): on a database where a read misses its budget the check
+-- FAILs and so does the verdict (report the times).
 -- The previous live definition of the page (one read that reconstructed the history on every request) is kept below as
 -- pg_temp.v0009l_live_page, as 133's pattern: T1 compares the stored take's two reads with it key by key, and every
 -- B check reads the page through the stored take (refreshed at the check's own "now").
 --   S1  the addition 0009l is recorded, after 0009k
 --   S2  every function of the addition the application's only and in the caller's rights, the set-returning ones saying
 --       their rows, the reads and the refresh with jit off; the trigger function that marks a take stale SECURITY DEFINER,
---       owned by cma_owner, pinned, nobody's to call; the six stored tables under row-level security with a policy, without
+--       owned by cma_owner, pinned, nobody's to call; the seven stored tables under row-level security with a policy, without
 --       the audit trigger, the application's to write and not the readers'; the job refresh_active_customers with its
 --       permission, the scheduler's alone in every tenant, and named by sync_run's two constraints; the two readers' views
 --       the readers' alone to select; the earlier forms' functions gone
@@ -74,24 +76,37 @@
 --   B16 the settings' refusals and normalisation
 --   T1  (D13) the stored take equals a fresh computation row for row: the two reads against the previous live
 --       definition for nine combinations of period, filters and grouping, and each stored table (spells, months, cohorts,
---       customers, base) against the function that computes it fresh
+--       customers, base) against the function that computes it fresh; provoked, the previous definition's answer is
+--       changed and a fresh spell lengthened, and the comparison says which
 --   T2  (D13) a change of a setting the stored rows depend on marks the take stale in its own transaction and refreshes
---       nothing; the next refresh clears the mark; another setting marks nothing
+--       nothing; the next refresh clears the mark; another setting marks nothing; a reset marks too, and every mark counts
 --   T3  (D13) a stale take, a late one (older than customers.history_notice_minutes) and none are shown as such; without
---       a take the present is answered and the history absent, never zeros
+--       a take the present is answered and the history absent, never zeros: no churn count, no split by acquisition
+--       channel, no tile under a channel filter, and the stored reads answer their head alone
 --   T4  (D13) two tenants are isolated: the other tenant's stored rows are not visible, its reads answer nothing of
 --       them, a refresh of another tenant is refused
 --   T5  (D13) the job's entry is the scheduler's alone (CMA06 for a person); a take younger than
 --       customers.refresh_minutes is kept; the run row is the job's
---   T6  (D13) keyset paging: pages chained by next read every row once in the sort's order, prev leads back, a cursor
---       that is not one is refused (CMA04)
+--   T6  (D13) keyset paging: pages chained by next read every row once in the sort's order, prev leads back, a cursor is
+--       the customer's id alone, continues under another sort, and one that is no customer of the take is refused (CMA04)
+--   T7  (D16) the stored documents equal a fresh computation: every document against the function that computes it, the
+--       page's stored reads against the reads computed now (no filter, a single one, a combination, a later first
+--       month, both cohort groupings), the stored present against the live one row for row
+--   T8  (D16) the table first, the live present after: a subscription that leaves after the take is still in the stored
+--       answer (as of the take) and gone from the live one; the next refresh brings the two together; the live read is
+--       the report readers' (CMA06, CMA04)
 --   N1  (A10) per tenant with stored Flash snapshots of the customers: the reconstructed month end beside the snapshot's
 --       Active customers, the difference as a notice
---   E1 to E4  per tenant with a subscription, after a forced refresh: above the fold (verify.max_top_ms, 400), below the
---       fold (verify.max_overview_ms, 500) and the list's first page (verify.max_list_ms, 300), each the best of the runs
---       after six untimed calls; the refresh with everything written again, once (verify.max_refresh_ms, 15,000)
+--   E1 to E6  per tenant with a subscription, after a forced refresh, each the best of the runs after six untimed calls:
+--       above (E1) and below the fold (E2: from a later first month, the cohorts by quarter read from the stored cohort
+--       rows) from their stored documents (verify.max_stored_ms, 50); the list's first page
+--       and a filtered page after a cursor in another sort (E3; verify.max_list_ms, 300); the refresh with the history and
+--       the documents written again, once (E4; verify.max_refresh_ms, 15,000; skip while the job holds the refresh); the
+--       live present of the tiles (E5; verify.max_top_ms, 400); what a request without a stored document computes from
+--       the take's rows, above the fold without a filter and under the largest market with its largest segment, below
+--       the fold without a filter (E6; verify.max_top_ms and verify.max_overview_ms, 500)
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id
--- (S1 … B16, P1 … P6, T1 … T6, E1 … E4): that check alone compares with a deliberate difference, so the run fails
+-- (S1 … B16, P1 … P6, T1 … T8, E1 … E6): that check alone compares with a deliberate difference, so the run fails
 -- exactly it.
 -- =============================================================================================
 
@@ -104,8 +119,9 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' for every check, or one check's id such as 'B3'
-select set_config('verify.max_top_ms', '400', false);                -- above the fold (decision D15)
-select set_config('verify.max_overview_ms', '500', false);           -- below the fold (131's class overview)
+select set_config('verify.max_stored_ms', '50', false);              -- a read answered from its stored document (decision D16; 131's class agent)
+select set_config('verify.max_top_ms', '400', false);                -- above the fold computed, and the live present (decision D15)
+select set_config('verify.max_overview_ms', '500', false);           -- below the fold computed (131's class overview)
 select set_config('verify.max_list_ms', '300', false);               -- the list's first page (131's class list)
 select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh, everything written again (131's row)
 select set_config('verify.timing_runs', '3', false);                 -- timed runs per read in E, after six untimed ones
@@ -607,7 +623,7 @@ create or replace function pg_temp.v0009l_doc(p_top jsonb, p_rest jsonb)
 returns jsonb
 language sql immutable
 as $$
-  select (p_top - 'take' - 'history' - 'months' - 'notes')
+  select (p_top - 'take' - 'history' - 'months' - 'notes' - 'present_at')
          || (p_rest - 'take' - 'history' - 'months' - 'notes' - 'set_up' - 'figures' - 'month' - 'from_month' - 'settings' - 'age_over')
          || case when p_top ? 'months' or p_rest ? 'months'
                  then jsonb_build_object(
@@ -659,9 +675,15 @@ begin
     'cma.active_base_of(uuid,timestamptz,boolean,date,boolean)', 'cma.active_customers_of(uuid,timestamptz,boolean)', 'cma.active_spells_of(uuid)',
     'cma.active_channel_of(uuid)', 'cma.active_spell_lengths_of(uuid,timestamptz,boolean)', 'cma.active_survival_of(uuid,text,timestamptz)',
     'cma.assert_active_filter(text,text,text)', 'cma.active_setting_marks_stale(text)', 'cma.active_take_lock_key(uuid)',
-    'cma.active_refresh_of(uuid,boolean,timestamptz)', 'cma.active_refresh()', 'cma.active_present_of(uuid)', 'cma.active_take_of(uuid,timestamptz)',
-    'cma.active_top_of(uuid,date,text,text,text,timestamptz)', 'cma.active_top(date,text,text,text)',
-    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest(date,text,text,text,text)', 'cma.active_markets()',
+    'cma.active_refresh_of(uuid,boolean,timestamptz)', 'cma.active_refresh()', 'cma.active_present_of(uuid)', 'cma.active_present_stored_of(uuid)',
+    'cma.active_take_of(uuid,timestamptz)', 'cma.active_now_of(uuid,text,text,text,timestamptz,boolean)',
+    'cma.active_top_head_of(uuid,date,text,text,text,timestamptz)', 'cma.active_top_body_of(uuid,text,text,text,timestamptz,boolean)',
+    'cma.active_months_since(jsonb,date)', 'cma.active_top_of(uuid,date,text,text,text,timestamptz)',
+    'cma.active_top_stored_of(uuid,date,text,text,text,timestamptz)', 'cma.active_top(date,text,text,text)', 'cma.active_now(text,text,text)',
+    'cma.active_rest_head_of(uuid,date,text,timestamptz)', 'cma.active_rest_body_of(uuid,text,text,text,timestamptz)',
+    'cma.active_cohort_part_of(uuid,date,text,text,text,text)', 'cma.active_rest_with_cohorts(jsonb,uuid,date,text,text,text,text)',
+    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest_stored_of(uuid,date,text,text,text,text,timestamptz)',
+    'cma.active_rest(date,text,text,text,text)',
     'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)',
     'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
     'cma.active_months_of(uuid,timestamptz)', 'cma.active_cohorts_of(uuid,text,timestamptz)'
@@ -690,23 +712,26 @@ begin
     v_bad := v_bad || 'trigger mark_active_take_stale missing; ';
   end if;
   -- the readers' earlier functions are gone (the views read the stored tables)
-  foreach v_fn in array array['cma_read.active_customer_month_rows()', 'cma_read.customer_cohort_rows()', 'cma.active_page(date,text,text,text,text)'] loop
+  foreach v_fn in array array['cma_read.active_customer_month_rows()', 'cma_read.customer_cohort_rows()', 'cma.active_page(date,text,text,text,text)',
+                              'cma.active_markets()'] loop
     if to_regprocedure(v_fn) is not null then
       v_bad := v_bad || v_fn || ' still there; ';
     end if;
   end loop;
   foreach v_fn in array array['cma.active_base_of(uuid,timestamptz,boolean,date,boolean)', 'cma.active_refresh_of(uuid,boolean,timestamptz)',
-                              'cma.active_present_of(uuid)', 'cma.active_top_of(uuid,date,text,text,text,timestamptz)',
-                              'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)',
+                              'cma.active_present_of(uuid)', 'cma.active_now_of(uuid,text,text,text,timestamptz,boolean)',
+                              'cma.active_top_body_of(uuid,text,text,text,timestamptz,boolean)',
+                              'cma.active_rest_body_of(uuid,text,text,text,timestamptz)', 'cma.active_cohort_part_of(uuid,date,text,text,text,text)',
                               'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)'] loop
     if to_regprocedure(v_fn) is not null
        and not ('jit=off' = any (coalesce((select p.proconfig from pg_proc p where p.oid = to_regprocedure(v_fn)), '{}'))) then
       v_bad := v_bad || v_fn || ' without jit off; ';
     end if;
   end loop;
-  -- the six stored tables: tenant-aware (row-level security forced or enabled, a tenant policy), no audit trigger, the
+  -- the seven stored tables: tenant-aware (row-level security forced or enabled, a tenant policy), no audit trigger, the
   -- application's to write, not the readers' to read
-  foreach v_fn in array array['cma.active_take', 'cma.active_base', 'cma.active_customer', 'cma.active_spell', 'cma.active_month', 'cma.active_cohort'] loop
+  foreach v_fn in array array['cma.active_take', 'cma.active_base', 'cma.active_customer', 'cma.active_spell', 'cma.active_month', 'cma.active_cohort',
+                              'cma.active_document'] loop
     if to_regclass(v_fn) is null then
       v_bad := v_bad || v_fn || ' missing; ';
     else
@@ -958,6 +983,7 @@ declare
   v_now timestamptz := '2026-11-11 12:00:00+00';
   j jsonb; j2 jsonb; j3 jsonb;
   v_run uuid;
+  v_sub uuid;
   v_txt text; v_txt2 text; v_n integer; v_m integer;
   r record;
   -- a time of the fixture: 09:00 UTC on a date
@@ -1458,7 +1484,9 @@ begin
                                                  filter (where q.old is distinct from q.new) || ')', ''))
     into v_txt
     from (select concat_ws('/', coalesce(f.m, '*'), coalesce(f.s, '*'), coalesce(f.c, '*'), f.g) as f,
-                 pg_temp.v0009l_live_page(v_t1, f.fm, f.m, f.s, f.c, f.g, v_now) as old,
+                 case when pg_temp.v0009l_p('T1') and f.m is null and f.s is null and f.c is null
+                      then pg_temp.v0009l_live_page(v_t1, f.fm, f.m, f.s, f.c, f.g, v_now) #- '{tiles,active_customers,value}'
+                      else pg_temp.v0009l_live_page(v_t1, f.fm, f.m, f.s, f.c, f.g, v_now) end as old,
                  pg_temp.v0009l_page_of(v_t1, f.fm, f.m, f.s, f.c, f.g, v_now) as new
           from (values (null::date, null::text, null::text, null::text, 'month'), (null, 'NL', null, null, 'month'), (null, 'GB', null, null, 'quarter'),
                        (null, null, 'B2B', null, 'month'), (null, null, 'B2C', null, 'quarter'), (null, null, 'unknown', null, 'month'),
@@ -1466,7 +1494,8 @@ begin
                ) f(fm, m, s, c, g)) q;
     v_txt := v_txt || format(' | spells %s | months %s | cohorts %s | customers %s',
       (select count(*) from (
-         (select l.customer_id, l.market, l.segment, l.channel, l.spell_start, l.spell_end, l.length_months, l.ended from cma.active_spell_lengths_of(v_t1, v_now, true) l
+         (select l.customer_id, l.market, l.segment, l.channel, l.spell_start, l.spell_end, l.length_months + case when pg_temp.v0009l_p('T1') then 1 else 0 end, l.ended
+          from cma.active_spell_lengths_of(v_t1, v_now, true) l
           except select x.customer_id, x.market, x.segment, x.channel, x.spell_start, x.spell_end, x.len, x.ended from cma.active_spell x where x.tenant_id = v_t1)
          union all
          (select x.customer_id, x.market, x.segment, x.channel, x.spell_start, x.spell_end, x.len, x.ended from cma.active_spell x where x.tenant_id = v_t1
@@ -1513,8 +1542,12 @@ begin
       'documents 9 of 9 equal | spells 0 | months 0 | cohorts 0 | customers 0 | base 0 | stored rows: true'];
 
     -- T2. a change of a setting the stored rows depend on marks the take stale in the setting's own transaction and never
-    -- refreshes there; the next refresh, due at once whatever the take's age, clears the mark; another setting marks nothing
+    -- refreshes there; the next refresh, due at once whatever the take's age, clears the mark; another setting marks
+    -- nothing; a reset to the default marks as a change does, and every mark counts. (A refresh clears the mark only when
+    -- the count is the one it started from, so a setting saved while a refresh runs keeps the take stale: two sessions
+    -- are needed to show that, which one script cannot be.)
     perform cma.active_refresh_of(v_t1, true, v_now);
+    j3 := (select to_jsonb(t.stale_marks) from cma.active_take t where t.tenant_id = v_t1);
     v_txt := cma.active_refresh_of(v_t1, false, v_now + interval '1 minute') ->> 'reason';
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_admin1::text, true);
@@ -1532,11 +1565,20 @@ begin
              || format(' | marks: %s', (select string_agg(k || '=' || cma.active_setting_marks_stale(k)::text, ' ' order by o)
                                          from unnest(array['attribution.window_days', 'crm.customer_segments', 'flash.device_holding_statuses',
                                                            'flash.ended_subscription_statuses', 'flash.active_subscription_statuses', 'customers.age_months',
-                                                           'intake.start_date', 'flash.device_bands']) with ordinality u(k, o)));
+                                                           'intake.start_date', 'flash.device_bands', 'reports.fx_eur_rates',
+                                                           'telephony.connected_min_seconds', 'calls.conversation_min_talk_seconds',
+                                                           'flash.file_max_rows', 'data_quality.refresh_minutes']) with ordinality u(k, o)));
+    perform set_config('role', 'cma_app', true);
+    perform cma.set_tenant_setting('customers.history_notice_minutes', null);
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || (select format(' | a reset marks: %s, marks counted %s', t.stale::text, t.stale_marks - (j3 #>> '{}')::bigint)
+                       from cma.active_take t where t.tenant_id = v_t1);
     v_rows := v_rows || array['121', 'T2', '(D13) a settings change marks the take stale without refreshing it; the next refresh clears the mark; another setting marks nothing', v_txt,
       'fresh | stale true, as of unchanged true, since set true | refreshed true, stale false, as of moved true | another setting: stale false'
       || ' | marks: attribution.window_days=true crm.customer_segments=true flash.device_holding_statuses=true flash.ended_subscription_statuses=true'
-      || ' flash.active_subscription_statuses=true customers.age_months=true intake.start_date=true flash.device_bands=false'];
+      || ' flash.active_subscription_statuses=true customers.age_months=true intake.start_date=true flash.device_bands=true'
+      || ' reports.fx_eur_rates=true telephony.connected_min_seconds=true calls.conversation_min_talk_seconds=true flash.file_max_rows=false'
+      || ' data_quality.refresh_minutes=false | a reset marks: true, marks counted 2'];
 
     -- T3. a stale take, a late one and none are shown as such: the take's state on every read; without a take the present
     -- is still answered (never zeros) and the history's parts are absent
@@ -1553,6 +1595,7 @@ begin
              || format(' | 10 minutes on: late %s', cma.active_take_of(v_t1, v_now + interval '10 minutes') ->> 'late')
              || format(' | 20 minutes on: %s minutes, late %s', cma.active_take_of(v_t1, v_now + interval '20 minutes') ->> 'age_minutes',
                        cma.active_take_of(v_t1, v_now + interval '20 minutes') ->> 'late');
+    delete from cma.active_document x where x.tenant_id = v_t1;
     delete from cma.active_cohort x where x.tenant_id = v_t1;
     delete from cma.active_month x where x.tenant_id = v_t1;
     delete from cma.active_spell x where x.tenant_id = v_t1;
@@ -1566,12 +1609,24 @@ begin
                              j ->> 'history', j2 ->> 'history', j3 ->> 'history', coalesce(j ->> 'take', 'null'), j -> 'tiles' -> 'active_customers' ->> 'value',
                              j -> 'tiles' -> 'total_subscriptions' ->> 'value', coalesce(j -> 'tiles' ->> 'customer_age', 'null'), coalesce(j -> 'tiles' ->> 'lifetime', 'null'),
                              jsonb_array_length(j -> 'months'), (select string_agg(k, ',' order by k) from jsonb_object_keys(j2) k),
-                             coalesce(j3 ->> 'total', 'null'), jsonb_array_length(j3 -> 'rows'));
+                             coalesce(j3 ->> 'total', 'null'), jsonb_array_length(j3 -> 'rows'))
+             -- what only a take can state is absent, never a zero: the churn count, the split by acquisition channel, and
+             -- every tile under a channel filter
+             || format(' | churned %s, by channel %s, tiles under a channel filter %s', coalesce(j -> 'unit_economics' ->> 'churned_30d', 'null'),
+                       coalesce(j -> 'tiles' -> 'active_customers' ->> 'by_channel', 'null'),
+                       coalesce(cma.active_top_of(v_t1, null, null, null, 'direct', v_now) -> 'tiles' ->> 'active_customers', 'null')
+                       || '/' || coalesce(cma.active_now_of(v_t1, null, null, 'indirect', v_now, false) ->> 'tiles', 'null'))
+             -- the page's own two reads of the report answer from the take alone: without one the head and no figure
+             || format(' | stored reads: top %s, rest %s', (select string_agg(k, ',' order by k) from jsonb_object_keys(cma.active_top_stored_of(v_t1, null, null, null, null, v_now)) k),
+                       (select string_agg(k, ',' order by k) from jsonb_object_keys(cma.active_rest_stored_of(v_t1, null, null, null, null, 'month', v_now)) k));
     perform cma.active_refresh_of(v_t1, true, v_now);
     v_rows := v_rows || array['122', 'T3', '(D13) a stale take, a late one and none are shown as such; without a take the present is answered and the history absent, never zeros', v_txt,
       'stale: top true/true rest true list true | fresh: late false | 10 minutes on: late false | 20 minutes on: 20 minutes, late true'
       || ' | none: history false/false/false, take null, live customers 8 and subscriptions 10, age null, lifetime null, months 0,'
-      || ' rest keys figures,from_month,grouping,history,month,set_up,settings,take, list total null rows 0'];
+      || ' rest keys figures,from_month,grouping,history,month,set_up,settings,take, list total null rows 0'
+      || ' | churned null, by channel null, tiles under a channel filter null/null'
+      || ' | stored reads: top computed_at,figures,filter,filters,from_month,history,month,set_up,settings,take,time_zone,today,'
+      || ' rest figures,from_month,grouping,history,month,set_up,settings,take'];
 
     -- T4. two tenants are isolated: as tenant two's analyst (the application's role, row-level security) none of tenant
     -- one's stored rows is visible, the reads answer tenant two's own, and a refresh of another tenant is refused
@@ -1579,10 +1634,14 @@ begin
     perform cma.active_refresh_of(v_t2, true, v_now);
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_analyst2::text, true);
-    v_txt := format('two sees take %s base %s customers %s spells %s months %s cohorts %s',
+    v_txt := format('two sees take %s base %s customers %s spells %s months %s cohorts %s documents of one %s',
                     (select count(*) from cma.active_take), (select count(*) from cma.active_base), (select count(*) from cma.active_customer),
-                    (select count(*) from cma.active_spell), (select count(*) from cma.active_month), (select count(*) from cma.active_cohort))
-             || format(' | reading one''s: customers %s, history %s, list %s', cma.active_top_of(v_t1, null, null, null, null, v_now) -> 'tiles' -> 'active_customers' ->> 'value',
+                    (select count(*) from cma.active_spell), (select count(*) from cma.active_month), (select count(*) from cma.active_cohort),
+                    (select count(*) from cma.active_document d where d.tenant_id = v_t1))
+             || format(' | stored read of one''s: %s', coalesce(cma.active_top_stored_of(v_t1, null, null, null, null, v_now) -> 'tiles' -> 'active_customers' ->> 'value', 'none'))
+             || format(' | reading one''s: set up %s, figures %s, customers %s, history %s, list %s',
+                       cma.active_top_of(v_t1, null, null, null, null, v_now) -> 'set_up' ->> 'commerce', cma.active_top_of(v_t1, null, null, null, null, v_now) ->> 'figures',
+                       coalesce(cma.active_top_of(v_t1, null, null, null, null, v_now) -> 'tiles' -> 'active_customers' ->> 'value', 'none'),
                        cma.active_rest_of(v_t1, null, null, null, null, 'month', v_now) ->> 'history',
                        coalesce(cma.active_rows_of(v_t1, null, null, null, 'monthly_amount', true, null, null, 50, v_now) ->> 'total', 'null'))
              || ' | refreshing one''s ' || pg_temp.v0009l_code(format('select cma.active_refresh_of(%L)', v_t1));
@@ -1590,7 +1649,7 @@ begin
     v_txt := v_txt || format(' | one holds rows: %s', (select count(*) > 0 from cma.active_base x where x.tenant_id = v_t1)::text);
     perform set_config('app.tenant_id', v_t1::text, true);
     v_rows := v_rows || array['123', 'T4', '(D13) two tenants are isolated: the other tenant''s stored rows are not visible, its reads answer nothing of them, its refresh is refused', v_txt,
-      'two sees take 1 base 0 customers 0 spells 0 months 0 cohorts 0 | reading one''s: customers 0, history false, list 0 | refreshing one''s CMA04 | one holds rows: true'];
+      'two sees take 1 base 0 customers 0 spells 0 months 0 cohorts 0 documents of one 0 | stored read of one''s: none | reading one''s: set up false, figures false, customers none, history false, list 0 | refreshing one''s CMA04 | one holds rows: true'];
 
     -- T5. the job's entry: the scheduler's system user alone (customers.refresh); a take younger than
     -- customers.refresh_minutes is kept (fresh); the run row is the job's, without a connection
@@ -1617,7 +1676,8 @@ begin
       'analyst CMA06 CMA06 | scheduler: false fresh | six minutes old: true | run row refresh_active_customers connection none succeeded'];
 
     -- T6. keyset paging: pages of three chained by next read every row once in the sort's order; prev leads back; a
-    -- cursor that is not one, or one of another sort, is refused
+    -- cursor is the customer's id alone (no store id, no amount: it rides in the address); one that is no customer of the
+    -- tenant's take is refused; under another sort it continues from that customer
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_analyst1::text, true);
     j := cma.active_rows(p_limit => 3);
@@ -1637,14 +1697,87 @@ begin
                         from jsonb_array_elements(cma.active_rows(p_sort => 'store_customer', p_descending => false, p_limit => 4,
                                                                   p_after => cma.active_rows(p_sort => 'store_customer', p_descending => false, p_limit => 4) ->> 'next') -> 'rows')
                              with ordinality q(x, o)))
+             || format(' | a cursor is the customer''s id alone: %s',
+                       ((j ->> 'next') = (select c.customer_id::text from cma.active_customer c where c.tenant_id = v_t1 and c.source_id = j -> 'rows' -> 2 ->> 'store_customer'))::text)
+             || format(' | under another sort it continues: %s',
+                       (select string_agg(x ->> 'store_customer', ',' order by o)
+                        from jsonb_array_elements(cma.active_rows(p_sort => 'store_customer', p_descending => false, p_after => j ->> 'next') -> 'rows') with ordinality q(x, o)))
              || ' | ' || pg_temp.v0009l_code($q$select cma.active_rows(p_after => 'bm90IGEgY3Vyc29y')$q$)
-             || ' ' || pg_temp.v0009l_code(format('select cma.active_rows(p_sort => %L, p_after => %L)', 'store_customer', j ->> 'next'))
+             || ' ' || pg_temp.v0009l_code($q$select cma.active_rows(p_after => '00000000-0000-4000-8000-000000000001')$q$)
+             || ' ' || pg_temp.v0009l_code($q$select cma.active_rows(p_sort => 'age_months', p_before => 'eyJrIjpbIngiXSwicyI6IjEiLCJpIjoiMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIn0=')$q$)
              || ' ' || pg_temp.v0009l_code(format('select cma.active_rows(p_after => %L, p_before => %L)', j ->> 'next', j ->> 'next'))
              || ' ' || pg_temp.v0009l_code(format('select cma.active_rows(p_file => true, p_after => %L)', j ->> 'next'));
     perform set_config('role', 'cma_owner', true);
-    v_rows := v_rows || array['125', 'T6', '(D13) keyset paging: pages chained by next read every row once in order, prev leads back, a cursor that is not one is refused', v_txt,
+    v_rows := v_rows || array['125', 'T6', '(D13) keyset paging: pages chained by next read every row once in order, prev leads back, a cursor is the customer''s id alone and one that is none is refused', v_txt,
       'forward g2,g1,c1,c2,c5,c7,c6,c4 = one page of 50 true; first page prev none, last page next none | back from the last page: true'
-      || ' | ascending by id, second page of four: c6,c7,g1,g2 | CMA04 CMA04 CMA04 CMA04'];
+      || ' | ascending by id, second page of four: c6,c7,g1,g2 | a cursor is the customer''s id alone: true'
+      || ' | under another sort it continues: c2,c4,c5,c6,c7,g1,g2 | CMA04 CMA04 CMA04 CMA04 CMA04'];
+
+    -- T7. (D16) the stored documents equal a fresh computation: every document the refresh stored against the function
+    -- that computes it (above the fold with the present as the take holds it and with the present live, which read the
+    -- same at the take's moment; below the fold without the cohorts); the page's stored reads against the reads computed
+    -- now for no filter, a single one of each kind, a later first month (the months cut, the cohorts of those months)
+    -- and a combination (no document: computed from the take's rows); the stored present against the live one, row for row
+    perform cma.active_refresh_of(v_t1, true, v_now);
+    select format('documents %s (top %s, rest %s) for %s', count(*), count(*) filter (where d.part = 'top'), count(*) filter (where d.part = 'rest'),
+                  string_agg(distinct nullif(concat_ws('/', nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, '')), ''), ',')
+                  || case when bool_or(d.market = '' and d.segment = '' and d.channel = '') then ' and no filter' else '' end)
+           || format(' | differ from fresh %s',
+                  count(*) filter (where d.doc is distinct from case when d.part = 'top'
+                       then cma.active_top_body_of(v_t1, nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, ''), v_now, true)
+                       else cma.active_rest_body_of(v_t1, nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, ''), v_now) end))
+           || format(' | top with the present live differs %s',
+                  count(*) filter (where d.part = 'top' and d.doc is distinct from
+                       cma.active_top_body_of(v_t1, nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, ''), v_now, false)))
+    into v_txt
+    from cma.active_document d where d.tenant_id = v_t1;
+    v_txt := v_txt || (select format(' | stored reads equal the computed ones: top %s of %s, rest %s of %s',
+                         count(*) filter (where cma.active_top_stored_of(v_t1, f.fm, f.m, f.s, f.c, v_now) - 'present_at'
+                                                = cma.active_top_of(v_t1, f.fm, f.m, f.s, f.c, v_now) - 'present_at'), count(*),
+                         count(*) filter (where cma.active_rest_stored_of(v_t1, f.fm, f.m, f.s, f.c, f.g, v_now) = cma.active_rest_of(v_t1, f.fm, f.m, f.s, f.c, f.g, v_now)), count(*))
+                       from (values (null::date, null::text, null::text, null::text, 'month'), (null, null, null, null, 'quarter'), (null, 'NL', null, null, 'month'),
+                                    (null, null, 'B2B', null, 'quarter'), (null, null, null, 'indirect', 'month'), (date '2025-08-01', null, null, null, 'month'),
+                                    (date '2025-08-01', 'NL', 'B2C', 'direct', 'month')) f(fm, m, s, c, g))
+             || format(' | present_at is the take''s: %s', ((cma.active_top_stored_of(v_t1, null, null, null, null, v_now + interval '3 minutes') ->> 'present_at')::timestamptz = v_now)::text)
+             || format(' | stored present differs from live in %s rows',
+                       (select count(*) from ((select * from cma.active_present_of(v_t1) except select * from cma.active_present_stored_of(v_t1))
+                                              union all
+                                              (select * from cma.active_present_stored_of(v_t1) except select * from cma.active_present_of(v_t1))) x));
+    v_rows := v_rows || array['126', 'T7', '(D16) the stored documents equal a fresh computation: each document against its function, the stored reads against the computed ones, the stored present against the live one', v_txt,
+      'documents 18 (top 9, rest 9) for B2B,B2C,GB,NL,direct,indirect,unknown and no filter | differ from fresh 0 | top with the present live differs 0'
+      || ' | stored reads equal the computed ones: top 7 of 7, rest 7 of 7 | present_at is the take''s: true | stored present differs from live in 0 rows'];
+
+    -- T8. (D16) the table first, the live present after: a subscription that leaves the store after the take is still in
+    -- the stored answer (as of the take) and gone from the live one; the next refresh brings the two together. The live
+    -- read is the report readers' (CMA06 without the permission, CMA04 for a filter out of its form)
+    select x.id into v_sub from cma.subscription x
+    where x.tenant_id = v_t1 and x.source_deleted_at is null and x.status = any (cma.flash_holding_statuses_of(v_t1)::text[])
+    order by x.source_id limit 1;
+    update cma.subscription x set source_deleted_at = v_now where x.id = v_sub;
+    v_txt := format('after the take: stored %s as of the take %s, live %s',
+                    cma.active_top_stored_of(v_t1, null, null, null, null, v_now) -> 'tiles' -> 'total_subscriptions' ->> 'value',
+                    ((cma.active_top_stored_of(v_t1, null, null, null, null, v_now) ->> 'present_at')::timestamptz = v_now)::text,
+                    cma.active_now_of(v_t1, null, null, null, v_now, false) -> 'tiles' -> 'total_subscriptions' ->> 'value');
+    perform cma.active_refresh_of(v_t1, true, v_now);
+    v_txt := v_txt || format(' | after the refresh: stored %s, live %s',
+                    cma.active_top_stored_of(v_t1, null, null, null, null, v_now) -> 'tiles' -> 'total_subscriptions' ->> 'value',
+                    cma.active_now_of(v_t1, null, null, null, v_now, false) -> 'tiles' -> 'total_subscriptions' ->> 'value');
+    update cma.subscription x set source_deleted_at = null where x.id = v_sub;
+    perform cma.active_refresh_of(v_t1, true, v_now);
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    j := cma.active_now();
+    v_txt := v_txt || format(' | put back: stored %s | the live read: keys %s, tiles %s, customers %s = the stored %s',
+                    cma.active_top() -> 'tiles' -> 'total_subscriptions' ->> 'value',
+                    (select string_agg(k, ',' order by k) from jsonb_object_keys(j) k), (select string_agg(k, ',' order by k) from jsonb_object_keys(j -> 'tiles') k),
+                    j -> 'tiles' -> 'active_customers' ->> 'value', cma.active_top() -> 'tiles' -> 'active_customers' ->> 'value')
+             || ' | ' || pg_temp.v0009l_code($q$select cma.active_now('nl')$q$);
+    perform set_config('app.user_id', v_agent1::text, true);
+    v_txt := v_txt || ' agent ' || pg_temp.v0009l_code('select cma.active_now()');
+    perform set_config('role', 'cma_owner', true);
+    v_rows := v_rows || array['127', 'T8', '(D16) the table first, the live present after: a change after the take is in the live answer at once and in the stored one after the next refresh', v_txt,
+      'after the take: stored 10 as of the take true, live 9 | after the refresh: stored 9, live 9 | put back: stored 10'
+      || ' | the live read: keys computed_at,figures,now,tiles, tiles active_customers,amounts,eur,total_subscriptions, customers 8 = the stored 8 | CMA04 agent CMA06'];
 
     -- B16. the settings: out of range refused (CMA04), a list kept without spaces, the rates in jsonb's own form
     perform set_config('role', 'cma_app', true);
@@ -1724,62 +1857,108 @@ $$;
 -- E. Timings against 131's budgets, as the application
 -- ---------------------------------------------------------------------------------------------
 -- Per active tenant with a subscription: the take refreshed (everything written again: the refresh's own time), then the
--- three reads of the page, each called six times untimed (a plpgsql function's statements turn to the generic plan
--- after five calls on a connection: CLAUDE.md, Performance) and then timed, the best of verify.timing_runs. Inside a
--- step that is always rolled back: the tenant's real take is left as it was (the job owns it)
+-- page's reads, each called six times untimed (a plpgsql function's statements turn to the generic plan after five calls
+-- on a connection: CLAUDE.md, Performance) and then timed, the best of verify.timing_runs: above and below the fold from
+-- their stored documents, the list's first page, the live present of the tiles, and the two reads computed from the
+-- take's rows as a combination of filters is (without a filter: the largest). Inside a step that is always rolled back:
+-- the tenant's real take is left as it was (the job owns it)
 do $$
 declare
   t record;
   v_runs integer := current_setting('verify.timing_runs')::integer;
-  v_t0 timestamptz; v_ms numeric; v_top numeric; v_rest numeric; v_list numeric; v_refresh numeric;
+  v_t0 timestamptz; v_ms numeric; v_top numeric; v_rest numeric; v_list numeric; v_refresh numeric; v_live numeric; v_ctop numeric; v_crest numeric;
+  v_first date;
+  v_m text; v_s text; v_cursor text; v_flist numeric; v_ftop numeric; v_refreshed boolean;
   v_any boolean := false;
   j jsonb;
 begin
   for t in select x.id, x.slug from cma.tenant x
            where x.status = 'active' and exists (select 1 from cma.subscription s where s.tenant_id = x.id) order by x.slug loop
     v_any := true;
-    v_top := null; v_rest := null; v_list := null; v_refresh := null;
+    v_top := null; v_rest := null; v_list := null; v_refresh := null; v_live := null; v_ctop := null; v_crest := null; v_flist := null; v_ftop := null;
     begin
       perform set_config('role', 'cma_app', true);
       perform set_config('app.tenant_id', t.id::text, true);
       v_t0 := clock_timestamp();
       j := cma.active_refresh_of(t.id, true);
       v_refresh := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+      v_refreshed := coalesce((j ->> 'refreshed')::boolean, false);
+      v_first := (cma.active_rest_head_of(t.id, null, 'month', now()) ->> 'from_month')::date;
+      -- the filters a request passes: the tenant's largest market and, within it, its largest segment (two filters
+      -- together have no stored document), and a cursor into that market's list by age
+      select c.market into v_m from cma.active_customer c where c.tenant_id = t.id and c.is_active group by 1 order by count(*) desc, 1 limit 1;
+      select c.segment into v_s from cma.active_customer c where c.tenant_id = t.id and c.is_active and c.market = v_m group by 1 order by count(*) desc, 1 limit 1;
+      v_cursor := cma.active_rows_of(t.id, v_m, null, null, 'age_months', false, null, null, 50, now()) ->> 'next';
       for i in 1 .. 6 + v_runs loop
         v_t0 := clock_timestamp();
-        j := cma.active_top_of(t.id, null, null, null, null, now());
+        j := cma.active_top_stored_of(t.id, null, null, null, null, now());
         v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
         if i > 6 then v_top := least(coalesce(v_top, v_ms), v_ms); end if;
         v_t0 := clock_timestamp();
-        j := cma.active_rest_of(t.id, null, null, null, null, 'month', now());
+        j := cma.active_rest_stored_of(t.id, (v_first + interval '36 months')::date, null, null, null, 'quarter', now());
         v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
         if i > 6 then v_rest := least(coalesce(v_rest, v_ms), v_ms); end if;
         v_t0 := clock_timestamp();
         j := cma.active_rows_of(t.id, null, null, null, 'monthly_amount', true, null, null, 50, now());
         v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
         if i > 6 then v_list := least(coalesce(v_list, v_ms), v_ms); end if;
+        v_t0 := clock_timestamp();
+        j := cma.active_now_of(t.id, null, null, null, now(), false);
+        v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+        if i > 6 then v_live := least(coalesce(v_live, v_ms), v_ms); end if;
+        v_t0 := clock_timestamp();
+        j := cma.active_top_body_of(t.id, null, null, null, now(), true);
+        v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+        if i > 6 then v_ctop := least(coalesce(v_ctop, v_ms), v_ms); end if;
+        v_t0 := clock_timestamp();
+        j := cma.active_rest_with_cohorts(cma.active_rest_body_of(t.id, null, null, null, now()), t.id, v_first, null, null, null, 'month');
+        v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+        if i > 6 then v_crest := least(coalesce(v_crest, v_ms), v_ms); end if;
+        v_t0 := clock_timestamp();
+        j := cma.active_top_stored_of(t.id, null, v_m, v_s, null, now());
+        v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+        if i > 6 then v_ftop := least(coalesce(v_ftop, v_ms), v_ms); end if;
+        v_t0 := clock_timestamp();
+        j := cma.active_rows_of(t.id, v_m, null, null, 'age_months', false, v_cursor, null, 50, now());
+        v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+        if i > 6 then v_flist := least(coalesce(v_flist, v_ms), v_ms); end if;
       end loop;
       raise exception using errcode = 'CMAOK', message = 'rollback';
     exception
       when sqlstate 'CMAOK' then null;
     end;
     perform set_config('role', 'cma_owner', true);
-    insert into pg_temp.verify_0009l values (301, 'E1 ' || t.slug || ': above the fold within its budget',
-      case when v_top <= case when pg_temp.v0009l_p('E1') then 0 else current_setting('verify.max_top_ms')::numeric end then 'PASS' else 'FAIL' end,
-      format('%s ms (best of %s, after six calls) against %s ms', v_top, v_runs, case when pg_temp.v0009l_p('E1') then '0' else current_setting('verify.max_top_ms') end));
-    insert into pg_temp.verify_0009l values (302, 'E2 ' || t.slug || ': below the fold within the overview budget',
-      case when v_rest <= case when pg_temp.v0009l_p('E2') then 0 else current_setting('verify.max_overview_ms')::numeric end then 'PASS' else 'FAIL' end,
-      format('%s ms (best of %s, after six calls) against %s ms', v_rest, v_runs, case when pg_temp.v0009l_p('E2') then '0' else current_setting('verify.max_overview_ms') end));
-    insert into pg_temp.verify_0009l values (303, 'E3 ' || t.slug || ': the list''s first page within the list budget',
-      case when v_list <= case when pg_temp.v0009l_p('E3') then 0 else current_setting('verify.max_list_ms')::numeric end then 'PASS' else 'FAIL' end,
-      format('%s ms (best of %s, after six calls) against %s ms', v_list, v_runs, case when pg_temp.v0009l_p('E3') then '0' else current_setting('verify.max_list_ms') end));
+    insert into pg_temp.verify_0009l values (301, 'E1 ' || t.slug || ': above the fold from its stored document within the stored budget',
+      case when v_top <= case when pg_temp.v0009l_p('E1') then 0 else current_setting('verify.max_stored_ms')::numeric end then 'PASS' else 'FAIL' end,
+      format('%s ms (best of %s, after six calls) against %s ms', v_top, v_runs, case when pg_temp.v0009l_p('E1') then '0' else current_setting('verify.max_stored_ms') end));
+    insert into pg_temp.verify_0009l values (302, 'E2 ' || t.slug || ': below the fold from its stored document, a later first month and the cohorts by quarter, within the stored budget',
+      case when v_rest <= case when pg_temp.v0009l_p('E2') then 0 else current_setting('verify.max_stored_ms')::numeric end then 'PASS' else 'FAIL' end,
+      format('%s ms (best of %s, after six calls) against %s ms', v_rest, v_runs, case when pg_temp.v0009l_p('E2') then '0' else current_setting('verify.max_stored_ms') end));
+    insert into pg_temp.verify_0009l values (303, 'E3 ' || t.slug || ': the list''s first page, and a filtered page after a cursor in another sort, within the list budget',
+      case when greatest(v_list, coalesce(v_flist, 0)) <= case when pg_temp.v0009l_p('E3') then 0 else current_setting('verify.max_list_ms')::numeric end then 'PASS' else 'FAIL' end,
+      format('first page %s ms, market %s by age after a cursor %s ms (best of %s, after six calls) against %s ms', v_list, coalesce(v_m, 'none'), coalesce(v_flist::text, 'not timed'),
+             v_runs, case when pg_temp.v0009l_p('E3') then '0' else current_setting('verify.max_list_ms') end));
+    -- a refresh that did not run here (the job is refreshing this tenant at this moment) has nothing to time
     insert into pg_temp.verify_0009l values (304, 'E4 ' || t.slug || ': the refresh within its budget',
-      case when v_refresh <= case when pg_temp.v0009l_p('E4') then 0 else current_setting('verify.max_refresh_ms')::numeric end then 'PASS' else 'FAIL' end,
-      format('%s ms (everything written again, once) against %s ms', v_refresh, case when pg_temp.v0009l_p('E4') then '0' else current_setting('verify.max_refresh_ms') end));
+      case when pg_temp.v0009l_p('E4') then 'FAIL' when not v_refreshed then 'skip'
+           when v_refresh <= current_setting('verify.max_refresh_ms')::numeric then 'PASS' else 'FAIL' end,
+      case when not v_refreshed then 'not refreshed here (the job holds this tenant''s refresh, or its sources are not set up): nothing to time'
+           else format('%s ms (the history and the documents written again, once) against %s ms', v_refresh,
+                       case when pg_temp.v0009l_p('E4') then '0' else current_setting('verify.max_refresh_ms') end) end);
+    insert into pg_temp.verify_0009l values (305, 'E5 ' || t.slug || ': the live present of the tiles within the above-the-fold budget',
+      case when v_live <= case when pg_temp.v0009l_p('E5') then 0 else current_setting('verify.max_top_ms')::numeric end then 'PASS' else 'FAIL' end,
+      format('%s ms (best of %s, after six calls) against %s ms', v_live, v_runs, case when pg_temp.v0009l_p('E5') then '0' else current_setting('verify.max_top_ms') end));
+    insert into pg_temp.verify_0009l values (306, 'E6 ' || t.slug || ': computed from the take''s rows (no stored document): above the fold and below it within their budgets',
+      case when greatest(v_ctop, coalesce(v_ftop, 0)) <= case when pg_temp.v0009l_p('E6') then 0 else current_setting('verify.max_top_ms')::numeric end
+            and v_crest <= case when pg_temp.v0009l_p('E6') then 0 else current_setting('verify.max_overview_ms')::numeric end then 'PASS' else 'FAIL' end,
+      format('above: without a filter %s ms, market %s with segment %s %s ms, against %s ms; below without a filter %s ms against %s ms (best of %s, after six calls)', v_ctop,
+             coalesce(v_m, 'none'), coalesce(v_s, 'none'), coalesce(v_ftop::text, 'not timed'),
+             case when pg_temp.v0009l_p('E6') then '0' else current_setting('verify.max_top_ms') end, v_crest,
+             case when pg_temp.v0009l_p('E6') then '0' else current_setting('verify.max_overview_ms') end, v_runs));
   end loop;
   if not v_any then
-    insert into pg_temp.verify_0009l values (301, 'E1 to E4 the three reads and the refresh within their budgets',
-      case when current_setting('verify.provoke') in ('true', 'E1', 'E2', 'E3', 'E4') then 'FAIL' else 'skip' end, 'no active tenant holds a subscription');
+    insert into pg_temp.verify_0009l values (301, 'E1 to E6 the reads and the refresh within their budgets',
+      case when current_setting('verify.provoke') in ('true', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6') then 'FAIL' else 'skip' end, 'no active tenant holds a subscription');
   end if;
 end
 $$;

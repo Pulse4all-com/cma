@@ -11,14 +11,14 @@ import { PrintWhenReady, Streamed } from "@/components/ActivePending";
 import { fmtAmount, fmtNumber } from "@/components/FlashParts";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
-import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
+import { Card, Keycap, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import {
-  ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
+  ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_CURSOR, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SCROLLING, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
   type ActivePanel, type ActiveSplit, activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, fromMonthOf, matureCohorts, monthLabel,
-  monthsBack, parseActiveFilter,
+  ACTIVE_TAKE_STATES, type ActiveTakeState, activeInTakeState, activeListInTakeState, activeNowInTakeState, monthsBack, parseActiveFilter, withActiveNow,
 } from "@/lib/active";
 import { CmaDbError, data, dataIsMock, requestDbTrace, streamed } from "@/lib/data";
-import type { ActiveCurve, ActiveReport, ActiveTake } from "@/lib/data";
+import type { ActiveCurve, ActiveFilter, ActiveNow, ActiveReport, ActiveTake } from "@/lib/data";
 import { activeCopy, type Copy } from "@/lib/copy";
 import type { Principal } from "@/lib/auth/identity";
 import { flashHref } from "@/lib/flash";
@@ -33,22 +33,27 @@ import { resolve } from "../../access";
  * customer terms): the state and the movement of the customer base, the page the sales director opens first. The
  * population is Flash's, unchanged: an Active customer is a store customer with a subscription in a device-holding
  * status, Total subscriptions the subscriptions in one; the live headline equals Flash's for every market and segment.
- * The history is read from a stored take the scheduler refreshes (decision D13: "History as of"); the tiles' present is
- * live. Amounts are per currency and never added across currencies; the indicative euro line shows only while
+ * The history is read from a stored take the scheduler refreshes (decision D13: "History as of"). The table first, the
+ * live present after (decision D16): the tiles paint from the stored take at once and the live figures take their places
+ * when their own read is in. Amounts are per currency and never added across currencies; the indicative euro line shows only while
  * reports.fx_eur_rates holds a rate for every currency shown. Narrowed by market (K), segment and Direct / Indirect, in
  * the database. Shown to people holding reports.view or performance.team; the database checks again on every read. Team
  * figures only: ids, statuses, codes, amounts and links, never a customer's name, email, phone or address.
  *
- * Three layers (decision D15), the server's streaming alone:
- *   the frame          no figure is read: the title row, the filters (their lists are tenant catalogs from the per-instance
- *                      cache), every panel's title, hint and status badge, the placeholder cards of the unit economics, and
- *                      an outline of each data panel at the panel's own height (ACTIVE_PANEL_HEIGHT), so nothing moves
- *   above the fold     one read (cma.active_top): the tiles, the churn count beside the placeholders, the hero chart
- *   below the fold     one read (cma.active_rest): inflow and outflow, the recurring amount, the markets, the two segments
- *                      compared, survival, Customer age, Direct / Indirect, the cohorts, the subscription mix
+ * Layers (decisions D15 and D16), the server's streaming alone:
+ *   the frame          nothing is read from the database: the title row, the filters' outline, every panel's title, hint
+ *                      and status badge, the placeholder cards of the unit economics, and an outline of each data panel
+ *                      at the panel's own height (ACTIVE_PANEL_HEIGHT), so nothing moves
+ *   above the fold     one read of the stored document (cma.active_top, a key lookup): the tiles as of the take, the churn
+ *                      count beside the placeholders, the hero chart, and the filters' choices
+ *   the live present   its own read (cma.active_now): the four tiles that state the present, in the places of the stored
+ *                      ones, with "Updated hh:mm:ss"; D2's equality with Flash is this read's
+ *   below the fold     one read of the stored document (cma.active_rest): inflow and outflow, the recurring amount, the
+ *                      markets, the two segments compared, survival, Customer age, Direct / Indirect, the cohorts, the mix
  *   the list           its own read (cma.active_rows), keyset paging
- * Each read is its own transaction, started before anything waits; the parts stand in document order, so the frame and
- * the top arrive first and a slow read below never holds up the tiles. Every toggle is a link; a small client component
+ * Each read is its own transaction, started before anything waits; the parts stand in document order. A click inside the
+ * page waits for the stored reads only (milliseconds): the boundary of the live present is a new one on every view, so
+ * the stored tiles show at once and no click waits for the live read. Every toggle is a link; a small client component
  * marks the clicked link and keeps the Print button waiting for the last part (decision D14). The address keys are
  * range, grouping, market, segment, channel, split, amount, survival, cohort, msort, mdir, sort, dir, after, before, page.
  */
@@ -73,40 +78,43 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const fromMonth = fromMonthOf(range, today);
   const { hints, more, copy: words, info } = wordsOf(me, copy);
 
-  // The three reads, side by side, none awaited here: each part below waits for its own behind its own boundary.
-  // streamed(): their cost is counted apart from the first paint's, which is the identity (and, on an instance's first
-  // view, the two catalogs of the filters); each part writes the request's cost once its read is there
-  const topRead = streamed(() => data().getActiveTop(me, fromMonth, filter));
-  const restRead = streamed(() => data().getActiveRest(me, fromMonth, filter, grouping));
+  // The four reads, side by side, none awaited here: each part below waits for its own behind its own boundary.
+  // streamed(): their cost is counted apart from the first paint's, which is the identity alone (the frame reads
+  // nothing); each part writes the request's cost once its read is there
+  // test data alone: ?take=none|stale|late shows the answers as the database gives them in that state of the take
+  const takeState: ActiveTakeState | null = dataIsMock && (ACTIVE_TAKE_STATES as readonly string[]).includes(view.take ?? "") ? (view.take as ActiveTakeState) : null;
+  const topRead = streamed(() => data().getActiveTop(me, fromMonth, filter).then((r) => activeInTakeState(r, takeState)));
+  const nowRead = streamed(() => data().getActiveNow(me, filter).then((r) => activeNowInTakeState(r, takeState, filter.channel)));
+  const restRead = streamed(() => data().getActiveRest(me, fromMonth, filter, grouping).then((r) => activeInTakeState(r, takeState)));
   const rowsRequest = { filter, sort, descending, after: view.after, before: view.before, limit: ACTIVE_PAGE_SIZE };
   // a cursor the list no longer knows (an old address, another sort): the first page instead
   const listRead = streamed(() => data().getActiveRows(me, rowsRequest).catch((e: unknown) =>
     e instanceof CmaDbError && e.sqlState === "CMA04" && (view.after || view.before)
-      ? data().getActiveRows(me, { ...rowsRequest, after: null, before: null }) : Promise.reject(e)));
-  for (const read of [topRead, restRead, listRead]) read.catch(() => undefined);   // a failed read is reported by the part that waits for it
+      ? data().getActiveRows(me, { ...rowsRequest, after: null, before: null }).then((l) => ({ ...l, restarted: true })) : Promise.reject(e))
+    .then((l) => activeListInTakeState(l, takeState)));
+  for (const read of [topRead, nowRead, restRead, listRead]) read.catch(() => undefined);   // a failed read is reported by the part that waits for it
 
-  // the filters' lists: tenant catalogs from the per-instance cache (the segments of crm.customer_segments, the stores' markets)
-  const [settingsList, markets] = await Promise.all([data().listSettings(me), data().getActiveMarkets(me)]);
-  const segments = (settingsList.find((x) => x.key === "crm.customer_segments")?.value ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-
-  // What changes the figures (the range, the cohort grouping, the three filters): a change of one of them shows every
-  // panel's outline at once. A panel's own choice and the list's sort and paging keep what is on the screen while the
-  // clicked link shows its mark
-  const figuresKey = [range, grouping, filter.market ?? "", filter.segment ?? "", filter.channel ?? ""].join("|");
-  const viewKey = [figuresKey, view.bySegment, view.wantEur, view.survivalSplit, view.cohortSplit, view.msort, view.mdesc, sort, descending, view.after ?? "", view.before ?? ""].join("|");
+  // What changes a panel's figures decides when its outline shows: the three filters for every panel; the range for the
+  // charts over time; the cohort grouping for what is below the fold. A panel's own choice and the list's sort and paging
+  // keep what is on the screen while the clicked link shows its mark (the stored reads answer in milliseconds)
+  const filterKey = [filter.market ?? "", filter.segment ?? "", filter.channel ?? ""].join("|");
+  const topKey = `${filterKey}|${range}`;
+  const restKey = `${topKey}|${grouping}`;
+  const viewKey = [restKey, view.bySegment, view.wantEur, view.survivalSplit, view.cohortSplit, view.msort, view.mdesc, sort, descending, view.after ?? "", view.before ?? ""].join("|");
   const ctx: Ctx = { me, t, hints, more, info, copy: words, view, viewKey };
-  const layer = (id: ActivePanel, part: string) => ({ id, k: `${id}|${figuresKey}`, part, viewKey });
+  const keyOf = (id: ActivePanel) => (id === "tiles" || id === "churn" || id === "list" ? filterKey : id === "hero" ? topKey : restKey);
+  const layer = (id: ActivePanel, part: string) => ({ id, k: `${id}|${keyOf(id)}`, part, viewKey });
   const empty = (text: string) => <p className="text-body text-p4a-muted">{text}</p>;
 
   return (
     <Shell copy={copy} me={me} active="active" wide>
-      <div data-print="report" data-testid="active-page">
+      <div data-print="report" data-print-loading={t.printLoading} data-testid="active-page">
         {/* ---- the frame ---- */}
         <PageTitle aside={(
           <div className="flex items-center gap-4">
             <span className="flex h-10 min-w-80 flex-col items-end justify-center text-small text-p4a-muted" data-testid="active-freshness">
-              <Suspense key={`fresh|${figuresKey}`} fallback={<span className="h-4 w-64 animate-pulse rounded-input bg-p4a-border" aria-hidden="true" />}>
-                <Freshness ctx={ctx} read={topRead} />
+              <Suspense key={`fresh|${filterKey}`} fallback={<span className="h-4 w-64 animate-pulse rounded-input bg-p4a-border" aria-hidden="true" />}>
+                <Freshness ctx={ctx} read={topRead} nowRead={nowRead} />
               </Suspense>
             </span>
             <span className="flex items-center gap-3 print:hidden">
@@ -118,9 +126,10 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
         <p className="-mt-2 mb-6 max-w-4xl text-small text-p4a-muted">{t.intro}</p>
 
         <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 print:hidden">
-          <ActiveFilters markets={markets} segments={[...segments, "unknown"]} filter={filter} keep={keep} unknownMarket={copy.reports.unknownMarket}
-            t={{ marketFilter: t.marketFilter, allMarkets: t.allMarkets, segmentFilter: t.segmentFilter, allSegments: t.allSegments, unknownSegment: t.unknownSegment,
-              channel: t.channel, allChannels: t.allChannels, channel_indirect: t.channel_indirect, channel_direct: t.channel_direct, channel_unknown: t.channel_unknown }} />
+          {/* the filters' choices come with the stored answer (no catalog read for the frame): their outline until then */}
+          <Suspense fallback={<FiltersOutline t={t} />}>
+            <FiltersSlot ctx={ctx} read={topRead} filter={filter} keep={keep} unknownMarket={copy.reports.unknownMarket} />
+          </Suspense>
           <div className="flex flex-wrap items-end gap-6">
             <LinkSwitch label={t.rangeLabel} testId="active-range" current={range} options={ACTIVE_RANGES.map((v) => ({ value: v, label: v === "all" ? t.rangeAll : t.rangeMonths.replace("{n}", v) }))}
               href={(v) => href({ range: v === "24" ? null : v })} />
@@ -132,7 +141,13 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
 
         <div className="flex flex-col gap-6">
           {/* 3.2 the headline: above the fold */}
-          <Layer {...layer("tiles", "top")} read={topRead}>{(top) => <Tiles ctx={ctx} top={top} />}</Layer>
+          {/* the table first, the live present after (decision D16): the stored tiles are the fallback of the live ones; the
+              boundary is a new one on every view, so no click waits for the live read */}
+          <Layer {...layer("tiles", "top")} read={topRead}>{(top) => (
+            <Suspense key={`now|${viewKey}`} fallback={<Tiles ctx={ctx} top={top} settled={false} />}>
+              <TilesLive ctx={ctx} top={top} read={nowRead} />
+            </Suspense>
+          )}</Layer>
 
           {/* 3.3 the unit economics: placeholders in the frame, never a number; the one real figure beside them */}
           <section aria-label={t.unitEconomics} data-testid="active-slots">
@@ -143,13 +158,13 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
               ))}
             </div>
             <div className="mt-3 text-small">
-              <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (top.unitEconomics ? (
+              <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (top.unitEconomics && top.unitEconomics.churned30d !== null ? (
                 <p data-testid="active-churned">
                   <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
                     {t.churned30dLine.replace("{n}", fmtCount(top.unitEconomics.churned30d, me.locale))}
                   </Link>
                 </p>
-              ) : null)}</Layer>
+              ) : top.figures && !top.history ? <p className="text-p4a-muted" data-testid="active-churned-preparing">{t.historyPreparing}</p> : null)}</Layer>
             </div>
           </section>
 
@@ -181,16 +196,18 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
           {/* 3.6 the markets */}
           <Card>
             <PanelTitle label={t.marketsCard} hint={hints.mh_markets!} more={more("active.by_market")} copy={words} />
-            <Layer {...layer("markets", "rest")} read={restRead}>{(rest) => (rest.markets.length === 0 || !rest.marketsTotal ? empty(t.empty)
+            <Layer {...layer("markets", "rest")} read={restRead} label={t.marketsCard}>{(rest) => (rest.markets.length === 0 || !rest.marketsTotal ? empty(t.empty)
               : <MarketsTable rows={sortMarkets(rest.markets, view.msort, view.mdesc)} total={rest.marketsTotal} sort={view.msort} descending={view.mdesc} href={href} hints={hints}
                 copy={words} locale={me.locale} segments={rest.settings.segments} />)}</Layer>
           </Card>
 
           {/* 3.7a the two segments compared */}
           <Card>
-            <PanelTitle label={t.comparisonCard.replace("{a}", segments[0] ?? "–").replace("{b}", segments[1] ?? "–")} hint={hints.mh_comparison!}
-              more={more("active.segment_difference")} copy={words} />
-            <Layer {...layer("comparison", "rest")} read={restRead}>{(rest) => (!rest.comparison || rest.comparison.a === null || rest.comparison.b === null
+            {/* the title names the tenant's first two segments, which come with the stored answer: the plain title until then */}
+            <Suspense fallback={<PanelTitle label={t.comparisonCardPlain} hint={hints.mh_comparison!} more={more("active.segment_difference")} copy={words} />}>
+              <ComparisonTitle ctx={ctx} read={topRead} />
+            </Suspense>
+            <Layer {...layer("comparison", "rest")} read={restRead} label={t.comparisonCardPlain}>{(rest) => (!rest.comparison || rest.comparison.a === null || rest.comparison.b === null
               ? empty(t.noSegments) : <ComparisonTable comparison={rest.comparison} hints={hints} copy={words} locale={me.locale} />)}</Layer>
           </Card>
 
@@ -223,7 +240,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
                 href={(v) => href({ cohort: v === "none" ? null : v })} />
             </PanelTitle>
             <div className="flex flex-col gap-6">
-              <Layer {...layer("cohortTable", "rest")} read={restRead}>{(rest) => <CohortTable ctx={ctx} rest={rest} />}</Layer>
+              <Layer {...layer("cohortTable", "rest")} read={restRead} label={t.cohortsCard}>{(rest) => <CohortTable ctx={ctx} rest={rest} />}</Layer>
               <Layer {...layer("cohortCurves", "rest")} read={restRead}>{(rest) => <CohortCurves ctx={ctx} rest={rest} />}</Layer>
             </div>
           </Card>
@@ -237,11 +254,11 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
           {/* 3.10 the customer list: its own read */}
           <Card>
             <PanelTitle label={t.listCard} hint={hints.mh_list!} more={more("active.list")} copy={words} />
-            <Layer {...layer("list", "list")} read={listRead} mark>{(list) => (
+            <Layer {...layer("list", "list")} read={listRead} mark label={t.listCard}>{(list) => (
               !list.setUp ? empty(copy.flash.notSetUpShort)
                 : !list.history ? empty(t.historyPreparing)
                   : list.total === 0 ? empty(t.emptyList)
-                    : <CustomerList list={list} sort={sort} descending={descending} page={view.pageNo} pageSize={ACTIVE_PAGE_SIZE} href={href} hints={hints} copy={words} locale={me.locale} />
+                    : <CustomerList list={list} sort={sort} descending={descending} page={"restarted" in list ? 1 : view.pageNo} pageSize={ACTIVE_PAGE_SIZE} href={href} hints={hints} copy={words} locale={me.locale} />
             )}</Layer>
           </Card>
         </div>
@@ -272,12 +289,13 @@ function viewOf(sp: Record<string, One>) {
   const mdesc = one(sp.mdir) !== "asc";
   const sort = activeSortOf(one(sp.sort));
   const descending = one(sp.dir) !== "asc";
-  // the list's place: a cursor of the page before (after) or after (before) this one, as the database wrote it; the page's
-  // number rides along for the words under the list only
-  const cursor = (v: string | undefined) => (v && v.length <= 600 && /^[A-Za-z0-9+/]+={0,2}$/.test(v) ? v : null);
+  // the list's place: a cursor of the page before (after) or after (before) this one, as the database wrote it (a
+  // customer's own id, nothing else); the page's number rides along for the words under the list only
+  const cursor = (v: string | undefined) => (v && ACTIVE_CURSOR.test(v) ? v : null);
   const after = cursor(one(sp.after));
   const before = after ? null : cursor(one(sp.before));
   const pageNo = after || before ? Math.max(1, Math.min(100_000, Number.parseInt(one(sp.page) ?? "1", 10) || 1)) : 1;
+  const take = one(sp.take);
 
   // the address: only what differs from the page's defaults, so a view can be shared; a toggle changes its own key
   const state: Record<string, string> = {
@@ -286,6 +304,7 @@ function viewOf(sp: Record<string, One>) {
     ...(cohortSplit === "none" ? {} : { cohort: cohortSplit }), ...(msort === "customers" && mdesc ? {} : { msort, mdir: mdesc ? "desc" : "asc" }),
     ...(sort === "monthly_amount" && descending ? {} : { sort, dir: descending ? "desc" : "asc" }),
     ...(after ? { after } : {}), ...(before ? { before } : {}), ...(pageNo > 1 ? { page: String(pageNo) } : {}),
+    ...(dataIsMock && take ? { take } : {}),
   };
   const href: ActiveHref = (change) => {
     const q = { ...state };
@@ -297,7 +316,7 @@ function viewOf(sp: Record<string, One>) {
   };
   const keep = Object.fromEntries(Object.entries(state).filter(([k]) => !["market", "segment", "channel", "after", "before", "page"].includes(k)));
   const fileQuery = new URLSearchParams({ ...activeQuery(filter), sort, dir: descending ? "desc" : "asc" }).toString();
-  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, sort, descending, after, before, pageNo, href, keep, fileQuery };
+  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, sort, descending, after, before, pageNo, take, href, keep, fileQuery };
 }
 type ActiveView = ReturnType<typeof viewOf>;
 
@@ -319,8 +338,10 @@ type Ctx = ReturnType<typeof wordsOf> & { me: Principal; view: ActiveView; viewK
  * outline at once. mark: the last panel of its part tells the page that the part is on the screen (the Print button
  * waits for all three). plain: a line of text, no box around the outline
  */
-function Layer<T>({ id, k, part, viewKey, read, children, mark = false, plain = false }: {
+function Layer<T>({ id, k, part, viewKey, read, children, mark = false, plain = false, label }: {
   id: ActivePanel; k: string; part: string; viewKey: string; read: Promise<T>; children: (value: T) => ReactNode; mark?: boolean; plain?: boolean;
+  /** The panel's name for a reader of the screen: a panel whose table scrolls inside it can be reached and scrolled with the keyboard */
+  label?: string;
 }) {
   const height = ACTIVE_PANEL_HEIGHT[id];
   return (
@@ -330,16 +351,19 @@ function Layer<T>({ id, k, part, viewKey, read, children, mark = false, plain = 
         {plain ? <span className="h-3 w-48 animate-pulse rounded-input bg-p4a-border" aria-hidden="true" /> : null}
       </div>
     )}>
-      <Body id={id} read={read} part={mark ? part : null} viewKey={viewKey}>{children}</Body>
+      <Body id={id} read={read} part={mark ? part : null} viewKey={viewKey} label={label}>{children}</Body>
     </Suspense>
   );
 }
 
-async function Body<T>({ id, read, part, viewKey, children }: { id: ActivePanel; read: Promise<T>; part: string | null; viewKey: string; children: (value: T) => ReactNode }) {
+async function Body<T>({ id, read, part, viewKey, label, children }: {
+  id: ActivePanel; read: Promise<T>; part: string | null; viewKey: string; label?: string; children: (value: T) => ReactNode;
+}) {
   const value = await read;
   const dbTrace = part ? requestDbTrace() : null;
   return (
-    <div data-panel-body={id} style={{ height: ACTIVE_PANEL_HEIGHT[id] }} className="flex flex-col overflow-y-auto">
+    <div data-panel-body={id} style={{ height: ACTIVE_PANEL_HEIGHT[id] }} className="flex flex-col overflow-y-auto"
+      {...(ACTIVE_SCROLLING.includes(id) ? { tabIndex: 0, role: "group", "aria-label": label } : {})}>
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       {children(value)}
       {part ? <Streamed part={part} view={viewKey} /> : null}
@@ -365,20 +389,28 @@ function gap(ctx: Ctx, r: ActiveReport, needsHistory = true): ReactNode | null {
 function late(ctx: Ctx, take: ActiveTake | null): ReactNode | null {
   if (!take?.late) return null;
   const time = clock(ctx.me, take.computedAt);
-  return <DataNote testId="active-note-late">{ctx.t.historyLateBody.replace("{time}", time).replace("{minutes}", String(take.ageMinutes))}</DataNote>;
+  // stale (a setting changed since) says so; late by its age says how old
+  return <DataNote testId="active-note-late">{(take.stale ? ctx.t.historyStaleBody : ctx.t.historyLateBody).replace("{time}", time).replace("{minutes}", String(take.ageMinutes))}</DataNote>;
 }
 
 const clock = (me: Principal, at: string, style: "short" | "medium" = "short") =>
   new Intl.DateTimeFormat(me.locale === "nl" ? "nl-NL" : "en-GB", { timeStyle: style, timeZone: me.timeZone }).format(new Date(at));
 
-/** The title row's two instants: Updated (this read) and History as of (the stored take), or that the history is being prepared */
-async function Freshness({ ctx, read }: { ctx: Ctx; read: Promise<ActiveReport> }) {
+/**
+ * The title row's two instants: Updated (the live present's read, once it is in; until then, and when it fails, the
+ * moment the stored tiles are of) and History as of (the stored take), or that the history is being prepared
+ */
+async function Freshness({ ctx, read, nowRead }: { ctx: Ctx; read: Promise<ActiveReport>; nowRead: Promise<ActiveNow> }) {
   const top = await read;
   const { t, me } = ctx;
   const take = top.take;
+  const stored = top.presentAt ? <span data-testid="active-updated" data-present="stored">{t.tilesAsOf.replace("{time}", clock(me, top.presentAt, "medium"))}</span>
+    : <span className="h-4 w-40 animate-pulse rounded-input bg-p4a-border" aria-hidden="true" />;
   return (
     <>
-      <span data-testid="active-updated">{t.updated.replace("{time}", clock(me, top.computedAt, "medium"))}</span>
+      <Suspense key={`updated|${ctx.viewKey}`} fallback={stored}>
+        <Updated ctx={ctx} read={nowRead} fallback={top.presentAt ? stored : null} />
+      </Suspense>
       {!top.figures ? null : take === null
         ? <span data-testid="active-history" data-history="none">{t.historyPreparing}</span>
         : (
@@ -390,14 +422,77 @@ async function Freshness({ ctx, read }: { ctx: Ctx; read: Promise<ActiveReport> 
   );
 }
 
+async function Updated({ ctx, read, fallback }: { ctx: Ctx; read: Promise<ActiveNow>; fallback: ReactNode }) {
+  const now = await read.catch(() => null);
+  if (!now || !now.figures || !now.tiles) return fallback;
+  return <span data-testid="active-updated" data-present="live">{ctx.t.updated.replace("{time}", clock(ctx.me, now.computedAt, "medium"))}</span>;
+}
+
+/** The filters' outline in the frame: the three labels and boxes at their own size, so nothing moves when the choices arrive */
+function FiltersOutline({ t }: { t: Ctx["t"] }) {
+  const box = <span className="block h-10 w-44 animate-pulse rounded-input border border-p4a-border bg-p4a-bgblue" />;
+  return (
+    <div className="flex flex-wrap items-end gap-4" aria-busy="true" data-testid="active-filters-outline">
+      <span className="flex flex-col gap-2 text-small font-semibold"><span className="flex items-center gap-2">{t.marketFilter} <Keycap>K</Keycap></span>{box}</span>
+      <span className="flex flex-col gap-2 text-small font-semibold"><span>{t.segmentFilter}</span>{box}</span>
+      <span className="flex flex-col gap-2 text-small font-semibold"><span>{t.channel}</span>{box}</span>
+    </div>
+  );
+}
+
+/** The filters with their choices from the stored answer (the markets of the base, the tenant's segments and unknown); a failed read leaves the choices empty */
+async function FiltersSlot({ ctx, read, filter, keep, unknownMarket }: {
+  ctx: Ctx; read: Promise<ActiveReport>; filter: ActiveFilter; keep: Record<string, string>; unknownMarket: string;
+}) {
+  const top = await read.catch(() => null);
+  const { t } = ctx;
+  return (
+    <ActiveFilters markets={top?.filters.markets ?? []} segments={top?.filters.segments ?? []} filter={filter} keep={keep} unknownMarket={unknownMarket}
+      t={{ marketFilter: t.marketFilter, allMarkets: t.allMarkets, segmentFilter: t.segmentFilter, allSegments: t.allSegments, unknownSegment: t.unknownSegment,
+        channel: t.channel, allChannels: t.allChannels, channel_indirect: t.channel_indirect, channel_direct: t.channel_direct, channel_unknown: t.channel_unknown }} />
+  );
+}
+
+async function ComparisonTitle({ ctx, read }: { ctx: Ctx; read: Promise<ActiveReport> }) {
+  const top = await read.catch(() => null);
+  const { t, hints, more, copy } = ctx;
+  const segments = top?.settings.segments ?? [];
+  return (
+    <PanelTitle label={segments.length >= 2 ? t.comparisonCard.replace("{a}", segments[0]!).replace("{b}", segments[1]!) : t.comparisonCardPlain}
+      hint={hints.mh_comparison!} more={more("active.segment_difference")} copy={copy} />
+  );
+}
+
 // ---- above the fold --------------------------------------------------------------------------------------------------
 
-function Tiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
+/** The tiles with the live present in the places of the stored ones, once its read is in (or has failed: the stored tiles stay, said as such) */
+async function TilesLive({ ctx, top, read }: { ctx: Ctx; top: ActiveReport; read: Promise<ActiveNow> }) {
+  const now = await read.catch(() => null);
+  const dbTrace = requestDbTrace();
+  return (
+    <>
+      {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
+      <Tiles ctx={ctx} top={withActiveNow(top, now)} settled />
+      <Streamed part="now" view={ctx.viewKey} />
+    </>
+  );
+}
+
+/**
+ * The headline tiles. settled false: the stored answer alone (the live present is on its way); true: with the live
+ * present where it arrived. Without any present yet (no take, the live read not in) the tiles' outline, never zeros
+ */
+function Tiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; settled: boolean }) {
   const { t, hints, info, me } = ctx;
   const locale = me.locale;
   const tiles = top.tiles;
   const g = gap(ctx, top, false);
-  if (g || !tiles) return g ?? null;
+  if (g) return g;
+  if (!tiles) {
+    return settled ? gap(ctx, top, true)
+      : <div data-panel-skeleton="tiles" aria-busy="true" className="h-full animate-pulse rounded-input bg-p4a-bgblue" />;
+  }
+  const live = top.presentAt !== null && top.presentAt !== top.take?.computedAt;
   const n = (x: number) => fmtCount(x, locale);
   const pct = (x: number | null) => fmtShare(x, locale);
   const months = (x: number, digits = 0) => t.monthsValue.replace("{n}", fmtNumber(x, locale, digits));
@@ -407,13 +502,17 @@ function Tiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
   const segLabel = (s: string) => (s === "unknown" ? t.unknownSegment : s);
   const dash = <span className="text-p4a-muted">–</span>;
   return (
-    <section className="grid h-full grid-cols-3 gap-4 xl:grid-cols-6 [&>div]:overflow-y-auto" aria-label={t.headline} data-testid="active-tiles">
+    <section className="grid h-full grid-cols-3 gap-4 xl:grid-cols-6 [&>div]:overflow-y-auto" aria-label={t.headline} data-testid="active-tiles"
+      data-present={live ? "live" : "stored"} data-settled={settled ? "true" : "false"} aria-busy={!settled || undefined}>
       <ActiveTile testId="active-tile-customers" label={t.activeCustomers} info={info(t.activeCustomers, hints.mh_active_customers!, "active.active_customers")}
         value={n(tiles.activeCustomers.value)}>
         <p data-testid="active-split-segment">{segOrder.map((s) => `${segLabel(s)} ${n(tiles.activeCustomers.bySegment[s] ?? 0)}`).join(" · ")}</p>
-        <p data-testid="active-split-channel">
-          {ACTIVE_CHANNELS.map((c) => `${t[`channelShort_${c}`]} ${pct(tiles.activeCustomers.value > 0 ? tiles.activeCustomers.byChannel[c] / tiles.activeCustomers.value : null)}`).join(" · ")}
-        </p>
+        {/* the acquisition channel is the stored take's: without a take there is no split to state */}
+        {tiles.activeCustomers.byChannel ? (
+          <p data-testid="active-split-channel">
+            {ACTIVE_CHANNELS.map((c) => `${t[`channelShort_${c}`]} ${pct(tiles.activeCustomers.value > 0 ? tiles.activeCustomers.byChannel![c] / tiles.activeCustomers.value : null)}`).join(" · ")}
+          </p>
+        ) : null}
         <ChangeLine value={tiles.activeCustomers.value} previous={tiles.activeCustomers.prevMonth} when={whenMonth} fmt={n} better="up" t={t} />
         <ChangeLine value={tiles.activeCustomers.value} previous={tiles.activeCustomers.prevYear} when={whenYear} fmt={n} better="up" t={t} />
       </ActiveTile>

@@ -2288,8 +2288,8 @@ export interface ActiveAmount { amount: number; customers: number; average: numb
 /** Customer lifetime value (realised) of one currency over the active customers: the average, the median and the average per month of Customer age */
 export interface ActiveClv { average: number; median: number; perMonth: number; customers: number }
 export interface ActiveTiles {
-  /** Flash's Active customers, with the split by segment and by acquisition channel */
-  activeCustomers: ActiveChange & { value: number; bySegment: Record<string, number>; byChannel: Record<ActiveChannel, number> };
+  /** Flash's Active customers, with the split by segment and by acquisition channel (the channel is the stored take's: null while there is no take yet, never "unknown 100 %") */
+  activeCustomers: ActiveChange & { value: number; bySegment: Record<string, number>; byChannel: Record<ActiveChannel, number> | null };
   /** Flash's Total subscriptions, with the split by holding status */
   totalSubscriptions: ActiveChange & { value: number; byStatus: Record<string, number> };
   /** The Monthly recurring amount per currency, never added across currencies */
@@ -2333,6 +2333,14 @@ export interface ActiveNotes {
   unknownChannel: { customers: number; reasons: Record<string, number> };
   dominantCohort: { cohort: DateKey; share: number } | null;
 }
+/** The live present of the tiles that state it (cma.active_now, decision D16): it streams in after the stored answer and takes those tiles' places */
+export interface ActiveNow {
+  /** False while a source is not set up */
+  figures: boolean;
+  computedAt: Instant;
+  /** Null without a present to state: a source not set up, or a channel filter while there is no take yet (the channel is the take's) */
+  tiles: Pick<ActiveTiles, "activeCustomers" | "totalSubscriptions" | "amounts" | "eur"> | null;
+}
 /** The stored take the history is read from (decision D13): when it was computed (History as of), and whether the page says it is old */
 export interface ActiveTake {
   computedAt: Instant; businessDate: DateKey;
@@ -2365,7 +2373,10 @@ export interface ActiveReport {
   /** The filter choices: the markets of the base (unknown last), the tenant's segments and unknown, the three channels */
   filters: { markets: string[]; segments: string[]; channels: ActiveChannel[] };
   tiles: ActiveTiles | null;
-  unitEconomics: { churned30d: number; slots: { key: ActiveSlotKey; status: "pending" }[] } | null;
+  /** The moment the tiles' present is of: the take's while the page shows the stored answer (decision D16), this read's once the live present is in; null without a present */
+  presentAt: Instant | null;
+  /** churned30d is the stored take's: null while there is no take yet (never a zero) */
+  unitEconomics: { churned30d: number | null; slots: { key: ActiveSlotKey; status: "pending" }[] } | null;
   months: ActiveMonth[];
   markets: ActiveMarketRow[];
   marketsTotal: (ActiveGroupStat & { share: number | null }) | null;
@@ -4164,10 +4175,10 @@ export interface CmaData {
   /** Customers → Courtesy (cma.courtesy_page, addition 0009a; reports.view or performance.team; at most 92 days) */
   getCourtesy(me: Principal, range: HoursRange, period: CourtesyPeriod, group: CourtesyGroup, filter: CourtesyFilter): Promise<CourtesyReport>;
   // ---- Customers → Active (addition 0009l): the database checks the permission on every call (CMA06)
-  /** Above the fold (cma.active_top): the live present with the stored take's history; fromMonth the history's first month (null: as far back as the tenant keeps) */
+  /** Above the fold from the stored take alone (cma.active_top, decision D16: the table first): the tiles as of the take, the hero series and the filters' choices; fromMonth the history's first month (null: as far back as the tenant keeps) */
   getActiveTop(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter): Promise<ActiveReport>;
-  /** The markets of the tenant's stores, for the page's market filter (cma.active_markets): a tenant catalog, kept in the per-instance cache, so the page's frame reads no figure */
-  getActiveMarkets(me: Principal): Promise<string[]>;
+  /** The live present of the tiles (cma.active_now): its own transaction, after the stored answer; D2's equality with Flash is this read's */
+  getActiveNow(me: Principal, filter: ActiveFilter): Promise<ActiveNow>;
   /** Below the fold, from the stored take alone (cma.active_rest): its own transaction */
   getActiveRest(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter, grouping: ActiveGrouping): Promise<ActiveReport>;
   /** The customer list's page (cma.active_rows); file: every row up to the tenant's flash.file_max_rows */

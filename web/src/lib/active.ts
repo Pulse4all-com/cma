@@ -37,7 +37,11 @@ export const ACTIVE_PANEL_HEIGHT = {
 } as const;
 export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
 /** The three streamed parts of the page (decision D15): above the fold, below it, the customer list */
-export const ACTIVE_PARTS = ["top", "rest", "list"] as const;
+export const ACTIVE_PARTS = ["top", "now", "rest", "list"] as const;
+/** The panels whose table can be longer than the panel's fixed height: they scroll inside it (and can be reached with the keyboard); every other panel fits */
+export const ACTIVE_SCROLLING: readonly ActivePanel[] = ["markets", "comparison", "cohortTable", "list"];
+/** A cursor of the customer list: the CMA's own id of a customer, nothing else (it rides in the address) */
+export const ACTIVE_CURSOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** The splits of the survival curves and of the cohorts' pooled retention */
 export const ACTIVE_SPLITS = ["segment", "channel"] as const;
 export type ActiveSplit = (typeof ACTIVE_SPLITS)[number];
@@ -379,6 +383,7 @@ export function activeFromDb(j: Record<string, unknown>): import("@/lib/data").A
     },
     filters: (c.filters as R["filters"] | undefined) ?? { markets: [], segments: [], channels: [...ACTIVE_CHANNELS] },
     tiles: figures ? ((c.tiles as import("@/lib/data").ActiveTiles | undefined) ?? null) : null,
+    presentAt: typeof c.presentAt === "string" ? c.presentAt : null,
     unitEconomics: figures ? ((c.unitEconomics as R["unitEconomics"] | undefined) ?? null) : null,
     months: figures ? ((c.months as Partial<import("@/lib/data").ActiveMonth>[] | undefined) ?? []).map(monthOf) : [],
     markets: figures ? ((c.markets as import("@/lib/data").ActiveMarketRow[] | undefined) ?? []) : [],
@@ -417,6 +422,56 @@ const TOP_MONTH = ["customers", "bySegment", "subscriptions"] as const;
 const TOP_NOTES = ["noEndedTime", "noCreatedTime", "unmatchedSubscriptions", "reconstructionGap", "historyStarts"] as const;
 
 /** The two reads as one report (the API's answer): the top's part, the rest's part, the months and the notes of both side by side */
+/** cma.active_now's answer: the live present of the four tiles that state it */
+export function activeNowFromDb(j: Record<string, unknown>): import("@/lib/data").ActiveNow {
+  const c = convert(j, false) as Record<string, unknown>;
+  const figures = c.figures === true;
+  return { figures, computedAt: String(c.computedAt ?? ""), tiles: figures ? ((c.tiles as import("@/lib/data").ActiveNow["tiles"] | undefined) ?? null) : null };
+}
+/**
+ * The stored answer with the live present in the places of the tiles that state it (decision D16): Active customers,
+ * Total subscriptions, the Monthly recurring amount and the indicative euros; the take's own tiles (Customer age,
+ * Customer lifetime, the realised value) stay. Without a live present the stored answer as it is
+ */
+export function withActiveNow(top: import("@/lib/data").ActiveReport, now: import("@/lib/data").ActiveNow | null): import("@/lib/data").ActiveReport {
+  if (!now || !now.figures || !now.tiles) return top;
+  const stored = top.tiles;
+  return {
+    ...top, presentAt: now.computedAt,
+    tiles: { customerAge: stored?.customerAge ?? null, lifetime: stored?.lifetime ?? null, clv: stored?.clv ?? null, ...now.tiles },
+  };
+}
+/** The states of a take the mock can show (the page's ?take= in test data): none yet, marked stale, or late by its age */
+export const ACTIVE_TAKE_STATES = ["none", "stale", "late"] as const;
+export type ActiveTakeState = (typeof ACTIVE_TAKE_STATES)[number];
+const takeIn = (take: import("@/lib/data").ActiveTake | null, state: ActiveTakeState): import("@/lib/data").ActiveTake | null => (take === null || state === "none" ? null
+  : state === "stale" ? { ...take, stale: true, late: true }
+    : { ...take, computedAt: new Date(new Date(take.computedAt).getTime() - 20 * 60_000).toISOString(), ageMinutes: 20, late: true });
+/**
+ * For test data alone: an answer of the report's reads as the database gives it in another state of the take, so the
+ * states can be looked at and verified without a database. none: the head with the filters' choices and nothing else
+ * (history false, no take, no figure: never zeros); stale and late: the same figures under a take that says so
+ */
+export function activeInTakeState(r: import("@/lib/data").ActiveReport, state: ActiveTakeState | null): import("@/lib/data").ActiveReport {
+  if (state === null || !r.figures) return r;
+  if (state === "none") {
+    return { ...activeFromDb({ figures: true }), setUp: r.setUp, computedAt: r.computedAt, timeZone: r.timeZone, today: r.today, month: r.month, fromMonth: r.fromMonth,
+      grouping: r.grouping, filter: r.filter, settings: r.settings, filters: r.filters, history: false, take: null, presentAt: null };
+  }
+  const take = takeIn(r.take, state);
+  return { ...r, take, presentAt: r.presentAt === null ? null : take?.computedAt ?? null };
+}
+/** The live present in that state: without a take the split by acquisition channel is absent, and under a channel filter there is no present to state */
+export function activeNowInTakeState(now: import("@/lib/data").ActiveNow, state: ActiveTakeState | null, channel: string | null): import("@/lib/data").ActiveNow {
+  if (state !== "none" || !now.tiles) return now;
+  return channel !== null ? { ...now, tiles: null } : { ...now, tiles: { ...now.tiles, activeCustomers: { ...now.tiles.activeCustomers, byChannel: null } } };
+}
+/** The list in that state: without a take no row and no total */
+export function activeListInTakeState(list: import("@/lib/data").ActiveList, state: ActiveTakeState | null): import("@/lib/data").ActiveList {
+  if (state === null || !list.setUp) return list;
+  if (state === "none") return { ...list, history: false, take: null, total: null, rows: [], next: null, prev: null };
+  return { ...list, take: takeIn(list.take, state) };
+}
 export function mergeActive(top: import("@/lib/data").ActiveReport, rest: import("@/lib/data").ActiveReport): import("@/lib/data").ActiveReport {
   const restPart = Object.fromEntries(REST_KEYS.map((k) => [k, rest[k]]));
   const byMonth = new Map(rest.months.map((m) => [m.month, m]));

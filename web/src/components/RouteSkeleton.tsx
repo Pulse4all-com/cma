@@ -90,8 +90,8 @@ export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "live
 
 /**
  * Customers → Active's outline below the title: the filters' row, six tiles, six placeholder slots, the wide chart, two
- * half-width charts and a table. The route's loading boundary draws it inside the frame; the page draws it while its
- * report is read (a change of the range, the grouping or a filter), so a click shows where the figures will stand
+ * half-width charts and a table. The route's loading boundary draws it inside the frame while the page itself is on its
+ * way; the page then draws its own frame with an outline per panel (decision D15)
  */
 export function ActiveSkeleton() {
   const bar = (w: string, h = "h-4") => <div className={`${h} ${w} animate-pulse rounded-input bg-p4a-border`} aria-hidden="true" />;

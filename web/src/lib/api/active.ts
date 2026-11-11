@@ -1,5 +1,5 @@
 import { ApiError } from "@/lib/api/respond";
-import { ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_SORTS, parseActiveFilter } from "@/lib/active";
+import { ACTIVE_CURSOR, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_SORTS, parseActiveFilter } from "@/lib/active";
 import type { ActiveFilter, ActiveGrouping, ActiveRowsRequest, ActiveSort } from "@/lib/data";
 
 /** The filter of the Active routes: &market (a market code or unknown), &segment (a segment's code or unknown), &channel (indirect, direct or unknown) */
@@ -29,7 +29,8 @@ export function activeParams(sp: URLSearchParams): { fromMonth: string | null; g
 
 /**
  * The query of the list's routes: the filter, &sort (a sort key of the list; monthly_amount when left out), &dir=asc|desc
- * (desc when left out), &after or &before (a page's next or prev cursor, never both: keyset paging, no offset) and
+ * (desc when left out), &after or &before (a page's next or prev cursor, never both: keyset paging, no offset; a cursor
+ * is the CMA's own id of a customer of the list and nothing else, since the address is logged) and
  * &limit (1 to 200; 50 when left out). A file takes the filter and the sort alone: every row, up to the tenant's
  * flash.file_max_rows.
  */
@@ -50,7 +51,7 @@ export function activeRowsParams(sp: URLSearchParams, opts: { file?: boolean } =
     const raw = sp.get(name);
     if (raw === null || raw === "") return null;
     if (opts.file) throw new ApiError(400, `invalid_${name}`, "a file takes no cursor");
-    if (raw.length > 600 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) throw new ApiError(400, `invalid_${name}`, `${name} must be the next or prev of a page of this list`);
+    if (!ACTIVE_CURSOR.test(raw)) throw new ApiError(400, `invalid_${name}`, `${name} must be the next or prev of a page of this list`);
     return raw;
   };
   const after = cursor("after");
