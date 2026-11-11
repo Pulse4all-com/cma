@@ -200,8 +200,8 @@ expect("six inbound tiles, Talk time the fifth, in the column of Outbound today'
   [INBOUND_TILES.length, INBOUND_TILES.indexOf("talk"), INBOUND_TILES.indexOf("talk") === OUTBOUND_TILES.indexOf("talk"),
     INBOUND_TILES.includes("waitingNow"), INBOUND_TILES.includes("longestWaiting")],
   [6, 4, true, false, false], [6, 5, false, true, false]);
-// the dash needs no answered call and no talk time: a line east of the tenant can carry talk time on the date before the
-// tenant's first answered call of the day (Answered counts the tenant's day, the talk time each call's line-zone day)
+// the dash needs no answered call and no talk time: both count the calls of the tenant's day, so they are 0 together, and
+// talk time without an answered call (a disagreement the rule rules out) still shows rather than hiding behind a dash
 expect("Talk time as Outbound today's shows it, a dash without an answered call and without talk time",
   [fmtTalk(inboundTileValue(today, "talk").value, "en"), inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk"),
     fmtTalk(inboundTileValue({ ...today, answered: 0, inboundTalkSeconds: 0 }, "talk").value, "nl"), fmtTalk(inboundTileValue({ ...today, inboundTalkSeconds: 0 }, "talk").value, "en"),

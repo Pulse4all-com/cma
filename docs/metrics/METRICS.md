@@ -1549,7 +1549,7 @@ with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id) se
 
 **Fixture check** Not run here: this session has no database. db/169_verify_live_inbound_talk.sql proves the figure on fixed test calls (lines west and east of the tenant) and per tenant against cma.calls_figures_of and cma.calls_per_person_of for today, naming the calls on another day in their line's zone; Martin runs it and this query in Studio.
 
-**Documented in** features.md §5, Live board, and api.md §Live board in one read and GET /api/v1/telephony/inbound-now (0009j); definitions.md, Talk time, Inbound call, Day (D34); data-model/0008.md, Live board: Inbound today with Talk time (0009j); decisions.md 10 Nov 2026 (Live board, Inbound today: Waiting now replaced by Talk time)
+**Documented in** features.md §5, Live board, and api.md §Live board in one read and GET /api/v1/telephony/inbound-now (0009j); definitions.md, Talk time, Inbound call, Day (the talk time follows Day; only its comparison with Reports → Calls meets gap D34); data-model/0008.md, Live board: Inbound today with Talk time (0009j); decisions.md 10 Nov 2026 (Live board, Inbound today: Waiting now replaced by Talk time); decisions.md 10 Nov 2026 (Inbound today's Talk time counts the calls started in the organisation's day)
 
 **Notes**
 

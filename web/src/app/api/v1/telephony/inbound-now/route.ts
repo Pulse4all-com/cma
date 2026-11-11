@@ -5,8 +5,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * The Live board's inbound part (addition 0008i): today's inbound in the tenant's zone with, since addition 0009j, the
- * talk time of today's answered inbound calls (inboundTalkSeconds, each call dated in its line's zone as Reports →
- * Calls dates it; in place of waitingNow) (cma.inbound_now), the missed calls not called back, one per caller, oldest first, each
+ * talk time of today's answered inbound calls (inboundTalkSeconds, over the same calls as the other figures: those
+ * started in the tenant's day; in place of waitingNow) (cma.inbound_now), the missed calls not called back, one per caller, oldest first, each
  * with its line, market, reason, time, waiting time, times missed and the record link when the
  * connection has a record_url_call template (cma.missed_callbacks), the anonymous missed calls as a
  * count and the lookback in days. `telephony` false: no telephony connected. Needs monitoring.live, here
