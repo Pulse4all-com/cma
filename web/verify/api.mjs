@@ -1591,7 +1591,7 @@ async function activeChecks() {
         d.tiles.eur === null || currencies.every((c) => c === "EUR" || typeof d.settings?.fx?.rates?.[c] === "number")],
       [true, true, true, true], [false, false, false, false]);
   }
-  const refused = ["/api/v1/reports/active?fromMonth=2026-11-02", "/api/v1/reports/active?fromMonth=november", "/api/v1/reports/active?grouping=week",
+  const refused = ["/api/v1/reports/active?fromMonth=2026-11-02", "/api/v1/reports/active?fromMonth=november", "/api/v1/reports/active?fromMonth=0000-01-01", "/api/v1/reports/active?grouping=week",
     "/api/v1/reports/active?market=nl", "/api/v1/reports/active?segment=B2B,B2C", "/api/v1/reports/active?channel=assisted",
     "/api/v1/reports/active/rows?sort=name", "/api/v1/reports/active/rows?limit=201", "/api/v1/reports/active/rows?offset=-1", "/api/v1/reports/active/rows?dir=up",
     "/api/v1/reports/active/file?market=nl"];

@@ -18,7 +18,8 @@ function filterOf(sp: URLSearchParams): ActiveFilter {
  */
 export function activeParams(sp: URLSearchParams): { fromMonth: string | null; grouping: ActiveGrouping; filter: ActiveFilter } {
   const fromMonth = sp.get("fromMonth");
-  if (fromMonth !== null && (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(fromMonth) || Number.isNaN(Date.parse(fromMonth)))) {
+  // a year from 1900 on: the database has no year 0, and an earlier month than any subscription asks nothing more
+  if (fromMonth !== null && (!/^(19|2\d)\d{2}-(0[1-9]|1[0-2])-01$/.test(fromMonth) || Number.isNaN(Date.parse(fromMonth)))) {
     throw new ApiError(400, "invalid_from_month", "fromMonth must be the first day of a month, as YYYY-MM-01");
   }
   const grouping = (sp.get("grouping") ?? "month") as ActiveGrouping;
