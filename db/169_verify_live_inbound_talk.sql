@@ -177,7 +177,8 @@ $$;
 -- The answered inbound calls on counted lines whose day in their line's zone (the line's market's, else the tenant's:
 -- cma.calls_of's date, gap D34) differs from the tenant's day at a date: plus, the talk time of those in the tenant's day
 -- and not the line's (counted by Inbound today, not by the reports for the date), minus, of those in the line's day and
--- not the tenant's (the other way round), and the calls named by id and line, + or −, for the check's detail
+-- not the tenant's (the other way round), and the calls named by id and line, + or −, for the check's detail (the first
+-- ten by call id, then 'and n more')
 create or replace function pg_temp.v0009j_zone_diff(p_tenant uuid, p_date date)
 returns table (plus bigint, minus bigint, calls text)
 language sql stable
@@ -192,14 +193,25 @@ as $$
     left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market
     where tc.tenant_id = p_tenant and tc.direction = 'inbound' and tc.source_deleted_at is null and tc.started_at is not null
       and tc.answered_at is not null and coalesce(n.is_counted, true)
-      and tc.started_at >= (p_date - 1)::timestamp at time zone t.timezone and tc.started_at < (p_date + 2)::timestamp at time zone t.timezone
+      -- the bounds as scalar subqueries, so they reach telephony_call_started_idx under row-level security (night N06)
+      and tc.started_at >= (select (p_date - 1)::timestamp at time zone t2.timezone from cma.tenant t2 where t2.id = p_tenant)
+      and tc.started_at < (select (p_date + 2)::timestamp at time zone t2.timezone from cma.tenant t2 where t2.id = p_tenant)
+  ),
+  d as (
+    select c.*, row_number() over (order by c.source_id) as k, count(*) over () as n
+    from c where c.in_day <> c.on_line_day and c.talk_seconds is not null
   )
   select coalesce(sum(c.talk_seconds) filter (where c.in_day and not c.on_line_day), 0)::bigint,
          coalesce(sum(c.talk_seconds) filter (where c.on_line_day and not c.in_day), 0)::bigint,
-         coalesce(string_agg(format('%s %s s call %s (line %s)', case when c.in_day then '+' else '−' end, c.talk_seconds, c.source_id, coalesce(c.number_ref, 'none')),
-                             ', ' order by c.source_id) filter (where c.in_day <> c.on_line_day and c.talk_seconds is not null), 'none')
+         -- the first ten named, then how many more: a busy day's detail stays one readable line
+         coalesce((select string_agg(format('%s %s s call %s (line %s)', case when d.in_day then '+' else '−' end, d.talk_seconds, d.source_id, coalesce(d.number_ref, 'none')),
+                                     ', ' order by d.source_id)
+                          || case when max(d.n) > 10 then format(' and %s more', max(d.n) - 10) else '' end
+                   from d where d.k <= 10), 'none')
   from c
 $$;
+-- jit off: not inlined into E2's and E3's lateral call, so p_date stays a parameter and the bounds stay on the index
+alter function pg_temp.v0009j_zone_diff(uuid, date) set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
 -- S. Structure and privileges
