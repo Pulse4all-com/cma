@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ActiveFilters } from "@/components/ActiveFilters";
@@ -7,7 +8,9 @@ import {
   MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets,
 } from "@/components/ActiveParts";
 import { fmtAmount, fmtNumber } from "@/components/FlashParts";
+import { ListSkeleton } from "@/components/InstalledBase";
 import { PrintButton } from "@/components/PrintButton";
+import { ActiveSkeleton } from "@/components/RouteSkeleton";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
@@ -16,7 +19,9 @@ import {
   activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, fromMonthOf, matureCohorts, monthLabel, monthsBack, parseActiveFilter,
 } from "@/lib/active";
 import { data, dataIsMock } from "@/lib/data";
-import type { ActiveCurve } from "@/lib/data";
+import type { ActiveCurve, ActiveList, ActiveReport } from "@/lib/data";
+import type { Copy } from "@/lib/copy";
+import type { Principal } from "@/lib/auth/identity";
 import { flashHref } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
@@ -57,9 +62,60 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
     );
   }
 
-  const sp = await searchParams;
-  const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+  const view = viewOf(await searchParams);
+  const { range, grouping, filter, sort, descending, pageNo } = view;
   const today = dateKeyInZone(new Date(), me.timeZone);
+
+  // the page in two reads, side by side: the document and the list's page (at most two transactions). Neither is awaited
+  // here: each part below waits for its own read behind its own boundary, so the frame, the title and the page's outline
+  // are sent before the database answers, and the list and the report each appear when their own read is there. Both
+  // boundaries are keyed on what changes the figures (the range, the cohort grouping and the three filters): a change of
+  // one of them shows the outline at once (CLAUDE.md, Performance: within 100 ms). A panel's own choice, the list's sort
+  // and its paging keep what is on the screen until the answer is there: React holds a navigation while a part already
+  // on the screen waits, and the report is read again on every request (no report is cached across requests), so those
+  // clicks show nothing until then. A mark inside the clicked link would need client code beyond the filters (decision
+  // D6): left open in the pull request of 0009l
+  const reportRead = data().getActive(me, fromMonthOf(range, today), filter, grouping);
+  const listRead = data().getActiveRows(me, { filter, sort, descending, offset: (pageNo - 1) * ACTIVE_PAGE_SIZE, limit: ACTIVE_PAGE_SIZE });
+  // a read that fails is reported by the part that waits for it; the other part may never get to wait for its own
+  reportRead.catch(() => undefined);
+  listRead.catch(() => undefined);
+  const figuresKey = [range, grouping, filter.market ?? "", filter.segment ?? "", filter.channel ?? ""].join("|");
+
+  return (
+    <Shell copy={copy} me={me} active="active" wide>
+      <div data-print="report" data-testid="active-page">
+        <Suspense key={figuresKey} fallback={(
+          <>
+            <PageTitle>{t.title}</PageTitle>
+            <p className="-mt-2 mb-6 max-w-4xl text-small text-p4a-muted">{t.intro}</p>
+            <ActiveSkeleton />
+          </>
+        )}>
+          <ActiveBody me={me} copy={copy} view={view} read={reportRead} />
+        </Suspense>
+        <Suspense key={figuresKey} fallback={(
+          <div className="mt-6" data-testid="active-list-loading">
+            <Card><ListSkeleton label={t.listCard} rows={ACTIVE_PAGE_SIZE} /></Card>
+          </div>
+        )}>
+          <ActiveListPanel me={me} copy={copy} view={view} read={listRead} />
+        </Suspense>
+        {dataIsMock ? (
+          <div className="mt-6 print:hidden">
+            <Notice tone="info">{copy.shell.testData}</Notice>
+          </div>
+        ) : null}
+      </div>
+    </Shell>
+  );
+}
+
+type One = string | string[] | undefined;
+
+/** The address read into the page's choices, and the links that change one of them (pure: the page and its two parts share it) */
+function viewOf(sp: Record<string, One>) {
+  const one = (v: One) => (typeof v === "string" ? v : undefined);
   const range = activeRangeOf(one(sp.range));
   const grouping = activeGroupingOf(one(sp.grouping));
   const { filter, problem } = parseActiveFilter(one(sp.market), one(sp.segment), one(sp.channel));
@@ -72,12 +128,6 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const sort = activeSortOf(one(sp.sort));
   const descending = one(sp.dir) !== "asc";
   const pageNo = Math.max(1, Math.min(100_000, Number.parseInt(one(sp.page) ?? "1", 10) || 1));
-
-  // the page in two reads, side by side: the document and the list's page (at most two transactions)
-  const [report, list] = await Promise.all([
-    data().getActive(me, fromMonthOf(range, today), filter, grouping),
-    data().getActiveRows(me, { filter, sort, descending, offset: (pageNo - 1) * ACTIVE_PAGE_SIZE, limit: ACTIVE_PAGE_SIZE }),
-  ]);
 
   // the address: only what differs from the page's defaults, so a view can be shared; a toggle changes its own key
   const state: Record<string, string> = {
@@ -96,6 +146,40 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   };
   const keep = Object.fromEntries(Object.entries(state).filter(([k]) => !["market", "segment", "channel", "page"].includes(k)));
   const fileQuery = new URLSearchParams({ ...activeQuery(filter), sort, dir: descending ? "desc" : "asc" }).toString();
+  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, sort, descending, pageNo, href, keep, fileQuery };
+}
+type ActiveView = ReturnType<typeof viewOf>;
+type Part<T> = { me: Principal; copy: Copy; view: ActiveView; read: Promise<T> };
+
+/** The words and helpers both parts use */
+function wordsOf(me: Principal, copy: Copy) {
+  const t = copy.active;
+  const hints = Object.fromEntries(Object.entries(t).filter(([k]) => k.startsWith("mh_"))) as Record<string, string>;
+  const more = (key: string) => metricsMore(me.permissions, key, copy.hints.howComputed);
+  return { t, hints, more };
+}
+
+/** The customer list (3.10), waiting for its own read: nothing where the sources are not set up (the report says so) */
+async function ActiveListPanel({ me, copy, view, read }: Part<ActiveList>) {
+  const list = await read;
+  if (!list.setUp) return null;
+  const { t, hints, more } = wordsOf(me, copy);
+  return (
+    <div className="mt-6">
+      <Card>
+        <PanelTitle label={t.listCard} hint={hints.mh_list!} more={more("active.list")} copy={copy} />
+        {list.total === 0 ? <p className="text-body text-p4a-muted">{t.emptyList}</p>
+          : <CustomerList list={list} sort={view.sort} descending={view.descending} page={view.pageNo} pageSize={ACTIVE_PAGE_SIZE} href={view.href} hints={hints} copy={copy} locale={me.locale} />}
+      </Card>
+    </div>
+  );
+}
+
+/** The report (3.0 to 3.9), waiting for its own read */
+async function ActiveBody({ me, copy, view, read }: Part<ActiveReport>) {
+  const report = await read;
+  const { t, hints, more } = wordsOf(me, copy);
+  const { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, href, keep, fileQuery } = view;
 
   const locale = me.locale;
   const n = (x: number) => fmtCount(x, locale);
@@ -104,8 +188,6 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const segLabel = (s: string) => (s === "unknown" ? t.unknownSegment : s);
   const info = (label: string, text: string, key?: string) =>
     ({ about: copy.hints.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, copy.hints.howComputed) : undefined });
-  const more = (key: string) => metricsMore(me.permissions, key, copy.hints.howComputed);
-  const hints = Object.fromEntries(Object.entries(t).filter(([k]) => k.startsWith("mh_"))) as Record<string, string>;
   const updated = new Intl.DateTimeFormat(locale === "nl" ? "nl-NL" : "en-GB", { timeStyle: "medium", timeZone: me.timeZone }).format(new Date(report.computedAt));
 
   const tiles = report.tiles;
@@ -164,7 +246,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const survivalSeries: LineSeries[] = curves.map((c, i) => ({
     key: c.value ?? "all", label: curveLabel(c), colour: c.value === "unknown" ? 5 : i, dashed: c.value === "unknown",
     points: c.curve.map((p) => ({
-      x: p.age, y: p.retained, title: `${months(p.age)}: ${pct(p.retained)} (${t.atRisk.replace("{n}", n(p.atRisk))})`,
+      x: p.age, y: p.survival, title: `${months(p.age)}: ${pct(p.survival)} (${t.atRisk.replace("{n}", n(p.atRisk))})`,
       label: c.median !== null && p.age === c.median ? t.medianAt.replace("{n}", String(c.median)) : undefined,
     })),
   }));
@@ -193,8 +275,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   ].filter((x): x is string => x !== null) : [];
 
   return (
-    <Shell copy={copy} me={me} active="active" wide>
-      <div data-print="report" data-testid="active-page">
+    <>
         <PageTitle aside={(
           <div className="flex items-center gap-4">
             <span className="text-small text-p4a-muted" data-testid="active-updated">{t.updated.replace("{time}", updated)}</span>
@@ -296,17 +377,15 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
               <PanelTitle label={t.unitEconomics} hint={hints.mh_unit_economics!} status="Pending" copy={copy} />
               <div className="grid grid-cols-3 gap-4 xl:grid-cols-6">
                 {ACTIVE_SLOTS.map((s) => (
-                  <PlaceholderCard key={s.key} slot={s.key} info={info(t[`slot_${s.key}`], hints[`mh_slot_${s.key}`]!, s.metric)} copy={copy}>
-                    {s.key === "churn_rate" ? (
-                      <p className="mt-auto border-t border-p4a-border pt-2 text-small" data-testid="active-churned">
-                        <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
-                          {t.churned30dLine.replace("{n}", n(report.unitEconomics!.churned30d))}
-                        </Link>
-                      </p>
-                    ) : null}
-                  </PlaceholderCard>
+                  <PlaceholderCard key={s.key} slot={s.key} info={info(t[`slot_${s.key}`], hints[`mh_slot_${s.key}`]!, s.metric)} copy={copy} />
                 ))}
               </div>
+              {/* the one real figure of the row, beside the placeholders and outside every one of them (D5): Flash's churn count */}
+              <p className="mt-3 text-small" data-testid="active-churned">
+                <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
+                  {t.churned30dLine.replace("{n}", n(report.unitEconomics!.churned30d))}
+                </Link>
+              </p>
             </section>
 
             {/* 3.4 the base over time */}
@@ -482,22 +561,8 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
                 </Card>
               </div>
             </section>
-
-            {/* 3.10 the customer list */}
-            <Card>
-              <PanelTitle label={t.listCard} hint={hints.mh_list!} more={more("active.list")} copy={copy} />
-              {list.total === 0 ? <p className="text-body text-p4a-muted">{t.emptyList}</p>
-                : <CustomerList list={list} sort={sort} descending={descending} page={pageNo} pageSize={ACTIVE_PAGE_SIZE} href={href} hints={hints} copy={copy} locale={locale} />}
-            </Card>
           </div>
         ) : null}
-
-        {dataIsMock ? (
-          <div className="mt-6 print:hidden">
-            <Notice tone="info">{copy.shell.testData}</Notice>
-          </div>
-        ) : null}
-      </div>
-    </Shell>
+    </>
   );
 }

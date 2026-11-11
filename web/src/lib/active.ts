@@ -188,8 +188,8 @@ export function spellsOf(intervals: readonly Interval[]): Spell[] {
  * Kaplan–Meier over spells in whole months (cma.active_km_from): lengths[i] a spell's length, or its age today while it
  * lasts; ended[i] whether it ended (an event at its length) or is still active (censored at its age). Per age from 0 to
  * the longest: the spells at risk (of at least that length), the events (the ended ones of exactly that length), the
- * survival (the product, over the ages up to and including it, of 1 − events / at risk) and retained (the same product
- * over the ages below it: the share of spells that reach the age, 1 at age 0)
+ * survival (the product, over the ages up to and including it, of 1 − events / at risk), which is Retention (customer)
+ * at that age
  */
 export function kaplanMeier(lengths: readonly number[], ended: readonly boolean[]): ActiveCurvePoint[] {
   const valid = lengths.map((l, i) => ({ l, e: ended[i] === true })).filter((x) => Number.isInteger(x.l) && x.l >= 0);
@@ -200,9 +200,8 @@ export function kaplanMeier(lengths: readonly number[], ended: readonly boolean[
   for (let age = 0; age <= longest; age++) {
     const atRisk = valid.filter((x) => x.l >= age).length;
     const events = valid.filter((x) => x.e && x.l === age).length;
-    const retained = round6(s);
     if (atRisk > 0) s *= 1 - events / atRisk;
-    points.push({ age, atRisk, events, survival: round6(s), retained });
+    points.push({ age, atRisk, events, survival: round6(s) });
   }
   return points;
 }
@@ -219,10 +218,10 @@ export function curveOf(lengths: readonly number[], ended: readonly boolean[], v
   };
 }
 
-/** The share of spells that reach an age (Retention (customer)); null where no spell is that old */
-export function retainedAt(curve: Pick<ActiveCurve, "curve">, months: number): number | null {
+/** Retention (customer) at an age: the curve's survival at it; null where no spell is that old */
+export function retentionAt(curve: Pick<ActiveCurve, "curve">, months: number): number | null {
   const p = curve.curve.find((x) => x.age === months);
-  return p && p.atRisk > 0 ? p.retained : null;
+  return p && p.atRisk > 0 ? p.survival : null;
 }
 
 // ---- what the screen draws ----------------------------------------------------------------------------------------------

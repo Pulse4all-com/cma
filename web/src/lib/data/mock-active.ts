@@ -10,7 +10,7 @@
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { ACTIVE_CHANNELS, ACTIVE_SLOTS, billingOf, curveOf, monthsBack, retainedAt, spellsOf, unitFactor } from "@/lib/active";
+import { ACTIVE_CHANNELS, ACTIVE_SLOTS, billingOf, curveOf, monthsBack, retentionAt, spellsOf, unitFactor } from "@/lib/active";
 import { dateKeyInZone } from "@/lib/time";
 import type {
   ActiveAmount, ActiveChannel, ActiveClv, ActiveCohort, ActiveCohortSplit, ActiveComparisonRow, ActiveCurve, ActiveFilter, ActiveGroupStat, ActiveGrouping,
@@ -278,7 +278,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   push("customers", (k) => segStat[k]!.customers);
   push("share", (k) => (total.customers > 0 ? round4(segStat[k]!.customers / total.customers) : null));
   push("lifetime_median", (k) => segCurve(k)?.median ?? null, { aLongest: segCurve("B2B")?.longest ?? null, bLongest: segCurve("B2C")?.longest ?? null, unknownLongest: segCurve("unknown")?.longest ?? null });
-  for (const m of BANDS.slice(0, 3)) push("retention", (k) => { const c = segCurve(k); return c ? retainedAt(c, m) : null; }, { months: m });
+  for (const m of BANDS.slice(0, 3)) push("retention", (k) => { const c = segCurve(k); return c ? retentionAt(c, m) : null; }, { months: m });
   push("median_age", (k) => segStat[k]!.medianAge);
   const currencies = [...new Set(active.map((c) => c.currency))].sort();
   for (const cur of currencies) push("clv_average", (k) => segStat[k]!.clv[cur]?.average ?? null, { currency: cur });

@@ -11,13 +11,17 @@
 -- difference as a notice (info), never a failure: a past pause counts as holding in the reconstruction. Block E times
 -- the page and the list per tenant with a subscription against 131's budgets, the seventh call of the session included.
 -- Every check writes one row (PASS, FAIL, info or skip) and the last row is the verdict, because Cloud SQL Studio shows
--- no notices. Run as your own IAM login after 172_active_customers.sql; then 14, 123, 137 and 151 (they read
--- cma.check_tenant_setting(), which 172 re-creates; unchanged, still PASS) and 85 (cma.first_orders_of is read by 172, not
--- re-created). Expected verdict: "PASS | 173_verify_active_customers: <n> PASS, 0 FAIL, <i> info, <k> skip".
+-- no notices. Run as your own IAM login after 172_active_customers.sql; then the verifies that read
+-- cma.check_tenant_setting(), which 172 re-creates: 73, 101, 113, 121, 123 and 137 by name, 14 and 151 through its
+-- trigger (all unchanged, still PASS); 85 is optional (cma.first_orders_of is read by 172, not re-created).
+-- Expected verdict: "PASS | 173_verify_active_customers: <n> PASS, 0 FAIL, <i> info, <k> skip". E1 and E2 are 131's
+-- budgets (500 and 300 ms): on a database where the page's read misses them they FAIL and so does the verdict; the pull
+-- request of 0009l states the measured miss at three times prod's volume and what to do then (report the two times).
 --   S1  the addition 0009l is recorded, after 0009k
 --   S2  every function of the addition the application's only and in the caller's rights; the two readers' functions
 --       SECURITY DEFINER, owned by cma_owner, search path pinned with pg_temp last, the readers' only; the set-returning
---       ones say their rows; cma.active_base_of, cma.active_page_of and cma.active_rows_of with jit off
+--       ones say their rows; cma.active_base_of, cma.active_page_of and cma.active_rows_of with jit off, the two
+--       plpgsql reads with a custom plan every call; the two readers' views the readers' alone to select
 --   S3  the four settings with their defaults
 --   S4  the readers' views: their columns, none of a customer, a contact, a level or a payload
 --   P1  (A2) cma.active_spells_from equals a day-by-day reconstruction on 200 random sets (overlaps, gaps, an interval
@@ -140,7 +144,7 @@ begin
     'cma.active_cohort_cube_from(text[],text[],text[],text[],timestamptz[],timestamptz[],timestamptz[],integer[],text,text,timestamptz)',
     'cma.active_km_from(integer[],boolean[])', 'cma.active_km_json(integer[],boolean[])',
     'cma.active_base_of(uuid,timestamptz,boolean,date,boolean)', 'cma.active_customers_of(uuid,timestamptz,boolean)', 'cma.active_spells_of(uuid)',
-    'cma.active_channel_of(uuid)', 'cma.active_spell_lengths_of(uuid,timestamptz,boolean)', 'cma.active_survival_of(uuid,text)',
+    'cma.active_channel_of(uuid)', 'cma.active_spell_lengths_of(uuid,timestamptz,boolean)', 'cma.active_survival_of(uuid,text,timestamptz)',
     'cma.assert_active_filter(text,text,text)', 'cma.active_page_of(uuid,date,text,text,text,text,timestamptz)',
     'cma.active_page(date,text,text,text,text)', 'cma.active_rows_of(uuid,text,text,text,text,boolean,integer,integer,timestamptz)',
     'cma.active_rows(text,text,text,text,boolean,integer,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
@@ -177,6 +181,15 @@ begin
     if to_regprocedure(v_fn) is not null
        and not ('jit=off' = any (coalesce((select p.proconfig from pg_proc p where p.oid = to_regprocedure(v_fn)), '{}'))) then
       v_bad := v_bad || v_fn || ' without jit off; ';
+    end if;
+    if v_fn not like 'cma.active_base_of%' and to_regprocedure(v_fn) is not null
+       and not ('plan_cache_mode=force_custom_plan' = any (coalesce((select p.proconfig from pg_proc p where p.oid = to_regprocedure(v_fn)), '{}'))) then
+      v_bad := v_bad || v_fn || ' without force_custom_plan; ';
+    end if;
+  end loop;
+  foreach v_fn in array array['cma_read.active_customer_month', 'cma_read.customer_cohort'] loop
+    if to_regclass(v_fn) is not null and (not has_table_privilege('cma_readonly', v_fn, 'select') or has_table_privilege('cma_app', v_fn, 'select')) then
+      v_bad := v_bad || v_fn || ' not the readers'' alone to select; ';
     end if;
   end loop;
   perform pg_temp.v0009l_row(2, 'S2', 'the functions: the application''s in the caller''s rights, the readers'' definer and pinned, rows said, jit off', v_bad, '');
@@ -306,18 +319,18 @@ begin
 
   -- P5 (A12). Kaplan–Meier by hand. Ten spells: lengths 1 ended, 2 ended, 2 ended (a tie), 2 still active (censored at the
   -- age of an event), 3 ended, 5 still, 5 ended, 6 still, 8 ended, 8 still.
-  --   age 0: at risk 10, events 0, survival 1        retained 1
-  --   age 1: at risk 10, events 1, survival 0.9      retained 1
-  --   age 2: at risk 9,  events 2, survival 0.7      retained 0.9
-  --   age 3: at risk 6,  events 1, survival 0.583333 retained 0.7
-  --   age 4: at risk 5,  events 0, survival 0.583333 retained 0.583333
-  --   age 5: at risk 5,  events 1, survival 0.466667 retained 0.583333   <- the median: the first age at or below 0.5
+  --   age 0: at risk 10, events 0, survival 1
+  --   age 1: at risk 10, events 1, survival 0.9
+  --   age 2: at risk 9,  events 2, survival 0.7
+  --   age 3: at risk 6,  events 1, survival 0.583333
+  --   age 4: at risk 5,  events 0, survival 0.583333
+  --   age 5: at risk 5,  events 1, survival 0.466667   <- the median: the first age at or below 0.5
   --   age 6: at risk 3,  events 0, survival 0.466667
   --   age 7: at risk 2,  events 0
-  --   age 8: at risk 2,  events 1, survival 0.233333 retained 0.466667
+  --   age 8: at risk 2,  events 1, survival 0.233333
   -- one spell of 4 months still active: survival 1 throughout, no median ("not reached", longest 4); two spells of 3 ended
   -- and 3 still: survival 0.5 at age 3, the median 3
-  select (select string_agg(format('%s:%s/%s/%s/%s', k.age_months, k.at_risk, k.events, round(k.survival, 6), round(k.retained, 6)), ' ' order by k.age_months)
+  select (select string_agg(format('%s:%s/%s/%s', k.age_months, k.at_risk, k.events, round(k.survival, 6)), ' ' order by k.age_months)
           from cma.active_km_from(array[1, 2, 2, 2, 3, 5, 5, 6, 8, 8], array[true, true, true, false, true, false, true, false, true, false]) k)
          || ' | median ' || coalesce(cma.active_km_json(array[1, 2, 2, 2, 3, 5, 5, 6, 8, 8], array[true, true, true, false, true, false, true, false, true, false]) ->> 'median', 'none')
          || ' | one: ' || coalesce(cma.active_km_json(array[4], array[false]) ->> 'median', 'none') || '/' || (cma.active_km_json(array[4], array[false]) ->> 'longest')
@@ -326,8 +339,8 @@ begin
          || ' | empty: ' || (cma.active_km_json('{}'::integer[], '{}'::boolean[]) ->> 'spells') || coalesce(cma.active_km_json('{}'::integer[], '{}'::boolean[]) ->> 'median', 'none')
   into v_txt;
   perform pg_temp.v0009l_row(15, 'P5', '(A12) Kaplan–Meier against the hand-computed table: ties, censoring at an event''s age, one spell, not reached', v_txt,
-    '0:10/0/1.000000/1.000000 1:10/1/0.900000/1.000000 2:9/2/0.700000/0.900000 3:6/1/0.583333/0.700000 4:5/0/0.583333/0.583333 5:5/1/0.466667/0.583333'
-    || ' 6:3/0/0.466667/0.466667 7:2/0/0.466667/0.466667 8:2/1/0.233333/0.466667 | median 5 | one: none/4/1.00,1.00,1.00,1.00,1.00 | two: 3 | empty: 0none');
+    '0:10/0/1.000000 1:10/1/0.900000 2:9/2/0.700000 3:6/1/0.583333 4:5/0/0.583333 5:5/1/0.466667'
+    || ' 6:3/0/0.466667 7:2/0/0.466667 8:2/1/0.233333 | median 5 | one: none/4/1.00,1.00,1.00,1.00,1.00 | two: 3 | empty: 0none');
 
   -- P6. the rates' form and the euros of an amount: never a rate guessed
   select format('%s%s%s%s%s%s%s%s%s%s | %s %s %s %s',
@@ -667,13 +680,15 @@ begin
       'churn_rate:pending cac:pending cost_per_subscription:pending clv_projected:pending clv_to_cac:pending payback_months:pending | keys key,status | no digit | churned_30d,slots'];
 
     -- B8 (A8). tenant two sees nothing of tenant one (as its analyst, through the application's role and row-level
-    -- security); an agent gets CMA06; a parameter out of its form CMA04; tenant two before its store was not set up
+    -- security), and its store's market, without a subscription, is listed with zeros; an agent gets CMA06; a parameter out of its form CMA04; tenant two before its store was not set up
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_analyst2::text, true);
     j2 := cma.active_page();
-    v_txt := format('not set up %s | two: figures %s, customers %s, subscriptions %s, months %s, list %s, rows visible %s/%s/%s', v_txt2, j2 ->> 'figures',
-                    j2 -> 'tiles' -> 'active_customers' ->> 'value', j2 -> 'tiles' -> 'total_subscriptions' ->> 'value', jsonb_array_length(j2 -> 'months'),
+    v_txt := format('not set up %s | two: figures %s, customers %s, subscriptions %s, markets %s of %s, months %s, list %s, rows visible %s/%s/%s', v_txt2, j2 ->> 'figures',
+                    j2 -> 'tiles' -> 'active_customers' ->> 'value', j2 -> 'tiles' -> 'total_subscriptions' ->> 'value',
+                    (select string_agg(format('%s:%s/%s', m ->> 'market', m ->> 'customers', m ->> 'subscriptions'), ' ' order by m ->> 'market')
+                     from jsonb_array_elements(j2 -> 'markets') m), j2 -> 'filters' ->> 'markets', jsonb_array_length(j2 -> 'months'),
                     cma.active_rows() ->> 'total', (select count(*) from cma.subscription), (select count(*) from cma.commerce_customer),
                     (select count(*) from cma.active_spells_of(v_t1)));
     perform set_config('app.tenant_id', v_t1::text, true);
@@ -690,7 +705,7 @@ begin
                                                   $q$select cma.active_file_record(null, null, null, -1)$q$]) with ordinality u(q, o));
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['108', 'B8', '(A8) the other tenant sees nothing; an agent gets CMA06; a parameter out of its form CMA04; no store: not set up', v_txt,
-      'not set up false/false/false/false | two: figures true, customers 0, subscriptions 0, months 0, list 0, rows visible 0/0/0'
+      'not set up false/false/false/false | two: figures true, customers 0, subscriptions 0, markets NL:0/0 of ["NL"], months 0, list 0, rows visible 0/0/0'
       || ' | agent CMA06 CMA06 CMA06 | analyst ok ok | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04'];
 
     -- B9 (A9). the readers' views (as a reader of tenant one: app.tenant_id set) against the page read at the same instant
@@ -761,12 +776,12 @@ begin
            || (select string_agg(format('%s:%s/%s/%s', p ->> 'age', p ->> 'at_risk', p ->> 'events', round((p ->> 'survival')::numeric, 4)), ' ' order by (p ->> 'age')::int)
                from jsonb_array_elements(j -> 'survival' -> 'all' -> 'curve') p where (p ->> 'events')::int > 0 or (p ->> 'age')::int in (0, 12, 21))
            || ' | ' || (select string_agg(format('%s %s spells median %s longest %s at 12 %s', s ->> 'value', s ->> 'spells', coalesce(s ->> 'median', 'not reached'), s ->> 'longest',
-                                                 (select round((p ->> 'retained')::numeric, 4) from jsonb_array_elements(s -> 'curve') p where (p ->> 'age')::int = 12)), '; ' order by ord)
+                                                 (select round((p ->> 'survival')::numeric, 4) from jsonb_array_elements(s -> 'curve') p where (p ->> 'age')::int = 12)), '; ' order by ord)
                         from jsonb_array_elements(j -> 'survival' -> 'segment') with ordinality x(s, ord))
            || ' | ' || (select string_agg(format('%s %s', s ->> 'value', s ->> 'spells'), '; ' order by ord)
                         from jsonb_array_elements(j -> 'survival' -> 'channel') with ordinality x(s, ord))
            || ' | function ' || (select string_agg(distinct format('%s:%s/%s', k.split_value, coalesce(k.median_months::text, 'not reached'), k.longest_months), ' ')
-                                 from cma.active_survival_of(v_t1, 'segment') k)
+                                 from cma.active_survival_of(v_t1, 'segment', v_now) k)
     into v_txt;
     v_rows := v_rows || array['111', 'B11', '(A12) the survival curves over all spells, per segment and per channel; a median reached and "not reached"', v_txt,
       'all 11 spells 3 ended, longest 21, median not reached; 0:11/0/1.0000 1:10/1/0.9000 4:9/1/0.8000 12:5/0/0.8000 14:4/1/0.6000 21:1/0/0.6000'

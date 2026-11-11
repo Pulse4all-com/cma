@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import {
   ACTIVE_BETTER_UP, ACTIVE_CHANNELS, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_SLOTS, ACTIVE_SORTS, HEAT_CLASSES, activeFileName, activeFromDb,
   activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, curveOf, differenceTone, fromMonthOf, heatStep, kaplanMeier, matureCohorts, monthsBack,
-  niceAxis, parseActiveFilter, retainedAt, signed, sparkPath, spellsOf, unitFactor,
+  niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor,
 } from "../src/lib/active.ts";
 import { copy } from "../src/lib/copy.ts";
 import { mockActive, mockActiveRows } from "../src/lib/data/mock-active.ts";
@@ -113,15 +113,15 @@ expect("S2 an interval that begins where another ends continues the spell; a gap
   // ten spells: 1 ended, 2 ended, 2 ended (a tie), 2 still active (censored at the age of an event), 3 ended, 5 still, 5 ended, 6 still, 8 ended, 8 still
   const lengths = [1, 2, 2, 2, 3, 5, 5, 6, 8, 8];
   const ended = [true, true, true, false, true, false, true, false, true, false];
-  expect("K1 the hand-computed table: at risk / events / survival / retained per age, the median 5",
-    [kaplanMeier(lengths, ended).map((p) => `${p.age}:${p.atRisk}/${p.events}/${p.survival}/${p.retained}`).join(" "), curveOf(lengths, ended).median],
-    ["0:10/0/1/1 1:10/1/0.9/1 2:9/2/0.7/0.9 3:6/1/0.583333/0.7 4:5/0/0.583333/0.583333 5:5/1/0.466667/0.583333 6:3/0/0.466667/0.466667 7:2/0/0.466667/0.466667 8:2/1/0.233333/0.466667", 5],
-    ["0:10/0/1/1", 4]);
+  expect("K1 the hand-computed table: at risk / events / survival per age, the median 5 where the curve first is at or below half",
+    [kaplanMeier(lengths, ended).map((p) => `${p.age}:${p.atRisk}/${p.events}/${p.survival}`).join(" "), curveOf(lengths, ended).median],
+    ["0:10/0/1 1:10/1/0.9 2:9/2/0.7 3:6/1/0.583333 4:5/0/0.583333 5:5/1/0.466667 6:3/0/0.466667 7:2/0/0.466667 8:2/1/0.233333", 5],
+    ["0:10/0/1", 4]);
   const one = curveOf([4], [false]);
   const two = curveOf([3, 3], [true, false]);
-  expect("K2 one spell still active: no median (not reached), the longest 4; an event and a censored spell of 3: the median 3; none: empty",
-    [one.median, one.longest, one.curve.map((p) => p.survival), two.median, retainedAt(two, 3), retainedAt(two, 4), curveOf([], []).curve.length],
-    [null, 4, [1, 1, 1, 1, 1], 3, 1, null, 0], [4, 4, [1, 1, 1, 1, 1], null, 0.5, 0, 1]);
+  expect("K2 one spell still active: no median (not reached), the longest 4; an event and a censored spell of 3: the median 3, where the retention is a half; no retention past the longest; none: empty",
+    [one.median, one.longest, one.curve.map((p) => p.survival), two.median, retentionAt(two, 3), retentionAt(two, 2), retentionAt(two, 4), curveOf([], []).curve.length],
+    [null, 4, [1, 1, 1, 1, 1], 3, 0.5, 1, null, 0], [4, 4, [1, 1, 1, 1, 1], null, 1, 0.5, 0, 1]);
   // a brute force: survival as the product by its definition, at risk and events counted per age from the raw list
   const rand = rng(173);
   let differ = 0;
@@ -138,13 +138,12 @@ expect("S2 an interval that begins where another ends continues the spell; a gap
         if (ls[i] >= age) atRisk += 1;
         if (es[i] && ls[i] === age) events += 1;
       }
-      const retained = r6(s);
       if (atRisk > 0) s *= (atRisk - events) / atRisk;
-      want.push({ age, atRisk, events, survival: r6(s), retained });
+      want.push({ age, atRisk, events, survival: r6(s) });
     }
     const got = kaplanMeier(ls, es);
     const close = got.length === want.length && got.every((p, i) => p.atRisk === want[i].atRisk && p.events === want[i].events
-      && Math.abs(p.survival - want[i].survival) < 2e-6 && Math.abs(p.retained - want[i].retained) < 2e-6);
+      && Math.abs(p.survival - want[i].survival) < 2e-6);
     if (!close) differ += 1;
   }
   expect("K3 kaplanMeier equals the brute force on 200 random sets of spells", { sets: 200, differ }, { sets: 200, differ: 0 }, { sets: 200, differ: 1 });

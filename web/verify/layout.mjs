@@ -2300,9 +2300,10 @@ async function expectFrame() {
     ["manager", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
     ["reader", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
     ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Sales", "Attempts per agent"], ["/", "/reports/speed-to-lead", null]],
-    // A contact center's Live board (addition 0008zv): Live › the organisation's name; Reviews in Customers
+    // A contact center's Live board (addition 0008zv): Live › the organisation's name; Reviews in Customers, the group
+    // linking to Active, its first page since addition 0009l
     ["supervisor", "/live/newco", ["Welcome", "Live", "Newco"], ["/", "/live/newco", null]],
-    ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/cancellations", null]],
+    ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/active", null]],
     // Assets (addition 0008zw): Installed base and Maintenance, the group linking to Installed base, its first page
     ["manager", "/reports/installed-base", ["Welcome", "Assets", "Installed base"], ["/", "/reports/installed-base", null]],
     ["reader", "/reports/maintenance", ["Welcome", "Assets", "Maintenance"], ["/", "/reports/installed-base", null]],

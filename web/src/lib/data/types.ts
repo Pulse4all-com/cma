@@ -2320,7 +2320,7 @@ export interface ActiveComparisonRow {
   measure: ActiveMeasure; months: number | null; currency: string | null; a: number | null; b: number | null; unknown: number | null;
   difference: number | null; ratio: number | null; aLongest: number | null; bLongest: number | null; unknownLongest: number | null;
 }
-export interface ActiveCurvePoint { age: number; atRisk: number; events: number; survival: number; retained: number }
+export interface ActiveCurvePoint { age: number; atRisk: number; events: number; survival: number }
 /** A Kaplan–Meier curve: its value of the split (absent for the curve over all), the spells, the longest observed age, the median or null */
 export interface ActiveCurve { value?: string; spells: number; ended: number; longest: number | null; median: number | null; curve: ActiveCurvePoint[] }
 export interface ActiveCohort { cohort: DateKey; started: number; share: number | null; ages: { age: number; stillActive: number; mature: boolean }[] }

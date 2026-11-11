@@ -15,9 +15,11 @@
 -- a caller, and no existing verify is edited by this change. 85_verify_first_orders.sql is optional (cma.first_orders_of
 -- is read here, not re-created). Then seed 02 (Pulse4all's three customers settings and the empty rates) and, in dev,
 -- seed 03 (the test rates and the synthetic base); then 131_time_all.sql part b, which gains the page's two rows and
--- refuses to run before 0009l. Prod the same after the merge, without seed 03.
--- The web of main runs unchanged on it: nothing main reads changes. The web of this change reads cma.active_page and
--- cma.active_rows, so in prod this script runs before that web is merged.
+-- refuses to run before 0009l.
+-- Prod: this script just before the merge (docs/RUNBOOK.md's usual order). The web of main runs unchanged on it: nothing
+-- main reads changes. The web of this change reads cma.active_page and cma.active_rows, and the merge deploys it, so a
+-- merge before this script would leave Customers → Active failing in prod until it has run. After the merge: 173 and
+-- the verifies above, seed 02 and 131 part b in prod, without seed 03.
 --
 -- Why (Martin, 11 November 2026, brief B35 with addendum A; Decision log): the sales director, Kira, Peter and Bas open
 -- one page first for the state and the movement of the customer base: who the active customers are, in which markets and
@@ -42,7 +44,7 @@
 --                      customers.cohort_ages_months: the share still in a spell at their own start plus the age
 --   Customer lifetime  the median of a Kaplan–Meier survival curve over the spells in whole months (an ended spell an
 --                      event at its length, an active one censored at its age); "not reached" while the curve stays
---                      above 50 %. Retention (customer) at an age: the share of spells that reach it
+--                      above 50 %. Retention (customer) at an age: the curve's survival at that age
 --   Customer lifetime value (realised)   the store's amount spent of a store customer, in the store's currency
 --   Acquisition channel   indirect (First orders' attribution call_center of the customer's first order), direct
 --                      (self_service) or unknown, with the reason
@@ -437,8 +439,10 @@ begin
   return exists (select 1 from jsonb_each(j) e where e.key <> 'as_of')
      and not exists (select 1 from jsonb_each(j) e
                      where e.key <> 'as_of'
-                       and (e.key !~ '^[A-Z]{3}$' or jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric <= 0
-                            or (e.value #>> '{}')::numeric > 1000000));
+                       and (e.key !~ '^[A-Z]{3}$'
+                            or case when jsonb_typeof(e.value) = 'number'
+                                    then (e.value #>> '{}')::numeric <= 0 or (e.value #>> '{}')::numeric > 1000000
+                                    else true end));
 end
 $$;
 
@@ -586,10 +590,10 @@ $$;
 -- (an ended spell's) or its age today (an active one's), p_ended whether it ended (an event at its length) or is still
 -- active (censored at its age). Per age from 0 to the longest length: at_risk the spells of at least that length, events
 -- the ended ones of exactly that length, survival the product over the ages up to and including it of
--- (1 - events / at_risk), and retained the same product over the ages below it: the share of spells that reach the age
--- (1 at age 0), which is Retention (customer) at that age. The median is the first age whose survival is at most 0.5
+-- (1 - events / at_risk), which is Retention (customer) at that age. The median is the first age whose survival is at
+-- most 0.5, so a curve crosses 50 % exactly at its median
 create or replace function cma.active_km_from(p_length integer[], p_ended boolean[])
-returns table (age_months integer, at_risk integer, events integer, survival numeric, retained numeric)
+returns table (age_months integer, at_risk integer, events integer, survival numeric)
 language plpgsql immutable
 rows 60
 as $$
@@ -613,7 +617,6 @@ begin
     age_months := r.age;
     at_risk := r.n_at;
     events := r.d_at;
-    retained := round(v_s, 6);
     if r.n_at > 0 then
       v_s := v_s * (1 - r.d_at::numeric / r.n_at);
     end if;
@@ -634,7 +637,7 @@ as $$
                             'longest', max(k.age_months),
                             'median', min(k.age_months) filter (where k.survival <= 0.5),
                             'curve', coalesce(jsonb_agg(jsonb_build_object('age', k.age_months, 'at_risk', k.at_risk, 'events', k.events,
-                                                                           'survival', k.survival, 'retained', k.retained)
+                                                                           'survival', k.survival)
                                                         order by k.age_months), '[]'::jsonb))
   from cma.active_km_from(p_length, p_ended) k
 $$;
@@ -815,11 +818,11 @@ rows 10000
 as $$
   select distinct on (b.customer_id) b.customer_id, b.customer_connection_id, b.customer_source_id, b.store, b.market, b.segment,
          b.customer_start,
-         cma.flash_age_months_of(b.customer_start, z.zone, (p_now at time zone z.zone)::date),
+         cma.flash_age_months_of(b.customer_start, (select t.timezone from cma.tenant t where t.id = p_tenant_id),
+                                 (p_now at time zone (select t.timezone from cma.tenant t where t.id = p_tenant_id))::date),
          b.customer_holding > 0, b.customer_holding, b.customer_devices, b.channel, b.level, b.unknown_reason, b.first_order_at
   from cma.active_base_of(p_tenant_id, p_now, p_with_channel,
                           case when p_with_channel then (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h) end, false) b
-  cross join (select t.timezone as zone from cma.tenant t where t.id = p_tenant_id) z
   where b.customer_id is not null
   order by b.customer_id
 $$;
@@ -884,19 +887,20 @@ as $$
 $$;
 
 -- Kaplan–Meier per value of a split (segment, channel, or none: one curve under the value all) over every spell of the
--- tenant: per age the spells at risk, the events, the survival and the share retained (cma.active_km_from), with the
--- curve's median (null: not reached) and its longest observed age on every row
-create or replace function cma.active_survival_of(p_tenant_id uuid, p_split text)
-returns table (split_value text, age_months integer, at_risk integer, events integer, survival numeric, retained numeric, median_months integer,
+-- tenant: per age the spells at risk, the events and the survival (cma.active_km_from), with the curve's median (null:
+-- not reached) and its longest observed age on every row. p_now is the moment an active spell's age is taken at (now when
+-- left out; a verify script pins it)
+create or replace function cma.active_survival_of(p_tenant_id uuid, p_split text, p_now timestamptz default now())
+returns table (split_value text, age_months integer, at_risk integer, events integer, survival numeric, median_months integer,
                longest_months integer)
 language sql stable
 rows 500
 as $$
-  select g.v, k.age_months, k.at_risk, k.events, k.survival, k.retained,
+  select g.v, k.age_months, k.at_risk, k.events, k.survival,
          min(k.age_months) filter (where k.survival <= 0.5) over (partition by g.v), max(k.age_months) over (partition by g.v)
   from (select case p_split when 'segment' then l.segment when 'channel' then l.channel else 'all' end as v,
                array_agg(l.length_months) as len, array_agg(l.ended) as ended
-        from cma.active_spell_lengths_of(p_tenant_id, now(), p_split = 'channel') l
+        from cma.active_spell_lengths_of(p_tenant_id, p_now, p_split = 'channel') l
         group by 1) g
   cross join lateral cma.active_km_from(g.len, g.ended) k
 $$;
@@ -1128,7 +1132,10 @@ begin
     from (select mc.market, mc.month, sum(mc.at_end) as n from mc where mc.month >= (v_month - interval '12 months')::date group by 1, 2) q
     group by 1
   ), keys as (
+    -- every market of the tenant's stores, with or without a subscription (zeros, never a missing row), and unknown
+    -- where a subscription has no store
     select g.key from g_c g where g.dim = 'market' union select g.key from g_sub g where g.dim = 'market'
+    union select st.market from cma.commerce_store st where st.tenant_id = p_tenant_id and (p_market is null or st.market = p_market)
   ), stat as materialized (
     -- one row per market, per segment and over all: the present figures as JSON
     select k.dim, k.key,
@@ -1167,7 +1174,7 @@ begin
     select 'lifetime_median', null, null, 30, g.key, (g.j ->> 'median')::numeric, (g.j ->> 'longest')::integer from g_km g where g.dim = 'segment'
     union all
     select 'retention', a.months, null, 40, g.key,
-           (select (p ->> 'retained')::numeric from jsonb_array_elements(g.j -> 'curve') p
+           (select (p ->> 'survival')::numeric from jsonb_array_elements(g.j -> 'curve') p
             where (p ->> 'age')::integer = a.months and (p ->> 'at_risk')::integer > 0), null
     from g_km g cross join unnest(v_bands[1:3]) a(months) where g.dim = 'segment'
     union all
@@ -1220,7 +1227,9 @@ begin
   select jsonb_build_object(
     'figures', true,
     'filters', jsonb_build_object(
-      'markets', (select coalesce(jsonb_agg(q.market order by q.market = 'unknown', q.market), '[]'::jsonb) from (select distinct b0.market from b0) q),
+      'markets', (select coalesce(jsonb_agg(q.market order by q.market = 'unknown', q.market), '[]'::jsonb)
+                  from (select distinct b0.market from b0
+                        union select st.market from cma.commerce_store st where st.tenant_id = p_tenant_id) q),
       'segments', to_jsonb(v_segments || array['unknown']),
       'channels', '["indirect", "direct", "unknown"]'::jsonb),
     'tiles', jsonb_build_object(
@@ -1695,7 +1704,7 @@ begin
     'cma.active_cohort_cube_from(text[],text[],text[],text[],timestamptz[],timestamptz[],timestamptz[],integer[],text,text,timestamptz)',
     'cma.active_km_from(integer[],boolean[])', 'cma.active_km_json(integer[],boolean[])',
     'cma.active_base_of(uuid,timestamptz,boolean,date,boolean)', 'cma.active_customers_of(uuid,timestamptz,boolean)', 'cma.active_spells_of(uuid)',
-    'cma.active_channel_of(uuid)', 'cma.active_spell_lengths_of(uuid,timestamptz,boolean)', 'cma.active_survival_of(uuid,text)',
+    'cma.active_channel_of(uuid)', 'cma.active_spell_lengths_of(uuid,timestamptz,boolean)', 'cma.active_survival_of(uuid,text,timestamptz)',
     'cma.assert_active_filter(text,text,text)', 'cma.active_page_of(uuid,date,text,text,text,text,timestamptz)',
     'cma.active_page(date,text,text,text,text)',
     'cma.active_rows_of(uuid,text,text,text,text,boolean,integer,integer,timestamptz)',

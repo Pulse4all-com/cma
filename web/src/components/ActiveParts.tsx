@@ -60,7 +60,7 @@ export function LinkSwitch<V extends string>({ label, options, current, href, te
       <span className="text-p4a-muted">{label}</span>
       <nav aria-label={label} className="flex flex-wrap gap-1" data-testid={testId}>
         {options.map((o) => (
-          <Link key={o.value} href={href(o.value)} aria-current={o.value === current ? "page" : undefined} scroll={false}
+          <Link key={o.value} href={href(o.value)} prefetch={false} aria-current={o.value === current ? "page" : undefined} scroll={false}
             className={["inline-flex h-8 items-center rounded-button border px-3 font-semibold",
               o.value === current ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"].join(" ")}>
             {o.label}
@@ -109,10 +109,11 @@ export function ActiveTile({ testId, label, info, value, children }: {
 
 /**
  * A placeholder (decision D5): the slot of a figure the Workspace cannot compute yet. Its label, the neutral badge "Not
- * connected yet", what will feed it and its definition status Pending; never a number, a zero or a dash
+ * connected yet", what will feed it and its definition status Pending; never a number, a zero or a dash, and it takes no children, so
+ * nothing else can be drawn inside it
  */
-export function PlaceholderCard({ slot, info, copy, children }: {
-  slot: ActiveSlotKey; info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy; children?: ReactNode;
+export function PlaceholderCard({ slot, info, copy }: {
+  slot: ActiveSlotKey; info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy;
 }) {
   const t = copy.active;
   const def = ACTIVE_SLOTS.find((s) => s.key === slot)!;
@@ -124,7 +125,6 @@ export function PlaceholderCard({ slot, info, copy, children }: {
       <p><Badge tone="neutral">{t.notConnected}</Badge></p>
       <p className="text-small text-p4a-muted">{t.fedBy.replace("{sources}", def.fedBy.map((f) => t[`feed_${f}`]).join(t.listJoin))}</p>
       <p><StatusBadge status="Pending" copy={copy} /></p>
-      {children}
     </div>
   );
 }
@@ -189,7 +189,7 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
     return (
       <th className={`${th} ${key === "market" ? "" : "text-right"} ${extra}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined}>
         <HintLabel label={key ? (
-          <Link href={href({ msort: key, mdir: next })} scroll={false} className="underline-offset-2 hover:underline" data-testid={`active-msort-${key}`}
+          <Link href={href({ msort: key, mdir: next })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline" data-testid={`active-msort-${key}`}
             title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}</Link>
         ) : label}>{hint(label, text)}</HintLabel>
       </th>
@@ -203,7 +203,7 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
     <tr key={isTotal ? "total" : r.market} className={isTotal ? "border-t-2 border-p4a-deepblue bg-p4a-bgblue font-semibold" : row} data-testid={isTotal ? "active-market-total" : "active-market-row"}>
       <td className="h-10 whitespace-nowrap px-2 font-semibold">
         {isTotal ? t.total : (
-          <Link href={href({ market: r.market!, msort: null, mdir: null })} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.filterOnMarket.replace("{market}", r.market!)}>
+          <Link href={href({ market: r.market!, msort: null, mdir: null, page: null })} prefetch={false} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.filterOnMarket.replace("{market}", r.market!)}>
             {r.market === "unknown" ? copy.reports.unknownMarket : r.market}
           </Link>
         )}
@@ -404,7 +404,7 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
     return (
       <th className={`${th} ${right ? "text-right" : ""}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined}>
         <HintLabel label={s ? (
-          <Link href={href({ sort: s, dir: current && descending ? "asc" : "desc", page: null })} scroll={false} className="underline-offset-2 hover:underline"
+          <Link href={href({ sort: s, dir: current && descending ? "asc" : "desc", page: null })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline"
             data-testid={`active-sort-${s}`} title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}</Link>
         ) : label}>{hint(label, text)}</HintLabel>
       </th>
@@ -472,11 +472,11 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
         </p>
         <nav aria-label={t.listCard} className="flex items-center gap-2 print:hidden">
           {page > 1
-            ? <Link href={href({ page: page === 2 ? null : String(page - 1) })} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-prev">{t.previousPage}</Link>
+            ? <Link href={href({ page: page === 2 ? null : String(page - 1) })} prefetch={false} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-prev">{t.previousPage}</Link>
             : null}
           <span className="tabular text-p4a-muted">{t.pageOf.replace("{page}", n(page)).replace("{pages}", n(pages))}</span>
           {page < pages
-            ? <Link href={href({ page: String(page + 1) })} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-next">{t.nextPage}</Link>
+            ? <Link href={href({ page: String(page + 1) })} prefetch={false} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-next">{t.nextPage}</Link>
             : null}
         </nav>
       </div>

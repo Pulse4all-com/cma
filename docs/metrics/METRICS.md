@@ -38157,12 +38157,12 @@ No mean is shown: ended spells in a short history are biased towards short ones.
 
 **Retention at an age** on /reports/active · Retention at an age (Retentie op een leeftijd)
 
-The Kaplan-Meier share of active spells that reach a Customer age: the survival over the ages below it. The comparison shows it at the first three ages of customers.age_months; the survival chart draws it per age.
+Retention (customer) at a Customer age: the Kaplan-Meier survival at that age, the share of active spells that still last after it. The comparison shows it at the first three ages of customers.age_months; the survival chart draws it per age, so a curve crosses 50 % at its median, the Customer lifetime.
 
 **Formula as computed**
 
 ```
-retained(a) = product over ages < a of (1 - events / at_risk) (cma.active_km_from's retained); a dash where no spell is that old (at_risk = 0)
+retention(a) = survival(a) = product over ages <= a of (1 - events / at_risk) (cma.active_km_from's survival); a dash where no spell is that old (at_risk = 0)
 ```
 
 **Unit** share · **Grain** now, per_segment, per_channel, per_age · **Status** prerequisite_missing
