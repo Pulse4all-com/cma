@@ -467,7 +467,7 @@ declare
   t record;
   v_user uuid; v_ord integer := 100; v_same boolean; v_talk bigint; v_ref text; v_per bigint; v_date date; v_min integer;
   v_plus bigint; v_minus bigint; v_calls text;
-  v_t0 timestamptz; v_ms numeric; v_new numeric; v_old numeric; v_err boolean;
+  v_t0 timestamptz; v_ms numeric; v_new numeric; v_old numeric; v_err boolean; v_allow numeric;
 begin
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
     perform set_config('role', 'cma_owner', true);
@@ -554,12 +554,13 @@ begin
     exception when others then
       v_err := true;
     end;
-    insert into verify_0009k values (v_ord, 'E4 inbound_now() within 1.5 ms or 30 % of 0009h''s, as the application (' || t.slug || ')',
-      case when not v_err and round(v_new, 2) <= round(v_old, 2) + greatest(v_slack, v_ratio * v_old) and not v_provoke then 'PASS' else 'FAIL' end,
+    -- the allowance rounded once, so the maximum the detail shows is exactly the one tested
+    v_allow := round(greatest(v_slack, v_ratio * v_old), 2);
+    insert into verify_0009k values (v_ord, format('E4 inbound_now() within %s ms or %s %% of 0009h''s, as the application (%s)', v_slack, round(100 * v_ratio), t.slug),
+      case when not v_err and round(v_new, 2) <= round(v_old, 2) + v_allow and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_err then 'a read raised an error'
            else format('%s ms against 0009h''s %s ms, allowed up to %s ms (%s ms more: the larger of %s ms and %s %% of 0009h''s; best of %s each after six untimed, alternating)',
-                       round(v_new, 2), round(v_old, 2), round(v_old, 2) + round(greatest(v_slack, v_ratio * v_old), 2), round(greatest(v_slack, v_ratio * v_old), 2),
-                       v_slack, round(100 * v_ratio), v_runs) end);
+                       round(v_new, 2), round(v_old, 2), round(v_old, 2) + v_allow, v_allow, v_slack, round(100 * v_ratio), v_runs) end);
   end loop;
   perform set_config('role', 'cma_owner', true);
 end
