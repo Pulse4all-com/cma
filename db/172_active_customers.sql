@@ -1087,13 +1087,14 @@ create table if not exists cma.active_spell (
   segment        text not null,
   channel        text not null,
   customer_start timestamptz,
+  customer_start_on date,
   spell_start    timestamptz not null,
   spell_end      timestamptz,
   len            integer not null,
   ended          boolean not null,
   primary key (tenant_id, customer_id, spell_start)
 );
-comment on table cma.active_spell is 'The active spells of a store customer as stored by the refresh (addition 0009l): a maximal stretch in which at least one of its subscriptions holds, with its length in whole months as of the take';
+comment on table cma.active_spell is 'The active spells of a store customer as stored by the refresh (addition 0009l): a maximal stretch in which at least one of its subscriptions holds, with its length in whole months as of the take and the Customer start as a date in the tenant''s zone';
 
 create table if not exists cma.active_month (
   tenant_id uuid not null default cma.current_tenant_id() references cma.tenant (id),
@@ -1423,8 +1424,8 @@ begin
     delete from cma.active_month x where x.tenant_id = p_tenant_id;
     delete from cma.active_spell x where x.tenant_id = p_tenant_id;
 
-    insert into cma.active_spell (tenant_id, customer_id, market, segment, channel, customer_start, spell_start, spell_end, len, ended)
-    select p_tenant_id, c.customer_id, c.market, c.segment, c.channel, c.customer_start, x.spell_start, x.spell_end,
+    insert into cma.active_spell (tenant_id, customer_id, market, segment, channel, customer_start, customer_start_on, spell_start, spell_end, len, ended)
+    select p_tenant_id, c.customer_id, c.market, c.segment, c.channel, c.customer_start, (c.customer_start at time zone v_zone)::date, x.spell_start, x.spell_end,
            greatest(0, cma.flash_age_months_of(x.spell_start, v_zone, coalesce((x.spell_end at time zone v_zone)::date, v_today))),
            x.spell_end is not null
     from (select array_agg(b.customer_id::text) as k, array_agg(b.started_at) as s, array_agg(b.ended_at) as e
@@ -1646,7 +1647,7 @@ begin
       and (p_channel is null or x.channel = p_channel)
   ), sp as materialized (
     -- their active spells, with the length in whole months as of the take
-    select x.customer_id, x.market, x.segment, x.channel, x.customer_start, x.spell_start, x.spell_end, x.len, x.ended
+    select x.customer_id, x.market, x.segment, x.channel, x.customer_start, x.customer_start_on, x.spell_start, x.spell_end, x.len, x.ended
     from cma.active_spell x
     where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
       and (p_channel is null or x.channel = p_channel)
@@ -1690,27 +1691,6 @@ begin
            bool_and(ma.currency = 'EUR' or coalesce(jsonb_typeof(v_fx -> ma.currency) = 'number', false)) as fx_ok,
            round(sum(cma.active_eur_of(ma.at_end, ma.currency, v_fx)), 2) as eur
     from ma group by 1
-  ), g_c as materialized (
-    select case when grouping(c.market) = 0 then 'market' when grouping(c.segment) = 0 then 'segment' else 'all' end as dim,
-           coalesce(c.market, c.segment, '*') as key,
-           count(*) as customers, sum(c.devices) as devices, sum(c.holding) as holding,
-           percentile_cont(0.5) within group (order by c.age) as median_age,
-           count(*) filter (where c.channel = 'indirect') as indirect, count(*) filter (where c.channel = 'direct') as direct,
-           count(*) filter (where c.channel = 'unknown') as unknown_channel,
-           count(*) filter (where c.age >= v_bands[1]) as over1, count(*) filter (where c.age >= v_bands[2]) as over2,
-           count(*) filter (where c.age >= v_bands[3]) as over3
-    from c where c.is_active
-    group by grouping sets ((c.market), (c.segment), ())
-  ), g_clv as (
-    select q.dim, q.key,
-           jsonb_object_agg(q.currency, jsonb_build_object('average', q.average, 'median', q.median, 'per_month', q.per_month, 'customers', q.n)) as j
-    from (select case when grouping(c.market) = 0 then 'market' when grouping(c.segment) = 0 then 'segment' else 'all' end as dim,
-                 coalesce(c.market, c.segment, '*') as key, c.clv_currency as currency, count(*) as n, round(avg(c.clv), 2) as average,
-                 round((percentile_cont(0.5) within group (order by c.clv))::numeric, 2) as median,
-                 round(avg(c.clv / greatest(c.age, 1)), 2) as per_month
-          from c where c.is_active and c.clv is not null and c.clv_currency is not null
-          group by grouping sets ((c.market, c.clv_currency), (c.segment, c.clv_currency), (c.clv_currency))) q
-    group by 1, 2
   ), ch as materialized (
     -- Flash's Churn (subscription) over the 30 business dates to the take's, as the refresh stored it per market, segment and channel
     select x.market, x.at_end as n
@@ -1739,6 +1719,19 @@ begin
   ), l_now as materialized (
     select (select count(*) from lc) as customers, (select count(*) from lb) as subscriptions,
            (select coalesce(jsonb_object_agg(q.segment, q.n), '{}'::jsonb) from (select lc.segment, count(*) as n from lc group by 1) q) as by_segment
+  ), g_all as materialized (
+    -- the stored take's active customers over all: how many, their median age and those older than the first three bounds
+    select count(*) as customers, percentile_cont(0.5) within group (order by c.age) as median_age,
+           count(*) filter (where c.age >= v_bands[1]) as over1, count(*) filter (where c.age >= v_bands[2]) as over2,
+           count(*) filter (where c.age >= v_bands[3]) as over3
+    from c where c.is_active
+  ), clv_all as materialized (
+    select jsonb_object_agg(q.currency, jsonb_build_object('average', q.average, 'median', q.median, 'per_month', q.per_month, 'customers', q.n)) as j
+    from (select c.clv_currency as currency, count(*) as n, round(avg(c.clv), 2) as average,
+                 round((percentile_cont(0.5) within group (order by c.clv))::numeric, 2) as median,
+                 round(avg(c.clv / greatest(c.age, 1)), 2) as per_month
+          from c where c.is_active and c.clv is not null and c.clv_currency is not null
+          group by c.clv_currency) q
   ), km_all as materialized (
     select cma.active_km_json(array_agg(sp.len), array_agg(sp.ended)) as j from sp
   )
@@ -1792,21 +1785,24 @@ begin
                                                                              'share', case when g.customers > 0 then round(x.n::numeric / g.customers, 4) end)
                                                            order by x.m), '[]'::jsonb)
                                   from (values (v_bands[1], g.over1), (v_bands[2], g.over2), (v_bands[3], g.over3)) x(m, n) where x.m is not null),
+                         -- the ages at a past month's end, as cma.flash_age_months_of counts them, from the Customer start's stored date
                          'prev_month', (select round((percentile_cont(0.5) within group (
-                                                        order by cma.flash_age_months_of(sp.customer_start, v_zone, v_month - 1)))::numeric, 1)
+                                                        order by (extract(year from a.g) * 12 + extract(month from a.g))::integer))::numeric, 1)
                                         from sp
+                                        cross join lateral (select age((v_month - 1)::timestamp, sp.customer_start_on::timestamp) as g) a
                                         where sp.spell_start < (v_month::timestamp at time zone v_zone)
                                           and (sp.spell_end is null or sp.spell_end >= (v_month::timestamp at time zone v_zone))
                                           and exists (select 1 from mt where mt.month = v_prev)),
                          'prev_year', (select round((percentile_cont(0.5) within group (
-                                                       order by cma.flash_age_months_of(sp.customer_start, v_zone, (v_year + interval '1 month')::date - 1)))::numeric, 1)
+                                                       order by (extract(year from a.g) * 12 + extract(month from a.g))::integer))::numeric, 1)
                                        from sp
+                                       cross join lateral (select age(((v_year + interval '1 month')::date - 1)::timestamp, sp.customer_start_on::timestamp) as g) a
                                        where sp.spell_start < ((v_year + interval '1 month')::timestamp at time zone v_zone)
                                          and (sp.spell_end is null or sp.spell_end >= ((v_year + interval '1 month')::timestamp at time zone v_zone))
                                          and exists (select 1 from mt where mt.month = v_year)))
-                       from g_c g where g.dim = 'all') end,
+                       from g_all g) end,
       'lifetime', case when v_has then (select k.j - 'curve' from km_all k) end,
-      'clv', case when v_has then coalesce((select g.j from g_clv g where g.dim = 'all'), '{}'::jsonb) end),
+      'clv', case when v_has then coalesce((select g.j from clv_all g), '{}'::jsonb) end),
     'unit_economics', jsonb_build_object(
       'churned_30d', (select coalesce(sum(ch.n), 0) from ch),
       'slots', (select jsonb_agg(jsonb_build_object('key', x.key, 'status', 'pending') order by x.ord)
@@ -1900,7 +1896,7 @@ begin
       and (p_channel is null or x.channel = p_channel)
   ), sp as materialized (
     -- their active spells, with the length in whole months as of the take
-    select x.customer_id, x.market, x.segment, x.channel, x.customer_start, x.spell_start, x.spell_end, x.len, x.ended
+    select x.customer_id, x.market, x.segment, x.channel, x.customer_start, x.customer_start_on, x.spell_start, x.spell_end, x.len, x.ended
     from cma.active_spell x
     where x.tenant_id = p_tenant_id and (p_market is null or x.market = p_market) and (p_segment is null or x.segment = p_segment)
       and (p_channel is null or x.channel = p_channel)
