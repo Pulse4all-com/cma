@@ -1423,19 +1423,19 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Updated (nl: Bijgewerkt) |
-| Key | Copy key `live.updatedAt` ("Updated {time}"); the Live board's title row |
+| Key | Copy keys `live.updatedAt` ("Updated {time}"; the Live board's title row) and `active.updated` ("Updated {time}", nl "Bijgewerkt {time}"; Customers → Active's title row) |
 | Definition | The instant of the Live board's last successful read, shown as hh:mm:ss with "Updates every 10 seconds while this tab is open". After two failed polls in a row the board says its figures are old: a Warning badge "Not updated since hh:mm:ss" and "Trying again. Reload the page if this stays." |
 | Source | The instant the server read the board for the last successful poll (`readAt` in the answer of `GET /api/v1/live/board`, the page's own read at first) |
 | Counts / does not count | A successful poll counts; a failed or timed-out one (a poll gives up after 8 seconds) does not move it; the first failed poll shows nothing, the second in a row shows the badge |
 | Unit and display | hh:mm:ss in the viewer's zone, on the title row |
 | Time rule | As of the last successful poll; the board polls every 10 seconds while the tab is visible |
-| Scope | The Live board, for `monitoring.live` |
+| Scope | The Live board, for `monitoring.live`; Customers → Active, where it is the instant of the live present's read (the four tiles that state the present), for `reports.view` or `performance.team` |
 | Equivalent in the source system | None |
 | Not to use | "Last read" (a job's read of a source), "Refreshed at" (a stored result's), "Last sync" |
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Definitions: Updated (nl: Bijgewerkt)..." (#261) |
-| Used by | The Live board (`/live/<organisation key>`) |
-| As built today | Matches the definition (`LiveBoardLive.tsx`) |
+| Used by | The Live board (`/live/<organisation key>`); Customers → Active's title row ("Tiles as of" until the live present is in) |
+| As built today | Matches the definition (`LiveBoardLive.tsx`); on Customers → Active it is the read time of `cma.active_now`, shown once the read is in |
 
 ### Last read
 
@@ -1831,7 +1831,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 
 ## Active customer terms
 
-Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 with addendum A: Customers → Active follows the active customer base: who the active customers are, in which markets and segments, how they were acquired, how long they stay, what they are worth, how the base grows and shrinks, and how cohorts retain. The population is Flash's (Active customer, Total subscriptions); the history is reconstructed from the subscriptions the CMA holds, so a figure of the past is an estimate, and a past pause counts as holding. On this page "customer" in a label means an Active customer (a store customer of the population), as in "Subscriptions per customer"; the term "customer" alone stays pending (Domains still to define, Customers and orders). Settings (tenant; no Configuration screen yet): `customers.cohort_ages_months` (default `3,6,12,24,36`; one to eight increasing whole numbers, each at most 120), `customers.age_months` (default `12,24,36,48,60`; one to ten), `customers.history_months` (60; 12 to 120) and `reports.fx_eur_rates` (default `{}`; a JSON object of currency codes with the euros one unit is worth, and `as_of`). Labels are written out in the UI because the style allows no all-caps word (`verify:copy`): CLV, CAC and EUR are what sales says, in hints at most.
+Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 with addendum A: Customers → Active follows the active customer base: who the active customers are, in which markets and segments, how they were acquired, how long they stay, what they are worth, how the base grows and shrinks, and how cohorts retain. The population is Flash's (Active customer, Total subscriptions); the history is reconstructed from the subscriptions the CMA holds and stored by a refresh (the Take), so a figure of the past is an estimate, and a past pause counts as holding. Time rules: the four tiles of the present (Active customers, Total subscriptions, Monthly recurring amount and its average) are live, as of the page's Updated; Customer age, Customer lifetime, CLV realised, Churned last 30 days, the Acquisition channel and every series are as of the take (History as of). On this page "customer" in a label means an Active customer (a store customer of the population), as in "Subscriptions per customer"; the term "customer" alone stays pending (Domains still to define, Customers and orders). Settings (tenant; no Configuration screen yet): `customers.cohort_ages_months` (default `3,6,12,24,36`; one to eight increasing whole numbers, each at most 120), `customers.age_months` (default `12,24,36,48,60`; one to ten), `customers.history_months` (60; 12 to 120), `customers.refresh_minutes` (5; 1 to 1440), `customers.history_notice_minutes` (15; 1 to 1440) and `reports.fx_eur_rates` (default `{}`; a JSON object of currency codes with the euros one unit is worth, and `as_of`). Labels are written out in the UI because the style allows no all-caps word (`verify:copy`): CLV, CAC and EUR are what sales says, in hints at most.
 
 ### Active (rail page)
 
@@ -1888,7 +1888,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Status | Proposed (for Kira to confirm) |
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "The new terms of the page are Proposed for Kira to confirm, …" and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
 | Used by | `active.customer_age_median`, `active.customer_age_bands`; Customers → Active (tile, Customer age, the comparison, the list) |
-| As built today | `cma.active_base_of` and `cma.active_page` (`172`) use `cma.flash_age_months_of`. Matches the definition |
+| As built today | `cma.active_base_of` (`172`) uses `cma.flash_age_months_of`. Matches the definition |
 
 ### Monthly recurring amount
 
@@ -1900,7 +1900,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Source | `cma.subscription` (`amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count`, `status`) |
 | Counts / does not count | Counts a holding subscription that pays. Does not count a failed subscription's amount (Flash's amount rule), a pause, or an ended subscription; never summed across currencies. The indicative euro line is shown only while `reports.fx_eur_rates` holds a rate for every currency shown, labelled "≈ euros, indicative" with the rates' date (nl: "≈ euro, indicatief"), and is otherwise absent, never computed from a guess |
 | Unit and display | An amount per currency, one line each; the average per active customer beside it (Average monthly amount per active customer) |
-| Time rule | As of now for the present; per month end for the history, by the reconstruction (a past pause counts as holding) |
+| Time rule | Live for the present tile (Updated); per month end for the history, as of the take (History as of), by the reconstruction (a past pause counts as holding) |
 | Scope | The Active customers of the tenant; per market, segment and Direct / Indirect |
 | Equivalent in the source system | Juo's price per billing cycle; sales often calls the figure MRR |
 | Not to use | "Revenue" (invoices and payments stay NetSuite's); "MRR" as the CMA's word |
@@ -1926,7 +1926,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Status | Proposed (for Kira to confirm) |
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
 | Used by | `active.average_monthly_amount`; Customers → Active (tile, Markets, the comparison) |
-| As built today | `cma.active_page` (`172`). Matches the definition |
+| As built today | `cma.active_top` and `cma.active_rest` (`172`). Matches the definition |
 
 ### Ended time (subscription)
 
@@ -2033,7 +2033,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Source | The spells (Customer start, Ended time) |
 | Counts / does not count | Every spell, ended or running. No mean is shown, because ended spells in a short history are biased towards short ones. When the curve has not fallen to 50% within the observed history the page says "Not reached yet: more than N months" (nl: "Nog niet bereikt: langer dan N maanden"), N the longest observed age, never a number |
 | Unit and display | Whole months, the median and the curve per segment or per Direct / Indirect, the 50% line marked, each median labelled where reached |
-| Time rule | The spells as of now, on a monthly age grid |
+| Time rule | The spells as of the take, on a monthly age grid |
 | Scope | The Active customers' stores; per market, segment and Direct / Indirect |
 | Equivalent in the source system | None |
 | Not to use | "Lifetime" for Customer age or Subscription age (Customer lifetime is never an age); "average lifetime"; "tenure" |
@@ -2071,14 +2071,14 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Source | `cma.commerce_customer.amount_spent` (Shopify) |
 | Counts / does not count | Per currency, never summed across currencies; a customer without an amount counts in no average. Open decisions keeps Shopify versus NetSuite as the source of value |
 | Unit and display | An amount per currency: the average with the median under it, per customer in the list |
-| Time rule | As of the CMA's last read of the store |
+| Time rule | As of the CMA's last read of the store at the take (History as of) |
 | Scope | The Active customers of the tenant; per market, segment and Direct / Indirect |
 | Equivalent in the source system | Shopify's customer `amountSpent` |
 | Not to use | "Customer value (realised)" (renamed, D11); "revenue" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "\"Customer value (realised)\" is renamed Customer lifetime value (realised) …" (D11) and "Definitions: Acquisition channel, Direct order, Indirect order, Customer lifetime, …" (this PR, addition 0009l) |
 | Used by | `active.clv_realised_average`, `active.clv_realised_median`, `active.clv_realised_per_month`, `active.segment_difference`; Customers → Active (tile, the comparison, the list) |
-| As built today | `cma.active_page` and `cma.active_rows` (`172`). Matches the definition |
+| As built today | `cma.active_top`, `cma.active_rest` and `cma.active_rows` (`172`). Matches the definition |
 
 ### Churn rate
 
@@ -2193,6 +2193,82 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
 | Used by | `active.payback_months`; Customers → Active (Unit economics) |
 | As built today | A placeholder card with no figure |
+
+### History as of
+
+| Field | Value |
+|---|---|
+| Term | History as of (nl: Geschiedenis per; `active.historyAsOf` "History as of {time}", `active.historyLate` "History as of {time}, {minutes} min old", `active.historyStale` "History as of {time}, being recomputed after a settings change") |
+| Key | `take.computedAt` of `GET /api/v1/reports/active` (with `businessDate`, `stale`, `ageMinutes`, `late`) |
+| Definition | The moment the Take was computed that Customers → Active reads its history from. It is Customers → Active's form of Refreshed at: the page shows its take as History as of, and the figures beside it are those of that instant, whatever the page's own time. |
+| Source | `cma.active_take.computed_at`, written by `cma.active_refresh_of` |
+| Counts / does not count | The tiles of the present are not as of it (Updated). A take that is stale (a setting changed) or older than `customers.history_notice_minutes` shows a notice beside it |
+| Unit and display | hh:mm in the viewer's zone, on the title row, next to Updated |
+| Time rule | The transaction time of the refresh, shown in the viewer's zone |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Refreshed at" on this page (it is the same idea, with the page's own label) and "Last updated" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and "Definitions: History as of, Tiles as of, ..." (#267) |
+| Used by | Customers → Active (title row, the notices); `GET /api/v1/reports/active` (`take`) |
+| As built today | `172`; `173` proves the stale and late states |
+
+### Tiles as of
+
+| Field | Value |
+|---|---|
+| Term | Tiles as of (nl: Tegels per; `active.tilesAsOf` "Tiles as of {time}") |
+| Key | `presentAt` of `GET /api/v1/reports/active` (the stored tiles' instant) |
+| Definition | The moment the stored tiles of Customers → Active are of. It is shown until the live present's read is in, and then replaced by Updated: the four tiles of the present take their places without a shift in the layout. |
+| Source | The Take's document (`cma.active_top`) until `cma.active_now` answers |
+| Counts / does not count | A page where the live read fails keeps the stored tiles and this label |
+| Unit and display | hh:mm in the viewer's zone, on the title row |
+| Time rule | As of the take |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Cached" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D16 and "Definitions: History as of, Tiles as of, ..." (#267) |
+| Used by | Customers → Active (title row) |
+| As built today | `ActivePending.tsx` (Streamed) swaps the tiles when `cma.active_now` is in |
+
+### History is being prepared
+
+| Field | Value |
+|---|---|
+| Term | History is being prepared (nl: De geschiedenis wordt voorbereid; `active.historyPreparing`) |
+| Key | `history` of `GET /api/v1/reports/active` (the state without a take) |
+| Definition | The state of Customers → Active while its tenant has no Take: the page says so and shows no figure of the history, never zeros. |
+| Source | No row in `cma.active_take` for the tenant |
+| Counts / does not count | The tiles of the present stay live. No churn count, no split by acquisition channel and no tile under a channel filter until a take exists; `tiles.activeCustomers.byChannel` and `unitEconomics.churned30d` are null; the list's total is null and the file answers 409 `history_not_ready` |
+| Unit and display | A notice in place of the history panels |
+| Time rule | Until the first refresh has run |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | A zero, a dash that reads as zero |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 (#267) |
+| Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows`, `/file` |
+| As built today | `172`; `173` proves that no figure appears without a take |
+
+### Take (Customers → Active)
+
+| Field | Value |
+|---|---|
+| Term | Take (the stored results of Customers → Active; no label of its own: the page shows its instant as History as of; Flash's is Current take) |
+| Key | `cma.active_take`, `cma.active_base`, `cma.active_customer`, `cma.active_spell`, `cma.active_month`, `cma.active_cohort`, `cma.active_document`; settings `customers.refresh_minutes`, `customers.history_notice_minutes`; `cma.active_refresh()` |
+| Definition | The stored results the history of Customers → Active is read from: the active customer base, its customers, spells, months and cohorts, and the page's answers per filter (the documents), as one refresh computed them at one instant. One take per tenant, kept by the job `cma-refresh-active-customers` every minute for a tenant whose take is older than `customers.refresh_minutes` or marked stale. |
+| Source | `cma.active_refresh_of` over the CMA's mirrors (`cma.active_base_of` and the fresh reads) |
+| Counts / does not count | A change of a setting the stored rows depend on marks the take stale in the setting's own transaction and never refreshes there; a mark set while a refresh runs is kept. The four tiles of the present are not in it (they are live) |
+| Unit and display | Shown as History as of; no customer data, ids, codes, amounts and times only |
+| Time rule | The instant of the refresh |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Cache" (no request cache; it is a stored result) and "snapshot" (a dated, never-changed take) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and D16 (#267) |
+| Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows`, `/file`; `cma_read.active_customer_month`, `cma_read.customer_cohort` |
+| As built today | `172` (tables, refresh, stale mark); `173` proves the take equals a fresh computation row for row |
 
 ## Rail terms
 
