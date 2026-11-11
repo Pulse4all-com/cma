@@ -62,15 +62,15 @@
           "minLength": 1
         },
         "unit": {
-          "description": "The brief's base units plus the ones the figures needed: days, business_days, date, average, text and flag",
-          "enum": ["count", "share", "seconds", "milliseconds", "minutes", "business_minutes", "currency", "percentile", "median", "time_of_day", "days", "business_days", "date", "average", "text", "flag"]
+          "description": "The brief's base units plus the ones the figures needed: days, business_days, date, average, text, flag, and since addition 0009l months and ratio",
+          "enum": ["count", "share", "seconds", "milliseconds", "minutes", "business_minutes", "currency", "percentile", "median", "time_of_day", "days", "business_days", "date", "average", "text", "flag", "months", "ratio"]
         },
         "grain": {
           "description": "One or more grains; the brief's base list plus the dimensions the figures needed",
           "type": "array",
           "minItems": 1,
           "items": {
-            "enum": ["period", "now", "per_day", "per_iso_week", "per_person", "per_market", "per_line", "per_pipeline", "per_form", "per_inbox", "per_mailbox", "per_tag", "per_stage", "per_level", "per_currency", "per_status", "per_reason", "per_hour", "per_check", "per_message", "per_record", "per_group", "per_category", "per_source", "per_attempt", "per_caller", "per_team", "per_skill", "per_question", "per_channel", "per_rating", "per_month", "per_model"]
+            "enum": ["period", "now", "per_day", "per_iso_week", "per_person", "per_market", "per_line", "per_pipeline", "per_form", "per_inbox", "per_mailbox", "per_tag", "per_stage", "per_level", "per_currency", "per_status", "per_reason", "per_hour", "per_check", "per_message", "per_record", "per_group", "per_category", "per_source", "per_attempt", "per_caller", "per_team", "per_skill", "per_question", "per_channel", "per_rating", "per_month", "per_model", "per_segment", "per_cohort", "per_age"]
           }
         },
         "sources": {

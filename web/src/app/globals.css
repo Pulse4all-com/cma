@@ -171,4 +171,36 @@ body {
   [data-testid="roster-print"] tr {
     page-break-inside: avoid;
   }
+  /* A report printed from inside the Shell (Customers → Active, addition 0009l): the frame lets go of the window, the top
+     bar and the rail leave the sheet, the content runs over as many A4 landscape pages as it needs, and a panel, a tile
+     or a table row is never cut across two pages */
+  html:has([data-print="report"]),
+  body:has([data-print="report"]) {
+    height: auto;
+    overflow: visible;
+    zoom: 1;
+  }
+  .cma-frame:has([data-print="report"]) {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .cma-frame:has([data-print="report"]) > header,
+  .cma-frame:has([data-print="report"]) nav[data-rail-nav] {
+    display: none;
+  }
+  .cma-frame:has([data-print="report"]) main {
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    background: var(--color-white);
+  }
+  [data-print="report"] section,
+  [data-print="report"] [data-tile],
+  [data-print="report"] [data-placeholder],
+  [data-print="report"] tr,
+  [data-print="report"] svg {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 }

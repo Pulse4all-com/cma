@@ -173,6 +173,11 @@ const pages = [
   { path: "/reports/first-orders?range=month&group=market", subject: "manager", tables: true },
   { path: "/reports/first-orders?range=month&group=level", subject: "analyst", tables: true },
   { path: "/reports/orders-per-person?range=month", subject: "manager", tables: true },
+  // Active (addition 0009l): the tiles, the placeholder cards, the line and bar charts in the series order (the inflow's
+  // stack Deep Blue, Light Blue and Border Grey, the outflow Inkt), the heatmap's five blues with white text on the two dark
+  // ones only, the markets, the comparison and the list as the manager; split by segment, in euros, by channel as the analyst
+  { path: "/reports/active", subject: "manager" },
+  { path: "/reports/active?split=segment&amount=eur&survival=channel&cohort=segment&grouping=quarter", subject: "analyst" },
   { path: "/reports/first-orders?range=month", subject: "invest-analyst", noHint: true },
   // Attempts per deal and Attempts per agent (addition 0008y): the tiles with their deltas (Leaf Green better, the error
   // colour worse), the bars per attempt, reach, won rate and time since the last attempt (Deep Blue, Light Blue), the

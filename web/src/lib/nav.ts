@@ -61,6 +61,8 @@ export type ShellPage =
   | "reviews"
   /** Courtesy (addition 0009a, brief B31): a courtesy call per First or Repeat store order, from its due day */
   | "courtesy"
+  /** Active (addition 0009l, brief B35): the active customer base, its state and its movement */
+  | "active"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
   /** Pledge lists (addition 0009j): the quarter files of the loans' pledged devices, and today's version */
@@ -85,7 +87,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | `/live/${string}` | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/maintenance" | "/reports/pledge-lists"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/active" | "/reports/maintenance" | "/reports/pledge-lists"
   | "/reports/installed-base" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
@@ -253,22 +255,29 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
     },
     {
       // Customers (addition 0008zv): what happens after the order; team figures only, as every report. Since addition
-      // 0008zw (Martin, 5 November 2026) Maintenance is Assets'
+      // 0008zw (Martin, 5 November 2026) Maintenance is Assets'. Since addition 0009l (Martin, 11 November 2026) the
+      // group opens with Active and runs Active, Courtesy, Reviews, Cancellations: the state of the base first, then
+      // what is done for it, what customers say and who asks to leave. The digit keys follow the visible order, so the
+      // keys of Courtesy, Reviews and Cancellations move for everyone who sees the group, and the group's breadcrumb
+      // leads to Active
       kind: "group",
       id: "customers",
       label: copy.nav.customers,
       icon: "person",
       items: [
-        // Cancellations (addition 0008zb, Kira's KPI 5): the cancellation requests of the tenant's cancellation kind per
-        // market and week
-        { page: "cancellations", href: "/reports/cancellations", label: copy.nav.cancellations, permission: ["reports.view", "performance.team"] },
-        // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
-        // average rating, the negative reviews and how they link to an order or a contact
-        { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
+        // Active (addition 0009l, brief B35 with addendum A): the active customer base in one page, Flash's population,
+        // its history reconstructed from the subscriptions; team figures only, no per-person figure
+        { page: "active", href: "/reports/active", label: copy.nav.active, permission: ["reports.view", "performance.team"] },
         // Courtesy (addition 0009a, brief B31, Martin, 6 November 2026): a courtesy call per First or Repeat store order from
         // its due day, completed by the telephony tags' completed meanings; team figures for the report permissions, per
         // person on the page for performance.team (as Follow-up's, not under reports.per_person)
         { page: "courtesy", href: "/reports/courtesy", label: copy.nav.courtesy, permission: ["reports.view", "performance.team"] },
+        // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
+        // average rating, the negative reviews and how they link to an order or a contact
+        { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
+        // Cancellations (addition 0008zb, Kira's KPI 5): the cancellation requests of the tenant's cancellation kind per
+        // market and week
+        { page: "cancellations", href: "/reports/cancellations", label: copy.nav.cancellations, permission: ["reports.view", "performance.team"] },
       ],
     },
     {

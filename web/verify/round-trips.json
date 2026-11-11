@@ -220,6 +220,12 @@
     "rt": 9
   },
   {
+    "path": "/reports/active",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
     "path": "/reports/installed-base",
     "subject": "manager",
     "tx": 2,

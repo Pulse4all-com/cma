@@ -768,6 +768,14 @@
     {
       "name": "courtesy_order",
       "what": "One row per courtesy order since each tenant's courtesy.start_date as of now: order, store, market, segment, business and due dates, has_contact (never which contact), attempts, conversation, last attempt, completion, outcome, the completing person and state (0009a). Computed when read by cma.courtesy_orders_of from cma.commerce_order, cma.commerce_customer, cma.commerce_store (Shopify's webhooks and read-back, the nightly reconcile, the backfill) and cma.telephony_call, cma.telephony_call_tag, cma.call_link, cma.crm_call, cma.crm_association (Aircall's and HubSpot's webhooks, the call link each minute by ingest-sweep)"
+    },
+    {
+      "name": "active_customer_month",
+      "what": "Per tenant, calendar month, market, customer segment and acquisition channel: the active customers and the holding subscriptions at the month's end as reconstructed from the subscriptions' created and ended times (the running month as of now; a past pause counts as holding), and the customers' inflow and outflow of the month; counts only, no customer and no contact (0009l). Computed when read by cma.active_months_of from cma.subscription and cma.subscription_event (Juo, polled every 5 minutes, the nightly reconcile), cma.commerce_customer and cma.commerce_store (Shopify's webhooks and read-back), cma.crm_contact (the segment, HubSpot) and First orders' attribution (cma.first_orders_of: cma.crm_record, cma.commerce_order and its evidence)"
+    },
+    {
+      "name": "customer_cohort",
+      "what": "Per tenant, customer cohort (the first day of the month or quarter of the Customer start; grouping says which), market, customer segment, acquisition channel and age in months of customers.cohort_ages_months: the customers started, those still in an active spell at their own start plus the age, and whether every customer of the row is that old (mature); counts only, no customer and no contact (0009l). Computed when read by cma.active_cohorts_of from the same tables as active_customer_month"
     }
   ],
   "flows": {

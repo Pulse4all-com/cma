@@ -14,8 +14,12 @@ import { RAIL_COOKIE } from "@/lib/nav";
  * shape "liveBoard" (the Live board's UX pass, 10 November 2026): the board's own outline, the freshness line, four
  * panels of six figures (Inbound today, Outbound today, Follow-up now, the team's groups) and the people's rows, so the
  * wait reads as the board arriving and nothing moves when it does.
+ *
+ * shape "active" (Customers → Active, addition 0009l): the page's own outline at full width, the filters' row, six
+ * tiles, six placeholder slots, the wide chart, two half-width charts and the tables, so a click shows where the
+ * figures will stand.
  */
-export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "liveBoard" } = {}) {
+export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "liveBoard" | "active" } = {}) {
   const collapsed = (await cookies()).get(RAIL_COOKIE)?.value === "collapsed";
   const bar = (w: string, h = "h-4") => <div className={`${h} ${w} animate-pulse rounded-input bg-p4a-border`} aria-hidden="true" />;
   return (
@@ -57,6 +61,30 @@ export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "live
                 </section>
               ))}
               <div className="flex flex-col gap-3">{[0, 1, 2, 3].map((i) => <div key={i}>{bar("w-full", "h-8")}</div>)}</div>
+            </div>
+          ) : shape === "active" ? (
+            <div className="mt-6 flex flex-col gap-6" data-skeleton-shape="active">
+              <div className="flex items-end justify-between gap-6">
+                <div className="flex gap-4">{[0, 1, 2].map((i) => <div key={i}>{bar("w-44", "h-10")}</div>)}</div>
+                <div className="flex gap-4">{bar("w-56", "h-8")}{bar("w-40", "h-8")}</div>
+              </div>
+              {[0, 1].map((r) => (
+                <div key={r} className="grid grid-cols-3 gap-4 xl:grid-cols-6">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <section key={i} className="flex flex-col gap-2 rounded-card border border-p4a-border bg-white p-5">{bar("w-3/4", "h-3")}{bar("w-1/2", "h-7")}{bar("w-full", "h-3")}</section>
+                  ))}
+                </div>
+              ))}
+              <section className="rounded-card border border-p4a-border bg-white p-6">{bar("w-56", "h-5")}<div className="mt-5">{bar("w-full", "h-64")}</div></section>
+              <div className="grid grid-cols-2 gap-6">
+                {[0, 1].map((i) => (
+                  <section key={i} className="rounded-card border border-p4a-border bg-white p-6">{bar("w-48", "h-5")}<div className="mt-5">{bar("w-full", "h-48")}</div></section>
+                ))}
+              </div>
+              <section className="rounded-card border border-p4a-border bg-white p-6">
+                {bar("w-40", "h-5")}
+                <div className="mt-5 flex flex-col gap-3">{[0, 1, 2, 3, 4].map((i) => <div key={i}>{bar("w-full", "h-8")}</div>)}</div>
+              </section>
             </div>
           ) : (
           <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">

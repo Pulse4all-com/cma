@@ -73,6 +73,7 @@ import {
 import { COHORT_PERIODS, COHORT_SPLITS, LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, leadAgesOf, leadCohortsReport, parseLeadAges, type LeadCohortDeal } from "@/lib/cohorts";
 import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
 import { mockDataQualityRows, mockFlashHeadline, mockFlashOverview, mockFlashPage, mockFlashRows, mockFlashSnapshots, mockRecordFlashFile } from "./mock-flash";
+import { mockActive, mockActiveRows } from "./mock-active";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -4893,6 +4894,18 @@ export const mockData: CmaData = {
 
   async recordFlashFile(me, read) {
     mockRecordFlashFile(me, read);
+  },
+
+  async getActive(me, fromMonth, filter, grouping) {
+    return mockActive(me, fromMonth, filter, grouping);
+  },
+
+  async getActiveRows(me, request) {
+    return mockActiveRows(me, request);
+  },
+
+  async recordActiveFile() {
+    // nothing is kept in the mock: the audit log is the database's
   },
 
   async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {

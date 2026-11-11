@@ -1,0 +1,32 @@
+import { activeParams } from "@/lib/api/active";
+import { forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
+import { data } from "@/lib/data";
+import { REPORT_PERMISSIONS } from "@/lib/reports";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Customers → Active (cma.active_page, addition 0009l) for ?fromMonth (the history's first month, YYYY-MM-01; as far back
+ * as customers.history_months allows when left out, which also caps an earlier one), &grouping=month|quarter (the customer
+ * cohorts) and the optional &market, &segment and &channel (indirect, direct or unknown) filters: the active customer base
+ * in one document. `setUp` says whether the store and the subscriptions are connected; while either is not, `figures` is
+ * false and every figure is null or empty ("Not set up", never zeros). `tiles` (Flash's Active customers and Total
+ * subscriptions with their splits, the Monthly recurring amount per currency with its customers and average, the
+ * indicative euros only while reports.fx_eur_rates holds a rate for every currency shown, Customer age, Customer lifetime
+ * and Customer lifetime value (realised) per currency; `prevMonth` and `prevYear` the value at the previous month's end and
+ * twelve months before it, null where the history does not reach); `unitEconomics` (the placeholders' keys with status
+ * pending and no figure; `churned30d`); `months` (per month end: customers with `bySegment`, subscriptions, inflow with
+ * `inflowByChannel`, outflow, net, amounts per currency; the running month is `isNow` and equals the headline); `markets`
+ * with `marketsTotal`; `comparison` (the first two segments side by side: a, b, unknown, difference and ratio per measure);
+ * `survival` (Kaplan–Meier per segment, per channel and over all); `ageBands`; `cohorts` with `cohortSplits`; `mix`;
+ * `notes`; `filters` (the choices); `settings`. Amounts are per currency and never added across currencies. Team figures
+ * only: counts, codes, dates and amounts, never a customer's name, email, phone or address. Needs reports.view or
+ * performance.team, here and again in the database.
+ */
+export async function GET(request: Request) {
+  return forPrincipal(async (me) => {
+    requireAnyPermission(me, REPORT_PERMISSIONS);
+    const { fromMonth, grouping, filter } = activeParams(new URL(request.url).searchParams);
+    return ok(await data().getActive(me, fromMonth, filter, grouping));
+  });
+}

@@ -169,6 +169,7 @@ if (ONLY_REPORTS) {
   await flashChecks();
   await reviewsAllChecks();
   await courtesyChecks();
+  await activeChecks();
   verdict();
 }
 if (ONLY_SOURCES) {
@@ -1043,6 +1044,7 @@ await reportChecks();
 await flashChecks();
 await reviewsAllChecks();
 await courtesyChecks();
+await activeChecks();
 await inboundChecks();
 await callsChecks();
 await attemptsChecks();
@@ -1553,6 +1555,66 @@ async function flashChecks() {
   const invest = (await call(INVEST, "/api/v1/reports/flash?overview=orders")).body?.data;
   expect("flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop)", [invest?.setUp, invest?.totals ?? null, invest?.rows?.length ?? -1],
     [false, null, 0], [true, {}, 1]);
+}
+
+// Customers → Active (addition 0009l): the page's document, its list and its file for reports.view or performance.team (an
+// agent 403); the parameters refused with a 400; no customer data in any answer; not set up answers no figure, never 0;
+// the placeholders carry no figure; the three channels add up to the unfiltered total; amounts per currency
+async function activeChecks() {
+  const r = await call(ANALYST, "/api/v1/reports/active");
+  const d = r.body?.data;
+  const personal = /(email|phone|address|firstName|lastName|customerName|contactName|displayName)/i;
+  const keysOf = (o, out = new Set()) => {
+    if (Array.isArray(o)) o.forEach((x) => keysOf(x, out));
+    else if (o && typeof o === "object") for (const [k, v] of Object.entries(o)) { out.add(k); keysOf(v, out); }
+    return out;
+  };
+  expect("active: the analyst reads the page; not set up answers no figure, never 0; no key of the document names a person's details",
+    [r.status, typeof d?.figures, d?.figures === false ? d?.tiles === null && (d?.months ?? []).length === 0 : typeof d?.tiles?.activeCustomers?.value === "number",
+      [...keysOf(d)].filter((k) => personal.test(k)), JSON.stringify(d ?? {}).includes("@")],
+    [200, "boolean", true, [], false], [200, "string", false, ["displayName"], true]);
+  if (d?.figures) {
+    const slots = d.unitEconomics?.slots ?? [];
+    const ms = d.months ?? [];
+    const last = ms[ms.length - 1];
+    expect("active: the placeholders carry a key and pending alone (no digit); the running month is now and equals the headline; net change = inflow − outflow",
+      [slots.length, slots.every((x) => Object.keys(x).sort().join(",") === "key,status" && x.status === "pending"), /\d/.test(JSON.stringify(slots)),
+        last?.isNow === true && last.customers === d.tiles.activeCustomers.value && last.subscriptions === d.tiles.totalSubscriptions.value,
+        ms.every((m) => m.net === m.inflow - m.outflow)],
+      [6, true, false, true, true], [0, false, true, false, false]);
+    const per = await Promise.all(["indirect", "direct", "unknown"].map(async (c) => (await call(ANALYST, `/api/v1/reports/active?channel=${c}`)).body?.data));
+    const currencies = d.tiles.amounts.map((a) => a.currency);
+    expect("active: the three channels add up to the unfiltered customers and subscriptions; one amount per currency, each currency once; the euro line only with every rate",
+      [per.reduce((n, x) => n + (x?.tiles?.activeCustomers?.value ?? NaN), 0) === d.tiles.activeCustomers.value,
+        per.reduce((n, x) => n + (x?.tiles?.totalSubscriptions?.value ?? NaN), 0) === d.tiles.totalSubscriptions.value,
+        new Set(currencies).size === currencies.length,
+        d.tiles.eur === null || currencies.every((c) => c === "EUR" || typeof d.settings?.fx?.rates?.[c] === "number")],
+      [true, true, true, true], [false, false, false, false]);
+  }
+  const refused = ["/api/v1/reports/active?fromMonth=2026-11-02", "/api/v1/reports/active?fromMonth=november", "/api/v1/reports/active?grouping=week",
+    "/api/v1/reports/active?market=nl", "/api/v1/reports/active?segment=B2B,B2C", "/api/v1/reports/active?channel=assisted",
+    "/api/v1/reports/active/rows?sort=name", "/api/v1/reports/active/rows?limit=201", "/api/v1/reports/active/rows?offset=-1", "/api/v1/reports/active/rows?dir=up",
+    "/api/v1/reports/active/file?market=nl"];
+  expect("active: a month, grouping, market, segment, channel, sort, limit, offset or direction out of its form is a 400; an agent is refused on all three routes",
+    [...await Promise.all(refused.map(async (u) => (await call(ANALYST, u)).status)),
+      ...await Promise.all(["/api/v1/reports/active", "/api/v1/reports/active/rows", "/api/v1/reports/active/file"].map(async (u) => (await call(AGENT, u)).status))],
+    [...refused.map(() => 400), 403, 403, 403], [...refused.map(() => 200), 200, 200, 200]);
+  const l = await call(ANALYST, "/api/v1/reports/active/rows?limit=5&sort=store_customer&dir=asc");
+  const rows = l.body?.data?.rows ?? [];
+  expect("active: the list answers ids, codes, dates and amounts with the contact's link, sorted as asked, never more than the limit; no key names a person's details",
+    [l.status, rows.length <= 5, rows.every((x, i) => i === 0 || rows[i - 1].storeCustomer <= x.storeCustomer), rows.flatMap((x) => Object.keys(x)).filter((k) => personal.test(k)),
+      typeof l.body?.data?.total],
+    [200, true, true, [], "number"], [200, false, false, ["displayName"], "string"]);
+  // the file's own headers and bytes (call() reads a body as JSON)
+  const f = await fetch(`${BASE}/api/v1/reports/active/file`, { headers: { "x-cma-mock-subject": ANALYST }, redirect: "manual" });
+  const text = await f.text();
+  expect("active: the file is a CSV named active-customers-all-all-<stamp>.csv with the list's columns under their snake_case names (not set up: 409, no file)",
+    f.status === 200
+      ? [/^attachment; filename="active-customers-all-all-\d{4}-\d{2}-\d{2}T\d{4}\.csv"$/.test(f.headers.get("content-disposition") ?? ""),
+        (f.headers.get("content-type") ?? "").startsWith("text/csv"), /as_of.filters.store_customer.store.market.segment.channel.level.customer_start/.test(text.split("\r\n")[0] ?? ""),
+        text.includes("@")]
+      : [f.status === 409, d?.figures === false, true, false],
+    [true, true, true, false], [false, false, false, true]);
 }
 
 // Customers → Courtesy (addition 0009a): the report for reports.view or performance.team (an agent 403), the period, group and
