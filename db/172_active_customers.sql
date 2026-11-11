@@ -1862,13 +1862,21 @@ declare
   v_commerce     boolean := coalesce(cma.flash_source_set_up_of(p_tenant_id, 'commerce'), false);
   v_subs         boolean := coalesce(cma.flash_source_set_up_of(p_tenant_id, 'subscriptions'), false);
   v_take         jsonb := cma.active_take_of(p_tenant_id, p_now);
+  v_attr         date := (select t.attribution_start from cma.active_take t where t.tenant_id = p_tenant_id);
 begin
   v_today := (p_now at time zone v_zone)::date;
   v_month := date_trunc('month', v_today)::date;
   v_from := least(v_month, greatest(coalesce(p_from_month, date '0001-01-01'), (v_month - make_interval(months => v_hist))::date));
+  -- the settings ride with this read too (as the top's), so the panels below the fold wait for one read alone
   v_head := jsonb_build_object(
     'set_up', jsonb_build_object('commerce', v_commerce, 'subscriptions', v_subs),
-    'take', v_take, 'history', v_take is not null, 'month', v_month, 'from_month', v_from, 'grouping', p_grouping);
+    'take', v_take, 'history', v_take is not null, 'month', v_month, 'from_month', v_from, 'grouping', p_grouping,
+    'settings', jsonb_build_object('cohort_ages_months', to_jsonb(v_ages), 'age_months', to_jsonb(v_bands), 'history_months', v_hist,
+                                   'fx', case when v_fx = '{}'::jsonb then null else v_fx end, 'segments', to_jsonb(v_segments),
+                                   'statuses', cma.flash_status_settings_of(p_tenant_id),
+                                   'attribution', jsonb_build_object(
+                                     'assisted_levels', to_jsonb(coalesce(string_to_array(nullif(cma.setting_of(p_tenant_id, 'attribution.assisted_levels'), ''), ','), '{}'::text[])),
+                                     'history_start', v_attr)));
   if not (v_commerce and v_subs) then
     return v_head || jsonb_build_object('figures', false);
   end if;
@@ -2126,6 +2134,12 @@ begin
                         select 'unknown', 1000 where exists (select 1 from c where c.is_active and c.age is null)) w
                   left join (select cma.flash_age_band_of(c.age, v_bands) as band, count(*) as n from c where c.is_active group by 1) q
                     on q.band = w.band),
+    'age_over', (select coalesce(jsonb_agg(jsonb_build_object('months', x.m, 'customers', x.n,
+                                                           'share', case when g.customers > 0 then round(x.n::numeric / g.customers, 4) end)
+                                         order by x.m), '[]'::jsonb)
+                 from g_c g
+                 cross join lateral (values (v_bands[1], g.over1), (v_bands[2], g.over2), (v_bands[3], g.over3)) x(m, n)
+                 where g.dim = 'all' and x.m is not null),
     'cohorts', (select coalesce(jsonb_agg(jsonb_build_object(
                          'cohort', co.cohort, 'started', co.started,
                          'share', case when (select sum(x.started) from co x) > 0 then round(co.started / (select sum(x.started) from co x), 4) end,
@@ -2171,6 +2185,19 @@ begin
 end
 $$;
 alter function cma.active_rest_of(uuid, date, text, text, text, text, timestamptz) set jit = off;
+
+-- The markets of the tenant's stores, for the page's market filter: a tenant catalog (the web keeps it in its per-instance
+-- cache), so the page's frame is drawn without reading a figure (decision D15). reports.view or performance.team
+create or replace function cma.active_markets()
+returns text[]
+language plpgsql stable
+as $$
+begin
+  perform cma.assert_any_permission(array['reports.view', 'performance.team']);
+  return coalesce((select array_agg(distinct st.market order by st.market) from cma.commerce_store st where st.tenant_id = cma.current_tenant_id()),
+                  '{}'::text[]);
+end
+$$;
 
 -- The page's two reads of the report (reports.view or performance.team, CMA06), each its own transaction. p_from_month
 -- the history's first month (a month's first day; null: as far back as customers.history_months allows, which also caps
@@ -2519,7 +2546,7 @@ begin
     'cma.assert_active_filter(text,text,text)', 'cma.active_setting_marks_stale(text)', 'cma.active_take_lock_key(uuid)',
     'cma.active_refresh_of(uuid,boolean,timestamptz)', 'cma.active_refresh()', 'cma.active_present_of(uuid)', 'cma.active_take_of(uuid,timestamptz)',
     'cma.active_top_of(uuid,date,text,text,text,timestamptz)', 'cma.active_top(date,text,text,text)',
-    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest(date,text,text,text,text)',
+    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest(date,text,text,text,text)', 'cma.active_markets()',
     'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)',
     'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
     'cma.active_months_of(uuid,timestamptz)', 'cma.active_cohorts_of(uuid,text,timestamptz)'

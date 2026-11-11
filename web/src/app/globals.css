@@ -203,4 +203,24 @@ body {
     break-inside: avoid;
     page-break-inside: avoid;
   }
+  /* On paper a data panel takes its own height (on screen it keeps a fixed one so nothing moves while the page streams,
+     decision D15) and nothing scrolls inside it; an outline still waiting for its read is not printed (the Print button
+     waits for every part) */
+  [data-print="report"] [data-panel-body],
+  [data-print="report"] [data-panel-body] * {
+    overflow: visible !important;
+  }
+  [data-print="report"] [data-panel-body] {
+    height: auto !important;
+  }
+  [data-print="report"] [data-panel-skeleton] {
+    display: none !important;
+  }
 }
+
+/* A link whose navigation is on its way (decision D14: ActivePending's mark inside it): it reads busy from the click */
+a:has([data-link-pending="true"]) {
+  cursor: progress;
+  opacity: 0.75;
+}
+

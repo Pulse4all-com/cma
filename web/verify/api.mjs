@@ -1593,9 +1593,11 @@ async function activeChecks() {
   }
   const refused = ["/api/v1/reports/active?fromMonth=2026-11-02", "/api/v1/reports/active?fromMonth=november", "/api/v1/reports/active?fromMonth=0000-01-01", "/api/v1/reports/active?grouping=week",
     "/api/v1/reports/active?market=nl", "/api/v1/reports/active?segment=B2B,B2C", "/api/v1/reports/active?channel=assisted",
-    "/api/v1/reports/active/rows?sort=name", "/api/v1/reports/active/rows?limit=201", "/api/v1/reports/active/rows?offset=-1", "/api/v1/reports/active/rows?dir=up",
-    "/api/v1/reports/active/file?market=nl"];
-  expect("active: a month, grouping, market, segment, channel, sort, limit, offset or direction out of its form is a 400; an agent is refused on all three routes",
+    "/api/v1/reports/active/rows?sort=name", "/api/v1/reports/active/rows?limit=201", "/api/v1/reports/active/rows?dir=up",
+    // a cursor that is no text of one, a text that is not a cursor of this list, both ends at once, a cursor on a file
+    "/api/v1/reports/active/rows?after=not%20a%20cursor", "/api/v1/reports/active/rows?after=bm90IGEgY3Vyc29y", "/api/v1/reports/active/rows?after=QQ==&before=QQ==",
+    "/api/v1/reports/active/file?after=QQ==", "/api/v1/reports/active/file?market=nl"];
+  expect("active: a month, grouping, market, segment, channel, sort, limit, cursor or direction out of its form is a 400; an agent is refused on all three routes",
     [...await Promise.all(refused.map(async (u) => (await call(ANALYST, u)).status)),
       ...await Promise.all(["/api/v1/reports/active", "/api/v1/reports/active/rows", "/api/v1/reports/active/file"].map(async (u) => (await call(AGENT, u)).status))],
     [...refused.map(() => 400), 403, 403, 403], [...refused.map(() => 200), 200, 200, 200]);
@@ -1605,15 +1607,25 @@ async function activeChecks() {
     [l.status, rows.length <= 5, rows.every((x, i) => i === 0 || rows[i - 1].storeCustomer <= x.storeCustomer), rows.flatMap((x) => Object.keys(x)).filter((k) => personal.test(k)),
       typeof l.body?.data?.total],
     [200, true, true, [], "number"], [200, false, false, ["displayName"], "string"]);
+  // the stored take (decision D13) rides on the report and on the list; keyset paging: next continues, prev leads back
+  const list = l.body?.data;
+  const second = list?.next ? (await call(ANALYST, `/api/v1/reports/active/rows?limit=5&sort=store_customer&dir=asc&after=${encodeURIComponent(list.next)}`)).body?.data : null;
+  const backTo = second?.prev ? (await call(ANALYST, `/api/v1/reports/active/rows?limit=5&sort=store_customer&dir=asc&before=${encodeURIComponent(second.prev)}`)).body?.data : null;
+  expect("active: the report and the list say the take they are read from (or that there is none yet: history false, never zeros); the next page continues after the first, prev leads back",
+    [typeof d?.history, d?.history === true ? typeof d?.take?.computedAt === "string" && typeof d?.take?.late === "boolean" : d?.take === null || d?.figures === false,
+      d?.history === false && d?.figures === true ? (d?.months ?? []).length === 0 && d?.markets?.length === 0 : true,
+      typeof list?.history, "offset" in (list ?? {}),
+      second ? second.rows.length > 0 && (second.rows[0].storeCustomer >= rows[rows.length - 1].storeCustomer) && JSON.stringify(backTo?.rows) === JSON.stringify(rows) : list?.next === null],
+    ["boolean", true, true, "boolean", false, true], ["string", false, false, "string", true, false]);
   // the file's own headers and bytes (call() reads a body as JSON)
   const f = await fetch(`${BASE}/api/v1/reports/active/file`, { headers: { "x-cma-mock-subject": ANALYST }, redirect: "manual" });
   const text = await f.text();
-  expect("active: the file is a CSV named active-customers-all-all-<stamp>.csv with the list's columns under their snake_case names (not set up: 409, no file)",
+  expect("active: the file is a CSV named active-customers-all-all-<stamp>.csv with the list's columns under their snake_case names (not set up or no take yet: 409, no file)",
     f.status === 200
       ? [/^attachment; filename="active-customers-all-all-\d{4}-\d{2}-\d{2}T\d{4}\.csv"$/.test(f.headers.get("content-disposition") ?? ""),
         (f.headers.get("content-type") ?? "").startsWith("text/csv"), /as_of.filters.store_customer.store.market.segment.channel.level.customer_start/.test(text.split("\r\n")[0] ?? ""),
         text.includes("@")]
-      : [f.status === 409, d?.figures === false, true, false],
+      : [f.status === 409, d?.figures === false || d?.history === false, true, false],
     [true, true, true, false], [false, false, false, true]);
 }
 

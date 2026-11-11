@@ -29,8 +29,9 @@ export function activeParams(sp: URLSearchParams): { fromMonth: string | null; g
 
 /**
  * The query of the list's routes: the filter, &sort (a sort key of the list; monthly_amount when left out), &dir=asc|desc
- * (desc when left out), &offset (0 or more) and &limit (1 to 200; 50 when left out). A file takes the filter and the sort
- * alone: every row, up to the tenant's flash.file_max_rows.
+ * (desc when left out), &after or &before (a page's next or prev cursor, never both: keyset paging, no offset) and
+ * &limit (1 to 200; 50 when left out). A file takes the filter and the sort alone: every row, up to the tenant's
+ * flash.file_max_rows.
  */
 export function activeRowsParams(sp: URLSearchParams, opts: { file?: boolean } = {}): ActiveRowsRequest {
   const sort = (sp.get("sort") ?? "monthly_amount") as ActiveSort;
@@ -44,8 +45,19 @@ export function activeRowsParams(sp: URLSearchParams, opts: { file?: boolean } =
     if (!/^\d{1,6}$/.test(raw) || n < min || n > max) throw new ApiError(400, `invalid_${name}`, `${name} must be a whole number from ${min} to ${max}`);
     return n;
   };
+  // a cursor is opaque (the database wrote it and checks it): base64 text of bounded length, here; anything else is a 400
+  const cursor = (name: "after" | "before") => {
+    const raw = sp.get(name);
+    if (raw === null || raw === "") return null;
+    if (opts.file) throw new ApiError(400, `invalid_${name}`, "a file takes no cursor");
+    if (raw.length > 600 || !/^[A-Za-z0-9+/]+={0,2}$/.test(raw)) throw new ApiError(400, `invalid_${name}`, `${name} must be the next or prev of a page of this list`);
+    return raw;
+  };
+  const after = cursor("after");
+  const before = cursor("before");
+  if (after !== null && before !== null) throw new ApiError(400, "invalid_cursor", "after and before do not go together");
   return {
-    filter: filterOf(sp), sort, descending: dir === "desc",
-    offset: opts.file ? 0 : whole("offset", 0, 0, 999_999), limit: opts.file ? ACTIVE_PAGE_SIZE : whole("limit", ACTIVE_PAGE_SIZE, 1, 200), file: opts.file === true,
+    filter: filterOf(sp), sort, descending: dir === "desc", after, before,
+    limit: opts.file ? ACTIVE_PAGE_SIZE : whole("limit", ACTIVE_PAGE_SIZE, 1, 200), file: opts.file === true,
   };
 }

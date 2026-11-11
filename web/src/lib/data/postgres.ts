@@ -3550,23 +3550,41 @@ export const postgresData: CmaData = {
     });
   },
 
-  async getActive(me, fromMonth, filter, grouping): Promise<ActiveReport> {
+  async getActiveTop(me, fromMonth, filter): Promise<ActiveReport> {
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission and the parameters first, and answers the whole page as one JSON document
-      // (addition 0009l): one statement, one transaction
-      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_page($1::date, $2, $3, $4, $5) as j`,
-        [fromMonth, filter.market, filter.segment, filter.channel, grouping])).rows, "active_page").j;
+      // above the fold (addition 0009l, decision D15): the function checks the permission and the parameters first, and
+      // answers the tiles' live present with the stored take's history as one JSON document; one statement, one transaction
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_top($1::date, $2, $3, $4) as j`,
+        [fromMonth, filter.market, filter.segment, filter.channel])).rows, "active_top").j;
+      return activeFromDb(j);
+    });
+  },
+
+  async getActiveMarkets(me): Promise<string[]> {
+    // a tenant catalog from the per-instance cache (lib/cache; CMA_CACHE_TTL_MS): the stores' markets, keyed by the tenant.
+    // The answer is the same for everyone who may open the page (the page checks the permission before it asks, and the
+    // function checks it again on a miss); a store is set up in the database, so the entry ages out, nothing drops it
+    return tenantCache.get(me.tenantId, "active-markets", () => withTenant(ctx(me), async (q) =>
+      one((await q.query<{ m: string[] }>(`select cma.active_markets() as m`)).rows, "active_markets").m));
+  },
+
+  async getActiveRest(me, fromMonth, filter, grouping): Promise<ActiveReport> {
+    return withTenant(ctx(me), async (q) => {
+      // below the fold, from the stored take alone: its own statement and transaction
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rest($1::date, $2, $3, $4, $5) as j`,
+        [fromMonth, filter.market, filter.segment, filter.channel, grouping])).rows, "active_rest").j;
       return activeFromDb(j);
     });
   },
 
   async getActiveRows(me, request): Promise<ActiveList> {
     return withTenant(ctx(me), async (q) => {
-      // the list's page with the contact's record link from the CRM connection's record_url_contact template; a file's
-      // read (file: true) answers every row up to the tenant's flash.file_max_rows
-      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8) as j`,
-        [request.filter.market, request.filter.segment, request.filter.channel, request.sort, request.descending, request.offset, request.limit,
-          request.file === true])).rows, "active_rows").j;
+      // the list's page from the stored take, by keyset (after or before a cursor), with the contact's record link from the
+      // CRM connection's record_url_contact template; a file's read (file: true) answers every row up to the tenant's
+      // flash.file_max_rows
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8, $9) as j`,
+        [request.filter.market, request.filter.segment, request.filter.channel, request.sort, request.descending, request.after ?? null,
+          request.before ?? null, request.limit, request.file === true])).rows, "active_rows").j;
       return activeRowsFromDb(j);
     });
   },

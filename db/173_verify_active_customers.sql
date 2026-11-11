@@ -586,7 +586,7 @@ returns jsonb
 language sql immutable
 as $$
   select (p_top - 'take' - 'history' - 'months' - 'notes')
-         || (p_rest - 'take' - 'history' - 'months' - 'notes' - 'set_up' - 'figures' - 'month' - 'from_month')
+         || (p_rest - 'take' - 'history' - 'months' - 'notes' - 'set_up' - 'figures' - 'month' - 'from_month' - 'settings' - 'age_over')
          || case when p_top ? 'months' or p_rest ? 'months'
                  then jsonb_build_object(
                         'months', (select coalesce(jsonb_agg(a.t || b.r order by a.i), '[]'::jsonb)
@@ -639,7 +639,7 @@ begin
     'cma.assert_active_filter(text,text,text)', 'cma.active_setting_marks_stale(text)', 'cma.active_take_lock_key(uuid)',
     'cma.active_refresh_of(uuid,boolean,timestamptz)', 'cma.active_refresh()', 'cma.active_present_of(uuid)', 'cma.active_take_of(uuid,timestamptz)',
     'cma.active_top_of(uuid,date,text,text,text,timestamptz)', 'cma.active_top(date,text,text,text)',
-    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest(date,text,text,text,text)',
+    'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest(date,text,text,text,text)', 'cma.active_markets()',
     'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)',
     'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
     'cma.active_months_of(uuid,timestamptz)', 'cma.active_cohorts_of(uuid,text,timestamptz)'
@@ -1549,7 +1549,7 @@ begin
     v_rows := v_rows || array['122', 'T3', '(D13) a stale take, a late one and none are shown as such; without a take the present is answered and the history absent, never zeros', v_txt,
       'stale: top true/true rest true list true | fresh: late false | 10 minutes on: late false | 20 minutes on: 20 minutes, late true'
       || ' | none: history false/false/false, take null, live customers 8 and subscriptions 10, age null, lifetime null, months 0,'
-      || ' rest keys figures,from_month,grouping,history,month,set_up,take, list total null rows 0'];
+      || ' rest keys figures,from_month,grouping,history,month,set_up,settings,take, list total null rows 0'];
 
     -- T4. two tenants are isolated: as tenant two's analyst (the application's role, row-level security) none of tenant
     -- one's stored rows is visible, the reads answer tenant two's own, and a refresh of another tenant is refused

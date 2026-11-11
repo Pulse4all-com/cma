@@ -18,6 +18,7 @@ import { ACTIVE_SLOTS, changeAgainst, cohortLabel, cohortShare, differenceTone, 
 import { fmtCount, fmtShare } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
 import { Sparkline } from "./ActiveCharts";
+import { LinkMark } from "./ActivePending";
 import { fmtAmount, fmtNumber } from "./FlashParts";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
@@ -66,7 +67,7 @@ export function LinkSwitch<V extends string>({ label, options, current, href, te
           <Link key={o.value} href={href(o.value)} prefetch={false} aria-current={o.value === current ? "page" : undefined} scroll={false}
             className={["inline-flex h-8 items-center rounded-button border px-3 font-semibold",
               o.value === current ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"].join(" ")}>
-            {o.label}
+            {o.label}<LinkMark />
           </Link>
         ))}
       </nav>
@@ -193,7 +194,7 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
       <th className={`${th} ${key === "market" ? "" : "text-right"} ${extra}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined}>
         <HintLabel label={key ? (
           <Link href={href({ msort: key, mdir: next })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline" data-testid={`active-msort-${key}`}
-            title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}</Link>
+            title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
         ) : label}>{hint(label, text)}</HintLabel>
       </th>
     );
@@ -206,8 +207,8 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
     <tr key={isTotal ? "total" : r.market} className={isTotal ? "border-t-2 border-p4a-deepblue bg-p4a-bgblue font-semibold" : row} data-testid={isTotal ? "active-market-total" : "active-market-row"}>
       <td className="h-10 whitespace-nowrap px-2 font-semibold">
         {isTotal ? t.total : (
-          <Link href={href({ market: r.market!, msort: null, mdir: null, page: null })} prefetch={false} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.filterOnMarket.replace("{market}", r.market!)}>
-            {r.market === "unknown" ? copy.reports.unknownMarket : r.market}
+          <Link href={href({ market: r.market!, msort: null, mdir: null, after: null, before: null, page: null })} prefetch={false} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.filterOnMarket.replace("{market}", r.market!)}>
+            {r.market === "unknown" ? copy.reports.unknownMarket : r.market}<LinkMark />
           </Link>
         )}
       </td>
@@ -407,14 +408,16 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
     return (
       <th className={`${th} ${right ? "text-right" : ""}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined}>
         <HintLabel label={s ? (
-          <Link href={href({ sort: s, dir: current && descending ? "asc" : "desc", page: null })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline"
-            data-testid={`active-sort-${s}`} title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}</Link>
+          <Link href={href({ sort: s, dir: current && descending ? "asc" : "desc", after: null, before: null, page: null })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline"
+            data-testid={`active-sort-${s}`} title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
         ) : label}>{hint(label, text)}</HintLabel>
       </th>
     );
   };
-  const pages = Math.max(1, Math.ceil(list.total / pageSize));
-  const first = list.total === 0 ? 0 : (page - 1) * pageSize + 1;
+  // keyset paging: the page's ends are cursors (next, prev); the page's number rides along in the address for these words only
+  const total = list.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const payment: Record<string, "success" | "warning" | "error" | "neutral"> = { paid: "success", in_retry: "warning", failed: "error", paused: "neutral" };
   return (
     <div className="flex flex-col gap-4">
@@ -471,15 +474,15 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
       </Scroll>
       <div className="flex flex-wrap items-center justify-between gap-4 text-small" data-testid="active-pager">
         <p className="text-p4a-muted">
-          {t.listRange.replace("{first}", n(first)).replace("{last}", n(Math.min(list.total, page * pageSize))).replace("{total}", n(list.total))}
+          {t.listRange.replace("{first}", n(first)).replace("{last}", n(Math.min(total, first + list.rows.length - 1))).replace("{total}", n(total))}
         </p>
         <nav aria-label={t.listCard} className="flex items-center gap-2 print:hidden">
-          {page > 1
-            ? <Link href={href({ page: page === 2 ? null : String(page - 1) })} prefetch={false} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-prev">{t.previousPage}</Link>
+          {list.prev
+            ? <Link href={href({ before: list.prev, after: null, page: page > 2 ? String(page - 1) : null })} prefetch={false} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-prev">{t.previousPage}<LinkMark /></Link>
             : null}
           <span className="tabular text-p4a-muted">{t.pageOf.replace("{page}", n(page)).replace("{pages}", n(pages))}</span>
-          {page < pages
-            ? <Link href={href({ page: String(page + 1) })} prefetch={false} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-next">{t.nextPage}</Link>
+          {list.next
+            ? <Link href={href({ after: list.next, before: null, page: String(page + 1) })} prefetch={false} scroll={false} className="inline-flex h-8 items-center rounded-button border border-p4a-border px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue" data-testid="active-next">{t.nextPage}<LinkMark /></Link>
             : null}
         </nav>
       </div>

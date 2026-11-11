@@ -93980,12 +93980,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile's own figure is live: read at the moment the page opens (cma.active_present_of). What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -94006,19 +94006,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_base_of",
+            "object": "cma.active_present_of",
             "migration": "0009l"
           }
         ],
@@ -94118,12 +94118,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile's own figure is live: read at the moment the page opens (cma.active_present_of). What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -94139,19 +94139,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_base_of",
+            "object": "cma.active_present_of",
             "migration": "0009l"
           }
         ],
@@ -94262,12 +94262,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile's own figure is live: read at the moment the page opens (cma.active_present_of). What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -94293,19 +94293,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_base_of",
+            "object": "cma.active_present_of",
             "migration": "0009l"
           }
         ],
@@ -94422,12 +94422,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile's own figure is live: read at the moment the page opens (cma.active_present_of). What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -94448,19 +94448,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_base_of",
+            "object": "cma.active_present_of",
             "migration": "0009l"
           }
         ],
@@ -94576,12 +94576,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -94597,15 +94597,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -94723,12 +94727,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -94749,15 +94753,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -94890,12 +94898,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -94916,15 +94924,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -95058,12 +95070,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -95089,15 +95101,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -95218,12 +95234,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -95239,15 +95255,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -95367,12 +95387,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -95388,15 +95408,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -95516,12 +95540,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -95537,15 +95561,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -95692,12 +95720,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -95723,15 +95751,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -95859,12 +95891,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -95885,15 +95917,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96013,12 +96049,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96034,15 +96070,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96156,12 +96196,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96177,15 +96217,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96317,12 +96361,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96348,15 +96392,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96488,12 +96536,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96514,15 +96562,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96653,12 +96705,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96679,15 +96731,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96819,12 +96875,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96840,15 +96896,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -96964,12 +97024,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96985,15 +97045,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_top",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_top_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -97141,12 +97205,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97167,15 +97231,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -97309,12 +97377,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97340,15 +97408,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -97478,12 +97550,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97504,15 +97576,19 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.active_page",
+            "object": "cma.active_rest",
             "migration": "0009l"
           },
           {
-            "object": "cma.active_page_of",
+            "object": "cma.active_rest_of",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           },
           {
@@ -97687,12 +97763,12 @@
         }
       ],
       "filters": [
-        "tenant: cma.active_page and cma.active_rows under RLS + the current tenant (cma.active_page_of, cma.active_rows_of and cma.active_base_of with the tenant passed explicitly)",
+        "tenant: cma.active_top, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)",
         "population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read",
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97713,7 +97789,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; two reads side by side per view: cma.active_page, one statement, and cma.active_rows for the list's page). No polling.",
+      "refresh": "On page load (server component; two reads side by side per view: cma.active_top and cma.active_rest, one statement, and cma.active_rows for the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -97726,6 +97802,10 @@
           },
           {
             "object": "cma.active_file_record",
+            "migration": "0009l"
+          },
+          {
+            "object": "cma.active_refresh_of",
             "migration": "0009l"
           }
         ],

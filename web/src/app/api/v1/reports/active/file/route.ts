@@ -30,15 +30,16 @@ export async function GET(request: Request) {
     const zone = list.timeZone || me.timeZone;
     const chosen = Object.entries(activeQuery(q.filter)).map(([k, v]) => `${k}=${v}`);
     let filters = chosen.length > 0 ? chosen.join("; ") : "all";
-    if (list.total > list.rows.length) filters = `${filters}; rows ${list.rows.length} of ${list.total}`;
+    if (!list.take) throw new ApiError(409, "history_not_ready", "the stored take the list is read from is being prepared, so there is no customer list yet");
+    if (list.total !== null && list.total > list.rows.length) filters = `${filters}; rows ${list.rows.length} of ${list.total}`;
     const rows = list.rows.map((r) => ({
       store_customer: r.storeCustomer, store: r.store, market: r.market, segment: r.segment, channel: r.channel, level: r.level, customer_start: r.customerStart,
       age_months: r.ageMonths, subscriptions: r.subscriptions, devices: r.devices, monthly_amount: r.monthlyAmount, currency: r.currency, clv: r.clv,
       clv_currency: r.clvCurrency, payment_state: r.paymentState, contact_id: r.contactId,
     }));
     const columns: FlashFileColumn[] = ACTIVE_FILE_COLUMNS.map((key) => ({ key, kind: KINDS[key] ?? "text" }));
-    const text = flashCsv(list.asOf, filters, columns, rows, exportSettingsFrom(settingsList), zone);
+    const text = flashCsv(list.take.computedAt, filters, columns, rows, exportSettingsFrom(settingsList), zone);
     await data().recordActiveFile(me, q.filter, list.rows.length);
-    return csvFile(text, activeFileName(q.filter, asOfStamp(null, new Date(list.asOf), zone)));
+    return csvFile(text, activeFileName(q.filter, asOfStamp(null, new Date(list.take.computedAt), zone)));
   });
 }

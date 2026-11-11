@@ -2297,10 +2297,11 @@ export interface ActiveTiles {
   /** The indicative euros: only while reports.fx_eur_rates holds a rate for every currency shown; else null */
   eur: (ActiveChange & { amount: number; asOf: string }) | null;
   /** Customer age in whole months over the active customers: the median, and the customers of at least each of the first three ages of customers.age_months */
-  customerAge: ActiveChange & { median: number | null; over: { months: number; customers: number; share: number | null }[] };
-  /** Customer lifetime: Kaplan–Meier over the spells; median null while the curve has not reached 50 % (then: more than longest months) */
-  lifetime: { spells: number; ended: number; longest: number | null; median: number | null };
-  clv: Record<string, ActiveClv>;
+  /** The stored take's (null while there is no take yet: the history is being prepared, never zeros) */
+  customerAge: (ActiveChange & { median: number | null; over: { months: number; customers: number; share: number | null }[] }) | null;
+  /** Customer lifetime: Kaplan–Meier over the spells; median null while the curve has not reached 50 % (then: more than longest months); the stored take's */
+  lifetime: { spells: number; ended: number; longest: number | null; median: number | null } | null;
+  clv: Record<string, ActiveClv> | null;
 }
 /** One month end of the history; the running month is "now" and carries the present */
 export interface ActiveMonth {
@@ -2332,11 +2333,26 @@ export interface ActiveNotes {
   unknownChannel: { customers: number; reasons: Record<string, number> };
   dominantCohort: { cohort: DateKey; share: number } | null;
 }
-/** Customers → Active in one read (cma.active_page): reports.view or performance.team; team figures only */
+/** The stored take the history is read from (decision D13): when it was computed (History as of), and whether the page says it is old */
+export interface ActiveTake {
+  computedAt: Instant; businessDate: DateKey;
+  /** A settings change marked it: the next refresh rewrites it */
+  stale: boolean; ageMinutes: number;
+  /** Stale, or older than customers.history_notice_minutes: the page says so */
+  late: boolean;
+}
+/**
+ * Customers → Active's report as its reads answer it (cma.active_top above the fold, cma.active_rest below it, decision
+ * D15): reports.view or performance.team; team figures only. One shape for both reads and for the two together (the
+ * API): a read fills its own part and leaves the other's empty (null, [] or zero counts), so nothing is ever a guess
+ */
 export interface ActiveReport {
   setUp: { commerce: boolean; subscriptions: boolean };
   /** False while a source is not set up: every figure below is then null or empty ("Not set up", never zeros) */
   figures: boolean;
+  /** False while the tenant has no stored take yet: the history's parts are then absent ("History is being prepared", never zeros); the tiles' present is still there */
+  history: boolean;
+  take: ActiveTake | null;
   computedAt: Instant; timeZone: string; today: DateKey; month: DateKey; fromMonth: DateKey; grouping: ActiveGrouping; filter: ActiveFilter;
   settings: {
     cohortAgesMonths: number[]; ageMonths: number[]; historyMonths: number;
@@ -2356,6 +2372,8 @@ export interface ActiveReport {
   comparison: { a: string | null; b: string | null; rows: ActiveComparisonRow[] } | null;
   survival: { all: ActiveCurve; segment: ActiveCurve[]; channel: ActiveCurve[] } | null;
   ageBands: { band: string; customers: number }[];
+  /** The active customers older than the first three bounds of customers.age_months, of the stored take (below the fold) */
+  ageOver: { months: number; customers: number; share: number | null }[];
   cohorts: ActiveCohort[];
   cohortSplits: { segment: ActiveCohortSplit[]; channel: ActiveCohortSplit[] } | null;
   mix: {
@@ -2371,8 +2389,21 @@ export interface ActiveListRow {
   clv: number | null; clvCurrency: string | null; paymentState: string | null; channel: ActiveChannel; level: string | null;
   contactId: string | null; contactUrl: string | null;
 }
-export interface ActiveList { setUp: boolean; asOf: Instant; timeZone: string; total: number; rows: ActiveListRow[] }
-export interface ActiveRowsRequest { filter: ActiveFilter; sort: ActiveSort; descending: boolean; offset: number; limit: number; file?: boolean }
+/**
+ * The customer list's page, from the stored take (cma.active_rows): keyset paging, so next and prev are the cursors of
+ * the page's ends where there is more (opaque: a row's sort values and ids as the database wrote them). total is null
+ * while there is no take yet
+ */
+export interface ActiveList {
+  setUp: boolean; history: boolean; take: ActiveTake | null; timeZone: string; total: number | null; rows: ActiveListRow[];
+  next: string | null; prev: string | null;
+}
+export interface ActiveRowsRequest {
+  filter: ActiveFilter; sort: ActiveSort; descending: boolean;
+  /** Continue after this cursor (a page's next) or end before this one (a page's prev); never both */
+  after?: string | null; before?: string | null;
+  limit: number; file?: boolean;
+}
 
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
 export type MaintenanceScope = "field" | "stock";
@@ -4133,8 +4164,12 @@ export interface CmaData {
   /** Customers → Courtesy (cma.courtesy_page, addition 0009a; reports.view or performance.team; at most 92 days) */
   getCourtesy(me: Principal, range: HoursRange, period: CourtesyPeriod, group: CourtesyGroup, filter: CourtesyFilter): Promise<CourtesyReport>;
   // ---- Customers → Active (addition 0009l): the database checks the permission on every call (CMA06)
-  /** Customers → Active in one read (cma.active_page): fromMonth the history's first month (null: as far back as the tenant keeps) */
-  getActive(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter, grouping: ActiveGrouping): Promise<ActiveReport>;
+  /** Above the fold (cma.active_top): the live present with the stored take's history; fromMonth the history's first month (null: as far back as the tenant keeps) */
+  getActiveTop(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter): Promise<ActiveReport>;
+  /** The markets of the tenant's stores, for the page's market filter (cma.active_markets): a tenant catalog, kept in the per-instance cache, so the page's frame reads no figure */
+  getActiveMarkets(me: Principal): Promise<string[]>;
+  /** Below the fold, from the stored take alone (cma.active_rest): its own transaction */
+  getActiveRest(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter, grouping: ActiveGrouping): Promise<ActiveReport>;
   /** The customer list's page (cma.active_rows); file: every row up to the tenant's flash.file_max_rows */
   getActiveRows(me: Principal, request: ActiveRowsRequest): Promise<ActiveList>;
   /** A file read of the customer list in the audit log (cma.active_file_record): who, which filters, how many rows */

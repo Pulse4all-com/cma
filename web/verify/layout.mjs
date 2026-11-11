@@ -757,6 +757,75 @@ async function expectFirstOrders() {
   }
 }
 
+// Customers → Active in three layers (addition 0009l, decision D15 of addendum B): the frame first, then above the
+// fold, then below it. As the manager.
+//   The stream as the server sends it (read as text, in the order it is sent): the frame comes before any figure. The
+//   six placeholder cards of the unit economics, the filters, every panel's title and an outline per data panel with its
+//   height are all sent before the first panel's figures; no placeholder holds a digit; the Print button is sent disabled.
+//   In the browser at 1280 and 1920 px, once the page has streamed: every panel's rendered body takes exactly the height
+//   its outline was sent with (no layout shift), no outline is left, the Print button is enabled, and a click on a
+//   panel's toggle marks the link at once (decision D14).
+// --provoke stretches one rendered panel by a pixel
+async function expectActiveLayers() {
+  const where = "manager /reports/active";
+  const html = await (await fetch(BASE + "/reports/active", { headers: { "x-cma-mock-subject": "manager", accept: "text/html" } })).text();
+  const firstFigures = html.indexOf("data-panel-body=");
+  const sentBefore = (needle) => { const i = html.indexOf(needle); return i >= 0 && (firstFigures < 0 || i < firstFigures); };
+  const outlines = Object.fromEntries([...html.matchAll(/data-panel-skeleton="([a-zA-Z]+)" style="height:(\d+)px"/g)].map((m) => [m[1], Number(m[2])]));
+  const lastOutline = Math.max(-1, ...[...html.matchAll(/data-panel-skeleton="/g)].map((m) => m.index));
+  const cards = [...html.matchAll(/<div[^>]*data-testid="active-slot-[a-z_]+"/g)].filter((m) => firstFigures < 0 || m.index < firstFigures);
+  if (Object.keys(outlines).length !== 14) problems.push(`${where}: ${Object.keys(outlines).length} panel outlines in the stream, expected one per data panel (14)`);
+  if (firstFigures >= 0 && lastOutline > firstFigures) problems.push(`${where}: a panel's figures are sent before the frame is complete`);
+  if (firstFigures < 0) problems.push(`${where}: no panel's figures in the stream`);
+  if (cards.length !== 6) problems.push(`${where}: ${cards.length} placeholder cards sent with the frame, expected 6 before any figure`);
+  if (!sentBefore('data-testid="active-filters"')) problems.push(`${where}: the filters are not sent with the frame`);
+  const titlesBefore = [...html.matchAll(/data-panel-title=""/g)].filter((m) => firstFigures < 0 || m.index < firstFigures).length;
+  if (titlesBefore < 10) problems.push(`${where}: only ${titlesBefore} panel titles sent with the frame, expected every panel's`);
+  const print = html.match(/<button[^>]*data-testid="active-print"[^>]*>/)?.[0] ?? "";
+  if (!/\sdisabled(=""|\s|>)/.test(print) || !/data-ready="false"/.test(print)) problems.push(`${where}: the Print button is not sent disabled`);
+
+  for (const [w, h] of [[1280, 800], [1920, 1080]]) {
+    const tag = `${where} at ${w}x${h}`;
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/active");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: the Print button did not become ready after the three parts streamed`));
+    const m = await p.evaluate((stretch) => {
+      const bodies = [...document.querySelectorAll("[data-panel-body]")];
+      if (stretch && bodies[0]) bodies[0].style.height = `${bodies[0].getBoundingClientRect().height + 1}px`;
+      return {
+        bodies: Object.fromEntries(bodies.map((el) => [el.getAttribute("data-panel-body"), el.getBoundingClientRect().height])),
+        outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length,
+        tiles: document.querySelectorAll("[data-tile]").length,
+        cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => /\d/.test(el.textContent ?? "")),
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    }, provoke);
+    if (m.cardDigits) problems.push(`${tag}: a placeholder card holds a digit`);
+    for (const id of new Set([...Object.keys(outlines), ...Object.keys(m.bodies)])) {
+      const a = outlines[id];
+      const c = m.bodies[id];
+      if (a === undefined || c === undefined) problems.push(`${tag}: panel ${id} has ${a === undefined ? "no outline in the frame" : "no rendered body"}`);
+      else if (Math.abs(a - c) > 0.5) problems.push(`${tag}: panel ${id} is ${c}px rendered against ${a}px as its outline (the page shifts when the data arrives)`);
+    }
+    if (m.outlinesLeft !== 0) problems.push(`${tag}: ${m.outlinesLeft} outlines still on the screen after the page streamed`);
+    if (m.tiles !== 6) problems.push(`${tag}: ${m.tiles} tiles, expected 6`);
+    if (m.scrollX) problems.push(`${tag}: the page scrolls horizontally`);
+    // a panel's toggle: the clicked link shows its mark before the answer is there (decision D14)
+    const toggle = p.locator('[data-testid="active-survival-split"] a').nth(1);
+    await toggle.scrollIntoViewIfNeeded();
+    await p.route("**/reports/active?**", async (route) => { await new Promise((r) => setTimeout(r, 400)); await route.continue(); });
+    await toggle.click();
+    const marked = await p.waitForSelector('[data-testid="active-survival-split"] a [data-link-pending="true"]', { timeout: 300, state: "attached" }).then(() => true, () => false);
+    if (!marked) problems.push(`${tag}: a click on a panel's toggle did not mark the link within 300 ms`);
+    await p.unroute("**/reports/active?**");
+    await p.waitForURL(/survival=channel/, { timeout: 10_000 }).catch(() => problems.push(`${tag}: the toggle did not change the address`));
+    await ctx.close();
+  }
+}
+
 // Campaign monitoring (addition 0008v, brief N19-A part 3), per identity at 1280 px: in the rail's Campaigns group and
 // on the page for reports.view or performance.team (the agent gets the no-permission card and no journey); a card per
 // journey, the archived one absent, each card inside the main area; the page never scrolls sideways; a journey's page
@@ -3022,6 +3091,7 @@ await expectInstalledBaseModels();
 await expectAsOfTyping();
 await expectWelcomeOnOpen();
 await expectCampaigns();
+await expectActiveLayers();
 await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();

@@ -25,6 +25,19 @@ export const ACTIVE_SORTS: readonly ActiveSort[] = [
   "monthly_amount", "clv", "store_customer", "store", "market", "segment", "customer_start", "age_months", "subscriptions", "devices", "channel", "level",
 ];
 export const ACTIVE_PAGE_SIZE = 50;
+
+/**
+ * The fixed heights of the page's data panels in pixels (decision D15 of addendum B): a panel's outline while its read is
+ * on its way and its rendered body take the same height, at 1280 and at 1920 px alike, so nothing moves when the data
+ * arrives (verify:layout compares the two). A table scrolls inside its panel; on paper every panel takes its own height
+ */
+export const ACTIVE_PANEL_HEIGHT = {
+  tiles: 372, churn: 24, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
+  cohortTable: 424, cohortCurves: 348, mix: 232, list: 656,
+} as const;
+export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
+/** The three streamed parts of the page (decision D15): above the fold, below it, the customer list */
+export const ACTIVE_PARTS = ["top", "rest", "list"] as const;
 /** The splits of the survival curves and of the cohorts' pooled retention */
 export const ACTIVE_SPLITS = ["segment", "channel"] as const;
 export type ActiveSplit = (typeof ACTIVE_SPLITS)[number];
@@ -332,16 +345,25 @@ function convert(value: unknown, keepKeys: boolean): unknown {
   return value;
 }
 
-/** cma.active_page's JSON as the page and the API hold it: camelCase keys, the data-keyed maps as they are, the rates apart from their date */
+/**
+ * A read's JSON (cma.active_top or cma.active_rest) as the page and the API hold it: camelCase keys, the data-keyed maps
+ * as they are, the rates apart from their date. Each read answers its own part of the report; the part it leaves out is
+ * empty here (null, [] or zero counts), never a guess
+ */
 export function activeFromDb(j: Record<string, unknown>): import("@/lib/data").ActiveReport {
+  type R = import("@/lib/data").ActiveReport;
   const c = convert(j, false) as Record<string, unknown>;
   const settings = (c.settings ?? {}) as Record<string, unknown>;
   const fxRaw = ((j.settings as Record<string, unknown> | undefined)?.fx ?? null) as Record<string, unknown> | null;
   const statuses = (settings.statuses ?? {}) as Record<string, unknown>;
   const figures = c.figures === true;
+  const notes = (c.notes ?? null) as Partial<import("@/lib/data").ActiveNotes> | null;
   return {
     ...(c as object),
     figures,
+    history: c.history === true,
+    take: (c.take as R["take"] | undefined) ?? null,
+    grouping: (c.grouping as R["grouping"] | undefined) ?? "month",
     settings: {
       cohortAgesMonths: (settings.cohortAgesMonths as number[] | undefined) ?? [], ageMonths: (settings.ageMonths as number[] | undefined) ?? [],
       historyMonths: Number(settings.historyMonths ?? 0),
@@ -355,20 +377,76 @@ export function activeFromDb(j: Record<string, unknown>): import("@/lib/data").A
       },
       attribution: (settings.attribution as { assistedLevels: string[]; historyStart: string | null } | undefined) ?? { assistedLevels: [], historyStart: null },
     },
-    filters: (c.filters as import("@/lib/data").ActiveReport["filters"] | undefined) ?? { markets: [], segments: [], channels: [...ACTIVE_CHANNELS] },
-    tiles: figures ? (c.tiles as import("@/lib/data").ActiveTiles) : null,
-    unitEconomics: figures ? (c.unitEconomics as import("@/lib/data").ActiveReport["unitEconomics"]) : null,
-    months: figures ? (c.months as import("@/lib/data").ActiveMonth[]) : [],
-    markets: figures ? (c.markets as import("@/lib/data").ActiveMarketRow[]) : [],
-    marketsTotal: figures ? (c.marketsTotal as import("@/lib/data").ActiveReport["marketsTotal"]) : null,
-    comparison: figures ? (c.comparison as import("@/lib/data").ActiveReport["comparison"]) : null,
-    survival: figures ? (c.survival as import("@/lib/data").ActiveReport["survival"]) : null,
-    ageBands: figures ? (c.ageBands as import("@/lib/data").ActiveReport["ageBands"]) : [],
-    cohorts: figures ? (c.cohorts as ActiveCohort[]) : [],
-    cohortSplits: figures ? (c.cohortSplits as import("@/lib/data").ActiveReport["cohortSplits"]) : null,
-    mix: figures ? mixFromDb(c.mix as Record<string, { key: string; name?: string | null; subscriptions?: number; devices?: number }[]>) : null,
-    notes: figures ? (c.notes as import("@/lib/data").ActiveNotes) : null,
-  } as import("@/lib/data").ActiveReport;
+    filters: (c.filters as R["filters"] | undefined) ?? { markets: [], segments: [], channels: [...ACTIVE_CHANNELS] },
+    tiles: figures ? ((c.tiles as import("@/lib/data").ActiveTiles | undefined) ?? null) : null,
+    unitEconomics: figures ? ((c.unitEconomics as R["unitEconomics"] | undefined) ?? null) : null,
+    months: figures ? ((c.months as Partial<import("@/lib/data").ActiveMonth>[] | undefined) ?? []).map(monthOf) : [],
+    markets: figures ? ((c.markets as import("@/lib/data").ActiveMarketRow[] | undefined) ?? []) : [],
+    marketsTotal: figures ? ((c.marketsTotal as R["marketsTotal"] | undefined) ?? null) : null,
+    comparison: figures ? ((c.comparison as R["comparison"] | undefined) ?? null) : null,
+    survival: figures ? ((c.survival as R["survival"] | undefined) ?? null) : null,
+    ageBands: figures ? ((c.ageBands as R["ageBands"] | undefined) ?? []) : [],
+    ageOver: figures ? ((c.ageOver as R["ageOver"] | undefined) ?? []) : [],
+    cohorts: figures ? ((c.cohorts as ActiveCohort[] | undefined) ?? []) : [],
+    cohortSplits: figures ? ((c.cohortSplits as R["cohortSplits"] | undefined) ?? null) : null,
+    mix: figures && c.mix ? mixFromDb(c.mix as Record<string, { key: string; name?: string | null; subscriptions?: number; devices?: number }[]>) : null,
+    notes: figures && notes ? notesOf(notes) : null,
+  } as R;
+}
+
+/** A month of a read with the other read's fields empty */
+function monthOf(m: Partial<import("@/lib/data").ActiveMonth>): import("@/lib/data").ActiveMonth {
+  return {
+    month: m.month ?? "", isNow: m.isNow === true, customers: m.customers ?? 0, bySegment: m.bySegment ?? {}, subscriptions: m.subscriptions ?? 0, inflow: m.inflow ?? 0,
+    inflowByChannel: m.inflowByChannel ?? {}, outflow: m.outflow ?? 0, net: m.net ?? 0, amounts: m.amounts ?? {}, eur: m.eur ?? null,
+  };
+}
+
+function notesOf(n: Partial<import("@/lib/data").ActiveNotes>): import("@/lib/data").ActiveNotes {
+  return {
+    noEndedTime: n.noEndedTime ?? 0, noCreatedTime: n.noCreatedTime ?? 0, noAmount: n.noAmount ?? 0, unmatchedSubscriptions: n.unmatchedSubscriptions ?? 0,
+    reconstructionGap: n.reconstructionGap ?? 0, historyStarts: n.historyStarts ?? [], unknownChannel: n.unknownChannel ?? { customers: 0, reasons: {} },
+    dominantCohort: n.dominantCohort ?? null,
+  };
+}
+
+/** The keys each read answers (decision D15): above the fold and below it; the rest of a report is shared (the head) */
+const TOP_KEYS = ["tiles", "unitEconomics", "filters"] as const;
+const REST_KEYS = ["markets", "marketsTotal", "comparison", "survival", "ageBands", "ageOver", "cohorts", "cohortSplits", "mix"] as const;
+const TOP_MONTH = ["customers", "bySegment", "subscriptions"] as const;
+const TOP_NOTES = ["noEndedTime", "noCreatedTime", "unmatchedSubscriptions", "reconstructionGap", "historyStarts"] as const;
+
+/** The two reads as one report (the API's answer): the top's part, the rest's part, the months and the notes of both side by side */
+export function mergeActive(top: import("@/lib/data").ActiveReport, rest: import("@/lib/data").ActiveReport): import("@/lib/data").ActiveReport {
+  const restPart = Object.fromEntries(REST_KEYS.map((k) => [k, rest[k]]));
+  const byMonth = new Map(rest.months.map((m) => [m.month, m]));
+  const months = top.months.map((m) => {
+    const r = byMonth.get(m.month);
+    return r ? { ...r, ...Object.fromEntries(TOP_MONTH.map((k) => [k, m[k]])), month: m.month, isNow: m.isNow } : m;
+  });
+  const notes = top.notes || rest.notes
+    ? { ...notesOf({}), ...(rest.notes ?? {}), ...Object.fromEntries(TOP_NOTES.map((k) => [k, (top.notes ?? notesOf({}))[k]])) }
+    : null;
+  return { ...top, ...restPart, grouping: rest.grouping, history: top.history && rest.history, months: months as import("@/lib/data").ActiveMonth[],
+    notes: notes as import("@/lib/data").ActiveNotes | null };
+}
+
+/** A whole report cut to what one read answers (the mock builds the whole and answers each read from it) */
+export function activePartOf(report: import("@/lib/data").ActiveReport, part: "top" | "rest"): import("@/lib/data").ActiveReport {
+  const empty = activeFromDb({ figures: report.figures });
+  const blank = part === "top" ? REST_KEYS : TOP_KEYS;
+  const kept = Object.fromEntries(blank.map((k) => [k, empty[k]]));
+  const months = report.months.map((m) => {
+    const e = monthOf({ month: m.month, isNow: m.isNow });
+    const keep = part === "top" ? TOP_MONTH : (["inflow", "inflowByChannel", "outflow", "net", "amounts", "eur"] as const);
+    return { ...e, ...Object.fromEntries(keep.map((k) => [k, m[k]])) };
+  });
+  const n = report.notes;
+  const notes = n === null ? null
+    : part === "top" ? { ...notesOf({}), ...Object.fromEntries(TOP_NOTES.map((k) => [k, n[k]])) }
+      : { ...notesOf({}), noAmount: n.noAmount, unknownChannel: n.unknownChannel, dominantCohort: n.dominantCohort };
+  return { ...report, ...kept, filters: part === "top" ? report.filters : empty.filters, months: months as import("@/lib/data").ActiveMonth[],
+    notes: notes as import("@/lib/data").ActiveNotes | null };
 }
 
 function mixFromDb(m: Record<string, { key: string; name?: string | null; subscriptions?: number; devices?: number }[]>): NonNullable<import("@/lib/data").ActiveReport["mix"]> {
@@ -382,5 +460,11 @@ function mixFromDb(m: Record<string, { key: string; name?: string | null; subscr
 
 /** cma.active_rows' JSON as the page and the API hold it */
 export function activeRowsFromDb(j: Record<string, unknown>): import("@/lib/data").ActiveList {
-  return convert(j, false) as import("@/lib/data").ActiveList;
+  const c = convert(j, false) as Record<string, unknown>;
+  return {
+    setUp: c.setUp === true, history: c.history === true, take: (c.take as import("@/lib/data").ActiveTake | undefined) ?? null,
+    timeZone: String(c.timeZone ?? ""), total: typeof c.total === "number" ? c.total : null,
+    rows: (c.rows as import("@/lib/data").ActiveListRow[] | undefined) ?? [],
+    next: typeof c.next === "string" ? c.next : null, prev: typeof c.prev === "string" ? c.prev : null,
+  };
 }

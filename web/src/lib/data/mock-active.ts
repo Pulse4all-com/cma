@@ -190,6 +190,8 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   const month = `${today.slice(0, 7)}-01`;
   const cap = monthsBack(today, HISTORY_MONTHS);
   const from = fromMonth === null || fromMonth < cap ? cap : fromMonth > month ? month : fromMonth;
+  // the mock's take is always of this moment: never stale, never late
+  const take = { computedAt: new Date(now).toISOString(), businessDate: today, stale: false, ageMinutes: 0, late: false };
   const head = {
     computedAt: new Date(now).toISOString(), timeZone: ZONE, today, month, fromMonth: from, grouping, filter,
     settings: {
@@ -200,7 +202,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   };
   if (me.tenantId === MOCK_TENANT_2) {
     return {
-      ...head, setUp: { commerce: false, subscriptions: false }, figures: false, filters: { markets: [], segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
+      ...head, setUp: { commerce: false, subscriptions: false }, figures: false, history: false, take: null, ageOver: [], filters: { markets: [], segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
       tiles: null, unitEconomics: null, months: [], markets: [], marketsTotal: null, comparison: null, survival: null, ageBands: [], cohorts: [], cohortSplits: null,
       mix: null, notes: null,
     };
@@ -352,7 +354,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   }
 
   return {
-    ...head, setUp: { commerce: true, subscriptions: true }, figures: true,
+    ...head, setUp: { commerce: true, subscriptions: true }, figures: true, history: true, take,
     filters: { markets: [...new Set(base.map((c) => c.market))].sort(), segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
     tiles: {
       activeCustomers: {
@@ -381,6 +383,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
     comparison: { a: SEGMENTS[0]!, b: SEGMENTS[1]!, rows },
     survival,
     ageBands: bandWords.map((b) => ({ band: b, customers: ages.filter((a) => bandOf(a) === b).length })),
+    ageOver: BANDS.slice(0, 3).map((m) => ({ months: m, customers: ages.filter((a) => a >= m).length, share: ages.length > 0 ? round4(ages.filter((a) => a >= m).length / ages.length) : null })),
     cohorts,
     cohortSplits: { segment: splitOf((c) => c.segment, [...SEGMENTS, "unknown"]), channel: splitOf((c) => c.channel, ACTIVE_CHANNELS) },
     mix: {
@@ -410,7 +413,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
 export function mockActiveRows(me: Principal, request: ActiveRowsRequest): ActiveList {
   assertAllowed(me);
   const now = Date.now();
-  if (me.tenantId === MOCK_TENANT_2) return { setUp: false, asOf: new Date(now).toISOString(), timeZone: ZONE, total: 0, rows: [] };
+  if (me.tenantId === MOCK_TENANT_2) return { setUp: false, history: false, take: null, timeZone: ZONE, total: 0, rows: [], next: null, prev: null };
   const rows: ActiveListRow[] = buildBase(now).filter((c) => matches(c, request.filter) && isActive(c)).map((c) => {
     const subs = c.subs.filter(holding);
     const paying = subs.filter((s) => s.status === "active");
@@ -437,6 +440,23 @@ export function mockActiveRows(me: Principal, request: ActiveRowsRequest): Activ
     || nullsLast(num[request.sort]?.(a) ?? null, num[request.sort]?.(b) ?? null, (x, y) => (x - y) * dir)
     || nullsLast(txt[request.sort]?.(a) ?? null, txt[request.sort]?.(b) ?? null, (x, y) => (x < y ? -1 : x > y ? 1 : 0) * dir)
     || (a.storeCustomer < b.storeCustomer ? -1 : 1));
-  const page = request.file ? rows : rows.slice(request.offset, request.offset + request.limit);
-  return { setUp: true, asOf: new Date(now).toISOString(), timeZone: ZONE, total: rows.length, rows: page };
+  const take = { computedAt: new Date(now).toISOString(), businessDate: key(now), stale: false, ageMinutes: 0, late: false };
+  if (request.file) return { setUp: true, history: true, take, timeZone: ZONE, total: rows.length, rows, next: null, prev: null };
+  // keyset paging as the database's: a cursor names a row (here its place in the sorted list), the page continues after it
+  // or ends before it
+  const at = (cursor: string | null | undefined) => {
+    if (!cursor) return null;
+    const i = Number.parseInt(Buffer.from(cursor, "base64").toString("utf8"), 10);
+    if (!Number.isInteger(i) || i < 0 || i >= rows.length) throw new CmaDbError("CMA04", "a cursor is the next or prev of a page of this list in this sort");
+    return i;
+  };
+  const cursorOf = (i: number) => Buffer.from(String(i), "utf8").toString("base64");
+  const after = at(request.after);
+  const before = at(request.before);
+  const start = before !== null ? Math.max(0, before - request.limit) : after !== null ? after + 1 : 0;
+  const end = before !== null ? before : Math.min(rows.length, start + request.limit);
+  return {
+    setUp: true, history: true, take, timeZone: ZONE, total: rows.length, rows: rows.slice(start, end),
+    next: end < rows.length && end > start ? cursorOf(end - 1) : null, prev: start > 0 && end > start ? cursorOf(start) : null,
+  };
 }

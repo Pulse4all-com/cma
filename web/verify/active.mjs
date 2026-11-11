@@ -28,9 +28,10 @@
  */
 import { readFileSync } from "node:fs";
 import {
-  ACTIVE_BETTER_UP, ACTIVE_CHANNELS, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_SLOTS, ACTIVE_SORTS, HEAT_CLASSES, activeFileName, activeFromDb,
+  ACTIVE_BETTER_UP, ACTIVE_CHANNELS, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_SLOTS, ACTIVE_SORTS, HEAT_CLASSES, activeFileName,
+  activeFromDb, activePartOf,
   activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, curveOf, differenceTone, fromMonthOf, heatStep, kaplanMeier, matureCohorts, monthsBack,
-  niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor,
+  mergeActive, niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor,
 } from "../src/lib/active.ts";
 import { activeCopy, copy } from "../src/lib/copy.ts";
 import { mockActive, mockActiveRows } from "../src/lib/data/mock-active.ts";
@@ -333,10 +334,58 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
     [two.figures, two.setUp, two.tiles, two.months.length, refused], [false, { commerce: false, subscriptions: false }, null, 0, "CMA06"], [true, { commerce: true, subscriptions: true }, {}, 1, "ok"]);
   expect("M5 the list: active customers only, sorted by the amount within its currency, 50 a page; the sort keys the database takes",
     (() => {
-      const l = mockActiveRows(me, { filter: none, sort: "monthly_amount", descending: true, offset: 0, limit: 50 });
+      const l = mockActiveRows(me, { filter: none, sort: "monthly_amount", descending: true, limit: 50 });
       const within = l.rows.every((r, i) => i === 0 || l.rows[i - 1].currency !== r.currency || (l.rows[i - 1].monthlyAmount ?? -1) >= (r.monthlyAmount ?? -1));
       return [l.rows.length, l.total === doc.tiles.activeCustomers.value, within, ACTIVE_SORTS.length];
     })(), [50, true, true, 12], [10, false, false, 3]);
+
+  // ---- N. the stored take, the two reads and the list's cursors (addendum B: decisions D13 to D15) -------------------
+  const top = activePartOf(doc, "top");
+  const rest = activePartOf(doc, "rest");
+  const back = mergeActive(top, rest);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  expect("N1 the report in two reads: each answers its own part and leaves the other's empty (never a guess); the two together are the whole",
+    [top.tiles !== null, top.markets.length, top.comparison, top.months.every((m) => m.inflow === 0 && Object.keys(m.amounts).length === 0),
+      rest.tiles, rest.markets.length > 0, rest.months.every((m) => m.customers === 0 && m.subscriptions === 0),
+      ["tiles", "unitEconomics", "months", "markets", "marketsTotal", "comparison", "survival", "ageBands", "cohorts", "cohortSplits", "mix", "notes"].filter((k) => !same(back[k], doc[k]))],
+    [true, 0, null, true, null, true, true, []], [false, 3, {}, false, {}, false, false, ["tiles"]]);
+  expect("N2 the take rides on every read: when the history was computed, never stale or late in the mock; without a store neither a take nor a history",
+    [typeof doc.take?.computedAt, doc.take?.stale, doc.take?.late, doc.history, two.take, two.history], ["string", false, false, true, null, false],
+    ["undefined", true, true, false, {}, true]);
+  const pages = [];
+  let page = mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7 });
+  const firstPrev = page.prev;
+  for (let guard = 0; guard < 500; guard += 1) {
+    pages.push(page);
+    if (!page.next) break;
+    page = mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7, after: page.next });
+  }
+  const all = mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 200 });
+  const chained = pages.flatMap((p) => p.rows.map((r) => r.storeCustomer));
+  const beforeLast = pages.length > 1 ? mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7, before: pages[pages.length - 1].prev }) : null;
+  let badCursor = "ok";
+  try {
+    mockActiveRows(me, { filter: none, sort: "store_customer", descending: false, limit: 7, after: "bm90IGEgY3Vyc29y" });
+  } catch (e) {
+    badCursor = e.sqlState;
+  }
+  expect("N3 keyset paging: pages chained by next hold every row once in order; the first has no prev, the last no next; prev leads back; a cursor that is not one is refused",
+    [chained.length === all.total, same(chained.slice(0, 200), all.rows.map((r) => r.storeCustomer)), firstPrev, pages[pages.length - 1].next,
+      beforeLast ? same(beforeLast.rows, pages[pages.length - 2].rows) : false, badCursor, "offset" in (all ?? {})],
+    [true, true, null, null, true, "CMA04", false], [false, false, "x", "x", false, "ok", true]);
+  const pending = src("components/ActivePending.tsx");
+  const pageSrc = src("app/reports/active/page.tsx");
+  const clientFiles = ["components/ActiveFilters.tsx", "components/ActivePending.tsx"];
+  expect("N4 the page's client code is the filters and one small component (D14): no fetch, no observer, no timer of its own; every sortable link and toggle carries the pending mark",
+    [clientFiles.every((f) => src(f).startsWith('"use client"')), /\bfetch\(|XMLHttpRequest|IntersectionObserver|setInterval|setTimeout|EventSource|WebSocket/.test(pending),
+      /useLinkStatus/.test(pending), (src("components/ActiveParts.tsx").match(/<LinkMark \/>/g) ?? []).length >= 6,
+      ["components/ActiveCharts.tsx", "components/ActiveParts.tsx", "app/reports/active/page.tsx"].some((f) => src(f).startsWith('"use client"'))],
+    [true, false, true, true, false], [false, true, false, false, true]);
+  expect("N5 three streamed parts and a fixed height for every data panel (D15): the page names each panel once, the Print button waits for all three parts",
+    [ACTIVE_PARTS.join(","), Object.keys(ACTIVE_PANEL_HEIGHT).filter((id) => !new RegExp(`layer\\("${id}", "(top|rest|list)"\\)`).test(pageSrc)),
+      Object.values(ACTIVE_PANEL_HEIGHT).every((h) => Number.isInteger(h) && h > 0), /PrintWhenReady[^>]*parts=\{ACTIVE_PARTS\}/.test(pageSrc),
+      ["top", "rest", "list"].every((part) => new RegExp(`layer\\("[a-zA-Z]+", "${part}"\\)\\} read=\\{[a-zA-Z]+\\} mark`).test(pageSrc))],
+    ["top,rest,list", [], true, true, true], ["top", ["tiles"], false, false, false]);
 }
 
 const n = results.length;

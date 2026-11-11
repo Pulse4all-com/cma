@@ -1,3 +1,4 @@
+import { mergeActive } from "@/lib/active";
 import { activeParams } from "@/lib/api/active";
 import { forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
 import { data } from "@/lib/data";
@@ -27,6 +28,8 @@ export async function GET(request: Request) {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, REPORT_PERMISSIONS);
     const { fromMonth, grouping, filter } = activeParams(new URL(request.url).searchParams);
-    return ok(await data().getActive(me, fromMonth, filter, grouping));
+    // the page's two reads of the report, side by side, as one document
+    const [top, rest] = await Promise.all([data().getActiveTop(me, fromMonth, filter), data().getActiveRest(me, fromMonth, filter, grouping)]);
+    return ok(mergeActive(top, rest));
   });
 }
