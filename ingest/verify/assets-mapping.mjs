@@ -56,7 +56,7 @@ const { JobBudget } = await import("../src/core/budget.mjs");
 const { SourceError } = await import("../src/core/http.mjs");
 const { assetSettings, endpointOf, resetClients } = await import("../src/adapters/airtable/client.mjs");
 const { clientFor, checkFields, modifiedAfter } = await import("../src/adapters/airtable/read.mjs");
-const { mappingOf, fieldNames, cellText, rowOf, parseDate, DEVICE_COLUMNS } = await import("../src/adapters/airtable/map.mjs");
+const { mappingOf, fieldNames, cellText, rowOf, parseDate, DEVICE_COLUMNS, OPTIONAL_COLUMNS, allowedTypesOf } = await import("../src/adapters/airtable/map.mjs");
 const airtableModule = await import("../src/adapters/airtable/index.mjs");
 const { airtable, skipReason, slicesOf, MODIFIED_STREAM, CADENCE_STREAM, PHASE_COUNTS } = airtableModule;
 const { DEFAULT_STATEMENT_TIMEOUT_MS, statementTimeoutMs } = await import("../src/core/db.mjs");
@@ -78,6 +78,8 @@ const FIELDS = [
   field("device_component", "serial", "battery", "battery_sn"), field("device_component", "expires_on", "battery", "battery_expiry_date_calculated"),
   field("device", "ref", "ns_internal_id", "ns_internal_id"), field("device", "ref", "ns_fam_id", "ns_fam_id"), field("device", "ref", "ns_sales_order_id", "sales_order_id"),
 ];
+// addition 0009j: the loan reference and the language mapped too (section H)
+const FIELDS_0009J = [...FIELDS, field("device", "pledge_ref", null, "maatje_id"), field("device", "language", null, "language")];
 // the types as the first read recorded them (the fixture's, before any switch changes the schema)
 const TYPES = new Map(source.fields.map((f) => [f.id, f.type.toLowerCase()]));
 const typed = (fields) => fields.map((f) => ({ ...f, sourceType: TYPES.get(f.property), checkedAt: "2026-10-28T00:00:00Z" }));
@@ -177,7 +179,7 @@ const isoOnly = rowOf({ id: "recIso", fields: { [idOf("first_shipment_date_to_cu
 expect("B6 ISO dates need no date_format", [isoOnly.row.first_shipped_on, isoOnly.row.warranty_until], ["2024-11-15", "2029-11-15"], [null, null]);
 const sparse = rowOf({ id: "recSparse", fields: { [idOf("aed_sn")]: "FX-SPARSE", [idOf("pads_sn")]: "PX-SPARSE" } }, mapping, { dateFormat: "dmy" });
 expect("B7 a field the API leaves out is empty: every column in the row, null (never left out, so the load writes it empty); a kind with a value kept, an emptied kind an empty object (the load closes it)",
-  [Object.keys(sparse.row).sort(), DEVICE_COLUMNS.filter((c) => c !== "serial").every((c) => Object.hasOwn(sparse.row, c) && sparse.row[c] === null),
+  [Object.keys(sparse.row).sort(), DEVICE_COLUMNS.filter((c) => c !== "serial" && !OPTIONAL_COLUMNS.includes(c)).every((c) => Object.hasOwn(sparse.row, c) && sparse.row[c] === null),
     sparse.row.serial, sparse.row.components, sparse.row.external_refs, JSON.stringify(sparse.row).includes("undefined")],
   [["components", "country", "customer_ref", "end_of_life_on", "external_refs", "first_shipped_on", "last_shipped_on", "model", "order_ref", "serial", "source_id",
     "status", "stock_received_on", "subscription_ref", "warehouse_ref", "warranty_until"].sort(), true, "FX-SPARSE", '{"battery":{},"pads":{"serial":"PX-SPARSE"}}', null, false],
@@ -212,9 +214,9 @@ let budget = new JobBudget({});
 const api = clientFor(CONN, SETTINGS, budget);
 const tables = await api.tables(source.baseId);
 const check = checkFields(tables, source.tableId, names);
-expect("D1 the schema: the table, its 25 fields with ids, names and types, every mapped field known, none recorded yet; the bearer token sent",
+expect("D1 the schema: the table, its 28 fields with ids, names and types, every mapped field known, none recorded yet; the bearer token sent",
   [tables.length, check.tableFields, check.list[0], check.unknown, check.changed, check.unrecorded.length, check.unrecorded[0], fake.state.requests.at(-1).authorized],
-  [1, 25, { id: idOf("aed_sn"), name: "aed_sn", type: "singleLineText" }, [], [], 20, { property: idOf("aed_sn"), type: "singlelinetext" }, true],
+  [1, 28, { id: idOf("aed_sn"), name: "aed_sn", type: "singleLineText" }, [], [], 20, { property: idOf("aed_sn"), type: "singlelinetext" }, true],
   [0, 0, {}, ["x"], ["x"], 0, {}, false]);
 const recorded = new Map(names.map((n) => [n, check.types.get(n)]));
 recorded.set(idOf("pads_expiry_date_calculated"), "singlelinetext");
@@ -386,12 +388,12 @@ const dry = await airtable.dryRun({ connection: CONN, store, budget, object: "de
 expect("E9 the dry run: the table's fields (id, name, type) and the counts; nothing loaded, nothing marked, no cursor, no type recorded",
   [dry.fetched, dry.mapped, dry.fields, dry.tableFields, dry.tableFieldList.length, dry.tableFieldList.find((f) => f.name === "pads_sn"), dry.dateFailures, dry.valuesWithAt,
     dry.unreadable, dry.unknownFields, dry.typeChangedFields, dry.notFieldIds, store.loads.length, store.marks.length, store.cursors.size, store.types.length],
-  [201, 201, 20, 25, 25, { id: idOf("pads_sn"), name: "pads_sn", type: "singleLineText" }, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+  [201, 201, 20, 28, 28, { id: idOf("pads_sn"), name: "pads_sn", type: "singleLineText" }, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
   [0, 0, 21, 0, 0, null, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1]);
 const pagesBeforeDry = fake.state.pagesAnswered;
 const dryBare = await airtable.dryRun({ connection: CONN, store: memStore(configOf({}, [])), budget, object: "device" });
 expect("E9b the dry run without a mapping: the table's fields only, no record read",
-  [dryBare.mappingSet, dryBare.tableFieldList.length, dryBare.fetched, fake.state.pagesAnswered - pagesBeforeDry], [false, 25, 0, 0], [true, 0, 201, 3]);
+  [dryBare.mappingSet, dryBare.tableFieldList.length, dryBare.fetched, fake.state.pagesAnswered - pagesBeforeDry], [false, 28, 0, 0], [true, 0, 201, 3]);
 expect("E10 no mapping, no table: mapping_not_set and table_id_not_set before any read",
   [await codeOf(airtable.pollAssets({ connection: CONN, store: memStore(configOf({}, [])), budget, counts: counts0() })),
     await codeOf(airtable.pollAssets({ connection: CONN, store: memStore({ fields: FIELDS, settings: {} }), budget, counts: counts0() }))],
@@ -450,16 +452,57 @@ const exampleMap = JSON.parse(readFileSync(path.join(here, "../../docs/import/de
 const gcloudJson = JSON.stringify([{ jsonPayload: { message: "backfill dry run", tableFieldList: dry.tableFieldList } }]);
 const block = mappingBlock({ connection: CONN.connectionId, map: exampleMap, fields: fieldsOf(gcloudJson) });
 const generated = block.lines.map((l) => /cma\.set_connection_field\('[^']+', '([a-z_]+)', '([a-z_]+)', '([a-z_]*)', '(fld[A-Za-z0-9]{14})'\)/.exec(l)?.slice(1).join("/")).sort();
-const wanted = FIELDS.map((f) => [f.entity, f.field, f.refSystem ?? "", f.property].join("/")).sort();
+const wanted = FIELDS_0009J.map((f) => [f.entity, f.field, f.refSystem ?? "", f.property].join("/")).sort();
 const renamedMap = { ...exampleMap, columns: { ...exampleMap.columns, serial: "aed_serial_number" } };
-expect("F5 the mapping step generated from the dry run's list and the map file: the 20 fields by id, as the adapter maps them; a header the table lacks named",
+expect("F5 the mapping step generated from the dry run's list and the map file: the 22 fields by id (maatje_id and language since 0009j), as the adapter maps them; a header the table lacks named",
   [block.mapped, JSON.stringify(generated) === JSON.stringify(wanted), block.missing, mappingBlock({ connection: CONN.connectionId, map: renamedMap, fields: dry.tableFieldList }).missing,
     studioBlock(CONN.connectionId, block.lines).split("\n").length, block.lines[0].endsWith("-- aed_sn (singleLineText)")],
-  [20, true, [], ["aed_serial_number"], 27, true], [19, false, ["x"], [], 0, false]);
+  [22, true, [], ["aed_serial_number"], 29, true], [21, false, ["x"], [], 0, false]);
+
+// ---- H. The loan reference and the language (addition 0009j) ---------------------------------------------------------
+const m9 = mappingOf(configOf({}, FIELDS_0009J));
+const allowed9 = allowedTypesOf(m9);
+expect("H1 the mapping takes pledge_ref and language: 15 device columns, 22 fields asked, both limited to a single select or text; spv_id never asked",
+  [Object.keys(m9.columns).length, fieldNames(m9).length, [...allowed9.keys()].sort(), allowed9.get(idOf("maatje_id")), fieldNames(m9).includes(idOf("spv_id")),
+    allowedTypesOf(mapping).size],
+  [15, 22, [idOf("language"), idOf("maatje_id")].sort(), ["singleselect", "singlelinetext", "multilinetext"], false, 0],
+  [13, 20, [], [], true, 2]);
+const h2 = rowOf(recordOf("recFixture0001aaa"), m9, { dateFormat: "dmy" });
+const h2b = rowOf(recordOf("recFixture0004aaa"), m9, { dateFormat: "dmy" });
+const h2c = rowOf({ id: "recSelect", fields: { [idOf("maatje_id")]: " 6 ", [idOf("language")]: ["English"] } }, m9, { dateFormat: "dmy" });
+expect("H2 a row with both mapped: the option name as text, trimmed; the empty option (left out by the API) null; unmapped, neither key is in the row",
+  [h2.row.pledge_ref, h2.row.language, h2b.row.pledge_ref, Object.hasOwn(h2b.row, "pledge_ref"), h2c.row.pledge_ref, h2c.row.language,
+    Object.hasOwn(r1.row, "pledge_ref"), Object.hasOwn(r1.row, "language")],
+  ["3", "Nederlands", null, true, "6", "English", false, false],
+  ["2", "English", "", false, " 6 ", null, true, true]);
+fake.state.retype(source.baseId, source.tableId, "maatje_id", "multipleSelects");
+const tables9 = await clientFor(CONN, configOf().settings, budget).tables(source.baseId);
+// the first read (no type recorded yet): the column's own limit refuses it
+const check9 = checkFields(tables9, source.tableId, fieldNames(m9), new Map(), allowed9);
+const asks9 = recordAsks().length;
+const typed9 = await codeOf(airtable.pollAssets({ connection: CONN, store: memStore(configOf({}, FIELDS_0009J)), budget, counts: counts0() }));
+const line9 = logOf("airtable field type changed");
+fake.state.retype(source.baseId, source.tableId, "maatje_id", "singleLineText");
+const check9b = checkFields(await clientFor(CONN, configOf().settings, budget).tables(source.baseId), source.tableId, fieldNames(m9), new Map(), allowed9);
+fake.state.retype(source.baseId, source.tableId, "maatje_id", "singleSelect");
+expect("H3 a pledge_ref field that becomes a multiple select fails field_type_changed before any record is read, naming the field; a text field is taken",
+  [check9.changed, typed9, line9?.field, line9?.was, line9?.now, recordAsks().length - asks9, check9b.changed],
+  [[{ id: idOf("maatje_id"), name: "maatje_id", was: "singleselect or singlelinetext or multilinetext", now: "multipleselects" }], "field_type_changed",
+    idOf("maatje_id"), "singleselect or singlelinetext or multilinetext", "multipleselects", 0, []],
+  [[], "ok", null, null, null, 3, [{}]]);
+const store9 = memStore(configOf({}, typed(FIELDS_0009J)));
+await airtable.reconcile({ connection: CONN, store: store9, budget, object: "device", counts: counts0() });
+const sent9 = store9.loads.flatMap((l) => l.rows);
+const one9 = sent9.find((r) => r.source_id === "recFixture0002aaa");
+expect("H4 a full read sends both keys on every row: the loan as its option name (none for the empty option), the language's label as written",
+  [sent9.length, sent9.every((r) => Object.hasOwn(r, "pledge_ref") && Object.hasOwn(r, "language")), one9?.pledge_ref, one9?.language,
+    sent9.filter((r) => r.pledge_ref === null).length, sent9.some((r) => Object.values(r).includes("FIN-FIXTURE-1"))],
+  [201, true, "4", "Nederlands", 51, false], [200, false, null, null, 0, true]);
 
 // ---- G. The logs -------------------------------------------------------------------------------------------------------
 const logText = logs.join("\n");
-const VALUES = [TOKEN, "FX-TEST-", "cu-fixture-", "sub-fixture-", "#FX0", "PX-0", "BX-0", "FAM-0", "Invented", "example.invalid", "Fixture note", "15/11/2034", "31/02/2035"];
+const VALUES = [TOKEN, "FX-TEST-", "cu-fixture-", "sub-fixture-", "#FX0", "PX-0", "BX-0", "FAM-0", "Invented", "example.invalid", "Fixture note", "15/11/2034", "31/02/2035",
+  "Nederlands", "Klingonese", "FIN-FIXTURE", "FREE-FIXTURE"];
 expect("G1 no log line holds the token or a value: field ids and names, codes and counts only", VALUES.filter((v) => logText.includes(v)), [], VALUES);
 
 await fake.close();

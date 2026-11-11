@@ -29,6 +29,13 @@
 # task retries (--max-retries=0): the next minute is the retry (the job itself tries a tenant once more on a fresh
 # connection after a dropped one, as the follow-up refresh). The scheduler's service account needs to invoke the job
 # (run.invoker).
+# Since addition 0009j (Decision log, 10 November 2026, D5) the same job also takes each tenant's pledge-list quarter
+# file (cma.pledge_snapshot_take, after Flash's take, as the tenant's Scheduler user with pledges.snapshot): due on the
+# tenant's local 1 January, 1 April, 1 July and 1 October from pledges.snapshot_local_time (00:05 by default), taken
+# once, answering already_taken afterwards. No new Cloud Run job, schedule, account or variable: this script is
+# unchanged but for this note, and a deploy of an image that holds the 0009j job (after 168_pledge_lists.sql ran in
+# that database) is all it takes. A failed pledge take fails the tenant's run row ("pledge_take <code>") without
+# stopping Flash's take, so System health shows it.
 set -euo pipefail
 
 ENV="${1:?dev or prod}"

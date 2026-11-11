@@ -6,14 +6,20 @@
  *
  *   entity device             field = a staging column (serial, model, status, country, warehouse_ref, customer_ref,
  *                             subscription_ref, order_ref, first_shipped_on, stock_received_on, last_shipped_on,
- *                             warranty_until, end_of_life_on) → the Airtable field that feeds it
+ *                             warranty_until, end_of_life_on, and since addition 0009j pledge_ref and language) → the
+ *                             Airtable field that feeds it. pledge_ref (the loan a device secures; Pulse4all's maatje_id)
+ *                             and language take a single select (its option name) or a text field only: any other type
+ *                             fails the read with field_type_changed (FIELD_TYPES, read.mjs checkFields)
  *   entity device_component   field serial or expires_on, ref_system the component kind → its field
  *   entity device, field ref  ref_system the id's name (ns_internal_id) → the field holding the named id
  *
  * An allow list: only the mapped fields are asked for and read, so nothing else a record holds reaches a row, a log or
  * the database. The record id is the API's record.id. No mapping means no read (mapping_not_set). A mapped field the
- * API leaves out of a record (Airtable leaves empty fields out) is empty: its column is null in the row, never left
- * out, so the load writes it empty rather than keeping the device's earlier value. A mapped component kind whose fields
+ * API leaves out of a record (Airtable leaves empty fields out; a single select's empty option) is empty: its column is
+ * null in the row, never left out, so the load writes it empty rather than keeping the device's earlier value. The two
+ * columns of addition 0009j (pledge_ref, language) are in a row only while mapped (OPTIONAL_COLUMNS): the database
+ * reads a key a chunk leaves out as empty, so the row is the same to it, and a database before 0009j, which knows
+ * neither key, still takes the rows of a register that maps neither. A mapped component kind whose fields
  * are all empty is sent as an empty object, so the load closes the device's current one (the register emptied it); a
  * kind with a field that cannot be read is left out, so nothing is closed on a value the adapter could not read.
  *
@@ -30,8 +36,18 @@ import { SourceError } from "../../core/http.mjs";
 
 export const OBJECT_TYPE = "device";
 export const DEVICE_COLUMNS = ["serial", "model", "status", "country", "warehouse_ref", "customer_ref", "subscription_ref", "order_ref",
-  "first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on"];
+  "first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on", "pledge_ref", "language"];
+/**
+ * The Airtable field types a column takes, lower case as the schema check compares them (addition 0009j): a single
+ * select's option name or text. A column not named here takes the type the connection first recorded for its field
+ */
+export const FIELD_TYPES = {
+  pledge_ref: ["singleselect", "singlelinetext", "multilinetext"],
+  language: ["singleselect", "singlelinetext", "multilinetext"],
+};
 export const DATE_COLUMNS = ["first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on"];
+/** Columns a row holds only while mapped (addition 0009j); every other column is always in a row */
+export const OPTIONAL_COLUMNS = ["pledge_ref", "language"];
 const KIND = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 const NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const ISO = /^(\d{4})-(\d{2})-(\d{2})(T[0-9:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
@@ -55,6 +71,11 @@ export function mappingOf(config) {
   }
   const any = Object.keys(columns).length + Object.keys(components).length + Object.keys(refs).length;
   return any ? { columns, components, refs } : null;
+}
+
+/** The types each mapped field takes where its column limits them: a Map of field id → allowed types (FIELD_TYPES) */
+export function allowedTypesOf(mapping) {
+  return new Map(Object.entries(FIELD_TYPES).filter(([c]) => mapping?.columns?.[c]).map(([c, types]) => [mapping.columns[c], types]));
 }
 
 /** Every field the mapping reads, each once, in a fixed order: the fields[] of the read and the schema check. */
@@ -132,6 +153,7 @@ export function rowOf(record, mapping, { dateFormat = null } = {}) {
   const row = { source_id: typeof record?.id === "string" ? record.id : null };
   for (const col of DEVICE_COLUMNS) {
     const name = mapping.columns[col];
+    if (!name && OPTIONAL_COLUMNS.includes(col)) continue;
     const v = name ? (DATE_COLUMNS.includes(col) ? date(name) : text(name)) : "";
     row[col] = v === "" ? null : v;
   }

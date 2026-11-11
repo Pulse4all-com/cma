@@ -38,6 +38,9 @@ export function assetsSource(nowMs = Date.now()) {
     // never mapped: a person's names, an email, who changed the row last, a note
     ["customer_first_name", "singleLineText"], ["customer_last_name", "singleLineText"], ["email", "email"], ["last_modified_by", "lastModifiedBy"],
     ["match_note", "multilineText"],
+    // addition 0009j: the loan a device secures (a single select of loan numbers), its language (a single select), and
+    // the register's own SPV label, which is never read
+    ["maatje_id", "singleSelect"], ["language", "singleSelect"], ["spv_id", "singleSelect"],
   ].map(([name, type], i) => ({ id: `fldFixture${String(i).padStart(7, "0")}`, name, type }));
   const ago = (minutes) => new Date(nowMs - minutes * 60_000).toISOString();
   const pad = (n) => String(n).padStart(4, "0");
@@ -55,6 +58,8 @@ export function assetsSource(nowMs = Date.now()) {
         sales_order_id: n % 5 ? undefined : `SO-${pad(n)}`,
         customer_first_name: `Invented Person ${pad(n)}`, customer_last_name: "Fixture", email: `person-${pad(n)}@example.invalid`,
         last_modified_by: { id: "usrFixture000001", email: "editor@example.invalid", name: "Invented Editor" }, match_note: "Fixture note text",
+        maatje_id: n % 4 ? String(2 + (n % 3)) : undefined, language: n % 7 ? (n % 3 ? "Nederlands" : "English") : "Klingonese",
+        spv_id: n % 2 ? "FIN-FIXTURE-1" : "FREE-FIXTURE",
       },
     });
   }

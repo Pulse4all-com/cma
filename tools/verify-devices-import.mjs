@@ -54,17 +54,17 @@ const mapOf = (patch) => write(`map-${results.length}-${Math.random().toString(3
 // ---- the fixture, with the example map ------------------------------------------------------------
 const sample = run(FIXTURE);
 expect("the fixture converts", sample.code, 0, 1);
-expect("counts", sample.counts, { rows: "30", mapped_columns: "21", ignored_columns: "31", date_parse_failures: "0", values_with_at: "1" },
+expect("counts", sample.counts, { rows: "30", mapped_columns: "23", ignored_columns: "29", date_parse_failures: "0", values_with_at: "1" },
   { rows: "30", mapped_columns: "52" });
 const lines = (sample.out ?? "").trimEnd().split("\n");
 expect("the staging header",
   lines[0],
   "batch_key,source_row,source_id,serial,model,status,country,warehouse_ref,customer_ref,subscription_ref,order_ref,first_shipped_on,"
-    + "stock_received_on,last_shipped_on,warranty_until,end_of_life_on,components,external_refs",
+    + "stock_received_on,last_shipped_on,warranty_until,end_of_life_on,pledge_ref,language,components,external_refs",
   "aed_sn,aed_sn_check");
 expect("a row: the line, dates as YYYY-MM-DD, components and named ids as JSON",
   lines[1],
-  'verify-devices,2,recTESTFIX000001,TEST-SN-0001,HS1,Active/Customer,United Kingdom,,7000000001,9100000001,#TEST1001,2025-03-10,,,2033-03-10,2033-03-10,'
+  'verify-devices,2,recTESTFIX000001,TEST-SN-0001,HS1,Active/Customer,United Kingdom,,7000000001,9100000001,#TEST1001,2025-03-10,,,2033-03-10,2033-03-10,2,English,'
     + '"{""pads"":{""serial"":""TEST-PAD-0001"",""expires_on"":""2027-01-10""},""battery"":{""serial"":""TEST-BAT-0001"",""expires_on"":""2027-02-20""}}",'
     + '"{""ns_internal_id"":""50001"",""ns_fam_id"":""FAM-0001"",""ns_sales_order_id"":""SO-0001""}"',
   "verify-devices,2,recTESTFIX000001,TEST-SN-0001,HS1,Active/Customer,United Kingdom,,,,,10/03/2025");
@@ -75,6 +75,12 @@ expect("no ignored column, no address reaches the staging file; no value printed
 // every data-quality case 113 checks is in the fixture, as the staging file carries it
 const rows = lines.slice(1).map((l) => l.split(","));
 const col = (name) => lines[0].split(",").indexOf(name);
+// addition 0009j: the loan a device secures (maatje_id's option name, empty for the empty option) and the language's
+// label, as the export holds them; spv_id never read
+expect("the loan reference and the language's label staged; spv_id never",
+  [rows.slice(0, 4).map((r) => [r[col("pledge_ref")], r[col("language")]]), /FIN1|FIN2|FREE/.test(sample.out ?? "")],
+  [[["2", "English"], ["6", "English"], ["2", "English"], ["", "English"]], false],
+  [[], true]);
 expect("the fixture covers every data-quality case",
   [rows.filter((r) => r[col("serial")] === "").length,
    rows.filter((r) => r[col("serial")] === "TEST-SN-0005").length,

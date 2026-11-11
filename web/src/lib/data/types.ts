@@ -2403,6 +2403,81 @@ export interface MaintenanceRows {
   rows: MaintenanceRow[];
 }
 
+// ---- Pledge lists (addition 0009j): Assets → Pledge lists, pledges.view (no default role)
+/** A quarter file as the page lists it (cma.pledge_snapshot): its valuation date, when it was taken, its loans and devices */
+export interface PledgeFileInfo {
+  valuationDate: DateKey;
+  takenAt: string;
+  loans: number;
+  devices: number;
+}
+/** Today's figures of one active loan with devices: the sums as decimal text with two decimals (EUR) */
+export interface PledgeLoanToday {
+  number: number;
+  /** The lender's label from the loan catalog (an investor's name: shown here and in the file's tab names, never logged) */
+  lenderLabel: string;
+  devices: number;
+  inStorage: number;
+  acquisitionValue: string;
+  currentValue: string;
+  receipts: string;
+}
+/** A check's devices: serial, the register's record id and the check's value (the loan reference, the model, the label) */
+export interface PledgeFindingRow {
+  serial: string | null;
+  sourceId: string;
+  value: string | null;
+}
+export interface PledgeFindingRows {
+  check: string;
+  total: number;
+  rows: PledgeFindingRow[];
+}
+/** The page (cma.pledge_page), and a check's devices when one is open (cma.pledge_finding_rows, the same transaction) */
+export interface PledgePage {
+  files: PledgeFileInfo[];
+  today: { valuationDate: DateKey; loans: PledgeLoanToday[] };
+  /** Each check's device count, by the keys of cma.pledge_check_keys */
+  checks: Record<string, number>;
+  /** The register's language labels of pledged devices without a code, with their device counts */
+  unmappedLanguages: { label: string; devices: number }[];
+  /** The current quarter: its first day, whether its file is held, whether the take was due by now */
+  quarter: { start: DateKey; taken: boolean; due: boolean };
+  fileNamePrefix: string;
+  /** A loan in the catalog */
+  isSetUp: boolean;
+  checkRows: PledgeFindingRows | null;
+}
+/** A file's row (cma.pledge_file): the loan's number, labels and layout as the file carries them, and the columns of the file */
+export interface PledgeFileRow {
+  valuationDate: DateKey;
+  takenAt: string | null;
+  loanNumber: number;
+  lenderLabel: string;
+  areaLabel: string;
+  nameSuffix: string;
+  layout: 1 | 2;
+  serial: string | null;
+  typeLabel: string | null;
+  market: string | null;
+  language: string | null;
+  /** The customer reference, or In Storage; null for a reference that is no id */
+  customerId: string | null;
+  startDate: DateKey | null;
+  firstShippedOn: DateKey | null;
+  monthsDepreciating: number;
+  /** Amounts as decimal text (two decimals), null without the model's values */
+  depreciationPerMonth: string | null;
+  acquisitionValue: string | null;
+  receipts: string | null;
+  currentValue: string | null;
+}
+/** A file: its rows, and its name's prefix (the stored file's own, frozen with it; the tenant's setting for today's version) */
+export interface PledgeFile {
+  fileNamePrefix: string;
+  rows: PledgeFileRow[];
+}
+
 export interface CancellationsReport {
   from: DateKey;
   to: DateKey;
@@ -3949,6 +4024,11 @@ export interface CmaData {
   getMaintenance(me: Principal, filter: MaintenanceFilter): Promise<MaintenanceReport>;
   /** The device list of one cell (cma.maintenance_rows): bucket past_due, a month of the horizon, unknown or all; at most limit rows (1 to 5000) */
   getMaintenanceRows(me: Principal, filter: MaintenanceFilter, bucket: string, view: MaintenanceView, limit: number): Promise<MaintenanceRows>;
+  // ---- Pledge lists (addition 0009j): pledges.view, checked by the database on every call (CMA06)
+  /** Assets → Pledge lists in one transaction (cma.pledge_page, and cma.pledge_finding_rows for an open check, at most limit rows) */
+  getPledgePage(me: Principal, check: string | null, limit: number): Promise<PledgePage>;
+  /** A file's rows (cma.pledge_file): a quarter file by its valuation date (CMA02 when none), or today's version for null; at most 50,000 (CMA04) */
+  getPledgeFile(me: Principal, valuationDate: DateKey | null): Promise<PledgeFile>;
   /** Reports → Funnel, deals per person: performance.team and the tenant's reports.per_person holding deals (CMA06 otherwise) */
   getDealsPerPerson(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<DealsPerPerson>;
   // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days

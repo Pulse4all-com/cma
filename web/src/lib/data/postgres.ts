@@ -24,7 +24,7 @@ import type {
   CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
   CourtesyCompleted, CourtesyCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
   CohortAge, LeadCohortRow, LeadCohortsReport,
-  MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
+  MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, PledgeFile, PledgePage, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
   DataQualityRowsView, FlashDocumentView, FlashHeadlineView, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
 } from "./types";
@@ -1017,6 +1017,24 @@ type CatalogsJson = {
 
 /** cma.reviews_page's answer (addition 0008ze): figures as the database names them */
 type ReviewFiguresDb = { reviews: number; average_rating: number | null; negative: number; linked_order: number; linked_contact: number; unlinked: number };
+/** cma.pledge_page's answer (addition 0009j) */
+type PledgePageDb = {
+  files: { valuation_date: string; taken_at: string; loans: number; devices: number }[];
+  today: { valuation_date: string; loans: { number: number; lender_label: string; devices: number; in_storage: number; acquisition_value: string;
+    current_value: string; receipts: string }[] };
+  checks: Record<string, number>;
+  unmapped_languages: { label: string; devices: number }[];
+  quarter: { start: string; taken: boolean; due: boolean };
+  file_name_prefix: string;
+  is_set_up: boolean;
+};
+/** A row of cma.pledge_file: numeric as text, dates as YYYY-MM-DD (the pool's parsers) */
+type PledgeFileDbRow = {
+  valuation_date: string; taken_at: Date | string | null; loan_number: number; lender_label: string; area_label: string; name_suffix: string; layout: number;
+  serial: string | null; type_label: string | null; market: string | null; language: string | null; customer_id: string | null; start_date: string | null;
+  first_shipped_on: string | null; months_depreciating: number; depreciation_per_month: string | null; acquisition_value: string | null;
+  receipts: string | null; current_value: string | null; file_name_prefix: string;
+};
 type MaintenancePageDb = {
   current_month: string; bundle_window_days: number; is_set_up: boolean; buckets: string[]; component_kinds: { key: string; name: string }[];
   cells: { bucket: string; market: string; model: string; components: Record<string, number>; component_items: number; end_of_life: number; exchanges: number }[];
@@ -2747,6 +2765,41 @@ export const postgresData: CmaData = {
          from cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8) r`,
         [filter.fromMonth, filter.months, bucket, filter.market, filter.model, filter.scope, view, limit]);
       return { total: Number(r.rows[0]?.total_rows ?? 0), rows: r.rows.map(toMaintenanceRow) };
+    });
+  },
+
+  async getPledgePage(me, check, limit): Promise<PledgePage> {
+    return withTenant(ctx(me), async (q) => {
+      // the functions check pledges.view (CMA06), the check and the limit (CMA04) (addition 0009j); a check's serials in the
+      // same transaction as the page
+      const j = one((await q.query<{ j: PledgePageDb }>(`select cma.pledge_page() as j`)).rows, "pledge_page").j;
+      let checkRows: PledgePage["checkRows"] = null;
+      if (check !== null) {
+        const r = await q.query<{ serial: string | null; source_id: string; value: string | null; total_rows: string }>(
+          `select serial, source_id, value, total_rows from cma.pledge_finding_rows($1, $2)`, [check, limit]);
+        checkRows = { check, total: Number(r.rows[0]?.total_rows ?? 0), rows: r.rows.map((x) => ({ serial: x.serial, sourceId: x.source_id, value: x.value })) };
+      }
+      return {
+        files: j.files.map((f) => ({ valuationDate: f.valuation_date, takenAt: isoOf(f.taken_at)!, loans: f.loans, devices: f.devices })),
+        today: { valuationDate: j.today.valuation_date, loans: j.today.loans.map((l) => ({ number: l.number, lenderLabel: l.lender_label, devices: l.devices,
+          inStorage: l.in_storage, acquisitionValue: l.acquisition_value, currentValue: l.current_value, receipts: l.receipts })) },
+        checks: j.checks, unmappedLanguages: j.unmapped_languages, quarter: j.quarter, fileNamePrefix: j.file_name_prefix, isSetUp: j.is_set_up, checkRows,
+      };
+    });
+  },
+
+  async getPledgeFile(me, valuationDate): Promise<PledgeFile> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks pledges.view (CMA06), the file's date (CMA02 when none) and its 50,000 rows (CMA04) (addition 0009j);
+      // every row carries the file's name prefix: the stored file's own, or the tenant's setting for today's version
+      const r = await q.query<PledgeFileDbRow>(`select * from cma.pledge_file($1::date)`, [valuationDate]);
+      return { fileNamePrefix: r.rows[0]?.file_name_prefix ?? "Pledge_Lists", rows: r.rows.map((x) => ({
+        valuationDate: x.valuation_date, takenAt: x.taken_at === null ? null : new Date(x.taken_at).toISOString(), loanNumber: x.loan_number,
+        lenderLabel: x.lender_label, areaLabel: x.area_label, nameSuffix: x.name_suffix, layout: x.layout === 2 ? 2 : 1, serial: x.serial,
+        typeLabel: x.type_label, market: x.market, language: x.language, customerId: x.customer_id, startDate: x.start_date,
+        firstShippedOn: x.first_shipped_on, monthsDepreciating: x.months_depreciating, depreciationPerMonth: x.depreciation_per_month,
+        acquisitionValue: x.acquisition_value, receipts: x.receipts, currentValue: x.current_value,
+      })) };
     });
   },
 

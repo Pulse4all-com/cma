@@ -14,6 +14,9 @@
 -- address, an email or a phone number. Edited in place after its dev runs of 27 October 2026 (records/0008zk-dev-2026-10-27),
 -- which ran its work in one transaction, and 28 October 2026 (records/0008zk-dev-2026-10-28): it has run in dev only, and
 -- CLAUDE.md forbids editing a script that has run in prod.
+-- Adjusted 10 November 2026 (addition 0009j, 168_pledge_lists.sql): A2 counts the load's row types' attributes as 0009j
+-- leaves them (cma.device_load_row 19, cma.device_load_mapped 22: pledge_ref and language added) once 0009j is recorded,
+-- 0008zk's counts (17, 20) before it.
 --
 -- The script mirrors production. Every step is its own transaction (begin; select …; commit;), as each of the ingest's
 -- calls is: a chunk of 1,000 rows, a slice of the final step, the one-call load, the report. Its throwaway tenants
@@ -534,8 +537,10 @@ begin
 
   -- A2. the load's row types with their columns; the staging trigger still on the COPY target
   v_bad := '';
-  if (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_row')) and attnum > 0) <> 17
-     or (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_mapped')) and attnum > 0) <> 20
+  if (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_row')) and attnum > 0 and not attisdropped)
+       <> (case when exists (select 1 from cma.schema_migration where version = '0009j') then 19 else 17 end)
+     or (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_mapped')) and attnum > 0 and not attisdropped)
+       <> (case when exists (select 1 from cma.schema_migration where version = '0009j') then 22 else 20 end)
      or (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_component')) and attnum > 0) <> 6 then
     v_bad := v_bad || 'types; ';
   end if;

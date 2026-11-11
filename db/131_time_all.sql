@@ -11,8 +11,10 @@
 -- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
 -- cma.organisation.is_contact_center), after 140_live_per_organisation.sql; since addition 0008zw (Reviews' period All),
 -- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql; since
--- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql. Prod is
--- the proof; dev's shared core is for information.
+-- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql; since
+-- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql. Prod is the proof; dev's shared core is for
+-- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
+-- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -76,6 +78,10 @@ begin
   -- the installed base's current take (cma.flash_current_refresh) since addition 0009e
   if not exists (select 1 from cma.schema_migration where version = '0009e') then
     raise exception 'addition 0009e (158_flash_current_take.sql) has not run in this database';
+  end if;
+  -- Assets → Pledge lists (cma.pledge_page, cma.pledge_file) since addition 0009j
+  if not exists (select 1 from cma.schema_migration where version = '0009j') then
+    raise exception 'addition 0009j (168_pledge_lists.sql) has not run in this database';
   end if;
 end
 $$;
@@ -296,7 +302,11 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'forms {P}', 'forms report', $q$select * from cma.forms_report('{f}', '{t}', 'day', null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms whole period', $q$select * from cma.forms_report('{f}', '{t}', 'week', null, null, null) where period = 'current' and group_key is null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
-('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']);
+('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'pledge lists now', 'pledge page', $q$select cma.pledge_page()$q$, 'overview', array['pledges.view']),
+('b', 'pledge lists now', 'pledge check serials', $q$select * from cma.pledge_finding_rows('no_language', 500)$q$, 'list', array['pledges.view']),
+('b', 'pledge lists now', 'pledge file today', $q$select * from cma.pledge_file(null)$q$, 'overview', array['pledges.view']),
+('b', 'pledge lists now', 'pledge file stored', $q$select * from cma.pledge_file(coalesce((select max(s.valuation_date) from cma.pledge_snapshot s), date '2000-01-01'))$q$, 'overview', array['pledges.view']);
 
 -- An as-of read of a date without a snapshot has nothing to time (CMA02): skip with that reason, never a FAIL
 update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'
@@ -304,6 +314,12 @@ where page = 'installed base as of month end';
 -- A page that loads in two parts: its set is the first paint's reads; the records read keeps its own list row
 update pg_temp.reads_0131 set in_set = false
 where page in ('installed base', 'installed base as of month end') and cls = 'list';
+-- Pledge lists (addition 0009j): the files are downloads of their own, outside the page's set; the stored file's read
+-- has nothing to time while the tenant holds no quarter file (CMA02)
+update pg_temp.reads_0131 set in_set = false
+where page = 'pledge lists now' and name in ('pledge file today', 'pledge file stored');
+update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no quarter file yet'
+where page = 'pledge lists now' and name = 'pledge file stored';
 
 do $$
 declare

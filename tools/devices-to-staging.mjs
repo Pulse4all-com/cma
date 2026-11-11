@@ -7,7 +7,8 @@
  *
  * Reads the register's export and writes the file that is copied into cma.device_import_staging: batch_key,
  * source_row, source_id, serial, model, status, country, warehouse_ref, customer_ref, subscription_ref, order_ref,
- * first_shipped_on, stock_received_on, last_shipped_on, warranty_until, end_of_life_on, components (a JSON object of
+ * first_shipped_on, stock_received_on, last_shipped_on, warranty_until, end_of_life_on, pledge_ref (the loan the device
+ * secures, as the register names it; addition 0009j), language (its language's label; 0009j), components (a JSON object of
  * component kinds, each with serial and expires_on) and external_refs (a JSON object of named ids), every date as
  * YYYY-MM-DD. A mapped kind whose cells are all empty is written as an empty object ({"pads": {}}), so the load closes
  * the device's current one of that kind (the register emptied it, addition 0008zk); a kind whose expiry does not read
@@ -15,7 +16,7 @@
  *
  * The map (JSON; the export's headers are configuration, never code; docs/import/devices-map.example.json):
  *   columns        staging column -> export header, for source_id (required), serial, model, status, country,
- *                  warehouse_ref, customer_ref, subscription_ref, order_ref and the five dates
+ *                  warehouse_ref, customer_ref, subscription_ref, order_ref, the five dates, pledge_ref and language
  *   components     component kind (the tenant's catalog key) -> { serial: header, expires_on: header }, either or both
  *   external_refs  name of the id (lower-case letters, digits and _) -> header
  *   ignore         the export's other headers, read by name and never used: every header the export holds must be
@@ -41,7 +42,7 @@ import { fileURLToPath } from "node:url";
 import { detectDelimiter, parseCsv } from "./legacy-sessions-to-staging.mjs";
 
 export const DEVICE_COLUMNS = ["source_id", "serial", "model", "status", "country", "warehouse_ref", "customer_ref", "subscription_ref",
-  "order_ref", "first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on"];
+  "order_ref", "first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on", "pledge_ref", "language"];
 export const DATE_COLUMNS = ["first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on"];
 export const STAGING_HEADER = ["batch_key", "source_row", ...DEVICE_COLUMNS, "components", "external_refs"];
 export const DATE_FORMATS = ["dmy", "mdy", "iso"];

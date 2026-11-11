@@ -14,6 +14,8 @@
 -- permissions added since 0005a (by 0008s, 0008zn and 0008zr) beside workday.close_forgotten, and still
 -- nothing else: a job never gets a person's right. The jobs' permissions are named once, in
 -- verify.job_permissions below.
+-- Adjusted 10 November 2026 (addition 0009j, 168_pledge_lists.sql): verify.job_permissions gains pledges.snapshot, the
+-- quarter take's right, which cma.ensure_scheduler_user gives the scheduler role since 0009j.
 -- =============================================================================================
 
 do $$
@@ -26,7 +28,7 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);   -- 'true' to make every block fail
 -- The jobs' permissions: the only ones the scheduler role may hold (A4), each a system job's right, none a person's
-select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh', false);
+select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh,pledges.snapshot', false);
 
 -- A. Structure and privileges (universal)
 do $$

@@ -24,7 +24,7 @@ import { codeOf, hearIdleErrors, isConnectionError, retryOnce } from "../jobs/li
 import { refreshTenants } from "../jobs/refresh-follow-up.mjs";
 import { refreshTenants as refreshDataQuality } from "../jobs/refresh-data-quality.mjs";
 import { closeTenants } from "../jobs/close-forgotten-workdays.mjs";
-import { snapshotTenants, countsOf, currentCountsOf, runErrorOf, poolMax, STATEMENT_TIMEOUT_MS, TAKE_RETRY_MINUTES } from "../jobs/snapshot-flash.mjs";
+import { snapshotTenants, countsOf, currentCountsOf, pledgeCountsOf, runErrorOf, poolMax, STATEMENT_TIMEOUT_MS, TAKE_RETRY_MINUTES } from "../jobs/snapshot-flash.mjs";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -66,7 +66,8 @@ function dbTake({ earlier = [] } = {}) {
 // The database's current refresh (0009e), per tenant: one take refreshed (65 rows), then fresh
 const CURRENT = { current_refreshed: 1, current_fresh: 0, current_running: 0, current_not_set_up: 0, current_failed: 0, current_rows: 65, current_duration_ms: 40 };
 const dbCurrent = () => () => CURRENT;
-function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = dbCurrent(), lastFailed = () => null } = {}) {
+function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = dbCurrent(), lastFailed = () => null,
+  pledge = () => ({ answer: "not_due", local_date: "2026-11-02" }) } = {}) {
   const pool = new EventEmitter();
   const state = { connects: 0, released: 0, dropped: 0, statements: [], runStarts: [], runFinishes: [] };
   let nextRun = 0;
@@ -98,6 +99,8 @@ function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = 
       // a failed take of the last TAKE_RETRY_MINUTES without a succeeded one since (0009e's backoff); none by default
       if (/from cma\.flash_snapshot_run r/.test(text)) { const f = lastFailed(tenant); return { rows: f ? [f] : [], rowCount: f ? 1 : 0 }; }
       if (/cma\.flash_snapshot_take\(/.test(text)) return { rows: [{ r: take(tenant, { now }) }], rowCount: 1 };
+      // the pledge-list quarter take (addition 0009j): not due by default
+      if (/cma\.pledge_snapshot_take\(/.test(text)) return { rows: [{ r: pledge(tenant) }], rowCount: 1 };
       if (/cma\.job_run_finish/.test(text)) {
         if (finished.has(values[0])) throw Object.assign(new Error(`scheduler run ${values[0]} is already finished`), { code: "CMA03" });
         finished.add(values[0]);
@@ -436,6 +439,53 @@ expect("snapshot: the current takes' counts (whole numbers, 0 without an answer)
     [r, count(pool, taken, T1), count(pool, taken, T2), finishes(pool), currentAt(pool, T1), pool.state.runFinishes[0].counts.backoff, TAKE_RETRY_MINUTES],
     [{ tenants: 2, failed: 1 }, 0, 1, ["t1:failed:take_backoff 23514", "t2:succeeded:9"], ["1/0/0/65"], 1, 60],
     [{ tenants: 2, failed: 0 }, 1, 1, ["t1:succeeded:9", "t2:succeeded:9"], [], 0, 0]);
+}
+
+// ---- snapshot-flash: the pledge-list quarter take (addition 0009j) ----------------------------------------------------
+const pledgeTake = /cma\.pledge_snapshot_take\(/;
+const pledgeAt = (pool, tenant) => pool.state.runFinishes.filter((f) => f.tenant === tenant)
+  .map((f) => `${f.counts.pledge_taken}/${f.counts.pledge_already}/${f.counts.pledge_not_due}/${f.counts.pledge_no_pledges}/${f.counts.pledge_failed}/${f.counts.pledge_devices}`);
+expect("snapshot: the pledge take's counts (one answer 1, the devices of a file taken); the run's error: Flash's take's, the current refresh's, then the pledge take's",
+  [pledgeCountsOf({ answer: "taken", devices: 412.2 }), pledgeCountsOf({ answer: "already_taken", devices: 412 }).pledge_already, pledgeCountsOf(null).pledge_failed,
+    runErrorOf({ taken: true }, CURRENT, { answer: "failed", error: "CMA04" }), runErrorOf({ reason: "failed", error: "23514" }, CURRENT, { answer: "failed", error: "CMA04" }),
+    runErrorOf({ taken: true }, { current_failed: 1, current_error: "P0001" }, { answer: "failed", error: "CMA04" }), runErrorOf({ taken: true }, CURRENT, { answer: "no_pledges" })],
+  [{ pledge_taken: 1, pledge_already: 0, pledge_not_due: 0, pledge_no_pledges: 0, pledge_failed: 0, pledge_devices: 412 }, 1, 0,
+    "pledge_take CMA04", "23514", "current_take P0001", null],
+  [{}, 0, 1, null, "pledge_take CMA04", "pledge_take CMA04", "pledge_take"]);
+{
+  // tenant 1's quarter is due: taken with its devices; tenant 2's not; the pledge take after Flash's, once each, on the same run row
+  const pool = mockPool({ pledge: (t) => (t === T1 ? { answer: "taken", valuation_date: "2026-10-01", loans: 2, devices: 9 } : { answer: "not_due" }) });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  const order = pool.state.statements.filter((s) => s.tenant === T1 && (taken.test(s.text) || pledgeTake.test(s.text))).map((s) => (pledgeTake.test(s.text) ? "pledge" : "take"));
+  expect("snapshot: the pledge take after Flash's take, once per tenant; its counts on the same run row; its answer in the log line",
+    [r, order, pledgeAt(pool, T1), pledgeAt(pool, T2), finishes(pool), lines.map((l) => l.pledge)],
+    [{ tenants: 2, failed: 0 }, ["take", "pledge"], ["1/0/0/0/0/9"], ["0/0/1/0/0/0"], ["t1:succeeded:9", "t2:succeeded:9"], ["taken", "not_due"]],
+    [{ tenants: 2, failed: 1 }, ["pledge", "take"], [], [], [], []]);
+}
+{
+  // the pledge take refused in tenant 1 (a database error) and missing in tenant 2 (42883, a database before 0009j): caught,
+  // Flash's take stored and counted all the same, each run row failed with pledge_take and the code, never retried
+  const pool = mockPool({ faults: [{ on: pledgeTake, tenant: T1, times: 1, error: () => Object.assign(new Error("too many rows"), { code: "CMA04" }) },
+    { on: pledgeTake, tenant: T2, times: 1, error: () => Object.assign(new Error("function does not exist"), { code: "42883" }) }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot: a pledge take that fails never stops Flash: the take stored and counted, the run row failed pledge_take with the code, not retried",
+    [r, count(pool, taken), count(pool, pledgeTake), finishes(pool), countsAt(pool, T1), pledgeAt(pool, T1),
+      lines.map((l) => `${l.severity}:${l.taken}:${l.error}`)],
+    [{ tenants: 2, failed: 2 }, 2, 2, ["t1:failed:pledge_take CMA04", "t2:failed:pledge_take 42883"], ["1/0/9/6"], ["0/0/0/0/1/0"],
+      ["ERROR:true:pledge_take CMA04", "ERROR:true:pledge_take 42883"]],
+    [{ tenants: 2, failed: 0 }, 0, 4, ["t1:succeeded:9", "t2:succeeded:9"], [], [], []]);
+}
+{
+  // a reset while the pledge take runs: the unit retried once on a fresh connection, Flash's take not sent again, the pledge
+  // take sent again (idempotent), one run row, succeeded
+  const pool = mockPool({ faults: [{ on: pledgeTake, tenant: T1, times: 1, error: reset }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a reset in tenant 1's pledge take: retried once, Flash's take sent once, the pledge take twice, one run row, succeeded",
+    [r.failed, count(pool, taken, T1), count(pool, pledgeTake, T1), starts(pool, T1), finishes(pool)[0]],
+    [0, 1, 2, 1, "t1:succeeded:9"], [1, 2, 1, 2, "t1:failed:ECONNRESET"]);
 }
 
 const passed = results.filter(Boolean).length;

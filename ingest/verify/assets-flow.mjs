@@ -26,7 +26,9 @@
  * date_format_not_set; the backfill's dry run lists the table's fields, reads and counts and writes nothing (no run, no
  * staging, no cursor); the backfill loads a full snapshot and takes no --from; tenant two's register loads into tenant
  * two only; the fields asked for are the mapped ids only, never a view; no token, value or personal fixture text in any
- * row of the run's tenants or in a log line; nothing written to another tenant.
+ * row of the run's tenants or in a log line; nothing written to another tenant; since addition 0009j, the loan reference
+ * and the language mapped and read by a backfill (the option name, the alias's code, an unmapped label none), and a
+ * mapped loan field turned into a multiple select refused (field_type_changed).
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -323,7 +325,7 @@ b = await runBackfill({ connectionId: reg1.id, object: "device", dryRun: true })
 expect("G1 the dry run lists the table's fields (id, name, type) and reads and counts: fetched, mapped, the fields, date failures, values with an @, unknown fields",
   [b.fetched, b.mapped, b.fields, b.tableFields, b.dateFailures, b.valuesWithAt, b.unknownFields, b.typeChangedFields,
     lastLog("backfill dry run")?.tableFieldList?.find((f) => f.name === "aed_sn")],
-  [200, 200, 20, 25, 1, 1, 0, 0, { id: idIn(one, "aed_sn"), name: "aed_sn", type: "singleLineText" }], [0, 0, 0, 0, 0, 0, 1, 1, null]);
+  [200, 200, 20, 28, 1, 1, 0, 0, { id: idIn(one, "aed_sn"), name: "aed_sn", type: "singleLineText" }], [0, 0, 0, 0, 0, 0, 1, 1, null]);
 expect("G2 …and writes nothing: no run, no staged row, the cursor as it was",
   [(await runsOf(reg1.id, null)).length - runs0, (await q("select count(*)::int as n from cma.device_import_row where tenant_id = $1", [T1.t]))[0].n,
     (await cursor(reg1.id, "assets:modified")).at === cursor0.at], [0, 0, true], [1, 1, false]);
@@ -421,6 +423,39 @@ expect("I3 cancelled again while its rows are sent again: the run fails (db_5701
   [1, [400, 200], "failed", "db_57014", 0, 0], [0, [400, 200, 200, 200], "succeeded", null, 3, 1]);
 if (timeoutBefore === undefined) delete process.env.CMA_DB_STATEMENT_TIMEOUT_MS;
 else process.env.CMA_DB_STATEMENT_TIMEOUT_MS = timeoutBefore;
+
+// ---- J. The loan reference and the language (addition 0009j) ------------------------------------------------------------
+// Both fields mapped on tenant one's register (maatje_id a single select of loan numbers, language a single select of
+// labels), two aliases set; a backfill reads them into every device. A loan reference as its option name, the empty option
+// none; a label an alias maps as its code, an unmapped one none with the label in raw
+const logsBeforeJ = logs.length;
+await asAdmin(T1, async () => {
+  await q("select cma.set_connection_field($1, 'device', 'pledge_ref', '', $2)", [reg1.id, idIn(one, "maatje_id")]);
+  await q("select cma.set_connection_field($1, 'device', 'language', '', $2)", [reg1.id, idIn(one, "language")]);
+  await q("select cma.set_device_language_alias('English', 'en')");
+  await q("select cma.set_device_language_alias('Nederlands', 'nl')");
+});
+total = await runBackfill({ connectionId: reg1.id, object: "device" });
+const jRun = (await runsOf(reg1.id, "backfill")).at(-1);
+const pledged = await q(`select d.source_id, d.pledge_ref, d.language, d.raw ->> 'language' as label from cma.device d
+  where d.connection_id = $1 and d.source_id in ('recFixture0001aaa', 'recFixture0004aaa', 'recFixture0021aaa') order by 1`, [reg1.id]);
+expect("J1 a backfill with both fields mapped: the loan as its option name (none for the empty option), the language as its code, an unmapped label none (raw keeps it)",
+  [total.failed, jRun.status, pledged],
+  [0, "succeeded", [{ source_id: "recFixture0001aaa", pledge_ref: "3", language: "nl", label: "Nederlands" },
+    { source_id: "recFixture0004aaa", pledge_ref: null, language: "nl", label: "Nederlands" },
+    { source_id: "recFixture0021aaa", pledge_ref: "2", language: null, label: "Klingonese" }]],
+  [1, "failed", []]);
+fake.state.retype(one.baseId, one.tableId, "maatje_id", "multipleSelects");
+total = await runBackfill({ connectionId: reg1.id, object: "device" });
+const jFail = (await runsOf(reg1.id, "backfill")).at(-1);
+const jLine = lastLog("airtable field type changed");
+fake.state.retype(one.baseId, one.tableId, "maatje_id", "singleSelect");
+expect("J2 maatje_id turned into a multiple select: the run fails field_type_changed before reading a record, the log naming the field",
+  [total.failed, jFail.status, jFail.error, jLine?.field, jLine?.now], [1, "failed", "field_type_changed", idIn(one, "maatje_id"), "multipleselects"],
+  [0, "succeeded", null, null, null]);
+const jLogs = logs.slice(logsBeforeJ).join("\n");
+expect("J3 the logs of section J hold field ids, names and counts, never a loan reference's or a language's value",
+  ["Nederlands", "Klingonese", "FIN-FIXTURE", "FREE-FIXTURE"].filter((v) => jLogs.includes(v)), [], ["x"]);
 
 // This run's connections stop being served (a later run's unfiltered jobs leave them alone)
 for (const [tenant, c] of [[T1, reg1.id], [T1, files.id], [T2, reg2.id]]) await asAdmin(tenant, () => q("select cma.set_connection_status($1, 'inactive')", [c]));
