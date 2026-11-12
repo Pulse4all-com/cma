@@ -66,10 +66,12 @@
 --   cma.check_data_quality_setting() (based on 132)   also the range of follow_up.recompute_minutes; its trigger on
 --                      cma.tenant_setting is unchanged, so no lock on that table
 --
--- Speed at three times prod's volume (web/verify/perf-volume-fixture.sql, local, the fixture's subscriptions tenant, best of three,
--- before → after): data quality's computation 4,492 → 1,627 ms; cma.open_tickets_of 885 → 113 ms; cma.open_leads_of
--- 782 → 639 ms; cma.speed_to_lead_of over the previous month 911 → 448 ms; the follow-up refresh with nothing changed
--- (one transaction, so no clock moved) 2,171 ms and 24,764 rows written → 1,473 ms and none written. In office hours a
+-- Speed at three times prod's volume (web/verify/perf-volume-fixture.sql with 0009l's block, local, after 172 to 176, the
+-- fixture's subscriptions tenant, best of three, before → after): data quality's computation 5,238 → 1,675 ms;
+-- cma.open_tickets_of 828 → 113 ms; cma.open_leads_of 761 → 643 ms; cma.speed_to_lead_of over the previous month
+-- 853 → 447 ms; the follow-up refresh with nothing changed (one transaction, so no clock moved) 2,068 ms and 24,764 rows
+-- written → 1,265 ms and none written. The previous computation grew with the devices that 0009l's fixture block moves to
+-- their subscription's market (4,525 ms before that block): two settings reads per matched device; this one did not. In office hours a
 -- ticket's open time and a lead's waiting time move every minute, so those items are still written each minute (the
 -- tasks and the closed hours are what stays); the job's skip happens outside office hours, between midnights.
 -- Margins in code, not rules: the audit check's 2-minute overlap, the back-off's 10-minute look-back past
