@@ -566,22 +566,27 @@
         {
           "name": "follow_up_snapshot",
           "what": "Per tenant: when the follow-up figures were last computed and how long it took, the eight counts and the figures per person (ids and counts, no names)",
-          "how": "Replaced every minute per tenant by the refresh job cma-refresh-follow-up (cma.refresh_follow_up, since 0008s); computed once on demand when a tenant has none"
+          "how": "Replaced by the refresh job cma-refresh-follow-up (cma.refresh_follow_up, since 0008s) when something the figures read changed, in office hours every minute; on a minute that found nothing changed (since 0009o) only computed_at is set to now, the figures and duration_ms stay; computed once on demand when a tenant has none"
         },
         {
           "name": "follow_up_item",
           "what": "Every open lead, ticket and task of the latest refresh: kind, order, market, owner as a person, state, and the row's fields as JSON (ids, codes and times; never a task's text)",
-          "how": "Rewritten with the snapshot every minute per tenant from cma.open_leads_of, open_tickets_of and open_tasks_of (since 0008s); derived, no audit trigger"
+          "how": "Written with the snapshot from cma.open_leads_of, open_tickets_of and open_tasks_of (since 0008s); since 0009o only the items that changed are deleted and inserted, the others stay, and nothing is written on a minute that found nothing changed; derived, no audit trigger"
+        },
+        {
+          "name": "follow_up_marker",
+          "what": "Per tenant, what the follow-up job checks before computing again: when the figures were last computed, up to when the audit log of their input tables was read, the first instant a figure moves with the clock alone and how many migrations were held then (0009o)",
+          "how": "Written by cma.refresh_follow_up_of at each computation and by cma.refresh_follow_up when it confirms nothing changed (setting follow_up.recompute_minutes, 60 by default, is the longest it goes without computing); derived, no audit trigger"
         },
         {
           "name": "data_quality_snapshot",
           "what": "When one tenant's stored data-quality result was computed (Refreshed at), how long it took and how many findings it holds (0008zr)",
-          "how": "Rewritten by the job cma-refresh-data-quality every minute when the result is older than data_quality.refresh_minutes (5 by default), and once on demand by a read that finds none; not audited"
+          "how": "Rewritten by the job cma-refresh-data-quality every minute when the result is older than data_quality.refresh_minutes (5 by default), and once on demand by a read that finds none; after a failed computation the next attempt waits data_quality.refresh_minutes (since 0009o), not one minute; not audited"
         },
         {
           "name": "data_quality_finding",
           "what": "The findings of the latest data-quality refresh: the check, the record's connection, type and id, the value the check reports, the market and where it is fixed; ids and codes only (0008zr)",
-          "how": "Rewritten with the snapshot by cma-refresh-data-quality (cma.flash_findings_compute_of, every check of cma.data_quality_of once); read by Reports → Data quality, Flash's data-quality overview and list, the snapshot take and the watch; not audited"
+          "how": "Rewritten with the snapshot by cma-refresh-data-quality (cma.flash_findings_compute_of, every check of cma.data_quality_of once); read by Reports → Data quality, Flash's data-quality overview and list, the snapshot take and the watch; after a failed computation the next attempt waits data_quality.refresh_minutes (since 0009o); not audited"
         }
       ]
     },
