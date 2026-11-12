@@ -2380,6 +2380,8 @@ export interface ActiveReport {
   tiles: ActiveTiles | null;
   /** The moment the tiles' present is of: the take's while the page shows the stored answer (decision D16), this read's once the live present is in; null without a present */
   presentAt: Instant | null;
+  /** Where the present of the four tiles was read from (the tenant's active.present_source): live, or the stored take (then presentAt is the take's moment); absent in a single read's answer */
+  presentSource?: "live" | "take";
   /** churned30d is the stored take's: null while there is no take yet (never a zero) */
   unitEconomics: { churned30d: number | null; slots: { key: ActiveSlotKey; status: "pending" }[] } | null;
   months: ActiveMonth[];

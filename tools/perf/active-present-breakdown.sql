@@ -10,8 +10,11 @@
 --   cd ~/cma && cma_db prod && psql "$PGCONN" -X -f tools/perf/active-present-breakdown.sql > /tmp/active-present-breakdown-prod.txt 2>&1
 --
 -- Another tenant: add  -v tenant_slug=<slug>  (the default is pulse4all-subscriptions).
+-- The other order: add  -v first=take  (N2 before N1; the default times the live path first). The path timed first
+-- warms the cache for the second: where the two orders disagree, the second run of each is the number to read.
 -- Every stage runs nine times on this connection as the application's role: the first call (planned for the call),
--- and the best of the seventh to ninth (the plan a pooled connection keeps), as 173's E5 times it. Stages:
+-- and the best, the median and the worst of the seventh to ninth (the plan a pooled connection keeps; 173's E5 reads
+-- the best, a busy hour shows in the worst). Stages:
 --   N1  cma.active_now_of, the present read live: 173's E5, the tiles' read as the page calls it while the tenant's
 --       setting active.present_source is live (the default)
 --   N2  cma.active_now_of, the present read from the stored take: the tiles' read while the setting is take (addition
@@ -33,6 +36,10 @@
 \else
   \set tenant_slug pulse4all-subscriptions
 \endif
+\if :{?first}
+\else
+  \set first live
+\endif
 
 begin;
 set local statement_timeout = '120s';
@@ -51,7 +58,9 @@ select :'tenant_id' as tenant_id, now() as measured_at, current_setting('server_
        cma.setting_of(:'tenant_id', 'active.present_source') as present_source_now,
        (select k.computed_at from cma.active_take k where k.tenant_id = :'tenant_id') as take_computed_at;
 
-create temporary table present_breakdown (ord integer, stage text, what text, rows bigint, first_ms numeric, kept_ms numeric) on commit drop;
+create temporary table present_breakdown (ord integer, stage text, what text, rows bigint, first_ms numeric, kept_ms numeric,
+                                          median_ms numeric, worst_ms numeric, run_order integer) on commit drop;
+select set_config('tool.first', :'first', true) as timed_first;
 grant select, insert on present_breakdown to cma_app;
 select set_config('app.tenant_id', :'tenant_id', true) as tenant;
 set local role cma_app;
@@ -60,8 +69,11 @@ do $$
 declare
   v_tenant uuid := current_setting('app.tenant_id')::uuid;
   r record;
-  v_t0 timestamptz; v_ms numeric; v_first numeric; v_kept numeric; n bigint;
+  v_t0 timestamptz; v_ms numeric; v_first numeric; v_late numeric[]; n bigint; v_run integer := 0;
 begin
+  if current_setting('tool.first') not in ('live', 'take') then
+    raise exception 'first is live or take, not %', current_setting('tool.first');
+  end if;
   for r in
     select * from (values
       (1, 'N1', 'cma.active_now_of, the present live (active.present_source = live; 173''s E5)',
@@ -74,23 +86,28 @@ begin
       (6, 'M1', 'the stored month ends (cma.active_month)', format('select y.at_end as x from cma.active_month y where y.tenant_id = %L', v_tenant)),
       (7, 'F1', 'cma.active_fx_of', format('select cma.active_fx_of(%L)::text as x offset 0', v_tenant))
     ) v(ord, stage, what, q)
+    order by case when current_setting('tool.first') = 'take' and v.ord in (1, 2) then 3 - v.ord else v.ord end
   loop
-    v_first := null; v_kept := null;
+    v_first := null; v_late := '{}'; v_run := v_run + 1;
     for i in 1 .. 9 loop
       v_t0 := clock_timestamp();
       execute 'select count(z.x) from (' || r.q || ') z' into n;
       v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
       if i = 1 then v_first := v_ms; end if;
-      if i > 6 then v_kept := least(coalesce(v_kept, v_ms), v_ms); end if;
+      if i > 6 then v_late := v_late || v_ms; end if;
     end loop;
-    insert into present_breakdown values (r.ord, r.stage, r.what, n, v_first, v_kept);
+    insert into present_breakdown
+    select r.ord, r.stage, r.what, n, v_first, min(x), percentile_disc(0.5) within group (order by x), max(x), v_run
+    from unnest(v_late) x;
   end loop;
 end
 $$;
 
 \echo
-\echo ==== The stages: rows, the first call and the best of the seventh to ninth, in milliseconds ====
-select stage, what, rows, first_ms, kept_ms as best_of_calls_7_to_9_ms from present_breakdown order by ord;
+\echo ==== The stages: rows, the first call and the best, median and worst of the seventh to ninth, in milliseconds ====
+select stage, run_order, what, rows, first_ms, kept_ms as best_of_calls_7_to_9_ms, median_ms as median_of_7_to_9_ms,
+       worst_ms as worst_of_7_to_9_ms
+from present_breakdown order by ord;
 
 \echo
 \echo ==== The plan of the live rows (P1): the statement of cma.active_present_of as 174 holds it, with this tenant ====

@@ -507,7 +507,7 @@ export function withActiveNow(top: import("@/lib/data").ActiveReport, now: impor
   const point = now.now;
   const was = top.months.find((m) => m.isNow);
   return {
-    ...top, presentAt: now.computedAt,
+    ...top, presentAt: now.computedAt, presentSource: now.source,
     tiles: { customerAge: stored?.customerAge ?? null, lifetime: stored?.lifetime ?? null, clv: stored?.clv ?? null, ...now.tiles },
     months: point ? top.months.map((m) => (m.isNow ? { ...m, customers: point.customers, subscriptions: point.subscriptions, bySegment: point.bySegment } : m)) : top.months,
     notes: point && was && top.notes ? { ...top.notes, reconstructionGap: top.notes.reconstructionGap + was.customers - point.customers } : top.notes,

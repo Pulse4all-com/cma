@@ -6,12 +6,15 @@
 -- (G: the setting's refusals; rolled back) and every active tenant with a subscription whose sources are set up, each
 -- inside a step that is always rolled back: the tenant's take, its settings and its rows are left as they were. It
 -- keeps 172's cma.active_base_of verbatim as a pg_temp function (133's pattern). Run as your own IAM login, after 176.
--- Output: tenant slugs, counts and milliseconds only.
--- While it runs: a tenant's step computes the take twice and holds, until it rolls back, the take's row (a settings
+-- Output: tenant slugs, counts and milliseconds only; a step that fails prints the database's error text (read a FAIL
+-- row before keeping it in records/).
+-- While it runs: a tenant's step computes the take once and holds, until it rolls back, the take's row (a settings
 -- save that marks the take stale waits), the active.present_source setting's row, the tenant's refresh lock (the job
 -- answers running) and the analyze's lock on the take's tables. Run it outside the busy hours.
--- Rows written during a step: A2 compares the take with First orders' rows read a moment later. An order deal, a call
--- or a store order arriving in between reads A2 FAIL: run again (the inputs' markers do not hold the CRM's deals).
+-- Rows written during a step: A1 and A2 compare reads of two moments (the first order deal's date and the base; the
+-- take and First orders' rows). An order deal, a call or a store order arriving in between reads FAIL: run again (the
+-- inputs' markers do not hold the CRM's deals). T1 compares the take with the live present and with Flash's figures a
+-- moment later: where the inputs' markers moved meanwhile it reads skip ("run again").
 --
 -- Checks
 --   S1  the addition is recorded after 0009m; the setting active.present_source (live; live or take); the base keeps
@@ -22,7 +25,8 @@
 --   A2  per tenant, on the tenant's own data: the acquisition channel, its level and the first order's moment of every
 --       customer of the take equal Sales → First orders' attribution of that customer's first order (cma.first_orders_of
 --       over every order deal: the earliest first order whose store order is the customer's; call_center indirect,
---       self_service direct), row for row and both ways; an info row gives the counts
+--       self_service direct), row for row and both ways; an info row gives the counts. skip where the tenant holds no
+--       first order linked to a store order (nothing to compare)
 --   A3  per tenant: the note's date is unchanged: the take's attribution_start is cma.first_orders_history_start_of's
 --   T1  per tenant: the present as the take holds it equals the live present at the take's moment (the four tiles of
 --       cma.active_now_of, stored against live), and its Active customers equal Flash's (decision D2: the customers of
@@ -231,15 +235,17 @@ do $$
 declare
   v_txt text;
 begin
-  select format('versions %s | setting %s | base %s | now %s',
+  select format('versions %s | setting %s | base %s %s | now %s',
     (select string_agg(m.version, ',' order by m.version collate "C") from cma.schema_migration m where m.version in ('0009m', '0009n')),
     (select format('%s %s %s', s.value_type, array_to_string(s.allowed_values, '/'), s.default_value) from cma.setting s where s.key = 'active.present_source'),
     (select coalesce(array_to_string(p.proconfig, ';'), 'none') from pg_proc p where p.oid = 'cma.active_base_of(uuid,timestamptz,boolean,date,boolean)'::regprocedure),
     (select format('%s/%s', has_function_privilege('cma_app', p.oid, 'execute'), has_function_privilege('public', p.oid, 'execute'))
+     from pg_proc p where p.oid = 'cma.active_base_of(uuid,timestamptz,boolean,date,boolean)'::regprocedure),
+    (select format('%s/%s', has_function_privilege('cma_app', p.oid, 'execute'), has_function_privilege('public', p.oid, 'execute'))
      from pg_proc p where p.oid = 'cma.active_now(text,text,text)'::regprocedure))
   into v_txt;
   perform pg_temp.v0009n_row(1, 'S1', 'the addition is recorded; the setting, JIT off on the base and the grant of the present''s read are in place', v_txt,
-    'versions 0009m,0009n | setting text live/take live | base jit=off | now t/f');
+    'versions 0009m,0009n | setting text live/take live | base jit=off t/f | now t/f');
 end
 $$;
 
@@ -286,6 +292,7 @@ declare
   v_first date;
   v_user uuid;
   v_a1 text; v_a2 text; v_a2i text; v_a3 text; v_t1 text; v_t2 text;
+  v_k1 text; v_k2 text; n_first bigint;
   j jsonb; j_take jsonb; j_live jsonb;
   v_t0 timestamptz; v_ms numeric; v_refresh numeric; v_take_ms numeric; v_live_ms numeric;
 begin
@@ -310,20 +317,20 @@ begin
 
       -- A1. the base of 176 against 172's, read from the first order deal's date on: the same rows, both ways
       v_first := (select (min(o.created_at) at time zone v_zone)::date from cma.first_orders_of(t.id, '-infinity'::timestamptz, v_now) o);
-      select format('rows differing %s; rows %s',
+      select format('rows differing %s',
                (select count(*) from ((select * from cma.active_base_of(t.id, v_now, true, null, true)
                                        except all select * from pg_temp.v0009n_base_172(t.id, v_now, true, v_first, true))
                                       union all
                                       (select * from pg_temp.v0009n_base_172(t.id, v_now, true, v_first, true)
                                        except all select * from cma.active_base_of(t.id, v_now, true, null, true))) q)
-               + case when pg_temp.v0009n_p('A1') then 1 else 0 end,
-               case when exists (select 1 from cma.active_base_of(t.id, v_now, true, null, true)) then 'some' else 'none' end)
+               + case when pg_temp.v0009n_p('A1') then 1 else 0 end)
       into v_a1;
 
       -- the take as 176 writes it; the checks after it read this take
       v_t0 := clock_timestamp();
       j := cma.active_refresh_of(t.id, true, v_now);
       v_refresh := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+      v_k1 := cma.active_inputs_key_of(t.id);
       perform set_config('role', 'cma_owner', true);
 
       -- A2. every customer's channel, level and first order's moment against First orders' own rows: the earliest
@@ -353,8 +360,9 @@ begin
                     (select count(*) from fo), (select count(*) from want),
                     (select count(*) from want w where w.channel = 'indirect'), (select count(*) from want w where w.channel = 'direct'),
                     (select count(*) from cma.active_customer k where k.tenant_id = t.id),
-                    (select count(*) from cma.active_customer k where k.tenant_id = t.id and k.channel = 'unknown'))
-      into v_a2, v_a2i;
+                    (select count(*) from cma.active_customer k where k.tenant_id = t.id and k.channel = 'unknown')),
+             (select count(*) from fo)
+      into v_a2, v_a2i, n_first;
 
       -- A3. the note's date: the take's attribution start is the history start of First orders, as before
       v_a3 := format('the note''s date is First orders'' history start: %s',
@@ -369,6 +377,8 @@ begin
                      ((j_take -> 'tiles') = (j_live -> 'tiles'))::text,
                      ((j_take #>> '{tiles,active_customers,value}')::bigint
                       = (select count(*) from cma.flash_customer_figures_of(t.id) f where coalesce(f.holding_subscriptions, 0) > 0))::text);
+      -- the live present and Flash's figures were read after the refresh: the markers once more, for T1's skip
+      v_k2 := cma.active_inputs_key_of(t.id);
 
       -- T2. a reader, the setting at take and at live
       if v_user is not null then
@@ -412,14 +422,23 @@ begin
       insert into pg_temp.verify_0009n values (100, 'A1 to E2 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
       continue;
     end if;
-    perform pg_temp.v0009n_row(20, 'A1', t.slug || ': the base of 176 equals 172''s base read from the first order deal on, row for row', v_a1,
-      format('rows differing 0; rows %s', case when exists (select 1 from cma.subscription s where s.tenant_id = t.id and s.source_deleted_at is null) then 'some' else 'none' end));
-    perform pg_temp.v0009n_row(21, 'A2', t.slug || ': every customer''s acquisition channel is Sales → First orders'' attribution of its first order, row for row', v_a2,
-      'customers whose channel, level or first order differs from First orders'': 0');
+    perform pg_temp.v0009n_row(20, 'A1', t.slug || ': the base of 176 equals 172''s base read from the first order deal on, row for row', v_a1, 'rows differing 0');
+    if n_first = 0 and not pg_temp.v0009n_p('A2') then
+      insert into pg_temp.verify_0009n values (21, 'A2 ' || t.slug || ': every customer''s acquisition channel against Sales → First orders''', 'skip',
+        'the tenant holds no first order linked to a store order: nothing to compare');
+    else
+      perform pg_temp.v0009n_row(21, 'A2', t.slug || ': every customer''s acquisition channel is Sales → First orders'' attribution of its first order, row for row', v_a2,
+        'customers whose channel, level or first order differs from First orders'': 0');
+    end if;
     insert into pg_temp.verify_0009n values (22, 'A2 counts ' || t.slug, case when current_setting('verify.provoke') = 'true' then 'FAIL' else 'info' end, v_a2i);
     perform pg_temp.v0009n_row(23, 'A3', t.slug || ': the note''s date stays First orders'' history start', v_a3, 'the note''s date is First orders'' history start: true');
-    perform pg_temp.v0009n_row(30, 'T1', t.slug || ': the present from the take equals the live present at the take''s moment, and Flash''s Active customers (D2)', v_t1,
-      'the four tiles from the take equal the live ones at the take''s moment: true; Active customers equal Flash''s: true');
+    if v_k1 is distinct from v_k2 and current_setting('verify.provoke') = 'false' then
+      insert into pg_temp.verify_0009n values (30, 'T1 ' || t.slug || ': the present from the take against the live present', 'skip',
+        'the inputs moved during the check (an ingest wrote a subscription, a device, a customer, an order or a contact): run again');
+    else
+      perform pg_temp.v0009n_row(30, 'T1', t.slug || ': the present from the take equals the live present at the take''s moment, and Flash''s Active customers (D2)', v_t1,
+        'the four tiles from the take equal the live ones at the take''s moment: true; Active customers equal Flash''s: true');
+    end if;
     if v_user is null then
       insert into pg_temp.verify_0009n values (31, 'T2 ' || t.slug || ': a reader and the setting', case when pg_temp.v0009n_p('T2') then 'FAIL' else 'skip' end,
         'no active person holds reports.view or performance.team');

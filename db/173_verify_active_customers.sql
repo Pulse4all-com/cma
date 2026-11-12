@@ -4,7 +4,7 @@
 -- Later additions (pg_temp.v0009l_later below says, per check, what it expects once a later addition is recorded; in a
 -- database without it the check expects what it always did):
 --   0009n (176_active_attribution_present.sql; edited by that change): the live present's answer carries one more key,
---   source (T8). Block B's fixture keeps its channels: its history start lies before its first order deal, so reading
+--   source (T8). Block B's fixture keeps its channels: its history start is not after its first order deal, so reading
 --   every order deal attributes the same first orders.
 -- Universal: no seed is assumed, so it runs in dev and in prod. Block S checks the addition, the functions, the grants,
 -- the settings and the readers' views. Block P proves the pure functions on arrays made here (random ones against a brute

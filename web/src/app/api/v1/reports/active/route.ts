@@ -21,8 +21,9 @@ export const dynamic = "force-dynamic";
  * with `marketsTotal`; `comparison` (the first two segments side by side: a, b, unknown, difference and ratio per measure);
  * `survival` (Kaplan–Meier per segment, per channel and over all); `ageBands`; `cohorts` with `cohortSplits`; `mix`;
  * `notes`; `filters` (the choices); `settings`. The tiles that state the present (Active customers, Total subscriptions,
- * the Monthly recurring amount, the euros) are live here (`presentAt` is their moment; decision D16: the page shows the
- * stored ones first and these after); everything else is read from the stored take the scheduler refreshes (decision
+ * the Monthly recurring amount, the euros) are read as the tenant's setting active.present_source says (`presentSource`):
+ * live, with `presentAt` the read's moment (decision D16: the page shows the stored ones first and these after), or
+ * from the stored take, with `presentAt` the take's moment; everything else is read from the stored take the scheduler refreshes (decision
  * D13), the churn count and the split by acquisition channel included (null while there is no take, never a zero).
  * `take` says when it was computed (`computedAt`), whether it is
  * `stale` (a setting it depends on changed since) or `late` (older than customers.history_notice_minutes), and `history`

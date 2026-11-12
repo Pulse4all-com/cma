@@ -329,7 +329,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- (below), on its own row
 -- against verify.max_refresh_ms; stocks at now, so timed once
 ('b', 'active customers', 'active top (stored document)', $q$select cma.active_top(null, null, null, null)$q$, 'agent', array['reports.view', 'performance.team']),
-('b', 'active customers', 'active now (the live present)', $q$select cma.active_now(null, null, null)$q$, 'top', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active now (the present by the tenant''s setting: live or from the take)', $q$select cma.active_now(null, null, null)$q$, 'top', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active now, the take''s path (the present from the stored take)', $q$select cma.active_now_of(cma.current_tenant_id(), null, null, null, now(), true)$q$, 'top', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active rest (stored document)', $q$select cma.active_rest(null, null, null, null, 'month')$q$, 'agent', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active list first page', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, null, null, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active top computed (two filters)', $q$select cma.active_top(null, null, 'unknown', 'direct')$q$, 'top', array['reports.view', 'performance.team']),

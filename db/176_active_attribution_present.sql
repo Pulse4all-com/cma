@@ -7,10 +7,11 @@
 -- own IAM login: dev first, then 177_verify_active_attribution_present.sql there (normal, then provoked), then the
 -- verifies that read what this script re-creates:
 --   cma.active_base_of (through the refresh, cma.active_customers_of and the fresh month ends and cohorts):
---     173_verify_active_customers.sql (edited by this change: where 0009n is recorded it expects the channels this
---     script gives its fixture) and 175_verify_active_refresh_quiet.sql (not edited: both refreshes it compares read
---     the same base);
---   cma.active_now: 173 and 131_time_all.sql part b (its Active rows; not edited).
+--     173_verify_active_customers.sql (its fixture keeps its channels: its history start lies before its first order
+--     deal) and 175_verify_active_refresh_quiet.sql (not edited: both refreshes it compares read the same base);
+--   cma.active_now: 173 (edited by this change: where 0009n is recorded its T8 expects the answer's new key, source)
+--     and 131_time_all.sql part b (its Active rows; edited: the present's row is named after the setting, and a row
+--     times the take's path).
 -- Prod: this script and 177 before the merge of #267; the web of main does not read these functions yet.
 --
 -- Why (Martin, 12 November 2026, after prod's first runs; Decision log, 12 Nov 2026, "Customers → Active attributes as
@@ -23,6 +24,8 @@
 --      date (cma.active_take.attribution_start): before it the attribution sees no touches older than the intake
 --      start, so some orders count as Direct that may have been Indirect.
 --      A customer whose Customer start lies before the first order deal the CRM holds keeps the reason before_history.
+--      The price: the refresh reads every order deal the CRM holds at each computing run (locally 0.9 ms per order
+--      deal); 177's E1 holds it to the refresh's 15 s in each database it runs in, prod included.
 --   2. The live present of the tiles took 717 ms at prod's busy hour against 400 ms. 0009m made the live read slimmer;
 --      whether that is enough is measured at that hour (tools/perf/active-present-breakdown.sql). The other path is
 --      built here beside it: the tenant setting active.present_source, live (the default) or take. With take the four
@@ -80,7 +83,8 @@ on conflict (key) do update
 -- As 172's, but for the channel: cma.first_orders_of is read over every order deal the CRM holds (from -infinity to
 -- p_now), not from p_attribution_start on. p_attribution_start is kept in the signature and no longer bounds the read:
 -- its callers go on passing the attribution's history start, which the take stores as the note's date. The reason
--- before_history is now of a customer whose Customer start (the tenant's date) lies before the first order deal's
+-- before_history is now of a customer whose Customer start (the tenant's date) lies before the date of the first order
+-- deal the CRM holds
 -- based on: 172_active_customers.sql
 create or replace function cma.active_base_of(p_tenant_id uuid, p_now timestamptz, p_with_channel boolean, p_attribution_start date,
                                               p_with_payment boolean)
@@ -96,8 +100,7 @@ as $$
   with s as materialized (
     select cma.flash_holding_statuses_of(p_tenant_id) as holding, cma.flash_active_statuses_of(p_tenant_id) as paying,
            cma.flash_ended_statuses_of(p_tenant_id) as ended,
-           (select t.timezone from cma.tenant t where t.id = p_tenant_id) as zone,
-           case when p_with_channel then p_attribution_start end as attribution_start
+           (select t.timezone from cma.tenant t where t.id = p_tenant_id) as zone
   ), sm as materialized (
     select * from cma.flash_subscription_stores_of(p_tenant_id)
   ), ps as materialized (
@@ -167,7 +170,7 @@ as $$
     from cma.flash_customer_figures_of(p_tenant_id) f
     where f.customer_id = any (array(select cu.id from cu))
   ), fo as materialized (
-    -- First orders' rows over the attribution's history, read once (never a second rule)
+    -- First orders' rows over every order deal the CRM holds, read once (never a second rule)
     select o.connection_id, o.contact_source_id, o.created_at, o.kind, o.order_id, o.level, o.attribution
     from s
     cross join lateral cma.first_orders_of(p_tenant_id, '-infinity'::timestamptz, p_now) o

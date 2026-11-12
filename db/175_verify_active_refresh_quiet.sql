@@ -54,6 +54,9 @@
 --       of three after six calls
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id
 -- (S1, P1, R1, Q1, A1, W1, E1, E2, E3): that check alone compares with a deliberate difference.
+-- Since addition 0009n (176_active_attribution_present.sql; edited by that change): Active attributes every order deal,
+-- so W1 no longer shows that opening the window is what gives customers a channel (177's A2 proves the channels against
+-- First orders' rows); W1 still passes, and its detail says so where 0009n is recorded.
 -- Collation: every ordering that feeds a compared text says collate "C".
 -- =============================================================================================
 
@@ -728,7 +731,10 @@ begin
       v_win := cma.setting_of(t.id, 'attribution.window_days')::integer;
       v_w := format('as configured: intake.start_date %s + attribution.window_days %s, the history starts %s (%s)',
                     cma.setting_of(t.id, 'intake.start_date'), v_win, coalesce(v_attr::text, 'never: no order deal'),
-                    case when v_attr is null then 'nothing to attribute' when v_attr > v_today then format('%s days ahead: every customer is Unknown until then', v_attr - v_today)
+                    case when v_attr is null then 'nothing to attribute'
+                         when v_attr > v_today and exists (select 1 from cma.schema_migration m where m.version = '0009n')
+                         then format('%s days ahead: since 0009n the customers are attributed all the same, and the date is the note''s', v_attr - v_today)
+                         when v_attr > v_today then format('%s days ahead: every customer is Unknown until then', v_attr - v_today)
                          else format('%s days of history', v_today - v_attr) end);
       insert into cma.tenant_setting (tenant_id, key, value) values (t.id, 'intake.start_date', (v_today - v_win - 400)::text)
       on conflict (tenant_id, key) do update set value = excluded.value;

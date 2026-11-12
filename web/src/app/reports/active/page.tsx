@@ -105,7 +105,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const topKey = `${filterKey}|${range}`;
   const restKey = `${topKey}|${grouping}`;
   const viewKey = [restKey, view.bySegment, view.wantEur, view.survivalSplit, view.cohortSplit, view.msort, view.mdesc, sort, descending, view.after ?? "", view.before ?? ""].join("|");
-  const ctx: Ctx = { me, t, hints, more, info, copy: words, view, viewKey };
+  const ctx: Ctx = { me, t, hints, more, info, copy: words, view, viewKey, today };
   const keyOf = (id: ActivePanel) => (id === "tiles" || id === "churn" || id === "list" ? filterKey : id === "hero" ? topKey : restKey);
   const layer = (id: ActivePanel, part: string) => ({ id, k: `${id}|${keyOf(id)}`, part, viewKey });
   const empty = (text: string) => <p className="text-body text-p4a-muted">{text}</p>;
@@ -333,7 +333,7 @@ function wordsOf(me: Principal, shared: Copy) {
     ({ about: shared.hints.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, shared.hints.howComputed) : undefined });
   return { t, hints, more, info, copy };
 }
-type Ctx = ReturnType<typeof wordsOf> & { me: Principal; view: ActiveView; viewKey: string };
+type Ctx = ReturnType<typeof wordsOf> & { me: Principal; view: ActiveView; viewKey: string; today: string };
 
 /**
  * A data panel (decision D15): its outline while its read is on its way, its body once the read is there, both at the
@@ -433,8 +433,11 @@ async function Updated({ ctx, read, fallback }: { ctx: Ctx; read: Promise<Active
   const now = await read.catch(() => null);
   if (!now || !now.figures || !now.tiles) return fallback;
   // the tenant's active.present_source: live ("Updated", the read's moment) or take ("As of", the take's moment)
+  // "As of hh:mm"; with its date when the take is not of today (a job that stopped: never a time that reads as today's)
+  const takenOn = dateKeyInZone(now.computedAt, ctx.me.timeZone);
+  const old = takenOn !== ctx.today;
   return now.source === "take"
-    ? <span data-testid="active-updated" data-present="take">{ctx.t.tilesFromTake.replace("{time}", clock(ctx.me, now.computedAt, "medium"))}</span>
+    ? <span data-testid="active-updated" data-present="take" data-old={old ? "" : undefined}>{ctx.t.tilesFromTake.replace("{time}", old ? `${fmtDate(takenOn, ctx.me.locale, "compact")}, ${clock(ctx.me, now.computedAt)}` : clock(ctx.me, now.computedAt))}</span>
     : <span data-testid="active-updated" data-present="live">{ctx.t.updated.replace("{time}", clock(ctx.me, now.computedAt, "medium"))}</span>;
 }
 

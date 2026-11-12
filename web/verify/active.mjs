@@ -519,9 +519,14 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
   expect("O5 the present says where it was read from: the take's answer is 'As of' the take's moment, the live one 'Updated'; an answer without the key is live",
     [activeNowFromDb({ figures: true, source: "take", computed_at: "t" }).source, activeNowFromDb({ figures: true, source: "live", computed_at: "t" }).source,
       activeNowFromDb({ figures: true, computed_at: "t" }).source, mockActiveNow({ tenantId: "t1", permissions: ["reports.view"] }, { market: null, segment: null, channel: null }).source,
-      /now\.source === "take"\s*\? <span data-testid="active-updated" data-present="take">\{ctx\.t\.tilesFromTake/.test(pageSrc),
-      /dataIsMock && view\.present === "take"/.test(pageSrc), activeCopy.en.tilesFromTake, activeCopy.nl.tilesFromTake],
-    ["take", "live", "live", "live", true, true, "As of {time}", "Per {time}"], ["", "", "", "", false, false, "", ""]);
+      /now\.source === "take"\s*\? <span data-testid="active-updated" data-present="take" data-old=\{old \? "" : undefined\}>\{ctx\.t\.tilesFromTake/.test(pageSrc),
+      /dataIsMock && view\.present === "take"/.test(pageSrc), activeCopy.en.tilesFromTake, activeCopy.nl.tilesFromTake,
+      // hours and minutes, and the take's date beside them when the take is not of today; the API's answer says the source
+      /const old = takenOn !== ctx\.today;/.test(pageSrc) && /old \? `\$\{fmtDate\(takenOn, ctx\.me\.locale, "compact"\)\}, \$\{clock\(ctx\.me, now\.computedAt\)\}` : clock\(ctx\.me, now\.computedAt\)/.test(pageSrc),
+      /presentAt: now\.computedAt, presentSource: now\.source,/.test(src("lib/active.ts")),
+      activeCopy.en.reason_before_history, activeCopy.nl.reason_before_history],
+    ["take", "live", "live", "live", true, true, "As of {time}", "Per {time}", true, true, "Started before the first order deal on record", "Gestart vóór de eerste bekende besteldeal"],
+    ["", "", "", "", false, false, "", "", false, false, "", ""]);
   expect("O6 the attribution's note says what its date means, in the same sentence on Customers → Active and on Sales → First orders, in both languages, each page with its own two words",
     [sentence("en", "active") === sentence("en", "first"), sentence("nl", "active") === sentence("nl", "first"),
       ["{date}", "{direct}", "{indirect}"].every((k) => sentence("en", "active").includes(k) && sentence("nl", "active").includes(k)),

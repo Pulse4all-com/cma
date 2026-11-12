@@ -472,11 +472,9 @@ reset role;
 --   order deals       an order pipeline (perf-orders, won stage po8) and, for each linked customer whose first
 --                     subscription is at most 365 days old, a first store order (paord…) at that moment and a won order
 --                     deal (pad…) of its contact at the same moment: about 1,500 × m / 3 first orders over a year
--- The acquisition channel reads cma.first_orders_of from the attribution's history start, which is intake.start_date
--- (60 days back above) plus attribution.window_days (90): in the future on this fixture as loaded, so every customer is
--- Unknown (before_history) and the read is empty. To time the channel over a year of first orders, move the start inside a
--- transaction and roll it back:  begin; set local role cma_owner; update cma.tenant_setting set value = (current_date - 455)::text
--- where key = 'intake.start_date' and tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions'); … ; rollback;
+-- The acquisition channel reads cma.first_orders_of over every order deal (since addition 0009n; before it, from the
+-- attribution's history start, which lies in the future on this fixture as loaded, so every customer was Unknown): a year
+-- of first orders, about 1,135 at three times volume. These are a design choice, not three times prod's order deals.
 -- Every id is invented; no name, address, email or phone. Rerunnable: a second run finds the pipeline perf-orders and stops.
 set role cma_owner;
 do $$

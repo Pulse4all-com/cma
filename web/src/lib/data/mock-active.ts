@@ -111,6 +111,8 @@ function buildBase(now: number): Customer[] {
       }
       let channel: ActiveChannel = "unknown";
       let level: string | null = null;
+      // before_history: the Customer start lies before the first order deal the CRM holds (in this test data that deal's
+      // date is the attribution's history start)
       let reason: string | null = contact === null ? "no_contact" : start < attributionStart ? "before_history" : null;
       if (reason === null) {
         const c = r();
