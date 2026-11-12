@@ -1,0 +1,44 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 10000
+(1 row)
+
+psql:db/115_verify_asset_sync.sql:39: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                  check_name                                                                  |     result      |                                                                                             detail                                                                                             
+----------------------------------------------------------------------------------------------------------------------------------------------+-----------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zj recorded, after 0008zi                                                                                                    | ok              | 
+ A2 the job assets_poll; the connection fields' checks and their trigger; the staging trigger                                                 | ok              | 
+ A3 every function the application's only and invoker, the trigger functions nobody's; one shared load                                        | ok              | 
+ A4 the asset register's settings by form: ids, the date format, the poll interval from 1 to 1440                                             | ok              | ok ok ok table_id table_id view_id date_format assets_poll_interval_minutes assets_poll_interval_minutes assets_poll_interval_minutes assets_poll_interval_minutes ok
+ B1 the ingest load as the Ingest user: counts, an address a bare @, no run of its own, the staged rows gone                                  | ok              | 4 @ rows=4 ins=4 upd=0 same=0 missing=0 repl=0 um=0 us=0 uk=1 cri=1 drop=0 | 0 0 rec-1:cu-1:false rec-2:-:false rec-3:-:true rec-4:cu-4:false true 0 0
+ B2 a batch of changed records (is_full false) never marks a device missing                                                                   | ok              | rows=2 ins=1 upd=1 same=0 missing=0 repl=0 um=0 us=0 uk=1 cri=0 drop=0 | 0/5 SN-1b
+ B3 a full batch marks the devices it does not hold missing; a later full one brings them back                                                | ok              | rows=2 ins=0 upd=0 same=2 missing=3 repl=0 um=0 us=0 uk=1 cri=0 drop=0 | rec-3,rec-4,rec-5 | rows=5 ins=0 upd=3 same=2 missing=0 repl=0 um=0 us=0 uk=2 cri=1 drop=0 | 0
+ B4 a connection without a token secret name: the ingest load and the shared one refused to the Ingest user, a person's load from files works | ok              | CMA04 CMA04 2 rows=2 ins=2 upd=0 same=0 missing=0 repl=0 um=0 us=0 uk=1 cri=0 drop=0 assets_import/files-b4/succeeded 0
+ B5 permissions: person and ingest each their own load, no agent stages; is_full, no rows, a CRM connection refused                           | ok              | CMA06 CMA06 CMA04 CMA02 CMA04 CMA06
+ B6 row-level security: each Ingest user loads and sees its own tenant only                                                                   | ok              | rows=1 ins=1 upd=0 same=0 missing=0 repl=0 um=1 us=1 uk=1 cri=0 drop=0 CMA02 1 1 0 7 ingest-b6-one
+ B7 the poll's run: job assets_poll with the load's counts and fetched; another key refused                                                   | ok              | ok assets_poll/devices/succeeded/2/1 CMA04
+ B8 the register's fields: device, component by kind, named id; the refusals; the kind they imply                                             | ok              | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 assets - device:ref:ns_internal_id:ns_internal_id device:serial:-:aed_sn device_component:expires_on:pads:pads_expiry device_component:serial:pads:pads_sn
+ B9 the register's settings checked by form; a CRM connection's not                                                                           | ok              | ok CMA04 CMA04 CMA04 ok CMA04 tblVerify0001
+ C1 a nightly full snapshot of 5,000 unchanged records, staged and loaded as the Ingest user, under verify.max_ms                             | ok              | 5089.7 ms, rows=5000 ins=0 upd=0 same=5000 missing=0 repl=0 um=0 us=0 uk=0 cri=0 drop=0
+ verdict                                                                                                                                      | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL
+(15 rows)
+
+RESET

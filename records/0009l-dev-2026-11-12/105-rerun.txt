@@ -1,0 +1,63 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/105_verify_reviews.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+                                                                    check_name                                                                    | result |                                                                                                                                                                                                        detail                                                                                                                                                                                                        
+--------------------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008ze recorded, after 0008zd                                                                                                        | PASS   | 
+ A2 the two tables' columns, types and nullability; rating and max_rating numeric(3,2)                                                            | PASS   | 
+ A3 keys, the link rules, the filtered raw, the market's key, the kind and the trigger                                                            | PASS   | 
+ A4 row-level security, the audit trigger, no delete for the application, nothing for the readers                                                 | PASS   | 
+ A5 every function the application's only and invoker; the readers' functions definer, the owner's, pinned, theirs only                           | PASS   | 
+ A6 the reporting views' exact columns, readable; no raw, person's name, email, phone, title or text                                              | PASS   | 
+ A7 the two settings, the job reviews_poll, the data-quality catalog, nothing twice                                                               | PASS   | 
+ A8 the redefinitions carry 0008n's kinds, 0008zc's data quality, 0008p's checks, the tag meaning                                                 | PASS   | 
+ B1 the channel catalog: new unmapped and not counted, renamed, gone, an empty list, the configuration kept, the refusals                         | PASS   | 4 chl-gb:-:false:en_GB chl-nl:-:false:nl_NL chl-old:-:false:de_DE chl-x:-:false:- | 3 0 chl-fr:-:false:false:Shop FR chl-gb:GB:true:false:Shop GB chl-nl:NL:true:false:Shop NL renamed chl-old:-:false:true:Old shop chl-x:-:false:false:Shop X | CMA02 CMA02 CMA04 CMA06
+ B2 the kind reviews from the rows, set and kept; a CRM or automation connection takes none (CMA04)                                               | PASS   | reviews CMA03 ok reviews CMA04 CMA04
+ B3 reviews and their links: by order name with the order's contact, by source id, none; unknown channel not stored                               | PASS   | old-1:inserted:none:false pre-1:inserted:none:false pre-2:inserted:none:false pre-3:inserted:none:false rev-1:inserted:order:true rev-2:inserted:order:false rev-3:inserted:none:false rev-4:inserted:none:false rev-5:inserted:none:false rev-6:inserted:none:false rev-7:unknown_channel:-:- | rev-1:c-1:true:true:true:verifyreviews rev-2:-:false:true:false:verifyreviews rev-3:-:-:false:false:verifyreviews
+ B4 the stale guard, an unchanged review written nowhere, a state change (vetoed, unpublished, a reply)                                           | PASS   | stale,unchanged 0 updated:none VETOED:false:true
+ B5 a raw with a text, a customer or an email, a rating of 6, no time, a flag that is no boolean, 501 items: CMA04, nothing stored                | PASS   | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 0
+ B6 the email contact: linked, unchanged and kept, relinked, an order's review, unknown, not a CRM (CMA04), kept by an unchanged re-read, cleared | PASS   | linked unchanged true relinked order unknown CMA04 unchanged:contact:true cleared unlinked linked none:-:false
+ B7 an order arriving later links the review, the email contact kept; an ambiguous name links nothing; a deleted order unlinks                    | PASS   | updated:order:true true:c-3 none true none updated:none:false
+ B8 the privacy deletion: the email link gone, the order kept without the contact                                                                 | PASS   | 1 1 rev-1:order:-:true rev-3:none:-:false 0
+ B9 the settings: the threshold 1 to 4, the history start a date or nothing                                                                       | PASS   | 2 empty CMA04 CMA04 CMA04 ok CMA04 ok 2024-01-01 ok
+ B10 review rules with and without a highest rating, listed; another trigger's name, a rating of 6, an agent refused; the trigger fixed           | PASS   | Every review:review_submitted:review:-:normal Negative review:review_submitted:review:2.00:urgent Verify new deal:record_created:deal:-:normal CMA03 CMA04 CMA03 CMA03 CMA03 CMA06 Every review:review_submitted Negative review:review_submitted Verify new deal:record_created
+ B11 the report's figures, the previous period like for like, the distribution, the link levels, the history start                                | PASS   | 4/3.13/2/2/1/1 prev 2/3.00/1/0/0/2 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/0 links order:2/0,contact:1/0,none:1/2 start 2026-08-01 neg 2 true
+ B12 the groups by day and week, markets, channels, invite events, the markets' states, the filter                                                | PASS   | 14 2026-10-02=1,2026-10-05=1,2026-10-14=2 week 2026-09-28=1,2026-10-05=1,2026-10-12=2 markets GB:2/2.75/1/0/1/1<1/2.00/1/0/0/1 NL:2/3.50/1/2/0/0<1/4.00/0/0/0/1 channels chl-gb:Shop GB:GB:2 chl-nl:Shop NL renamed:NL:2 events checkout:2/1,klaviyo-integration:1/0,none:1/1 states DE:no_channel:0 FR:channel_no_reviews:1 GB:has_reviews:1 NL:has_reviews:1 filter FR,GB,NL NL 2/3.50/1/2/0/0 unknown 0/-/0/0/0/0
+ B13 the page's range, market and group (CMA04), an agent (CMA06), reports.view and performance.team read it                                      | PASS   | CMA04 CMA04 CMA04 ok CMA06 ok ok
+ B14 data quality: the unmapped channel with its reviews, the market without a channel; listed where reviews connect                              | PASS   | market_without_review_channel:DE:- review_channel_unmapped:chl-x:1 review_channel_unmapped=1,market_without_review_channel=1 two review_channel_unmapped=0,market_without_review_channel=0
+ B15 the reader views: per day, week, market and channel with the previous period, the states, the reviews; tenant two sees none                  | PASS   | 2/2.75/10001/1/011/- 1/3/4.00 GB=2 Shop GB=1,Shop NL renamed=2 DE:no_channel,FR:channel_no_reviews,GB:has_reviews,NL:has_reviews 10 1/1 two 0/0
+ B16 the alerts: once per rule and review, a counted channel's published and recent reviews only; market, channel, rating, time, link             | PASS   | 3 0 Every review>al-1,Every review>al-2,Negative review>al-1 true true true verifyreviews urgent true 2.00
+ B17 tenant isolation: tenant two writes nothing into tenant one's connection and sees none of it                                                 | PASS   | CMA02 CMA02 CMA02 0/0 0/-/0/0/0/0
+ B18 the review channels on Sources, a run of reviews_poll, the audit's actors                                                                    | PASS   | chl-fr:FR:true:0:false chl-gb:GB:true:3:false chl-nl:NL:true:10:false chl-x:-:false:2:false chl-old:-:false:0:true reviews_poll:succeeded:12 3/15
+ C1 the page of 92 days over 20,000 reviews, as the application, under verify.max_ms                                                              | PASS   | 113.5 ms
+ verdict                                                                                                                                          | PASS   | 105_verify_reviews: 27 PASS, 0 FAIL
+(28 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+RESET

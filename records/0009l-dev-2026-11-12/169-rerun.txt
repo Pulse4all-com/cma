@@ -1,0 +1,60 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/169_verify_pledge_lists.sql:60: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+                                                                              check_name                                                                               | result |                                                                                                 detail                                                                                                  
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 0009j after 0009i; five tables with RLS, audit (not per file row), frozen triggers, the app reading the files only                                                 | PASS   | pledge_snapshot and pledge_snapshot_row: no insert, update or delete for cma_app; nothing for cma_readonly
+ S2 the two device fields, the staging, the types, the mapping, the settings, the permissions, the scheduler                                                           | PASS   | pledges.snapshot held by every tenant's scheduler role and by no other role
+ S3 every function the application's and invoker; the takes definer and pinned; their bodies the owner's                                                               | PASS   | 18 invoker functions, 2 definer takes, 2 bodies; the load and the scheduler user 0009j's
+ A1 the file path: the reference trimmed and kept as an id, the label mapped, raw keeping both                                                                         | PASS   | rec-1=2/en/2/ENGLISH rec-2=-/-/-/- rec-3=-/-/-/Klingon rec-4=-/-/-/- rec-5=-/-/-/-; inserted 5, unmapped_language 1, refs_dropped 2 (a comma, an @)
+ A1 an unchanged rerun changes nothing; an alias added later maps the label at the next load                                                                           | PASS   | rerun: 5 unchanged; then rec-3 6/kl, updated 1
+ A1 the chunk path: both keys loaded; a chunk without them loads both empty; another key or 501 characters refused                                                     | PASS   | rec-c1 3/en then -/- (updated 1); CMA04 CMA04 CMA04
+ A2 aliases trimmed and lower-cased, matched case-insensitively; unmapped or empty null; an empty code removes; refusals                                               | PASS   | en en null null null; CMA04 ×5 (eng, e1, empty, @, 101 characters); one alias left; CMA06 without tenant.configure
+ A3 months at 9 October 2026: 14, 12, 32; 0 without a shipment or after; 774.58; never below 0; empty without values                                                   | PASS   | months 14 12 32 0 0 0 0 0 (age's whole months); values 774.58 845.00 0.00 null 736.36
+ A4 the rows: two active loans, In Storage, Start date in the tenant's zone, months and values, an empty model                                                         | PASS   | 9 rows of loans 2 and 3; d-4 (inactive loan), d-5 (unknown loan), d-9 (missing), d-13 (no loan) left out; s-dup by the first id
+ A4 the link equals the installed base's for every device                                                                                                              | PASS   | 12 devices held, 7 linked; d-3 (nope) and d-12 (s-1 in NL) unlinked
+ A5 not due before 00:05 local (also by an instant in UTC) or on another day; taken at 00:05 local once                                                                | PASS   | not_due not_due not_due taken 2026-10-01 2 9 already_taken already_taken not_due not_due
+ A5 the winter quarter by its local day; pledges.snapshot_local_time moved; no_pledges takes nothing                                                                   | PASS   | taken 2027-01-01 16 not_due taken no_pledges 0
+ A5 the file keeps its rows and labels after the catalog and the register change; taken by the scheduler                                                               | PASS   | 2|Lender A|UK|EUR|1|SN-0001|C1001|779.61 3|Lender B|NL|EUR LTD|2|SN-0011|123456789012345|0.00
+ A5 frozen: update, delete, truncate refused to the owner (CMA03), every write to the application; one audit row per file, none per row                                | PASS   | CMA03 CMA03 CMA03 CMA03 CMA03 42501 42501 42501 3 0 27
+ A5 take_current: the quarter's first day once, already_taken after, no_pledges without; the job's entry answers                                                       | PASS   | quarter 2026-10-01; t t already_taken no_pledges t
+ A6 the page: the files, today's sums per loan, In Storage, the checks, the unmapped labels, the quarter                                                               | PASS   | 2026-10-01 2 9 {"no_language": 1, "unknown_loan": 1, "no_start_date": 2, "no_model_values": 1, "no_first_shipped": 1, "customer_ref_invalid": 1} [{"label": "Klingon", "devices": 1}] Pledge_Lists true
+ A6 a check's serials with their values and total; an unknown check or a limit outside 1 to 1,000 refused                                                              | PASS   | SN-0003:2,SN-0012:2 SN-0005=9 SN-0006=frx 1 CMA04 CMA04 CMA04
+ A6 a stored file by loan and serial with its labels, layout and the name prefix it was taken with; today's valued today with today's prefix; no file of a date: CMA02 | PASS   | 9 Pledge_Lists/Pledge_Lists P4A_Pledge_Lists_Maatjes 2:SN-0001,3:SN-0012 Lender B/2 t t CMA02
+ A6 every refusal; a new tenant's default roles hold neither permission, its scheduler pledges.snapshot                                                                | PASS   | CMA06 CMA06 CMA06 CMA06 42501 42501 CMA06 CMA06 CMA06 CMA06 CMA06 CMA06 CMA06
+ A7 set_pledge_loan: trimmed, upserted by key; number, labels, characters, layout and key refused (CMA04), a number held (CMA03)                                       | PASS   | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA03 t|2|2|Lender A|EUR LTD|2|f
+ A7 set_pledge_model_value: upserted per model; an unknown model (CMA02), three decimals, below 0, none, 21 characters (CMA04)                                         | PASS   | CMA02 CMA04 CMA04 CMA04 CMA04 hs1|HS1|845.00|7.76|120.00
+ A7 the settings' forms (24:00 and a space refused); the two fields mapped on an asset register only                                                                   | PASS   | CMA04 ok CMA04 ok 06:30 P4A_Pledge_Lists_Maatjes ok ok CMA04 CMA04
+ A7 the loan's audit images keep no lender label (D8): lender_label_changed on an update instead                                                                       | PASS   | 3 audit rows, none with a label; changed: -, false, true
+ verdict                                                                                                                                                               | PASS   | 23 PASS, 0 FAIL
+(24 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET

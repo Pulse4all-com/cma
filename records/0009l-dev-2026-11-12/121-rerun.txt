@@ -1,0 +1,52 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/121_verify_lead_cohorts.sql:54: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                check_name                                                                | result |                                                                                                                                                                                                                                          detail                                                                                                                                                                                                                                           
+------------------------------------------------------------------------------------------------------------------------------------------+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zm recorded, after 0008zl                                                                                                | PASS   | 
+ A2 every function the application's only and invoker; the readers' function definer, the owner's, pinned, theirs only                    | PASS   | 
+ A3 the reader view with its exact columns, the readers' only; no name, address, email, phone, hash or payload                            | PASS   | 
+ A4 the setting cohorts.lead_ages_days in the catalog                                                                                     | PASS   | cohorts.lead_ages_days:text:1,7,30,60,90:-
+ A5 every fact read from the function that owns it; nothing written again                                                                 | PASS   | 
+ A6 nothing twice: one addition row, the setting once, the row type's 21 fields, the check with 0008zi's branches and the new             | PASS   | 
+ B1 the population is cma.lead_deals_of's, a deal of an order pipeline still marked lead included                                         | PASS   | dA1 dA2 dA3 dA4 dB1 dB2 dC1 dC2 dOrd = dA1 dA2 dA3 dA4 dB1 dB2 dC1 dC2 dOrd
+ B2 every deal's period keys in the tenant's zone, age, attempts, first attempt and conversation, outcome, loss, order and not called yet | PASS   | dA1:0706/0701/116/1/06 08:59:50/06 08:59:50/ordered/-/2.08/Facebook/f dA2:0706/0701/115/2/09 08:59:50/20 08:59:50/ordered/-/45.00/Google/f dA3:0706/0701/114/0/-/-/lost/0720/-/Facebook/f dA4:0713/0701/109/0/-/-/open/-/-/-/t dB1:1012/1001/18/1/12 08:04:50/12 08:04:50/won/-/-/Facebook/f dB2:1012/1001/14/1/16 09:54:50/-/open/-/-/Google/f dC1:1026/1001/1/1/29 08:29:50/29 08:29:50/open/-/-/Facebook/f dC2:1026/1001/0/0/-/-/open/-/-/Facebook/t dOrd:1012/1001/17/-/-/-/-/-/-/-/f
+ B3 attempts, first attempt, conversation and outcome equal Attempts per deal's for every sales deal                                      | PASS   | 8 of 8
+ B4 per range, period and split the created deals add up to cma.lead_deals_of's count of the range                                        | PASS   | 0701:4/4/4+4/4+4/4/4+4/4+4 1001:5/5/5+5/5+5/5/5+5/5+5 1014:3/3/3+3/3+3/3/3+3/3+3 0801:0/0/0+0/0+0/0/0+0/0+0 
+ B5 the figures per week and age, newest first                                                                                            | PASS   | 2026-W29 1/1/0/- 1:0/0/0/0 7:0/0/0/0 30:0/0/0/0 60:0/0/0/0 90:0/0/0/0 | 2026-W28 3/0/2/23.5 1:1/1/0/0 7:2/1/1/0 30:2/2/1/1 60:2/2/2/1 90:2/2/2/1 || 2026-W44* 2/1/0/- 1:-/-/-/- 7:-/-/-/- 30:-/-/-/- 60:-/-/-/- 90:-/-/-/- | 2026-W42 3/0/0/- 1:2/1/0/0 7:2/1/0/0 30:-/-/-/- 60:-/-/-/- 90:-/-/-/-
+ B6 the ordered share at the largest age equals lead to order's share ordered within that age                                             | PASS   | 2/4=2/4 1/4=1/4
+ B7 an age the cohort has not reached is null, one it has reached is counted                                                              | PASS   | 1:false:null 7:false:null 30:false:null 60:false:null 90:false:null | 1:true:0 7:true:0 30:false:null 60:false:null 90:false:null
+ B8 a range that cuts a cohort marks it partial and counts its deals in the range only                                                    | PASS   | 2026-10-26:2026-10-26..2026-11-01:true:2 2026-10-12:2026-10-12..2026-10-18:true:1 2026-06-01 [1, 7, 30, 60, 90] 90 week | 2026-07:2026-07-01..2026-07-31:false
+ B9 the splits per market and per source channel within each cohort                                                                       | PASS   | 2026-W29/GB 1/1/0/- 1:0/0/0/0 7:0/0/0/0 30:0/0/0/0 60:0/0/0/0 90:0/0/0/0 | 2026-W28/GB 1/0/0/- 1:0/0/0/0 7:0/0/0/0 30:0/0/0/1 60:0/0/0/1 90:0/0/0/1 | 2026-W28/NL 2/0/2/23.5 1:1/1/0/0 7:2/1/1/0 30:2/2/1/0 60:2/2/2/0 90:2/2/2/0 # 2 || 2026-W29/none:1 2026-W28/Facebook:2 2026-W28/Google:1
+ B10 the market, source channel and pipeline filters, and the filter lists of the deals without them                                      | PASS   | 2 2 4 0 ["GB", "NL"] Sales,Self Serve ["Facebook", "Google"]
+ B11 the setting's spaces dropped and its refusals; lead_to_order.max_days no lower than the largest age                                  | PASS   | 1,7,30 CMA04 CMA04 CMA04 CMA04 CMA04 ok CMA04 ok 1,7,90
+ B12 an age above lead_to_order.max_days is counted without its ordered figure                                                            | PASS   | 2026-07 4/1/2/23.5 1:1/1/0/0 7:2/1/1/0 100:2/2/-/1 90
+ B13 the parameters refused out of form; the defaults and a full set accepted                                                             | PASS   | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok ok
+ B14 an agent refused, no acting user refused; the analyst and the admin read                                                             | PASS   | CMA06 CMA01 ok ok
+ B15 another tenant sees 0 rows of tenant one, and its own deal only                                                                      | PASS   | 0 1 2026-W42:1/1 ["unknown"]
+ B16 the reader view equals the application's rows for its tenant and shows no other tenant's                                             | PASS   | 9 true 0
+ verdict                                                                                                                                  | OK     | 121_verify_lead_cohorts: 22 PASS, 0 FAIL
+(23 rows)
+
+RESET
