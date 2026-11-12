@@ -1,6 +1,11 @@
 -- =============================================================================================
 -- 173_verify_active_customers.sql: verifies addition 0009l, Customers → Active
 -- =============================================================================================
+-- Later additions (pg_temp.v0009l_later below says, per check, what it expects once a later addition is recorded; in a
+-- database without it the check expects what it always did):
+--   0009n (176_active_attribution_present.sql; edited by that change): the live present's answer carries one more key,
+--   source (T8). Block B's fixture keeps its channels: its history start lies before its first order deal, so reading
+--   every order deal attributes the same first orders.
 -- Universal: no seed is assumed, so it runs in dev and in prod. Block S checks the addition, the functions, the grants,
 -- the settings and the readers' views. Block P proves the pure functions on arrays made here (random ones against a brute
 -- force, hand-made ones against hand-computed tables): no table is read. Block B works on two throwaway tenants inside a
@@ -147,6 +152,23 @@ as $$
   select current_setting('verify.provoke') in ('true', p_id)
 $$;
 
+-- What a check expects once a later addition is recorded (the header says which and why); without it: as it is
+create or replace function pg_temp.v0009l_later(p_id text, p_expected text)
+returns text
+language plpgsql stable
+as $$
+declare
+  v text := p_expected;
+begin
+  if exists (select 1 from cma.schema_migration m where m.version = '0009n') then
+    if p_id = 'T8' then
+      v := replace(v, 'live read: keys computed_at,figures,now,tiles,', 'live read: keys computed_at,figures,now,source,tiles,');
+    end if;
+  end if;
+  return v;
+end
+$$;
+
 -- One check's row: PASS when what was found equals what is expected; provoked, the expectation carries a deliberate
 -- difference, so the comparison itself fails
 create or replace function pg_temp.v0009l_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
@@ -154,7 +176,8 @@ returns void
 language plpgsql
 as $$
 declare
-  v_exp text := case when pg_temp.v0009l_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
+  v_exp text := case when pg_temp.v0009l_p(p_id) then coalesce(pg_temp.v0009l_later(p_id, p_expected), '') || ' [provoked: a deliberate difference]'
+                     else pg_temp.v0009l_later(p_id, p_expected) end;
 begin
   insert into pg_temp.verify_0009l values (p_ord, p_id || ' ' || p_name,
     case when p_found is not distinct from v_exp then 'PASS' else 'FAIL' end,
@@ -2076,6 +2099,7 @@ drop function if exists pg_temp.v0009l_doc(jsonb, jsonb);
 drop function if exists pg_temp.v0009l_live_page(uuid, date, text, text, text, text, timestamptz);
 drop function if exists pg_temp.v0009l_code(text);
 drop function if exists pg_temp.v0009l_row(integer, text, text, text, text);
+drop function if exists pg_temp.v0009l_later(text, text);
 drop function if exists pg_temp.v0009l_p(text);
 
 select check_name, result, detail
