@@ -1,0 +1,54 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ set_config 
+------------
+ 400
+(1 row)
+
+psql:/tmp/provoke.sql:76: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                   check_name                                                                                                   |        result        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition is recorded; the column, the grants, the definer's frame and JIT off are in place                                                                                                              | FAIL                 | found versions 0009l,0009m | inputs_key text nullable | app only: active_inputs_key_of t/f, active_take_analyze t/f | analyze: definer t, owner cma_owner, search_path=pg_catalog, cma, pg_temp | jit off: active_present_of jit=off, active_refresh_of jit=off | analyze without a tenant: CMA04 | expected versions 0009l,0009m | inputs_key text nullable | app only: active_inputs_key_of t/f, active_take_analyze t/f | analyze: definer t, owner cma_owner, search_path=pg_catalog, cma, pg_temp | jit off: active_present_of jit=off, active_refresh_of jit=off | analyze without a tenant: CMA04 [provoked: a deliberate difference]
+ P1 pulse4all-subscriptions: the live present of 174 equals 172's row for row                                                                                                                                   | FAIL                 | found rows differing 1; rows some | expected rows differing 0; rows some [provoked: a deliberate difference]
+ R1 pulse4all-subscriptions: a forced refresh of 174 writes the same take as 172's at the same moment                                                                                                           | FAIL                 | found active_base 540:9c747bff4cb5745ff82ce582e07d310a | active_customer 450:c24788a4a654a0912c00b75552f5788a | active_spell 453:c9659def3509a757f60fd7755bf17c00 | active_month 831:b641ad0c73c2986147a0ec39e58d2c9c | active_cohort 1345:763240b122740904eb60200483ec3556 | active_document 20:517e29c088543b26d66dbbff8ab52322 | take 1:cb84884300a811e9ff85988416eb0fda | expected active_base 540:9c747bff4cb5745ff82ce582e07d310a | active_customer 450:c24788a4a654a0912c00b75552f5788a | active_spell 453:c9659def3509a757f60fd7755bf17c00 | active_month 831:b641ad0c73c2986147a0ec39e58d2c9c | active_cohort 1345:763240b122740904eb60200483ec3556 | active_document 20:517e29c088543b26d66dbbff8ab52322 | take 1:cb84884300a811e9ff85988416eb0fda [provoked: a deliberate difference]
+ Q1 pulse4all-subscriptions: a due run with nothing changed computes nothing and leaves what a recompute would write; a changed input, a stale take, a new business date and a take without a key compute again | FAIL                 | found nothing changed: refreshed true unchanged true rows 0, the take's moment moved true, the six tables as they were true | past the refresh's interval, a quiet run leaves what 172's due run writes then: true | a customer delivered again unchanged: unchanged true | a customer's link changed: unchanged false | a subscription written since: unchanged false | a stale take: unchanged false | a new business date: unchanged false | a take without inputs_key: unchanged false, then it holds one true | expected nothing changed: refreshed true unchanged true rows 0, the take's moment moved true, the six tables as they were true | past the refresh's interval, a quiet run leaves what 172's due run writes then: true | a customer delivered again unchanged: unchanged true | a customer's link changed: unchanged false | a subscription written since: unchanged false | a stale take: unchanged false | a new business date: unchanged false | a take without inputs_key: unchanged false, then it holds one true [provoked: a deliberate difference]
+ A1 pulse4all-subscriptions: the planner's row counts of the take's tables follow a fill                                                                                                                        | FAIL                 | found tables whose planner count is off by more than a fifth: 0; tables with rows and no statistics: 0; a second call analyzes 0; the first refresh reported tables_analyzed a number | expected tables whose planner count is off by more than a fifth: 0; tables with rows and no statistics: 0; a second call analyzes 0; the first refresh reported tables_analyzed a number [provoked: a deliberate difference]
+ W1 pulse4all-subscriptions: with the attribution's window open, customers get a known acquisition channel                                                                                                      | FAIL                 | opened in this step: the history starts never (- days back), first orders of the take's customers 0, customers with a known acquisition channel 0 | as configured: intake.start_date 2026-10-01 + attribution.window_days 90, the history starts never: no order deal (nothing to attribute)
+ E1 pulse4all-subscriptions: the forced refresh within its budget, after it computed 9 times on this connection (6 with the history)                                                                            | FAIL                 | 353.1 ms against 0 ms
+ E2 pulse4all-subscriptions: a due run with nothing changed within the quiet budget                                                                                                                             | FAIL                 | 4.0 ms (best of 3) against 0 ms
+ E3 pulse4all-subscriptions: the live present of the tiles within the above-the-fold budget                                                                                                                     | FAIL                 | 8.8 ms (best of 3, after six calls) against 0 ms
+ verdict                                                                                                                                                                                                        | PROVOKED, NOT A PASS | 175_verify_active_refresh_quiet: 0 PASS, 9 FAIL, 0 skip
+(10 rows)
+
+DROP TABLE
+RESET
