@@ -8,12 +8,18 @@
 -- same rows at the same moment, as 133 compares a rewritten read with its previous definition. Run as your own IAM
 -- login, after 174. Output: tenant slugs, counts and milliseconds only.
 -- While it runs: a tenant's step computes the take about twelve times (in prod about a minute) and holds, until it
--- rolls back, the take's row (a settings save that marks the take stale waits), one subscription's row (an ingest
--- write of that subscription waits), the intake.start_date setting's row and the tenant's refresh lock (the job
--- answers running). Run it outside the busy hours.
+-- rolls back, the take's row (a settings save that marks the take stale waits), one subscription's row and one store
+-- customer's row (an ingest write of that subscription or that customer waits), the intake.start_date setting's row,
+-- the tenant's refresh lock (the job answers running) and the analyze's lock on the take's six tables (another
+-- analyze or a vacuum of them waits; no reader or writer does). Run it outside the busy hours.
 -- Rows written by an ingest while a step runs: the two refreshes R1 compares, and the quiet runs of Q1 and E2, each
--- read the tables as they are at their own moment. The step reads the inputs' markers at its start and after the quiet
--- runs; where they moved, R1, Q1 and E2 read skip ("the inputs moved during the check: run again"), never a FAIL.
+-- read the tables as they are at their own moment. The step reads the inputs' markers at its start and after the last
+-- run that must be quiet; where they moved, R1, Q1 and E2 read skip ("the inputs moved during the check: run again").
+-- What the markers do not hold (a CRM deal, call or association arriving between two compared refreshes) can still
+-- read R1 or Q1 FAIL: run again.
+-- A take is due after the tenant's customers.refresh_minutes; the step ages the take by that plus a minute. Where the
+-- later moment of Q1 falls on the next business date (the last minutes before the tenant's midnight) that part is not
+-- compared and an info row says so.
 --
 -- Checks
 --   S1  the addition is recorded after 0009l; cma.active_take.inputs_key exists; the two new functions are the
@@ -24,9 +30,11 @@
 --   R1  per tenant: a forced refresh of 174 writes the same take as 172's forced refresh at the same moment: the six
 --       take tables row for row and the take's own row (but its duration and inputs_key), each refresh in a step of its
 --       own, rolled back
---   Q1  per tenant: the quiet run: a take six minutes old with nothing changed answers unchanged with every count 0,
---       moves the take's moment and writes no other row; six minutes on by the clock, a quiet run leaves the six
---       tables and the take's row as 172's forced refresh writes them at that moment (in a step of its own); a
+--   Q1  per tenant: the quiet run: a take older than the refresh's interval with nothing changed answers unchanged with every count 0,
+--       moves the take's moment and writes no other row; past the refresh's interval by the clock, a quiet run leaves
+--       the six tables and the take's row as 172's own due run writes them at that moment (in a step of its own; not
+--       172's forced refresh, which also writes the history again: the cohorts' ages move with the clock, and within
+--       a business date neither 172's due run nor the quiet run writes them again); a
 --       subscription written since, a customer whose row or whose link to a contact changed, a setting saved since
 --       (the take marked stale), a new business date and a take of 0009l (no inputs_key) each compute again; a
 --       customer delivered again unchanged (only its write time moves) stays quiet
@@ -533,6 +541,7 @@ declare
   v_k0 text; v_k1 text; v_moved boolean;
   v_comp integer; v_hist integer;
   d_later text; d_later_172 text;
+  v_due interval; v_mid boolean;
 begin
   for t in select x.id, x.slug from cma.tenant x
            where x.status = 'active' and exists (select 1 from cma.subscription s where s.tenant_id = x.id) order by x.slug collate "C" loop
@@ -545,6 +554,9 @@ begin
     d_later := null; d_later_172 := null;
     v_zone := (select x.timezone from cma.tenant x where x.id = t.id);
     v_today := (v_now at time zone v_zone)::date;
+    -- a take is due after customers.refresh_minutes (1 to 1440): aged here by that plus a minute
+    v_due := make_interval(mins => coalesce(nullif(cma.setting_of(t.id, 'customers.refresh_minutes'), '')::integer, 5) + 1);
+    v_mid := ((v_now + v_due) at time zone v_zone)::date is distinct from v_today;
     begin
       perform set_config('app.tenant_id', t.id::text, true);
       perform set_config('role', 'cma_app', true);
@@ -591,7 +603,7 @@ begin
 
       -- Q1. the quiet run
       perform set_config('role', 'cma_owner', true);
-      update cma.active_take k set computed_at = v_now - interval '6 minutes' where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due where k.tenant_id = t.id;
       d_q := (select string_agg(pg_temp.v0009m_digest(x, t.id, '{}'), ' ' order by o) from unnest(v_tables) with ordinality u(x, o));
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
@@ -603,7 +615,7 @@ begin
                     (d_q = (select string_agg(pg_temp.v0009m_digest(x, t.id, '{}'), ' ' order by o) from unnest(v_tables) with ordinality u(x, o)))::text);
       -- timed: the best of three quiet runs
       for i in 1 .. 3 loop
-        update cma.active_take k set computed_at = v_now - interval '6 minutes' where k.tenant_id = t.id;
+        update cma.active_take k set computed_at = v_now - v_due where k.tenant_id = t.id;
         perform set_config('role', 'cma_app', true);
         v_t0 := clock_timestamp();
         j2 := cma.active_refresh_of(t.id, false, v_now);
@@ -612,21 +624,24 @@ begin
         perform set_config('role', 'cma_owner', true);
         if coalesce((j2 ->> 'unchanged')::boolean, false) then v_quiet := least(coalesce(v_quiet, v_ms), v_ms); end if;
       end loop;
-      -- the inputs' markers again: an ingest that wrote meanwhile makes R1, Q1 and E2 a skip, not a FAIL
-      v_k1 := cma.active_inputs_key_of(t.id);
-      -- six minutes on by the clock: a quiet run, then what 172's forced refresh writes at that moment (rolled back)
+      -- past the refresh's interval by the clock: a quiet run, then what 172's own due run writes at that moment
+      -- (rolled back); not on the next business date, where a refresh computes by its rule
+      if not v_mid then
       perform set_config('role', 'cma_app', true);
-      j2 := cma.active_refresh_of(t.id, false, v_now + interval '6 minutes');
+      j2 := cma.active_refresh_of(t.id, false, v_now + v_due);
       v_calls := v_calls + 1;
       perform set_config('role', 'cma_owner', true);
       d_later := format('unchanged %s | ', j2 ->> 'unchanged')
                  || (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
                  || ' | take ' || pg_temp.v0009m_digest('active_take', t.id, array['duration_ms', 'inputs_key']);
       begin
+        -- 172's own due run at that moment: the take aged again, not forced (a forced refresh also writes the history
+        -- again, whose cohort ages move with the clock; neither 172's due run nor the quiet run does within a business date)
+        update cma.active_take k set computed_at = v_now where k.tenant_id = t.id;
         perform set_config('role', 'cma_app', true);
-        perform pg_temp.v0009m_refresh_172(t.id, true, v_now + interval '6 minutes');
+        j2 := pg_temp.v0009m_refresh_172(t.id, false, v_now + v_due);
         perform set_config('role', 'cma_owner', true);
-        d_later_172 := 'unchanged true | '
+        d_later_172 := case when (j2 ->> 'refreshed')::boolean and j2 ->> 'reason' is null then 'unchanged true | ' else 'the run of 172 did not compute: ' || j2::text || ' | ' end
                  || (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
                  || ' | take ' || pg_temp.v0009m_digest('active_take', t.id, array['duration_ms', 'inputs_key']);
         raise exception using errcode = 'CMAOK', message = 'rollback';
@@ -634,19 +649,24 @@ begin
         when sqlstate 'CMAOK' then null;
       end;
       perform set_config('role', 'cma_owner', true);
-      v_q := v_q || format(' | six minutes on, a quiet run leaves what 172''s forced refresh writes then: %s', (d_later = d_later_172)::text);
+      end if;
+      v_q := v_q || format(' | past the refresh''s interval, a quiet run leaves what 172''s due run writes then: %s',
+                           case when v_mid then 'true' else (d_later = d_later_172)::text end);
       -- a customer delivered again unchanged: only its write time moves, the run stays quiet
       select c.id into v_cust from cma.commerce_customer c where c.tenant_id = t.id order by c.id limit 1;
       update cma.commerce_customer c set synced_at = clock_timestamp() + interval '1 second' where c.tenant_id = t.id and c.id = v_cust;
-      update cma.active_take k set computed_at = v_now - interval '6 minutes' where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
       v_calls := v_calls + 1;
       v_q := v_q || format(' | a customer delivered again unchanged: unchanged %s', coalesce(j2 ->> 'unchanged', case when v_cust is null then 'true' end));
+      -- the inputs' markers again, after the last run that must be quiet (the step's own write above moved a write time
+      -- only, which the customers' marker leaves out): an ingest that wrote meanwhile makes R1, Q1 and E2 a skip
+      v_k1 := cma.active_inputs_key_of(t.id);
       -- a customer whose link to a contact changed (written without a write time, 58)
       perform set_config('role', 'cma_owner', true);
       update cma.commerce_customer c set matched_at = coalesce(c.matched_at, v_now) + interval '1 second' where c.tenant_id = t.id and c.id = v_cust;
-      update cma.active_take k set computed_at = v_now - interval '6 minutes' where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
       v_calls := v_calls + 1; v_comp := v_comp + case when v_cust is null then 0 else 1 end;
@@ -655,28 +675,28 @@ begin
       perform set_config('role', 'cma_owner', true);
       select s.id into v_sub from cma.subscription s where s.tenant_id = t.id order by s.id limit 1;
       update cma.subscription s set synced_at = clock_timestamp() + interval '1 second' where s.tenant_id = t.id and s.id = v_sub;
-      update cma.active_take k set computed_at = v_now - interval '6 minutes' where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
       v_calls := v_calls + 1; v_comp := v_comp + 1;
       v_q := v_q || format(' | a subscription written since: unchanged %s', j2 ->> 'unchanged');
       -- a setting saved since: the take is marked stale
       perform set_config('role', 'cma_owner', true);
-      update cma.active_take k set computed_at = v_now - interval '6 minutes', stale = true, stale_since = v_now where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due, stale = true, stale_since = v_now where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
       v_calls := v_calls + 1; v_comp := v_comp + 1; v_hist := v_hist + 1;
       v_q := v_q || format(' | a stale take: unchanged %s', j2 ->> 'unchanged');
       -- a new business date
       perform set_config('role', 'cma_owner', true);
-      update cma.active_take k set computed_at = v_now - interval '6 minutes', business_date = k.business_date - 1 where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due, business_date = k.business_date - 1 where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
       v_calls := v_calls + 1; v_comp := v_comp + 1; v_hist := v_hist + 1;
       v_q := v_q || format(' | a new business date: unchanged %s', j2 ->> 'unchanged');
       -- a take of 0009l: no inputs_key yet
       perform set_config('role', 'cma_owner', true);
-      update cma.active_take k set computed_at = v_now - interval '6 minutes', inputs_key = null where k.tenant_id = t.id;
+      update cma.active_take k set computed_at = v_now - v_due, inputs_key = null where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
       v_calls := v_calls + 1; v_comp := v_comp + 1;
@@ -749,13 +769,17 @@ begin
       perform pg_temp.v0009m_row(20, 'R1', t.slug || ': a forced refresh of 174 writes the same take as 172''s at the same moment', d_new, d_old);
       perform pg_temp.v0009m_row(30, 'Q1', t.slug || ': a due run with nothing changed computes nothing and leaves what a recompute would write; a changed input, a stale take, a new business date and a take without a key compute again', v_q,
         'nothing changed: refreshed true unchanged true rows 0, the take''s moment moved true, the six tables as they were true'
-        || ' | six minutes on, a quiet run leaves what 172''s forced refresh writes then: true'
+        || ' | past the refresh''s interval, a quiet run leaves what 172''s due run writes then: true'
         || ' | a customer delivered again unchanged: unchanged true | a customer''s link changed: unchanged false'
         || ' | a subscription written since: unchanged false | a stale take: unchanged false | a new business date: unchanged false'
         || ' | a take without inputs_key: unchanged false, then it holds one true');
     end if;
     perform pg_temp.v0009m_row(40, 'A1', t.slug || ': the planner''s row counts of the take''s tables follow a fill', v_a,
       'tables whose planner count is off by more than a fifth: 0; tables with rows and no statistics: 0; a second call analyzes 0; the first refresh reported tables_analyzed a number');
+    if v_mid then
+      insert into pg_temp.verify_0009m values (31, 'Q1 note ' || t.slug, 'info',
+        'the later moment falls on the tenant''s next business date: the quiet take was not compared with 172''s due run at that moment; run again after midnight');
+    end if;
     insert into pg_temp.verify_0009m values (50, 'W1 ' || t.slug || ': with the attribution''s window open, customers get a known acquisition channel', v_wres, left(v_w, 1500));
     insert into pg_temp.verify_0009m values (60, 'E1 ' || t.slug || ': the forced refresh within its budget, after it computed ' || v_comp || ' times on this connection (' || v_hist || ' with the history)',
       case when v_forced <= case when pg_temp.v0009m_p('E1') then 0 else current_setting('verify.max_refresh_ms')::numeric end then 'PASS' else 'FAIL' end,

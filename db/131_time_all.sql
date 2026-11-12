@@ -461,11 +461,15 @@ begin
         if v_sched is not null then
           perform set_config('role', 'cma_app', true);
           perform set_config('app.user_id', v_sched::text, true);
-          for i in 1 .. 3 loop
-            v_mark0 := clock_timestamp();
-            perform cma.active_inputs_key_of(t.id);
-            v_ms := least(coalesce(v_ms, 1e9), round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1));
-          end loop;
+          begin
+            for i in 1 .. 3 loop
+              v_mark0 := clock_timestamp();
+              perform cma.active_inputs_key_of(t.id);
+              v_ms := least(coalesce(v_ms, 1e9), round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1));
+            end loop;
+          exception
+            when others then v_ms := null;                     -- an error reads FAIL below, the other rows go on
+          end;
           perform set_config('role', 'cma_owner', true);
           perform set_config('app.user_id', '', true);
         end if;
@@ -474,7 +478,7 @@ begin
         r_result := r_result || case when v_provoke then 'FAIL' when v_sched is null then 'skip'
                                      when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
         r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
-                                     else v_ms || ' ms (best of 3) against ' || v_max || ' ms' end;
+                                     else coalesce(v_ms || ' ms (best of 3)', 'the read failed') || ' against ' || v_max || ' ms' end;
         r_ms := r_ms || v_ms;
       end if;
       for rd in

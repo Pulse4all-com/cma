@@ -68,7 +68,8 @@
 -- meaning with the quiet run: the moment the take was last computed or found unchanged against its inputs' markers
 -- (docs/definitions.md; Decision log, 12 Nov 2026, "Definitions: History as of ...").
 -- Not solved here, named for later (docs/open-decisions.md): an analyze holds its table lock until the refresh commits,
--- so two tenants' first fills at the same moment wait on each other (one tenant today).
+-- so two tenants' first fills at the same moment wait on each other, and can deadlock (the database ends one, the
+-- job's next run takes it up); one tenant today.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
