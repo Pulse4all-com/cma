@@ -1,0 +1,47 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ set_config 
+------------
+ 400
+(1 row)
+
+psql:/tmp/provoke.sql:76: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                            check_name                                             |        result        |                                                                                                                                                                                                                                                                                                                    detail                                                                                                                                                                                                                                                                                                                    
+---------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition is recorded; the column, the grants, the definer's frame and JIT off are in place | FAIL                 | found versions 0009l,0009m | inputs_key text nullable | app only: active_inputs_key_of t/f, active_take_analyze t/f | analyze: definer t, owner cma_owner, search_path=pg_catalog, cma, pg_temp | jit off: active_present_of jit=off, active_refresh_of jit=off | analyze without a tenant: CMA04 | expected versions 0009l,0009m | inputs_key text nullable | app only: active_inputs_key_of t/f, active_take_analyze t/f | analyze: definer t, owner cma_owner, search_path=pg_catalog, cma, pg_temp | jit off: active_present_of jit=off, active_refresh_of jit=off | analyze without a tenant: CMA04 [provoked: a deliberate difference]
+ P1 to E3 pulse4all-subscriptions: the checks ran to their end                                     | FAIL                 | 23514: new row for relation "commerce_customer" violates check constraint "commerce_customer_crm_link_check"
+ verdict                                                                                           | PROVOKED, NOT A PASS | 175_verify_active_refresh_quiet: 0 PASS, 2 FAIL, 0 skip
+(3 rows)
+
+DROP TABLE
+RESET

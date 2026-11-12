@@ -1,0 +1,49 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 400
+(1 row)
+
+psql:/tmp/provoke.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                              check_name                                                               |        result        |                                                                                                                                          detail                                                                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition is recorded; the setting, JIT off on the base and the grant of the present's read are in place                        | FAIL                 | found versions 0009m,0009n | setting text live/take live | base jit=off t/f | now t/f | expected versions 0009m,0009n | setting text live/take live | base jit=off t/f | now t/f [provoked: a deliberate difference]
+ G1 the setting takes live and take and refuses anything else (CMA04)                                                                  | FAIL                 | found take ok, live ok, stored CMA04, Take CMA04,  CMA04 | kept as live | expected take ok, live ok, stored CMA04, Take CMA04,  CMA04 | kept as live [provoked: a deliberate difference]
+ A1 pulse4all-subscriptions: the base of 176 equals 172's base read from the first order deal on, row for row                          | FAIL                 | found rows differing 1 | expected rows differing 0 [provoked: a deliberate difference]
+ A2 pulse4all-subscriptions: every customer's acquisition channel is Sales → First orders' attribution of its first order, row for row | FAIL                 | found customers whose channel, level or first order differs from First orders': 1 | expected customers whose channel, level or first order differs from First orders': 0 [provoked: a deliberate difference]
+ A2 counts pulse4all-subscriptions                                                                                                     | FAIL                 | first orders linked to a store order 471; customers of the take with a first order 465: indirect 174, direct 291; customers of the take 6815, of them unknown 6350
+ A3 pulse4all-subscriptions: the note's date stays First orders' history start                                                         | FAIL                 | found the note's date is First orders' history start: true | expected the note's date is First orders' history start: true [provoked: a deliberate difference]
+ T1 pulse4all-subscriptions: the present from the take equals the live present at the take's moment, and Flash's Active customers (D2) | FAIL                 | found the four tiles from the take equal the live ones at the take's moment: true; Active customers equal Flash's: true | expected the four tiles from the take equal the live ones at the take's moment: true; Active customers equal Flash's: true [provoked: a deliberate difference]
+ T2 pulse4all-subscriptions: for a reader the setting chooses the path and the answer says which, with its moment                      | FAIL                 | found at take: source take, of the take's moment true, tiles yes | at live: source live, tiles yes | expected at take: source take, of the take's moment true, tiles yes | at live: source live, tiles yes [provoked: a deliberate difference]
+ E1 pulse4all-subscriptions: the forced refresh, the attribution over every order deal, within its budget                              | FAIL                 | 8755.7 ms against 0 ms
+ E2 pulse4all-subscriptions: the tiles' present from the take within the above-the-fold budget                                         | FAIL                 | from the take 77.0 ms, live 111.1 ms (each the best of 3, after six calls) against 0 ms
+ verdict                                                                                                                               | PROVOKED, NOT A PASS | 177_verify_active_attribution_present: 0 PASS, 10 FAIL, 0 info, 0 skip
+(11 rows)
+
+DROP TABLE
+RESET

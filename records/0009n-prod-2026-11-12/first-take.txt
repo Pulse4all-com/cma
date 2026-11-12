@@ -1,0 +1,14 @@
+BEGIN
+SET
+ tenant_set | scheduler_set 
+------------+---------------
+ t          | t
+(1 row)
+
+SET
+                                                                                       first_take                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"rows": 21166, "base_rows": 7436, "refreshed": true, "unchanged": false, "duration_ms": 36600, "history_rows": 6871, "customer_rows": 6817, "document_rows": 42, "tables_analyzed": 6}
+(1 row)
+
+COMMIT
