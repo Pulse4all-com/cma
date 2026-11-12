@@ -85,7 +85,10 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   // test data alone: ?take=none|stale|late shows the answers as the database gives them in that state of the take
   const takeState: ActiveTakeState | null = dataIsMock && (ACTIVE_TAKE_STATES as readonly string[]).includes(view.take ?? "") ? (view.take as ActiveTakeState) : null;
   const topRead = streamed(() => data().getActiveTop(me, fromMonth, filter).then((r) => activeInTakeState(r, takeState)));
-  const nowRead = streamed(() => data().getActiveNow(me, filter).then((r) => activeNowInTakeState(r, takeState, filter.channel)));
+  // test data alone: ?present=take shows the tiles as the tenant's active.present_source = take answers them (the
+  // take's present, of the take's moment); with a database the setting decides, in cma.active_now
+  const nowRead = streamed(() => data().getActiveNow(me, filter).then((r) => activeNowInTakeState(r, takeState, filter.channel))
+    .then((r): ActiveNow => (dataIsMock && view.present === "take" ? { ...r, source: "take" } : r)));
   const restRead = streamed(() => data().getActiveRest(me, fromMonth, filter, grouping).then((r) => activeInTakeState(r, takeState)));
   const rowsRequest = { filter, sort, descending, after: view.after, before: view.before, limit: ACTIVE_PAGE_SIZE };
   // a cursor the list no longer knows (an old address, another sort): the first page instead
@@ -295,6 +298,7 @@ function viewOf(sp: Record<string, One>) {
   const before = after ? null : cursor(one(sp.before));
   const pageNo = after || before ? Math.max(1, Math.min(100_000, Number.parseInt(one(sp.page) ?? "1", 10) || 1)) : 1;
   const take = (ACTIVE_TAKE_STATES as readonly string[]).includes(one(sp.take) ?? "") ? one(sp.take) : undefined;
+  const present = one(sp.present) === "take" ? "take" : undefined;
 
   // the address: only what differs from the page's defaults, so a view can be shared; a toggle changes its own key
   const state: Record<string, string> = {
@@ -303,7 +307,7 @@ function viewOf(sp: Record<string, One>) {
     ...(cohortSplit === "none" ? {} : { cohort: cohortSplit }), ...(msort === "customers" && mdesc ? {} : { msort, mdir: mdesc ? "desc" : "asc" }),
     ...(sort === "monthly_amount" && descending ? {} : { sort, dir: descending ? "desc" : "asc" }),
     ...(after ? { after } : {}), ...(before ? { before } : {}), ...(pageNo > 1 ? { page: String(pageNo) } : {}),
-    ...(dataIsMock && take ? { take } : {}),
+    ...(dataIsMock && take ? { take } : {}), ...(dataIsMock && present ? { present } : {}),
   };
   const href: ActiveHref = (change) => {
     const q = { ...state };
@@ -315,7 +319,7 @@ function viewOf(sp: Record<string, One>) {
   };
   const keep = Object.fromEntries(Object.entries(state).filter(([k]) => !["market", "segment", "channel", "after", "before", "page"].includes(k)));
   const fileQuery = new URLSearchParams({ ...activeQuery(filter), sort, dir: descending ? "desc" : "asc" }).toString();
-  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, sort, descending, after, before, pageNo, take, href, keep, fileQuery };
+  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, sort, descending, after, before, pageNo, take, present, href, keep, fileQuery };
 }
 type ActiveView = ReturnType<typeof viewOf>;
 
@@ -428,7 +432,10 @@ async function Freshness({ ctx, read, nowRead }: { ctx: Ctx; read: Promise<Activ
 async function Updated({ ctx, read, fallback }: { ctx: Ctx; read: Promise<ActiveNow>; fallback: ReactNode }) {
   const now = await read.catch(() => null);
   if (!now || !now.figures || !now.tiles) return fallback;
-  return <span data-testid="active-updated" data-present="live">{ctx.t.updated.replace("{time}", clock(ctx.me, now.computedAt, "medium"))}</span>;
+  // the tenant's active.present_source: live ("Updated", the read's moment) or take ("As of", the take's moment)
+  return now.source === "take"
+    ? <span data-testid="active-updated" data-present="take">{ctx.t.tilesFromTake.replace("{time}", clock(ctx.me, now.computedAt, "medium"))}</span>
+    : <span data-testid="active-updated" data-present="live">{ctx.t.updated.replace("{time}", clock(ctx.me, now.computedAt, "medium"))}</span>;
 }
 
 /** The filters' outline in the frame: the three labels and boxes at their own size, so nothing moves when the choices arrive */
@@ -814,11 +821,21 @@ function Channels({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
     <>
       <Bars testId="active-channels" label={t.channelCard}
         rows={ACTIVE_CHANNELS.map((c) => ({ key: c, label: channelLabel(c), value: by[c], text: n(by[c]), title: `${channelLabel(c)}: ${n(by[c])}` }))} />
-      {notes && notes.unknownChannel.customers > 0 ? (
+      {/* the note: the customers without a channel with their reasons, and what the attribution's history start means
+          (the same sentence as Sales → First orders': Active attributes as that page does, addition 0009n) */}
+      {notes && (notes.unknownChannel.customers > 0 || rest.settings.attribution.historyStart) ? (
         <DataNote testId="active-note-channel">
-          <span className="block">{counted(t.noteUnknownChannel, notes.unknownChannel.customers, n(notes.unknownChannel.customers))}</span>
-          {reasons.map(([k, v]) => <span key={k} className="block" data-reason={k}>{`${(t as Record<string, string>)[`reason_${k}`] ?? k}: ${n(v)}`}</span>)}
-          <span className="block">{rest.settings.attribution.historyStart ? t.noteAttributionStart.replace("{date}", fmtDate(rest.settings.attribution.historyStart, me.locale, "full")) : t.noteNoAttribution}</span>
+          {notes.unknownChannel.customers > 0 ? (
+            <>
+              <span className="block">{counted(t.noteUnknownChannel, notes.unknownChannel.customers, n(notes.unknownChannel.customers))}</span>
+              {reasons.map(([k, v]) => <span key={k} className="block" data-reason={k}>{`${(t as Record<string, string>)[`reason_${k}`] ?? k}: ${n(v)}`}</span>)}
+            </>
+          ) : null}
+          <span className="block" data-testid="active-note-attribution">
+            {rest.settings.attribution.historyStart
+              ? t.noteAttributionStart.replace("{date}", fmtDate(rest.settings.attribution.historyStart, me.locale, "full")).replace("{direct}", t.channelShort_direct).replace("{indirect}", t.channelShort_indirect)
+              : t.noteNoAttribution}
+          </span>
         </DataNote>
       ) : null}
     </>

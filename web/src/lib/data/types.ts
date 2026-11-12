@@ -2337,6 +2337,9 @@ export interface ActiveNotes {
 export interface ActiveNow {
   /** False while a source is not set up */
   figures: boolean;
+  /** Where the present was read from (the tenant's active.present_source): live at the read's moment, or the stored take, as of the take's moment */
+  source: "live" | "take";
+  /** The read's moment (live) or the take's (take) */
   computedAt: Instant;
   /** Null without a present to state: a source not set up, or a channel filter while there is no take yet (the channel is the take's) */
   tiles: Pick<ActiveTiles, "activeCustomers" | "totalSubscriptions" | "amounts" | "eur"> | null;

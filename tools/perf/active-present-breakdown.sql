@@ -12,9 +12,11 @@
 -- Another tenant: add  -v tenant_slug=<slug>  (the default is pulse4all-subscriptions).
 -- Every stage runs nine times on this connection as the application's role: the first call (planned for the call),
 -- and the best of the seventh to ninth (the plan a pooled connection keeps), as 173's E5 times it. Stages:
---   N1  cma.active_now_of, the present read live: 173's E5, the tiles' read as the page calls it
---   N2  cma.active_now_of, the present read from the stored take: the same answer's cost with the take's age as the
---       tiles' staleness (the way out Martin named, should N1 stay over 400 ms at the busy hour)
+--   N1  cma.active_now_of, the present read live: 173's E5, the tiles' read as the page calls it while the tenant's
+--       setting active.present_source is live (the default)
+--   N2  cma.active_now_of, the present read from the stored take: the tiles' read while the setting is take (addition
+--       0009n): the same answer of the take's moment, the page saying "As of". The two rows of one run, at the same
+--       hour, are what Martin chooses the setting from: N1 within 400 ms keeps live; else take
 --   P1  cma.active_present_of alone (the live rows: the subscriptions, their store customer, its segment)
 --   P2  cma.active_present_stored_of alone (the same rows from the take)
 --   P3  cma.flash_subscription_stores_of (the subscriptions' connections to their stores)
@@ -46,6 +48,7 @@ select (select t.id from cma.tenant t where t.slug = :'tenant_slug') as tenant_i
 \endif
 select :'tenant_id' as tenant_id, now() as measured_at, current_setting('server_version') as server_version,
        exists (select 1 from cma.schema_migration m where m.version = '0009m') as has_0009m,
+       cma.setting_of(:'tenant_id', 'active.present_source') as present_source_now,
        (select k.computed_at from cma.active_take k where k.tenant_id = :'tenant_id') as take_computed_at;
 
 create temporary table present_breakdown (ord integer, stage text, what text, rows bigint, first_ms numeric, kept_ms numeric) on commit drop;
@@ -61,9 +64,9 @@ declare
 begin
   for r in
     select * from (values
-      (1, 'N1', 'cma.active_now_of, the present live (173''s E5)',
+      (1, 'N1', 'cma.active_now_of, the present live (active.present_source = live; 173''s E5)',
           format('select cma.active_now_of(%L, null, null, null, now(), false)::text as x offset 0', v_tenant)),
-      (2, 'N2', 'cma.active_now_of, the present from the stored take',
+      (2, 'N2', 'cma.active_now_of, the present from the stored take (active.present_source = take)',
           format('select cma.active_now_of(%L, null, null, null, now(), true)::text as x offset 0', v_tenant)),
       (3, 'P1', 'cma.active_present_of (the live rows)', format('select y.subscription_id as x from cma.active_present_of(%L) y', v_tenant)),
       (4, 'P2', 'cma.active_present_stored_of (the take''s rows)', format('select y.subscription_id as x from cma.active_present_stored_of(%L) y', v_tenant)),

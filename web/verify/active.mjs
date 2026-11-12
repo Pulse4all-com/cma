@@ -481,7 +481,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
         && merged.notes.reconstructionGap - top.notes.reconstructionGap === top.months.find((m) => m.isNow).customers - moved.now.customers, same(merged.take, top.take),
       top.presentAt === top.take.computedAt, merged.presentAt, same(withActiveNow(top, null), top), same(withActiveNow(top, { figures: true, computedAt: "x", tiles: null, now: null }), top),
       Object.keys(live.tiles).sort().join(","), same(activeNowFromDb({ figures: true, computed_at: "t", tiles: { active_customers: { value: 4, by_segment: { B2B: 4 }, by_channel: null } } }),
-        { figures: true, computedAt: "t", tiles: { activeCustomers: { value: 4, bySegment: { B2B: 4 }, byChannel: null } }, now: null })],
+        { figures: true, source: "live", computedAt: "t", tiles: { activeCustomers: { value: 4, bySegment: { B2B: 4 }, byChannel: null } }, now: null })],
     [3, 1, true, true, true, true, true, true, "2031-01-01T00:00:00.000Z", true, true, "activeCustomers,amounts,eur,totalSubscriptions", true],
     [0, 0, false, false, false, false, false, false, "", false, false, "", false]);
   const noTake = activeInTakeState(top, "none");
@@ -509,6 +509,26 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
       /<Suspense key=\{`now\|\$\{ctx\.viewKey\}`\} fallback=\{<PresentTiles ctx=\{ctx\} top=\{top\} settled=\{false\} \/>\}>/.test(pageSrc),
       /dataIsMock && \(ACTIVE_TAKE_STATES/.test(pageSrc), ["tilesAsOf", "historyStaleBody", "comparisonCardPlain", "printLoading"].every((k) => (copySrc.match(new RegExp(`\\b${k}: "`, "g")) ?? []).length === 2)],
     [false, false, true, true, true, true, true], [true, true, false, false, false, false, false]);
+}
+
+// ---- addition 0009n: the present's source, and the attribution's note on both pages ---------------------------------------
+{
+  const pageSrc = src("app/reports/active/page.tsx");
+  const partsSrc = src("components/FirstOrderParts.tsx");
+  const sentence = (lang, where) => (where === "active" ? activeCopy[lang].noteAttributionStart : copy[lang].firstOrders.historyMeaning);
+  expect("O5 the present says where it was read from: the take's answer is 'As of' the take's moment, the live one 'Updated'; an answer without the key is live",
+    [activeNowFromDb({ figures: true, source: "take", computed_at: "t" }).source, activeNowFromDb({ figures: true, source: "live", computed_at: "t" }).source,
+      activeNowFromDb({ figures: true, computed_at: "t" }).source, mockActiveNow({ tenantId: "t1", permissions: ["reports.view"] }, { market: null, segment: null, channel: null }).source,
+      /now\.source === "take"\s*\? <span data-testid="active-updated" data-present="take">\{ctx\.t\.tilesFromTake/.test(pageSrc),
+      /dataIsMock && view\.present === "take"/.test(pageSrc), activeCopy.en.tilesFromTake, activeCopy.nl.tilesFromTake],
+    ["take", "live", "live", "live", true, true, "As of {time}", "Per {time}"], ["", "", "", "", false, false, "", ""]);
+  expect("O6 the attribution's note says what its date means, in the same sentence on Customers → Active and on Sales → First orders, in both languages, each page with its own two words",
+    [sentence("en", "active") === sentence("en", "first"), sentence("nl", "active") === sentence("nl", "first"),
+      ["{date}", "{direct}", "{indirect}"].every((k) => sentence("en", "active").includes(k) && sentence("nl", "active").includes(k)),
+      /intake start/.test(sentence("en", "active")), /replace\("\{direct\}", t\.channelShort_direct\)\.replace\("\{indirect\}", t\.channelShort_indirect\)/.test(pageSrc),
+      partsSrc.includes('t.historyMeaning.replace("{date}", fmtDate(historyStart, locale)).replace("{direct}", t.selfService.toLowerCase()).replace("{indirect}", t.callCenter.toLowerCase())'),
+      /notes\.unknownChannel\.customers > 0 \|\| rest\.settings\.attribution\.historyStart/.test(pageSrc)],
+    [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
 }
 
 const n = results.length;

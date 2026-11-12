@@ -491,7 +491,7 @@ export function activeNowFromDb(j: Record<string, unknown>): import("@/lib/data"
   const c = convert(j, false) as Record<string, unknown>;
   const figures = c.figures === true;
   return {
-    figures, computedAt: String(c.computedAt ?? ""), tiles: figures ? ((c.tiles as import("@/lib/data").ActiveNow["tiles"] | undefined) ?? null) : null,
+    figures, source: c.source === "take" ? "take" : "live", computedAt: String(c.computedAt ?? ""), tiles: figures ? ((c.tiles as import("@/lib/data").ActiveNow["tiles"] | undefined) ?? null) : null,
     now: figures ? ((c.now as import("@/lib/data").ActiveNow["now"] | undefined) ?? null) : null,
   };
 }
