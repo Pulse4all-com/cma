@@ -121,11 +121,13 @@ export function ActiveTile({ testId, label, info, value, children }: {
  * related: a line under the badge for a figure that exists and belongs with the slot (the churned subscriptions of the
  * last 30 days under Churn rate, a link to Flash's overview): it sits apart from the placeholder's own words (data-related)
  */
-export function PlaceholderCard({ slot, info, copy, related }: {
+export function PlaceholderCard({ slot, info, copy, related: given }: {
   slot: ActiveSlotKey; info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy; related?: ReactNode;
 }) {
   const t = copy.active;
   const def = ACTIVE_SLOTS.find((s) => s.key === slot)!;
+  // the one exception to "a placeholder shows no number" (decision D5; Martin, 12 November 2026): the Churn rate's card alone
+  const related = slot === "churn_rate" ? given : undefined;
   return (
     <div className="flex flex-col gap-2 rounded-card border border-dashed border-p4a-border bg-white p-5" data-testid={`active-slot-${slot}`} data-placeholder="">
       <p className="text-caption text-p4a-grey" data-hint-anchor="">
@@ -160,6 +162,11 @@ function Scroll({ testId, label, children }: { testId: string; label: string; ch
       <table className="w-full border-collapse text-body leading-table [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-p4a-bgblue" data-testid={testId}>{children}</table>
     </div>
   );
+}
+
+/** A part of a split in whole percents: "< 1%" for a part that is there but rounds to nothing, never "0%" */
+export function splitPercent(percent: number, part: number, locale: Locale): string {
+  return fmtPct(percent === 0 && part > 0 ? 0.4 : percent, locale);
 }
 
 /** Amounts per currency, one line each: never one figure across currencies */
@@ -213,7 +220,8 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
   };
   const segCols = [...segments, "unknown"];
   // the markets' shares of the base in whole percents that add up to 100 (largest remainder), whatever the order shown
-  const shares = new Map(wholePercents(rows.map((r) => r.customers)).map((p, i) => [rows[i]!.market, p]));
+  // (the database's shares, rounded together)
+  const shares = new Map(wholePercents(rows.map((r) => r.share ?? 0)).map((p, i) => [rows[i]!.market, p]));
   const delta = (x: number) => (
     <span className={x > 0 ? "text-p4a-green" : x < 0 ? "text-p4a-error" : "text-p4a-muted"}>{x === 0 ? "0" : signed(n(Math.abs(x)), x)}</span>
   );
@@ -227,7 +235,7 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
         )}
       </td>
       <td className={tdD}>{n(r.customers)}</td>
-      <td className={tdD}>{isTotal ? fmtShare(r.share, locale) : fmtPct(shares.get(r.market!) ?? 0, locale)}</td>
+      <td className={tdD}>{isTotal ? fmtShare(r.share, locale) : splitPercent(shares.get(r.market!) ?? 0, r.customers, locale)}</td>
       {segCols.map((s) => <td key={s} className={tdD}>{n(r.bySegment[s] ?? 0)}</td>)}
       <td className={tdD}>{n(r.subscriptions)}</td>
       <td className={tdD}>{n(r.devices)}</td>
@@ -250,7 +258,8 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
           {head(t.colMarket, hints.mh_col_market!, "market")}
           {head(t.shortCustomers, hints.mh_active_customers!, "customers", t.activeCustomers)}
           {head(t.colShare, hints.mh_col_share!, "share")}
-          {segCols.map((s) => <th key={s} className={`${thD} text-right`}><HintLabel label={s === "unknown" ? t.unknownSegment : s}>{hint(s === "unknown" ? t.unknownSegment : s, hints.mh_col_segment!)}</HintLabel></th>)}
+          {/* a segment's header: its info mark may stand under the word, as under the sortable headers of this narrow table */}
+          {segCols.map((s) => <th key={s} className={`${thD} text-right`}>{s === "unknown" ? t.unknownSegment : s} {hint(s === "unknown" ? t.unknownSegment : s, hints.mh_col_segment!)}</th>)}
           {head(t.shortSubscriptions, hints.mh_total_subscriptions!, "subscriptions", t.totalSubscriptions)}
           {head(t.colDevices, hints.mh_col_devices!, "devices")}
           {head(t.shortMonthlyAmount, hints.mh_monthly_amount!, undefined, t.monthlyAmount)}
@@ -277,7 +286,7 @@ export function measureText(measure: ActiveMeasure, value: number, currency: str
     case "customers": return fmtCount(value, locale);
     case "share": case "retention": case "indirect_share": return fmtShare(value, locale);
     case "lifetime_median": return counted(t.monthsValue, value, fmtNumber(value, locale, 0));
-    case "median_age": return counted(t.monthsValue, value, fmtNumber(value, locale, 1));
+    case "median_age": return counted(t.monthsValue, Number(value.toFixed(1)), fmtNumber(value, locale, 1));
     case "clv_average": case "clv_median": case "clv_per_month": case "average_monthly_amount": return currency ? fmtAmount(value, currency, locale) : fmtNumber(value, locale, 2);
     default: return fmtNumber(value, locale, 2);
   }
@@ -307,7 +316,10 @@ export function ComparisonTable({ comparison, hints, copy, locale }: { compariso
     const base = r.measure === "retention" ? counted(t.m_retention, r.months ?? 0) : t[`m_${r.measure}`];
     return r.currency ? `${base} (${r.currency})` : base;
   };
-  const cell = (r: ActiveComparisonRow, value: number | null, longest: number | null, side: string) => {
+  // the share of the base is a split over the two segments and the unknown one: whole percents that add up to 100
+  const baseShares = (r: ActiveComparisonRow) => wholePercents([r.a ?? 0, r.b ?? 0, r.unknown ?? 0]);
+  const cell = (r: ActiveComparisonRow, value: number | null, longest: number | null, side: string, part?: 0 | 1 | 2) => {
+    if (value !== null && r.measure === "share" && part !== undefined) return <td className={td} data-split="">{splitPercent(baseShares(r)[part]!, value, locale)}</td>;
     if (value !== null) return <td className={td}>{measureText(r.measure, value, r.currency, locale, t)}</td>;
     if (r.measure === "lifetime_median" && longest !== null) {
       return <td className={`${td} text-p4a-muted`} title={`${t.notReachedShort}. ${t.notReachedTitle}`} data-not-reached="">{counted(t.moreThanMonths, longest)}</td>;
@@ -331,13 +343,13 @@ export function ComparisonTable({ comparison, hints, copy, locale }: { compariso
         {comparison.rows.map((r) => (
           <tr key={`${r.measure}|${r.months ?? ""}|${r.currency ?? ""}`} className={row} data-testid="active-comparison-row" data-measure={r.measure}>
             <td className="h-10 px-2 font-semibold">{label(r)}</td>
-            {cell(r, r.a, r.aLongest, a)}
-            {cell(r, r.b, r.bLongest, b)}
+            {cell(r, r.a, r.aLongest, a, 0)}
+            {cell(r, r.b, r.bLongest, b, 1)}
             <td className={`${td} text-p4a-inkt`} data-difference="">
               {r.difference === null ? "" : differenceText(r.measure, r.difference, r.currency, locale, t)}
             </td>
             <td className={`${td} text-p4a-inkt`}>{r.ratio === null ? "" : t.ratioValue.replace("{n}", fmtNumber(r.ratio, locale, 2))}</td>
-            {cell(r, r.unknown, r.unknownLongest, t.unknownSegment)}
+            {cell(r, r.unknown, r.unknownLongest, t.unknownSegment, 2)}
           </tr>
         ))}
         <tr className={row} data-testid="active-comparison-row" data-measure="clv_projected" data-placeholder="">
@@ -411,7 +423,7 @@ export function CohortHeatmap({ cohorts, ages, grouping, hints, copy, locale }: 
 /** The list's columns that sort, by their header */
 const LIST_SORT: Partial<Record<string, ActiveSort>> = {
   colStoreCustomer: "store_customer", colStore: "store", colMarket: "market", colSegment: "segment", colCustomerStart: "customer_start", customerAge: "age_months",
-  totalSubscriptions: "subscriptions", colDevices: "devices", monthlyAmount: "monthly_amount", clvRealised: "clv", channel: "channel",
+  totalSubscriptions: "subscriptions", colDevices: "devices", monthlyAmount: "monthly_amount", clvRealised: "clv", channel: "channel", colAcquired: "level",
 };
 
 /**
@@ -465,7 +477,7 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
             {head("colDevices", hints.mh_col_devices!)}
             {head("monthlyAmount", hints.mh_monthly_amount!, true, t.shortMonthlyAmount)}
             {head("clvRealised", hints.mh_clv_realised!, true, t.shortClvRealised)}
-            {head("channel", `${hints.mh_channel!} ${hints.mh_col_acquired!}`, false)}
+            {head("channel", hints.mh_channel!, false, undefined, { key: "colAcquired", text: hints.mh_col_acquired! })}
             {head("colPaymentState", hints.mh_col_payment_state!, false)}
             {head("colContact", hints.mh_col_contact!, false)}
           </tr>

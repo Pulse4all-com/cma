@@ -764,10 +764,10 @@ async function expectFirstOrders() {
 //   height are all sent before the first panel's figures; no placeholder holds a digit; the Print button is sent disabled.
 //   In the browser at 1280 and 1920 px, once the page has streamed: every panel's rendered body takes exactly the height
 //   its outline was sent with (no layout shift), no outline is left, the Print button is enabled, and a click on a
-//   panel's toggle marks the link at once (decision D14). A panel that holds a table (the markets, the comparison, the
-//   cohorts, the list: Martin's review of 12 November 2026) is as high as its table and never higher than its outline:
-//   it equals the outline when the table fills it, and is shorter only when the whole table shows (no space is left
-//   under a short table; the page under it then moves up once, by the difference).
+//   panel's toggle marks the link at once (decision D14). The markets' panel alone (Martin's review of 12 November 2026)
+//   is as high as its table and never higher than its outline: it equals the outline when the table fills it, and is
+//   shorter only when the whole table shows (no space under the totals row; the page under it then moves up once, by
+//   the difference: open for Martin). Every other panel, the three other table panels included, equals its outline.
 //   The tables at 1440 and 1280 px: the header row stays at the top of its scroll container while the rows scroll; at
 //   1440 px every column of the markets and of the customer list shows without scrolling sideways, at 1280 px every
 //   column of the list but the last (the CRM link); the comparison's columns show at both; the list's Customer start
@@ -822,6 +822,8 @@ async function expectActiveLayers() {
       const x = t[id];
       if (!x) { problems.push(`${tag}: the table ${id} is not on the page`); continue; }
       if (x.hidden.length > (provoke ? -1 : most)) problems.push(`${tag}: ${id} needs a sideways scroll for ${x.hidden.length} of its ${x.columns} columns (${x.hidden.join(", ")}), at most ${most} may`);
+      // the one column that may need the scroll is the last (the CRM link)
+      else if (most === 1 && x.hidden.length === 1 && !x.last.startsWith(x.hidden[0].split(" ")[0])) problems.push(`${tag}: ${id} hides ${x.hidden[0]}, only its last column (${x.last}) may need the scroll`);
     }
     for (const [id, x] of Object.entries(t)) {
       if (x && x.columns < 5) problems.push(`${tag}: ${id} shows ${x.columns} header cells: its header row is missing`);
@@ -863,7 +865,7 @@ async function expectActiveLayers() {
         // a placeholder's own words hold no digit; the related line under the Churn rate's badge (the churned subscriptions, a figure that exists) stands apart
         cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => {
           const own = el.cloneNode(true);
-          for (const r of own.querySelectorAll("[data-related]")) r.remove();
+          if (el.getAttribute("data-testid") === "active-slot-churn_rate") for (const r of own.querySelectorAll("[data-related]")) r.remove();
           return /\d/.test(own.textContent ?? "");
         }),
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
@@ -874,9 +876,11 @@ async function expectActiveLayers() {
       const a = outlines[id];
       const c = m.bodies[id];
       if (a === undefined || c === undefined) problems.push(`${tag}: panel ${id} has ${a === undefined ? "no outline in the frame" : "no rendered body"}`);
-      else if (["markets", "comparison", "cohortTable", "list"].includes(id)) {
-        if (c > a + 0.5) problems.push(`${tag}: the table panel ${id} is ${c}px rendered, higher than its outline of ${a}px`);
-        else if (c < a - 0.5 && m.fills[id]) problems.push(`${tag}: the table panel ${id} is ${c}px rendered against ${a}px as its outline while its table still scrolls (it should fill the panel)`);
+      else if (id === "markets") {
+        // the markets' panel follows its table: never higher than its outline, never lower than a header and two rows, and at the outline's height when the table still scrolls
+        if (c > a + 0.5) problems.push(`${tag}: the markets' panel is ${c}px rendered, higher than its outline of ${a}px`);
+        else if (c < 120) problems.push(`${tag}: the markets' panel is ${c}px rendered: it has collapsed`);
+        else if (c < a - 0.5 && m.fills[id]) problems.push(`${tag}: the markets' panel is ${c}px rendered against ${a}px as its outline while its table still scrolls (it should fill the panel)`);
       } else if (Math.abs(a - c) > 0.5) problems.push(`${tag}: panel ${id} is ${c}px rendered against ${a}px as its outline (the page shifts when the data arrives)`);
     }
     if (m.outlinesLeft !== 0) problems.push(`${tag}: ${m.outlinesLeft} outlines still on the screen after the page streamed`);

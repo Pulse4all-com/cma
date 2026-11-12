@@ -5,7 +5,7 @@ import { ActiveFilters } from "@/components/ActiveFilters";
 import { Bars, FLOW_BG, FlowChart, Legend, LineChart, type LineSeries } from "@/components/ActiveCharts";
 import {
   type ActivePageCopy, ActiveTile, type ActiveHref, ChangeLine, CohortHeatmap, ComparisonTable, CustomerList, DataNote, LinkSwitch, MARKET_SORTS, type MarketSort,
-  MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets,
+  MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets, splitPercent,
 } from "@/components/ActiveParts";
 import { PrintWhenReady, Streamed } from "@/components/ActivePending";
 import { fmtAmount, fmtNumber } from "@/components/FlashParts";
@@ -13,7 +13,7 @@ import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Keycap, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import {
-  ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_CURSOR, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SCROLLING, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
+  ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_CURSOR, ACTIVE_FITTING, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SCROLLING, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
   type ActivePanel, type ActiveSplit, activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, counted, fromMonthOf, lineStyle, matureCohorts, monthLabel, wholePercents,
   ACTIVE_TAKE_STATES, type ActiveTakeState, activeInTakeState, activeListInTakeState, activeNowInTakeState, monthsBack, parseActiveFilter, withActiveNow,
 } from "@/lib/active";
@@ -24,7 +24,7 @@ import type { Principal } from "@/lib/auth/identity";
 import { flashHref } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
-import { fmtCount, fmtPct, fmtShare, REPORT_PERMISSIONS } from "@/lib/reports";
+import { fmtCount, fmtShare, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
@@ -195,7 +195,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
           {/* 3.6 the markets */}
           <Card>
             <PanelTitle label={t.marketsCard} hint={hints.mh_markets!} more={more("active.by_market")} copy={words} />
-            <Layer {...layer("markets", "rest")} read={restRead} label={t.marketsCard}>{(rest) => (rest.markets.length === 0 || !rest.marketsTotal ? empty(t.empty)
+            <Layer {...layer("markets", "rest")} read={restRead} label={t.marketsCard}>{(rest) => (rest.markets.length === 0 || !rest.marketsTotal ? <div style={{ height: ACTIVE_PANEL_HEIGHT.markets }}>{empty(t.empty)}</div>
               : <MarketsTable rows={sortMarkets(rest.markets, view.msort, view.mdesc)} total={rest.marketsTotal} sort={view.msort} descending={view.mdesc} href={href} hints={hints}
                 copy={words} locale={me.locale} segments={rest.settings.segments} />)}</Layer>
           </Card>
@@ -360,12 +360,12 @@ async function Body<T>({ id, read, part, viewKey, label, children }: {
 }) {
   const value = await read;
   const dbTrace = part ? requestDbTrace() : null;
-  // a panel that holds a table (markets, the comparison, the cohorts, the list) is as high as its table, up to the
-  // panel's own height: the table's container scrolls inside it under its header row, and no space is left under a
-  // short table. Every other panel takes its fixed height
+  // a panel that holds a table: the table's container scrolls inside the panel's fixed height, under its header row.
+  // The markets' panel alone is as high as its table (at most the panel's height): no space under its totals row
   const scrolls = ACTIVE_SCROLLING.includes(id);
+  const fits = ACTIVE_FITTING.includes(id);
   return (
-    <div data-panel-body={id} style={scrolls ? { maxHeight: ACTIVE_PANEL_HEIGHT[id] } : { height: ACTIVE_PANEL_HEIGHT[id] }}
+    <div data-panel-body={id} style={fits ? { maxHeight: ACTIVE_PANEL_HEIGHT[id] } : { height: ACTIVE_PANEL_HEIGHT[id] }}
       className={`flex flex-col ${scrolls ? "overflow-hidden" : "overflow-y-auto"}`} {...(scrolls ? { role: "group", "aria-label": label } : {})}>
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       {children(value)}
@@ -539,7 +539,7 @@ function PresentTiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; sett
         {/* the acquisition channel is the stored take's: without a take there is no split to state */}
         {tiles.activeCustomers.byChannel ? (
           <p data-testid="active-split-channel">
-            {wholePercents(ACTIVE_CHANNELS.map((c) => tiles.activeCustomers.byChannel![c])).map((p, i) => `${t[`channelShort_${ACTIVE_CHANNELS[i]!}`]} ${fmtPct(p, locale)}`).join(" · ")}
+            {wholePercents(ACTIVE_CHANNELS.map((c) => tiles.activeCustomers.byChannel![c])).map((p, i) => `${t[`channelShort_${ACTIVE_CHANNELS[i]!}`]} ${splitPercent(p, tiles.activeCustomers.byChannel![ACTIVE_CHANNELS[i]!], locale)}`).join(" · ")}
           </p>
         ) : null}
         <ChangeLine value={tiles.activeCustomers.value} previous={tiles.activeCustomers.prevMonth} when={whenMonth} fmt={n} better="up" t={t} />
@@ -755,7 +755,7 @@ function Survival({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
   const longest = Math.max(1, ...curves.map((c) => c.longest ?? 0));
   const ageStep = longest > 48 ? 12 : longest > 24 ? 6 : 3;
   const series: LineSeries[] = curves.map((c, i) => ({
-    key: c.value ?? "all", label: curveLabel(c), ...(c.value === "unknown" ? { colour: 5, dashed: true } : lineStyle(i === 3 ? 4 : i)),
+    key: c.value ?? "all", label: curveLabel(c), ...(c.value === "unknown" ? { colour: 5, dashed: true } : lineStyle(i)),
     points: c.curve.map((p) => ({
       x: p.age, y: p.survival, title: `${counted(t.monthsValue, p.age, fmtNumber(p.age, locale, 0))}: ${pct(p.survival)} (${t.atRisk.replace("{n}", n(p.atRisk))})`,
       label: c.median !== null && p.age === c.median ? t.medianAt.replace("{n}", String(c.median)) : undefined,
@@ -863,7 +863,7 @@ function CohortCurves({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
       }),
     }))
     : (rest.cohortSplits?.[view.cohortSplit] ?? []).map((s, i) => ({
-      key: s.value, label: view.cohortSplit === "segment" ? segLabel(s.value) : channelLabel(s.value), ...(s.value === "unknown" ? { colour: 5, dashed: true } : lineStyle(i === 3 ? 4 : i)),
+      key: s.value, label: view.cohortSplit === "segment" ? segLabel(s.value) : channelLabel(s.value), ...(s.value === "unknown" ? { colour: 5, dashed: true } : lineStyle(i)),
       points: s.ages.flatMap((a) => (a.started > 0 ? [{ x: a.age, y: a.stillActive / a.started,
         title: `${months(a.age)}: ${pct(a.stillActive / a.started)} (${t.cohortCellTitle.replace("{n}", n(a.stillActive)).replace("{started}", n(a.started))})` }] : [])),
     }));

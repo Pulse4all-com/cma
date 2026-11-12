@@ -2084,7 +2084,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 
 | Field | Value |
 |---|---|
-| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); a placeholder |
+| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); a placeholder. Its card alone carries one related figure under its badge, the subscriptions churned in the last 30 days, linked to Flash's Churn overview: a figure that exists, never the rate |
 | Key | `churn_rate`; catalog `active.churn_rate` |
 | Definition | As intended: the subscriptions churned in a month (Churn (subscription)) divided by the Total subscriptions at the previous month end. |
 | Source | `cma.subscription_event` (the subscription app's events) |

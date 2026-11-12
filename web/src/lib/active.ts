@@ -29,10 +29,11 @@ export const ACTIVE_PAGE_SIZE = 50;
 /**
  * The fixed heights of the page's data panels in pixels (decision D15 of addendum B): a panel's outline while its read is
  * on its way and its rendered body take the same height, at 1280 and at 1920 px alike, so nothing moves when the data
- * arrives (verify:layout compares the two). A panel that holds a table (ACTIVE_SCROLLING) is as high as its table and at
- * most this high: a long table scrolls inside it under its header row, and a short one leaves no space under its last
- * row (Martin's review, 12 November 2026; the page under a short table then moves up once, by the difference: the
- * outline cannot know the table's rows before its read). On paper every panel takes its own height
+ * arrives (verify:layout compares the two). A table scrolls inside its panel under its header row. One panel differs
+ * (ACTIVE_FITTING, Martin's review of 12 November 2026): the markets' table is as high as its rows and at most this
+ * high, so no space is left under its totals row; the outline cannot know the markets' count before the read, so the
+ * page under a short markets table moves up once, by the difference (open for Martin: docs/open-decisions.md). On
+ * paper every panel takes its own height
  */
 export const ACTIVE_PANEL_HEIGHT = {
   tiles: 372, churn: 40, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
@@ -41,8 +42,10 @@ export const ACTIVE_PANEL_HEIGHT = {
 export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
 /** The streamed parts of the page (decisions D15 and D16): above the fold, the live present of the tiles, below the fold, the customer list */
 export const ACTIVE_PARTS = ["top", "now", "rest", "list"] as const;
-/** The panels that hold a table: as high as the table, at most the panel's height; the table's container scrolls inside (and can be reached with the keyboard). Every other panel takes its fixed height */
+/** The panels that hold a table: the table's container scrolls inside the panel's fixed height (and can be reached with the keyboard) */
 export const ACTIVE_SCROLLING: readonly ActivePanel[] = ["markets", "comparison", "cohortTable", "list"];
+/** The table panel whose height follows its table (at most the panel's own): the markets, whose rows are few for a tenant with few markets */
+export const ACTIVE_FITTING: readonly ActivePanel[] = ["markets"];
 /** A cursor of the customer list: the CMA's own id of a customer, nothing else (it rides in the address) */
 export const ACTIVE_CURSOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** The splits of the survival curves and of the cohorts' pooled retention */

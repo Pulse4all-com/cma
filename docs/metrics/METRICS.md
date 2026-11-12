@@ -38513,7 +38513,7 @@ difference = a - b where both have a value; ratio = a / b only when both are abo
 
 **Notes**
 
-A difference is coloured only where the higher value is unambiguously better (lifetime, retention, value, average amount). verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+A difference between two segments is never coloured: it stands in Inkt with its sign (no better or worse between segments). verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
 
 #### `active.subscriptions_per_customer`
 

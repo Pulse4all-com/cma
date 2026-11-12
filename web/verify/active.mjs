@@ -12,9 +12,9 @@
  *      gaps, an interval that begins where another ends, one without an end, one of no length)
  *   K  Kaplan–Meier against a hand-computed table (ties, a spell censored at the age of an event, one spell, a curve that
  *      never reaches 50 %) and against a brute force over 200 random sets of spells
- *   D  the difference's colour rule: coloured only where the higher value is unambiguously better; a sign always written
+ *   D  a difference between two segments: never coloured (no better or worse), its sign always written
  *   C  the change against an earlier month end, the cohort's share and maturity, the range and its first month
- *   H  the heatmap's steps (white text on the two dark steps only), the sparkline's path inside its box, the axis
+ *   H  the heatmap's scale (one hue, monotonic, 4.5:1 on every step, white only from Denim on), the sparkline's path, the axis
  *   F  the filter from an address (what is out of its form is refused and named), the address back, the file's name
  *   J  the database's document in the API's words: camelCase keys, the data-keyed maps kept as they are
  *   T  the copy: every key the page reads exists in both languages, every channel, slot, measure, reason, payment state,
@@ -332,8 +332,9 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
     [2000, 0, [9, 10, 81], [34, 33, 33], [0, 0], [100], [81, 9, 10]], [2000, 1, [9, 10, 82], [33, 33, 33], [50, 50], [99], [81, 9, 11]]);
   const page = src("app/reports/active/page.tsx");
   const parts = src("components/ActiveParts.tsx");
-  expect("W2 the page's splits use it: the channels under Active customers, the markets' shares",
-    [/wholePercents\(ACTIVE_CHANNELS\.map/.test(page), /wholePercents\(rows\.map\(\(r\) => r\.customers\)\)/.test(parts)], [true, true], [false, false]);
+  expect("W2 the page's splits use it: the channels under Active customers, the markets' shares, the comparison's share of the base; a part that rounds to nothing reads < 1%",
+    [/wholePercents\(ACTIVE_CHANNELS\.map/.test(page), /wholePercents\(rows\.map\(\(r\) => r\.share \?\? 0\)\)/.test(parts), /wholePercents\(\[r\.a \?\? 0, r\.b \?\? 0, r\.unknown \?\? 0\]\)/.test(parts),
+      /percent === 0 && part > 0 \? 0\.4 : percent/.test(parts)], [true, true, true, true], [false, false, false, false]);
   const t = activeCopy;
   const forms = ["monthsValue", "moreThanMonths", "moreThan", "notReached", "pointsValue", "m_retention", "medianIs", "spellsCount", "bandMonths", "devicesBand", "noteUnknownChannel"];
   expect("W3 one month, one device: every unit has a singular for exactly 1, in en and nl; the survival legend's words; a reason per line",
