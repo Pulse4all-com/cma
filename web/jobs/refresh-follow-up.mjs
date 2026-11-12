@@ -15,6 +15,8 @@
  *                              set on Cloud Run, where the service account's IAM user inherits cma_app
  * Plain JavaScript on pg and the connector, so it needs no build step and no part of Next; pool of 2 (README,
  * Database connection budget). Every tenant is served in turn and one tenant's failure never stops the others.
+ * Since addition 0009l (172) the database computes only when something the figures read changed (else computed 0,
+ * reason unchanged: the figures stand) and writes only the items that changed (written).
  * Each tenant leaves one sync_run row (job refresh_follow_up, no connection: started, then succeeded with the rows
  * and duration_ms, skipped 1 when another refresh of the tenant was running, or failed with a code) through
  * cma.job_run_start() and cma.job_run_finish(), so Configuration → System health shows the job; and one JSON log
@@ -111,13 +113,17 @@ export async function refreshTenants({ connect, log }) {
         if (!runId) runId = (await asScheduler(client, tenant_id, me, "select cma.job_run_start($1) as id", [JOB])).rows[0].id;
         // 3. The refresh: skipped when another refresh of this tenant holds its lock (a run that overran its minute)
         const r = (await asScheduler(client, tenant_id, me, "select cma.refresh_follow_up() as r")).rows[0].r;
+        // Since 0009l (172): computed 0 when nothing the figures read had changed (reason unchanged: the figures stand,
+        // nothing written), written the item rows deleted or inserted; a database before 172 sends neither (computed 1)
         const counts = r.refreshed
-          ? { rows: r.rows, leads: r.leads, tickets: r.tickets, tasks: r.tasks, duration_ms: r.duration_ms, skipped: 0 }
+          ? { rows: r.rows, leads: r.leads, tickets: r.tickets, tasks: r.tasks, duration_ms: r.duration_ms, skipped: 0,
+              computed: r.computed === false ? 0 : 1, ...(Number.isFinite(r.written) ? { written: r.written } : {}) }
           : { rows: 0, duration_ms: 0, skipped: 1 };
         await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
         return { r, counts };
       }), { log, fields: { tenant_id } });
       log(r.refreshed ? "INFO" : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
+        ...(r.refreshed ? { computed: counts.computed, ...(counts.written !== undefined ? { written: counts.written } : {}) } : {}),
         ...(r.refreshed ? {} : { reason: r.reason ?? "running" }) });
     } catch (e) {
       failed += 1;

@@ -9,8 +9,9 @@
  * Runs as a Cloud Run job on the web image (command: node jobs/refresh-data-quality.mjs), started by Cloud Scheduler
  * every minute (docs/scheduler/deploy-data-quality.sh); the database decides whether a tenant's result is due: a
  * result younger than the tenant's data_quality.refresh_minutes (5 by default) is kept (the run row says skipped with
- * reason fresh), so the setting is the cadence and the schedule only the clock. The same database variables as the
- * service:
+ * reason fresh), so the setting is the cadence and the schedule only the clock. Since addition 0009l (172) a
+ * computation that failed is not tried again before the setting's minutes have passed (skipped with reason backoff, a
+ * WARNING line). The same database variables as the service:
  *   CMA_DB_INSTANCE  <project>:<region>:<instance>   with the Cloud SQL connector and IAM auth
  *   CMA_DB_USER      <service account>@<project>.iam  member of cma_app
  *   CMA_DB_NAME      cma
