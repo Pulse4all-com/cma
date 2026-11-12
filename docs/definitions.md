@@ -2200,18 +2200,18 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 |---|---|
 | Term | History as of (nl: Geschiedenis per; `active.historyAsOf` "History as of {time}", `active.historyLate` "History as of {time}, {minutes} min old", `active.historyStale` "History as of {time}, being recomputed after a settings change") |
 | Key | `take.computedAt` of `GET /api/v1/reports/active` (with `businessDate`, `stale`, `ageMinutes`, `late`) |
-| Definition | The moment the Take was computed that Customers → Active reads its history from. It is Customers → Active's form of Refreshed at: the page shows its take as History as of, and the figures beside it are those of that instant, whatever the page's own time. |
+| Definition | The moment the Take that Customers → Active reads its history from was last computed or found unchanged against its inputs' change markers (a quiet run moves it without computing). It is Customers → Active's form of Refreshed at: the page shows its take as History as of, and the figures beside it are those of that instant, whatever the page's own time. The markers hold the subscriptions, their events, the devices, the stores' customers with their link to a contact, the orders, the CRM's contacts, the stores, the device statuses and models, the markets, the connections' kind and account and the tenant's time zone. They do not hold the CRM's deals, calls, emails and associations, nor the telephony behind the acquisition channel and the courtesy calls: those follow at the next change of a marker or at the next business date, at most a day. |
 | Source | `cma.active_take.computed_at`, written by `cma.active_refresh_of` |
 | Counts / does not count | The tiles of the present are not as of it (Updated). A take that is stale (a setting changed) or older than `customers.history_notice_minutes` shows a notice beside it |
 | Unit and display | hh:mm in the viewer's zone, on the title row, next to Updated |
-| Time rule | The transaction time of the refresh, shown in the viewer's zone |
+| Time rule | The transaction time of the refresh that last computed the take or found it unchanged, shown in the viewer's zone |
 | Scope | Per tenant |
 | Equivalent in the source system | None |
 | Not to use | "Refreshed at" on this page (it is the same idea, with the page's own label) and "Last updated" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and "Definitions: History as of, Tiles as of, ..." (#267) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and "Definitions: History as of, Tiles as of, ..." (#267); 12 Nov 2026, "Definitions: History as of ..." (#267) |
 | Used by | Customers → Active (title row, the notices); `GET /api/v1/reports/active` (`take`) |
-| As built today | `172`; `173` proves the stale and late states |
+| As built today | `172`; `174` (the quiet run, `cma.active_take.inputs_key`); `173` proves the stale and late states, `175` the quiet run |
 
 ### Tiles as of
 
