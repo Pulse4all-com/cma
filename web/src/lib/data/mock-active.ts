@@ -80,7 +80,9 @@ function buildBase(now: number): Customer[] {
   const attributionStart = now - 300 * DAY;
   for (const s of STORES) {
     for (let i = 1; i <= s.customers; i++) {
-      const firstStartDays = s.market === "GB" && r() < 0.45 ? 540 : 15 + Math.floor(r() * 900);
+      // the British store's subscription history starts 540 days back (as the dev seed's second store: the app was connected
+      // then), inside the page's default 24 months, so the hero chart has a history start to mark
+      const firstStartDays = s.market === "GB" ? (r() < 0.45 ? 540 : Math.min(540, 15 + Math.floor(r() * 900))) : 15 + Math.floor(r() * 900);
       const start = now - firstStartDays * DAY;
       const seg = r();
       const segment = seg < 0.2 ? "B2B" : seg < 0.8 ? "B2C" : "unknown";

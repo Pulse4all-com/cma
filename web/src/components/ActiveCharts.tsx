@@ -187,13 +187,13 @@ export function FlowChart({ bars, xLabels, words, fmt, label, width = 960, heigh
   );
 }
 
-/** A sparkline: 80 by 20, no axes, its title naming the first and the last value */
-export function Sparkline({ values, title }: { values: number[]; title: string }) {
+/** A sparkline: 80 by 20 (or the width given), no axes, its title naming the first and the last value */
+export function Sparkline({ values, title, width = 80 }: { values: number[]; title: string; width?: number }) {
   if (values.length === 0) return <span className="text-p4a-muted">–</span>;
   return (
-    <svg viewBox="0 0 80 20" width={80} height={20} role="img" aria-label={title} className="inline-block align-middle" data-testid="active-spark">
+    <svg viewBox={`0 0 ${width} 20`} width={width} height={20} role="img" aria-label={title} className="inline-block align-middle" data-testid="active-spark">
       <title>{title}</title>
-      <path d={sparkPath(values, 80, 20)} fill="none" className="stroke-p4a-deepblue" strokeWidth={1.5} />
+      <path d={sparkPath(values, width, 20)} fill="none" className="stroke-p4a-deepblue" strokeWidth={1.5} />
     </svg>
   );
 }

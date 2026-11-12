@@ -69,6 +69,8 @@ const problems = [];
 
 // Static: the stylesheet must drop Tailwind's default colours
 const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+// the steps of the cohort heatmap's one-hue scale (src/lib/active.ts heatColour): a whole percent between its two ends
+const heatScale = new Set(Array.from({ length: 101 }, (_, p) => "#" + [[0xea, 0x26], [0xf4, 0x5b], [0xfc, 0xa4]].map(([from, to]) => Math.round(from + ((to - from) * p) / 100).toString(16).padStart(2, "0")).join("")));
 if (!css.includes("--color-*: initial")) problems.push("globals.css does not remove Tailwind's default palette");
 for (const hex of css.matchAll(/#[0-9a-f]{6}\b/gi)) {
   if (!palette.has(hex[0].toLowerCase())) problems.push(`globals.css: colour ${hex[0]} is not in the palette`);
@@ -314,7 +316,9 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
       if (el instanceof SVGElement && el.tagName.toLowerCase() !== "svg" && el.tagName.toLowerCase() !== "g") props.push("fill", "stroke");
       for (const prop of props) {
         const cls = typeof el.className === "string" ? el.className : el.className?.baseVal ?? "";
-        out.colours.push([el.tagName.toLowerCase() + (cls ? "." + cls.split(" ")[0] : ""), prop, cs[prop]]);
+        // a heatmap cell or a swatch of its legend (Customers → Active): its background is a step of the one-hue scale, checked below
+        const heat = prop === "backgroundColor" && (el.hasAttribute("data-heat") || el.hasAttribute("data-heat-swatch"));
+        out.colours.push([el.tagName.toLowerCase() + (cls ? "." + cls.split(" ")[0] : "") + (heat ? "[heat]" : ""), prop, cs[prop]]);
       }
     }
     for (const h of document.querySelectorAll("h1, h2")) if (vis(h)) out.headings.push([h.textContent?.trim().slice(0, 30), getComputedStyle(h).color]);
@@ -325,6 +329,11 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
   for (const c of found.capitals) problems.push(`${path}: ${c} is set in capitals by CSS (style guide rule 4)`);
   for (const [sel, prop, value] of found.colours) {
     const hex = rgbToHex(value);
+    // the heatmap's scale (Martin, 12 November 2026): any whole percent between Background Blue #EAF4FC and Deep Blue #265BA4, nothing else
+    if (sel.endsWith("[heat]")) {
+      if (hex && !heatScale.has(hex)) problems.push(`${path}: ${sel} ${prop} ${hex} is not a step of the heatmap's scale from #eaf4fc to #265ba4`);
+      continue;
+    }
     if (hex && hex !== "transparent" && !palette.has(hex)) problems.push(`${path}: ${sel} ${prop} ${hex} is not in the palette`);
   }
   for (const [text, color] of found.headings) if (rgbToHex(color) !== "#2e61a6") problems.push(`${path}: heading "${text}" is ${rgbToHex(color)}, not Deep Blue Heading`);

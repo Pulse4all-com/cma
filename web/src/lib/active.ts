@@ -3,7 +3,7 @@
  * customer terms): the pure logic of the page. The database computes every figure (cma.active_top, cma.active_rest, cma.active_rows);
  * this module holds what the screen, the API's parameter checks, the file and the mock share: the filter and its
  * address, the range and the cohort grouping, the list's sort keys, the placeholders with what will feed them, and the
- * arithmetic the charts need (a change line, a sparkline's path, the heatmap's colour step, a difference's tone). It also
+ * arithmetic the charts need (a change line, a sparkline's path, the heatmap's colour scale, a split's whole percentages). It also
  * mirrors the database's pure functions (the unit factor per billing interval, the active spells of a set of holding
  * intervals, Kaplan–Meier in whole months, the month ends and the customer cohorts) so the mock can build a document
  * of the same shape and verify:active can prove them against a brute force. No runtime imports beyond types: server
@@ -29,16 +29,19 @@ export const ACTIVE_PAGE_SIZE = 50;
 /**
  * The fixed heights of the page's data panels in pixels (decision D15 of addendum B): a panel's outline while its read is
  * on its way and its rendered body take the same height, at 1280 and at 1920 px alike, so nothing moves when the data
- * arrives (verify:layout compares the two). A table scrolls inside its panel; on paper every panel takes its own height
+ * arrives (verify:layout compares the two). A panel that holds a table (ACTIVE_SCROLLING) is as high as its table and at
+ * most this high: a long table scrolls inside it under its header row, and a short one leaves no space under its last
+ * row (Martin's review, 12 November 2026; the page under a short table then moves up once, by the difference: the
+ * outline cannot know the table's rows before its read). On paper every panel takes its own height
  */
 export const ACTIVE_PANEL_HEIGHT = {
-  tiles: 372, churn: 24, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
+  tiles: 372, churn: 40, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
   cohortTable: 424, cohortCurves: 348, mix: 232, list: 656,
 } as const;
 export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
 /** The streamed parts of the page (decisions D15 and D16): above the fold, the live present of the tiles, below the fold, the customer list */
 export const ACTIVE_PARTS = ["top", "now", "rest", "list"] as const;
-/** The panels whose table can be longer than the panel's fixed height: they scroll inside it (and can be reached with the keyboard); every other panel fits */
+/** The panels that hold a table: as high as the table, at most the panel's height; the table's container scrolls inside (and can be reached with the keyboard). Every other panel takes its fixed height */
 export const ACTIVE_SCROLLING: readonly ActivePanel[] = ["markets", "comparison", "cohortTable", "list"];
 /** A cursor of the customer list: the CMA's own id of a customer, nothing else (it rides in the address) */
 export const ACTIVE_CURSOR = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -69,22 +72,6 @@ export const ACTIVE_MEASURE_METRIC: Readonly<Record<ActiveMeasure, string>> = {
   subscriptions_per_customer: "active.subscriptions_per_customer", devices_per_customer: "active.devices_per_customer",
   indirect_share: "active.acquisition_channel_share",
 };
-
-/**
- * The measures whose higher value is unambiguously the better one, so a difference between two segments is coloured:
- * how long customers stay and what they are worth. A count, a share of the base, an age, subscriptions or devices per
- * customer and the indirect share say how two segments differ, not which does better: their difference stays Inkt
- */
-export const ACTIVE_BETTER_UP: ReadonlySet<ActiveMeasure> = new Set<ActiveMeasure>([
-  "lifetime_median", "retention", "clv_average", "clv_median", "clv_per_month", "average_monthly_amount",
-]);
-
-/** A difference's tone (Pulse4all-Style 7.7): good (Leaf Green, +), bad (#B8433C, −) or neutral (Inkt); none: nothing to show */
-export function differenceTone(measure: ActiveMeasure, difference: number | null): "good" | "bad" | "neutral" | "none" {
-  if (difference === null || !Number.isFinite(difference)) return "none";
-  if (!ACTIVE_BETTER_UP.has(measure) || difference === 0) return "neutral";
-  return difference > 0 ? "good" : "bad";
-}
 
 /** A difference with its sign, always written: +2, −2, 0 */
 export function signed(text: string, value: number): string {
@@ -255,9 +242,54 @@ export function cohortShare(cohort: Pick<ActiveCohort, "started">, age: { stillA
   return age.mature && cohort.started > 0 ? age.stillActive / cohort.started : null;
 }
 
-/** The cohorts whose first age is Mature, the newest first: those a retention curve can be drawn for */
+/**
+ * The newest cohorts a retention curve can be drawn for: those Mature at two ages or more (a cohort Mature at one age
+ * is a lone dot, not a line)
+ */
 export function matureCohorts(cohorts: readonly ActiveCohort[], n: number): ActiveCohort[] {
-  return cohorts.filter((c) => c.started > 0 && c.ages.length > 0 && c.ages[0]!.mature).slice(0, n);
+  return cohorts.filter((c) => c.started > 0 && c.ages.filter((a) => a.mature).length >= 2).slice(0, n);
+}
+
+/**
+ * A line's place in the series (Pulse4all-Style 7.7's palette without Soft Rose, too light as a line on white): Deep
+ * Blue, Leaf Green, Denim, Inkt, Light Blue as indexes of the charts' series order; from the sixth line on the colours
+ * come round again, dashed, so colour is never the only signal
+ */
+export const LINE_COLOURS = [0, 1, 3, 5, 2] as const;
+export function lineStyle(i: number): { colour: number; dashed: boolean } {
+  return { colour: LINE_COLOURS[i % LINE_COLOURS.length]!, dashed: i >= LINE_COLOURS.length };
+}
+
+/**
+ * Whole percentages of a split that add up to 100 (the largest-remainder method): each part's share rounded down, the
+ * points left over given to the parts with the largest remainders (the earlier part first on a tie). All zeros where
+ * the parts sum to nothing; a negative or non-finite part counts as nothing
+ */
+export function wholePercents(parts: readonly number[]): number[] {
+  const clean = parts.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+  const total = clean.reduce((a, b) => a + b, 0);
+  if (total <= 0) return clean.map(() => 0);
+  const exact = clean.map((v) => (v / total) * 100);
+  const floor = exact.map((v) => Math.floor(v + 1e-9));
+  let left = 100 - floor.reduce((a, b) => a + b, 0);
+  const order = exact.map((v, i) => ({ i, rest: v - floor[i]! })).sort((a, b) => b.rest - a.rest || a.i - b.i);
+  for (const o of order) {
+    if (left <= 0) break;
+    floor[o.i]! += 1;
+    left -= 1;
+  }
+  return floor;
+}
+
+/**
+ * A text with a count in it, in its singular or plural form: the template holds both as "one|many" ("{n} month|{n}
+ * months"; a template without a bar has one form), the singular for exactly 1 (and −1). shown is what stands for {n}
+ * (the formatted number); the count decides the form
+ */
+export function counted(template: string, n: number, shown?: string): string {
+  const bar = template.indexOf("|");
+  const form = bar < 0 ? template : Math.abs(n) === 1 ? template.slice(0, bar) : template.slice(bar + 1);
+  return form.replace("{n}", shown ?? String(n));
 }
 
 /** A cohort's label: its month ("Mar 2026") or its quarter ("Q1 2026") */
@@ -275,21 +307,50 @@ export function monthLabel(month: string, locale: string, withYear: boolean): st
 }
 
 /**
- * The heatmap's step for a share still active: five steps of one blue hue from Background Blue to Deep Blue (the
- * palette's own blues, Pulse4all-Style 7.7 and 7.8), white text on the two dark steps only. The steps lie where
- * retention differs (under 50 %, to 70 %, to 85 %, to 95 %, above), so a table of cohorts that mostly stay does not
- * turn one colour; the share and the count stand in every cell, the colour only helps the eye
+ * The heatmap's colour for a share still active (Pulse4all-Style 7.7 and 7.8): one hue, from Background Blue (#EAF4FC,
+ * 0 %) to Deep Blue (#265BA4, 100 %) by the share's value in whole percents, never lighter for a higher share. The text
+ * is Inkt on the light part and white only where the background is at least as dark as Denim (#3B6FB3). Between the
+ * two lies a band of blues on which neither Inkt nor white reaches a contrast of 4.5:1; a share whose colour would fall
+ * in it takes the band's nearer edge (the lower half the light edge, the upper half the dark one), so every step reads
+ * at 4.5:1 or more (verify:active proves each of the 101). The share and the count stand in every cell; the colour only
+ * helps the eye
  */
-export const HEAT_BOUNDS = [0.5, 0.7, 0.85, 0.95] as const;
-export function heatStep(share: number | null): { step: 0 | 1 | 2 | 3 | 4; className: string } | null {
-  if (share === null || !Number.isFinite(share)) return null;
-  const step = HEAT_BOUNDS.filter((b) => share >= b).length as 0 | 1 | 2 | 3 | 4;
-  return { step, className: HEAT_CLASSES[step] };
+export const HEAT_FROM = [0xea, 0xf4, 0xfc] as const;
+export const HEAT_TO = [0x26, 0x5b, 0xa4] as const;
+export const HEAT_INKT = [0x0b, 0x13, 0x3d] as const;
+export const HEAT_DENIM = [0x3b, 0x6f, 0xb3] as const;
+type Rgb = readonly [number, number, number];
+
+/** The relative luminance of a colour (WCAG 2) */
+export function luminance(rgb: Rgb): number {
+  const [r, g, b] = rgb.map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-export const HEAT_CLASSES = [
-  "bg-p4a-bgblue text-p4a-body", "bg-p4a-bgblue-dark text-p4a-body", "bg-p4a-lightblue text-p4a-inkt", "bg-p4a-denim text-white", "bg-p4a-deepblue text-white",
-] as const;
+/** The contrast ratio of two colours (WCAG 2) */
+export function contrast(a: Rgb, b: Rgb): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+const heatAt = (percent: number): Rgb => HEAT_FROM.map((from, i) => Math.round(from + ((HEAT_TO[i]! - from) * percent) / 100)) as unknown as Rgb;
+const HEAT_WHITE: Rgb = [255, 255, 255];
+/** The last whole percent whose colour still carries Inkt at 4.5:1, and the first one at least as dark as Denim */
+export const HEAT_LIGHT_EDGE = Math.max(...Array.from({ length: 101 }, (_, p) => p).filter((p) => contrast(heatAt(p), HEAT_INKT) >= 4.5));
+export const HEAT_DARK_EDGE = Math.min(...Array.from({ length: 101 }, (_, p) => p).filter((p) => luminance(heatAt(p)) <= luminance(HEAT_DENIM)));
+
+export function heatColour(share: number | null): { percent: number; background: string; text: "inkt" | "white"; rgb: Rgb } | null {
+  if (share === null || !Number.isFinite(share)) return null;
+  const percent = Math.round(Math.min(1, Math.max(0, share)) * 100);
+  const at = percent <= HEAT_LIGHT_EDGE || percent >= HEAT_DARK_EDGE ? percent : percent < (HEAT_LIGHT_EDGE + HEAT_DARK_EDGE) / 2 ? HEAT_LIGHT_EDGE : HEAT_DARK_EDGE;
+  const rgb = heatAt(at);
+  const white = luminance(rgb) <= luminance(HEAT_DENIM);
+  return { percent, background: `rgb(${rgb[0]} ${rgb[1]} ${rgb[2]})`, text: white ? "white" : "inkt", rgb };
+}
+export const heatTextRgb = (text: "inkt" | "white"): Rgb => (text === "white" ? HEAT_WHITE : HEAT_INKT);
 
 /** A sparkline's path in a w by h box (no axes): the values left to right, the lowest at the bottom, a flat line in the middle */
 export function sparkPath(values: readonly number[], w: number, h: number, pad = 2): string {

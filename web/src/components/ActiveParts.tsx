@@ -3,8 +3,9 @@
  * its definition status, the link switches, the headline tiles with their change lines, the placeholder cards, the
  * markets table, the comparison of the two segments, the cohort heatmap, the customer list and the quiet data notes.
  * Server components, plain CSS; Pulse4all-Style 7.3 (cards), 7.5 (badges: the label is always there), 7.6 (tables:
- * numbers right-aligned in tabular figures, every header with its hint) and 7.7 (a positive delta Leaf Green, a negative
- * one Error, text only). Ids, codes, counts, dates, amounts and links only: never a customer's name, email, phone or
+ * numbers right-aligned in tabular figures, every header with its hint, the header row staying on top of its scroll
+ * container) and 7.7 (a positive delta Leaf Green, a negative one Error, text only: a figure's change over time, never a
+ * difference between two segments). Ids, codes, counts, dates, amounts and links only: never a customer's name, email, phone or
  * address.
  */
 import Link from "next/link";
@@ -14,8 +15,8 @@ import type { ActiveCopy, Copy as SharedCopy, Locale } from "@/lib/copy";
 import type {
   ActiveCohort, ActiveComparisonRow, ActiveGrouping, ActiveList, ActiveMarketRow, ActiveMeasure, ActiveReport, ActiveSlotKey, ActiveSort,
 } from "@/lib/data";
-import { ACTIVE_SLOTS, changeAgainst, cohortLabel, cohortShare, differenceTone, heatStep, signed } from "@/lib/active";
-import { fmtCount, fmtShare } from "@/lib/reports";
+import { ACTIVE_SLOTS, changeAgainst, cohortLabel, cohortShare, counted, heatColour, signed, wholePercents } from "@/lib/active";
+import { fmtCount, fmtPct, fmtShare } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
 import { Sparkline } from "./ActiveCharts";
 import { LinkMark } from "./ActivePending";
@@ -31,8 +32,11 @@ type Copy = ActivePageCopy;
 type T = ActiveCopy;
 export type ActiveHref = (change: Record<string, string | null>) => { pathname: Route; query: Record<string, string> };
 
-const th = "h-10 px-2 py-1 align-bottom font-semibold";
+const th = "h-10 px-2 py-1 align-bottom font-semibold leading-tight";
 const td = "h-10 whitespace-nowrap px-2 tabular text-right";
+// the two widest tables (the markets, the customer list): the same cells with half the side padding, so their columns fit 1440 px (3 px a side; the first column keeps 8 px on its left)
+const thD = "h-10 px-[3px] py-1 align-bottom font-semibold leading-tight";
+const tdD = "h-10 whitespace-nowrap px-[3px] tabular text-right";
 const row = "border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
 
 /** A definition's status as a badge: Proposed (for Kira to confirm) or Pending (an open question, named in the hint) */
@@ -113,11 +117,12 @@ export function ActiveTile({ testId, label, info, value, children }: {
 
 /**
  * A placeholder (decision D5): the slot of a figure the Workspace cannot compute yet. Its label, the neutral badge "Not
- * connected yet", what will feed it and its definition status Pending; never a number, a zero or a dash, and it takes no children, so
- * nothing else can be drawn inside it
+ * connected yet", what will feed it and its definition status Pending; never a number, a zero or a dash of its own.
+ * related: a line under the badge for a figure that exists and belongs with the slot (the churned subscriptions of the
+ * last 30 days under Churn rate, a link to Flash's overview): it sits apart from the placeholder's own words (data-related)
  */
-export function PlaceholderCard({ slot, info, copy }: {
-  slot: ActiveSlotKey; info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy;
+export function PlaceholderCard({ slot, info, copy, related }: {
+  slot: ActiveSlotKey; info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy; related?: ReactNode;
 }) {
   const t = copy.active;
   const def = ACTIVE_SLOTS.find((s) => s.key === slot)!;
@@ -127,6 +132,7 @@ export function PlaceholderCard({ slot, info, copy }: {
         <HintLabel label={t[`slot_${slot}`]}><HeaderHint label={info.about} text={info.text} more={info.more} /></HintLabel>
       </p>
       <p><Badge tone="neutral">{t.notConnected}</Badge></p>
+      {related ? <div className="text-small" data-related="">{related}</div> : null}
       <p className="text-small text-p4a-muted">{t.fedBy.replace("{sources}", def.fedBy.map((f) => t[`feed_${f}`]).join(t.listJoin))}</p>
       <p><StatusBadge status="Pending" copy={copy} /></p>
     </div>
@@ -144,10 +150,14 @@ function hintOf(copy: Copy) {
   };
 }
 
+/**
+ * A table inside its scroll container (Pulse4all-Style 7.6): the container scrolls both ways inside the panel (it
+ * shrinks to what the panel leaves it), and the header row stays at its top while the rows scroll under it
+ */
 function Scroll({ testId, label, children }: { testId: string; label: string; children: ReactNode }) {
   return (
-    <div className="overflow-x-auto" data-testid={`${testId}-scroll`} role="region" aria-label={label} tabIndex={0}>
-      <table className="w-full border-collapse text-body leading-table" data-testid={testId}>{children}</table>
+    <div className="min-h-0 overflow-auto" data-testid={`${testId}-scroll`} role="region" aria-label={label} tabIndex={0}>
+      <table className="w-full border-collapse text-body leading-table [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-p4a-bgblue" data-testid={testId}>{children}</table>
     </div>
   );
 }
@@ -187,45 +197,49 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
   const t = copy.active;
   const hint = hintOf(copy);
   const n = (x: number) => fmtCount(x, locale);
-  const head = (label: string, text: string, key?: MarketSort, extra = "") => {
+  // a header: a short label that may break over two lines (in these narrow columns the info mark may stand under the
+  // label's last word); its hint is named with the column's full name
+  const head = (label: string, text: string, key?: MarketSort, full = label) => {
     const current = key !== undefined && key === sort;
     const next = current && descending ? "asc" : "desc";
     return (
-      <th className={`${th} ${key === "market" ? "" : "text-right"} ${extra}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined}>
+      <th className={`${thD} ${key === "market" ? "" : "text-right"}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined} data-full={full}>
         <HintLabel label={key ? (
-          <Link href={href({ msort: key, mdir: next })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline" data-testid={`active-msort-${key}`}
-            title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
-        ) : label}>{hint(label, text)}</HintLabel>
+          <Link href={href({ msort: key, mdir: next })} prefetch={false} scroll={false} className="whitespace-normal underline-offset-2 hover:underline" data-testid={`active-msort-${key}`}
+            title={t.sortBy.replace("{column}", full)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
+        ) : label}>{hint(full, text)}</HintLabel>
       </th>
     );
   };
   const segCols = [...segments, "unknown"];
+  // the markets' shares of the base in whole percents that add up to 100 (largest remainder), whatever the order shown
+  const shares = new Map(wholePercents(rows.map((r) => r.customers)).map((p, i) => [rows[i]!.market, p]));
   const delta = (x: number) => (
     <span className={x > 0 ? "text-p4a-green" : x < 0 ? "text-p4a-error" : "text-p4a-muted"}>{x === 0 ? "0" : signed(n(Math.abs(x)), x)}</span>
   );
   const line = (r: ActiveMarketRow | (NonNullable<ActiveReport["marketsTotal"]> & { market?: undefined; spark?: undefined }), isTotal: boolean) => (
     <tr key={isTotal ? "total" : r.market} className={isTotal ? "border-t-2 border-p4a-deepblue bg-p4a-bgblue font-semibold" : row} data-testid={isTotal ? "active-market-total" : "active-market-row"}>
-      <td className="h-10 whitespace-nowrap px-2 font-semibold">
+      <td className="h-10 whitespace-nowrap px-[3px] pl-2 font-semibold">
         {isTotal ? t.total : (
           <Link href={href({ market: r.market!, msort: null, mdir: null, after: null, before: null, page: null })} prefetch={false} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.filterOnMarket.replace("{market}", r.market!)}>
             {r.market === "unknown" ? copy.reports.unknownMarket : r.market}<LinkMark />
           </Link>
         )}
       </td>
-      <td className={td}>{n(r.customers)}</td>
-      <td className={td}>{fmtShare(r.share, locale)}</td>
-      {segCols.map((s) => <td key={s} className={td}>{n(r.bySegment[s] ?? 0)}</td>)}
-      <td className={td}>{n(r.subscriptions)}</td>
-      <td className={td}>{n(r.devices)}</td>
-      <td className={td}><Amounts amounts={r.amounts} locale={locale} pick="amount" /></td>
-      <td className={td}><Amounts amounts={r.amounts} locale={locale} pick="average" /></td>
-      <td className={td}>{r.medianAge === null ? "–" : fmtNumber(r.medianAge, locale, 1)}</td>
-      <td className={td}><Amounts amounts={Object.fromEntries(Object.entries(r.clv).map(([c, v]) => [c, v.average]))} locale={locale} /></td>
-      <td className={td}>{n(r.churned30d)}</td>
-      <td className={td} data-testid="active-net">{delta(r.net30d)}</td>
-      <td className={td} title={t.knownChannel.replace("{n}", n(r.indirect + r.direct))}>{r.indirectShare === null ? "–" : fmtShare(r.indirectShare, locale)}</td>
-      <td className="h-10 px-2 text-right">
-        {isTotal || !r.spark ? null : <Sparkline values={r.spark} title={t.sparkTitle.replace("{first}", n(r.spark[0] ?? 0)).replace("{last}", n(r.spark[r.spark.length - 1] ?? 0))} />}
+      <td className={tdD}>{n(r.customers)}</td>
+      <td className={tdD}>{isTotal ? fmtShare(r.share, locale) : fmtPct(shares.get(r.market!) ?? 0, locale)}</td>
+      {segCols.map((s) => <td key={s} className={tdD}>{n(r.bySegment[s] ?? 0)}</td>)}
+      <td className={tdD}>{n(r.subscriptions)}</td>
+      <td className={tdD}>{n(r.devices)}</td>
+      <td className={tdD}><Amounts amounts={r.amounts} locale={locale} pick="amount" /></td>
+      <td className={tdD}><Amounts amounts={r.amounts} locale={locale} pick="average" /></td>
+      <td className={tdD}>{r.medianAge === null ? "–" : fmtNumber(r.medianAge, locale, 1)}</td>
+      <td className={tdD}><Amounts amounts={Object.fromEntries(Object.entries(r.clv).map(([c, v]) => [c, v.average]))} locale={locale} /></td>
+      <td className={tdD}>{n(r.churned30d)}</td>
+      <td className={tdD} data-testid="active-net">{delta(r.net30d)}</td>
+      <td className={tdD} title={t.knownChannel.replace("{n}", n(r.indirect + r.direct))}>{r.indirectShare === null ? "–" : fmtShare(r.indirectShare, locale)}</td>
+      <td className="h-10 px-[3px] text-right">
+        {isTotal || !r.spark ? null : <Sparkline width={64} values={r.spark} title={t.sparkTitle.replace("{first}", n(r.spark[0] ?? 0)).replace("{last}", n(r.spark[r.spark.length - 1] ?? 0))} />}
       </td>
     </tr>
   );
@@ -234,18 +248,18 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
       <thead>
         <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
           {head(t.colMarket, hints.mh_col_market!, "market")}
-          {head(t.activeCustomers, hints.mh_active_customers!, "customers")}
+          {head(t.shortCustomers, hints.mh_active_customers!, "customers", t.activeCustomers)}
           {head(t.colShare, hints.mh_col_share!, "share")}
-          {segCols.map((s) => <th key={s} className={`${th} text-right`}><HintLabel label={s === "unknown" ? t.unknownSegment : s}>{hint(s === "unknown" ? t.unknownSegment : s, hints.mh_col_segment!)}</HintLabel></th>)}
-          {head(t.totalSubscriptions, hints.mh_total_subscriptions!, "subscriptions")}
+          {segCols.map((s) => <th key={s} className={`${thD} text-right`}><HintLabel label={s === "unknown" ? t.unknownSegment : s}>{hint(s === "unknown" ? t.unknownSegment : s, hints.mh_col_segment!)}</HintLabel></th>)}
+          {head(t.shortSubscriptions, hints.mh_total_subscriptions!, "subscriptions", t.totalSubscriptions)}
           {head(t.colDevices, hints.mh_col_devices!, "devices")}
-          {head(t.monthlyAmount, hints.mh_monthly_amount!)}
-          {head(t.averageAmount, hints.mh_average_amount!)}
-          {head(t.medianAge, hints.mh_customer_age!, "medianAge")}
-          {head(t.clvAverage, hints.mh_clv_realised!)}
-          {head(t.churned30d, hints.mh_churned_30d!, "churned30d")}
-          {head(t.net30d, hints.mh_net_30d!, "net30d")}
-          {head(t.indirectShare, hints.mh_indirect_share!, "indirectShare")}
+          {head(t.shortMonthlyAmount, hints.mh_monthly_amount!, undefined, t.monthlyAmount)}
+          {head(t.shortAverageAmount, hints.mh_average_amount!, undefined, t.averageAmount)}
+          {head(t.shortMedianAge, hints.mh_customer_age!, "medianAge", t.medianAge)}
+          {head(t.shortClvAverage, hints.mh_clv_realised!, undefined, t.clvAverage)}
+          {head(t.shortChurned30d, hints.mh_churned_30d!, "churned30d", t.churned30d)}
+          {head(t.shortNet30d, hints.mh_net_30d!, "net30d", t.net30d)}
+          {head(t.shortIndirectShare, hints.mh_indirect_share!, "indirectShare", t.indirectShare)}
           {head(t.colTrend, hints.mh_col_trend!)}
         </tr>
       </thead>
@@ -262,8 +276,8 @@ export function measureText(measure: ActiveMeasure, value: number, currency: str
   switch (measure) {
     case "customers": return fmtCount(value, locale);
     case "share": case "retention": case "indirect_share": return fmtShare(value, locale);
-    case "lifetime_median": return t.monthsValue.replace("{n}", fmtNumber(value, locale, 0));
-    case "median_age": return t.monthsValue.replace("{n}", fmtNumber(value, locale, 1));
+    case "lifetime_median": return counted(t.monthsValue, value, fmtNumber(value, locale, 0));
+    case "median_age": return counted(t.monthsValue, value, fmtNumber(value, locale, 1));
     case "clv_average": case "clv_median": case "clv_per_month": case "average_monthly_amount": return currency ? fmtAmount(value, currency, locale) : fmtNumber(value, locale, 2);
     default: return fmtNumber(value, locale, 2);
   }
@@ -273,15 +287,16 @@ export function measureText(measure: ActiveMeasure, value: number, currency: str
 function differenceText(measure: ActiveMeasure, value: number, currency: string | null, locale: Locale, t: T): string {
   const abs = Math.abs(value);
   const text = measure === "share" || measure === "retention" || measure === "indirect_share"
-    ? t.pointsValue.replace("{n}", fmtNumber(abs * 100, locale, 1))
+    ? counted(t.pointsValue, Math.round(abs * 1000) / 10, fmtNumber(abs * 100, locale, 1))
     : measureText(measure, abs, currency, locale, t);
   return value === 0 ? text : signed(text, value);
 }
 
 /**
  * The first two segments side by side (decision D12): one row per measure, the difference (the first less the second) and
- * the ratio, the unknown segment beside them and never in the difference. A difference is coloured only where the higher
- * value is unambiguously the better one; a currency one side lacks leaves its cell empty with the reason in its title
+ * the ratio, the unknown segment beside them and never in the difference. Between two segments there is no better or
+ * worse: every difference and ratio stands in Inkt with its sign (Martin, 12 November 2026); a currency one side lacks
+ * leaves its cell empty with the reason in its title
  */
 export function ComparisonTable({ comparison, hints, copy, locale }: { comparison: NonNullable<ActiveReport["comparison"]>; hints: Record<string, string>; copy: Copy; locale: Locale }) {
   const t = copy.active;
@@ -289,13 +304,13 @@ export function ComparisonTable({ comparison, hints, copy, locale }: { compariso
   const a = comparison.a ?? "–";
   const b = comparison.b ?? "–";
   const label = (r: ActiveComparisonRow) => {
-    const base = r.measure === "retention" ? t.m_retention.replace("{n}", String(r.months)) : t[`m_${r.measure}`];
+    const base = r.measure === "retention" ? counted(t.m_retention, r.months ?? 0) : t[`m_${r.measure}`];
     return r.currency ? `${base} (${r.currency})` : base;
   };
   const cell = (r: ActiveComparisonRow, value: number | null, longest: number | null, side: string) => {
     if (value !== null) return <td className={td}>{measureText(r.measure, value, r.currency, locale, t)}</td>;
     if (r.measure === "lifetime_median" && longest !== null) {
-      return <td className={`${td} text-p4a-muted`} title={`${t.notReachedShort}. ${t.notReachedTitle}`} data-not-reached="">{t.moreThanMonths.replace("{n}", String(longest))}</td>;
+      return <td className={`${td} text-p4a-muted`} title={`${t.notReachedShort}. ${t.notReachedTitle}`} data-not-reached="">{counted(t.moreThanMonths, longest)}</td>;
     }
     const why = r.currency ? t.noCustomersInCurrency.replace("{segment}", side) : r.measure === "retention" ? t.noSpellThatOld : t.noValue;
     return <td className={`${td} text-p4a-muted`} title={why} data-empty="">{r.currency ? "" : "–"}</td>;
@@ -313,23 +328,20 @@ export function ComparisonTable({ comparison, hints, copy, locale }: { compariso
         </tr>
       </thead>
       <tbody>
-        {comparison.rows.map((r) => {
-          const tone = differenceTone(r.measure, r.difference);
-          return (
-            <tr key={`${r.measure}|${r.months ?? ""}|${r.currency ?? ""}`} className={row} data-testid="active-comparison-row" data-measure={r.measure}>
-              <td className="h-10 whitespace-nowrap px-2 font-semibold">{label(r)}</td>
-              {cell(r, r.a, r.aLongest, a)}
-              {cell(r, r.b, r.bLongest, b)}
-              <td className={`${td} ${tone === "good" ? "text-p4a-green" : tone === "bad" ? "text-p4a-error" : "text-p4a-inkt"}`} data-tone={tone}>
-                {r.difference === null ? "" : differenceText(r.measure, r.difference, r.currency, locale, t)}
-              </td>
-              <td className={td}>{r.ratio === null ? "" : t.ratioValue.replace("{n}", fmtNumber(r.ratio, locale, 2))}</td>
-              {cell(r, r.unknown, r.unknownLongest, t.unknownSegment)}
-            </tr>
-          );
-        })}
+        {comparison.rows.map((r) => (
+          <tr key={`${r.measure}|${r.months ?? ""}|${r.currency ?? ""}`} className={row} data-testid="active-comparison-row" data-measure={r.measure}>
+            <td className="h-10 px-2 font-semibold">{label(r)}</td>
+            {cell(r, r.a, r.aLongest, a)}
+            {cell(r, r.b, r.bLongest, b)}
+            <td className={`${td} text-p4a-inkt`} data-difference="">
+              {r.difference === null ? "" : differenceText(r.measure, r.difference, r.currency, locale, t)}
+            </td>
+            <td className={`${td} text-p4a-inkt`}>{r.ratio === null ? "" : t.ratioValue.replace("{n}", fmtNumber(r.ratio, locale, 2))}</td>
+            {cell(r, r.unknown, r.unknownLongest, t.unknownSegment)}
+          </tr>
+        ))}
         <tr className={row} data-testid="active-comparison-row" data-measure="clv_projected" data-placeholder="">
-          <td className="h-10 whitespace-nowrap px-2 font-semibold">{t.slot_clv_projected}</td>
+          <td className="h-10 px-2 font-semibold">{t.slot_clv_projected}</td>
           <td className="h-10 px-2 text-right" colSpan={5}>
             <span className="inline-flex items-center gap-2"><Badge tone="neutral">{t.notConnected}</Badge><StatusBadge status="Pending" copy={copy} /></span>
           </td>
@@ -341,8 +353,9 @@ export function ComparisonTable({ comparison, hints, copy, locale }: { compariso
 
 /**
  * The customer cohorts as a heatmap table: the cohort, its size and, per age, the share still active with the count in
- * the cell's title, on five steps of one blue hue (white text on the two dark steps only); a dash with its reason where
- * the cohort is not Mature at the age
+ * the cell's title, on one continuous scale of one blue hue by the share's value (lib/active heatColour: Inkt text on
+ * the light part, white only from Denim on); a dash with its reason where the cohort is not Mature at the age. A small
+ * legend under the table shows the scale from 0 % to 100 %
  */
 export function CohortHeatmap({ cohorts, ages, grouping, hints, copy, locale }: {
   cohorts: ActiveCohort[]; ages: number[]; grouping: ActiveGrouping; hints: Record<string, string>; copy: Copy; locale: Locale;
@@ -350,13 +363,14 @@ export function CohortHeatmap({ cohorts, ages, grouping, hints, copy, locale }: 
   const t = copy.active;
   const hint = hintOf(copy);
   return (
+    <>
     <Scroll testId="active-cohorts" label={t.cohortsCard}>
       <thead>
         <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
           <th className={th}><HintLabel label={t.colCohort}>{hint(t.colCohort, hints.mh_cohort!)}</HintLabel></th>
           <th className={`${th} text-right`}><HintLabel label={t.colStarted}>{hint(t.colStarted, hints.mh_col_started!)}</HintLabel></th>
           {ages.map((a) => (
-            <th key={a} className={`${th} text-right`}><HintLabel label={t.monthsValue.replace("{n}", String(a))}>{hint(t.monthsValue.replace("{n}", String(a)), hints.mh_col_cohort_age!)}</HintLabel></th>
+            <th key={a} className={`${th} text-right`}><HintLabel label={counted(t.monthsValue, a)}>{hint(counted(t.monthsValue, a), hints.mh_col_cohort_age!)}</HintLabel></th>
           ))}
         </tr>
       </thead>
@@ -367,14 +381,14 @@ export function CohortHeatmap({ cohorts, ages, grouping, hints, copy, locale }: 
             <td className={td}>{fmtCount(c.started, locale)}</td>
             {c.ages.map((a) => {
               const share = cohortShare(c, a);
-              const heat = heatStep(share);
+              const heat = heatColour(share);
               if (share === null || heat === null) {
                 return <td key={a.age} className={`${td} text-p4a-muted`} title={t.notMature} data-mature="false">–</td>;
               }
               return (
-                <td key={a.age} className={`${td} ${heat.className}`} data-mature="true" data-heat={heat.step}
+                <td key={a.age} className={`${td} ${heat.text === "white" ? "text-white" : "text-p4a-inkt"}`} style={{ backgroundColor: heat.background }} data-mature="true" data-heat={heat.percent}
                   title={t.cohortCellTitle.replace("{n}", fmtCount(a.stillActive, locale)).replace("{started}", fmtCount(c.started, locale))}>
-                  {fmtShare(share, locale)} <span className="font-normal opacity-90">({fmtCount(a.stillActive, locale)})</span>
+                  {fmtShare(share, locale)} <span className="font-normal">({fmtCount(a.stillActive, locale)})</span>
                 </td>
               );
             })}
@@ -382,13 +396,22 @@ export function CohortHeatmap({ cohorts, ages, grouping, hints, copy, locale }: 
         ))}
       </tbody>
     </Scroll>
+    <div className="mt-3 flex shrink-0 items-center gap-2 text-caption text-p4a-grey" data-testid="active-heat-legend" role="img" aria-label={t.heatLegend}>
+      <span className="tabular">{fmtShare(0, locale)}</span>
+      <span className="flex h-3 w-64 overflow-hidden rounded-sm border border-p4a-border" aria-hidden="true">
+        {Array.from({ length: 21 }, (_, i) => <span key={i} className="h-full flex-1" data-heat-swatch="" style={{ backgroundColor: heatColour(i / 20)!.background }} />)}
+      </span>
+      <span className="tabular">{fmtShare(1, locale)}</span>
+      <span>{t.heatLegend}</span>
+    </div>
+    </>
   );
 }
 
 /** The list's columns that sort, by their header */
 const LIST_SORT: Partial<Record<string, ActiveSort>> = {
   colStoreCustomer: "store_customer", colStore: "store", colMarket: "market", colSegment: "segment", colCustomerStart: "customer_start", customerAge: "age_months",
-  totalSubscriptions: "subscriptions", colDevices: "devices", monthlyAmount: "monthly_amount", clvRealised: "clv", channel: "channel", colAcquired: "level",
+  totalSubscriptions: "subscriptions", colDevices: "devices", monthlyAmount: "monthly_amount", clvRealised: "clv", channel: "channel",
 };
 
 /**
@@ -401,16 +424,25 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
   const t = copy.active;
   const hint = hintOf(copy);
   const n = (x: number) => fmtCount(x, locale);
-  const head = (key: keyof T & string, text: string, right = true) => {
+  // a header: a short label where the column's name is long (it may break over two lines); the hint is named with the full name
+  const sortLink = (key: keyof T & string, short?: string): ReactNode => {
     const s = LIST_SORT[key];
-    const label = t[key] as string;
+    const full = t[key] as string;
+    const label = short ?? full;
     const current = s !== undefined && s === sort;
+    return s ? (
+      <Link href={href({ sort: s, dir: current && descending ? "asc" : "desc", after: null, before: null, page: null })} prefetch={false} scroll={false} className="whitespace-normal underline-offset-2 hover:underline"
+        data-testid={`active-sort-${s}`} title={t.sortBy.replace("{column}", full)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
+    ) : label;
+  };
+  // under: a second figure that shares the column (the Customer age under the Customer start), with its own sort link;
+  // the header keeps one info mark, whose text explains both
+  const head = (key: keyof T & string, text: string, right = true, short?: string, under?: { key: keyof T & string; text: string }) => {
+    const sorted = [key, under?.key].map((k) => (k ? LIST_SORT[k] : undefined)).find((k) => k !== undefined && k === sort);
     return (
-      <th className={`${th} ${right ? "text-right" : ""}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined}>
-        <HintLabel label={s ? (
-          <Link href={href({ sort: s, dir: current && descending ? "asc" : "desc", after: null, before: null, page: null })} prefetch={false} scroll={false} className="underline-offset-2 hover:underline"
-            data-testid={`active-sort-${s}`} title={t.sortBy.replace("{column}", label)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
-        ) : label}>{hint(label, text)}</HintLabel>
+      <th className={`${thD} ${right ? "text-right" : ""}`} aria-sort={sorted ? (descending ? "descending" : "ascending") : undefined} data-full={t[key] as string}>
+        <HintLabel label={sortLink(key, short)}>{hint(t[key] as string, under ? `${text} ${t[under.key] as string}: ${under.text}` : text)}</HintLabel>
+        {under ? <span className="block font-normal" data-under={t[under.key] as string}>{sortLink(under.key)}</span> : null}
       </th>
     );
   };
@@ -420,7 +452,7 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const payment: Record<string, "success" | "warning" | "error" | "neutral"> = { paid: "success", in_retry: "warning", failed: "error", paused: "neutral" };
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-h-0 flex-col gap-4">
       <Scroll testId="active-list" label={t.listCard}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
@@ -428,14 +460,12 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
             {head("colStore", hints.mh_col_store!, false)}
             {head("colMarket", hints.mh_col_market!, false)}
             {head("colSegment", hints.mh_col_segment!, false)}
-            {head("channel", hints.mh_channel!, false)}
-            {head("colAcquired", hints.mh_col_acquired!, false)}
-            {head("colCustomerStart", hints.mh_customer_start!)}
-            {head("customerAge", hints.mh_customer_age!)}
-            {head("totalSubscriptions", hints.mh_total_subscriptions!)}
+            {head("colCustomerStart", hints.mh_customer_start!, true, undefined, { key: "customerAge", text: hints.mh_customer_age! })}
+            {head("totalSubscriptions", hints.mh_total_subscriptions!, true, t.shortSubscriptions)}
             {head("colDevices", hints.mh_col_devices!)}
-            {head("monthlyAmount", hints.mh_monthly_amount!)}
-            {head("clvRealised", hints.mh_clv_realised!)}
+            {head("monthlyAmount", hints.mh_monthly_amount!, true, t.shortMonthlyAmount)}
+            {head("clvRealised", hints.mh_clv_realised!, true, t.shortClvRealised)}
+            {head("channel", `${hints.mh_channel!} ${hints.mh_col_acquired!}`, false)}
             {head("colPaymentState", hints.mh_col_payment_state!, false)}
             {head("colContact", hints.mh_col_contact!, false)}
           </tr>
@@ -443,19 +473,17 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
         <tbody>
           {list.rows.map((r) => (
             <tr key={`${r.store}|${r.storeCustomer}`} className={row} data-testid="active-list-row">
-              <td className="h-10 whitespace-nowrap px-2 tabular">{r.storeCustomer}</td>
-              <td className="h-10 whitespace-nowrap px-2">{r.store}</td>
-              <td className="h-10 whitespace-nowrap px-2">{r.market === "unknown" ? copy.reports.unknownMarket : r.market}</td>
-              <td className="h-10 whitespace-nowrap px-2">{r.segment === "unknown" ? t.unknownSegment : r.segment}</td>
-              <td className="h-10 whitespace-nowrap px-2">{t[`channel_${r.channel}`]}</td>
-              <td className="h-10 whitespace-nowrap px-2 tabular" title={r.level ? (copy.firstOrders as Record<string, string>)[`level_${r.level}`] ?? r.level : t.noLevel}>
-                {r.level ?? <span className="text-p4a-muted">–</span>}
+              <td className="h-10 whitespace-nowrap px-[3px] pl-2 tabular">{r.storeCustomer}</td>
+              <td className="h-10 whitespace-nowrap px-[3px]">{r.store}</td>
+              <td className="h-10 whitespace-nowrap px-[3px]">{r.market === "unknown" ? copy.reports.unknownMarket : r.market}</td>
+              <td className="h-10 whitespace-nowrap px-[3px]">{r.segment === "unknown" ? t.unknownSegment : r.segment}</td>
+              <td className={`${tdD} leading-tight`}>
+                <span className="block" data-testid="active-list-start">{r.customerStart ? fmtDate(r.customerStart, locale, "medium") : "–"}</span>
+                <span className="block text-caption text-p4a-muted" data-testid="active-list-age">{r.ageMonths === null ? "–" : counted(t.monthsValue, r.ageMonths, n(r.ageMonths))}</span>
               </td>
-              <td className={td}>{r.customerStart ? fmtDate(r.customerStart, locale, "short") : "–"}</td>
-              <td className={td}>{r.ageMonths === null ? "–" : n(r.ageMonths)}</td>
-              <td className={td}>{n(r.subscriptions)}</td>
-              <td className={td}>{n(r.devices)}</td>
-              <td className={td}>
+              <td className={tdD}>{n(r.subscriptions)}</td>
+              <td className={tdD}>{n(r.devices)}</td>
+              <td className={tdD}>
                 {r.monthlyAmount !== null && r.currency ? (
                   <span className="flex flex-col items-end">
                     <span>{fmtAmount(r.monthlyAmount, r.currency, locale)}</span>
@@ -463,11 +491,17 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
                   </span>
                 ) : <span className="text-p4a-muted" title={t.noPayingAmount}>–</span>}
               </td>
-              <td className={td}>{r.clv !== null && r.clvCurrency ? fmtAmount(r.clv, r.clvCurrency, locale) : "–"}</td>
-              <td className="h-10 whitespace-nowrap px-2">
+              <td className={tdD}>{r.clv !== null && r.clvCurrency ? fmtAmount(r.clv, r.clvCurrency, locale) : "–"}</td>
+              {/* Direct / Indirect, with the level the first order was acquired through as its code; First orders' label on hover */}
+              <td className="h-10 whitespace-nowrap px-[3px] leading-tight" data-testid="active-list-channel">
+                <span className="block">{t[`channelShort_${r.channel}`]}</span>
+                {r.level ? <span className="block text-caption text-p4a-muted" title={`${t.colAcquired}: ${(copy.firstOrders as Record<string, string>)[`level_${r.level}`] ?? r.level}`} data-level={r.level}>{r.level}</span>
+                  : <span className="sr-only">{t.noLevel}</span>}
+              </td>
+              <td className="h-10 whitespace-nowrap px-[3px]">
                 {r.paymentState ? <Badge tone={payment[r.paymentState] ?? "neutral"}>{(t as Record<string, string>)[`pay_${r.paymentState}`] ?? r.paymentState}</Badge> : "–"}
               </td>
-              <td className="h-10 px-2"><RecordLink url={r.contactUrl} label={t.openContact.replace("{id}", r.contactId ?? "")} /></td>
+              <td className="h-10 px-[3px]"><RecordLink url={r.contactUrl} label={t.openContact.replace("{id}", r.contactId ?? "")} /></td>
             </tr>
           ))}
         </tbody>

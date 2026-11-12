@@ -14,7 +14,7 @@ import { Shell } from "@/components/Shell";
 import { Card, Keycap, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import {
   ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_CURSOR, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SCROLLING, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
-  type ActivePanel, type ActiveSplit, activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, fromMonthOf, matureCohorts, monthLabel,
+  type ActivePanel, type ActiveSplit, activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, counted, fromMonthOf, lineStyle, matureCohorts, monthLabel, wholePercents,
   ACTIVE_TAKE_STATES, type ActiveTakeState, activeInTakeState, activeListInTakeState, activeNowInTakeState, monthsBack, parseActiveFilter, withActiveNow,
 } from "@/lib/active";
 import { CmaDbError, data, dataIsMock, requestDbTrace, streamed } from "@/lib/data";
@@ -24,7 +24,7 @@ import type { Principal } from "@/lib/auth/identity";
 import { flashHref } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
-import { fmtCount, fmtShare, REPORT_PERMISSIONS } from "@/lib/reports";
+import { fmtCount, fmtPct, fmtShare, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
@@ -151,17 +151,18 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
             <PanelTitle label={t.unitEconomics} hint={hints.mh_unit_economics!} status="Pending" copy={words} />
             <div className="grid grid-cols-3 gap-4 xl:grid-cols-6">
               {ACTIVE_SLOTS.map((s) => (
-                <PlaceholderCard key={s.key} slot={s.key} info={info(t[`slot_${s.key}`], hints[`mh_slot_${s.key}`]!, s.metric)} copy={words} />
+                <PlaceholderCard key={s.key} slot={s.key} info={info(t[`slot_${s.key}`], hints[`mh_slot_${s.key}`]!, s.metric)} copy={words}
+                  // the one real figure of the row sits in the Churn rate card, under its badge: the subscriptions churned in the last 30 days, linked to Flash's Churn overview
+                  related={s.key === "churn_rate" ? (
+                    <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (top.unitEconomics && top.unitEconomics.churned30d !== null ? (
+                      <p data-testid="active-churned">
+                        <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
+                          {t.churned30dLine.replace("{n}", fmtCount(top.unitEconomics.churned30d, me.locale))}
+                        </Link>
+                      </p>
+                    ) : top.figures && !top.history ? <p className="text-p4a-muted" data-testid="active-churned-preparing">{t.historyPreparing}</p> : null)}</Layer>
+                  ) : undefined} />
               ))}
-            </div>
-            <div className="mt-3 text-small">
-              <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (top.unitEconomics && top.unitEconomics.churned30d !== null ? (
-                <p data-testid="active-churned">
-                  <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
-                    {t.churned30dLine.replace("{n}", fmtCount(top.unitEconomics.churned30d, me.locale))}
-                  </Link>
-                </p>
-              ) : top.figures && !top.history ? <p className="text-p4a-muted" data-testid="active-churned-preparing">{t.historyPreparing}</p> : null)}</Layer>
             </div>
           </section>
 
@@ -346,7 +347,7 @@ function Layer<T>({ id, k, part, viewKey, read, children, mark = false, plain = 
     <Suspense key={k} fallback={(
       <div data-panel-skeleton={id} style={{ height }} aria-busy="true"
         className={plain ? "flex items-center" : "animate-pulse rounded-input bg-p4a-bgblue"}>
-        {plain ? <span className="h-3 w-48 animate-pulse rounded-input bg-p4a-border" aria-hidden="true" /> : null}
+        {plain ? <span className="h-3 w-24 animate-pulse rounded-input bg-p4a-border" aria-hidden="true" /> : null}
       </div>
     )}>
       <Body id={id} read={read} part={mark ? part : null} viewKey={viewKey} label={label}>{children}</Body>
@@ -359,9 +360,13 @@ async function Body<T>({ id, read, part, viewKey, label, children }: {
 }) {
   const value = await read;
   const dbTrace = part ? requestDbTrace() : null;
+  // a panel that holds a table (markets, the comparison, the cohorts, the list) is as high as its table, up to the
+  // panel's own height: the table's container scrolls inside it under its header row, and no space is left under a
+  // short table. Every other panel takes its fixed height
+  const scrolls = ACTIVE_SCROLLING.includes(id);
   return (
-    <div data-panel-body={id} style={{ height: ACTIVE_PANEL_HEIGHT[id] }} className="flex flex-col overflow-y-auto"
-      {...(ACTIVE_SCROLLING.includes(id) ? { tabIndex: 0, role: "group", "aria-label": label } : {})}>
+    <div data-panel-body={id} style={scrolls ? { maxHeight: ACTIVE_PANEL_HEIGHT[id] } : { height: ACTIVE_PANEL_HEIGHT[id] }}
+      className={`flex flex-col ${scrolls ? "overflow-hidden" : "overflow-y-auto"}`} {...(scrolls ? { role: "group", "aria-label": label } : {})}>
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       {children(value)}
       {part ? <Streamed part={part} view={viewKey} /> : null}
@@ -517,7 +522,6 @@ function PresentTiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; sett
     );
   }
   const n = (x: number) => fmtCount(x, locale);
-  const pct = (x: number | null) => fmtShare(x, locale);
   // what a change line compares with: the month ends of the date the figures are of (the take's business date for the
   // stored tiles, today for the live ones), so the label names the right month across a month's first minutes too
   const of = live ? top.today : (top.take?.businessDate ?? top.today);
@@ -535,7 +539,7 @@ function PresentTiles({ ctx, top, settled }: { ctx: Ctx; top: ActiveReport; sett
         {/* the acquisition channel is the stored take's: without a take there is no split to state */}
         {tiles.activeCustomers.byChannel ? (
           <p data-testid="active-split-channel">
-            {ACTIVE_CHANNELS.map((c) => `${t[`channelShort_${c}`]} ${pct(tiles.activeCustomers.value > 0 ? tiles.activeCustomers.byChannel![c] / tiles.activeCustomers.value : null)}`).join(" · ")}
+            {wholePercents(ACTIVE_CHANNELS.map((c) => tiles.activeCustomers.byChannel![c])).map((p, i) => `${t[`channelShort_${ACTIVE_CHANNELS[i]!}`]} ${fmtPct(p, locale)}`).join(" · ")}
           </p>
         ) : null}
         <ChangeLine value={tiles.activeCustomers.value} previous={tiles.activeCustomers.prevMonth} when={whenMonth} fmt={n} better="up" t={t} />
@@ -588,7 +592,7 @@ function TakeTiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
   const lifetime = top.tiles?.lifetime ?? null;
   const clv = top.tiles?.clv ?? null;
   const pct = (x: number | null) => fmtShare(x, locale);
-  const months = (x: number, digits = 0) => t.monthsValue.replace("{n}", fmtNumber(x, locale, digits));
+  const months = (x: number, digits = 0) => counted(t.monthsValue, Number(x.toFixed(digits)), fmtNumber(x, locale, digits));
   const of = top.take?.businessDate ?? top.today;
   const whenMonth = monthEndText(monthsBack(of, 1), locale, t);
   const whenYear = monthEndText(monthsBack(of, 13), locale, t);
@@ -600,7 +604,7 @@ function TakeTiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
           : <span>{fmtNumber(age.median, locale, 1)} <span className="text-small font-normal text-p4a-muted">{t.monthsUnit}</span></span>}>
         {!age ? <p>{t.historyPreparing}</p> : (
           <>
-            {age.over[0] ? <p>{t.moreThan.replace("{n}", String(age.over[0].months))} {pct(age.over[0].share)}</p> : null}
+            {age.over[0] ? <p>{counted(t.moreThan, age.over[0].months)} {pct(age.over[0].share)}</p> : null}
             <ChangeLine value={age.median} previous={age.prevMonth} when={whenMonth} fmt={(x) => months(x, 1)} t={t} />
             <ChangeLine value={age.median} previous={age.prevYear} when={whenYear} fmt={(x) => months(x, 1)} t={t} />
           </>
@@ -612,7 +616,7 @@ function TakeTiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
           : <span className="text-panel" title={t.notReachedTitle} data-testid="active-not-reached">{t.notReachedShort}</span>}>
         {!lifetime ? <p>{t.historyPreparing}</p> : (
           <>
-            {lifetime.median === null && lifetime.longest !== null ? <p>{t.moreThanMonths.replace("{n}", String(lifetime.longest))}</p> : null}
+            {lifetime.median === null && lifetime.longest !== null ? <p>{counted(t.moreThanMonths, lifetime.longest)}</p> : null}
             <p>{t.clvAverage}</p>
             {Object.entries(clv ?? {}).sort(([a], [b]) => (a < b ? -1 : 1)).map(([c, v]) => <p key={c} className="tabular" data-currency={c}>{fmtAmount(v.average, c, locale)}</p>)}
           </>
@@ -621,6 +625,9 @@ function TakeTiles({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
     </>
   );
 }
+
+/** A band's words ("1 device", "2–5 devices", "36+ months"): the singular for the band that is exactly 1 */
+const banded = (template: string, band: string) => counted(template, /^1$/.test(band.trim()) ? 1 : 2, band);
 
 /** The months named under an axis: at most n of them, the year written on the first and wherever it changes */
 function axisLabels(ms: { month: string }[], most: number, locale: string) {
@@ -654,7 +661,7 @@ function Hero({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
   const title = (m: ActiveReport["months"][number], v: number) => `${monthName(m.month)}${m.isNow ? `, ${t.soFar}` : ""}: ${n(v)}`;
   const series: LineSeries[] = view.bySegment
     ? segOrder.filter((s) => ms.some((m) => (m.bySegment[s] ?? 0) > 0)).map((s, i) => ({
-      key: `segment-${s}`, label: `${t.activeCustomers}, ${segLabel(s)}`, colour: [0, 2, 3, 5, 4][i % 5]!,
+      key: `segment-${s}`, label: `${t.activeCustomers}, ${segLabel(s)}`, colour: [0, 3, 5, 2][i % 4]!, dashed: i >= 4,
       points: ms.map((m, x) => ({ x, y: m.bySegment[s] ?? 0, title: title(m, m.bySegment[s] ?? 0), hollow: m.isNow })),
     }))
     : [{
@@ -665,7 +672,7 @@ function Hero({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
   const firstMonth = ms[0]?.month ?? top.fromMonth;
   const markers = (notes?.historyStarts ?? []).filter((h) => h.date >= firstMonth).map((h) => ({
     x: (Number(h.date.slice(0, 4)) - Number(firstMonth.slice(0, 4))) * 12 + Number(h.date.slice(5, 7)) - Number(firstMonth.slice(5, 7)) + (Number(h.date.slice(8, 10)) - 1) / 31,
-    title: t.historyStartsHere.replace("{store}", h.store).replace("{date}", fmtDate(h.date, locale)),
+    title: t.historyStartsHere.replace("{store}", h.store).replace("{date}", fmtDate(h.date, locale, "full")),
   }));
   const reconstruction = notes ? [
     notes.noEndedTime > 0 ? t.noteNoEndedTime.replace("{n}", n(notes.noEndedTime)) : null,
@@ -677,7 +684,7 @@ function Hero({ ctx, top }: { ctx: Ctx; top: ActiveReport }) {
   return (
     <Fit
       notes={<>{late(ctx, top.take)}{reconstruction.length > 0 ? <DataNote testId="active-note-history">{reconstruction.join(" ")}</DataNote> : null}</>}
-      legend={<Legend label={t.baseCard} items={[...series.map((s, i) => ({ key: s.key, label: s.label, colour: s.colour ?? i })),
+      legend={<Legend label={t.baseCard} items={[...series.map((s, i) => ({ key: s.key, label: s.label, colour: s.colour ?? i, dashed: s.dashed })),
         ...(markers.length > 0 ? [{ key: "marker", label: t.historyMarker, colour: 5, dashed: true }] : [])]} />}>
       <LineChart series={series} xLabels={axisLabels(ms, 12, locale)} yFormat={n} yLabel={t.axisCount} label={t.baseCard} testId="active-base-chart" markers={markers} height={320} />
     </Fit>
@@ -721,13 +728,13 @@ function AmountChart({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
     ? [{ key: "eur", label: t.eurIndicative, colour: 0,
       points: ms.filter((m) => m.eur !== null).map((m) => ({ x: ms.indexOf(m), y: m.eur!, title: `${monthName(m.month)}: ${t.approx} ${fmtAmount(m.eur!, "EUR", locale)}`, hollow: m.isNow })) }]
     : currencies.map((c, i) => ({
-      key: c, label: c, colour: i,
+      key: c, label: c, ...lineStyle(i),
       points: ms.filter((m) => m.amounts[c] !== undefined).map((m) => ({ x: ms.indexOf(m), y: m.amounts[c]!, title: `${monthName(m.month)}: ${fmtAmount(m.amounts[c]!, c, locale)}`, hollow: m.isNow })),
     }));
   if (series.length === 0) return <p className="text-body text-p4a-muted">{t.empty}</p>;
   return (
     <Fit notes={view.wantEur && !eurAvailable ? <DataNote testId="active-note-eur">{t.eurNotAvailable}</DataNote> : undefined}
-      legend={<Legend label={t.amountCard} items={series.map((s, i) => ({ key: s.key, label: s.label, colour: s.colour ?? i }))} />}>
+      legend={<Legend label={t.amountCard} items={series.map((s, i) => ({ key: s.key, label: s.label, colour: s.colour ?? i, dashed: s.dashed }))} />}>
       <LineChart series={series} xLabels={axisLabels(ms, 6, locale)} yFormat={(v) => fmtNumber(v, locale, 0)} yLabel={showEur ? t.axisEur : t.axisAmount} label={t.amountCard}
         testId="active-amount-chart" width={600} height={300} />
     </Fit>
@@ -748,9 +755,9 @@ function Survival({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
   const longest = Math.max(1, ...curves.map((c) => c.longest ?? 0));
   const ageStep = longest > 48 ? 12 : longest > 24 ? 6 : 3;
   const series: LineSeries[] = curves.map((c, i) => ({
-    key: c.value ?? "all", label: curveLabel(c), colour: c.value === "unknown" ? 5 : i, dashed: c.value === "unknown",
+    key: c.value ?? "all", label: curveLabel(c), ...(c.value === "unknown" ? { colour: 5, dashed: true } : lineStyle(i === 3 ? 4 : i)),
     points: c.curve.map((p) => ({
-      x: p.age, y: p.survival, title: `${t.monthsValue.replace("{n}", fmtNumber(p.age, locale, 0))}: ${pct(p.survival)} (${t.atRisk.replace("{n}", n(p.atRisk))})`,
+      x: p.age, y: p.survival, title: `${counted(t.monthsValue, p.age, fmtNumber(p.age, locale, 0))}: ${pct(p.survival)} (${t.atRisk.replace("{n}", n(p.atRisk))})`,
       label: c.median !== null && p.age === c.median ? t.medianAt.replace("{n}", String(c.median)) : undefined,
     })),
   }));
@@ -761,7 +768,7 @@ function Survival({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
         <Legend label={t.survivalCard} items={series.map((s, i) => ({ key: s.key, label: s.label, colour: s.colour ?? i, dashed: s.dashed }))} />
         <ul className="flex flex-wrap gap-x-8 gap-y-1 text-small text-p4a-muted" data-testid="active-medians">
           {curves.map((c) => (
-            <li key={c.value}>{curveLabel(c)}: {c.median !== null ? t.medianIs.replace("{n}", String(c.median)) : t.notReached.replace("{n}", String(c.longest ?? 0))} ({t.spellsCount.replace("{n}", n(c.spells))})</li>
+            <li key={c.value}>{curveLabel(c)}: {c.median !== null ? counted(t.medianIs, c.median) : counted(t.notReached, c.longest ?? 0)} ({counted(t.spellsCount, c.spells, n(c.spells))})</li>
           ))}
         </ul>
       </div>
@@ -780,11 +787,11 @@ function AgeBands({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
   return (
     <>
       <Bars testId="active-age-bands" label={t.customerAge}
-        rows={rest.ageBands.map((b) => ({ key: b.band, label: t.bandMonths.replace("{band}", b.band), value: b.customers, text: n(b.customers), title: `${t.bandMonths.replace("{band}", b.band)}: ${n(b.customers)}` }))} />
+        rows={rest.ageBands.map((b) => ({ key: b.band, label: banded(t.bandMonths, b.band), value: b.customers, text: n(b.customers), title: `${banded(t.bandMonths, b.band)}: ${n(b.customers)}` }))} />
       <dl className="mt-4 grid grid-cols-3 gap-4 border-t border-p4a-border pt-4" data-testid="active-age-over">
         {rest.ageOver.map((o) => (
           <div key={o.months}>
-            <dt className="text-caption text-p4a-grey">{t.moreThan.replace("{n}", String(o.months))}</dt>
+            <dt className="text-caption text-p4a-grey">{counted(t.moreThan, o.months)}</dt>
             <dd className="tabular text-panel font-semibold text-p4a-heading">{n(o.customers)} <span className="text-small font-normal text-p4a-muted">{fmtShare(o.share, me.locale)}</span></dd>
           </div>
         ))}
@@ -809,9 +816,9 @@ function Channels({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
         rows={ACTIVE_CHANNELS.map((c) => ({ key: c, label: channelLabel(c), value: by[c], text: n(by[c]), title: `${channelLabel(c)}: ${n(by[c])}` }))} />
       {notes && notes.unknownChannel.customers > 0 ? (
         <DataNote testId="active-note-channel">
-          {t.noteUnknownChannel.replace("{n}", n(notes.unknownChannel.customers))}{" "}
-          {reasons.map(([k, v]) => `${(t as Record<string, string>)[`reason_${k}`] ?? k} ${n(v)}`).join(" · ")}
-          {rest.settings.attribution.historyStart ? ` ${t.noteAttributionStart.replace("{date}", fmtDate(rest.settings.attribution.historyStart, me.locale))}` : ` ${t.noteNoAttribution}`}
+          <span className="block">{counted(t.noteUnknownChannel, notes.unknownChannel.customers, n(notes.unknownChannel.customers))}</span>
+          {reasons.map(([k, v]) => <span key={k} className="block" data-reason={k}>{`${(t as Record<string, string>)[`reason_${k}`] ?? k}: ${n(v)}`}</span>)}
+          <span className="block">{rest.settings.attribution.historyStart ? t.noteAttributionStart.replace("{date}", fmtDate(rest.settings.attribution.historyStart, me.locale, "full")) : t.noteNoAttribution}</span>
         </DataNote>
       ) : null}
     </>
@@ -842,29 +849,32 @@ function CohortCurves({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
   if (!rest.figures || !rest.history || rest.cohorts.length === 0) return null;
   const n = (x: number) => fmtCount(x, locale);
   const pct = (x: number | null) => fmtShare(x, locale);
-  const months = (x: number) => t.monthsValue.replace("{n}", fmtNumber(x, locale, 0));
+  const months = (x: number) => counted(t.monthsValue, x, fmtNumber(x, locale, 0));
   const segLabel = (s: string) => (s === "unknown" ? t.unknownSegment : s);
   const channelLabel = (c: string) => (t as Record<string, string>)[`channel_${c}`] ?? c;
   const ages = rest.settings.cohortAgesMonths;
+  // the last six cohorts Mature at two ages or more (one mature age is a lone dot); x is the age in months, on a linear scale as Survival's
   const series: LineSeries[] = view.cohortSplit === "none"
     ? matureCohorts(rest.cohorts, 6).map((c, i) => ({
-      key: c.cohort, label: cohortLabel(c.cohort, rest.grouping, locale), colour: i,
-      points: c.ages.flatMap((a, x) => {
+      key: c.cohort, label: cohortLabel(c.cohort, rest.grouping, locale), ...lineStyle(i),
+      points: c.ages.flatMap((a) => {
         const share = cohortShare(c, a);
-        return share === null ? [] : [{ x, y: share, title: `${months(a.age)}: ${pct(share)} (${t.cohortCellTitle.replace("{n}", n(a.stillActive)).replace("{started}", n(c.started))})` }];
+        return share === null ? [] : [{ x: a.age, y: share, title: `${months(a.age)}: ${pct(share)} (${t.cohortCellTitle.replace("{n}", n(a.stillActive)).replace("{started}", n(c.started))})` }];
       }),
     }))
     : (rest.cohortSplits?.[view.cohortSplit] ?? []).map((s, i) => ({
-      key: s.value, label: view.cohortSplit === "segment" ? segLabel(s.value) : channelLabel(s.value), colour: s.value === "unknown" ? 5 : i, dashed: s.value === "unknown",
-      points: s.ages.flatMap((a, x) => (a.started > 0 ? [{ x, y: a.stillActive / a.started,
+      key: s.value, label: view.cohortSplit === "segment" ? segLabel(s.value) : channelLabel(s.value), ...(s.value === "unknown" ? { colour: 5, dashed: true } : lineStyle(i === 3 ? 4 : i)),
+      points: s.ages.flatMap((a) => (a.started > 0 ? [{ x: a.age, y: a.stillActive / a.started,
         title: `${months(a.age)}: ${pct(a.stillActive / a.started)} (${t.cohortCellTitle.replace("{n}", n(a.stillActive)).replace("{started}", n(a.started))})` }] : [])),
     }));
   if (!series.some((s) => s.points.length > 0)) return <p className="text-small text-p4a-muted">{t.noMatureCohort}</p>;
+  // the axis runs to the oldest age a line reaches (as Survival's runs to the longest customer age), not to the last age of the settings
+  const reach = Math.max(...series.flatMap((s) => s.points.map((p) => p.x)));
   return (
     <Fit notes={<h3 className="text-body font-semibold text-p4a-heading">{view.cohortSplit === "none" ? t.cohortCurves : t.cohortCurvesSplit}</h3>}
       legend={<Legend label={t.cohortCurves} items={series.map((s, i) => ({ key: s.key, label: s.label, colour: s.colour ?? i, dashed: s.dashed }))} />}>
       <LineChart series={series} yTop={1} yFormat={(v) => pct(v)} yLabel={t.axisStillActive} xLabel={t.axisAge} label={t.cohortCurves} testId="active-cohort-chart"
-        xLabels={ages.map((a, i) => ({ x: i, text: String(a) }))} />
+        xLabels={[{ x: 0, text: "0" }, ...ages.filter((a) => a <= reach).map((a) => ({ x: a, text: String(a) }))]} />
     </Fit>
   );
 }
@@ -883,7 +893,7 @@ function Mix({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
       </Card>
       <Card title={t.mixDeviceBand}>
         <Bars testId="active-mix-band" label={t.mixDeviceBand}
-          rows={rest.mix.deviceBand.map((b) => ({ key: b.key, label: t.devicesBand.replace("{band}", b.key), value: b.subscriptions, text: n(b.subscriptions), title: n(b.subscriptions) }))} />
+          rows={rest.mix.deviceBand.map((b) => ({ key: b.key, label: banded(t.devicesBand, b.key), value: b.subscriptions, text: n(b.subscriptions), title: n(b.subscriptions) }))} />
       </Card>
       <Card title={t.mixModel}>
         {rest.mix.model.length === 0 ? <p className="text-small text-p4a-muted">{t.noDevices}</p> : (

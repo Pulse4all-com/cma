@@ -764,8 +764,15 @@ async function expectFirstOrders() {
 //   height are all sent before the first panel's figures; no placeholder holds a digit; the Print button is sent disabled.
 //   In the browser at 1280 and 1920 px, once the page has streamed: every panel's rendered body takes exactly the height
 //   its outline was sent with (no layout shift), no outline is left, the Print button is enabled, and a click on a
-//   panel's toggle marks the link at once (decision D14).
-// --provoke stretches one rendered panel by a pixel
+//   panel's toggle marks the link at once (decision D14). A panel that holds a table (the markets, the comparison, the
+//   cohorts, the list: Martin's review of 12 November 2026) is as high as its table and never higher than its outline:
+//   it equals the outline when the table fills it, and is shorter only when the whole table shows (no space is left
+//   under a short table; the page under it then moves up once, by the difference).
+//   The tables at 1440 and 1280 px: the header row stays at the top of its scroll container while the rows scroll; at
+//   1440 px every column of the markets and of the customer list shows without scrolling sideways, at 1280 px every
+//   column of the list but the last (the CRM link); the comparison's columns show at both; the list's Customer start
+//   carries its year.
+// --provoke stretches one rendered panel by a pixel, and asks for one column more than a table has
 async function expectActiveLayers() {
   const where = "manager /reports/active";
   const html = await (await fetch(BASE + "/reports/active", { headers: { "x-cma-mock-subject": "manager", accept: "text/html" } })).text();
@@ -788,6 +795,47 @@ async function expectActiveLayers() {
   const print = html.match(/<button[^>]*data-testid="active-print"[^>]*>/)?.[0] ?? "";
   if (!/\sdisabled(=""|\s|>)/.test(print) || !/data-ready="false"/.test(print)) problems.push(`${where}: the Print button is not sent disabled`);
 
+  // the tables (Martin's review, 12 November 2026): columns without a sideways scroll, the header row staying on top
+  for (const [w, mayHide] of [[1440, { "active-list": 0, "active-markets": 0, "active-comparison": 0 }], [1280, { "active-list": 1, "active-comparison": 0 }]]) {
+    const tag = `${where} at ${w} px`;
+    const ctx = await b.newContext({ viewport: { width: w, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/active");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => undefined);
+    const t = await p.evaluate(() => Object.fromEntries(["active-list", "active-markets", "active-comparison", "active-cohorts"].map((id) => {
+      const table = document.querySelector(`[data-testid="${id}"]`);
+      const box = document.querySelector(`[data-testid="${id}-scroll"]`);
+      if (!table || !box) return [id, null];
+      const right = box.getBoundingClientRect().right;
+      const heads = [...table.querySelectorAll("thead th")];
+      const hidden = heads.filter((h) => h.getBoundingClientRect().right > right + 1).map((h) => h.getAttribute("data-full") ?? h.innerText.replace(/\s+/g, " ").trim());
+      // scroll the rows: the header row keeps its place at the container's top
+      box.scrollTop = 200;
+      const moved = box.scrollTop > 0;
+      const stays = Math.abs(heads[0].getBoundingClientRect().top - box.getBoundingClientRect().top) <= 1;
+      box.scrollTop = 0;
+      return [id, { columns: heads.length, hidden, last: heads.at(-1)?.innerText.replace(/\s+/g, " ").trim() ?? "", moved, stays }];
+    })));
+    for (const [id, most] of Object.entries(mayHide)) {
+      const x = t[id];
+      if (!x) { problems.push(`${tag}: the table ${id} is not on the page`); continue; }
+      if (x.hidden.length > (provoke ? -1 : most)) problems.push(`${tag}: ${id} needs a sideways scroll for ${x.hidden.length} of its ${x.columns} columns (${x.hidden.join(", ")}), at most ${most} may`);
+    }
+    for (const [id, x] of Object.entries(t)) {
+      if (x && x.columns < 5) problems.push(`${tag}: ${id} shows ${x.columns} header cells: its header row is missing`);
+      if (x && x.moved && !x.stays) problems.push(`${tag}: the header row of ${id} scrolls away with its rows`);
+    }
+    const starts = await p.locator('[data-testid="active-list-start"]').allInnerTexts();
+    if (starts.length === 0 || starts.some((d) => d !== "–" && !/\b(19|20)\d\d$/.test(d))) problems.push(`${tag}: a Customer start in the list carries no year (${starts.slice(0, 3).join(", ")})`);
+    if (await p.locator('[data-testid="active-heat-legend"]').count() !== 1) problems.push(`${tag}: the heatmap has no scale legend`);
+    if (await p.locator('[data-testid="active-comparison"] [class*="text-p4a-green"], [data-testid="active-comparison"] [class*="text-p4a-error"]').count() !== 0) problems.push(`${tag}: a difference between two segments is coloured`);
+    if (await p.locator('[data-testid="active-slot-churn_rate"] [data-testid="active-churned"]').count() !== 1) problems.push(`${tag}: the churned subscriptions of the last 30 days are not inside the Churn rate card`);
+    if (await p.locator('[data-testid="active-base-chart"] [data-testid="active-marker"]').count() < 1) problems.push(`${tag}: the hero chart marks no store's subscription history start`);
+    await ctx.close();
+  }
+
   for (const [w, h] of [[1280, 800], [1920, 1080]]) {
     const tag = `${where} at ${w}x${h}`;
     const ctx = await b.newContext({ viewport: { width: w, height: h }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
@@ -808,9 +856,16 @@ async function expectActiveLayers() {
         filters: document.querySelectorAll('[data-testid="active-filters"] select').length,
         // a panel of a fixed height either fits its figures or is one of the four that scroll inside (and can be focused)
         cut: bodies.filter((el) => el.scrollHeight > el.clientHeight + 1 && el.getAttribute("tabindex") !== "0").map((el) => `${el.getAttribute("data-panel-body")} ${el.scrollHeight}>${el.clientHeight}`),
+        // the table panels: whether the table's own container still scrolls down (the table fills the panel)
+        fills: Object.fromEntries(bodies.map((el) => [el.getAttribute("data-panel-body"), [...el.querySelectorAll('[data-testid$="-scroll"]')].some((sc) => sc.scrollHeight > sc.clientHeight + 1)])),
         // a tile fits its figures too (it may scroll inside itself, which nobody would find)
         cutTiles: [...document.querySelectorAll("[data-tile]")].filter((el) => el.scrollHeight > el.clientHeight + 1).map((el) => `${el.getAttribute("data-testid")} ${el.scrollHeight}>${el.clientHeight}`),
-        cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => /\d/.test(el.textContent ?? "")),
+        // a placeholder's own words hold no digit; the related line under the Churn rate's badge (the churned subscriptions, a figure that exists) stands apart
+        cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => {
+          const own = el.cloneNode(true);
+          for (const r of own.querySelectorAll("[data-related]")) r.remove();
+          return /\d/.test(own.textContent ?? "");
+        }),
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
       };
     }, provoke);
@@ -819,7 +874,10 @@ async function expectActiveLayers() {
       const a = outlines[id];
       const c = m.bodies[id];
       if (a === undefined || c === undefined) problems.push(`${tag}: panel ${id} has ${a === undefined ? "no outline in the frame" : "no rendered body"}`);
-      else if (Math.abs(a - c) > 0.5) problems.push(`${tag}: panel ${id} is ${c}px rendered against ${a}px as its outline (the page shifts when the data arrives)`);
+      else if (["markets", "comparison", "cohortTable", "list"].includes(id)) {
+        if (c > a + 0.5) problems.push(`${tag}: the table panel ${id} is ${c}px rendered, higher than its outline of ${a}px`);
+        else if (c < a - 0.5 && m.fills[id]) problems.push(`${tag}: the table panel ${id} is ${c}px rendered against ${a}px as its outline while its table still scrolls (it should fill the panel)`);
+      } else if (Math.abs(a - c) > 0.5) problems.push(`${tag}: panel ${id} is ${c}px rendered against ${a}px as its outline (the page shifts when the data arrives)`);
     }
     if (m.outlinesLeft !== 0) problems.push(`${tag}: ${m.outlinesLeft} outlines still on the screen after the page streamed`);
     if (m.tiles !== 6) problems.push(`${tag}: ${m.tiles} tiles, expected 6`);

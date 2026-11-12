@@ -32,10 +32,10 @@
  */
 import { readFileSync } from "node:fs";
 import {
-  ACTIVE_BETTER_UP, ACTIVE_CHANNELS, ACTIVE_CURSOR, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_SCROLLING, ACTIVE_SLOTS, ACTIVE_SORTS,
-  HEAT_CLASSES, activeFileName, activeFromDb, activeInTakeState, activeListInTakeState, activeNowFromDb, activeNowInTakeState, activePartOf, withActiveNow,
-  activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, curveOf, differenceTone, fromMonthOf, heatStep, kaplanMeier, matureCohorts, monthsBack,
-  mergeActive, niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor,
+  ACTIVE_CHANNELS, ACTIVE_CURSOR, ACTIVE_FILE_COLUMNS, ACTIVE_MEASURE_METRIC, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_SCROLLING, ACTIVE_SLOTS, ACTIVE_SORTS,
+  HEAT_DARK_EDGE, HEAT_DENIM, HEAT_FROM, HEAT_LIGHT_EDGE, HEAT_TO, LINE_COLOURS, activeFileName, activeFromDb, activeInTakeState, activeListInTakeState, activeNowFromDb, activeNowInTakeState, activePartOf, withActiveNow,
+  activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, contrast, counted, curveOf, fromMonthOf, heatColour, heatTextRgb, kaplanMeier, lineStyle, luminance, matureCohorts, monthsBack,
+  mergeActive, niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor, wholePercents,
 } from "../src/lib/active.ts";
 import { activeCopy, copy } from "../src/lib/copy.ts";
 import { mockActive, mockActiveNow, mockActiveRows } from "../src/lib/data/mock-active.ts";
@@ -154,19 +154,15 @@ expect("S2 an interval that begins where another ends continues the spell; a gap
   expect("K3 kaplanMeier equals the brute force on 200 random sets of spells", { sets: 200, differ }, { sets: 200, differ: 0 }, { sets: 200, differ: 1 });
 }
 
-// ---- D. The difference's colour rule -----------------------------------------------------------------------------------------
+// ---- D. A difference between two segments: its sign, never a colour -----------------------------------------------------------
 {
-  const measures = Object.keys(ACTIVE_MEASURE_METRIC);
-  const coloured = measures.filter((m) => differenceTone(m, 1) === "good" && differenceTone(m, -1) === "bad").sort();
-  const neutral = measures.filter((m) => differenceTone(m, 1) === "neutral" && differenceTone(m, -1) === "neutral").sort();
-  expect("D1 a difference is coloured only where higher is unambiguously better (how long customers stay, what they are worth)",
-    [coloured, neutral, coloured.every((m) => ACTIVE_BETTER_UP.has(m))],
-    [["average_monthly_amount", "clv_average", "clv_median", "clv_per_month", "lifetime_median", "retention"],
-      ["customers", "devices_per_customer", "indirect_share", "median_age", "share", "subscriptions_per_customer"], true],
-    [measures.slice().sort(), [], true]);
-  expect("D2 no difference: nothing to colour; zero: neutral; the sign always written",
-    [differenceTone("retention", null), differenceTone("retention", 0), differenceTone("clv_average", Number.NaN), signed("2", 2), signed("2", -2), signed("0", 0)],
-    ["none", "neutral", "none", "+2", "−2", "0"], ["neutral", "good", "neutral", "2", "-2", "+0"]);
+  const parts = src("components/ActiveParts.tsx");
+  const table = parts.slice(parts.indexOf("export function ComparisonTable"), parts.indexOf("export function CohortHeatmap"));
+  expect("D1 between two segments there is no better or worse: no difference or ratio is coloured green or red, every one stands in Inkt",
+    [/text-p4a-(green|error)/.test(table), /data-tone/.test(table), (table.match(/text-p4a-inkt/g) ?? []).length, "differenceTone" in await import("../src/lib/active.ts")],
+    [false, false, 2, false], [true, true, 0, true]);
+  expect("D2 the sign of a difference is always written; zero carries none",
+    [signed("2", 2), signed("2", -2), signed("0", 0)], ["+2", "−2", "0"], ["2", "-2", "+0"]);
 }
 
 // ---- C. Change lines, cohorts, the range -----------------------------------------------------------------------------------
@@ -180,19 +176,42 @@ expect("C1 a change against an earlier month end: its direction and size; none w
     { cohort: "2026-05-01", started: 10, share: 0.2, ages: [{ age: 3, stillActive: 9, mature: true }, { age: 6, stillActive: 4, mature: false }] },
     { cohort: "2026-04-01", started: 0, share: 0, ages: [{ age: 3, stillActive: 0, mature: true }] },
   ];
-  expect("C2 a cohort's share only where it is Mature; a curve only for a cohort whose first age is Mature",
-    [cohortShare(cohorts[1], cohorts[1].ages[0]), cohortShare(cohorts[1], cohorts[1].ages[1]), cohortShare(cohorts[2], cohorts[2].ages[0]), matureCohorts(cohorts, 6).map((c) => c.cohort)],
-    [0.9, null, null, ["2026-05-01"]], [0.9, 0.4, 0, ["2026-10-01", "2026-05-01", "2026-04-01"]]);
+  const two = { cohort: "2026-03-01", started: 5, share: 0.1, ages: [{ age: 3, stillActive: 5, mature: true }, { age: 6, stillActive: 4, mature: true }, { age: 12, stillActive: 4, mature: false }] };
+  expect("C2 a cohort's share only where it is Mature; a curve only for a cohort Mature at two ages or more (one mature age is a lone dot)",
+    [cohortShare(cohorts[1], cohorts[1].ages[0]), cohortShare(cohorts[1], cohorts[1].ages[1]), cohortShare(cohorts[2], cohorts[2].ages[0]), matureCohorts([...cohorts, two], 6).map((c) => c.cohort),
+      matureCohorts(Array.from({ length: 9 }, (_, i) => ({ ...two, cohort: `c${i}` })), 6).length],
+    [0.9, null, null, ["2026-03-01"], 6], [0.9, 0.4, 0, ["2026-05-01", "2026-03-01"], 9]);
+  // the lines' colours: Deep Blue, Leaf Green, Denim, Inkt, Light Blue of the series order (never Soft Rose, index 4); the sixth dashed
+  const page = src("app/reports/active/page.tsx");
+  expect("C4 no line takes Soft Rose: five colours, the sixth line the first colour again, dashed; the retention's x is the age in months",
+    [[...LINE_COLOURS], LINE_COLOURS.includes(4), [0, 4, 5, 6].map((i) => lineStyle(i)), /colour: \[[^\]]*\b4\b[^\]]*\]\[i %/.test(page), /x: a\.age, y: share/.test(page), /xLabels=\{\[\{ x: 0, text: "0" \}, \.\.\.ages\.filter\(\(a\) => a <= reach\)\.map\(\(a\) => \(\{ x: a,/.test(page)],
+    [[0, 1, 3, 5, 2], false, [{ colour: 0, dashed: false }, { colour: 2, dashed: false }, { colour: 0, dashed: true }, { colour: 1, dashed: true }], false, true, true],
+    [[0, 1, 2, 3, 4], true, [{ colour: 0, dashed: false }, { colour: 4, dashed: false }, { colour: 5, dashed: false }, { colour: 0, dashed: true }], true, false, false]);
 }
 expect("C3 the range: 24 months unless 12, 36 or all; its first month; all starts where the database's cap puts it",
   [activeRangeOf(undefined), activeRangeOf("36"), activeRangeOf("48"), fromMonthOf("24", "2026-11-11"), fromMonthOf("12", "2026-01-31"), fromMonthOf("all", "2026-11-11"), monthsBack("2026-03-15", 13)],
   ["24", "36", "24", "2024-11-01", "2025-01-01", null, "2025-02-01"], ["12", "36", "48", "2024-11-11", "2025-01-31", "2021-11-01", "2025-02-15"]);
 
 // ---- H. The heatmap, the sparkline, the axis --------------------------------------------------------------------------------
-expect("H1 five steps of one blue hue; white text on the two dark steps only (Pulse4all-Style 7.8); no step without a share",
-  [[0.2, 0.5, 0.7, 0.85, 0.95, 1].map((s) => heatStep(s).step), HEAT_CLASSES.map((c) => c.includes("text-white")), heatStep(null),
-    HEAT_CLASSES.every((c) => /^bg-p4a-(bgblue|bgblue-dark|lightblue|denim|deepblue) text-/.test(c))],
-  [[0, 1, 2, 3, 4, 4], [false, false, false, true, true], null, true], [[0, 0, 1, 2, 3, 4], [false, false, true, true, true], { step: 0 }, false]);
+{
+  // every whole percent of the scale: its background, its text, the contrast between the two
+  const steps = Array.from({ length: 101 }, (_, p) => heatColour(p / 100));
+  const lum = steps.map((h) => luminance(h.rgb));
+  const ratios = steps.map((h) => contrast(h.rgb, heatTextRgb(h.text)));
+  const hex = (rgb) => `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+  expect("H1 the heatmap: one hue from #EAF4FC (0 %) to #265BA4 (100 %), never lighter for a higher share (70 % is never darker than 80 %)",
+    [hex(steps[0].rgb), hex(steps[100].rgb), lum.every((l, i) => i === 0 || l <= lum[i - 1] + 1e-12), lum[70] >= lum[80], new Set(steps.map((h) => h.background)).size > 80,
+      heatColour(null), heatColour(1.4).percent, heatColour(-1).percent, hex([...HEAT_FROM]), hex([...HEAT_TO])],
+    ["#EAF4FC", "#265BA4", true, true, true, null, 100, 0, "#EAF4FC", "#265BA4"], ["#FFFFFF", "#000000", false, false, false, { percent: 0 }, 140, -100, "#EAF4FC", "#265BA4"]);
+  expect("H1b every one of the 101 steps reads at 4.5:1 or more; white text only where the background is at least as dark as Denim (#3B6FB3), Inkt on the lighter half",
+    [ratios.filter((r) => r < 4.5).length, Math.round(Math.min(...ratios) * 100) / 100, steps.filter((h) => h.text === "white" && luminance(h.rgb) > luminance(HEAT_DENIM)).length,
+      steps.slice(0, 51).every((h) => h.text === "inkt"), steps[100].text, HEAT_LIGHT_EDGE, HEAT_DARK_EDGE, steps.findIndex((h) => h.text === "white")],
+    [0, 4.59, 0, true, "white", 74, 87, 81], [1, 3, 1, false, "inkt", 0, 100, 0]);
+  const parts = src("components/ActiveParts.tsx");
+  expect("H1c the cells take the scale's colour and a legend from 0 % to 100 % stands under the heatmap",
+    [/style=\{\{ backgroundColor: heat\.background \}\}/.test(parts), /data-testid="active-heat-legend"/.test(parts), /fmtShare\(0, locale\)[\s\S]{0,400}fmtShare\(1, locale\)/.test(parts), /text-white" : "text-p4a-inkt"/.test(parts)],
+    [true, true, true, true], [false, false, false, false]);
+}
 {
   const path = sparkPath([3, 4, 3, 6, 6], 80, 20);
   const points = [...path.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
@@ -291,6 +310,54 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
     [keys, keys.filter((k) => personal.test(k)), JSON.stringify(list.rows).includes("@")],
     [["ageMonths", "channel", "clv", "clvCurrency", "contactId", "contactUrl", "currency", "customerStart", "devices", "level", "market", "monthlyAmount", "otherAmounts", "paymentState",
       "segment", "store", "storeCustomer", "subscriptions"], [], false], [["name"], ["name"], true]);
+}
+
+// ---- W. Whole percentages of a split, and a count's singular --------------------------------------------------------------------
+{
+  const rand = rng(20261112);
+  let bad = 0;
+  let sets = 0;
+  for (let i = 0; i < 2000; i += 1) {
+    const parts = Array.from({ length: 1 + Math.floor(rand() * 7) }, () => (rand() < 0.15 ? 0 : Math.floor(rand() * (rand() < 0.5 ? 20 : 5000))));
+    const total = parts.reduce((a, b) => a + b, 0);
+    const got = wholePercents(parts);
+    sets += 1;
+    const sum = got.reduce((a, b) => a + b, 0);
+    // adds up to 100 (or 0 for an empty split), every part within one point of its exact share, whole, never negative, a zero part 0
+    const ok = sum === (total > 0 ? 100 : 0) && got.every((p, k) => Number.isInteger(p) && p >= 0 && (total === 0 || Math.abs(p - (parts[k] / total) * 100) < 1) && (parts[k] > 0 || p === 0));
+    if (!ok) bad += 1;
+  }
+  expect("W1 a split in whole percentages adds up to 100 by the largest remainder: 2,000 random splits, each part within a point of its share",
+    [sets, bad, wholePercents([9.4, 9.5, 81.1].map((x) => x * 10)), wholePercents([1, 1, 1]), wholePercents([0, 0]), wholePercents([5]), wholePercents([176, 20, 22])],
+    [2000, 0, [9, 10, 81], [34, 33, 33], [0, 0], [100], [81, 9, 10]], [2000, 1, [9, 10, 82], [33, 33, 33], [50, 50], [99], [81, 9, 11]]);
+  const page = src("app/reports/active/page.tsx");
+  const parts = src("components/ActiveParts.tsx");
+  expect("W2 the page's splits use it: the channels under Active customers, the markets' shares",
+    [/wholePercents\(ACTIVE_CHANNELS\.map/.test(page), /wholePercents\(rows\.map\(\(r\) => r\.customers\)\)/.test(parts)], [true, true], [false, false]);
+  const t = activeCopy;
+  const forms = ["monthsValue", "moreThanMonths", "moreThan", "notReached", "pointsValue", "m_retention", "medianIs", "spellsCount", "bandMonths", "devicesBand", "noteUnknownChannel"];
+  expect("W3 one month, one device: every unit has a singular for exactly 1, in en and nl; the survival legend's words; a reason per line",
+    [counted(t.en.monthsValue, 1), counted(t.en.monthsValue, 2), counted(t.en.devicesBand, 1), counted(t.en.devicesBand, 2, "2–5"), counted(t.nl.monthsValue, 1), counted(t.nl.devicesBand, 1),
+      counted(t.en.notReached, 29), counted(t.en.spellsCount, 67), counted("{n} x", 1), counted(t.en.monthsValue, 1, "1.0"),
+      forms.filter((k) => ["en", "nl"].some((l) => t[l][k].split("|").length !== 2 || !t[l][k].split("|").every((f) => f.includes("{n}")))),
+      Object.keys(t.en).filter((k) => k.startsWith("reason_")).every((k) => /^[A-Z]/.test(t.en[k]) && /^[A-Z]/.test(t.nl[k])),
+      /data-reason=\{k\}>[^\n]*\}: \$\{n\(v\)\}`\}<\/span>/.test(page), /noteAttributionStart\.replace\("\{date\}", fmtDate\([^)]*, "full"\)\)/.test(page)],
+    ["1 month", "2 months", "1 device", "2–5 devices", "1 maand", "1 apparaat", "not reached yet, more than 29 months", "67 active periods", "1 x", "1.0 month", [], true, true, true],
+    ["1 months", "2 month", "1 devices", "2–5 device", "1 maanden", "1 apparaten", "Not reached yet: more than 29 months", "67 active period", "1", "1.0 months", ["monthsValue"], false, false, false]);
+}
+
+// ---- S. A store's subscription history start is marked on the hero chart (B35 3.4) -----------------------------------------------
+{
+  const doc = mockActive({ tenantId: "t1", permissions: ["reports.view"] }, fromMonthOf("24", new Date().toISOString().slice(0, 10)), { market: null, segment: null, channel: null }, "month");
+  const from = doc.months[0]?.month ?? "9999";
+  const inside = doc.notes.historyStarts.filter((h) => h.date >= from);
+  const page = src("app/reports/active/page.tsx");
+  const charts = src("components/ActiveCharts.tsx");
+  const seed = readFileSync(new URL("../../db/03_seed_dev_test_data.sql", import.meta.url), "utf8");
+  expect("S1 the mock has a store whose history starts inside the default 24 months (the dev seed's second store too); the hero draws a marker for each",
+    [doc.notes.historyStarts.length, inside.map((h) => h.store), doc.months.length >= 24, /markers=\{markers\}/.test(page), /data-testid="active-marker"/.test(charts),
+      /fmtDate\(h\.date, locale, "full"\)/.test(page), /when i = 2 and 10 \+ \(g \* 53\) % 900 > 540 then 540/.test(seed)],
+    [3, ["mock-gb"], true, true, true, true, true], [0, [], false, false, false, false, false]);
 }
 
 // ---- X. The placeholders render no digit --------------------------------------------------------------------------------------
