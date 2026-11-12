@@ -1,6 +1,7 @@
 -- =============================================================================================
 -- tools/perf/active-refresh-stale-plan.sql: why 173's E4 timed the refresh of Customers → Active's take at 56 s where the
 -- refresh alone takes 6 s (prod, 12 November 2026): a plan made while the take's tables were empty, run after they filled
+-- (reproduced on the local three-times fixture: 30.9 s kept against 0.1 s planned again; this script shows it in prod)
 -- =============================================================================================
 -- A diagnostic, not a migration: it writes nothing that stays (one transaction, always rolled back; the refresh it runs
 -- to fill the take's tables is rolled back with it). Run by Martin in his own terminal, as his own IAM login, while the
@@ -8,6 +9,10 @@
 -- and there is nothing to show, which the script says before it stops.
 --
 --   cd ~/cma && cma_db prod && psql "$PGCONN" -X -f tools/perf/active-refresh-stale-plan.sql > /tmp/active-refresh-stale-plan-prod.txt 2>&1
+-- Another tenant: add  -v tenant_slug=<slug>  (the default is pulse4all-subscriptions).
+-- After it: the analyze inside the rolled-back refresh leaves the planner's row counts of the take's tables behind
+-- without their statistics; cma.active_take_analyze (174) reads "rows without statistics" for that reason, so the first
+-- real take analyzes all the same.
 --
 -- What it shows, with the refresh's own second statement (the stored base into one row per store customer), read as a
 -- count: (1) its plan as made on the empty tables, every estimate one row, joined by nested loops; (2) the same kept plan

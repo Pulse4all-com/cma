@@ -13,7 +13,8 @@
 -- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql; since
 -- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql; since
 -- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
--- 172_active_customers.sql. Prod is the proof; dev's shared core is for
+-- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql.
+-- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
@@ -88,6 +89,10 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0009l') then
     raise exception 'addition 0009l (172_active_customers.sql) has not run in this database';
   end if;
+  -- the refresh's quiet run and its inputs' markers (cma.active_inputs_key_of) since addition 0009m
+  if not exists (select 1 from cma.schema_migration where version = '0009m') then
+    raise exception 'addition 0009m (174_active_refresh_quiet.sql) has not run in this database';
+  end if;
 end
 $$;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every timed read fail
@@ -101,6 +106,7 @@ select set_config('verify.max_sources_ms', '150', false);            -- cma.sour
 select set_config('verify.max_dq_ms', '500', false);                 -- data quality's overview and first page
 select set_config('verify.max_top_ms', '400', false);                -- Customers → Active: the live present of the tiles, and above the fold computed (decisions D15, D16)
 select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh of Customers → Active's stored take, the history and the documents written again
+select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
 
 drop table if exists pg_temp.time_0131;
@@ -361,7 +367,7 @@ declare
   v_stop    timestamptz := clock_timestamp() + make_interval(secs => current_setting('verify.time_budget_s')::numeric);
   t record; rd record; o record;
   v_user uuid; v_sys text; v_ext text; v_conn uuid; v_today date; v_monday date; v_month date; v_from date; v_to date; v_from92 date;
-  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb;
+  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb; v_mark0 timestamptz;
   -- per page and tenant: the sum of its reads and whether one failed
   v_pages text[]; v_sums numeric[]; v_bad boolean[]; p integer;
   -- per page: a read in its set had nothing to time (and why); a read outside its set (a page that loads in two parts)
@@ -448,6 +454,27 @@ begin
                                      when v_cur ->> 'reason' = 'not_set_up' then 'the sources are not set up: nothing to take'
                                      when v_cur ->> 'reason' = 'running' then 'the job is refreshing this tenant now: nothing to time'
                                      else coalesce(v_ms || ' ms (the history and the documents written again, once) against ' || v_max || ' ms: ', '') || v_cur::text end;
+        r_ms := r_ms || v_ms;
+        -- the inputs' change markers (addition 0009m): what the job's every due run reads before it decides to compute,
+        -- as the tenant's scheduler, the best of three
+        v_ms := null;
+        if v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          for i in 1 .. 3 loop
+            v_mark0 := clock_timestamp();
+            perform cma.active_inputs_key_of(t.id);
+            v_ms := least(coalesce(v_ms, 1e9), round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1));
+          end loop;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_markers_ms')::numeric end;
+        r_name := r_name || (t.slug || ' active customers inputs markers');
+        r_result := r_result || case when v_provoke then 'FAIL' when v_sched is null then 'skip'
+                                     when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
+                                     else v_ms || ' ms (best of 3) against ' || v_max || ' ms' end;
         r_ms := r_ms || v_ms;
       end if;
       for rd in

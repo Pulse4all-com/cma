@@ -6,47 +6,69 @@
 -- (0009l). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 175_verify_active_refresh_quiet.sql there (normal, then provoked), then the verifies that read what this script
 -- re-creates: 173_verify_active_customers.sql (not edited: its E4 and E5 are the two figures this change answers) and
--- 131_time_all.sql part b (its Active rows). No other verify reads cma.active_refresh_of or cma.active_present_of. Prod: this script, 175 and 173 before the merge of #267; the web of
--- main does not read these functions yet.
+-- 131_time_all.sql part b (its Active rows; edited by this change: one row for the inputs' markers). No other verify
+-- reads cma.active_refresh_of or cma.active_present_of. Prod: this script, 175 and 173 before the merge of #267; the web
+-- of main does not read these functions yet.
 --
 -- Why (Martin, 12 November 2026, prod's first runs of 173 and tools/perf/active-refresh-breakdown.sql;
 -- records/0009l-prod-2026-11-12/):
---   1. Inside 173 the forced refresh took 56 and 45 s; alone on the same database 5.7 s. The difference is a cached
---      plan: 173's fixture block runs the refresh more than five times for tenants of a handful of rows, so the
---      connection keeps plans made for one row, and the timed refresh of the real tenant runs them over thousands (the
---      customers' statement as a nested loop of 22,680 by 12,915 rows on the three-times fixture: 16.8 s for it alone,
---      the whole run over eleven minutes; with the plans dropped first, 5.5 s). The job opens a connection per run and
---      plans each statement once, after the rows before it are written, so it does not meet this; but nothing told the
---      planner that the take's tables had grown, and a connection that planned a read of them while they were empty
---      would keep that plan. So the refresh itself analyzes a take table whose size changed much
---      (cma.active_take_analyze), which makes every connection plan again: 173, unchanged, then times the refresh at
---      what it costs (tools/perf/active-refresh-stale-plan.sql shows the kept plan beside the fresh one).
---   2. The live present of the tiles took 717 ms at prod's busy hour against 400 ms. It read Flash's whole per-customer
---      figures (every subscription grouped, every device grouped, the contacts' references) to learn two things per
---      holding subscription: its store customer and that customer's segment. cma.active_present_of now reads those
---      directly (the store's customer by its id, the contact's segment): the same rows, by construction and compared
---      row for row in 175 with 172's definition. Still live, nothing moved into the take.
+--   1. Inside 173 the forced refresh took 56 and 45 s; alone on the same database 5.7 s. Reproduced locally on the
+--      three-times fixture, not measured in prod: 173's fixture block runs the refresh more than five times for tenants
+--      of a handful of rows, so the connection keeps plans made for one row, and the timed refresh of the real tenant
+--      runs them over thousands (the customers' statement as a nested loop of 22,680 by 12,915 rows: 16.8 s for it
+--      inside 173, where the whole run did not end in eleven minutes; the same statement prepared on empty tables and
+--      run alone, 30.9 s kept against 0.1 s planned again, tools/perf/active-refresh-stale-plan.sql; with the plans
+--      dropped first the refresh takes 5.5 s). Prod confirms it when 173's E4, unchanged, reads under 15 s after this
+--      script. The job opens a connection per run and plans each statement once, after the rows before it are written,
+--      so it does not meet this plan; the cause is 173's own setup. Of Martin's two answers the refresh's was taken all
+--      the same, for him to confirm: 173 has run in prod and stays as it is, and nothing told the planner that the
+--      take's tables had grown, so any connection that planned a read of them while they were small would keep that
+--      plan. The refresh analyzes a take table whose size changed much (cma.active_take_analyze), which makes every
+--      connection plan again: 173's E4 then times a refresh planned for the tables as they are, which is what the job
+--      runs.
+--   2. The live present of the tiles took 717 ms at prod's busy hour against 400 ms (258 ms two hours earlier on the
+--      same rows). It read Flash's whole per-customer figures (every subscription grouped, every device grouped, the
+--      contacts' references) to learn two things per holding subscription: its store customer and that customer's
+--      segment. cma.active_present_of now reads those directly (the store's customer by its id, the contact's segment):
+--      the same rows, by construction and compared row for row in 175 with 172's definition. Still live, nothing moved
+--      into the take. Local, three times prod's volume: 209 to 143 ms. Whether that brings prod's busy hour under
+--      400 ms is not known until 173's E5 runs there; if it does not, the tiles' present moves into the take
+--      (cma.active_present_stored_of is there since 172) with the take's age as its stated staleness, in a script of
+--      its own.
 --   3. A due run with nothing changed computed everything for 5.4 s and wrote nothing. The refresh now reads the
 --      inputs' change markers first (cma.active_inputs_key_of) and leaves a take whose markers, business date and
 --      settings are unchanged as it is, moving only its moment. Everything is computed again when a marker changes,
 --      on a new business date (so at least nightly), after a settings change and when forced.
+--      What the markers hold: the subscriptions, their events, the devices, the stores' customers (with their link to
+--      a contact) and orders, the CRM's contacts, the stores, the device statuses and models, the markets, the
+--      connections' kind and account, and the tenant's time zone.
+--      What they do not hold, and what a quiet run therefore leaves as the last computation found it until a marker
+--      changes or the business date turns (at most a day): the CRM's deals, calls, emails and associations behind the
+--      acquisition channel and the courtesy calls (cma.courtesy_orders_of: telephony_call, its tags, call_link,
+--      crm_call, crm_association). They are the busiest tables; a marker over them would cost the quiet run its point.
+--      For Martin to confirm (docs/open-decisions.md).
 --
 -- What it adds
 --   column     cma.active_take.inputs_key: the markers' digest the take was computed under (null on a take of 0009l:
 --              the next due run computes once and fills it)
---   function   cma.active_inputs_key_of(tenant): a digest of, per input table, its row count and latest write
---              (synced_at, which the mirrors move only when a row changes): the subscriptions, their events, the
---              devices, the stores' customers and orders, the CRM's contacts; and the stores (count and updated_at)
---   function   cma.active_take_analyze(tenant): analyzes each of the take's six tables whose row count differs from
---              the planner's by more than a fifth (and by 50 rows), or that was never analyzed; SECURITY DEFINER, owned
---              by cma_owner (the application may not analyze), search path pinned, the current tenant only; the
---              application's, called by the refresh
+--   function   cma.active_inputs_key_of(tenant): a digest of the inputs' markers. Per table a row count and a sum over
+--              its rows that no order of commits can pass: the subscriptions', events' and devices' write times
+--              (synced_at, which their mirrors move only when a row changes), and for the stores' customers and orders
+--              and the CRM's contacts, whose mirrors stamp every delivery, changed or not, a hash of the row's columns
+--              (all but the write time and the raw payload, which the take does not read); the catalogs by their rows
+--   function   cma.active_take_analyze(tenant): analyzes each of the take's six tables that holds rows without
+--              statistics, or whose row count differs from the planner's by more than a fifth (and by 50 rows);
+--              SECURITY DEFINER, owned by cma_owner (the application may not analyze), search path pinned, the current
+--              tenant only (never without one); the application's, called by the refresh
 -- What it re-creates (each from its latest definition, 172, with its -- based on: line)
 --   cma.active_present_of(tenant)                  the slimmer live read (2); JIT off repeated
 --   cma.active_refresh_of(tenant, force, now)      the quiet run (3), the analyze after a fill (1), inputs_key written;
 --                                                  its answer gains unchanged and tables_analyzed; JIT off repeated
--- What it leaves: 172's tables, reads, documents and the job. A take's meaning does not change: "History as of" is the
--- moment the take was last found or made current.
+-- What it leaves: 172's tables, reads, documents and the job. "History as of" (cma.active_take.computed_at) changes its
+-- meaning with the quiet run: the moment the take was last computed or found unchanged against its inputs' markers
+-- (docs/definitions.md; Decision log, 12 Nov 2026, "Definitions: History as of ...").
+-- Not solved here, named for later (docs/open-decisions.md): an analyze holds its table lock until the refresh commits,
+-- so two tenants' first fills at the same moment wait on each other (one tenant today).
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -79,32 +101,69 @@ comment on column cma.active_take.inputs_key is 'The digest of the inputs'' chan
 -- ---------------------------------------------------------------------------------------------
 -- 2. The inputs' change markers
 -- ---------------------------------------------------------------------------------------------
--- Per input table of the take the tenant's row count and latest write, as one digest. synced_at is the mirror's own
--- write time: an upsert moves it only when a row reads differently, a delete in the source sets it with
--- source_deleted_at, so an unchanged table gives the same pair. Epoch seconds, never a timestamp's text (a session's
--- time zone would change it). The caller's rights: the application reads its tenant's rows
+-- One digest of what the take is computed from. Per table the tenant's row count and a sum over its rows, which no
+-- order of commits can pass (a latest write time can: a transaction that began earlier and commits later writes below
+-- it). Three kinds:
+--   a. the subscriptions, their events and the devices: the mirror moves synced_at only when a row reads differently
+--      (118, 116; the events are only added), so the count, the latest write and the writes' sum stand still on an
+--      unchanged table;
+--   b. the stores' customers and orders and the CRM's contacts: their mirrors stamp synced_at at every delivery,
+--      changed or not (36, 56, 30), and the customer's link to a contact is written without it (58), so the marker is
+--      a hash over the row's columns: every column but the tenant, the write time and the raw payload (no read of the
+--      take touches raw). A column added to one of these tables that the take reads is added here;
+--   c. the catalogs and the tenant: the stores, the device statuses, the device models and the markets by their rows,
+--      the connections by the columns the take reads (their row also holds the adapters' own settings), the tenant's
+--      time zone.
+-- Not held: the CRM's deals, calls, emails and associations and the telephony behind the acquisition channel and the
+-- courtesy calls (the header, 3). Epoch numbers and hashes, never a timestamp's text (a session's time zone would
+-- change it). The caller's rights: the application reads its tenant's rows
 create or replace function cma.active_inputs_key_of(p_tenant_id uuid)
 returns text
 language sql stable
 as $$
   select md5(concat_ws('|',
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.synced_at))::text, '') from cma.subscription x where x.tenant_id = p_tenant_id),
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.synced_at))::text, '') from cma.subscription_event x where x.tenant_id = p_tenant_id),
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.synced_at))::text, '') from cma.device x where x.tenant_id = p_tenant_id),
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.synced_at))::text, '') from cma.commerce_customer x where x.tenant_id = p_tenant_id),
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.synced_at))::text, '') from cma.commerce_order x where x.tenant_id = p_tenant_id),
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.synced_at))::text, '') from cma.crm_contact x where x.tenant_id = p_tenant_id),
-    (select count(*)::text || '@' || coalesce(extract(epoch from max(x.updated_at))::text, '') from cma.commerce_store x where x.tenant_id = p_tenant_id)))
+    (select concat_ws('@', count(*), extract(epoch from max(x.synced_at)), sum((extract(epoch from x.synced_at) * 1000000)::bigint))
+     from cma.subscription x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), extract(epoch from max(x.synced_at)), sum((extract(epoch from x.synced_at) * 1000000)::bigint))
+     from cma.subscription_event x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), extract(epoch from max(x.synced_at)), sum((extract(epoch from x.synced_at) * 1000000)::bigint))
+     from cma.device x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(row(
+              x.id, x.connection_id, x.source_system, x.source_id, x.state, x.locale, x.orders_count, x.amount_spent,
+              x.amount_currency, x.source_created_at, x.source_updated_at, x.source_deleted_at, x.phone_hash,
+              x.crm_connection_id, x.crm_contact_source_id, x.matched_at), 0)))
+     from cma.commerce_customer x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(row(
+              x.id, x.connection_id, x.source_system, x.source_id, x.order_name, x.customer_source_id, x.source_created_at,
+              x.processed_at, x.source_updated_at, x.cancelled_at, x.cancel_reason, x.is_test, x.currency, x.total_amount,
+              x.subtotal_amount, x.tax_amount, x.discount_amount, x.refunded_amount, x.financial_status,
+              x.fulfillment_status, x.source_name, x.app_ref, x.landing_host, x.landing_path, x.utm, x.referring_host,
+              x.tags, x.prior_orders_count, x.prior_count_exact, x.order_kind, x.source_deleted_at, x.phone_hash), 0)))
+     from cma.commerce_order x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(row(
+              x.id, x.connection_id, x.source_system, x.source_id, x.country, x.language, x.source_updated_at,
+              x.source_deleted_at, x.currency, x.store, x.country_source, x.source_created_at, x.segment), 0)))
+     from cma.crm_contact x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(x, 0))) from cma.commerce_store x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(x, 0))) from cma.device_status x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(x, 0))) from cma.device_model x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(x, 0))) from cma.market x where x.tenant_id = p_tenant_id),
+    (select concat_ws('@', count(*), sum(hash_record_extended(row(x.id, x.key, x.adapter, x.kind, x.external_account_id, x.status), 0)))
+     from cma.integration_connection x where x.tenant_id = p_tenant_id),
+    (select t.timezone from cma.tenant t where t.id = p_tenant_id)))
 $$;
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. The take's statistics after a fill
 -- ---------------------------------------------------------------------------------------------
--- A take table whose row count differs from the planner's figure by more than a fifth (and by more than 50 rows), or
--- that was never analyzed while it holds rows, is analyzed: the planner then knows the size the refresh just gave it,
--- and every connection drops the plans it made for the old size (an analyze invalidates them). Counted over the whole
--- table, every tenant's rows (the statistics are the table's). SECURITY DEFINER: the application may not analyze; the
--- function names its six tables itself and takes nothing of the caller's into a statement. Answers how many it analyzed
+-- A take table that holds rows without statistics, or whose row count differs from the planner's figure by more than a
+-- fifth (and by more than 50 rows), is analyzed: the planner then knows the size the refresh just gave it, and every
+-- connection drops the plans it made for the old size (an analyze invalidates them). "Without statistics" is read from
+-- pg_stats, not from the planner's row count alone: an analyze inside a transaction that is rolled back (a verify's
+-- step) leaves its row count in pg_class and takes its statistics back. Counted over the whole table, every tenant's
+-- rows (the statistics are the table's). SECURITY DEFINER: the application may not analyze; the function names its six
+-- tables itself and takes nothing of the caller's into a statement. Never without a tenant. Answers how many it
+-- analyzed
 create or replace function cma.active_take_analyze(p_tenant_id uuid)
 returns integer
 language plpgsql
@@ -116,18 +175,20 @@ declare
   n      bigint;
   v_done integer := 0;
 begin
-  if p_tenant_id is distinct from cma.current_tenant_id() then
+  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() then
     raise exception 'a take''s statistics follow a refresh of the current tenant only' using errcode = 'CMA04';
   end if;
   for r in
-    select c.oid::regclass as tbl, c.reltuples
+    select c.oid::regclass as tbl, c.reltuples,
+           exists (select 1 from pg_stats s where s.schemaname = 'cma' and s.tablename = c.relname) as has_stats
     from pg_class c
     where c.oid in ('cma.active_base'::regclass, 'cma.active_customer'::regclass, 'cma.active_spell'::regclass,
                     'cma.active_month'::regclass, 'cma.active_cohort'::regclass, 'cma.active_document'::regclass)
     order by c.relname
   loop
     execute format('select count(*) from %s', r.tbl) into n;
-    if (r.reltuples < 0 and n > 0) or abs(n - greatest(r.reltuples, 0)) > greatest(50, 0.2 * greatest(r.reltuples, 0)) then
+    if (n > 0 and (r.reltuples < 0 or not r.has_stats))
+       or abs(n - greatest(r.reltuples, 0)) > greatest(50, 0.2 * greatest(r.reltuples, 0)) then
       execute format('analyze %s', r.tbl);
       v_done := v_done + 1;
     end if;
@@ -263,24 +324,24 @@ begin
   v_month := date_trunc('month', v_today)::date;
   v_prev := (v_month - interval '1 month')::date;
   v_year := (v_month - interval '13 months')::date;
-  v_attr := (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h);
   -- everything is written again when asked, on a first take, after a settings change and on a new business date
   v_all := p_force or not v_found or v_take.stale or v_take.business_date is distinct from v_today;
 
   -- 0. the quiet run (0009m): the inputs' change markers, read before anything is computed (a row that changes after
   --    this read gives the next run another key). The same key as the take's, on the same business date, with no
   --    setting saved since and no force: nothing the take is computed from changed, so the take stands as it is and
-  --    only its moment moves. What the markers do not hold (the CRM's deals and calls behind the acquisition channel)
-  --    is read again at the next change of a marker and at every new business date
+  --    only its moment moves. What the markers do not hold (the CRM's deals, calls and emails behind the acquisition
+  --    channel, the courtesy calls) is read again at the next change of a marker and at every new business date
   v_inputs := cma.active_inputs_key_of(p_tenant_id);
   if not v_all and v_take.inputs_key is not distinct from v_inputs then
     update cma.active_take t
     set computed_at = v_now, duration_ms = (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer
     where t.tenant_id = p_tenant_id;
-    return jsonb_build_object('refreshed', true, 'unchanged', true, 'base_rows', 0, 'customer_rows', 0, 'history_rows', 0,
+    return jsonb_build_object('refreshed', true, 'unchanged', true, 'tables_analyzed', 0, 'base_rows', 0, 'customer_rows', 0, 'history_rows', 0,
                               'document_rows', 0, 'rows', 0,
                               'duration_ms', (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer);
   end if;
+  v_attr := (select h.history_start from cma.first_orders_history_start_of(p_tenant_id) h);
 
   -- 1. the base, row by row: a row that reads the same is not written again; a subscription no longer in it goes
   with n as materialized (
@@ -532,6 +593,8 @@ begin
     returning 1
   )
   select (select count(*) from up) + (select count(*) from gone) into n_docs;
+  -- the documents' table too (on a first take it was empty at every analyze above)
+  if n_docs > 0 then n_stats := n_stats + cma.active_take_analyze(p_tenant_id); end if;
   -- the take's row, last: its moment, and the mark cleared only when no setting was saved since this refresh read the
   -- take (the row is the one committed now: a settings transaction still open is waited for)
   update cma.active_take t
