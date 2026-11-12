@@ -540,7 +540,7 @@ declare
   v_quiet numeric; v_forced numeric; v_live numeric;
   v_q text; v_a text; v_w text; v_wres text;
   v_attr date; v_win integer; v_known bigint; v_first bigint; v_calls integer;
-  v_sub uuid; v_cust uuid;
+  v_sub uuid; v_cust uuid; v_link uuid;
   v_k0 text; v_k1 text; v_moved boolean;
   v_comp integer; v_hist integer;
   d_later text; d_later_172 text;
@@ -666,14 +666,17 @@ begin
       -- the inputs' markers again, after the last run that must be quiet (the step's own write above moved a write time
       -- only, which the customers' marker leaves out): an ingest that wrote meanwhile makes R1, Q1 and E2 a skip
       v_k1 := cma.active_inputs_key_of(t.id);
-      -- a customer whose link to a contact changed (written without a write time, 58)
+      -- a customer whose link to a contact changed (written without a write time, 58). A customer that holds a link:
+      -- the link's three columns are set together (commerce_customer_crm_link_check), so the moment of a customer
+      -- without one cannot be moved (prod's first run of this script, 12 November 2026, stopped there)
       perform set_config('role', 'cma_owner', true);
-      update cma.commerce_customer c set matched_at = coalesce(c.matched_at, v_now) + interval '1 second' where c.tenant_id = t.id and c.id = v_cust;
+      select c.id into v_link from cma.commerce_customer c where c.tenant_id = t.id and c.matched_at is not null order by c.id limit 1;
+      update cma.commerce_customer c set matched_at = c.matched_at + interval '1 second' where c.tenant_id = t.id and c.id = v_link;
       update cma.active_take k set computed_at = v_now - v_due where k.tenant_id = t.id;
       perform set_config('role', 'cma_app', true);
       j2 := cma.active_refresh_of(t.id, false, v_now);
-      v_calls := v_calls + 1; v_comp := v_comp + case when v_cust is null then 0 else 1 end;
-      v_q := v_q || format(' | a customer''s link changed: unchanged %s', case when v_cust is null then 'false' else j2 ->> 'unchanged' end);
+      v_calls := v_calls + 1; v_comp := v_comp + case when v_link is null then 0 else 1 end;
+      v_q := v_q || format(' | a customer''s link changed: unchanged %s', case when v_link is null then 'false' else j2 ->> 'unchanged' end);
       -- a subscription written since
       perform set_config('role', 'cma_owner', true);
       select s.id into v_sub from cma.subscription s where s.tenant_id = t.id order by s.id limit 1;
