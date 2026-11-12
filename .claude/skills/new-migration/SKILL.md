@@ -29,6 +29,7 @@ Follow CLAUDE.md (Database, Performance) and docs/RUNBOOK.md, section 7. Nothing
 - Refuses `postgres` as session user; `set role cma_owner;` `select set_config('verify.provoke', 'false', false);` a temp results table; synthetic data only (example.invalid), fixed dates; blocks inside subtransactions that always roll back.
 - Check S1: the version is recorded after the previous one; grants and ownership as designed.
 - A rewrite meant to keep the answers keeps the previous definition inside the verify and compares both row for row; a change that restores a rule compares with the definition that held it.
+- Every ordering that feeds a compared text says `collate "C"` (`string_agg(… order by k collate "C")`, `string_agg(distinct k collate "C", …)`, a `limit 1` tie-break): Cloud SQL orders text under en_US.UTF8. A keyset read is walked page by page under the database's own collation (`173`'s T9). Run the verify on a local database created with that collation (web/verify/README.md), normal and provoked.
 - Provoke switch: with `verify.provoke` true every block fails and the verdict says "PROVOKED, NOT A PASS". The last row is "PASS | n PASS, 0 FAIL".
 - Error codes and permissions follow docs/architecture/data-model/ and docs/architecture/api.md.
 

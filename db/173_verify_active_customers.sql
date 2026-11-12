@@ -95,6 +95,12 @@
 --   T8  (D16) the table first, the live present after: a subscription that leaves after the take is still in the stored
 --       answer (as of the take) and gone from the live one; the next refresh brings the two together; the live read is
 --       the report readers' (CMA06, CMA04)
+--   T9  the list's order and paging under the database's own collation (Cloud SQL: en_US.UTF8, where a, A, b, B follow
+--       each other and punctuation is read over; a C database puts A to Z before a to z): the take's rows get store
+--       names and store customer ids in mixed case with punctuation, then for each of the twelve sort keys, ascending and
+--       descending, one read, the pages chained by next and the pages back by prev each equal a plain order by on the
+--       same keys; no index of the list, no text column of it and no word of its function names another collation, so the
+--       cursor's comparison, the order by and the index agree. Its info row (T9i) names the database's collation
 --   N1  (A10) per tenant with stored Flash snapshots of the customers: the reconstructed month end beside the snapshot's
 --       Active customers, the difference as a notice
 --   E1 to E6  per tenant with a subscription, after a forced refresh, each the best of the runs after six untimed calls:
@@ -106,8 +112,11 @@
 --       the take's rows, above the fold without a filter and under the largest market with its largest segment, below
 --       the fold without a filter (E6; verify.max_top_ms and verify.max_overview_ms, 500)
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id
--- (S1 … B16, P1 … P6, T1 … T8, E1 … E6): that check alone compares with a deliberate difference, so the run fails
+-- (S1 … B16, P1 … P6, T1 … T9, E1 … E6): that check alone compares with a deliberate difference, so the run fails
 -- exactly it.
+-- Collation (Martin's dev run, 12 November 2026): every ordering that feeds a compared text says collate "C", so a found
+-- text reads the same in a C database and under Cloud SQL's en_US.UTF8. Orderings compared with the functions' own
+-- (the previous definitions kept here, the stored documents) keep the database's collation on both sides, as 172 does.
 -- =============================================================================================
 
 do $$
@@ -664,7 +673,7 @@ declare
   v_txt text;
 begin
   perform pg_temp.v0009l_row(1, 'S1', 'the addition 0009l is recorded, after 0009k',
-    (select string_agg(m.version, ',' order by m.version) from cma.schema_migration m where m.version in ('0009k', '0009l')), '0009k,0009l');
+    (select string_agg(m.version, ',' order by m.version collate "C") from cma.schema_migration m where m.version in ('0009k', '0009l')), '0009k,0009l');
 
   foreach v_fn in array array[
     'cma.active_fx_ok(text)', 'cma.active_fx_of(uuid)', 'cma.active_eur_of(numeric,text,jsonb)', 'cma.active_month_factor_of(text,integer)',
@@ -762,13 +771,13 @@ begin
   end loop;
   perform pg_temp.v0009l_row(2, 'S2', 'the functions in the caller''s rights and the application''s, rows said, jit off; the stored tables tenant-aware; the stale trigger; the job', v_bad, '');
 
-  select string_agg(s.key || '=' || s.value_type || ':' || s.default_value, ' | ' order by s.key) into v_txt
+  select string_agg(s.key || '=' || s.value_type || ':' || s.default_value, ' | ' order by s.key collate "C") into v_txt
   from cma.setting s where s.key like 'customers.%' or s.key = 'reports.fx_eur_rates';
   perform pg_temp.v0009l_row(3, 'S3', 'the six settings with their defaults', v_txt,
     'customers.age_months=text:12,24,36,48,60 | customers.cohort_ages_months=text:3,6,12,24,36 | customers.history_months=integer:60'
     || ' | customers.history_notice_minutes=integer:15 | customers.refresh_minutes=integer:5 | reports.fx_eur_rates=text:{}');
 
-  select string_agg(c.table_name || ':' || c.cols, ' | ' order by c.table_name) into v_txt
+  select string_agg(c.table_name || ':' || c.cols, ' | ' order by c.table_name collate "C") into v_txt
   from (select x.table_name, string_agg(x.column_name, ',' order by x.ordinal_position) as cols
         from information_schema.columns x
         where x.table_schema = 'cma_read' and x.table_name in ('active_customer_month', 'customer_cohort') group by 1) c;
@@ -803,7 +812,7 @@ begin
           from generate_series(1, 2 + (floor(random() * 7))::int)) g
     cross join lateral (select g.k, g.s, case when g.r < 0.15 then null when g.r < 0.25 then g.s else g.s + make_interval(days => 1 + g.len) end as e) q;
     select coalesce(string_agg(x.key || ':' || to_char(x.spell_start at time zone 'UTC', 'MMDD') || '-' || coalesce(to_char(x.spell_end at time zone 'UTC', 'MMDD'), 'open'),
-                               ' ' order by x.key, x.spell_start), '') into v_fn
+                               ' ' order by x.key collate "C", x.spell_start), '') into v_fn
     from cma.active_spells_from(v_k, v_s, v_e) x;
     with iv as (
       select u.k, u.s, u.e from unnest(v_k, v_s, v_e) u(k, s, e)
@@ -820,7 +829,7 @@ begin
       from run where run.held and not run.before
     )
     select coalesce(string_agg(st.k || ':' || to_char(st.s at time zone 'UTC', 'MMDD') || '-' || coalesce(to_char(st.e at time zone 'UTC', 'MMDD'), 'open'),
-                               ' ' order by st.k, st.s), '') into v_bf
+                               ' ' order by st.k collate "C", st.s), '') into v_bf
     from st;
     v_cases := v_cases + 1;
     if v_fn is distinct from v_bf then
@@ -872,9 +881,9 @@ begin
   --   c (segment n) starts 5 Mar, a spell 5 Mar to 1 Apr: at 1 (5 Apr) not, at 3 (5 Jun) not, at 6 (5 Sep) not that old yet
   -- month: Jan m: started 2; 1: 2 mature; 3: 1 mature; 6: 1 of those old enough, not mature. Mar n: started 1; 1: 0 mature; 3: 0 mature; 6: 0 not mature
   -- quarter: Q1 m and Q1 n the same rows under 1 January
-  select string_agg(format('%s %s %s:%s/%s/%s', to_char(x.cohort, 'MMDD'), x.d1, x.age_months, x.started, x.still_active, x.mature), ' ' order by x.cohort, x.d1, x.age_months)
+  select string_agg(format('%s %s %s:%s/%s/%s', to_char(x.cohort, 'MMDD'), x.d1, x.age_months, x.started, x.still_active, x.mature), ' ' order by x.cohort, x.d1 collate "C", x.age_months)
          || ' || ' ||
-         (select string_agg(format('%s %s %s:%s/%s/%s', to_char(y.cohort, 'MMDD'), y.d1, y.age_months, y.started, y.still_active, y.mature), ' ' order by y.cohort, y.d1, y.age_months)
+         (select string_agg(format('%s %s %s:%s/%s/%s', to_char(y.cohort, 'MMDD'), y.d1, y.age_months, y.started, y.still_active, y.mature), ' ' order by y.cohort, y.d1 collate "C", y.age_months)
           from cma.active_cohort_cube_from(array['a', 'a', 'b', 'c'], array['m', 'm', 'm', 'n'], array['', '', '', ''], array['', '', '', ''],
                  array['2024-01-10', '2024-01-10', '2024-01-20', '2024-03-05']::timestamptz[], array['2024-01-10', '2024-06-01', '2024-02-01', '2024-03-05']::timestamptz[],
                  array['2024-03-01', null, null, '2024-04-01']::timestamptz[], array[1, 3, 6], 'quarter', 'UTC', timestamptz '2024-07-15 00:00+00') y)
@@ -985,6 +994,7 @@ declare
   v_run uuid;
   v_sub uuid;
   v_txt text; v_txt2 text; v_n integer; v_m integer;
+  v_own text; v_one text; v_sorts integer := 0; v_bad1 integer := 0; v_bad2 integer := 0; v_bad3 integer := 0; v_note text;
   r record;
   -- a time of the fixture: 09:00 UTC on a date
   -- (written as text below; t() is no function here, the casts are plain)
@@ -1118,7 +1128,7 @@ begin
                                or q.page_subs is distinct from q.fig_subs
                                or (q.flash_customers is not null and q.page_customers is distinct from q.flash_customers)
                                or (q.flash_subs is not null and q.page_subs is distinct from q.flash_subs)),
-           string_agg(format('%s/%s:%s,%s', coalesce(q.market, '*'), coalesce(q.segment, '*'), q.page_customers, q.page_subs), ' ' order by q.market nulls first, q.segment nulls first)
+           string_agg(format('%s/%s:%s,%s', coalesce(q.market, '*'), coalesce(q.segment, '*'), q.page_customers, q.page_subs), ' ' order by q.market collate "C" nulls first, q.segment collate "C" nulls first)
     into v_n, v_txt
     from (
       select m.market, s.segment,
@@ -1153,12 +1163,12 @@ begin
     select string_agg(format('%s:%s%s%s %s-%s', b.source_id, case when b.is_holding then 'H' else '-' end, case when b.in_history then 'in' else 'out' end,
                              coalesce('(' || b.left_out || ')', ''), coalesce(to_char(b.started_at at time zone 'UTC', 'YYMMDD'), 'none'),
                              coalesce(to_char(b.ended_at at time zone 'UTC', 'YYMMDD'), case when b.is_holding then 'open' else 'none' end)),
-                      ' ' order by length(b.source_id), b.source_id)
+                      ' ' order by length(b.source_id), b.source_id collate "C")
     into v_txt from cma.active_base_of(v_t1, v_now, false, null, false) b;
-    select v_txt || ' | ' || string_agg(format('%s:%s/%s', c.source_id, to_char(c.customer_start at time zone 'UTC', 'YYMMDD'), c.age_months), ' ' order by c.source_id)
+    select v_txt || ' | ' || string_agg(format('%s:%s/%s', c.source_id, to_char(c.customer_start at time zone 'UTC', 'YYMMDD'), c.age_months), ' ' order by c.source_id collate "C")
     into v_txt from cma.active_customers_of(v_t1, v_now, false) c;
     select v_txt || ' | ' || string_agg(format('%s:%s-%s', s.source_id, to_char(s.spell_start at time zone 'UTC', 'YYMMDD'), coalesce(to_char(s.spell_end at time zone 'UTC', 'YYMMDD'), 'open')),
-                                         ' ' order by s.source_id, s.spell_start)
+                                         ' ' order by s.source_id collate "C", s.spell_start)
     into v_txt from cma.active_spells_of(v_t1) s;
     v_rows := v_rows || array['102', 'B2', 'the base: holding intervals (pause, reactivation, expiry by event, left out, merged absent), Customer starts and spells', v_txt,
       's1:Hin 250115-open s2:-in 250401-250910 s3:-in 250310-250720 s4:Hin 251105-open s5:-in 250625-260915 s6:Hin 260203-open s7:Hin 261021-open'
@@ -1175,7 +1185,7 @@ begin
     into v_txt, v_n
     from (select (m ->> 'month')::date as month, (m ->> 'customers')::numeric as customers, (m ->> 'inflow')::numeric as inflow, (m ->> 'outflow')::numeric as outflow,
                  (m ->> 'subscriptions')::numeric as subscriptions, (m ->> 'net')::numeric as net, (m ->> 'is_now')::boolean as is_now,
-                 coalesce(lag((m ->> 'customers')::numeric) over (order by m ->> 'month'), 0) as before
+                 coalesce(lag((m ->> 'customers')::numeric) over (order by (m ->> 'month') collate "C"), 0) as before
           from jsonb_array_elements(j -> 'months') m) q;
     v_txt := v_txt || format(' | identity broken in %s months | prev %s/%s and %s/%s', v_n,
                              j -> 'tiles' -> 'active_customers' ->> 'prev_month', j -> 'tiles' -> 'active_customers' ->> 'prev_year',
@@ -1187,12 +1197,12 @@ begin
 
     -- B4 (A4). the Monthly recurring amount: per currency, never one figure across currencies
     select string_agg(format('%s %s over %s = %s (prev %s/%s, average prev %s/%s)', a ->> 'currency', a ->> 'amount', a ->> 'customers', a ->> 'average', a ->> 'prev_month',
-                             a ->> 'prev_year', a ->> 'average_prev_month', a ->> 'average_prev_year'), ' | ' order by a ->> 'currency')
+                             a ->> 'prev_year', a ->> 'average_prev_month', a ->> 'average_prev_year'), ' | ' order by (a ->> 'currency') collate "C")
     into v_txt from jsonb_array_elements(j -> 'tiles' -> 'amounts') a;
     v_txt := v_txt || format(' | eur %s | Oct 2025 %s | Oct 2026 %s | keys %s', coalesce(j -> 'tiles' ->> 'eur', 'none'),
                              (select m -> 'amounts' from jsonb_array_elements(j -> 'months') m where m ->> 'month' = '2025-10-01'),
                              (select m -> 'amounts' from jsonb_array_elements(j -> 'months') m where m ->> 'month' = '2026-10-01'),
-                             (select string_agg(k, ',' order by k) from jsonb_object_keys(j -> 'tiles') k));
+                             (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(j -> 'tiles') k));
     v_rows := v_rows || array['104', 'B4', '(A4) the Monthly recurring amount per currency with its customers, average and month ends; no figure across currencies', v_txt,
       'EUR 111.22 over 6 = 18.54 (prev 111.22/70.44, average prev 18.54/35.22) | GBP 90.00 over 2 = 45.00 (prev 90.00/85.00, average prev 45.00/42.50)'
       || ' | eur none | Oct 2025 {"EUR": 70.44, "GBP": 85.00} | Oct 2026 {"EUR": 111.22, "GBP": 90.00}'
@@ -1201,16 +1211,16 @@ begin
     -- B5 (A5). the customer cohorts by month and by quarter: started, then per age (3, 6, 12, 24, 36 months) still active and t/f for Mature
     select string_agg(format('%s:%s %s', to_char((c ->> 'cohort')::date, 'YYMM'), c ->> 'started',
                              (select string_agg((a ->> 'still_active') || left(a ->> 'mature', 1), '/' order by (a ->> 'age')::int) from jsonb_array_elements(c -> 'ages') a)),
-                      ' ' order by c ->> 'cohort')
+                      ' ' order by (c ->> 'cohort') collate "C")
     into v_txt from jsonb_array_elements(j -> 'cohorts') c;
     j2 := pg_temp.v0009l_page_of(v_t1, null, null, null, null, 'quarter', v_now);
     select v_txt || ' || ' || string_agg(format('%s:%s %s', to_char((c ->> 'cohort')::date, 'YYMM'), c ->> 'started',
                              (select string_agg((a ->> 'still_active') || left(a ->> 'mature', 1), '/' order by (a ->> 'age')::int) from jsonb_array_elements(c -> 'ages') a)),
-                      ' ' order by c ->> 'cohort')
+                      ' ' order by (c ->> 'cohort') collate "C")
     into v_txt from jsonb_array_elements(j2 -> 'cohorts') c;
     select v_txt || ' || ' || string_agg(format('%s:%s %s', s ->> 'value', s ->> 'started',
                              (select string_agg((a ->> 'started') || '>' || (a ->> 'still_active'), '/' order by (a ->> 'age')::int) from jsonb_array_elements(s -> 'ages') a)),
-                      ' ' order by s ->> 'value')
+                      ' ' order by (s ->> 'value') collate "C")
     into v_txt from jsonb_array_elements(j -> 'cohort_splits' -> 'segment') s;
     j2 := pg_temp.v0009l_page_of(v_t1, date '2025-08-01', 'GB', null, null, 'month', v_now);
     v_txt := v_txt || format(' || dominant %s, GB from Aug 2025 %s', coalesce(j -> 'notes' ->> 'dominant_cohort', 'none'), j2 -> 'notes' ->> 'dominant_cohort');
@@ -1243,9 +1253,9 @@ begin
 
     -- B7 (A7). the placeholders: a key and the status pending, nothing else; no number in a slot
     select string_agg((s ->> 'key') || ':' || (s ->> 'status'), ' ' order by ord) || ' | keys '
-           || (select string_agg(distinct k, ',') from jsonb_array_elements(j -> 'unit_economics' -> 'slots') s2 cross join jsonb_object_keys(s2) k)
+           || (select string_agg(distinct k collate "C", ',') from jsonb_array_elements(j -> 'unit_economics' -> 'slots') s2 cross join jsonb_object_keys(s2) k)
            || ' | ' || case when (j -> 'unit_economics' -> 'slots')::text ~ '[0-9]' then 'a digit in the slots' else 'no digit' end
-           || ' | ' || (select string_agg(k, ',' order by k) from jsonb_object_keys(j -> 'unit_economics') k)
+           || ' | ' || (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(j -> 'unit_economics') k)
     into v_txt from jsonb_array_elements(j -> 'unit_economics' -> 'slots') with ordinality x(s, ord);
     v_rows := v_rows || array['107', 'B7', '(A7) the placeholders carry a key and the status pending, no figure', v_txt,
       'churn_rate:pending cac:pending cost_per_subscription:pending clv_projected:pending clv_to_cac:pending payback_months:pending | keys key,status | no digit | churned_30d,slots'];
@@ -1259,7 +1269,7 @@ begin
     j2 := pg_temp.v0009l_doc(cma.active_top(), cma.active_rest());
     v_txt := format('not set up %s | two: figures %s, customers %s, subscriptions %s, markets %s of %s, months %s, list %s, rows visible %s/%s/%s', v_txt2, j2 ->> 'figures',
                     j2 -> 'tiles' -> 'active_customers' ->> 'value', j2 -> 'tiles' -> 'total_subscriptions' ->> 'value',
-                    (select string_agg(format('%s:%s/%s', m ->> 'market', m ->> 'customers', m ->> 'subscriptions'), ' ' order by m ->> 'market')
+                    (select string_agg(format('%s:%s/%s', m ->> 'market', m ->> 'customers', m ->> 'subscriptions'), ' ' order by (m ->> 'market') collate "C")
                      from jsonb_array_elements(j2 -> 'markets') m), j2 -> 'filters' ->> 'markets', jsonb_array_length(j2 -> 'months'),
                     cma.active_rows() ->> 'total', (select count(*) from cma.subscription), (select count(*) from cma.commerce_customer),
                     (select count(*) from cma.active_spells_of(v_t1)));
@@ -1304,7 +1314,7 @@ begin
                   (select count(*) from cma_read.active_customer_month v where v.tenant_id = v_t1),
                   (select count(*) from cma_read.customer_cohort v where v.tenant_id = v_t1),
                   (select count(*) from cma_read.active_customer_month v where v.tenant_id <> v_t1),
-                  (select string_agg(distinct v.acquisition_channel, ',') from cma_read.active_customer_month v where v.tenant_id = v_t1))
+                  (select string_agg(distinct v.acquisition_channel collate "C", ',') from cma_read.active_customer_month v where v.tenant_id = v_t1))
     into v_txt;
     v_rows := v_rows || array['109', 'B9', '(A9) cma_read.active_customer_month and cma_read.customer_cohort equal the page; a reader of one tenant sees it alone', v_txt,
       format('months differ 0, cohort rows differ 0; rows %s and %s; of another tenant 0; channels direct,indirect,unknown',
@@ -1323,12 +1333,12 @@ begin
     left join cma.active_channel_of(v_t1) ch on ch.customer_id = cu.id
     where o.kind = 'first';
     select format('history from %s; %s first orders with a store order, %s differ | ', (select h.history_start from cma.first_orders_history_start_of(v_t1) h), v_n, v_m)
-           || string_agg(format('%s:%s/%s', c.source_id, c.channel, coalesce(c.level, c.unknown_reason)), ' ' order by c.source_id)
+           || string_agg(format('%s:%s/%s', c.source_id, c.channel, coalesce(c.level, c.unknown_reason)), ' ' order by c.source_id collate "C")
     into v_txt from cma.active_channel_of(v_t1) c;
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_tenant_setting('attribution.assisted_levels', 'conversation,email,phone_match');
-    select v_txt || ' | without lead_deal: ' || string_agg(format('%s:%s/%s', c.source_id, c.channel, coalesce(c.level, c.unknown_reason)), ' ' order by c.source_id)
+    select v_txt || ' | without lead_deal: ' || string_agg(format('%s:%s/%s', c.source_id, c.channel, coalesce(c.level, c.unknown_reason)), ' ' order by c.source_id collate "C")
     into v_txt from cma.active_channel_of(v_t1) c;
     perform cma.set_tenant_setting('attribution.assisted_levels', 'lead_deal,conversation,email,phone_match');
     perform set_config('role', 'cma_owner', true);
@@ -1353,7 +1363,7 @@ begin
                         from jsonb_array_elements(j -> 'survival' -> 'segment') with ordinality x(s, ord))
            || ' | ' || (select string_agg(format('%s %s', s ->> 'value', s ->> 'spells'), '; ' order by ord)
                         from jsonb_array_elements(j -> 'survival' -> 'channel') with ordinality x(s, ord))
-           || ' | function ' || (select string_agg(distinct format('%s:%s/%s', k.split_value, coalesce(k.median_months::text, 'not reached'), k.longest_months), ' ')
+           || ' | function ' || (select string_agg(distinct format('%s:%s/%s', k.split_value, coalesce(k.median_months::text, 'not reached'), k.longest_months) collate "C", ' ')
                                  from cma.active_survival_of(v_t1, 'segment', v_now) k)
     into v_txt;
     v_rows := v_rows || array['111', 'B11', '(A12) the survival curves over all spells, per segment and per channel; a median reached and "not reached"', v_txt,
@@ -1380,7 +1390,7 @@ begin
     select string_agg(format('%s %s=%s %s=%s %s=%s %s=%s', f.dim, f.customers, (j -> 'tiles' -> 'active_customers' ->> 'value'),
                              f.subs + case when pg_temp.v0009l_p('B13') then 1 else 0 end, (j -> 'tiles' -> 'total_subscriptions' ->> 'value'),
                              f.eur, (select a ->> 'amount' from jsonb_array_elements(j -> 'tiles' -> 'amounts') a where a ->> 'currency' = 'EUR'),
-                             f.gbp, (select a ->> 'amount' from jsonb_array_elements(j -> 'tiles' -> 'amounts') a where a ->> 'currency' = 'GBP')), ' | ' order by f.dim)
+                             f.gbp, (select a ->> 'amount' from jsonb_array_elements(j -> 'tiles' -> 'amounts') a where a ->> 'currency' = 'GBP')), ' | ' order by f.dim collate "C")
     into v_txt
     from (select x.dim, sum((p.j -> 'tiles' -> 'active_customers' ->> 'value')::numeric) as customers,
                  sum((p.j -> 'tiles' -> 'total_subscriptions' ->> 'value')::numeric) as subs,
@@ -1401,7 +1411,7 @@ begin
                   (select string_agg(format('%s:%s/%s', o ->> 'months', o ->> 'customers', o ->> 'share'), ',' order by (o ->> 'months')::int)
                    from jsonb_array_elements(j -> 'tiles' -> 'customer_age' -> 'over') o),
                   j -> 'tiles' -> 'customer_age' ->> 'prev_month', j -> 'tiles' -> 'customer_age' ->> 'prev_year',
-                  (select string_agg(format('%s %s/%s/%s/%s', e.key, e.value ->> 'customers', e.value ->> 'average', e.value ->> 'median', e.value ->> 'per_month'), ', ' order by e.key)
+                  (select string_agg(format('%s %s/%s/%s/%s', e.key, e.value ->> 'customers', e.value ->> 'average', e.value ->> 'median', e.value ->> 'per_month'), ', ' order by e.key collate "C")
                    from jsonb_each(j -> 'tiles' -> 'clv') e),
                   j -> 'tiles' ->> 'lifetime')
            || ' | bands ' || (select string_agg(format('%s:%s', b ->> 'band', b ->> 'customers'), ' ' order by ord) from jsonb_array_elements(j -> 'age_bands') with ordinality x(b, ord))
@@ -1413,7 +1423,7 @@ begin
                      j -> 'markets_total' ->> 'subscriptions', j -> 'markets_total' ->> 'devices', j -> 'markets_total' ->> 'median_age', j -> 'markets_total' ->> 'churned_30d',
                      j -> 'markets_total' ->> 'net_30d', j -> 'markets_total' ->> 'indirect_share')
            || ' | mix ' || (select string_agg(e.key || ' ' || (select string_agg(format('%s:%s', x ->> 'key', coalesce(x ->> 'subscriptions', x ->> 'devices')), ',' order by ord)
-                                                                from jsonb_array_elements(e.value) with ordinality y(x, ord)), ' ; ' order by e.key)
+                                                                from jsonb_array_elements(e.value) with ordinality y(x, ord)), ' ; ' order by e.key collate "C")
                             from jsonb_each(j -> 'mix') e)
            || ' | payment states differ ' || (select count(*) from cma.active_base_of(v_t1, v_now, false, null, true) b
                                               full join cma.subscription_payment_state_of(v_t1) p on p.subscription_id = b.subscription_id
@@ -1448,7 +1458,7 @@ begin
            || string_agg(format('%s %s %s %s/%s %s%s %s %s %s/%s %s/%s %s', x ->> 'store_customer', x ->> 'market', x ->> 'segment', x ->> 'customer_start', x ->> 'age_months',
                                 coalesce(x ->> 'monthly_amount', '-'), coalesce(x ->> 'currency', ''), x ->> 'subscriptions', x ->> 'devices', x ->> 'clv', x ->> 'clv_currency',
                                 x ->> 'channel', coalesce(x ->> 'level', '-'), x ->> 'payment_state'), '; ' order by ord)
-           || ' | keys ' || (select string_agg(distinct k, ',') from jsonb_array_elements(j2 -> 'rows') x2 cross join jsonb_object_keys(x2) k)
+           || ' | keys ' || (select string_agg(distinct k collate "C", ',') from jsonb_array_elements(j2 -> 'rows') x2 cross join jsonb_object_keys(x2) k)
            || ' | link ' || (j2 -> 'rows' -> 0 ->> 'contact_id') || ' ' || (j2 -> 'rows' -> 0 ->> 'contact_url')
     into v_txt from jsonb_array_elements(j2 -> 'rows') with ordinality q(x, ord);
     v_txt := v_txt || ' | page ' || (select string_agg(x ->> 'store_customer', ',' order by ord)
@@ -1608,7 +1618,7 @@ begin
     v_txt := v_txt || format(' | none: history %s/%s/%s, take %s, live customers %s and subscriptions %s, age %s, lifetime %s, months %s, rest keys %s, list total %s rows %s',
                              j ->> 'history', j2 ->> 'history', j3 ->> 'history', coalesce(j ->> 'take', 'null'), j -> 'tiles' -> 'active_customers' ->> 'value',
                              j -> 'tiles' -> 'total_subscriptions' ->> 'value', coalesce(j -> 'tiles' ->> 'customer_age', 'null'), coalesce(j -> 'tiles' ->> 'lifetime', 'null'),
-                             jsonb_array_length(j -> 'months'), (select string_agg(k, ',' order by k) from jsonb_object_keys(j2) k),
+                             jsonb_array_length(j -> 'months'), (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(j2) k),
                              coalesce(j3 ->> 'total', 'null'), jsonb_array_length(j3 -> 'rows'))
              -- what only a take can state is absent, never a zero: the churn count, the split by acquisition channel, and
              -- every tile under a channel filter
@@ -1617,8 +1627,8 @@ begin
                        coalesce(cma.active_top_of(v_t1, null, null, null, 'direct', v_now) -> 'tiles' ->> 'active_customers', 'null')
                        || '/' || coalesce(cma.active_now_of(v_t1, null, null, 'indirect', v_now, false) ->> 'tiles', 'null'))
              -- the page's own two reads of the report answer from the take alone: without one the head and no figure
-             || format(' | stored reads: top %s, rest %s', (select string_agg(k, ',' order by k) from jsonb_object_keys(cma.active_top_stored_of(v_t1, null, null, null, null, v_now)) k),
-                       (select string_agg(k, ',' order by k) from jsonb_object_keys(cma.active_rest_stored_of(v_t1, null, null, null, null, 'month', v_now)) k));
+             || format(' | stored reads: top %s, rest %s', (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(cma.active_top_stored_of(v_t1, null, null, null, null, v_now)) k),
+                       (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(cma.active_rest_stored_of(v_t1, null, null, null, null, 'month', v_now)) k));
     perform cma.active_refresh_of(v_t1, true, v_now);
     v_rows := v_rows || array['122', 'T3', '(D13) a stale take, a late one and none are shown as such; without a take the present is answered and the history absent, never zeros', v_txt,
       'stale: top true/true rest true list true | fresh: late false | 10 minutes on: late false | 20 minutes on: 20 minutes, late true'
@@ -1725,7 +1735,7 @@ begin
       where d.tenant_id = v_t1 and d.part = 'top' and d.market = '' and d.segment = '' and d.channel = '';
     end if;
     select format('documents %s (top %s, rest %s) for %s', count(*), count(*) filter (where d.part = 'top'), count(*) filter (where d.part = 'rest'),
-                  string_agg(distinct nullif(concat_ws('/', nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, '')), ''), ',')
+                  string_agg(distinct nullif(concat_ws('/', nullif(d.market, ''), nullif(d.segment, ''), nullif(d.channel, '')), '') collate "C", ',')
                   || case when bool_or(d.market = '' and d.segment = '' and d.channel = '') then ' and no filter' else '' end)
            || format(' | differ from fresh %s',
                   count(*) filter (where d.doc is distinct from case when d.part = 'top'
@@ -1760,7 +1770,7 @@ begin
     -- read is the report readers' (CMA06 without the permission, CMA04 for a filter out of its form)
     select x.id into v_sub from cma.subscription x
     where x.tenant_id = v_t1 and x.source_deleted_at is null and x.status = any (cma.flash_holding_statuses_of(v_t1)::text[])
-    order by x.source_id limit 1;
+    order by x.source_id collate "C" limit 1;
     update cma.subscription x set source_deleted_at = v_now where x.id = v_sub;
     v_txt := format('after the take: stored %s as of the take %s, live %s',
                     cma.active_top_stored_of(v_t1, null, null, null, null, v_now) -> 'tiles' -> 'total_subscriptions' ->> 'value',
@@ -1777,7 +1787,7 @@ begin
     j := cma.active_now();
     v_txt := v_txt || format(' | put back: stored %s | the live read: keys %s, tiles %s, customers %s = the stored %s',
                     cma.active_top() -> 'tiles' -> 'total_subscriptions' ->> 'value',
-                    (select string_agg(k, ',' order by k) from jsonb_object_keys(j) k), (select string_agg(k, ',' order by k) from jsonb_object_keys(j -> 'tiles') k),
+                    (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(j) k), (select string_agg(k, ',' order by k collate "C") from jsonb_object_keys(j -> 'tiles') k),
                     j -> 'tiles' -> 'active_customers' ->> 'value', cma.active_top() -> 'tiles' -> 'active_customers' ->> 'value')
              || ' | ' || pg_temp.v0009l_code($q$select cma.active_now('nl')$q$);
     perform set_config('app.user_id', v_agent1::text, true);
@@ -1786,6 +1796,82 @@ begin
     v_rows := v_rows || array['127', 'T8', '(D16) the table first, the live present after: a change after the take is in the live answer at once and in the stored one after the next refresh', v_txt,
       'after the take: stored 10 as of the take true, live 9 | after the refresh: stored 9, live 9 | put back: stored 10'
       || ' | the live read: keys computed_at,figures,now,tiles, tiles active_customers,amounts,eur,total_subscriptions, customers 8 = the stored 8 | CMA04 agent CMA06'];
+
+    -- T9. the list's order and its paging under the database's own collation. The take's rows of the first tenant get
+    -- store customer ids and store names in mixed case with punctuation (C: A1, Ab, B-1, Z, _z, a 3, aB, ab, b_2, …;
+    -- en_US: a 3, A1, ab, aB, Ab, b_2, B-1, …), so the store customer's id, the tie-break of every sort, orders differently
+    -- in a C database and under en_US. For each sort key, ascending and descending: the table's own order (a plain
+    -- order by on the sort's keys, the function's list of them written here once more) against one read of the list,
+    -- against the pages of three chained by next, and against the pages read back by prev from the last one. Nothing
+    -- here names a collation, and no expected text depends on one. Provoked: the table's own order is read the other way
+    -- round. The take is refreshed after it, so the rows are the fixture's again
+    perform set_config('role', 'cma_owner', true);
+    update cma.active_customer c
+    set source_id = (array['b_2', 'B-1', 'a 3', 'A1', 'ab', 'Ab', 'set_up', 'settings', 'aB', 'Z', 'z_', '_z'])[x.n],
+        store = (array['shop-b', 'Shop_a', 'shop a', 'SHOP'])[1 + x.n % 4]
+    from (select c2.customer_id, row_number() over (order by c2.customer_id)::integer as n
+          from cma.active_customer c2 where c2.tenant_id = v_t1 and c2.is_active) x
+    where c.tenant_id = v_t1 and c.customer_id = x.customer_id and x.n <= 12;
+    for r in
+      select k.sort, d.descending,
+             (select string_agg(u.e || case when d.descending <> pg_temp.v0009l_p('T9') then ' desc' else ' asc' end, ', ' order by u.o)
+              from unnest(k.keys || array['c.source_id', 'c.customer_id']) with ordinality u(e, o)) as own_order
+      from (values ('store_customer', '{}'::text[]), ('store', array['c.store']), ('market', array['c.market']), ('segment', array['c.segment']),
+                   ('channel', array['c.channel']), ('level', array[$k$coalesce(c.level, '')$k$]),
+                   ('monthly_amount', array[$k$coalesce(c.currency, '')$k$, 'coalesce(c.amount, -1)']),
+                   ('clv', array[$k$coalesce(c.clv_currency, '')$k$, 'coalesce(c.clv, -1)']),
+                   ('customer_start', array[$k$coalesce(c.customer_start, '-infinity'::timestamptz)$k$]),
+                   ('age_months', array['coalesce(c.age_months, -1)']), ('subscriptions', array['c.holding']), ('devices', array['c.devices'])) k(sort, keys)
+      cross join (values (false), (true)) d(descending)
+    loop
+      perform set_config('role', 'cma_owner', true);
+      execute format($q$select string_agg(c.source_id, ',' order by %s) from cma.active_customer c where c.tenant_id = $1 and c.is_active$q$, r.own_order)
+        into v_own using v_t1;
+      perform set_config('role', 'cma_app', true);
+      perform set_config('app.user_id', v_analyst1::text, true);
+      v_one := (select string_agg(x ->> 'store_customer', ',' order by o)
+                from jsonb_array_elements(cma.active_rows(p_sort => r.sort, p_descending => r.descending) -> 'rows') with ordinality q(x, o));
+      j2 := cma.active_rows(p_sort => r.sort, p_descending => r.descending, p_limit => 3);
+      v_txt := (select string_agg(x ->> 'store_customer', ',' order by o) from jsonb_array_elements(j2 -> 'rows') with ordinality q(x, o));
+      while j2 ->> 'next' is not null loop
+        j2 := cma.active_rows(p_sort => r.sort, p_descending => r.descending, p_after => j2 ->> 'next', p_limit => 3);
+        v_txt := v_txt || ',' || (select string_agg(x ->> 'store_customer', ',' order by o) from jsonb_array_elements(j2 -> 'rows') with ordinality q(x, o));
+      end loop;
+      j3 := j2;
+      v_txt2 := (select string_agg(x ->> 'store_customer', ',' order by o) from jsonb_array_elements(j3 -> 'rows') with ordinality q(x, o));
+      while j3 ->> 'prev' is not null loop
+        j3 := cma.active_rows(p_sort => r.sort, p_descending => r.descending, p_before => j3 ->> 'prev', p_limit => 3);
+        v_txt2 := (select string_agg(x ->> 'store_customer', ',' order by o) from jsonb_array_elements(j3 -> 'rows') with ordinality q(x, o)) || ',' || v_txt2;
+      end loop;
+      v_sorts := v_sorts + 1;
+      v_bad1 := v_bad1 + (v_one is distinct from v_own)::integer;
+      v_bad2 := v_bad2 + (v_txt is distinct from v_own)::integer;
+      v_bad3 := v_bad3 + (v_txt2 is distinct from v_own)::integer;
+    end loop;
+    perform set_config('role', 'cma_owner', true);
+    v_txt := format('%s sorts walked over %s rows: one read differs from the table''s own order in %s, the pages chained by next in %s, the pages back by prev in %s',
+                    v_sorts, (select count(*) from cma.active_customer c where c.tenant_id = v_t1 and c.is_active), v_bad1, v_bad2, v_bad3)
+             || format(' | index columns of the list under another collation than the database''s: %s',
+                       (select count(*) from pg_index i
+                        cross join lateral unnest(string_to_array(i.indcollation::text, ' ')::oid[]) u(coll)
+                        where i.indrelid = 'cma.active_customer'::regclass and u.coll <> 0
+                          and u.coll <> (select pc.oid from pg_collation pc where pc.collname = 'default' and pc.collnamespace = 'pg_catalog'::regnamespace)))
+             || format(' | text columns of the list under another collation: %s',
+                       (select count(*) from pg_attribute a
+                        where a.attrelid = 'cma.active_customer'::regclass and a.attnum > 0 and not a.attisdropped and a.attcollation <> 0
+                          and a.attcollation <> (select pc.oid from pg_collation pc where pc.collname = 'default' and pc.collnamespace = 'pg_catalog'::regnamespace)))
+             || format(' | the list''s function names a collation: %s',
+                       (position('collate' in lower(pg_get_functiondef('cma.active_rows_of(uuid, text, text, text, text, boolean, text, text, integer, timestamptz)'::regprocedure))) > 0)::text);
+    -- the info row beside it: this database's collation, and the test ids as it orders them beside C's order
+    v_note := format('the database''s collation is %s; the store customers'' ids in its order: %s; in C''s order: %s',
+                     (select d.datcollate from pg_database d where d.datname = current_database()),
+                     (select string_agg(c.source_id, ',' order by c.source_id) from cma.active_customer c where c.tenant_id = v_t1 and c.is_active),
+                     (select string_agg(c.source_id, ',' order by c.source_id collate "C") from cma.active_customer c where c.tenant_id = v_t1 and c.is_active));
+    v_rows := v_rows || array['129', 'T9', 'the list''s order and paging under the database''s own collation: every sort, one read, pages by next and back by prev equal the table''s own order; no index, column or function names another collation', v_txt,
+      '24 sorts walked over 8 rows: one read differs from the table''s own order in 0, the pages chained by next in 0, the pages back by prev in 0'
+      || ' | index columns of the list under another collation than the database''s: 0 | text columns of the list under another collation: 0'
+      || ' | the list''s function names a collation: false'];
+    perform cma.active_refresh_of(v_t1, true, v_now);
 
     -- B16. the settings: out of range refused (CMA04), a list kept without spaces, the rates in jsonb's own form
     perform set_config('role', 'cma_app', true);
@@ -1821,6 +1907,9 @@ begin
   perform set_config('role', 'cma_owner', true);
   perform pg_temp.v0009l_row(v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3], v_rows[i + 4])
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 5) as i;
+  if v_note is not null then
+    insert into pg_temp.verify_0009l values (131, 'T9i the collation T9 ran under', 'info', left(v_note, 1500));
+  end if;
 end
 $$;
 
@@ -1837,7 +1926,7 @@ declare
   v_txt text;
   v_any boolean := false;
 begin
-  for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug loop
+  for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
     select string_agg(format('%s: snapshot %s, reconstructed %s (%s)', s.snapshot_date, s.snap, coalesce(m.n, 0),
                              to_char(coalesce(m.n, 0) - s.snap, 'SG999999990')), '; ' order by s.snapshot_date)
     into v_txt
@@ -1881,7 +1970,7 @@ declare
   j jsonb;
 begin
   for t in select x.id, x.slug from cma.tenant x
-           where x.status = 'active' and exists (select 1 from cma.subscription s where s.tenant_id = x.id) order by x.slug loop
+           where x.status = 'active' and exists (select 1 from cma.subscription s where s.tenant_id = x.id) order by x.slug collate "C" loop
     v_any := true;
     v_top := null; v_rest := null; v_list := null; v_refresh := null; v_live := null; v_ctop := null; v_crest := null; v_flist := null; v_ftop := null;
     begin
@@ -1905,8 +1994,8 @@ begin
       v_first := (cma.active_rest_head_of(t.id, null, 'month', now()) ->> 'from_month')::date;
       -- the filters a request passes: the tenant's largest market and, within it, its largest segment (two filters
       -- together have no stored document), and a cursor into that market's list by age
-      select c.market into v_m from cma.active_customer c where c.tenant_id = t.id and c.is_active group by 1 order by count(*) desc, 1 limit 1;
-      select c.segment into v_s from cma.active_customer c where c.tenant_id = t.id and c.is_active and c.market = v_m group by 1 order by count(*) desc, 1 limit 1;
+      select c.market into v_m from cma.active_customer c where c.tenant_id = t.id and c.is_active group by 1 order by count(*) desc, c.market collate "C" limit 1;
+      select c.segment into v_s from cma.active_customer c where c.tenant_id = t.id and c.is_active and c.market = v_m group by 1 order by count(*) desc, c.segment collate "C" limit 1;
       v_cursor := cma.active_rows_of(t.id, v_m, null, null, 'age_months', false, null, null, 50, now()) ->> 'next';
       for i in 1 .. 6 + v_runs loop
         v_t0 := clock_timestamp();

@@ -17,6 +17,7 @@
 --
 --   psql -h 127.0.0.1 -d cma -v ON_ERROR_STOP=1 -c "set cma.local_fixture = 'on'" -c "set cma.perf_multiplier = '3'" -f verify/perf-volume-fixture.sql
 --   (or put both  set  lines in the same session before \i; the multiplier defaults to 3)
+--   The local database is created with Cloud SQL's collation (en_US.UTF8), not C: verify/README.md, A local database
 --
 -- The base figures (prod, 5 November 2026, from the brief; the census, db/130, gives the exact ones) and the generous
 -- estimates where the brief has none, each times cma.perf_multiplier (3 by default; "× m" below):

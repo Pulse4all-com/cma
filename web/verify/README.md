@@ -26,6 +26,12 @@ fail proves nothing.
 | `perf.mjs` | The Workspace's speed against `perf.json` (night N06): server time to first and last byte per route and subject (30 requests after 3 warm-up, p50 and p95, each route in its class), and the client JavaScript and HTML per page route, gzip-compressed; `--provoke` sets every budget to 0 and must fail | standalone build and app in api data mode with mock sign-in, `BASE`; the local database with `perf-volume-fixture.sql` (`npm run verify:perf`) |
 | `iap-token.mjs` | IAP token handling: valid, missing, wrong audience or issuer, expired, future issue, wrong signer, spoofed headers | app in iap mode against the script's key set, see file header |
 
+A local database (for the volume fixtures, and for a db/ verify script before Martin runs it) is created with Cloud SQL's
+collation, en_US.UTF8, not an image's default C: `create database cma template template0 encoding 'UTF8' locale 'en_US.UTF-8'`
+(where the machine lacks the locale, once: `localedef -i en_US -f UTF-8 en_US.UTF-8`). A C database puts A to Z before a
+to z; en_US orders a, A, b, B and reads over punctuation, so a compared text ordered without `collate "C"` passes in one and
+fails in the other (`173`'s T3 and T7). A verify script runs there normal and provoked.
+
 Browser verifiers use Playwright; install its browser once with
 `npx playwright install chromium` (Cloud Shell: add `--with-deps`). That installs the headless shell the verifiers run in and
 the full chromium, whose PDF viewer `layout.mjs` uses to render the roster's printed page.
