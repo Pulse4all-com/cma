@@ -92975,7 +92975,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -92994,7 +92994,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -93111,7 +93111,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -93126,7 +93126,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -93254,7 +93254,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -93277,7 +93277,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -93411,7 +93411,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -93430,7 +93430,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -93578,7 +93578,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -93732,7 +93732,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -93901,7 +93901,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -94075,7 +94075,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -94228,7 +94228,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -94380,7 +94380,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -94532,7 +94532,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -94605,8 +94605,8 @@
         "en": "Indirect share",
         "nl": "Aandeel indirect"
       },
-      "definition": "The active customers by acquisition channel: Indirect (First orders attributed the customer's first order to the call center), Direct (to self-service) or Unknown, with the reasons for Unknown. The Indirect share is Indirect over the customers with a known channel.",
-      "formula": "channel = the attribution cma.first_orders_of gives the customer's first order (the customer of the first order's linked store order; the earliest by the deal's creation): call_center -> indirect, self_service -> direct; else unknown with reason no_contact, before_history, no_first_order, order_not_matched or no_order_deal; indirect_share = indirect / (indirect + direct), null without a known channel",
+      "definition": "The active customers by acquisition channel, attributed as Sales -> First orders attributes over every order deal the CRM holds: Indirect (First orders attributed the customer's first order to the call center), Direct (to self-service) or Unknown, with the reasons for Unknown. Before the attribution's history start (the page's note) the attribution sees no touches older than the intake start, so some orders count as Direct that may have been Indirect. The Indirect share is Indirect over the customers with a known channel.",
+      "formula": "channel = the attribution cma.first_orders_of gives the customer's first order (the customer of the first order's linked store order; the earliest by the deal's creation), read over every order deal the CRM holds (cma.first_orders_of from -infinity to now): call_center -> indirect, self_service -> direct; else unknown with reason no_contact, before_history (the Customer start lies before the first order deal on record), no_first_order, order_not_matched or no_order_deal; indirect_share = indirect / (indirect + direct), null without a known channel",
       "unit": "share",
       "grain": [
         "now",
@@ -94719,7 +94719,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -94883,7 +94883,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -95035,7 +95035,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -95181,7 +95181,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -95353,7 +95353,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -95521,7 +95521,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -95688,7 +95688,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -95852,7 +95852,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -96000,7 +96000,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -96184,7 +96184,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -96358,7 +96358,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -96524,7 +96524,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -96735,7 +96735,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [
           {
@@ -96865,7 +96865,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [],
         "ts": [
@@ -96973,7 +96973,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [],
         "ts": [
@@ -97065,7 +97065,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [],
         "ts": [
@@ -97182,7 +97182,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [],
         "ts": [
@@ -97286,7 +97286,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [],
         "ts": [
@@ -97390,7 +97390,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.",
+      "refresh": "On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.",
       "computed_in": {
         "sql": [],
         "ts": [

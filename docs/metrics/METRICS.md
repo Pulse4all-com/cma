@@ -37724,7 +37724,7 @@ active_customers = count(cma.flash_customer_figures_of(tenant) rows with holding
 - the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
 - a source not set up (no store, or no subscriptions connection) gives no figure, never zero
 
-**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
 
 **Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
 
@@ -37737,7 +37737,7 @@ active_customers = count(cma.flash_customer_figures_of(tenant) rows with holding
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -37798,7 +37798,7 @@ total_subscriptions = count(subscriptions the latest read still returns whose st
 - the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
 - a source not set up (no store, or no subscriptions connection) gives no figure, never zero
 
-**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
 
 **Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
 
@@ -37810,7 +37810,7 @@ total_subscriptions = count(subscriptions the latest read still returns whose st
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -37866,7 +37866,7 @@ amount[currency] = sum(amount_per_cycle * factor) over subscriptions with status
 - the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
 - a source not set up (no store, or no subscriptions connection) gives no figure, never zero
 
-**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
 
 **Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
 
@@ -37880,7 +37880,7 @@ amount[currency] = sum(amount_per_cycle * factor) over subscriptions with status
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -37938,7 +37938,7 @@ average[currency] = amount[currency] / count(distinct store customers with a sub
 - the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
 - a source not set up (no store, or no subscriptions connection) gives no figure, never zero
 
-**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
 
 **Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
 
@@ -37951,7 +37951,7 @@ average[currency] = amount[currency] / count(distinct store customers with a sub
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38012,7 +38012,7 @@ median_age = percentile_cont(0.5) over cma.flash_age_months_of(customer_start, t
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38072,7 +38072,7 @@ per band of customers.age_months (cma.flash_age_band_of): count(active customers
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38133,7 +38133,7 @@ per age a (whole months): at_risk = spells of length >= a; events = ended spells
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38195,7 +38195,7 @@ retention(a) = survival(a) = product over ages <= a of (1 - events / at_risk) (c
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38254,7 +38254,7 @@ average[currency] = avg(commerce_customer.amount_spent) over active customers wi
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38313,7 +38313,7 @@ median[currency] = percentile_cont(0.5) over commerce_customer.amount_spent of t
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38372,7 +38372,7 @@ per_month[currency] = avg(amount_spent / greatest(customer age in months, 1)) ov
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38396,12 +38396,12 @@ A customer whose store history is shorter than its Customer age reads low. verif
 
 **Indirect share** on /reports/active · Indirect share (Aandeel indirect)
 
-The active customers by acquisition channel: Indirect (First orders attributed the customer's first order to the call center), Direct (to self-service) or Unknown, with the reasons for Unknown. The Indirect share is Indirect over the customers with a known channel.
+The active customers by acquisition channel, attributed as Sales -> First orders attributes over every order deal the CRM holds: Indirect (First orders attributed the customer's first order to the call center), Direct (to self-service) or Unknown, with the reasons for Unknown. Before the attribution's history start (the page's note) the attribution sees no touches older than the intake start, so some orders count as Direct that may have been Indirect. The Indirect share is Indirect over the customers with a known channel.
 
 **Formula as computed**
 
 ```
-channel = the attribution cma.first_orders_of gives the customer's first order (the customer of the first order's linked store order; the earliest by the deal's creation): call_center -> indirect, self_service -> direct; else unknown with reason no_contact, before_history, no_first_order, order_not_matched or no_order_deal; indirect_share = indirect / (indirect + direct), null without a known channel
+channel = the attribution cma.first_orders_of gives the customer's first order (the customer of the first order's linked store order; the earliest by the deal's creation), read over every order deal the CRM holds (cma.first_orders_of from -infinity to now): call_center -> indirect, self_service -> direct; else unknown with reason no_contact, before_history (the Customer start lies before the first order deal on record), no_first_order, order_not_matched or no_order_deal; indirect_share = indirect / (indirect + direct), null without a known channel
 ```
 
 **Unit** share · **Grain** now, per_market, per_segment, per_channel · **Status** prerequisite_missing
@@ -38435,7 +38435,7 @@ channel = the attribution cma.first_orders_of gives the customer's first order (
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38495,7 +38495,7 @@ difference = a - b where both have a value; ratio = a / b only when both are abo
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38554,7 +38554,7 @@ subscriptions_per_customer = sum(holding_subscriptions of the active customers, 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38613,7 +38613,7 @@ devices_per_customer = sum(devices whose customer reference is the customer's id
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38675,7 +38675,7 @@ customers(month end) = customers with an active spell at that instant = spells s
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38736,7 +38736,7 @@ inflow(month) = count(spells whose start falls in the month), per acquisition ch
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38797,7 +38797,7 @@ outflow(month) = count(spells whose end falls in the month)
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38857,7 +38857,7 @@ net(month) = inflow - outflow = customers(month end) - customers(previous month 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38916,7 +38916,7 @@ churned_30d = count(cma.flash_churn_of(tenant, today - 29, today) rows under the
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `cma.flash_churn_of` (0008zn); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -38978,7 +38978,7 @@ per market (the store's market): the page's measures over that market's customer
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -39040,7 +39040,7 @@ started = customers whose Customer start falls in the cohort's period; still_act
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -39101,7 +39101,7 @@ billing = count per cma.active_billing_of(interval, count); device_band = count 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `cma.subscription_payment_state_of` (0008zl); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
@@ -39165,7 +39165,7 @@ one row per active customer (cma.active_rows); monthly amount = the sum of its p
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `cma.active_rows` (0009l); `cma.active_rows_of` (0009l); `cma.active_file_record` (0009l); `cma.active_refresh_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `GET` in src/app/api/v1/reports/active/file/route.ts; `postgresData.getActiveRows` in src/lib/data/postgres.ts
 
@@ -39217,7 +39217,7 @@ Pending: no code computes it. As intended: churn_rate(month) = subscriptions chu
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
 
@@ -39268,7 +39268,7 @@ Pending: no code computes it. As intended: cac(month) = (marketing spend of the 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
 
@@ -39318,7 +39318,7 @@ Pending: no code computes it. As intended: cost_per_subscription(month) = acquis
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
 
@@ -39369,7 +39369,7 @@ Pending: no code computes it. As intended: clv_projected = average monthly amoun
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
 
@@ -39419,7 +39419,7 @@ Pending: no code computes it. As intended: clv_to_cac = clv_projected / cac
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
 
@@ -39469,7 +39469,7 @@ Pending: no code computes it. As intended: payback_months = cac / average monthl
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
 **Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
 

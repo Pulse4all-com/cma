@@ -1429,13 +1429,13 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Counts / does not count | A successful poll counts; a failed or timed-out one (a poll gives up after 8 seconds) does not move it; the first failed poll shows nothing, the second in a row shows the badge |
 | Unit and display | hh:mm:ss in the viewer's zone, on the title row |
 | Time rule | As of the last successful poll; the board polls every 10 seconds while the tab is visible |
-| Scope | The Live board, for `monitoring.live`; Customers → Active, where it is the instant of the live present's read (the four tiles that state the present), for `reports.view` or `performance.team` |
+| Scope | The Live board, for `monitoring.live`; Customers → Active, where it is the instant of the live present's read (the four tiles that state the present) while the tenant setting `active.present_source` is `live` (the default; with `take` the title row says As of instead), for `reports.view` or `performance.team` |
 | Equivalent in the source system | None |
 | Not to use | "Last read" (a job's read of a source), "Refreshed at" (a stored result's), "Last sync" |
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Definitions: Updated (nl: Bijgewerkt)..." (#261) |
-| Used by | The Live board (`/live/<organisation key>`); Customers → Active's title row ("Tiles as of" until the live present is in) |
-| As built today | Matches the definition (`LiveBoardLive.tsx`); on Customers → Active it is the read time of `cma.active_now`, shown once the read is in |
+| Used by | The Live board (`/live/<organisation key>`); Customers → Active's title row ("Tiles as of" until the live present is in, under the setting `live` only) |
+| As built today | Matches the definition (`LiveBoardLive.tsx`); on Customers → Active it is the read time of `cma.active_now` when its `source` is `live`, shown once the read is in |
 
 ### Last read
 
@@ -1991,18 +1991,18 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 |---|---|
 | Term | Acquisition channel (nl: Acquisitiekanaal). The column and filter label is "Direct / Indirect" (nl: Direct / Indirect); the values are "Indirect · call center" (nl: Indirect · callcenter), "Direct · self-service" (nl: Direct · selfservice) and "Unknown" (nl: Onbekend) |
 | Key | API `channel` (the filter `&channel=`, the list row), `byChannel`, `inflowByChannel`, `unknownChannel`, `level`; reader views `acquisition_channel`; values `indirect`, `direct`, `unknown`; catalog `active.acquisition_channel_share`; SQL `cma.active_channel_of`. These keys are this page's: Review channel's `byChannel` and `channel` are another term's on another page |
-| Definition | How the store customer's first order was acquired, by the attribution Sales → First orders gives it (`cma.first_orders_of`, the `attribution.*` settings, no second rule): Indirect when the attribution is `call_center`, Direct when it is `self_service`, Unknown when the first order is not attributed. A customer with several attributed first orders takes the earliest by T. |
+| Definition | How the store customer's first order was acquired, by the attribution Sales → First orders gives it (`cma.first_orders_of`, the `attribution.*` settings, no second rule): Indirect when the attribution is `call_center`, Direct when it is `self_service`, Unknown when the first order is not attributed. It is attributed exactly as Sales → First orders attributes: every first order from the first order deal the CRM holds, over every order deal and not from the attribution's history start. A customer with several attributed first orders takes the earliest by T. |
 | Source | `cma.first_orders_of` over the attribution's history (the order's deal, contact and calls), the store customer of its linked order; the settings `attribution.*` |
-| Counts / does not count | Unknown is shown with its count and a data note of its reasons, never folded into Direct. Five reasons as built: `no_contact` (no CRM contact, or First orders' kind no_contact), `before_history` (the Customer start before the attribution's history start), `no_first_order`, `no_order_deal` (no first order deal) and `order_not_matched` (a first order that matches no store order of the customer; a fifth case, derived, beside the four of the decision). Changing `attribution.assisted_levels` moves a customer between Indirect and Direct with no other change |
+| Counts / does not count | Unknown is shown with its count and a data note of its reasons, never folded into Direct. Five reasons as built: `no_contact` (no CRM contact, or First orders' kind no_contact), `before_history` (the Customer start lies before the date of the first order deal the CRM holds; UI label "Started before the first order deal on record", nl "Gestart vóór de eerste bekende besteldeal"), `no_first_order`, `no_order_deal` (no first order deal) and `order_not_matched` (a first order that matches no store order of the customer; a fifth case, derived, beside the four of the decision). Changing `attribution.assisted_levels` moves a customer between Indirect and Direct with no other change |
 | Unit and display | A count and a share per value; "Indirect n% · Direct n% · Unknown n%" under Active customers, in whole percents that add up to 100 (largest remainder); the Indirect share is over the customers with a known channel (n known in its title); in the list the Direct / Indirect cell holds First orders' level code under the channel, with its label ("Acquired through") on hover |
-| Time rule | As First orders' (the order's time against the attribution's history start); the Customer start for `before_history` |
+| Time rule | As First orders' (every order deal; the attribution's history start only dates the note: before it the attribution sees no touches older than the intake start, so some orders count as Direct that may have been Indirect); the Customer start against the first order deal for `before_history` |
 | Scope | The Active customers of the tenant; every panel, the list and the file take the filter |
 | Equivalent in the source system | None: First orders' attribution, read per customer |
 | Not to use | "Channel" alone (Review channel; the CMA's channel rows); "assisted" in a label |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Every active customer has an Acquisition channel: …" (D8), "The labels are the column and filter "Direct / Indirect" …" (D9) and "Definitions: Acquisition channel, Direct order, Indirect order, …" (this PR, addition 0009l) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Every active customer has an Acquisition channel: …" (D8), "The labels are the column and filter "Direct / Indirect" …" (D9) and "Definitions: Acquisition channel, Direct order, Indirect order, …" (this PR, addition 0009l); 12 November 2026 (Martin), "Customers → Active attributes as Sales → First orders ..." and "Definitions: Acquisition channel is attributed as Sales → First orders ..." (#267, addition 0009n) |
 | Used by | `active.acquisition_channel_share`; Customers → Active (the filter, tiles, Inflow, Markets, the survival split, Cohorts' split, the list and the file); `cma_read.active_customer_month`, `cma_read.customer_cohort` |
-| As built today | `cma.active_channel_of` (`172`) reads `cma.first_orders_of` once from the attribution's history start to now and re-implements no evidence; `173` A11 proves it against First orders row for row. Until the attribution's history starts (`intake.start_date` plus `attribution.window_days`) it is Unknown for everyone. Read live: at three times prod's volume the page's read misses its 500 ms target (Open decisions) |
+| As built today | `cma.active_channel_of` reads `cma.first_orders_of` once over every order deal (from `-infinity` to now) and re-implements no evidence; `177` A2 proves it against First orders' attribution rows over every order deal, both ways, in each database it runs in. The note's date is `cma.active_take.attribution_start`. Read live: at three times prod's volume the page's read misses its 500 ms target (Open decisions) |
 
 ### Direct order and Indirect order
 
@@ -2230,6 +2230,44 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Status | Proposed (for Kira to confirm) |
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D16 and "Definitions: History as of, Tiles as of, ..." (#267) |
 | Used by | Customers → Active (title row) |
+
+### As of
+
+| Field | Value |
+|---|---|
+| Term | As of (nl: Per; `active.tilesFromTake` "As of {time}", nl "Per {time}") |
+| Key | `presentSource` (`live` or `take`) and `presentAt` of `GET /api/v1/reports/active`; `source` and `computed_at` of `cma.active_now`; the tenant setting `active.present_source` |
+| Definition | The moment the four present tiles of Customers → Active are of when the tenant's setting `active.present_source` is `take`: the Take's moment, not the read's. With `live` (the default) the title row says Updated and the tiles are of the read. |
+| Source | `cma.active_now`, from the Take's own present rows (`cma.active_present_stored_of`); a tenant without a take yet is answered live |
+| Counts / does not count | D2's equality with Flash's Active customers is checked at the take's moment. Choosing take changes D13 for the tiles (they are no longer live). The choice is Martin's, after the 08:10 measurement of both paths (`tools/perf/active-present-breakdown.sql`); no default is changed in code |
+| Unit and display | hh:mm in the viewer's zone, with the take's date when the take is not of today, on the title row |
+| Time rule | As of the take |
+| Scope | Per tenant, for `reports.view` or `performance.team` |
+| Equivalent in the source system | None |
+| Not to use | "Cached" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 12 November 2026 (Martin); docs/decisions.md, 12 Nov 2026, "The tiles' present of Customers → Active can be read from the take ..." and "Definitions: Acquisition channel is attributed as Sales → First orders ..." (#267, addition 0009n) |
+| Used by | Customers → Active (title row) |
+| As built today | `176`; `177` T1 and T2 prove the tiles from the take equal the live ones at the take's moment |
+
+### Attribution history note
+
+| Field | Value |
+|---|---|
+| Term | Attribution history note (nl: no label of its own; `active.noteAttributionStart` on Customers → Active and `firstOrders.historyMeaning` on Sales → First orders: "Before {date} the attribution sees no touches older than the intake start, so some orders count as {direct} that may have been {indirect}.", nl "Vóór {date} ziet de toerekening geen contactmomenten van vóór de start van de intake, dus sommige bestellingen tellen als {direct} die mogelijk {indirect} waren.") |
+| Key | `cma.active_take.attribution_start`; `cma.first_orders_history_start_of`; `settings.attribution` |
+| Definition | The attribution's history start (`intake.start_date` plus `attribution.window_days`) stated as a note, with what it means: before it the attribution sees no touches older than the intake start, so some orders count as Direct (Sales → First orders: self-service) that may have been Indirect (call center). It does not bound the attribution: every first order from the first order deal is attributed. |
+| Source | `cma.first_orders_history_start_of` |
+| Counts / does not count | The same sentence in en and nl on both pages, each filling in its own two words; Customers → Active shows it whenever a history start exists |
+| Unit and display | A date and the sentence, as a note |
+| Time rule | The date is the history start |
+| Scope | Customers → Active; Sales → First orders |
+| Equivalent in the source system | None |
+| Not to use | "Unknown until" (the attribution is no longer Unknown before it) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 12 November 2026 (Martin); docs/decisions.md, 12 Nov 2026, "Customers → Active attributes as Sales → First orders ..." (#267, addition 0009n) |
+| Used by | `active.acquisition_channel_share`; Customers → Active; Sales → First orders |
+| As built today | `177` A3 proves the note's date is the history start |
 | As built today | `ActivePending.tsx` (Streamed) swaps the tiles when `cma.active_now` is in |
 
 ### History is being prepared
@@ -2256,10 +2294,10 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Field | Value |
 |---|---|
 | Term | Take (the stored results of Customers → Active; no label of its own: the page shows its instant as History as of; Flash's is Current take) |
-| Key | `cma.active_take`, `cma.active_base`, `cma.active_customer`, `cma.active_spell`, `cma.active_month`, `cma.active_cohort`, `cma.active_document`; settings `customers.refresh_minutes`, `customers.history_notice_minutes`; `cma.active_refresh()` |
+| Key | `cma.active_take`, `cma.active_base`, `cma.active_customer`, `cma.active_spell`, `cma.active_month`, `cma.active_cohort`, `cma.active_document`; settings `customers.refresh_minutes`, `customers.history_notice_minutes`, `active.present_source`; `cma.active_refresh()` |
 | Definition | The stored results the history of Customers → Active is read from: the active customer base, its customers, spells, months and cohorts, and the page's answers per filter (the documents), as one refresh computed them at one instant. One take per tenant, kept by the job `cma-refresh-active-customers` every minute for a tenant whose take is older than `customers.refresh_minutes` or marked stale. |
 | Source | `cma.active_refresh_of` over the CMA's mirrors (`cma.active_base_of` and the fresh reads) |
-| Counts / does not count | A change of a setting the stored rows depend on marks the take stale in the setting's own transaction and never refreshes there; a mark set while a refresh runs is kept. The four tiles of the present are not in it (they are live) |
+| Counts / does not count | A change of a setting the stored rows depend on marks the take stale in the setting's own transaction and never refreshes there; a mark set while a refresh runs is kept. The four tiles of the present are not in it (they are live) unless the tenant setting `active.present_source` is `take`, when they are read from its own present rows and say As of |
 | Unit and display | Shown as History as of; no customer data, ids, codes, amounts and times only |
 | Time rule | The instant of the refresh |
 | Scope | Per tenant |
