@@ -1,0 +1,54 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ set_config 
+------------
+ 400
+(1 row)
+
+psql:db/175_verify_active_refresh_quiet.sql:76: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                   check_name                                                                                                   | result |                                                                                                                                                                                                      detail                                                                                                                                                                                                      
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition is recorded; the column, the grants, the definer's frame and JIT off are in place                                                                                                              | PASS   | versions 0009l,0009m | inputs_key text nullable | app only: active_inputs_key_of t/f, active_take_analyze t/f | analyze: definer t, owner cma_owner, search_path=pg_catalog, cma, pg_temp | jit off: active_present_of jit=off, active_refresh_of jit=off | analyze without a tenant: CMA04
+ P1 pulse4all-subscriptions: the live present of 174 equals 172's row for row                                                                                                                                   | PASS   | rows differing 0; rows some
+ R1 pulse4all-subscriptions: a forced refresh of 174 writes the same take as 172's at the same moment                                                                                                           | PASS   | active_base 540:9c747bff4cb5745ff82ce582e07d310a | active_customer 450:d99ff506419c9fd652ea510c0bdf258d | active_spell 453:20a7c24a398ca42654de1bc1f10ad302 | active_month 831:b641ad0c73c2986147a0ec39e58d2c9c | active_cohort 1345:763240b122740904eb60200483ec3556 | active_document 20:d9b620fbd967adafd9c56233d6520229 | take 1:ac8e33a9433c53ce47a0f9d52c4dcc1d
+ Q1 pulse4all-subscriptions: a due run with nothing changed computes nothing and leaves what a recompute would write; a changed input, a stale take, a new business date and a take without a key compute again | PASS   | nothing changed: refreshed true unchanged true rows 0, the take's moment moved true, the six tables as they were true | past the refresh's interval, a quiet run leaves what 172's due run writes then: true | a customer delivered again unchanged: unchanged true | a customer's link changed: unchanged false | a subscription written since: unchanged false | a stale take: unchanged false | a new busines
+ A1 pulse4all-subscriptions: the planner's row counts of the take's tables follow a fill                                                                                                                        | PASS   | tables whose planner count is off by more than a fifth: 0; tables with rows and no statistics: 0; a second call analyzes 0; the first refresh reported tables_analyzed a number
+ W1 pulse4all-subscriptions: with the attribution's window open, customers get a known acquisition channel                                                                                                      | skip   | opened in this step: the history starts never (- days back), first orders of the take's customers 0, customers with a known acquisition channel 0 | as configured: intake.start_date 2026-10-01 + attribution.window_days 90, the history starts never: no order deal (nothing to attribute)
+ E1 pulse4all-subscriptions: the forced refresh within its budget, after it computed 9 times on this connection (6 with the history)                                                                            | PASS   | 1527.4 ms against 15000 ms
+ E2 pulse4all-subscriptions: a due run with nothing changed within the quiet budget                                                                                                                             | PASS   | 3.7 ms (best of 3) against 1000 ms
+ E3 pulse4all-subscriptions: the live present of the tiles within the above-the-fold budget                                                                                                                     | PASS   | 8.8 ms (best of 3, after six calls) against 400 ms
+ verdict                                                                                                                                                                                                        | PASS   | 175_verify_active_refresh_quiet: 8 PASS, 0 FAIL, 1 skip
+(10 rows)
+
+DROP TABLE
+RESET

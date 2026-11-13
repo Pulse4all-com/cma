@@ -1,0 +1,69 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/179_verify_job_reads.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                 check_name                                                                 |     result     |                                                             detail                                                              
+--------------------------------------------------------------------------------------------------------------------------------------------+----------------+---------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0009o recorded after 0009n                                                                                                     | ok             | cma.schema_migration holds 0009o
+ S2 cma.follow_up_marker: columns, row-level security, policy, the application's grants, no audit trigger                                   | ok             | tenant_id,computed_at,inputs_checked_at,next_change_at,migrations
+ S3 the setting follow_up.recompute_minutes, 60 by default                                                                                  | ok             | 60
+ S4 jit off on open_tickets_of, data_quality_of and flash_findings_compute_of; rows 20 on the calendar; custom plans on the two job entries | ok             | pg_proc.proconfig and prorows
+ S5 the fifteen functions: the application may execute them, public may not                                                                 | ok             | as designed
+ S6 the follow-up's input tables: each table its functions read is listed and its audit trigger enabled                                     | ok             | 24 tables listed
+ E1 open_tickets_of (pulse4all-invest)                                                                                                      | ok             | the same rows as the previous definition, in the same order
+ E2 open_leads_of (pulse4all-invest)                                                                                                        | ok             | the same rows as the previous definition, in the same order
+ E3 speed_to_lead_of, unbounded (pulse4all-invest)                                                                                          | ok             | the same rows as the previous definition
+ E4 speed_to_lead_of, the previous month (pulse4all-invest)                                                                                 | ok             | the same rows as the previous definition
+ E5 data_quality_of (pulse4all-invest)                                                                                                      | ok             | the same rows as the previous definition
+ E6 flash_findings_compute_of (pulse4all-invest)                                                                                            | ok             | the same rows as the previous definition
+ E7 business_seconds_in, business_days_in and next_business_noon_in against the _of functions (pulse4all-invest)                            | ok             | every market and an unknown one, 42 by 18 instants: the same answers
+ E8 the follow-up refresh writes only what changed, to the same items and snapshot (pulse4all-invest)                                       | ok             | 0 items: the same as the full rewrite, 0 written (rolled back)
+ E1 open_tickets_of (pulse4all-subscriptions)                                                                                               | ok             | the same rows as the previous definition, in the same order
+ E2 open_leads_of (pulse4all-subscriptions)                                                                                                 | ok             | the same rows as the previous definition, in the same order
+ E3 speed_to_lead_of, unbounded (pulse4all-subscriptions)                                                                                   | ok             | the same rows as the previous definition
+ E4 speed_to_lead_of, the previous month (pulse4all-subscriptions)                                                                          | ok             | the same rows as the previous definition
+ E5 data_quality_of (pulse4all-subscriptions)                                                                                               | ok             | the same rows as the previous definition
+ E6 flash_findings_compute_of (pulse4all-subscriptions)                                                                                     | ok             | the same rows as the previous definition
+ E7 business_seconds_in, business_days_in and next_business_noon_in against the _of functions (pulse4all-subscriptions)                     | ok             | every market and an unknown one, 42 by 18 instants: the same answers
+ E8 the follow-up refresh writes only what changed, to the same items and snapshot (pulse4all-subscriptions)                                | ok             | 3 items: the same as the full rewrite, 0 written (rolled back)
+ A1 the business-time functions equal the _of functions on a crafted calendar (split day, own and * hours, holidays, DST)                   | ok             | NL, GB and XX, 123 by 25 instants
+ A2 follow_up.recompute_minutes takes 1 to 1440 (0 and 1441 refused with CMA04), 60 by default                                              | ok             | 60 for the tenant
+ A3 the job computes only when an input changed, the backstop passed or the clock moves a figure                                            | ok             | computed: first true, nothing changed false, a run row false, 61 minutes true, clock change reached true, an input changed true
+ A4 the next clock change: now in office hours, else the next opening or midnight                                                           | ok             | open: 2026-11-16 09:00:00+00; Saturday 14:00: 2026-11-14 23:00:00+00 (the next midnight before Monday's opening)
+ A5 a failed data-quality computation waits data_quality.refresh_minutes (backoff)                                                          | ok             | another job failed: refreshed; its own failure: backoff
+ A6 0009l to 0009n's settings still behave beside this change's (triggers, accepted and refused values)                                     | ok             | triggers present; the Active settings accepted and refused as 172 and 176 set them
+ verdict                                                                                                                                    | 0009o verified | 179_verify_job_reads: 28 ok, 0 FAIL, 0 skip
+(29 rows)
+
+DROP TABLE
+RESET

@@ -1,0 +1,49 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 400
+(1 row)
+
+psql:db/177_verify_active_attribution_present.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                              check_name                                                               | result |                                                                          detail                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition is recorded; the setting, JIT off on the base and the grant of the present's read are in place                        | PASS   | versions 0009m,0009n | setting text live/take live | base jit=off t/f | now t/f
+ G1 the setting takes live and take and refuses anything else (CMA04)                                                                  | PASS   | take ok, live ok, stored CMA04, Take CMA04,  CMA04 | kept as live
+ A1 pulse4all-subscriptions: the base of 176 equals 172's base read from the first order deal on, row for row                          | PASS   | rows differing 0
+ A2 pulse4all-subscriptions: every customer's acquisition channel against Sales → First orders'                                        | skip   | the tenant holds no first order linked to a store order: nothing to compare
+ A2 counts pulse4all-subscriptions                                                                                                     | info   | first orders linked to a store order 0; customers of the take with a first order 0: indirect 0, direct 0; customers of the take 450, of them unknown 450
+ A3 pulse4all-subscriptions: the note's date stays First orders' history start                                                         | PASS   | the note's date is First orders' history start: true
+ T1 pulse4all-subscriptions: the present from the take equals the live present at the take's moment, and Flash's Active customers (D2) | PASS   | the four tiles from the take equal the live ones at the take's moment: true; Active customers equal Flash's: true
+ T2 pulse4all-subscriptions: for a reader the setting chooses the path and the answer says which, with its moment                      | PASS   | at take: source take, of the take's moment true, tiles yes | at live: source live, tiles yes
+ E1 pulse4all-subscriptions: the forced refresh, the attribution over every order deal, within its budget                              | PASS   | 3005.1 ms against 15000 ms
+ E2 pulse4all-subscriptions: the tiles' present from the take within the above-the-fold budget                                         | PASS   | from the take 7.2 ms, live 8.7 ms (each the best of 3, after six calls) against 400 ms
+ verdict                                                                                                                               | PASS   | 177_verify_active_attribution_present: 8 PASS, 0 FAIL, 1 info, 1 skip
+(11 rows)
+
+DROP TABLE
+RESET
