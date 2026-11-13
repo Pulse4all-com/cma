@@ -6,6 +6,14 @@
 --   0009n (176_active_attribution_present.sql; edited by that change): the live present's answer carries one more key,
 --   source (T8). Block B's fixture keeps its channels: its history start is not after its first order deal, so reading
 --   every order deal attributes the same first orders.
+-- Since addition 0009r (184_active_device_bands.sql; edited by that change): where 0009r is recorded the page's Devices
+-- are the devices in the field on a customer's holding subscriptions (they were the register's devices carrying the
+-- customer's id), the list's three functions take a band, there is a seventh setting and the below-the-fold document
+-- states one more row and one more part. This verify then expects exactly that (pg_temp.v0009l_later and
+-- pg_temp.v0009l_sig below): in block B's fixture the customer c2's one device is in stock, so c2 holds 0 where it held
+-- 1, the B2C customers hold 0.25 each on average where it was 0.50, and the markets' devices are 2 and 3 where they were
+-- 3 and 4; T1's comparison with 0009l's kept definitions differs in the three parts that state devices and nowhere else.
+-- In a database without 0009r it expects what it always did. 185_verify_active_device_bands.sql proves the new parts.
 -- Universal: no seed is assumed, so it runs in dev and in prod. Block S checks the addition, the functions, the grants,
 -- the settings and the readers' views. Block P proves the pure functions on arrays made here (random ones against a brute
 -- force, hand-made ones against hand-computed tables): no table is read. Block B works on two throwaway tenants inside a
@@ -152,6 +160,21 @@ as $$
   select current_setting('verify.provoke') in ('true', p_id)
 $$;
 
+-- Since addition 0009r (184): the signature of one of the list's three functions as that addition holds it
+create or replace function pg_temp.v0009l_sig(p_signature text)
+returns text
+language sql stable
+as $$
+  select case when not exists (select 1 from cma.schema_migration m where m.version = '0009r') then p_signature
+              else case p_signature
+                     when 'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)'
+                       then 'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz,text)'
+                     when 'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)'
+                       then 'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean,text)'
+                     when 'cma.active_file_record(text,text,text,integer)' then 'cma.active_file_record(text,text,text,integer,text)'
+                     else p_signature end end
+$$;
+
 -- What a check expects once a later addition is recorded (the header says which and why); without it: as it is
 create or replace function pg_temp.v0009l_later(p_id text, p_expected text)
 returns text
@@ -164,6 +187,23 @@ begin
     if p_id = 'T8' then
       v := replace(v, 'live read: keys computed_at,figures,now,tiles,', 'live read: keys computed_at,figures,now,source,tiles,');
     end if;
+  end if;
+  -- 0009r (184): the page's Devices are the devices in the field on a customer's holding subscriptions (the header says
+  -- which figures of the fixture change and why)
+  if exists (select 1 from cma.schema_migration m where m.version = '0009r') then
+    v := case p_id
+                when 'S3' then replace(v, ' | customers.history_months=', ' | customers.device_bands=text:1,2,3,6,11 | customers.history_months=')
+                when 'B12' then replace(v, 'devices_per_customer 1.00|0.50|0.00 d 0.50 r 2.00;',
+                                        'devices_per_customer 1.00|0.25|0.00 d 0.75 r 4.00; devices_from_share 0.0000|0.0000|0.0000 d 0.0000 r -;')
+                when 'B14' then replace(replace(v, ' | markets NL 6/0.7500/8/3/', ' | markets NL 6/0.7500/8/2/'), ' ; total 8/1/10/4 age ', ' ; total 8/1/10/3 age ')
+                when 'B15' then replace(v, '2025-03-05/20 20.00EUR 1 1 300.00/EUR', '2025-03-05/20 20.00EUR 1 0 300.00/EUR')
+                when 'T1' then replace(v, 'documents 9 of 9 equal |',
+                                       'documents 0 of 9 equal (differ: */*/*/month comparison,markets,markets_total; */*/indirect/month comparison,markets,markets_total;'
+                                       || ' */*/unknown/quarter comparison,markets,markets_total; */B2B/*/month comparison,markets,markets_total;'
+                                       || ' */B2C/*/quarter comparison,markets,markets_total; */unknown/*/month comparison,markets,markets_total;'
+                                       || ' GB/*/*/quarter comparison,markets,markets_total; NL/*/*/month comparison,markets,markets_total;'
+                                       || ' NL/B2C/direct/month comparison,markets,markets_total) |')
+                else v end;
   end if;
   return v;
 end
@@ -716,8 +756,9 @@ begin
     'cma.active_cohort_part_of(uuid,date,text,text,text,text)', 'cma.active_rest_with_cohorts(jsonb,uuid,date,text,text,text,text)',
     'cma.active_rest_of(uuid,date,text,text,text,text,timestamptz)', 'cma.active_rest_stored_of(uuid,date,text,text,text,text,timestamptz)',
     'cma.active_rest(date,text,text,text,text)',
-    'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)',
-    'cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)', 'cma.active_file_record(text,text,text,integer)',
+    pg_temp.v0009l_sig('cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)'),
+    pg_temp.v0009l_sig('cma.active_rows(text,text,text,text,boolean,text,text,integer,boolean)'),
+    pg_temp.v0009l_sig('cma.active_file_record(text,text,text,integer)'),
     'cma.active_months_of(uuid,timestamptz)', 'cma.active_cohorts_of(uuid,text,timestamptz)'
   ] loop
     if to_regprocedure(v_fn) is null then
@@ -754,7 +795,7 @@ begin
                               'cma.active_present_of(uuid)', 'cma.active_now_of(uuid,text,text,text,timestamptz,boolean)',
                               'cma.active_top_body_of(uuid,text,text,text,timestamptz,boolean)',
                               'cma.active_rest_body_of(uuid,text,text,text,timestamptz)', 'cma.active_cohort_part_of(uuid,date,text,text,text,text)',
-                              'cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)'] loop
+                              pg_temp.v0009l_sig('cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)')] loop
     if to_regprocedure(v_fn) is not null
        and not ('jit=off' = any (coalesce((select p.proconfig from pg_proc p where p.oid = to_regprocedure(v_fn)), '{}'))) then
       v_bad := v_bad || v_fn || ' without jit off; ';
@@ -1512,8 +1553,8 @@ begin
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     select format('documents %s of %s equal%s', count(*) filter (where q.old = q.new), count(*),
-                  coalesce(' (differ: ' || string_agg(q.f || ' ' || (select string_agg(k.key, ',') from jsonb_object_keys(q.old) k(key)
-                                                                         where q.old -> k.key is distinct from q.new -> k.key), '; ')
+                  coalesce(' (differ: ' || string_agg(q.f || ' ' || (select string_agg(k.key, ',' order by k.key collate "C") from jsonb_object_keys(q.old) k(key)
+                                                                         where q.old -> k.key is distinct from q.new -> k.key), '; ' order by q.f collate "C")
                                                  filter (where q.old is distinct from q.new) || ')', ''))
     into v_txt
     from (select concat_ws('/', coalesce(f.m, '*'), coalesce(f.s, '*'), coalesce(f.c, '*'), f.g) as f,
@@ -1884,7 +1925,7 @@ begin
                         where a.attrelid = 'cma.active_customer'::regclass and a.attnum > 0 and not a.attisdropped and a.attcollation <> 0
                           and a.attcollation <> (select pc.oid from pg_collation pc where pc.collname = 'default' and pc.collnamespace = 'pg_catalog'::regnamespace)))
              || format(' | the list''s function names a collation: %s',
-                       (position('collate' in lower(pg_get_functiondef('cma.active_rows_of(uuid, text, text, text, text, boolean, text, text, integer, timestamptz)'::regprocedure))) > 0)::text);
+                       (position('collate' in lower(pg_get_functiondef(pg_temp.v0009l_sig('cma.active_rows_of(uuid,text,text,text,text,boolean,text,text,integer,timestamptz)')::regprocedure))) > 0)::text);
     -- the info row beside it: this database's collation, and the test ids as it orders them beside C's order
     v_note := format('the database''s collation is %s; the store customers'' ids in its order: %s; in C''s order: %s',
                      (select d.datcollate from pg_database d where d.datname = current_database()),
@@ -2100,6 +2141,7 @@ drop function if exists pg_temp.v0009l_live_page(uuid, date, text, text, text, t
 drop function if exists pg_temp.v0009l_code(text);
 drop function if exists pg_temp.v0009l_row(integer, text, text, text, text);
 drop function if exists pg_temp.v0009l_later(text, text);
+drop function if exists pg_temp.v0009l_sig(text);
 drop function if exists pg_temp.v0009l_p(text);
 
 select check_name, result, detail

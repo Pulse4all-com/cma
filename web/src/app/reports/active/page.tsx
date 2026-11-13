@@ -4,7 +4,7 @@ import type { Route } from "next";
 import { ActiveFilters } from "@/components/ActiveFilters";
 import { Bars, FLOW_BG, FlowChart, Legend, LineChart, type LineSeries } from "@/components/ActiveCharts";
 import {
-  type ActivePageCopy, ActiveTile, type ActiveHref, ChangeLine, CohortHeatmap, ComparisonTable, CustomerList, DataNote, LinkSwitch, MARKET_SORTS, type MarketSort,
+  type ActivePageCopy, ActiveTile, type ActiveHref, BandChip, ChangeLine, CohortHeatmap, ComparisonTable, CustomerList, DataNote, DeviceBands, LinkSwitch, MARKET_SORTS, type MarketSort,
   MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets, splitPercent,
 } from "@/components/ActiveParts";
 import { PrintWhenReady, Streamed } from "@/components/ActivePending";
@@ -13,7 +13,7 @@ import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Keycap, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import {
-  ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, ACTIVE_CURSOR, ACTIVE_FITTING, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SCROLLING, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
+  ACTIVE_CHANNELS, ACTIVE_COHORT_SPLITS, activeBandOf, ACTIVE_CURSOR, ACTIVE_FITTING, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_PANEL_HEIGHT, ACTIVE_PARTS, ACTIVE_RANGES, ACTIVE_SCROLLING, ACTIVE_SLOTS, type ActiveCohortSplitChoice,
   type ActivePanel, type ActiveSplit, activeGroupingOf, activeQuery, activeRangeOf, activeSortOf, cohortLabel, cohortShare, counted, fromMonthOf, lineStyle, matureCohorts, monthLabel, wholePercents,
   ACTIVE_TAKE_STATES, type ActiveTakeState, activeInTakeState, activeListInTakeState, activeNowInTakeState, monthsBack, parseActiveFilter, withActiveNow,
 } from "@/lib/active";
@@ -90,11 +90,12 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const nowRead = streamed(() => data().getActiveNow(me, filter).then((r) => activeNowInTakeState(r, takeState, filter.channel))
     .then((r): ActiveNow => (dataIsMock && view.present === "take" ? { ...r, source: "take" } : r)));
   const restRead = streamed(() => data().getActiveRest(me, fromMonth, filter, grouping).then((r) => activeInTakeState(r, takeState)));
-  const rowsRequest = { filter, sort, descending, after: view.after, before: view.before, limit: ACTIVE_PAGE_SIZE };
-  // a cursor the list no longer knows (an old address, another sort): the first page instead
+  const rowsRequest = { filter, sort, descending, after: view.after, before: view.before, limit: ACTIVE_PAGE_SIZE, band: view.band };
+  // a cursor the list no longer knows (an old address, another sort) or a band the setting no longer names: the first
+  // page instead, of every band
   const listRead = streamed(() => data().getActiveRows(me, rowsRequest).catch((e: unknown) =>
-    e instanceof CmaDbError && e.sqlState === "CMA04" && (view.after || view.before)
-      ? data().getActiveRows(me, { ...rowsRequest, after: null, before: null }).then((l) => ({ ...l, restarted: true })) : Promise.reject(e))
+    e instanceof CmaDbError && e.sqlState === "CMA04" && (view.after || view.before || view.band)
+      ? data().getActiveRows(me, { ...rowsRequest, after: null, before: null, band: null }).then((l) => ({ ...l, restarted: true })) : Promise.reject(e))
     .then((l) => activeListInTakeState(l, takeState)));
   for (const read of [topRead, nowRead, restRead, listRead]) read.catch(() => undefined);   // a failed read is reported by the part that waits for it
 
@@ -104,11 +105,11 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
   const filterKey = [filter.market ?? "", filter.segment ?? "", filter.channel ?? ""].join("|");
   const topKey = `${filterKey}|${range}`;
   const restKey = `${topKey}|${grouping}`;
-  const viewKey = [restKey, view.bySegment, view.wantEur, view.survivalSplit, view.cohortSplit, view.msort, view.mdesc, sort, descending, view.after ?? "", view.before ?? ""].join("|");
+  const viewKey = [restKey, view.bySegment, view.wantEur, view.survivalSplit, view.cohortSplit, view.deviceSplit, view.band ?? "", view.msort, view.mdesc, sort, descending, view.after ?? "", view.before ?? ""].join("|");
   const ctx: Ctx = { me, t, hints, more, info, copy: words, view, viewKey, today };
   const keyOf = (id: ActivePanel) => (id === "tiles" || id === "churn" || id === "list" ? filterKey : id === "hero" ? topKey : restKey);
   const layer = (id: ActivePanel, part: string) => ({ id, k: `${id}|${keyOf(id)}`, part, viewKey });
-  const empty = (text: string) => <p className="text-body text-p4a-muted">{text}</p>;
+  const empty = (text: ReactNode) => <p className="text-body text-p4a-muted">{text}</p>;
 
   return (
     <Shell copy={copy} me={me} active="active" wide>
@@ -210,7 +211,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
               <ComparisonTitle ctx={ctx} read={topRead} />
             </Suspense>
             <Layer {...layer("comparison", "rest")} read={restRead} label={t.comparisonCardPlain}>{(rest) => (!rest.comparison || rest.comparison.a === null || rest.comparison.b === null
-              ? empty(t.noSegments) : <ComparisonTable comparison={rest.comparison} hints={hints} copy={words} locale={me.locale} />)}</Layer>
+              ? empty(t.noSegments) : <ComparisonTable comparison={rest.comparison} hints={hints} copy={words} locale={me.locale} devicesFrom={rest.deviceCustomers?.from ?? null} />)}</Layer>
           </Card>
 
           {/* 3.7b survival */}
@@ -253,14 +254,26 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
             <Layer {...layer("mix", "rest")} read={restRead} mark>{(rest) => <Mix ctx={ctx} rest={rest} />}</Layer>
           </section>
 
+          {/* 3.9b the active customers by the devices they hold (addition 0009r) */}
+          <Card>
+            <PanelTitle label={t.devicesCard} hint={hints.mh_devices_customers!} more={more("active.device_band_customers")} copy={words}>
+              <LinkSwitch label={t.splitBy} testId="active-devices-split" current={view.deviceSplit}
+                options={[{ value: "none", label: t.splitNone }, { value: "segment", label: t.segmentFilter }, { value: "channel", label: t.channel }]}
+                href={(v) => href({ dsplit: v === "none" ? null : v })} />
+            </PanelTitle>
+            <Layer {...layer("devices", "rest")} read={restRead} mark label={t.devicesCard}>{(rest) => <Devices ctx={ctx} rest={rest} />}</Layer>
+          </Card>
+
           {/* 3.10 the customer list: its own read */}
           <Card>
+            <span id="active-list" />
             <PanelTitle label={t.listCard} hint={hints.mh_list!} more={more("active.list")} copy={words} />
             <Layer {...layer("list", "list")} read={listRead} mark label={t.listCard}>{(list) => (
               !list.setUp ? empty(copy.flash.notSetUpShort)
                 : !list.history ? empty(t.historyPreparing)
-                  : list.total === 0 ? empty(t.emptyList)
-                    : <CustomerList list={list} sort={sort} descending={descending} page={"restarted" in list ? 1 : view.pageNo} pageSize={ACTIVE_PAGE_SIZE} href={href} hints={hints} copy={words} locale={me.locale} />
+                  : list.total === 0 ? empty(view.band && !("restarted" in list) ? <>{t.emptyListBand}<BandChip band={view.band} href={href} t={t} /></> : t.emptyList)
+                    : <CustomerList list={list} sort={sort} descending={descending} page={"restarted" in list ? 1 : view.pageNo} pageSize={ACTIVE_PAGE_SIZE} href={href} hints={hints} copy={words} locale={me.locale}
+                        band={"restarted" in list ? null : view.band} />
             )}</Layer>
           </Card>
         </div>
@@ -287,6 +300,9 @@ function viewOf(sp: Record<string, One>) {
   const wantEur = one(sp.amount) === "eur";
   const survivalSplit: ActiveSplit = one(sp.survival) === "channel" ? "channel" : "segment";
   const cohortSplit: ActiveCohortSplitChoice = (ACTIVE_COHORT_SPLITS as readonly string[]).includes(one(sp.cohort) ?? "") ? (one(sp.cohort) as ActiveCohortSplitChoice) : "none";
+  // the devices panel's split, and the band of Devices per active customer the list is narrowed to
+  const deviceSplit: ActiveCohortSplitChoice = (ACTIVE_COHORT_SPLITS as readonly string[]).includes(one(sp.dsplit) ?? "") ? (one(sp.dsplit) as ActiveCohortSplitChoice) : "none";
+  const band = activeBandOf(one(sp.band));
   const msort: MarketSort = (MARKET_SORTS as readonly string[]).includes(one(sp.msort) ?? "") ? (one(sp.msort) as MarketSort) : "customers";
   const mdesc = one(sp.mdir) !== "asc";
   const sort = activeSortOf(one(sp.sort));
@@ -304,7 +320,8 @@ function viewOf(sp: Record<string, One>) {
   const state: Record<string, string> = {
     ...(range === "24" ? {} : { range }), ...(grouping === "month" ? {} : { grouping }), ...activeQuery(filter),
     ...(bySegment ? { split: "segment" } : {}), ...(wantEur ? { amount: "eur" } : {}), ...(survivalSplit === "channel" ? { survival: "channel" } : {}),
-    ...(cohortSplit === "none" ? {} : { cohort: cohortSplit }), ...(msort === "customers" && mdesc ? {} : { msort, mdir: mdesc ? "desc" : "asc" }),
+    ...(cohortSplit === "none" ? {} : { cohort: cohortSplit }), ...(deviceSplit === "none" ? {} : { dsplit: deviceSplit }), ...(band ? { band } : {}),
+    ...(msort === "customers" && mdesc ? {} : { msort, mdir: mdesc ? "desc" : "asc" }),
     ...(sort === "monthly_amount" && descending ? {} : { sort, dir: descending ? "desc" : "asc" }),
     ...(after ? { after } : {}), ...(before ? { before } : {}), ...(pageNo > 1 ? { page: String(pageNo) } : {}),
     ...(dataIsMock && take ? { take } : {}), ...(dataIsMock && present ? { present } : {}),
@@ -318,8 +335,8 @@ function viewOf(sp: Record<string, One>) {
     return { pathname: "/reports/active" as Route, query: q };
   };
   const keep = Object.fromEntries(Object.entries(state).filter(([k]) => !["market", "segment", "channel", "after", "before", "page"].includes(k)));
-  const fileQuery = new URLSearchParams({ ...activeQuery(filter), sort, dir: descending ? "desc" : "asc" }).toString();
-  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, msort, mdesc, sort, descending, after, before, pageNo, take, present, href, keep, fileQuery };
+  const fileQuery = new URLSearchParams({ ...activeQuery(filter), ...(band ? { band } : {}), sort, dir: descending ? "desc" : "asc" }).toString();
+  return { range, grouping, filter, problem, bySegment, wantEur, survivalSplit, cohortSplit, deviceSplit, band, msort, mdesc, sort, descending, after, before, pageNo, take, present, href, keep, fileQuery };
 }
 type ActiveView = ReturnType<typeof viewOf>;
 
@@ -896,6 +913,18 @@ function CohortCurves({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
       <LineChart series={series} yTop={1} yFormat={(v) => pct(v)} yLabel={t.axisStillActive} xLabel={t.axisAge} label={t.cohortCurves} testId="active-cohort-chart"
         xLabels={[{ x: 0, text: "0" }, ...ages.filter((a) => a <= reach).map((a) => ({ x: a, text: String(a) }))]} />
     </Fit>
+  );
+}
+
+function Devices({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
+  const { t, me, view } = ctx;
+  const g = gap(ctx, rest);
+  if (g) return g;
+  // a document stored before addition 0009r holds no such part: the next refresh writes it
+  if (!rest.deviceCustomers) return <p className="text-small text-p4a-muted" data-testid="active-devices-pending">{t.devicesPending}</p>;
+  return (
+    <DeviceBands part={rest.deviceCustomers} split={view.deviceSplit} segments={rest.settings.segments} href={view.href} copy={ctx.copy} locale={me.locale}
+      dataQuality={<Link href={flashHref("/reports/flash", { o: "data_quality", f_check: "field_device_without_subscription_ref" }) as Route} className="text-p4a-deepblue underline-offset-2 hover:underline">{t.devicesNoteLink}</Link>} />
   );
 }
 

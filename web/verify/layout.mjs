@@ -781,7 +781,7 @@ async function expectActiveLayers() {
   const outlines = Object.fromEntries([...html.matchAll(/data-panel-skeleton="([a-zA-Z]+)" style="height:(\d+)px"/g)].map((m) => [m[1], Number(m[2])]));
   const lastOutline = Math.max(-1, ...[...html.matchAll(/data-panel-skeleton="/g)].map((m) => m.index));
   const cards = [...html.matchAll(/<div[^>]*data-testid="active-slot-[a-z_]+"/g)].filter((m) => firstFigures < 0 || m.index < firstFigures);
-  if (Object.keys(outlines).length !== 14) problems.push(`${where}: ${Object.keys(outlines).length} panel outlines in the stream, expected one per data panel (14)`);
+  if (Object.keys(outlines).length !== 15) problems.push(`${where}: ${Object.keys(outlines).length} panel outlines in the stream, expected one per data panel (15)`);
   if (firstFigures >= 0 && lastOutline > firstFigures) problems.push(`${where}: a panel's figures are sent before the frame is complete`);
   if (firstFigures < 0) problems.push(`${where}: no panel's figures in the stream`);
   if (cards.length !== 6) problems.push(`${where}: ${cards.length} placeholder cards sent with the frame, expected 6 before any figure`);

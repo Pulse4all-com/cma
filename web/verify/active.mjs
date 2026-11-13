@@ -26,6 +26,9 @@
  *      read, keyset paging with a cursor that is an id alone, the page's client code, the streamed parts and heights
  *   O  the table first, the live present after (decision D16): the live tiles in the places of the stored ones, nothing a
  *      zero without a take, a stale and a late take saying so, the frame reading nothing from the database
+ *   B  Devices per active customer in bands (addition 0009r): the bands' keys and a count's band as the database names
+ *      them, the count the page counts "n or more" from, the band of an address, the mock's part adding up, the list
+ *      under a band, the page's wiring (the panel, its split, the list's band, a document without the part)
  *   M  the mock's document: net change = inflow − outflow = this month end − the previous one, the running month equals
  *      the headline, the three channels and the segments add up to the unfiltered totals, a tenant without a store shows
  *      nothing (never zeros), a person without the report permissions is refused
@@ -36,6 +39,7 @@ import {
   HEAT_DARK_EDGE, HEAT_DENIM, HEAT_FROM, HEAT_LIGHT_EDGE, HEAT_TO, LINE_COLOURS, activeFileName, activeFromDb, activeInTakeState, activeListInTakeState, activeNowFromDb, activeNowInTakeState, activePartOf, withActiveNow,
   activeQuery, activeRangeOf, billingOf, changeAgainst, cohortShare, contrast, counted, curveOf, fromMonthOf, heatColour, heatTextRgb, kaplanMeier, lineStyle, luminance, matureCohorts, monthsBack,
   mergeActive, niceAxis, parseActiveFilter, retentionAt, signed, sparkPath, spellsOf, unitFactor, wholePercents,
+  activeBandOf, deviceBandKeys, deviceBandOf, deviceFromOf,
 } from "../src/lib/active.ts";
 import { activeCopy, copy } from "../src/lib/copy.ts";
 import { mockActive, mockActiveNow, mockActiveRows } from "../src/lib/data/mock-active.ts";
@@ -509,6 +513,51 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
       /<Suspense key=\{`now\|\$\{ctx\.viewKey\}`\} fallback=\{<PresentTiles ctx=\{ctx\} top=\{top\} settled=\{false\} \/>\}>/.test(pageSrc),
       /dataIsMock && \(ACTIVE_TAKE_STATES/.test(pageSrc), ["tilesAsOf", "historyStaleBody", "comparisonCardPlain", "printLoading"].every((k) => (copySrc.match(new RegExp(`\\b${k}: "`, "g")) ?? []).length === 2)],
     [false, false, true, true, true, true, true], [true, true, false, false, false, false, false]);
+}
+
+// ---- B. Devices per active customer in bands (addition 0009r) ------------------------------------------------------------
+{
+  const me = { tenantId: "t1", permissions: ["reports.view"] };
+  const none = { market: null, segment: null, channel: null };
+  // the database's own answers (cma.flash_count_bands_of and cma.flash_count_band_of; db/185's H1 and H4)
+  expect("B1 the bands of a list of bounds as the database names them: 1,2,3,6,11; 2,4; 3,6; one bound",
+    [deviceBandKeys([1, 2, 3, 6, 11]), deviceBandKeys([2, 4]), deviceBandKeys([3, 6]), deviceBandKeys([1])],
+    [["0", "1", "2", "3-5", "6-10", "11+"], ["0", "1", "2-3", "4+"], ["0", "1-2", "3-5", "6+"], ["0", "1+"]], [[], [], [], []]);
+  expect("B2 a count's band at every edge (0, 1, 2, 3, 5, 6, 10, 11, 40) and under 2,4; the count 'n or more' counts from",
+    [[0, 1, 2, 3, 5, 6, 10, 11, 40].map((c) => deviceBandOf(c, [1, 2, 3, 6, 11])), [0, 1, 2, 3, 4, 9].map((c) => deviceBandOf(c, [2, 4])),
+      deviceFromOf([1, 2, 3, 6, 11]), deviceFromOf([2, 4]), deviceFromOf([5])],
+    [["0", "1", "2", "3-5", "3-5", "6-10", "6-10", "11+", "11+"], ["0", "1", "2-3", "2-3", "4+", "4+"], 3, 4, 5], [[], [], 0, 0, 0]);
+  expect("B3 the band of an address: a key in the bands' form, anything else none",
+    [activeBandOf("0"), activeBandOf("3-5"), activeBandOf("11+"), activeBandOf("3–5"), activeBandOf("x"), activeBandOf("1;drop"), activeBandOf(undefined), activeBandOf("00")],
+    ["0", "3-5", "11+", null, null, null, null, null], [null, null, null, "", "", "", "", ""]);
+  const doc = mockActive(me, null, none, "month");
+  const part = doc.deviceCustomers;
+  const sum = (f) => part.bands.reduce((n, b) => n + f(b), 0);
+  const active = doc.tiles.activeCustomers.value;
+  expect("B4 the mock's part: the bands add up to the active customers and their devices, each band's splits to the band, the figures follow",
+    [sum((b) => b.customers) === part.customers, part.customers === active, sum((b) => b.devices) === part.devices, part.devices === doc.marketsTotal.devices,
+      part.bands.every((b) => Object.values(b.bySegment).reduce((n, x) => n + x.customers, 0) === b.customers && Object.values(b.byChannel).reduce((n, x) => n + x.devices, 0) === b.devices),
+      part.average === Math.round((part.devices / part.customers) * 100) / 100, part.from, part.notLinked === part.bands[0].customers, part.bands.map((b) => b.band),
+      part.fromCustomers === part.bands.filter((b) => !["0", "1", "2"].includes(b.band)).reduce((n, b) => n + b.customers, 0), part.fromCustomers > 0, part.notLinked > 0,
+      doc.marketsTotal.devicesFromShare === part.fromShare, doc.comparison.rows.some((r) => r.measure === "devices_from_share")],
+    [true, true, true, true, true, true, 3, true, ["0", "1", "2", "3-5", "6-10", "11+"], true, true, true, true, true],
+    [false, false, false, false, false, false, 0, false, [], false, false, false, false, false]);
+  const under = (band) => mockActiveRows(me, { filter: none, sort: "devices", descending: true, limit: 200, band });
+  const totals = part.bands.map((b) => under(b.band).total);
+  let refused = null;
+  try { under("7-9999"); } catch (e) { refused = e.sqlState ?? String(e); }
+  expect("B5 the list under a band: every band's total is the band's customers, its rows are of the band alone, a band of another setting is refused",
+    [totals.join(","), under("3-5").rows.every((r) => r.devices >= 3 && r.devices <= 5), under("0").rows.every((r) => r.devices === 0), under(null).total === active, refused],
+    [part.bands.map((b) => b.customers).join(","), true, true, true, "CMA04"], ["", false, false, false, null]);
+  const pageSrc = src("app/reports/active/page.tsx");
+  const partsSrc = src("components/ActiveParts.tsx");
+  expect("B6 the page: the panel after the mix with its own height and split, the list's band in the read and the file, a document without the part says so, labels without the word AED",
+    [pageSrc.indexOf('layer("devices", "rest")') > pageSrc.indexOf('layer("mix", "rest")'), pageSrc.indexOf('layer("devices", "rest")') < pageSrc.indexOf('layer("list", "list")'),
+      typeof ACTIVE_PANEL_HEIGHT.devices, /band: view\.band/.test(pageSrc), /\.\.\.\(band \? \{ band \} : \{\}\), sort/.test(pageSrc), /data-testid="active-devices-pending"/.test(pageSrc),
+      /testId="active-devices-split"/.test(pageSrc), /data-testid="active-devices-parts"/.test(partsSrc),
+      Object.entries(activeCopy.en).concat(Object.entries(activeCopy.nl)).filter(([k, v]) => /devices|band/i.test(k) && /\bAEDs?\b/.test(String(v))).length,
+      activeFromDb({ figures: true }).deviceCustomers, ACTIVE_MEASURE_METRIC.devices_from_share],
+    [true, true, "number", true, true, true, true, true, 0, null, "active.device_from_share"], [false, false, "", false, false, false, false, false, 1, {}, ""]);
 }
 
 // ---- addition 0009n: the present's source, and the attribution's note on both pages ---------------------------------------
