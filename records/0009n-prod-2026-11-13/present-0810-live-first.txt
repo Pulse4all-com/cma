@@ -1,0 +1,137 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+SET
+              tenant_id               |          measured_at          | server_version | has_0009m | present_source_now |       take_computed_at        
+--------------------------------------+-------------------------------+----------------+-----------+--------------------+-------------------------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4 | 2026-11-13 08:33:16.140259+00 | 18.6           | t         | live               | 2026-11-13 08:31:09.982957+00
+(1 row)
+
+CREATE TABLE
+ timed_first 
+-------------
+ live
+(1 row)
+
+GRANT
+                tenant                
+--------------------------------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4
+(1 row)
+
+SET
+DO
+
+==== The stages: rows, the first call and the best, median and worst of the seventh to ninth, in milliseconds ====
+ stage | run_order |                                        what                                        | rows | first_ms | best_of_calls_7_to_9_ms | median_of_7_to_9_ms | worst_of_7_to_9_ms 
+-------+-----------+------------------------------------------------------------------------------------+------+----------+-------------------------+---------------------+--------------------
+ N1    |         1 | cma.active_now_of, the present live (active.present_source = live; 173's E5)       |    1 |    444.4 |                   184.5 |               202.2 |              233.5
+ N2    |         2 | cma.active_now_of, the present from the stored take (active.present_source = take) |    1 |     78.4 |                    74.5 |                77.5 |               83.3
+ P1    |         3 | cma.active_present_of (the live rows)                                              | 6217 |     40.8 |                    37.5 |                39.0 |               39.9
+ P2    |         4 | cma.active_present_stored_of (the take's rows)                                     | 6217 |      2.8 |                     2.7 |                 2.8 |                3.1
+ P3    |         5 | cma.flash_subscription_stores_of                                                   |   12 |      1.3 |                     1.0 |                 1.2 |                1.4
+ M1    |         6 | the stored month ends (cma.active_month)                                           | 8277 |      2.0 |                     1.4 |                 1.4 |                1.7
+ F1    |         7 | cma.active_fx_of                                                                   |    1 |      0.3 |                     0.1 |                 0.1 |                0.1
+(7 rows)
+
+
+==== The plan of the live rows (P1): the statement of cma.active_present_of as 174 holds it, with this tenant ====
+                                                                                     QUERY PLAN                                                                                     
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=3016.60..3016.61 rows=1 width=24) (actual time=40.197..40.216 rows=1.00 loops=1)
+   Buffers: shared hit=1722
+   CTE s
+     ->  Result  (cost=0.53..2.04 rows=1 width=128) (actual time=0.232..0.234 rows=1.00 loops=1)
+           Buffers: shared hit=16
+           InitPlan 1
+             ->  Function Scan on unnest u  (cost=0.50..0.53 rows=2 width=40) (actual time=0.045..0.047 rows=2.00 loops=1)
+                   Buffers: shared hit=4
+   CTE sm
+     ->  Result  (cost=0.01..20.63 rows=1 width=96) (actual time=0.065..0.306 rows=12.00 loops=1)
+           One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+           Buffers: shared hit=44
+           ->  Nested Loop  (cost=0.01..20.63 rows=1 width=96) (actual time=0.062..0.300 rows=12.00 loops=1)
+                 Join Filter: (s_1.handle = lower(split_part(btrim(c_1.external_account_id), '.'::text, 1)))
+                 Rows Removed by Join Filter: 156
+                 Buffers: shared hit=44
+                 ->  Seq Scan on commerce_store s_1  (cost=0.00..2.17 rows=1 width=112) (actual time=0.009..0.012 rows=14.00 loops=1)
+                       Filter: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                       Buffers: shared hit=2
+                 ->  Seq Scan on integration_connection c_1  (cost=0.00..18.40 rows=2 width=56) (actual time=0.004..0.010 rows=12.00 loops=14)
+                       Filter: ((tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND ((kind = 'subscriptions'::text) OR ((kind IS NULL) AND EXISTS(SubPlan 3))))
+                       Rows Removed by Filter: 18
+                       Buffers: shared hit=42
+                       SubPlan 3
+                         ->  Result  (cost=0.41..77.37 rows=848 width=0) (never executed)
+                               One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = c_1.tenant_id)
+                               ->  Index Only Scan using subscription_tenant_id_connection_id_source_id_key on subscription s  (cost=0.41..77.37 rows=848 width=0) (never executed)
+                                     Index Cond: ((tenant_id = c_1.tenant_id) AND (connection_id = c_1.id))
+                                     Heap Fetches: 0
+                                     Index Searches: 0
+   CTE s0
+     ->  Result  (cost=0.05..1087.35 rows=6260 width=90) (actual time=0.273..9.007 rows=6217.00 loops=1)
+           One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+           Buffers: shared hit=709
+           InitPlan 6
+             ->  CTE Scan on s s_2  (cost=0.00..0.02 rows=1 width=32) (actual time=0.001..0.001 rows=1.00 loops=1)
+                   Storage: Memory  Maximum Storage: 17kB
+           InitPlan 7
+             ->  CTE Scan on s s_3  (cost=0.00..0.02 rows=1 width=32) (actual time=0.234..0.235 rows=1.00 loops=1)
+                   Storage: Memory  Maximum Storage: 17kB
+                   Buffers: shared hit=16
+           ->  Seq Scan on subscription x_1  (cost=0.01..883.86 rows=6260 width=72) (actual time=0.258..5.015 rows=6217.00 loops=1)
+                 Filter: ((source_deleted_at IS NULL) AND (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND (status = ANY ((InitPlan 7).col1)))
+                 Rows Removed by Filter: 1431
+                 Buffers: shared hit=709
+   InitPlan 9
+     ->  CTE Scan on s s_4  (cost=0.00..0.02 rows=1 width=32) (actual time=0.001..0.001 rows=1.00 loops=1)
+           Storage: Memory  Maximum Storage: 17kB
+   InitPlan 10
+     ->  CTE Scan on s s_5  (cost=0.00..0.02 rows=1 width=32) (actual time=0.003..0.004 rows=1.00 loops=1)
+           Storage: Memory  Maximum Storage: 17kB
+   ->  Hash Left Join  (cost=1574.85..1812.64 rows=6260 width=36) (actual time=16.869..37.692 rows=6217.00 loops=1)
+         Hash Cond: ((c.tenant_id = k.tenant_id) AND (c.crm_connection_id = k.connection_id) AND (c.crm_contact_source_id = k.source_id))
+         Buffers: shared hit=1722
+         ->  Hash Left Join  (cost=651.57..840.07 rows=6260 width=77) (actual time=7.591..24.728 rows=6217.00 loops=1)
+               Hash Cond: ((sm.store_connection_id = c.connection_id) AND (x.customer_source_id = c.source_id))
+               Buffers: shared hit=1130
+               ->  Hash Left Join  (cost=0.03..155.67 rows=6260 width=64) (actual time=0.594..14.225 rows=6217.00 loops=1)
+                     Hash Cond: (x.connection_id = sm.connection_id)
+                     Buffers: shared hit=753
+                     ->  CTE Scan on s0 x  (cost=0.00..125.20 rows=6260 width=64) (actual time=0.275..12.173 rows=6217.00 loops=1)
+                           Storage: Memory  Maximum Storage: 650kB
+                           Buffers: shared hit=709
+                     ->  Hash  (cost=0.02..0.02 rows=1 width=32) (actual time=0.314..0.315 rows=12.00 loops=1)
+                           Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                           Buffers: shared hit=44
+                           ->  CTE Scan on sm  (cost=0.00..0.02 rows=1 width=32) (actual time=0.066..0.309 rows=12.00 loops=1)
+                                 Storage: Memory  Maximum Storage: 17kB
+                                 Buffers: shared hit=44
+               ->  Hash  (cost=524.06..524.06 rows=8498 width=91) (actual time=6.973..6.975 rows=8498.00 loops=1)
+                     Buckets: 16384  Batches: 1  Memory Usage: 1144kB
+                     Buffers: shared hit=377
+                     ->  Result  (cost=0.01..524.06 rows=8498 width=91) (actual time=0.012..4.461 rows=8498.00 loops=1)
+                           One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                           Buffers: shared hit=377
+                           ->  Seq Scan on commerce_customer c  (cost=0.01..524.06 rows=8498 width=91) (actual time=0.009..3.122 rows=8498.00 loops=1)
+                                 Filter: ((source_deleted_at IS NULL) AND (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid))
+                                 Rows Removed by Filter: 3266
+                                 Buffers: shared hit=377
+         ->  Hash  (cost=732.38..732.38 rows=10909 width=49) (actual time=9.248..9.250 rows=10915.00 loops=1)
+               Buckets: 16384  Batches: 1  Memory Usage: 958kB
+               Buffers: shared hit=592
+               ->  Result  (cost=0.01..732.38 rows=10909 width=49) (actual time=0.034..6.067 rows=10915.00 loops=1)
+                     One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                     Buffers: shared hit=592
+                     ->  Seq Scan on crm_contact k  (cost=0.01..732.38 rows=10909 width=49) (actual time=0.022..3.758 rows=10915.00 loops=1)
+                           Filter: ((source_deleted_at IS NULL) AND (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid))
+                           Rows Removed by Filter: 320
+                           Buffers: shared hit=592
+ Planning:
+   Buffers: shared hit=4
+ Planning Time: 2.471 ms
+ Execution Time: 40.416 ms
+(93 rows)
+
+ROLLBACK
