@@ -1,0 +1,69 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                 check_name                                                                 |        result        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------+----------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0009o recorded after 0009n                                                                                                     | FAIL                 | cma.schema_migration holds 0009o
+ S2 cma.follow_up_marker: columns, row-level security, policy, the application's grants, no audit trigger                                   | FAIL                 | tenant_id,computed_at,inputs_checked_at,next_change_at,migrations
+ S3 the setting follow_up.recompute_minutes, 60 by default                                                                                  | FAIL                 | 60
+ S4 jit off on open_tickets_of, data_quality_of and flash_findings_compute_of; rows 20 on the calendar; custom plans on the two job entries | FAIL                 | pg_proc.proconfig and prorows
+ S5 the fifteen functions: the application may execute them, public may not                                                                 | FAIL                 | as designed
+ S6 the follow-up's input tables: each table its functions read is listed and its audit trigger enabled                                     | FAIL                 | 24 tables listed
+ E1 open_tickets_of (pulse4all-invest)                                                                                                      | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E2 open_leads_of (pulse4all-invest)                                                                                                        | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E3 speed_to_lead_of, unbounded (pulse4all-invest)                                                                                          | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E4 speed_to_lead_of, the previous month (pulse4all-invest)                                                                                 | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E5 data_quality_of (pulse4all-invest)                                                                                                      | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E6 flash_findings_compute_of (pulse4all-invest)                                                                                            | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E7 business_seconds_in, business_days_in and next_business_noon_in against the _of functions (pulse4all-invest)                            | FAIL                 | XX: provoked: 756 pairs compared (FAIL by the switch)
+ E8 the follow-up refresh writes only what changed, to the same items and snapshot (pulse4all-invest)                                       | FAIL                 | provoked
+ E1 open_tickets_of (pulse4all-subscriptions)                                                                                               | FAIL                 | provoked, but the set is empty: nothing to differ (FAIL by the switch)
+ E2 open_leads_of (pulse4all-subscriptions)                                                                                                 | FAIL                 | 1 rows now against 0 before: 1 only now, 0 only before
+ E3 speed_to_lead_of, unbounded (pulse4all-subscriptions)                                                                                   | FAIL                 | 2 rows now against 1 before: 1 only now, 0 only before
+ E4 speed_to_lead_of, the previous month (pulse4all-subscriptions)                                                                          | FAIL                 | 2 rows now against 1 before: 1 only now, 0 only before
+ E5 data_quality_of (pulse4all-subscriptions)                                                                                               | FAIL                 | 905 rows now against 904 before: 1 only now, 0 only before
+ E6 flash_findings_compute_of (pulse4all-subscriptions)                                                                                     | FAIL                 | 905 rows now against 904 before: 1 only now, 0 only before
+ E7 business_seconds_in, business_days_in and next_business_noon_in against the _of functions (pulse4all-subscriptions)                     | FAIL                 | AT: provoked: 756 pairs compared (FAIL by the switch); BE: provoked: 756 pairs compared (FAIL by the switch); CH: provoked: 756 pairs compared (FAIL by the switch); DE: provoked: 756 pairs compared (FAIL by the switch); DK: provoked: 756 pairs compared (FAIL by the switch); ES: provoked: 756 pairs compared (FAIL by the switch); FI: provoked: 756 pairs compared (FAIL by the switch); FR: provoked: 756 pairs compared (FAIL by the switch); GB: provoked: 756 pairs compared (FAIL by the switch); IE: provoked: 756 pairs compared (FAIL by the switch); IT: provoked: 756 pairs compared (FAIL by the switch); NL: provoked: 756 pairs compared (FAIL by the switch); NO: provoked: 756 pairs compared (FAIL by the switch); PL: provoked: 756 pairs compared (FAIL by the switch); PT: provoked: 756 pairs compared (FAIL by the switch); SE: provoked: 756 pairs compared (FAIL by the switch); XX: provoked: 756 pairs compared (FAIL by the switch)
+ E8 the follow-up refresh writes only what changed, to the same items and snapshot (pulse4all-subscriptions)                                | FAIL                 | provoked
+ A1 the business-time functions equal the _of functions on a crafted calendar (split day, own and * hours, holidays, DST)                   | FAIL                 | provoked: 3075 pairs compared (FAIL by the switch)provoked: 3075 pairs compared (FAIL by the switch)provoked: 3075 pairs compared (FAIL by the switch)
+ A2 follow_up.recompute_minutes takes 1 to 1440 (0 and 1441 refused with CMA04), 60 by default                                              | FAIL                 | 60 for the tenant
+ A3 the job computes only when an input changed, the backstop passed or the clock moves a figure                                            | FAIL                 | computed: first true, nothing changed false, a run row false, 61 minutes true, clock change reached true, an input changed true
+ A4 the next clock change: now in office hours, else the next opening or midnight                                                           | FAIL                 | open: 2026-11-16 09:00:00+00; Saturday 14:00: 2026-11-14 23:00:00+00 (the next midnight before Monday's opening)
+ A5 a failed data-quality computation waits data_quality.refresh_minutes (backoff)                                                          | FAIL                 | another job failed: refreshed; its own failure: backoff
+ A6 0009l to 0009n's settings still behave beside this change's (triggers, accepted and refused values)                                     | FAIL                 | triggers present; the Active settings accepted and refused as 172 and 176 set them
+ verdict                                                                                                                                    | PROVOKED, NOT A PASS | 179_verify_job_reads: 0 ok, 28 FAIL, 0 skip
+(29 rows)
+
+DROP TABLE
+RESET

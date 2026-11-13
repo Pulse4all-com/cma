@@ -430,9 +430,9 @@ gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cm
 
 **Terminal** (the follow-up refresh, since 0008s; RUNBOOK 7a)
 ```bash
-gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-follow-up AND jsonPayload.message="refresh-follow-up"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.refreshed)'
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-follow-up AND jsonPayload.message="refresh-follow-up"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.refreshed, jsonPayload.computed, jsonPayload.written)'
 ```
-Expected: INFO rows, `refreshed` True, one per tenant per minute; a WARNING with `refreshed` False now and then
+Expected: INFO rows, `refreshed` True, one per tenant per minute, with `computed` 1 and `written` (the item rows changed) on a run that computed and `computed` 0 on a run that confirmed nothing changed (since 0009o; it computes at least every `follow_up.recompute_minutes`, 60 by default, and every minute in office hours); a WARNING with `refreshed` False now and then
 is a skipped overlap, every minute means a refresh longer than a minute.
 Expected: one short line per hourly run, most of them closing nothing.
 
@@ -446,7 +446,7 @@ Expected: one line per tenant per hourly run, INFO: `taken` True on the run that
 ```bash
 gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-data-quality AND jsonPayload.message="refresh-data-quality"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.refreshed, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms)'
 ```
-Expected: one line per tenant per minute, INFO: `refreshed` True with `rows` and `duration_ms` on the run that computed (every `data_quality.refresh_minutes`, 5 by default), `reason` `fresh` on the runs between; `reason` `running` as a WARNING when a run found the tenant's lock taken; an ERROR line names the SQLSTATE (section 4, then 5 to pause it: the pages keep the last result).
+Expected: one line per tenant per minute, INFO: `refreshed` True with `rows` and `duration_ms` on the run that computed (every `data_quality.refresh_minutes`, 5 by default), `reason` `fresh` on the runs between; after a failed computation the runs wait `data_quality.refresh_minutes` too, `reason` `backoff`; `reason` `running` as a WARNING when a run found the tenant's lock taken; an ERROR line names the SQLSTATE (section 4, then 5 to pause it: the pages keep the last result).
 
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
 ```bash

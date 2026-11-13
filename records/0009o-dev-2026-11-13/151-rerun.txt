@@ -1,0 +1,49 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/151_verify_courtesy.sql:67: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+                                                      check_name                                                       | result |                                                                                                                                                                                                                                                                                     detail                                                                                                                                                                                                                                                                                      
+-----------------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009a recorded, after 0008zz                                                                              | PASS   | 
+ A2 every function the application's only and invoker; the readers' function definer, the owner's, pinned, theirs only | PASS   | 
+ A3 the five courtesy settings with their types and defaults                                                           | PASS   | courtesy.ages_days=text:10,14,21,30 courtesy.alert_attempts=integer:3 courtesy.due_days=integer:10 courtesy.order_kinds=text:first,repeat courtesy.start_date=text:
+ A4 cma.follow_up_summary() ends with the courtesy columns; the reader view's columns without a contact                | PASS   | tenant_id,order_id,connection_id,order_source_id,store,market,segment,created_at,business_date,due_date,has_contact,attempts,conversation,last_attempt_at,completed_at,outcome,completed_by,state
+ B1 First and Repeat count; Renewal, Unknown, test, deleted and cancelled orders do not                                | PASS   | o6a o6b o6c o7a o7b o7c o8u oAms oE oF oLdn oNo oP oR
+ B2 before the start date nothing counts; an unset start date gives not set up, no store has_store false               | PASS   | 0 rows; set_up false; now null; has_store true; unreachable null | two: set_up false, has_store false
+ B3 an order without a linked contact counts as No contact only                                                        | PASS   | f/-/-/unknown; now {"orders": 13, "not_due": 1, "due_open": 7, "attempted": 4, "completed": 5, "no_contact": 1, "unreachable": 1, "due_no_attempt": 2}
+ B4 due 10 calendar days after the business date; London and Amsterdam at 23:30 UTC on their own dates                 | PASS   | oAms:NL/1028/1107/not_due oF:NL/1001/1011/completed oLdn:GB/1027/1106/due_no_attempt
+ B5 a call before the due date is no attempt since due; a completed call before it still completes                     | PASS   | o6a:1001/1011/completed/1/true/neutral o6b:1003/1013/completed/1/true/neutral o6c:1025/1104/due_no_attempt/0/false/- o7a:1001/1011/unreachable/3/false/- o7b:1001/1011/attempted/2/false/- o7c:1001/1011/attempted/3/true/- o8u:1001/1011/attempted/1/true/- oAms:1028/1107/not_due/0/false/- oE:1005/1015/completed/0/false/positive oF:1001/1011/completed/1/true/positive oLdn:1027/1106/due_no_attempt/0/false/- oNo:1003/1013/-/-/-/- oP:1005/1015/attempted/1/false/- oR:1002/1012/completed/0/false/negative
+ B6 one completed call completes two open orders of a contact; a later third stays open                                | PASS   | o6a:completed o6b:completed o6c:due_no_attempt; 1 completing call
+ B7 three attempts since due without a conversation Unreachable; two Attempted; three with one conversation Attempted  | PASS   | o6a:1001/1011/completed/1/true/neutral o6b:1003/1013/completed/1/true/neutral o6c:1025/1104/due_no_attempt/0/false/- o7a:1001/1011/unreachable/3/false/- o7b:1001/1011/attempted/2/false/- o7c:1001/1011/attempted/3/true/- o8u:1001/1011/attempted/1/true/- oAms:1028/1107/not_due/0/false/- oE:1005/1015/completed/0/false/positive oF:1001/1011/completed/1/true/positive oLdn:1027/1106/due_no_attempt/0/false/- oNo:1003/1013/-/-/-/- oP:1005/1015/attempted/1/false/- oR:1002/1012/completed/0/false/negative
+ B8 the completions split by outcome; an untagged connected call never completes                                       | PASS   | {"orders": 5, "neutral": 2, "negative": 1, "positive": 2} | o6a:1001/1011/completed/1/true/neutral o6b:1003/1013/completed/1/true/neutral o6c:1025/1104/due_no_attempt/0/false/- o7a:1001/1011/unreachable/3/false/- o7b:1001/1011/attempted/2/false/- o7c:1001/1011/attempted/3/true/- o8u:1001/1011/attempted/1/true/- oAms:1028/1107/not_due/0/false/- oE:1005/1015/completed/0/false/positive oF:1001/1011/completed/1/true/positive oLdn:1027/1106/due_no_attempt/0/false/- oNo:1003/1013/-/-/-/- oP:1005/1015/attempted/1/false/- oR:1002/1012/completed/0/false/negative
+ B9 per person by name, not by count; the user linked to nobody in the not-linked row, last                            | PASS   | Anna:1/0/0/1 Zed:3/1/2/0 none:1/1/0/0
+ B10 the follow-up summary's Unreachable equals the page's tile, with the attempts since due that flag it              | PASS   | summary 1/3, page 1
+ B11 no reports.view or performance.team CMA06; per person absent without performance.team                             | PASS   | CMA06 viewer per_person null analyst per_person array
+ B12 cma_read.courtesy_order without a contact id, equal to the application's rows                                     | PASS   | 14 rows; two 0; o6a:completed o6b:completed o6c:due_no_attempt o7a:unreachable o7b:attempted o7c:attempted o8u:attempted oAms:due_no_attempt oE:completed oF:completed oLdn:due_no_attempt oNo:- oP:attempted oR:completed
+ B13 the tiles, per market, per week and the order cohorts with their ages                                             | PASS   | GB:1/0/0/0 NL:12/5/1/1 | 0928:8/4/1 1005:2/1/0 1012:0/0/0 1019:1/0/0 1026:2/0/0 | 2026-W44* 2 10:-,14:-,21:-,30:- 2026-W43 1 10:0,14:-,21:-,30:- 2026-W41 2 10:1,14:1,21:1,30:1 2026-W40* 8 10:0,14:2,21:4,30:4 | now {"orders": 13, "not_due": 1, "due_open": 7, "attempted": 4, "completed": 5, "no_contact": 1, "unreachable": 1, "due_no_attempt": 2}
+ B14 the filters in the database; the list's order, cap and total, link and days past due                              | PASS   | GB 1 oLdn; B2B 1 1; unreachable 1 o7a; due 7; no_contact 1 nolink; first 3 of 14: o7a/unreachable/26 o6c/due_no_attempt/2 oLdn/due_no_attempt/0
+ B15 the parameters and the settings out of range refused (CMA04); a list kept without spaces                          | PASS   | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 first,repeat,renewal 7,90 15
+ B16 the other tenant sees no order of tenant one                                                                      | PASS   | 0 rows; page now {"orders": 0, "not_due": 0, "due_open": 0, "attempted": 0, "completed": 0, "no_contact": 0, "unreachable": 0, "due_no_attempt": 0}
+ B ran to the end                                                                                                      | PASS   | 
+ verdict                                                                                                               | OK     | 151_verify_courtesy: 21 PASS, 0 FAIL
+(22 rows)
+
+RESET

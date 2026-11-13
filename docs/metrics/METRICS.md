@@ -9552,7 +9552,7 @@ count of open lead deals not called = deals of counted lead pipelines (connectio
 - a call in the pre-window (speed_to_lead.pre_window_minutes before creation) counts as the deal's call
 - the page's market/person/state filters narrow the LISTS only; the tiles always count everything
 
-**Time** No period: the open set right now; now = the snapshot's computed_at (the refresh transaction's now()). Business time plays no role in this count itself.
+**Time** No period: the open set right now; now = the snapshot's computed_at (the refresh transaction's now(): the instant the figures were computed or confirmed unchanged). Business time plays no role in this count itself.
 
 **Settings**
 
@@ -10009,7 +10009,7 @@ How long ago the follow-up figures were computed, so the reader knows their age.
 **Formula as computed**
 
 ```
-agoText(computed_at, now): 'now' under 10 s, then seconds, minutes, hours, days (Intl.RelativeTimeFormat, the viewer's locale); the full timestamp in the viewer's zone on hover (title attribute). Muted (text-p4a-muted) once now - computed_at > 3 minutes (FOLLOW_UP_STALE_MS = 180000, hardcoded in web); computed_at = cma.follow_up_snapshot.computed_at, the refresh transaction's now().
+agoText(computed_at, now): 'now' under 10 s, then seconds, minutes, hours, days (Intl.RelativeTimeFormat, the viewer's locale); the full timestamp in the viewer's zone on hover (title attribute). Muted (text-p4a-muted) once now - computed_at > 3 minutes (FOLLOW_UP_STALE_MS = 180000, hardcoded in web); computed_at = cma.follow_up_snapshot.computed_at, the refresh transaction's now() (the instant the figures were computed or confirmed unchanged).
 ```
 
 **Unit** text · **Grain** now · **Status** verified

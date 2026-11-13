@@ -1,0 +1,70 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/95_verify_attempts_for_sales.sql:83: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+                                                              check_name                                                               | result |                                                                                                    detail                                                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008z recorded, after 0008y                                                                                               | PASS   | 
+ A2 every function the application's only and invoker; the readers' function definer, the owner's, pinned, theirs only; the scope gone | PASS   | 
+ A3 the reader view with its exact columns; no name, address, email, phone, hash or payload                                            | PASS   | 
+ A4 the three settings in the catalog                                                                                                  | PASS   | attempts.source:text:telephony:telephony|crm attempts.speed_buckets_business_minutes:text:5,15,60,240,1440:- calls.conversation_min_talk_seconds:integer:30:-
+ A5 the calls, the store orders and the window each written once; 0007d's business time reused                                         | PASS   | 
+ A6 the withdrawal columns, trigger and grants; cma_read.message; messages.withdraw on every default admin role only                   | PASS   | 
+ A7 nothing twice: one addition row, the settings once, the permission once per role, the row type's 37 fields                         | PASS   | 
+ B1 only sales deals: an order pipeline, a pipeline that is no lead pipeline and an uncounted one out                                  | PASS   | dA dB dL dL2 dN dO dS dT dU dW dW2
+ B2 telephony: attempts, conversations, the first, talk, without outcome; a CRM call without the telephony call counted apart          | PASS   | dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:2/1/1/90/90/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:1/1/1/60/60/0/0 dS:1/1/1/45/45/1/0 dT:1/0/-/10/0/1/1 dU:1/1/1/120/120/0/0 dW:4/1/3/64/30/2/1 dW2:1/1/1/300/300/0/0
+ B3 the source: crm counts every outbound CRM call, telephony only the telephony calls                                                 | PASS   | dT:2/-/08 08:02:00/120 dW:5/4/05 08:04:50/290 | dT:1/-/08 09:29:50/5390 dW:4/3/05 08:04:50/290
+ B4 the window ends at the close or the first order (a won order deal, a store order), else now                                        | PASS   | dA:open/open/-/1 dB:open/open/-/1 dL:closed/lost/08 10:00/2 dO:ordered/ordered/07 10:00/1 dS:ordered/ordered/08 10:00/1 dW:closed/won/-/4
+ B5 an ordered deal is out of the open figures, without business days since its last attempt                                           | PASS   | dA:3 dB:4 dN:3 dO:- dS:- dT:4 open 4 never 1 since 0–1:0 1–2:0 2–5:4 5+:0
+ B6 a conversation at 30 s of talk, the outcome deciding nothing; answered with 0 s connected, no conversation                         | PASS   | 1:f/-/f 2:t/29/f 3:t/30/t 4:t/5/f | 1:t/90/t 2:t/0/f
+ B7 calls.conversation_min_talk_seconds moves the edge                                                                                 | PASS   | 29:2/2 31:0/
+ B8 the speed to lead is 0007d's for the same first call; a first CRM call without the telephony call differs                          | PASS   | 8 equal of 8; differ: dT 5390<>120
+ B9 one deal's attempts in order with the start, the outcome's label and the agent                                                     | PASS   | 1|05 08:04:50|No answer|Anna Verify 2|05 08:59:50|-|Anna Verify 3|06 08:59:50|-|Anna Verify 4|07 08:59:50|Connected|Bram Verify
+ B10 the agent's name gated; an agent refused; another pipeline's, an unknown and another tenant's deal not found                      | PASS   | reader:0 off:0 CMA06 CMA01 CMA02 CMA02 CMA02
+ B11 the filters attempted and outcome                                                                                                 | PASS   | none:all=2/2/dL2,dN some:all=9/9/dA,dB,dL,dO,dS,dT,dU,dW,dW2 all:open=4/4/dA,dB,dN,dT all:won=2/2/dW,dW2 all:lost=2/2/dL,dL2 all:ordered=2/2/dO,dS none:lost=1/1/dL2 
+ B12 won against lost, the deals not decided counted apart                                                                             | PASS   | won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of2/1/90 not_decided:7 open:4 ordered:2 unknown:1
+ B13 the win rate by attempts and by speed to lead with their buckets                                                                  | PASS   | 0:0/1 1:1/0 2:0/1 3:0/0 4:1/0 5+:0/0 | 0–5:1/0 5–15:0/0 15–60:0/1 60–240:1/0 240–1440:0/0 1440+:0/0 none:0/1 no_hours:0
+ B14 the figures, the previous period and the first conversation per attempt                                                           | PASS   | 11/9/13/1.18/1.0/6/5/5390/8of11/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0
+ B15 the list's order, its cap and total, the deal's id, the link and the stage                                                        | PASS   | dB dT dN dA dU dW2 dL2 dW dS dL dO | dB dT dN dA of 11 true true Open
+ B16 per deal owner by name with the not-linked row and the total                                                                      | PASS   | Anna Verify:4/7/4/7190/435/0 Bram Verify:3/4/1/32390/90/0 not_linked(1):4/2/1/3590/120/1 total:11/13
+ B17 the settings' refusals and the speed buckets' spaces                                                                              | PASS   | CMA04 ok ok CMA04 CMA04 CMA04 ok ok CMA04 CMA04 CMA04 ok 5,15,60
+ B18 the parameters refused; each page for its permissions                                                                             | PASS   | CMA04 CMA04 CMA04 CMA04 ok CMA06 ok CMA06
+ B19 the reader view equals the application's rows for its tenant and shows no other tenant's                                          | PASS   | 12 true 0
+ B20 tenant isolation for the pages                                                                                                    | PASS   | 1/0/0/0.00/0.0/0/0/-/0of0/1/1/0/0/0/0/0/0/0/0 dW
+ B21 0007d's calls of a deal and lead to order give their rows as before (copies of 0007d's bodies)                                    | PASS   | 0/0 calls:24 true orders:3
+ B22 the settings, the history start and the filter lists of the lead pipelines only                                                   | PASS   | telephony/30/5,15,60,240,1440/5 2026-09-30 ["NL"] Sales Sales=11
+ C1 refused for a sender without the permission, an agent, no acting user, an unknown and another tenant's message                     | PASS   | CMA06 CMA06 CMA01 CMA02 CMA02
+ C2 an admin withdraws a manual message and an alert                                                                                   | PASS   | t 2 1
+ C3 a recipient's inbox and unread count without them; a delivery not yet made never made                                              | PASS   | Verify kept unread:1 read:0 ack:CMA02 | Verify kept unread:1 undelivered:2
+ C4 the stats mark a withdrawn message                                                                                                 | PASS   | New deal:2/t/t Verify kept:2/f/ Verify withdrawn:2/t/t
+ C5 the audit row names the admin and the time                                                                                         | PASS   | 1/1
+ C6 withdrawing twice changes nothing                                                                                                  | PASS   | true 1 t
+ C7 nothing else of a message changes, and a withdrawal never moves                                                                    | PASS   | 42501 CMA04 CMA03 23514
+ verdict                                                                                                                               | PASS   | 36 PASS, 0 FAIL
+(37 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
