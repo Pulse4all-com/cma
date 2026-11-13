@@ -761,7 +761,7 @@ expect("Flash renders an overview through components/FlashOverview; Assets → I
   [true, true, true, true, true, "/reports/installed-base?market=GB&f_status=field", "/reports/flash"],
   [false, false, false, false, false, "/reports/flash?market=GB&f_status=field", "/reports/flash?"]);
 expect("every link and control of an overview keeps its page: the cells, the bands, the sort, the As of and the market",
-  [(partsSrc0008zu.match(/, path\)/g) ?? []).length >= 3, /router\.push\(flashHref\(path, q\) as Route\)/.test(controlsSrc0008zu),
+  [(partsSrc0008zu.match(/, path\)/g) ?? []).length >= 3, /^  push\(flashHref\(path, q\) as Route\);$/m.test(controlsSrc0008zu),
     (overviewSrc.match(/path=\{path\}/g) ?? []).length >= 5, /\/reports\/flash/.test(overviewSrc.replace(/"\/reports\/flash"/g, "").replace(/\/api\/v1\/reports\/flash/g, ""))],
   [true, true, true, false], [false, false, false, true]);
 expect("the orders' kind is the split's word in the breakdown and the records too; the code stays in the files and on hover",

@@ -10,10 +10,10 @@
  * when the period bar gained Yesterday (26 October 2026).
  */
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import type { FormCategory, FormsFilter } from "@/lib/data";
 import { Keycap } from "./primitives";
+import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
 
@@ -33,41 +33,41 @@ export function FormsFilters({ markets, categories, forms, filter, query, copy }
   copy: Pick<Copy, "forms" | "reports">;
 }) {
   const t = copy.forms;
-  const router = useRouter();
-  const marketList = filter.market && !markets.includes(filter.market) ? [...markets, filter.market] : markets;
-  const formList = filter.form && !forms.some((f) => f.key === filter.form) ? [...forms, { key: filter.form, name: filter.form.split(":").slice(1).join(":") }] : forms;
+  const [pending, shown, choose] = usePendingChoice(filter);
+  const marketList = shown.market && !markets.includes(shown.market) ? [...markets, shown.market] : markets;
+  const formList = shown.form && !forms.some((f) => f.key === shown.form) ? [...forms, { key: shown.form, name: shown.form.split(":").slice(1).join(":") }] : forms;
   const categoryList = [
     ...categories.map((c) => ({ code: c.code, name: c.name })),
-    ...(filter.category && filter.category !== "none" && !categories.some((c) => c.code === filter.category) ? [{ code: filter.category, name: filter.category }] : []),
+    ...(shown.category && shown.category !== "none" && !categories.some((c) => c.code === shown.category) ? [{ code: shown.category, name: shown.category }] : []),
     { code: "none", name: t.noCategory },
   ];
 
   function go(next: FormsFilter) {
-    router.push(href({ ...query, market: next.market, category: next.category, form: next.form }));
+    choose(next, href({ ...query, market: next.market, category: next.category, form: next.form }));
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-4" data-testid="forms-filters">
+    <div className={`flex flex-wrap items-end gap-4 ${PENDING_ROW}`} data-testid="forms-filters" aria-busy={pending || undefined}>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span className="flex items-center gap-2">{t.marketFilter} <Keycap>K</Keycap></span>
-        <select value={filter.market ?? ""} data-shortcut="k" data-testid="forms-market" className={select}
-          onChange={(e) => go({ ...filter, market: e.target.value || null })}>
+        <select value={shown.market ?? ""} data-shortcut="k" data-testid="forms-market" className={select}
+          onChange={(e) => go({ ...shown, market: e.target.value || null })}>
           <option value="">{t.allMarkets}</option>
           {marketList.map((m) => <option key={m} value={m}>{m === "unknown" ? copy.reports.unknownMarket : m}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span className="flex items-center gap-2">{t.categoryFilter} <Keycap>A</Keycap></span>
-        <select value={filter.category ?? ""} data-shortcut="a" data-testid="forms-category" className={select}
-          onChange={(e) => go({ ...filter, category: e.target.value || null })}>
+        <select value={shown.category ?? ""} data-shortcut="a" data-testid="forms-category" className={select}
+          onChange={(e) => go({ ...shown, category: e.target.value || null })}>
           <option value="">{t.allCategories}</option>
           {categoryList.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span className="flex items-center gap-2">{t.formFilter} <Keycap>F</Keycap></span>
-        <select value={filter.form ?? ""} data-shortcut="f" data-testid="forms-form" className={`${select} w-64`}
-          onChange={(e) => go({ ...filter, form: e.target.value || null })}>
+        <select value={shown.form ?? ""} data-shortcut="f" data-testid="forms-form" className={`${select} w-64`}
+          onChange={(e) => go({ ...shown, form: e.target.value || null })}>
           <option value="">{t.allForms}</option>
           {formList.map((f) => <option key={f.key} value={f.key}>{f.name}</option>)}
         </select>
@@ -87,24 +87,24 @@ export function AnswerFilters({ fields, field, value, query, copy }: {
   copy: Pick<Copy, "forms" | "reports">;
 }) {
   const t = copy.forms;
-  const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice({ field, value });
   const fieldList = field && !fields.some((f) => f.field === field) ? [...fields, { field, values: value ? [value] : [] }] : fields;
   const values = fieldList.find((f) => f.field === field)?.values ?? [];
   const valueList = value && !values.includes(value) ? [...values, value] : values;
   return (
-    <div className="flex flex-wrap items-end gap-4" data-testid="forms-answer-filters">
+    <div className={`flex flex-wrap items-end gap-4 ${PENDING_ROW}`} data-testid="forms-answer-filters" aria-busy={pending || undefined}>
       <label className="flex flex-col gap-2 text-small font-semibold">
         {t.fieldFilter}
-        <select value={field ?? ""} data-testid="forms-field" className={`${select} w-56`}
-          onChange={(e) => router.push(href({ ...query, field: e.target.value || null, value: null }), { scroll: false })}>
+        <select value={shown.field ?? ""} data-testid="forms-field" className={`${select} w-56`}
+          onChange={(e) => choose({ field: e.target.value || null, value: null }, href({ ...query, field: e.target.value || null, value: null }), { scroll: false })}>
           <option value="">{t.allFields}</option>
           {fieldList.map((f) => <option key={f.field} value={f.field}>{f.field}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
         {t.valueFilter}
-        <select value={value ?? ""} data-testid="forms-value" className={`${select} w-56`} disabled={field === null}
-          onChange={(e) => router.push(href({ ...query, field, value: e.target.value || null }), { scroll: false })}>
+        <select value={shown.value ?? ""} data-testid="forms-value" className={`${select} w-56`} disabled={shown.field === null || shown.field !== field}
+          onChange={(e) => choose({ field: shown.field, value: e.target.value || null }, href({ ...query, field: shown.field, value: e.target.value || null }), { scroll: false })}>
           <option value="">{t.allValues}</option>
           {valueList.map((v) => <option key={v} value={v}>{v}</option>)}
         </select>

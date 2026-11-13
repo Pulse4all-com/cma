@@ -8,10 +8,10 @@
  * and loads the page with the filter; the address keys are market, pipeline and source.
  */
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import type { FunnelFilter } from "@/lib/data";
 import { funnelFilterQuery, type FunnelClientCopy } from "@/lib/funnel";
 import { Keycap } from "./primitives";
+import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
 
@@ -29,22 +29,22 @@ export function FunnelFilters({ pathname, markets, pipelines, sourceChannels, fi
   marketOnly?: boolean;
 }) {
   const t = copy.funnel;
-  const router = useRouter();
-  const marketList = filter.market && !markets.includes(filter.market) ? [...markets, filter.market] : markets;
-  const pipelineList = filter.pipeline && !pipelines.some((p) => p.key === filter.pipeline) ? [...pipelines, { key: filter.pipeline, label: filter.pipeline }] : pipelines;
-  const sourceList = filter.sourceChannel && !sourceChannels.includes(filter.sourceChannel) ? [...sourceChannels, filter.sourceChannel] : sourceChannels;
+  const [pending, shown, choose] = usePendingChoice(filter);
+  const marketList = shown.market && !markets.includes(shown.market) ? [...markets, shown.market] : markets;
+  const pipelineList = shown.pipeline && !pipelines.some((p) => p.key === shown.pipeline) ? [...pipelines, { key: shown.pipeline, label: shown.pipeline }] : pipelines;
+  const sourceList = shown.sourceChannel && !sourceChannels.includes(shown.sourceChannel) ? [...sourceChannels, shown.sourceChannel] : sourceChannels;
 
   function go(next: FunnelFilter) {
     const qs = new URLSearchParams({ ...query, ...funnelFilterQuery(next) });
-    router.push(`${pathname}?${qs.toString()}` as Route);
+    choose(next, `${pathname}?${qs.toString()}` as Route);
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-4" data-testid="funnel-filters">
+    <div className={`flex flex-wrap items-end gap-4 ${PENDING_ROW}`} data-testid="funnel-filters" aria-busy={pending || undefined}>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span className="flex items-center gap-2">{t.marketFilter} <Keycap>K</Keycap></span>
-        <select value={filter.market ?? ""} data-shortcut="k" data-testid="funnel-market" className={select}
-          onChange={(e) => go({ ...filter, market: e.target.value || null })}>
+        <select value={shown.market ?? ""} data-shortcut="k" data-testid="funnel-market" className={select}
+          onChange={(e) => go({ ...shown, market: e.target.value || null })}>
           <option value="">{t.allMarkets}</option>
           {marketList.map((m) => <option key={m} value={m}>{m === "unknown" ? copy.reports.unknownMarket : m}</option>)}
         </select>
@@ -53,16 +53,16 @@ export function FunnelFilters({ pathname, markets, pipelines, sourceChannels, fi
         <>
           <label className="flex flex-col gap-2 text-small font-semibold">
             <span className="flex items-center gap-2">{t.pipelineFilter} <Keycap>P</Keycap></span>
-            <select value={filter.pipeline ?? ""} data-shortcut="p" data-testid="funnel-pipeline" className={select}
-              onChange={(e) => go({ ...filter, pipeline: e.target.value || null })}>
+            <select value={shown.pipeline ?? ""} data-shortcut="p" data-testid="funnel-pipeline" className={select}
+              onChange={(e) => go({ ...shown, pipeline: e.target.value || null })}>
               <option value="">{t.allPipelines}</option>
               {pipelineList.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
             </select>
           </label>
           <label className="flex flex-col gap-2 text-small font-semibold">
             <span className="flex items-center gap-2">{t.sourceFilter} <Keycap>S</Keycap></span>
-            <select value={filter.sourceChannel ?? ""} data-shortcut="s" data-testid="funnel-source" className={select}
-              onChange={(e) => go({ ...filter, sourceChannel: e.target.value || null })}>
+            <select value={shown.sourceChannel ?? ""} data-shortcut="s" data-testid="funnel-source" className={select}
+              onChange={(e) => go({ ...shown, sourceChannel: e.target.value || null })}>
               <option value="">{t.allSources}</option>
               {sourceList.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
