@@ -17,6 +17,7 @@ import {
 import { dateKeyInZone } from "@/lib/time";
 import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /**
  * Forms (Report, addition 0008p, brief B17d): every polled form's submissions for a period, whether or not
@@ -103,7 +104,7 @@ export default async function FormsPage({ searchParams }: PageProps<"/reports/fo
         {report.forms ? (
           <div className="mb-6">
             <FormsFilters markets={report.markets} categories={report.categories} forms={report.formList} filter={filter}
-              query={{ ...periodQuery, group }} copy={copy} />
+              query={{ ...periodQuery, group }} copy={pickCopy(copy, "forms", "reports")} />
           </div>
         ) : null}
       </div>
@@ -185,7 +186,7 @@ export default async function FormsPage({ searchParams }: PageProps<"/reports/fo
             <div className="-mt-2 mb-4 flex flex-wrap items-end justify-between gap-4">
               <p className="max-w-3xl text-small text-p4a-muted">{t.answersIntro}</p>
               {fieldLists.length > 0 || narrowed ? (
-                <AnswerFilters fields={fieldLists} field={answer.field} value={answer.field === null ? null : answer.value} query={pageQuery} copy={copy} />
+                <AnswerFilters fields={fieldLists} field={answer.field} value={answer.field === null ? null : answer.value} query={pageQuery} copy={pickCopy(copy, "forms", "reports")} />
               ) : null}
             </div>
             {answers.rows.length === 0 ? <p className="text-body text-p4a-muted">{t.answersEmpty}</p> : (

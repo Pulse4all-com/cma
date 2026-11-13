@@ -23,7 +23,7 @@ export function WeekBar({
   pathname: "/roster/planner" | "/schedule";
   weekStart: string;
   thisWeek: string;
-  copy: Copy;
+  copy: Pick<Copy, "roster">;
   locale: Locale;
   /** Other query values to carry along, such as the team */
   keep?: Record<string, string>;

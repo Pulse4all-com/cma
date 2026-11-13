@@ -27,7 +27,7 @@ function Radio({ name, value, checked, onChange, children }: { name: string; val
 const yesNo = (v: boolean, t: Copy["configSources"]) => (v ? t.ruleYes : t.ruleNo);
 
 export function FormRuleDialog({ forms, markets, copy, busy, onSave, onClose }: {
-  forms: SourceForm[]; markets: MarketConfig[]; copy: Copy; busy: boolean;
+  forms: SourceForm[]; markets: MarketConfig[]; copy: Pick<Copy, "configSources" | "configuration">; busy: boolean;
   onSave: (changes: SourceFormChange[]) => void; onClose: () => void;
 }) {
   const c = copy.configuration;

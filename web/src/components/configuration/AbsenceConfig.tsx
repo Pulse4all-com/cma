@@ -15,7 +15,7 @@ import { FlagField, FormDialog, SaveNote, field, label, send, td, th, useSave } 
 
 type Form = { key: string; name: string; isPaid: boolean; sortOrder: number };
 
-export function AbsenceConfig({ absences, teams, skills, targets, copy }: { absences: AbsenceType[]; teams: TeamInfo[]; skills: SkillInfo[]; targets: CoverageTargetRow[]; copy: Copy }) {
+export function AbsenceConfig({ absences, teams, skills, targets, copy }: { absences: AbsenceType[]; teams: TeamInfo[]; skills: SkillInfo[]; targets: CoverageTargetRow[]; copy: Pick<Copy, "configAbsences" | "configTeams" | "configuration"> }) {
   const c = copy.configuration;
   const t = copy.configAbsences;
   const { state, save } = useSave(c);

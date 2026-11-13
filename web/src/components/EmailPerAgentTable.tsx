@@ -28,7 +28,7 @@ export function EmailPerAgentTable({ rows, total, hints, copy, locale }: {
   total: EmailPerson;
   /** The hint texts by key, the tenant's values filled in */
   hints: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "emailPerAgent" | "reports"> & { hints: Pick<Copy["hints"], "about"> };
   locale: Locale;
 }) {
   const t = copy.emailPerAgent;

@@ -13,6 +13,7 @@ import { resolvePeriod } from "@/lib/period";
 import { fillHint, MAX_REPORT_DAYS } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
 import { resolve } from "../../access";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 /**
  * Orders per person (Report, addition 0008u; brief N19-A part 2): the first orders that came in through the call
@@ -64,7 +65,7 @@ export default async function OrdersPerPersonPage({ searchParams }: PageProps<"/
         {people.connected ? (
           <div className="mb-6">
             <FirstOrderFilters pathname="/reports/orders-per-person" markets={people.markets} levels={levelsInOrder(people.settings)} filter={filter}
-              query={periodQuery} copy={copy} />
+              query={periodQuery} copy={pickCopy(copy, "firstOrders", "reports")} />
           </div>
         ) : null}
       </div>
@@ -94,7 +95,7 @@ export default async function OrdersPerPersonPage({ searchParams }: PageProps<"/
         ) : people.rows.length === 0 ? (
           <p className="text-body text-p4a-muted">{t.empty}</p>
         ) : (
-          <OrdersPerPersonTable rows={people.rows} total={people.total} hints={hints} copy={copy} locale={me.locale} />
+          <OrdersPerPersonTable rows={people.rows} total={people.total} hints={hints} copy={{ ...pickCopy(copy, "firstOrders", "ordersPerPerson", "reports"), hints: pickHints(copy, "about") }} locale={me.locale} />
         )}
       </Card>
 

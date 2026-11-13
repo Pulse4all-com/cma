@@ -48,7 +48,7 @@ const label = "flex flex-col gap-2 text-small font-semibold text-p4a-body";
 export function InviteDialog({ mode, context, copy, onClose, onDone }: {
   mode: InviteDialogMode;
   context: InviteContext;
-  copy: Copy;
+  copy: Pick<Copy, "invitations">;
   onClose: () => void;
   /** After a link was made: the page re-reads the list */
   onDone: () => void;

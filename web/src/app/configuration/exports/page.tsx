@@ -2,6 +2,7 @@ import { ExportsConfig } from "@/components/configuration/ExportsConfig";
 import { data } from "@/lib/data";
 import { resolve } from "../../access";
 import { ConfigurationPage, mayConfigure } from "../gate";
+import { pickCopy } from "@/lib/copy";
 
 /** Exports (Configuration, migration 0005a): the five CSV settings with a preview, and the minute settings */
 export default async function ExportsPage() {
@@ -12,7 +13,7 @@ export default async function ExportsPage() {
   const settings = mayConfigure(me) ? await data().listSettings(me) : [];
   return (
     <ConfigurationPage me={me} copy={copy} active="config-exports" title={t.title} intro={t.intro}>
-      <ExportsConfig settings={settings} copy={copy} />
+      <ExportsConfig settings={settings} copy={pickCopy(copy, "configExports", "configuration", "exports")} />
     </ConfigurationPage>
   );
 }

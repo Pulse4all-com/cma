@@ -15,6 +15,7 @@ import { fillHint, fmtCount, fmtShare, MAX_REPORT_DAYS, REPORT_PERMISSIONS } fro
 import { dateKeyInZone } from "@/lib/time";
 import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /**
  * First orders (Report, addition 0008u; brief N19-A part 2): of the new first orders of a period, which came in by
@@ -89,7 +90,7 @@ export default async function FirstOrdersPage({ searchParams }: PageProps<"/repo
         </div>
         {report.connected ? (
           <div className="mb-6">
-            <FirstOrderFilters pathname="/reports/first-orders" markets={report.markets} levels={levels} filter={filter} query={{ ...periodQuery, group }} copy={copy} />
+            <FirstOrderFilters pathname="/reports/first-orders" markets={report.markets} levels={levels} filter={filter} query={{ ...periodQuery, group }} copy={pickCopy(copy, "firstOrders", "reports")} />
           </div>
         ) : null}
       </div>

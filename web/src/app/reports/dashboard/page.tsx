@@ -92,7 +92,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
         canOpenMetrics={me.permissions.includes("tenant.configure")} />
 
       <div className="mb-6 flex items-end justify-between gap-4">
-        <DashboardFilter people={people} person={person} query={query} copy={copy} />
+        <DashboardFilter people={people} person={person} query={query} labels={{ person: t.person, everyone: t.everyone }} />
         <p className="text-caption text-p4a-grey">
           {fmtDate(period.from, me.locale)}
           {period.from !== period.to ? ` – ${fmtDate(period.to, me.locale)}` : ""}

@@ -20,7 +20,7 @@ import { Badge, Button, Notice } from "./primitives";
 
 const TONE = { open: "info", expired: "warning", accepted: "success", revoked: "neutral" } as const;
 
-export function InvitationsSection({ invitations, context, copy }: { invitations: Invitation[]; context: InviteContext; copy: Copy }) {
+export function InvitationsSection({ invitations, context, copy }: { invitations: Invitation[]; context: InviteContext; copy: Pick<Copy, "invitations"> & { hints: Pick<Copy["hints"], "about"> } }) {
   const t = copy.invitations;
   const router = useRouter();
   const [pending, startTransition] = useTransition();

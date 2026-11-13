@@ -21,7 +21,7 @@ import { Badge, Button } from "../primitives";
 import { fmtWhen } from "./SourcesList";
 import { FlagField, FormDialog, SaveNote, field, label, send, th, useSave } from "./shared";
 
-export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: { data: Data; permissions: PermissionInfo[]; copy: Copy; locale: Locale; timeZone: string }) {
+export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: { data: Data; permissions: PermissionInfo[]; copy: Pick<Copy, "configAlertRules" | "configuration"> & { hints: Pick<Copy["hints"], "about"> }; locale: Locale; timeZone: string }) {
   const c = copy.configuration;
   const t = copy.configAlertRules;
   const { state, save } = useSave(c);

@@ -23,7 +23,7 @@ export function EmailFilters({ pathname, markets, inboxes, accounts, filter, que
   filter: EmailFilter;
   /** The period and grouping part of the query string, kept when a filter changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "email" | "reports">;
 }) {
   const t = copy.email;
   const router = useRouter();

@@ -2,6 +2,7 @@ import { StatusConfig } from "@/components/configuration/StatusConfig";
 import { data } from "@/lib/data";
 import { resolve } from "../../access";
 import { ConfigurationPage, mayConfigure } from "../gate";
+import { pickCopy } from "@/lib/copy";
 
 /** Status (Configuration, migration 0005a): the work status list with its four flags, the default, retire and reactivate */
 export default async function StatusPage() {
@@ -12,7 +13,7 @@ export default async function StatusPage() {
   const statuses = mayConfigure(me) ? await data().listConfigStatuses(me) : [];
   return (
     <ConfigurationPage me={me} copy={copy} active="config-statuses" title={t.title} intro={t.intro}>
-      <StatusConfig statuses={statuses} copy={copy} />
+      <StatusConfig statuses={statuses} copy={pickCopy(copy, "configStatuses", "configuration")} />
     </ConfigurationPage>
   );
 }

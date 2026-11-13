@@ -22,7 +22,7 @@ export function CallsFilters({ pathname, markets, lines, filter, query, copy }: 
   filter: CallsFilter;
   /** The period and grouping part of the query string, kept when a filter changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "calls" | "reports">;
 }) {
   const t = copy.calls;
   const router = useRouter();

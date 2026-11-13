@@ -8,6 +8,7 @@ import { copy as allCopy, t as copyFor, type Locale } from "@/lib/copy";
 import { data, dataIsMock } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
 import { resolve } from "../../access";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 /**
  * People (Team group, migration 0004): everyone of the tenant with role, employer, teams and
@@ -73,12 +74,12 @@ export default async function PeoplePage() {
           defaultLoginSystem={config.authMode === "iap" ? "google" : "mock"}
           linked={linked}
           invite={invite}
-          copy={copy}
+          copy={{ ...pickCopy(copy, "invitations", "team"), hints: pickHints(copy, "about") }}
         />
       </Card>
 
       <div className="mt-6">
-        <InvitationsSection invitations={invitations} context={invite} copy={copy} />
+        <InvitationsSection invitations={invitations} context={invite} copy={{ ...pickCopy(copy, "invitations"), hints: pickHints(copy, "about") }} />
       </div>
 
       {dataIsMock ? (

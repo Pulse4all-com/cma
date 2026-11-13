@@ -14,6 +14,7 @@ import {
 } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /**
  * Intake (Report, B11): per business date and market the counts of cma.intake_per_day (migration
@@ -97,7 +98,7 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
       ) : null}
 
       <div className="mb-6 flex items-end justify-between gap-4">
-        <MarketFilter markets={markets} market={market} query={query} copy={copy} />
+        <MarketFilter markets={markets} market={market} query={query} copy={pickCopy(copy, "intake", "reports")} />
         <p className="text-caption text-p4a-grey">
           {fmtDate(period.from, me.locale)}
           {period.from !== period.to ? ` – ${fmtDate(period.to, me.locale)}` : ""}

@@ -53,7 +53,7 @@ export function RosterPlanner({
   today: string;
   thisWeek: string;
   viewerZone: string;
-  copy: Copy;
+  copy: Pick<Copy, "dayEditor" | "roster">;
   locale: Locale;
 }) {
   const t = copy.roster;

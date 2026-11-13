@@ -13,6 +13,7 @@ import {
 import { dateKeyInZone } from "@/lib/time";
 import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /**
  * Calls (Report, addition 0008j, brief B16; Aircall's General Performance and Outbound views): every call
@@ -88,7 +89,7 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
         {overview.telephony ? (
           <div className="mb-6">
             <CallsFilters pathname="/reports/calls" markets={overview.markets} lines={overview.lines} filter={filter}
-              query={{ ...periodQuery, group }} copy={copy} />
+              query={{ ...periodQuery, group }} copy={pickCopy(copy, "calls", "reports")} />
           </div>
         ) : null}
       </div>

@@ -56,7 +56,7 @@ export function PersonDialog({
   defaultLoginSystem: string;
   /** Linked accounts (addition 0008e): the systems a person can hold an id in, and the ids held */
   linked: LinkedAccounts;
-  copy: Copy;
+  copy: Pick<Copy, "team">;
   onClose: () => void;
   onSaved: () => void;
 }) {

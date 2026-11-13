@@ -17,7 +17,7 @@ function formOf(l: ConfigAppLink | null): Form {
   return l ? { key: l.key, label: l.label, address: l.address, permissionKey: l.permissionKey ?? "", sortOrder: l.sortOrder } : { key: "", label: "", address: "https://", permissionKey: "", sortOrder: 100 };
 }
 
-export function AppLinksConfig({ links, permissions, copy }: { links: ConfigAppLink[]; permissions: PermissionInfo[]; copy: Copy }) {
+export function AppLinksConfig({ links, permissions, copy }: { links: ConfigAppLink[]; permissions: PermissionInfo[]; copy: Pick<Copy, "configAppLinks" | "configuration"> }) {
   const c = copy.configuration;
   const t = copy.configAppLinks;
   const { state, save } = useSave(c);

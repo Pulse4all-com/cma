@@ -58,7 +58,7 @@ export function TeamHoursView({
   meId: string;
   today: DateKey;
   statuses: WorkStatus[];
-  copy: Copy;
+  copy: Pick<Copy, "exports" | "teamHours" | "dayEditor">;
   locale: Locale;
   /** Download links for the period and person shown; null without workday.export */
   downloads: { hours: string; statusChanges: string } | null;

@@ -21,7 +21,7 @@ export function MarketFilter({
   market: string;
   /** The period part of the query string, kept when the filter changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "intake" | "reports">;
 }) {
   const t = copy.intake;
   const router = useRouter();

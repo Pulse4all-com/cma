@@ -7,6 +7,7 @@ import { data, dataIsMock, type TeamDay } from "@/lib/data";
 import { resolvePeriod } from "@/lib/period";
 import { dateKeyInZone, fmtDate, fmtMinutes, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /** team_hours answers at most 92 days per request */
 const MAX_DAYS = 92;
@@ -138,7 +139,7 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
           meId={me.userId}
           today={today}
           statuses={statuses}
-          copy={copy}
+          copy={pickCopy(copy, "exports", "teamHours", "dayEditor")}
           locale={me.locale}
           downloads={downloads}
           emptyLabel={toCorrect ? t.emptyToCorrect : t.empty}

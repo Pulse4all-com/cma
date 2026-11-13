@@ -47,7 +47,7 @@ const COURTESY_HINTS: Record<CourtesySettingKey, keyof Copy["configExports"]> = 
   "courtesy.alert_attempts": "courtesyAlertHint", "courtesy.ages_days": "courtesyAgesHint",
 };
 
-export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; copy: Copy }) {
+export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; copy: Pick<Copy, "configExports" | "configuration" | "exports"> }) {
   const c = copy.configuration;
   const t = copy.configExports;
   const { state, save } = useSave(c);

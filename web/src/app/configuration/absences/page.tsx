@@ -2,6 +2,7 @@ import { AbsenceConfig } from "@/components/configuration/AbsenceConfig";
 import { data } from "@/lib/data";
 import { resolve } from "../../access";
 import { ConfigurationPage, mayConfigure } from "../gate";
+import { pickCopy } from "@/lib/copy";
 
 /** Absence (Configuration, migration 0005a): the absence types and the coverage targets per team */
 export default async function AbsencePage() {
@@ -14,7 +15,7 @@ export default async function AbsencePage() {
     : [[], [], [], []];
   return (
     <ConfigurationPage me={me} copy={copy} active="config-absences" title={t.title} intro={t.intro}>
-      <AbsenceConfig absences={absences} teams={teams} skills={skills} targets={targets} copy={copy} />
+      <AbsenceConfig absences={absences} teams={teams} skills={skills} targets={targets} copy={pickCopy(copy, "configAbsences", "configTeams", "configuration")} />
     </ConfigurationPage>
   );
 }
