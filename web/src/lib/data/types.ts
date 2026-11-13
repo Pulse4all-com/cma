@@ -2263,6 +2263,166 @@ export interface CourtesyReport {
   segments: string[];
 }
 
+/**
+ * Customers → Active (addition 0009l, brief B35 with addendum A; docs/definitions.md, Active customer terms): the active
+ * customer base, its state and its movement, in one read (cma.active_top / cma.active_rest) and its customer list (cma.active_rows).
+ * Ids, codes, counts, dates, amounts and links only: no field of these types holds what identifies a customer in words.
+ * An acquisition channel: indirect (the call center), direct (self-service) or unknown
+ */
+export type ActiveChannel = "indirect" | "direct" | "unknown";
+/** The customer cohorts' period: the month or the quarter of the Customer start */
+export type ActiveGrouping = "month" | "quarter";
+export interface ActiveFilter { market: string | null; segment: string | null; channel: ActiveChannel | null }
+/** The list's sort keys (cma.active_rows) */
+export type ActiveSort = "monthly_amount" | "clv" | "store_customer" | "store" | "market" | "segment" | "customer_start" | "age_months" | "subscriptions"
+  | "devices" | "channel" | "level";
+/** The placeholders: figures the Workspace cannot compute yet (definition status Pending); a slot never carries a figure */
+export type ActiveSlotKey = "churn_rate" | "cac" | "cost_per_subscription" | "clv_projected" | "clv_to_cac" | "payback_months";
+/** The comparison's measures (the two segments side by side) */
+export type ActiveMeasure = "customers" | "share" | "lifetime_median" | "retention" | "median_age" | "clv_average" | "clv_median" | "clv_per_month"
+  | "average_monthly_amount" | "subscriptions_per_customer" | "devices_per_customer" | "indirect_share";
+/** A figure at the previous month's end and at the month end twelve months before that; null where the history does not reach */
+export interface ActiveChange { prevMonth: number | null; prevYear: number | null }
+/** The Monthly recurring amount of one currency: the amount, the active customers with a subscription in it, their average */
+export interface ActiveAmount { amount: number; customers: number; average: number | null }
+/** Customer lifetime value (realised) of one currency over the active customers: the average, the median and the average per month of Customer age */
+export interface ActiveClv { average: number; median: number; perMonth: number; customers: number }
+export interface ActiveTiles {
+  /** Flash's Active customers, with the split by segment and by acquisition channel (the channel is the stored take's: null while there is no take yet, never "unknown 100 %") */
+  activeCustomers: ActiveChange & { value: number; bySegment: Record<string, number>; byChannel: Record<ActiveChannel, number> | null };
+  /** Flash's Total subscriptions, with the split by holding status */
+  totalSubscriptions: ActiveChange & { value: number; byStatus: Record<string, number> };
+  /** The Monthly recurring amount per currency, never added across currencies */
+  amounts: (ActiveAmount & ActiveChange & { currency: string; averagePrevMonth: number | null; averagePrevYear: number | null })[];
+  /** The indicative euros: only while reports.fx_eur_rates holds a rate for every currency shown; else null */
+  eur: (ActiveChange & { amount: number; asOf: string }) | null;
+  /** Customer age in whole months over the active customers: the median, and the customers of at least each of the first three ages of customers.age_months */
+  /** The stored take's (null while there is no take yet: the history is being prepared, never zeros) */
+  customerAge: (ActiveChange & { median: number | null; over: { months: number; customers: number; share: number | null }[] }) | null;
+  /** Customer lifetime: Kaplan–Meier over the spells; median null while the curve has not reached 50 % (then: more than longest months); the stored take's */
+  lifetime: { spells: number; ended: number; longest: number | null; median: number | null } | null;
+  clv: Record<string, ActiveClv> | null;
+}
+/** One month end of the history; the running month is "now" and carries the present */
+export interface ActiveMonth {
+  month: DateKey; isNow: boolean; customers: number; bySegment: Record<string, number>; subscriptions: number; inflow: number;
+  inflowByChannel: Record<string, number>; outflow: number; net: number; amounts: Record<string, number>; eur: number | null;
+}
+/** The present figures of a market, of a segment or of everything */
+export interface ActiveGroupStat {
+  customers: number; bySegment: Record<string, number>; subscriptions: number; devices: number; amounts: Record<string, ActiveAmount>;
+  medianAge: number | null; clv: Record<string, ActiveClv>; churned30d: number; net30d: number; indirect: number; direct: number; unknownChannel: number;
+  /** Indirect over the customers with a known channel; null without one */
+  indirectShare: number | null; subscriptionsPerCustomer: number | null; devicesPerCustomer: number | null;
+}
+export interface ActiveMarketRow extends ActiveGroupStat { market: string; share: number | null; spark: number[] }
+/** One row of the comparison: a the first segment, b the second, unknown beside them, never in the difference */
+export interface ActiveComparisonRow {
+  measure: ActiveMeasure; months: number | null; currency: string | null; a: number | null; b: number | null; unknown: number | null;
+  difference: number | null; ratio: number | null; aLongest: number | null; bLongest: number | null; unknownLongest: number | null;
+}
+export interface ActiveCurvePoint { age: number; atRisk: number; events: number; survival: number }
+/** A Kaplan–Meier curve: its value of the split (absent for the curve over all), the spells, the longest observed age, the median or null */
+export interface ActiveCurve { value?: string; spells: number; ended: number; longest: number | null; median: number | null; curve: ActiveCurvePoint[] }
+export interface ActiveCohort { cohort: DateKey; started: number; share: number | null; ages: { age: number; stillActive: number; mature: boolean }[] }
+/** A split value's pooled retention: per age the customers of the rows Mature at it, and those still active */
+export interface ActiveCohortSplit { value: string; started: number; ages: { age: number; started: number; stillActive: number }[] }
+export interface ActiveNotes {
+  noEndedTime: number; noCreatedTime: number; noAmount: number; unmatchedSubscriptions: number; reconstructionGap: number;
+  historyStarts: { store: string; market: string; date: DateKey }[];
+  unknownChannel: { customers: number; reasons: Record<string, number> };
+  dominantCohort: { cohort: DateKey; share: number } | null;
+}
+/** The live present of the tiles that state it (cma.active_now, decision D16): it streams in after the stored answer and takes those tiles' places */
+export interface ActiveNow {
+  /** False while a source is not set up */
+  figures: boolean;
+  /** Where the present was read from (the tenant's active.present_source): live at the read's moment, or the stored take, as of the take's moment */
+  source: "live" | "take";
+  /** The read's moment (live) or the take's (take) */
+  computedAt: Instant;
+  /** Null without a present to state: a source not set up, or a channel filter while there is no take yet (the channel is the take's) */
+  tiles: Pick<ActiveTiles, "activeCustomers" | "totalSubscriptions" | "amounts" | "eur"> | null;
+  /** The headline's figures as the series' running point (the current point is "now" and equals the headline) */
+  now: { customers: number; subscriptions: number; bySegment: Record<string, number> } | null;
+}
+/** The stored take the history is read from (decision D13): when it was computed (History as of), and whether the page says it is old */
+export interface ActiveTake {
+  computedAt: Instant; businessDate: DateKey;
+  /** A settings change marked it: the next refresh rewrites it */
+  stale: boolean; ageMinutes: number;
+  /** Stale, or older than customers.history_notice_minutes: the page says so */
+  late: boolean;
+}
+/**
+ * Customers → Active's report as its reads answer it (cma.active_top above the fold, cma.active_rest below it, decision
+ * D15): reports.view or performance.team; team figures only. One shape for both reads and for the two together (the
+ * API): a read fills its own part and leaves the other's empty (null, [] or zero counts), so nothing is ever a guess
+ */
+export interface ActiveReport {
+  setUp: { commerce: boolean; subscriptions: boolean };
+  /** False while a source is not set up: every figure below is then null or empty ("Not set up", never zeros) */
+  figures: boolean;
+  /** False while the tenant has no stored take yet: the history's parts are then absent ("History is being prepared", never zeros); the tiles' present is still there */
+  history: boolean;
+  take: ActiveTake | null;
+  computedAt: Instant; timeZone: string; today: DateKey; month: DateKey; fromMonth: DateKey; grouping: ActiveGrouping; filter: ActiveFilter;
+  settings: {
+    cohortAgesMonths: number[]; ageMonths: number[]; historyMonths: number;
+    /** reports.fx_eur_rates: the rates' date and the euros one unit of a currency is worth; null while empty */
+    fx: { asOf: string; rates: Record<string, number> } | null;
+    segments: string[];
+    statuses: { active: string[]; holding: string[]; ended: string[] };
+    attribution: { assistedLevels: string[]; historyStart: DateKey | null };
+  };
+  /** The filter choices: the markets of the base (unknown last), the tenant's segments and unknown, the three channels */
+  filters: { markets: string[]; segments: string[]; channels: ActiveChannel[] };
+  tiles: ActiveTiles | null;
+  /** The moment the tiles' present is of: the take's while the page shows the stored answer (decision D16), this read's once the live present is in; null without a present */
+  presentAt: Instant | null;
+  /** Where the present of the four tiles was read from (the tenant's active.present_source): live, or the stored take (then presentAt is the take's moment); absent in a single read's answer */
+  presentSource?: "live" | "take";
+  /** churned30d is the stored take's: null while there is no take yet (never a zero) */
+  unitEconomics: { churned30d: number | null; slots: { key: ActiveSlotKey; status: "pending" }[] } | null;
+  months: ActiveMonth[];
+  markets: ActiveMarketRow[];
+  marketsTotal: (ActiveGroupStat & { share: number | null }) | null;
+  comparison: { a: string | null; b: string | null; rows: ActiveComparisonRow[] } | null;
+  survival: { all: ActiveCurve; segment: ActiveCurve[]; channel: ActiveCurve[] } | null;
+  ageBands: { band: string; customers: number }[];
+  /** The active customers older than the first three bounds of customers.age_months, of the stored take (below the fold) */
+  ageOver: { months: number; customers: number; share: number | null }[];
+  cohorts: ActiveCohort[];
+  cohortSplits: { segment: ActiveCohortSplit[]; channel: ActiveCohortSplit[] } | null;
+  mix: {
+    billing: { key: string; subscriptions: number }[]; deviceBand: { key: string; subscriptions: number }[];
+    model: { key: string; label: string | null; devices: number }[]; paymentState: { key: string; subscriptions: number }[];
+  } | null;
+  notes: ActiveNotes | null;
+}
+/** One active customer of the list: the store's id of the customer, codes, dates, amounts and the CRM contact's id with its link */
+export interface ActiveListRow {
+  storeCustomer: string; store: string; market: string; segment: string; customerStart: DateKey | null; ageMonths: number | null;
+  subscriptions: number; devices: number; currency: string | null; monthlyAmount: number | null; otherAmounts: Record<string, number>;
+  clv: number | null; clvCurrency: string | null; paymentState: string | null; channel: ActiveChannel; level: string | null;
+  contactId: string | null; contactUrl: string | null;
+}
+/**
+ * The customer list's page, from the stored take (cma.active_rows): keyset paging, so next and prev are the cursors of
+ * the page's ends where there is more (opaque: a row's sort values and ids as the database wrote them). total is null
+ * while there is no take yet
+ */
+export interface ActiveList {
+  setUp: boolean; history: boolean; take: ActiveTake | null; timeZone: string; total: number | null; rows: ActiveListRow[];
+  next: string | null; prev: string | null;
+}
+export interface ActiveRowsRequest {
+  filter: ActiveFilter; sort: ActiveSort; descending: boolean;
+  /** Continue after this cursor (a page's next) or end before this one (a page's prev); never both */
+  after?: string | null; before?: string | null;
+  limit: number; file?: boolean;
+}
+
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
 export type MaintenanceScope = "field" | "stock";
 /** Reports → Maintenance's grid: the planned exchanges per cell, or the due components and devices at end of life */
@@ -4021,6 +4181,17 @@ export interface CmaData {
   getReviews(me: Principal, range: ReviewsRange, group: ReviewGroup, market: string | null): Promise<ReviewsReport>;
   /** Customers → Courtesy (cma.courtesy_page, addition 0009a; reports.view or performance.team; at most 92 days) */
   getCourtesy(me: Principal, range: HoursRange, period: CourtesyPeriod, group: CourtesyGroup, filter: CourtesyFilter): Promise<CourtesyReport>;
+  // ---- Customers → Active (addition 0009l): the database checks the permission on every call (CMA06)
+  /** Above the fold from the stored take alone (cma.active_top, decision D16: the table first): the tiles as of the take, the hero series and the filters' choices; fromMonth the history's first month (null: as far back as the tenant keeps) */
+  getActiveTop(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter): Promise<ActiveReport>;
+  /** The live present of the tiles (cma.active_now): its own transaction, after the stored answer; D2's equality with Flash is this read's */
+  getActiveNow(me: Principal, filter: ActiveFilter): Promise<ActiveNow>;
+  /** Below the fold, from the stored take alone (cma.active_rest): its own transaction */
+  getActiveRest(me: Principal, fromMonth: DateKey | null, filter: ActiveFilter, grouping: ActiveGrouping): Promise<ActiveReport>;
+  /** The customer list's page (cma.active_rows); file: every row up to the tenant's flash.file_max_rows */
+  getActiveRows(me: Principal, request: ActiveRowsRequest): Promise<ActiveList>;
+  /** A file read of the customer list in the audit log (cma.active_file_record): who, which filters, how many rows */
+  recordActiveFile(me: Principal, filter: ActiveFilter, rows: number): Promise<void>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
   getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;

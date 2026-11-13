@@ -1,0 +1,204 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+SET
+              tenant_id               | take_tables_empty | planner_rows_of_the_base | has_0009m 
+--------------------------------------+-------------------+--------------------------+-----------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4 | t                 | 0                        | f
+(1 row)
+
+psql:tools/perf/active-refresh-stale-plan.sql:52: error: unterminated quoted string
+                tenant                
+--------------------------------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4
+(1 row)
+
+SET
+SET
+PREPARE
+
+==== 1. The plan as made on the empty tables (kept from here on) ====
+ count 
+-------
+     0
+(1 row)
+
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.29..0.30 rows=1 width=8)
+   CTE b
+     ->  Result  (cost=0.01..0.01 rows=1 width=719)
+           One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = $1)
+           ->  Seq Scan on active_base x  (cost=0.01..0.01 rows=1 width=719)
+                 Filter: ((customer_id IS NOT NULL) AND (tenant_id = $1))
+   CTE amt
+     ->  WindowAgg  (cost=0.05..0.07 rows=1 width=88)
+           Window: w1 AS (PARTITION BY b.customer_id ORDER BY (sum(b.monthly_amount)), b.currency ROWS UNBOUNDED PRECEDING)
+           ->  Sort  (cost=0.05..0.06 rows=1 width=80)
+                 Sort Key: b.customer_id, (sum(b.monthly_amount)) DESC, b.currency
+                 ->  HashAggregate  (cost=0.03..0.04 rows=1 width=80)
+                       Group Key: b.customer_id, b.currency
+                       ->  CTE Scan on b  (cost=0.00..0.02 rows=1 width=80)
+                             Filter: (is_holding AND is_paying AND (currency IS NOT NULL) AND (monthly_amount IS NOT NULL))
+   CTE n
+     ->  Unique  (cost=0.18..0.18 rows=1 width=116)
+           ->  Sort  (cost=0.18..0.18 rows=1 width=116)
+                 Sort Key: b_1.customer_id
+                 ->  Nested Loop Left Join  (cost=0.00..0.17 rows=1 width=116)
+                       Join Filter: (o.customer_id = b_1.customer_id)
+                       ->  Nested Loop Left Join  (cost=0.00..0.05 rows=1 width=88)
+                             Join Filter: (a.customer_id = b_1.customer_id)
+                             ->  CTE Scan on b b_1  (cost=0.00..0.02 rows=1 width=24)
+                             ->  CTE Scan on amt a  (cost=0.00..0.02 rows=1 width=80)
+                                   Filter: (rn = 1)
+                       ->  GroupAggregate  (cost=0.00..0.04 rows=1 width=48)
+                             Group Key: o.customer_id
+                             ->  CTE Scan on amt o  (cost=0.00..0.02 rows=1 width=80)
+                                   Filter: (rn > 1)
+   ->  CTE Scan on n  (cost=0.00..0.02 rows=1 width=0)
+(31 rows)
+
+
+==== The take filled by a forced refresh (rolled back at the end) ====
+ refreshed | base_rows | customer_rows | refresh_ms |     tables_analyzed      
+-----------+-----------+---------------+------------+--------------------------
+ true      | 7432      | 6813          | 6677       | none: the refresh of 172
+(1 row)
+
+
+==== 2. The kept plan over the filled tables (before 174: nested loops over every row; after 174: planned again) ====
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=0.29..0.30 rows=1 width=8) (actual time=12437.531..12437.542 rows=1.00 loops=1)
+   Buffers: shared hit=324
+   CTE b
+     ->  Result  (cost=0.01..0.01 rows=1 width=719) (actual time=0.037..7.634 rows=7426.00 loops=1)
+           One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = $1)
+           Buffers: shared hit=324
+           ->  Seq Scan on active_base x  (cost=0.01..0.01 rows=1 width=719) (actual time=0.025..4.491 rows=7426.00 loops=1)
+                 Filter: ((customer_id IS NOT NULL) AND (tenant_id = $1))
+                 Rows Removed by Filter: 6
+                 Buffers: shared hit=324
+   CTE amt
+     ->  WindowAgg  (cost=0.05..0.07 rows=1 width=88) (actual time=35.217..38.847 rows=5555.00 loops=1)
+           Window: w1 AS (PARTITION BY b.customer_id ORDER BY (sum(b.monthly_amount)), b.currency ROWS UNBOUNDED PRECEDING)
+           Storage: Memory  Maximum Storage: 17kB
+           Buffers: shared hit=322
+           ->  Sort  (cost=0.05..0.06 rows=1 width=80) (actual time=35.199..36.080 rows=5555.00 loops=1)
+                 Sort Key: b.customer_id, (sum(b.monthly_amount)) DESC, b.currency
+                 Sort Method: quicksort  Memory: 457kB
+                 Buffers: shared hit=322
+                 ->  HashAggregate  (cost=0.03..0.04 rows=1 width=80) (actual time=28.237..32.651 rows=5555.00 loops=1)
+                       Group Key: b.customer_id, b.currency
+                       Batches: 1  Memory Usage: 2473kB
+                       Buffers: shared hit=322
+                       ->  CTE Scan on b  (cost=0.00..0.02 rows=1 width=80) (actual time=0.006..21.860 rows=5834.00 loops=1)
+                             Filter: (is_holding AND is_paying AND (currency IS NOT NULL) AND (monthly_amount IS NOT NULL))
+                             Rows Removed by Filter: 1592
+                             Storage: Memory  Maximum Storage: 2570kB
+                             Buffers: shared hit=322
+   CTE n
+     ->  Unique  (cost=0.18..0.18 rows=1 width=116) (actual time=12433.570..12435.806 rows=6813.00 loops=1)
+           Buffers: shared hit=324
+           ->  Sort  (cost=0.18..0.18 rows=1 width=116) (actual time=12433.567..12434.343 rows=7426.00 loops=1)
+                 Sort Key: b_1.customer_id
+                 Sort Method: quicksort  Memory: 592kB
+                 Buffers: shared hit=324
+                 ->  Nested Loop Left Join  (cost=0.00..0.17 rows=1 width=116) (actual time=41.511..12416.694 rows=7426.00 loops=1)
+                       Join Filter: (o.customer_id = b_1.customer_id)
+                       Buffers: shared hit=324
+                       ->  Nested Loop Left Join  (cost=0.00..0.05 rows=1 width=88) (actual time=36.042..8745.874 rows=7426.00 loops=1)
+                             Join Filter: (a.customer_id = b_1.customer_id)
+                             Rows Removed by Join Filter: 41245375
+                             Buffers: shared hit=324
+                             ->  CTE Scan on b b_1  (cost=0.00..0.02 rows=1 width=24) (actual time=0.042..7.240 rows=7426.00 loops=1)
+                                   Storage: Memory  Maximum Storage: 2570kB
+                                   Buffers: shared hit=2
+                             ->  CTE Scan on amt a  (cost=0.00..0.02 rows=1 width=80) (actual time=0.005..0.741 rows=5555.00 loops=7426)
+                                   Filter: (rn = 1)
+                                   Storage: Memory  Maximum Storage: 415kB
+                                   Buffers: shared hit=322
+                       ->  GroupAggregate  (cost=0.00..0.04 rows=1 width=48) (actual time=0.483..0.483 rows=0.00 loops=7426)
+                             Group Key: o.customer_id
+                             ->  CTE Scan on amt o  (cost=0.00..0.02 rows=1 width=80) (actual time=0.482..0.482 rows=0.00 loops=7426)
+                                   Filter: (rn > 1)
+                                   Rows Removed by Filter: 5555
+                                   Storage: Memory  Maximum Storage: 415kB
+   ->  CTE Scan on n  (cost=0.00..0.02 rows=1 width=0) (actual time=12433.573..12436.996 rows=6813.00 loops=1)
+         Storage: Memory  Maximum Storage: 484kB
+         Buffers: shared hit=324
+ Planning Time: 0.026 ms
+ Execution Time: 12437.946 ms
+(60 rows)
+
+
+==== 3. The statement planned again on the filled tables ====
+SET
+                                                                     QUERY PLAN                                                                     
+----------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=60.60..60.61 rows=1 width=8) (actual time=54.541..54.551 rows=1.00 loops=1)
+   Buffers: shared hit=385
+   CTE b
+     ->  Result  (cost=4.42..57.95 rows=16 width=719) (actual time=0.750..6.516 rows=7426.00 loops=1)
+           One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+           Buffers: shared hit=385
+           ->  Bitmap Heap Scan on active_base x  (cost=4.42..57.95 rows=16 width=719) (actual time=0.733..4.005 rows=7426.00 loops=1)
+                 Recheck Cond: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                 Filter: (customer_id IS NOT NULL)
+                 Rows Removed by Filter: 6
+                 Heap Blocks: exact=324
+                 Buffers: shared hit=385
+                 ->  Bitmap Index Scan on active_base_pkey  (cost=0.00..4.40 rows=16 width=0) (actual time=0.564..0.565 rows=7432.00 loops=1)
+                       Index Cond: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                       Index Searches: 1
+                       Buffers: shared hit=61
+   CTE amt
+     ->  WindowAgg  (cost=0.44..0.53 rows=4 width=88) (actual time=9.951..13.058 rows=5555.00 loops=1)
+           Window: w1 AS (PARTITION BY b.customer_id ORDER BY (sum(b.monthly_amount)), b.currency ROWS UNBOUNDED PRECEDING)
+           Storage: Memory  Maximum Storage: 17kB
+           ->  Sort  (cost=0.44..0.45 rows=4 width=80) (actual time=9.933..10.643 rows=5555.00 loops=1)
+                 Sort Key: b.customer_id, (sum(b.monthly_amount)) DESC, b.currency
+                 Sort Method: quicksort  Memory: 457kB
+                 ->  HashAggregate  (cost=0.35..0.40 rows=4 width=80) (actual time=4.354..7.731 rows=5555.00 loops=1)
+                       Group Key: b.customer_id, b.currency
+                       Batches: 1  Memory Usage: 2473kB
+                       ->  CTE Scan on b  (cost=0.00..0.32 rows=4 width=80) (actual time=0.004..1.480 rows=5834.00 loops=1)
+                             Filter: (is_holding AND is_paying AND (currency IS NOT NULL) AND (monthly_amount IS NOT NULL))
+                             Rows Removed by Filter: 1592
+                             Storage: Memory  Maximum Storage: 2570kB
+   CTE n
+     ->  Unique  (cost=0.64..1.76 rows=16 width=116) (actual time=35.365..52.753 rows=6813.00 loops=1)
+           Buffers: shared hit=385
+           ->  Merge Left Join  (cost=0.64..1.72 rows=16 width=116) (actual time=35.363..51.014 rows=7426.00 loops=1)
+                 Merge Cond: (b_1.customer_id = o.customer_id)
+                 Buffers: shared hit=385
+                 ->  Merge Left Join  (cost=0.64..0.83 rows=16 width=88) (actual time=30.315..36.076 rows=7426.00 loops=1)
+                       Merge Cond: (b_1.customer_id = a.customer_id)
+                       Buffers: shared hit=385
+                       ->  Sort  (cost=0.64..0.68 rows=16 width=24) (actual time=20.338..21.390 rows=7426.00 loops=1)
+                             Sort Key: b_1.customer_id
+                             Sort Method: quicksort  Memory: 483kB
+                             Buffers: shared hit=385
+                             ->  CTE Scan on b b_1  (cost=0.00..0.32 rows=16 width=24) (actual time=0.765..17.897 rows=7426.00 loops=1)
+                                   Storage: Memory  Maximum Storage: 2570kB
+                                   Buffers: shared hit=385
+                       ->  Materialize  (cost=0.00..0.09 rows=1 width=80) (actual time=9.967..11.778 rows=6055.00 loops=1)
+                             Storage: Memory  Maximum Storage: 17kB
+                             ->  CTE Scan on amt a  (cost=0.00..0.09 rows=1 width=80) (actual time=9.959..10.890 rows=5555.00 loops=1)
+                                   Filter: (rn = 1)
+                                   Storage: Memory  Maximum Storage: 415kB
+                 ->  GroupAggregate  (cost=0.00..0.11 rows=1 width=48) (actual time=5.016..5.017 rows=0.00 loops=1)
+                       Group Key: o.customer_id
+                       ->  CTE Scan on amt o  (cost=0.00..0.09 rows=1 width=80) (actual time=5.012..5.012 rows=0.00 loops=1)
+                             Filter: (rn > 1)
+                             Rows Removed by Filter: 5555
+                             Storage: Memory  Maximum Storage: 415kB
+   ->  CTE Scan on n  (cost=0.00..0.32 rows=16 width=0) (actual time=35.367..54.036 rows=6813.00 loops=1)
+         Storage: Memory  Maximum Storage: 484kB
+         Buffers: shared hit=385
+ Planning Time: 0.911 ms
+ Execution Time: 54.911 ms
+(62 rows)
+
+ROLLBACK

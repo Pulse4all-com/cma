@@ -12,7 +12,9 @@
 -- cma.organisation.is_contact_center), after 140_live_per_organisation.sql; since addition 0008zw (Reviews' period All),
 -- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql; since
 -- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql; since
--- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql. Prod is the proof; dev's shared core is for
+-- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
+-- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql.
+-- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
@@ -83,6 +85,14 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0009j') then
     raise exception 'addition 0009j (168_pledge_lists.sql) has not run in this database';
   end if;
+  -- Customers → Active (cma.active_top, cma.active_now, cma.active_rest, cma.active_rows, cma.active_refresh_of) since addition 0009l
+  if not exists (select 1 from cma.schema_migration where version = '0009l') then
+    raise exception 'addition 0009l (172_active_customers.sql) has not run in this database';
+  end if;
+  -- the refresh's quiet run and its inputs' markers (cma.active_inputs_key_of) since addition 0009m
+  if not exists (select 1 from cma.schema_migration where version = '0009m') then
+    raise exception 'addition 0009m (174_active_refresh_quiet.sql) has not run in this database';
+  end if;
 end
 $$;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every timed read fail
@@ -94,6 +104,9 @@ select set_config('verify.max_list_ms', '300', false);               -- a list's
 select set_config('verify.max_overview_ms', '500', false);           -- an overview, a landing, a report core, a page's reads together
 select set_config('verify.max_sources_ms', '150', false);            -- cma.sources()
 select set_config('verify.max_dq_ms', '500', false);                 -- data quality's overview and first page
+select set_config('verify.max_top_ms', '400', false);                -- Customers → Active: the live present of the tiles, and above the fold computed (decisions D15, D16)
+select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh of Customers → Active's stored take, the history and the documents written again
+select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
 
 drop table if exists pg_temp.time_0131;
@@ -305,6 +318,26 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'forms {P}', 'forms whole period', $q$select * from cma.forms_report('{f}', '{t}', 'week', null, null, null) where period = 'current' and group_key is null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+-- Customers → Active (addition 0009l, decisions D13, D15 and D16): the page's four reads, each its own transaction,
+-- on one page here so their sum is held against the overview budget (the one live read they replace took 1.4 to 2.0 s at
+-- three times prod's volume): above and below the fold from their stored documents (class agent, 50 ms: a key lookup),
+-- the live present of the tiles (class top, 400 ms) and the list's first page as the page asks it. Outside the set, on
+-- their own rows: below the fold from a later first month with the cohorts by quarter (still the stored document: its
+-- months are cut and the cohorts read from the stored cohort rows), what a request without a stored document computes
+-- from the take's rows (two filters together, above the fold and below it), a filtered list page in another sort, and
+-- the file's read (every row, the worst payment state of each as the take holds it). The take is refreshed before them
+-- (below), on its own row
+-- against verify.max_refresh_ms; stocks at now, so timed once
+('b', 'active customers', 'active top (stored document)', $q$select cma.active_top(null, null, null, null)$q$, 'agent', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active now (the present by the tenant''s setting: live or from the take)', $q$select cma.active_now(null, null, null)$q$, 'top', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active now, the take''s path (the present from the stored take)', $q$select cma.active_now_of(cma.current_tenant_id(), null, null, null, now(), true)$q$, 'top', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active rest (stored document)', $q$select cma.active_rest(null, null, null, null, 'month')$q$, 'agent', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active list first page', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, null, null, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active top computed (two filters)', $q$select cma.active_top(null, null, 'unknown', 'direct')$q$, 'top', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active rest, a later first month by quarter (stored document)', $q$select cma.active_rest((date '{month}' - interval '12 months')::date, null, null, null, 'quarter')$q$, 'agent', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active rest computed (two filters)', $q$select cma.active_rest(null, null, 'unknown', 'direct', 'month')$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active list filtered, by age', $q$select cma.active_rows(null, 'unknown', 'direct', 'age_months', false, null, null, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active file', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, null, null, null, true)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'pledge lists now', 'pledge page', $q$select cma.pledge_page()$q$, 'overview', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge check serials', $q$select * from cma.pledge_finding_rows('no_language', 500)$q$, 'list', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge file today', $q$select * from cma.pledge_file(null)$q$, 'overview', array['pledges.view']),
@@ -322,6 +355,11 @@ update pg_temp.reads_0131 set in_set = false
 where page = 'pledge lists now' and name in ('pledge file today', 'pledge file stored');
 update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no quarter file yet'
 where page = 'pledge lists now' and name = 'pledge file stored';
+-- Customers → Active: the set is the page's four reads; what is computed without a stored document, the filtered list
+-- and the file are reads of other requests
+update pg_temp.reads_0131 set in_set = false
+where page = 'active customers' and name in ('active top computed (two filters)', 'active rest, a later first month by quarter (stored document)',
+                                             'active rest computed (two filters)', 'active list filtered, by age', 'active file');
 
 do $$
 declare
@@ -330,7 +368,7 @@ declare
   v_stop    timestamptz := clock_timestamp() + make_interval(secs => current_setting('verify.time_budget_s')::numeric);
   t record; rd record; o record;
   v_user uuid; v_sys text; v_ext text; v_conn uuid; v_today date; v_monday date; v_month date; v_from date; v_to date; v_from92 date;
-  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb;
+  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb; v_mark0 timestamptz;
   -- per page and tenant: the sum of its reads and whether one failed
   v_pages text[]; v_sums numeric[]; v_bad boolean[]; p integer;
   -- per page: a read in its set had nothing to time (and why); a read outside its set (a page that loads in two parts)
@@ -378,6 +416,72 @@ begin
         r_detail := r_detail || coalesce('refreshed before the reads: ' || v_cur::text, 'no active scheduler user: the documents read live');
         r_ms := r_ms || null::numeric;
       end if;
+      -- the stored take of Customers → Active (addition 0009l, decision D13), refreshed as the tenant's scheduler: the
+      -- history and the documents written again, timed once against verify.max_refresh_ms, in a step of its own that is
+      -- rolled back at once (so the take's row is not held locked through the timed part: a settings save that marks the
+      -- take stale would wait for it). The reads below then read the take the job keeps; a tenant without one yet (a
+      -- database where the job never ran) gets one here, rolled back with the timed part. A refresh the job is running
+      -- at this moment has nothing to time here (skip)
+      if v_part in ('b', 'all') then
+        select u.id into v_sched from cma.app_user u
+        where u.tenant_id = t.id and u.kind = 'system' and u.email = 'scheduler@system.invalid' and u.status = 'active';
+        v_cur := null; v_ms := null;
+        if v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          begin
+            v_cur := cma.active_refresh_of(t.id, true);
+            v_ms := (v_cur ->> 'duration_ms')::numeric;
+            raise exception using errcode = 'CMAOK', message = 'the refresh is timed: rolled back';
+          exception
+            when sqlstate 'CMAOK' then null;
+            when others then v_cur := jsonb_build_object('error', sqlstate);
+          end;
+          if not exists (select 1 from cma.active_take k where k.tenant_id = t.id) then
+            begin
+              perform cma.active_refresh_of(t.id, true);
+            exception when others then null;
+            end;
+          end if;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_refresh_ms')::numeric end;
+        r_name := r_name || (t.slug || ' active customers refresh');
+        r_result := r_result || case when v_provoke then 'FAIL'
+                                     when v_sched is null or v_cur ->> 'reason' in ('not_set_up', 'running') then 'skip'
+                                     when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
+                                     when v_cur ->> 'reason' = 'not_set_up' then 'the sources are not set up: nothing to take'
+                                     when v_cur ->> 'reason' = 'running' then 'the job is refreshing this tenant now: nothing to time'
+                                     else coalesce(v_ms || ' ms (the history and the documents written again, once) against ' || v_max || ' ms: ', '') || v_cur::text end;
+        r_ms := r_ms || v_ms;
+        -- the inputs' change markers (addition 0009m): what the job's every due run reads before it decides to compute,
+        -- as the tenant's scheduler, the best of three
+        v_ms := null;
+        if v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          begin
+            for i in 1 .. 3 loop
+              v_mark0 := clock_timestamp();
+              perform cma.active_inputs_key_of(t.id);
+              v_ms := least(coalesce(v_ms, 1e9), round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1));
+            end loop;
+          exception
+            when others then v_ms := null;                     -- an error reads FAIL below, the other rows go on
+          end;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_markers_ms')::numeric end;
+        r_name := r_name || (t.slug || ' active customers inputs markers');
+        r_result := r_result || case when v_provoke then 'FAIL' when v_sched is null then 'skip'
+                                     when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
+                                     else coalesce(v_ms || ' ms (best of 3)', 'the read failed') || ' against ' || v_max || ' ms' end;
+        r_ms := r_ms || v_ms;
+      end if;
       for rd in
         select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, 1 as period
         from pg_temp.reads_0131 x where x.part = 'a' and v_part in ('a', 'all')
@@ -408,7 +512,8 @@ begin
                    '{conn}', coalesce(v_conn::text, '00000000-0000-0000-0000-000000000000')), '{sys}', coalesce(v_sys, 'none')), '{ext}', coalesce(v_ext, 'none'));
         v_max := case when v_provoke then 0 else current_setting(case rd.cls when 'poll' then 'verify.max_poll_ms' when 'agent' then 'verify.max_agent_ms'
                                                                   when 'list' then 'verify.max_list_ms' when 'sources' then 'verify.max_sources_ms'
-                                                                  when 'dq' then 'verify.max_dq_ms' else 'verify.max_overview_ms' end)::numeric end;
+                                                                  when 'dq' then 'verify.max_dq_ms' when 'top' then 'verify.max_top_ms'
+                                                                  else 'verify.max_overview_ms' end)::numeric end;
         perform set_config('role', 'cma_app', true);
         perform set_config('app.user_id', v_user::text, true);
         v_ms := case when clock_timestamp() > v_stop then null else pg_temp.t0131_best_ms(v_sql, 2) end;

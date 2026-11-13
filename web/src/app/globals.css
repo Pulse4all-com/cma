@@ -171,4 +171,65 @@ body {
   [data-testid="roster-print"] tr {
     page-break-inside: avoid;
   }
+  /* A report printed from inside the Shell (Customers → Active, addition 0009l): the frame lets go of the window, the top
+     bar and the rail leave the sheet, the content runs over as many A4 landscape pages as it needs, and a panel, a tile
+     or a table row is never cut across two pages */
+  html:has([data-print="report"]),
+  body:has([data-print="report"]) {
+    height: auto;
+    overflow: visible;
+    zoom: 1;
+  }
+  .cma-frame:has([data-print="report"]) {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .cma-frame:has([data-print="report"]) > header,
+  .cma-frame:has([data-print="report"]) nav[data-rail-nav] {
+    display: none;
+  }
+  .cma-frame:has([data-print="report"]) main {
+    height: auto;
+    overflow: visible;
+    padding: 0;
+    background: var(--color-white);
+  }
+  [data-print="report"] section,
+  [data-print="report"] [data-tile],
+  [data-print="report"] [data-placeholder],
+  [data-print="report"] tr,
+  [data-print="report"] svg {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* On paper a data panel takes its own height (on screen it keeps a fixed one so nothing moves while the page streams,
+     decision D15) and nothing scrolls inside it. Only a complete page is printed: while an outline still waits for its
+     read (or the tiles for their live present), the report is withheld and one line says so, whatever started the
+     print (the Print button waits for every part; the browser's own print command does not) */
+  [data-print="report"] [data-panel-body],
+  [data-print="report"] [data-panel-body] * {
+    overflow: visible !important;
+  }
+  [data-print="report"] [data-panel-body] {
+    height: auto !important;
+  }
+  [data-print="report"] [data-panel-skeleton] {
+    display: none !important;
+  }
+  [data-print="report"]:has([data-panel-skeleton], [data-settled="false"]) > * {
+    display: none !important;
+  }
+  [data-print="report"]:has([data-panel-skeleton], [data-settled="false"])::before {
+    content: attr(data-print-loading);
+    display: block;
+    font-size: 14pt;
+  }
 }
+
+/* A link whose navigation is on its way (decision D14: ActivePending's mark inside it): it reads busy from the click */
+a:has([data-link-pending="true"]) {
+  cursor: progress;
+  opacity: 0.75;
+}
+

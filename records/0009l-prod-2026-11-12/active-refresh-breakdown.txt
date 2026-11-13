@@ -1,0 +1,137 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+SET
+
+==== Context ====
+                tenant                
+--------------------------------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4
+(1 row)
+
+              tenant_id               |            acting_user_id            | server_version | collation  | stored_take_of 
+--------------------------------------+--------------------------------------+----------------+------------+----------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4 | 01a11c97-f777-73b7-b145-a97cbd069608 | 18.6           | en_US.UTF8 | 
+(1 row)
+
+psql:tools/perf/active-refresh-breakdown.sql:91: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+           measured_tenant            
+--------------------------------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4
+(1 row)
+
+             acting_user              
+--------------------------------------
+ 01a11c97-f777-73b7-b145-a97cbd069608
+(1 row)
+
+SET
+DO
+
+==== The breakdown (part: V volumes, R the refresh, B the base read, H the history, C customers, K Kaplan-Meier and cohorts, D documents, W writes) ====
+ part |                                              stage                                              | runs | best_ms |  rows  |                                                          note                                                          
+------+-------------------------------------------------------------------------------------------------+------+---------+--------+------------------------------------------------------------------------------------------------------------------------
+ V    | subscriptions (not deleted)                                                                     |      |         |   7448 | 
+ V    | subscription events                                                                             |      |         | 103336 | 
+ V    | store customers (not deleted)                                                                   |      |         |   8475 | 
+ V    | store orders                                                                                    |      |         |  10554 | 
+ V    | devices in the asset register                                                                   |      |         |   9677 | 
+ V    | days in the attribution's window                                                                |      |         |    -48 | 
+ R    | refresh, forced: everything written again (173's E4)                                            |    1 |  5738.2 |  21136 | refreshed true; base 7426, customers 6807, history 6861, documents 42
+ R    | refresh, forced once more (warm)                                                                |    1 |  3669.9 |   6861 | base 0, customers 0, history 6861, documents 0
+ R    | refresh, due and quiet: a take six minutes old, nothing changed (the job's run)                 |    1 |  5435.8 |      0 | refreshed true; base 0, customers 0, history 0, documents 0
+ V    | take: base rows (subscriptions)                                                                 |      |         |   7426 | 
+ V    | take: customers                                                                                 |      |         |   6807 | 
+ V    | take: active customers                                                                          |      |         |   5850 | 
+ V    | take: customers with a known acquisition channel                                                |      |         |      0 | 
+ V    | take: spells                                                                                    |      |         |   6861 | 
+ V    | take: month-end rows                                                                            |      |         |   3351 | 
+ V    | take: cohort rows                                                                               |      |         |   2475 | 
+ V    | take: documents                                                                                 |      |         |     42 | 
+ V    | take: documents' size in kB                                                                     |      |         |    115 | 
+ B    | base read, no channel, no payment state                                                         |    2 |   564.0 |   7426 | 
+ B    | base read with the payment state                                                                |    2 |   622.6 |   7426 | 
+ B    | base read with the channel (cma.first_orders_of inside)                                         |    2 |   379.6 |   7426 | 
+ B    | base read with both: the refresh's own call                                                     |    2 |   675.3 |   7426 | 
+ B    | cma.first_orders_history_start_of                                                               |    2 |    34.0 |      1 | 
+ B    | cma.first_orders_of over the attribution's window: order deals                                  |    2 |     1.5 |      0 | 
+ B    | of them first orders                                                                            |    2 |     0.9 |      0 | 
+ B    | cma.subscription_payment_state_of                                                               |    2 |   210.8 |   7426 | 
+ B    | cma.flash_customer_figures_of (every customer)                                                  |    2 |    65.4 |   8475 | 
+ H    | history key: the digest of the stored base                                                      |    2 |    23.5 |     32 | 
+ H    | spells (cma.active_spells_from) joined to their customers                                       |    2 |    97.8 |   6861 | 
+ H    | month cube: customers (from the spells)                                                         |    2 |    29.7 |   1100 | 
+ H    | month cube: subscriptions (from the base)                                                       |    2 |    35.0 |   1100 | 
+ H    | month cube: amounts (from the base)                                                             |    2 |    28.8 |   1100 | 
+ H    | customers per currency at two month ends                                                        |    2 |    45.1 |   9210 | 
+ H    | Flash's churn of the last 30 business dates (cma.flash_churn_of) with the base                  |    2 |     5.2 |    125 | 
+ H    | cohort cube: by month                                                                           |    2 |    32.7 |   1710 | 
+ H    | cohort cube: by quarter                                                                         |    2 |    33.1 |    765 | 
+ C    | per-customer rows: the stored base into one row per store customer                              |    2 |    44.2 |   6807 | 
+ C    | of it: the Customer age in whole months per customer (cma.flash_age_months_of)                  |    2 |    11.9 |   6807 | 
+ C    | of it: a customer's amounts per currency, ranked                                                |    2 |     9.2 |   5553 | 
+ K    | Kaplan–Meier: all stored spells (cma.active_km_json)                                            |    2 |     0.1 |      1 | 
+ K    | Kaplan–Meier: per segment                                                                       |    2 |     3.7 |      3 | 
+ K    | Kaplan–Meier: per acquisition channel                                                           |    2 |     3.9 |      1 | 
+ K    | a document's cohort part, by month, no filter                                                   |    2 |     6.9 |      1 | 
+ K    | a document's cohort part, by quarter, no filter                                                 |    2 |     3.6 |      1 | 
+ D    | document above the fold: no filter                                                              |    2 |   121.3 |     11 | rows: the document's size in kB
+ D    | document below the fold: no filter                                                              |    2 |   148.5 |     51 | rows: the document's size in kB
+ D    | document above the fold: market AT                                                              |    2 |    29.6 |      3 | rows: the document's size in kB
+ D    | document above the fold: market BE                                                              |    2 |    32.1 |      6 | rows: the document's size in kB
+ D    | document above the fold: market CH                                                              |    2 |    26.1 |      1 | rows: the document's size in kB
+ D    | document above the fold: market DE                                                              |    2 |    45.4 |      6 | rows: the document's size in kB
+ D    | document above the fold: market DK                                                              |    2 |    29.1 |      3 | rows: the document's size in kB
+ D    | document above the fold: market ES                                                              |    2 |    28.5 |      1 | rows: the document's size in kB
+ D    | document above the fold: market FI                                                              |    2 |    26.9 |      1 | rows: the document's size in kB
+ D    | document above the fold: market FR                                                              |    2 |    43.4 |      6 | rows: the document's size in kB
+ D    | document above the fold: market GB                                                              |    2 |    89.6 |     10 | rows: the document's size in kB
+ D    | document above the fold: market IE                                                              |    2 |    38.3 |      2 | rows: the document's size in kB
+ D    | document above the fold: market IT                                                              |    2 |    25.6 |      1 | rows: the document's size in kB
+ D    | document above the fold: market NL                                                              |    2 |    50.6 |     10 | rows: the document's size in kB
+ D    | document above the fold: market NO                                                              |    2 |    25.2 |      1 | rows: the document's size in kB
+ D    | document above the fold: market SE                                                              |    2 |    32.8 |      6 | rows: the document's size in kB
+ D    | document below the fold: market AT                                                              |    2 |    20.9 |     10 | rows: the document's size in kB
+ D    | document below the fold: market BE                                                              |    2 |    20.1 |     21 | rows: the document's size in kB
+ D    | document below the fold: market CH                                                              |    2 |    13.8 |      3 | rows: the document's size in kB
+ D    | document below the fold: market DE                                                              |    2 |    37.2 |     23 | rows: the document's size in kB
+ D    | document below the fold: market DK                                                              |    2 |    14.8 |      9 | rows: the document's size in kB
+ D    | document below the fold: market ES                                                              |    2 |    13.1 |      3 | rows: the document's size in kB
+ D    | document below the fold: market FI                                                              |    2 |    15.0 |      3 | rows: the document's size in kB
+ D    | document below the fold: market FR                                                              |    2 |    21.6 |     21 | rows: the document's size in kB
+ D    | document below the fold: market GB                                                              |    2 |   102.8 |     36 | rows: the document's size in kB
+ D    | document below the fold: market IE                                                              |    2 |    15.6 |      6 | rows: the document's size in kB
+ D    | document below the fold: market IT                                                              |    2 |    16.0 |      3 | rows: the document's size in kB
+ D    | document below the fold: market NL                                                              |    2 |    42.3 |     32 | rows: the document's size in kB
+ D    | document below the fold: market NO                                                              |    2 |    13.8 |      3 | rows: the document's size in kB
+ D    | document below the fold: market SE                                                              |    2 |    20.2 |     20 | rows: the document's size in kB
+ D    | document above the fold: segment B2B                                                            |    2 |    56.4 |      8 | rows: the document's size in kB
+ D    | document above the fold: segment B2C                                                            |    2 |    42.5 |      9 | rows: the document's size in kB
+ D    | document above the fold: segment unknown                                                        |    2 |   115.2 |     10 | rows: the document's size in kB
+ D    | document below the fold: segment B2B                                                            |    2 |    47.3 |     35 | rows: the document's size in kB
+ D    | document below the fold: segment B2C                                                            |    2 |    33.7 |     42 | rows: the document's size in kB
+ D    | document below the fold: segment unknown                                                        |    2 |   113.5 |     42 | rows: the document's size in kB
+ D    | document above the fold: channel direct                                                         |    2 |    30.9 |      1 | rows: the document's size in kB
+ D    | document above the fold: channel indirect                                                       |    2 |    30.8 |      1 | rows: the document's size in kB
+ D    | document above the fold: channel unknown                                                        |    2 |   133.7 |     11 | rows: the document's size in kB
+ D    | document below the fold: channel direct                                                         |    2 |    15.3 |      8 | rows: the document's size in kB
+ D    | document below the fold: channel indirect                                                       |    2 |    13.8 |      8 | rows: the document's size in kB
+ D    | document below the fold: channel unknown                                                        |    2 |   156.6 |     51 | rows: the document's size in kB
+ D    | documents: the sum of the above                                                                 |      |  1949.9 |        | 
+ W    | writes, estimated: the best forced refresh less its reads (base, history, customers, documents) |      |   105.6 |        | forced 3669.9 ms, reads 1614.4 ms, documents 1949.9 ms; an estimate: a stage alone is not the stage inside the refresh
+ W    | this script's own run                                                                           |      | 25965.2 |        | 
+ -    | ran to the end; everything it wrote is rolled back                                              |      |         |        | 
+(90 rows)
+
+
+==== Nothing is left behind: the take as it was before this script ====
+ base_rows | documents | stored_take_of 
+-----------+-----------+----------------
+         0 |         0 | 
+(1 row)
+
+ROLLBACK

@@ -199,6 +199,11 @@ const cases = [
   // checked below
   ["manager", `/reports/courtesy?${COURTESY_LAST_MONTH}`, 36, 4],
   ["reader", `/reports/courtesy?${COURTESY_LAST_MONTH}&group=day`, 31, 4],
+  // Active (addition 0009l): six tiles; the markets' table (the market, active customers, share, the segments and unknown,
+  // subscriptions, devices, the two amounts, age, value, churned, net change, indirect share, the trend), the comparison's
+  // six headers, the cohorts' cohort, started and five ages, the list's fourteen
+  ["manager", "/reports/active", 40, 6],
+  ["reader", "/reports/active?market=NL&grouping=quarter&range=36", 40, 6],
 ];
 let headers = 0;
 let tiles = 0;

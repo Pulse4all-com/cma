@@ -220,6 +220,22 @@
     "rt": 9
   },
   {
+    "path": "/reports/active",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 21,
+    "firstTx": 1,
+    "firstRt": 5
+  },
+  {
+    "path": "/reports/active?segment=unknown&channel=direct",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 21,
+    "firstTx": 1,
+    "firstRt": 5
+  },
+  {
     "path": "/reports/installed-base",
     "subject": "manager",
     "tx": 2,

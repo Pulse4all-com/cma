@@ -1,0 +1,33 @@
+import { activeRowsParams } from "@/lib/api/active";
+import { forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
+import { data } from "@/lib/data";
+import { REPORT_PERMISSIONS } from "@/lib/reports";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * The customer list of Customers → Active (cma.active_rows, addition 0009l): the active customers under &market, &segment
+ * and &channel, sorted by &sort (monthly_amount, clv, store_customer, store, market, segment, customer_start, age_months,
+ * subscriptions, devices, channel or level; monthly_amount when left out) and &dir (desc when left out), &limit rows (1 to
+ * 200; 50 when left out) after &after or before &before (the `next` or `prev` cursor of a page, never both: keyset paging
+ * through the sort key's index, no offset). A cursor is the CMA's own id of a customer of the list, nothing else; one
+ * out of that form is 400 invalid_after or invalid_before, one that names no customer of the take 400 invalid (the
+ * database's CMA04), both together 400 invalid_cursor. Read from the stored take
+ * (decision D13; `take` and `history` as the report's), only the worst payment state live for the page's rows. `total`
+ * (the customers there are; null while no take exists), `next`, `prev` and `rows`: the store's id of the customer, store,
+ * market, segment, Customer start, Customer age in months, subscriptions, devices, the Monthly recurring amount in its
+ * currency, Customer lifetime value (realised) in the store's currency, the worst payment state, the acquisition channel
+ * with First orders' level, and the CRM contact's id with its record link. Ids, codes, dates, amounts and links only: never
+ * a name, email, phone or address. Needs reports.view or performance.team, here and again in the database. Every read is
+ * recorded in the audit log as a file read is (cma.active_file_record: who, which filters, how many rows; never a row),
+ * before the rows are sent.
+ */
+export async function GET(request: Request) {
+  return forPrincipal(async (me) => {
+    requireAnyPermission(me, REPORT_PERMISSIONS);
+    const q = activeRowsParams(new URL(request.url).searchParams);
+    const list = await data().getActiveRows(me, q);
+    await data().recordActiveFile(me, q.filter, list.rows.length);
+    return ok(list);
+  });
+}

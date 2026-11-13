@@ -17,6 +17,12 @@
  *      budgets in kB (night N06's measured values, rounded up; a route that still carries the whole copy object has minus
  *      25 % as its next target, docs/night-2026-11-06/NIGHT_NOTES.md). A request row may carry its own html_kb, which wins
  *      over the route's: Assets → Installed base's default view and each panel (addition 0009f).
+ *   3. The layers of a page that streams in parts (a row's layers; Customers → Active, addition 0009l, decisions D15 and
+ *      D16): when each layer's mark first arrives in the stream, the 95th percentile against the layer's budget in
+ *      milliseconds (measured on the three-times fixture and rounded up, inside the decisions' targets of 200, 400, 500,
+ *      300 and 400 ms; not scaled by the container factor). They time the bytes on the wire: what the browser paints
+ *      follows React's own rule (a part is shown no sooner than about 300 ms after the outline it replaces), which
+ *      verify:layout sees in a browser.
  * Needs the standalone build and a running app in api data mode with mock sign-in (CMA_AUTH_MODE=mock CMA_DATA_MODE=api,
  * the local database with verify/perf-volume-fixture.sql loaded for a figure that means something):
  *
@@ -73,6 +79,7 @@ const observed = [];
 for (const row of budget.requests) {
   const times = [];
   const totals = [];
+  const layerTimes = {};
   let htmlGzip = null;
   let status = 0;
   for (let i = 0; i < WARMUP + REQUESTS; i++) {
@@ -80,10 +87,26 @@ for (const row of budget.requests) {
     const res = await fetch(BASE + row.path, { headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json" }, redirect: "manual" });
     // time to first byte: the headers are in; the body is then read in full so the server finishes streaming before the next request
     const ttfb = performance.now() - t0;
-    const body = Buffer.from(await res.arrayBuffer());
+    // a row with layers (a page that streams in parts, Customers → Active: decisions D15 and D16) is read as it arrives,
+    // and the moment each layer's mark is first in the stream is kept
+    const parts = [];
+    const seen = {};
+    let text = "";
+    const dec = new TextDecoder();
+    for await (const chunk of res.body ?? []) {
+      parts.push(Buffer.from(chunk));
+      if (row.layers) {
+        text += dec.decode(chunk, { stream: true });
+        for (const [name, layer] of Object.entries(row.layers)) if (seen[name] === undefined && text.includes(layer.mark)) seen[name] = performance.now() - t0;
+      }
+    }
+    const body = Buffer.concat(parts);
     const total = performance.now() - t0;
     status = res.status;
-    if (i >= WARMUP) { times.push(ttfb); totals.push(total); }
+    if (i >= WARMUP) {
+      times.push(ttfb); totals.push(total);
+      if (row.layers) for (const name of Object.keys(row.layers)) (layerTimes[name] ??= []).push(seen[name] ?? Infinity);
+    }
     if (htmlGzip === null && (res.headers.get("content-type") ?? "").includes("text/html")) htmlGzip = gzipSync(body).length;
   }
   if (status !== 200) { problems.push(`${row.subject} ${row.path}: status ${status}`); continue; }
@@ -100,11 +123,30 @@ for (const row of budget.requests) {
   const js = row.path.startsWith("/api/") ? null : routeJs(row.route ?? row.path.replace(/\?.*$/, ""));
   const o = { path: row.path, subject: row.subject, class: row.class, p50, p95, done_p50: done50, done_p95: done95, requests: times.length,
               html_kb: htmlGzip === null ? null : kb(htmlGzip), js_kb: js ? kb(js.gzipBytes) : null, js_chunks: js?.chunks ?? null };
+  // the layers of a streamed page: the 95th percentile of each mark's arrival against the row's own budget in milliseconds
+  // (the targets of the decisions that set the layers, on the local three-times fixture: not scaled by the container factor)
+  if (row.layers) {
+    o.layers = {};
+    for (const [name, layer] of Object.entries(row.layers)) {
+      const sorted = (layerTimes[name] ?? []).slice().sort((a, b) => a - b);
+      const l95 = Math.round(percentile(sorted, 95) * 10) / 10;
+      const l50 = Math.round(percentile(sorted, 50) * 10) / 10;
+      o.layers[name] = Number.isFinite(l95) ? l95 : null;
+      (o.layers_p50 ??= {})[name] = Number.isFinite(l50) ? l50 : null;
+      const max = provoke ? 0 : layer.p95;
+      if (!Number.isFinite(l95)) problems.push(`${row.subject} ${row.path}: layer ${name} (${layer.mark}) did not arrive in the stream`);
+      else if (l95 > max) problems.push(`${row.subject} ${row.path}: layer ${name} arrives at p95 ${l95} ms, budget ${max} ms`);
+    }
+  }
   observed.push(o);
   if (p50 > maxP50) problems.push(`${row.subject} ${row.path}: p50 ${p50} ms, budget ${maxP50} ms (${row.class} ${cls.p50} × ${factor})`);
   if (p95 > maxP95) problems.push(`${row.subject} ${row.path}: p95 ${p95} ms, budget ${maxP95} ms (${row.class} ${cls.p95} × ${factor})`);
-  if (done50 > maxP50) problems.push(`${row.subject} ${row.path}: last byte p50 ${done50} ms, budget ${maxP50} ms (${row.class} ${cls.p50} × ${factor})`);
-  if (done95 > maxP95) problems.push(`${row.subject} ${row.path}: last byte p95 ${done95} ms, budget ${maxP95} ms (${row.class} ${cls.p95} × ${factor})`);
+  // a row with layers holds each layer to its own budget (its last byte is its last layer), so the class's last-byte
+  // budget is not asked of it a second time
+  if (!row.layers) {
+    if (done50 > maxP50) problems.push(`${row.subject} ${row.path}: last byte p50 ${done50} ms, budget ${maxP50} ms (${row.class} ${cls.p50} × ${factor})`);
+    if (done95 > maxP95) problems.push(`${row.subject} ${row.path}: last byte p95 ${done95} ms, budget ${maxP95} ms (${row.class} ${cls.p95} × ${factor})`);
+  }
   // a row's own HTML budget wins over the route's (addition 0009f: Assets → Installed base's default view and each of its
   // panels are rows of one route; a panel weighs more than the default view and has its own budget)
   const key = row.path.replace(/\?.*$/, "");
@@ -124,7 +166,10 @@ if (observedOnly) {
   process.exit(0);
 }
 console.log(`route (subject): first byte p50 / p95 ms, last byte p50 / p95 ms, HTML kB, JS kB`);
-for (const o of observed) console.log(`  ${o.path} (${o.subject}): ${o.p50} / ${o.p95} ms, ${o.done_p50} / ${o.done_p95} ms, ${o.html_kb ?? "-"} kB, ${o.js_kb ?? "-"} kB`);
+for (const o of observed) {
+  console.log(`  ${o.path} (${o.subject}): ${o.p50} / ${o.p95} ms, ${o.done_p50} / ${o.done_p95} ms, ${o.html_kb ?? "-"} kB, ${o.js_kb ?? "-"} kB`
+    + (o.layers ? `; layers p50 / p95 ${Object.entries(o.layers).map(([k, v]) => `${k} ${o.layers_p50?.[k] ?? "-"} / ${v ?? "-"} ms`).join(", ")}` : ""));
+}
 if (problems.length) {
   for (const p of problems) console.log("  " + p);
   console.log(`perf: FAIL (${problems.length} problems, ${REQUESTS} requests per route, container factor ${factor})`);

@@ -23,6 +23,7 @@ import { EventEmitter } from "node:events";
 import { codeOf, hearIdleErrors, isConnectionError, retryOnce } from "../jobs/lib/connection.mjs";
 import { refreshTenants } from "../jobs/refresh-follow-up.mjs";
 import { refreshTenants as refreshDataQuality } from "../jobs/refresh-data-quality.mjs";
+import { refreshTenants as refreshActiveCustomers } from "../jobs/refresh-active-customers.mjs";
 import { closeTenants } from "../jobs/close-forgotten-workdays.mjs";
 import { snapshotTenants, countsOf, currentCountsOf, pledgeCountsOf, runErrorOf, poolMax, STATEMENT_TIMEOUT_MS, TAKE_RETRY_MINUTES } from "../jobs/snapshot-flash.mjs";
 
@@ -95,6 +96,8 @@ function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = 
       if (/cma\.refresh_follow_up\(\)/.test(text)) return { rows: [{ r: { refreshed: true, rows: 3, leads: 1, tickets: 1, tasks: 1, duration_ms: 7 } }], rowCount: 1 };
       // the data-quality refresh (0008zr): tenant 1 refreshed, tenant 2's result still fresh
       if (/cma\.refresh_data_quality\(\)/.test(text)) return { rows: [{ r: tenant === T2 ? { refreshed: false, reason: "fresh", age_seconds: 40 } : { refreshed: true, rows: 3, duration_ms: 7 } }], rowCount: 1 };
+      // the refresh of Customers → Active's take (0009l): tenant 1 refreshed, tenant 2's take still fresh
+      if (/cma\.active_refresh\(\)/.test(text)) return { rows: [{ r: tenant === T2 ? { refreshed: false, reason: "fresh" } : { refreshed: true, rows: 5, duration_ms: 9 } }], rowCount: 1 };
       if (/cma\.flash_current_refresh\(/.test(text)) return { rows: [{ r: current(tenant) }], rowCount: 1 };
       // a failed take of the last TAKE_RETRY_MINUTES without a succeeded one since (0009e's backoff); none by default
       if (/from cma\.flash_snapshot_run r/.test(text)) { const f = lastFailed(tenant); return { rows: f ? [f] : [], rowCount: f ? 1 : 0 }; }
@@ -250,6 +253,35 @@ expect("idle reset: unheard it throws (the 16:04 crash), heard it is one warning
   const r = await refreshDataQuality({ connect: pool.connect, log });
   expect("data quality, a statement timeout: never retried, the tenant failed with 57014, tenant 2 still served",
     [r, finishes(pool)], [{ tenants: 2, failed: 1 }, ["t1:failed:57014", "t2:succeeded:0"]], [{ tenants: 2, failed: 0 }, ["t1:succeeded:3", "t2:succeeded:3"]]);
+}
+
+// ---- refresh-active-customers (0009l, decision D13): the data-quality refresh's shape, a fresh take skipped ------------
+{
+  const pool = mockPool();
+  lines.length = 0;
+  const r = await refreshActiveCustomers({ connect: pool.connect, log });
+  expect("active customers: tenant 1 refreshed, tenant 2 fresh (skipped 1, reason fresh as INFO), one run row each, every client released",
+    [r, finishes(pool), lines.filter((l) => l.tenant_id).map((l) => `${l.severity}:${l.refreshed}:${l.reason ?? "-"}`), pool.state.released === pool.state.connects],
+    [{ tenants: 2, failed: 0 }, ["t1:succeeded:5", "t2:succeeded:0"], ["INFO:true:-", "INFO:false:fresh"], true],
+    [{ tenants: 2, failed: 1 }, [], [], false]);
+  expect("active customers: the job's own entry, and a log line holds ids and counts only",
+    [pool.state.statements.some((q) => /cma\.active_refresh\(\)/.test(q.text)),
+      lines.every((l) => Object.keys(l).every((k) => ["severity", "message", "tenant_id", "rows", "duration_ms", "refreshed", "reason", "error", "step"].includes(k)))],
+    [true, true], [false, false]);
+}
+{
+  const pool = mockPool({ faults: [{ on: /cma\.active_refresh\(\)/, tenant: T1, times: 1, error: reset }] });
+  lines.length = 0;
+  const r = await refreshActiveCustomers({ connect: pool.connect, log });
+  expect("active customers, a reset in tenant 1's refresh: retried on a fresh connection, its run row kept, the broken one dropped",
+    [r.failed, count(pool, /cma\.active_refresh\(\)/, T1), starts(pool, T1), pool.state.dropped, finishes(pool)[0]], [0, 2, 1, 1, "t1:succeeded:5"], [1, 1, 2, 0, "t1:failed:ECONNRESET"]);
+}
+{
+  const pool = mockPool({ faults: [{ on: /cma\.active_refresh\(\)/, tenant: T1, times: 1, error: () => Object.assign(new Error("canceling statement due to statement timeout"), { code: "57014" }) }] });
+  lines.length = 0;
+  const r = await refreshActiveCustomers({ connect: pool.connect, log });
+  expect("active customers, a statement timeout: never retried, the tenant failed with 57014, tenant 2 still served",
+    [r, finishes(pool)], [{ tenants: 2, failed: 1 }, ["t1:failed:57014", "t2:succeeded:0"]], [{ tenants: 2, failed: 0 }, ["t1:succeeded:5", "t2:succeeded:5"]]);
 }
 
 // ---- close-forgotten-workdays ---------------------------------------------------------------------------------

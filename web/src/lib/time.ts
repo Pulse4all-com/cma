@@ -75,8 +75,10 @@ export function fmtTime(instant: Instant, timeZone: string, locale: Locale): str
  * long:    Thu 12 March 2026 / do 12 maart 2026 (style guide section 4)
  * short:   12 Mar
  * compact: Thu 12 Mar, for table rows
+ * medium:  12 Mar 2026, a past date in a table row (the year always, no weekday)
+ * full:    12 March 2026, a date inside a sentence (no weekday)
  */
-export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | "compact" = "long"): string {
+export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | "compact" | "medium" | "full" = "long"): string {
   const d = toUtcDate(key);
   // The parts joined by one space, never the locale's own punctuation: ICU versions differ on it (Node 22
   // writes "Sat 17 Oct", a browser "Sat, 17 Oct"), and a client component that formats a date on the server
@@ -84,10 +86,10 @@ export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | 
   // 17 October 2026, React error 418 on Messages, the roster planner and Alert rules)
   return dateTimeFormat(intlLocale[locale], {
     timeZone: "UTC",
-    weekday: style === "short" ? undefined : "short",
+    weekday: style === "short" || style === "medium" || style === "full" ? undefined : "short",
     day: "numeric",
-    month: style === "long" ? "long" : "short",
-    year: style === "long" ? "numeric" : undefined,
+    month: style === "long" || style === "full" ? "long" : "short",
+    year: style === "long" || style === "medium" || style === "full" ? "numeric" : undefined,
   })
     .formatToParts(d)
     .filter((p) => p.type === "weekday" || p.type === "day" || p.type === "month" || p.type === "year")

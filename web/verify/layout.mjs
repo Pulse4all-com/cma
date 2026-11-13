@@ -228,18 +228,18 @@ async function expectNavigation() {
     ["analyst", ["/", "/messages", "/live/newco", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
       "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
       "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
+      "/reports/orders-per-person", "/reports/active", "/reports/courtesy", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
       "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
-      "/reports/first-orders", "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
+      "/reports/first-orders", "/reports/active", "/reports/courtesy", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/calls",
       "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms",
       "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts",
-      "/reports/first-orders", "/reports/orders-per-person", "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/active", "/reports/courtesy", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin), since 0008zw
     // between Time and Reports; the supervisor and the agent see no Team group, so their keys do not move. The planner
     // (0005) joins it.
@@ -247,12 +247,12 @@ async function expectNavigation() {
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+      "/reports/active", "/reports/courtesy", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/roster/planner", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/cancellations", "/reports/reviews", "/reports/courtesy", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
+      "/reports/active", "/reports/courtesy", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -413,7 +413,7 @@ async function expectReports() {
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
     "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
-    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/courtesy", "/reports/maintenance", "/reports/installed-base",
+    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/courtesy", "/reports/active", "/reports/maintenance", "/reports/installed-base",
     "/reports/data-quality", "/reports/flash"]) {
     await p.goto(BASE + path);
     await settle(p);
@@ -754,6 +754,227 @@ async function expectFirstOrders() {
       await p.screenshot({ path: `${outDir}/${subject}-${name}.png`, fullPage: true });
     }
     await ctx.close();
+  }
+}
+
+// Customers → Active in three layers (addition 0009l, decision D15 of addendum B): the frame first, then above the
+// fold, then below it. As the manager.
+//   The stream as the server sends it (read as text, in the order it is sent): the frame comes before any figure. The
+//   six placeholder cards of the unit economics, the filters, every panel's title and an outline per data panel with its
+//   height are all sent before the first panel's figures; no placeholder holds a digit; the Print button is sent disabled.
+//   In the browser at 1280 and 1920 px, once the page has streamed: every panel's rendered body takes exactly the height
+//   its outline was sent with (no layout shift), no outline is left, the Print button is enabled, and a click on a
+//   panel's toggle marks the link at once (decision D14). The markets' panel alone (Martin's review of 12 November 2026)
+//   is as high as its table and never higher than its outline: it equals the outline when the table fills it, and is
+//   shorter only when the whole table shows (no space under the totals row; the page under it then moves up once, by
+//   the difference: open for Martin). Every other panel, the three other table panels included, equals its outline.
+//   The tables at 1440 and 1280 px: the header row stays at the top of its scroll container while the rows scroll; at
+//   1440 px every column of the markets and of the customer list shows without scrolling sideways, at 1280 px every
+//   column of the list but the last (the CRM link); the comparison's columns show at both; the list's Customer start
+//   carries its year.
+// --provoke stretches one rendered panel by a pixel, and asks for one column more than a table has
+async function expectActiveLayers() {
+  const where = "manager /reports/active";
+  const html = await (await fetch(BASE + "/reports/active", { headers: { "x-cma-mock-subject": "manager", accept: "text/html" } })).text();
+  const firstFigures = html.indexOf("data-panel-body=");
+  const sentBefore = (needle) => { const i = html.indexOf(needle); return i >= 0 && (firstFigures < 0 || i < firstFigures); };
+  const outlines = Object.fromEntries([...html.matchAll(/data-panel-skeleton="([a-zA-Z]+)" style="height:(\d+)px"/g)].map((m) => [m[1], Number(m[2])]));
+  const lastOutline = Math.max(-1, ...[...html.matchAll(/data-panel-skeleton="/g)].map((m) => m.index));
+  const cards = [...html.matchAll(/<div[^>]*data-testid="active-slot-[a-z_]+"/g)].filter((m) => firstFigures < 0 || m.index < firstFigures);
+  if (Object.keys(outlines).length !== 14) problems.push(`${where}: ${Object.keys(outlines).length} panel outlines in the stream, expected one per data panel (14)`);
+  if (firstFigures >= 0 && lastOutline > firstFigures) problems.push(`${where}: a panel's figures are sent before the frame is complete`);
+  if (firstFigures < 0) problems.push(`${where}: no panel's figures in the stream`);
+  if (cards.length !== 6) problems.push(`${where}: ${cards.length} placeholder cards sent with the frame, expected 6 before any figure`);
+  if (!sentBefore('data-testid="active-filters-outline"')) problems.push(`${where}: the filters' outline is not sent with the frame`);
+  // the table first, the live present after (decision D16): the stored tiles are in the stream before the live ones
+  const storedAt = html.indexOf('data-present="stored"');
+  const liveAt = html.indexOf('data-present="live"');
+  if (storedAt < 0 || liveAt < 0 || storedAt > liveAt) problems.push(`${where}: the stored tiles (${storedAt}) are not sent before the live ones (${liveAt})`);
+  const titlesBefore = [...html.matchAll(/data-panel-title=""/g)].filter((m) => firstFigures < 0 || m.index < firstFigures).length;
+  if (titlesBefore < 10) problems.push(`${where}: only ${titlesBefore} panel titles sent with the frame, expected every panel's`);
+  const print = html.match(/<button[^>]*data-testid="active-print"[^>]*>/)?.[0] ?? "";
+  if (!/\sdisabled(=""|\s|>)/.test(print) || !/data-ready="false"/.test(print)) problems.push(`${where}: the Print button is not sent disabled`);
+
+  // the tables (Martin's review, 12 November 2026): columns without a sideways scroll, the header row staying on top
+  for (const [w, mayHide] of [[1440, { "active-list": 0, "active-markets": 0, "active-comparison": 0 }], [1280, { "active-list": 1, "active-comparison": 0 }]]) {
+    const tag = `${where} at ${w} px`;
+    const ctx = await b.newContext({ viewport: { width: w, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/active");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => undefined);
+    const t = await p.evaluate(() => Object.fromEntries(["active-list", "active-markets", "active-comparison", "active-cohorts"].map((id) => {
+      const table = document.querySelector(`[data-testid="${id}"]`);
+      const box = document.querySelector(`[data-testid="${id}-scroll"]`);
+      if (!table || !box) return [id, null];
+      const right = box.getBoundingClientRect().right;
+      const heads = [...table.querySelectorAll("thead th")];
+      const hidden = heads.filter((h) => h.getBoundingClientRect().right > right + 1).map((h) => h.getAttribute("data-full") ?? h.innerText.replace(/\s+/g, " ").trim());
+      // scroll the rows: the header row keeps its place at the container's top
+      box.scrollTop = 200;
+      const moved = box.scrollTop > 0;
+      const stays = Math.abs(heads[0].getBoundingClientRect().top - box.getBoundingClientRect().top) <= 1;
+      box.scrollTop = 0;
+      return [id, { columns: heads.length, hidden, last: heads.at(-1)?.innerText.replace(/\s+/g, " ").trim() ?? "", moved, stays }];
+    })));
+    for (const [id, most] of Object.entries(mayHide)) {
+      const x = t[id];
+      if (!x) { problems.push(`${tag}: the table ${id} is not on the page`); continue; }
+      if (x.hidden.length > (provoke ? -1 : most)) problems.push(`${tag}: ${id} needs a sideways scroll for ${x.hidden.length} of its ${x.columns} columns (${x.hidden.join(", ")}), at most ${most} may`);
+      // the one column that may need the scroll is the last (the CRM link)
+      else if (most === 1 && x.hidden.length === 1 && !x.last.startsWith(x.hidden[0].split(" ")[0])) problems.push(`${tag}: ${id} hides ${x.hidden[0]}, only its last column (${x.last}) may need the scroll`);
+    }
+    for (const [id, x] of Object.entries(t)) {
+      if (x && x.columns < 5) problems.push(`${tag}: ${id} shows ${x.columns} header cells: its header row is missing`);
+      if (x && x.moved && !x.stays) problems.push(`${tag}: the header row of ${id} scrolls away with its rows`);
+    }
+    const starts = await p.locator('[data-testid="active-list-start"]').allInnerTexts();
+    if (starts.length === 0 || starts.some((d) => d !== "–" && !/\b(19|20)\d\d$/.test(d))) problems.push(`${tag}: a Customer start in the list carries no year (${starts.slice(0, 3).join(", ")})`);
+    if (await p.locator('[data-testid="active-heat-legend"]').count() !== 1) problems.push(`${tag}: the heatmap has no scale legend`);
+    if (await p.locator('[data-testid="active-comparison"] [class*="text-p4a-green"], [data-testid="active-comparison"] [class*="text-p4a-error"]').count() !== 0) problems.push(`${tag}: a difference between two segments is coloured`);
+    if (await p.locator('[data-testid="active-slot-churn_rate"] [data-testid="active-churned"]').count() !== 1) problems.push(`${tag}: the churned subscriptions of the last 30 days are not inside the Churn rate card`);
+    if (await p.locator('[data-testid="active-base-chart"] [data-testid="active-marker"]').count() < 1) problems.push(`${tag}: the hero chart marks no store's subscription history start`);
+    await ctx.close();
+  }
+
+  for (const [w, h] of [[1280, 800], [1920, 1080]]) {
+    const tag = `${where} at ${w}x${h}`;
+    const ctx = await b.newContext({ viewport: { width: w, height: h }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/active");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: the Print button did not become ready after the four parts streamed`));
+    const m = await p.evaluate((stretch) => {
+      const bodies = [...document.querySelectorAll("[data-panel-body]")];
+      if (stretch && bodies[0]) bodies[0].style.height = `${bodies[0].getBoundingClientRect().height + 1}px`;
+      return {
+        bodies: Object.fromEntries(bodies.map((el) => [el.getAttribute("data-panel-body"), el.getBoundingClientRect().height])),
+        outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length,
+        tiles: document.querySelectorAll("[data-tile]").length,
+        present: document.querySelector('[data-testid="active-present"]')?.getAttribute("data-present") ?? null,
+        updated: document.querySelector('[data-testid="active-updated"]')?.getAttribute("data-present") ?? null,
+        filters: document.querySelectorAll('[data-testid="active-filters"] select').length,
+        // a panel of a fixed height either fits its figures or is one of the four that scroll inside (and can be focused)
+        cut: bodies.filter((el) => el.scrollHeight > el.clientHeight + 1 && el.getAttribute("tabindex") !== "0").map((el) => `${el.getAttribute("data-panel-body")} ${el.scrollHeight}>${el.clientHeight}`),
+        // the table panels: whether the table's own container still scrolls down (the table fills the panel)
+        fills: Object.fromEntries(bodies.map((el) => [el.getAttribute("data-panel-body"), [...el.querySelectorAll('[data-testid$="-scroll"]')].some((sc) => sc.scrollHeight > sc.clientHeight + 1)])),
+        // a tile fits its figures too (it may scroll inside itself, which nobody would find)
+        cutTiles: [...document.querySelectorAll("[data-tile]")].filter((el) => el.scrollHeight > el.clientHeight + 1).map((el) => `${el.getAttribute("data-testid")} ${el.scrollHeight}>${el.clientHeight}`),
+        // a placeholder's own words hold no digit; the related line under the Churn rate's badge (the churned subscriptions, a figure that exists) stands apart
+        cardDigits: [...document.querySelectorAll("[data-placeholder]")].some((el) => {
+          const own = el.cloneNode(true);
+          if (el.getAttribute("data-testid") === "active-slot-churn_rate") for (const r of own.querySelectorAll("[data-related]")) r.remove();
+          return /\d/.test(own.textContent ?? "");
+        }),
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    }, provoke);
+    if (m.cardDigits) problems.push(`${tag}: a placeholder card holds a digit`);
+    for (const id of new Set([...Object.keys(outlines), ...Object.keys(m.bodies)])) {
+      const a = outlines[id];
+      const c = m.bodies[id];
+      if (a === undefined || c === undefined) problems.push(`${tag}: panel ${id} has ${a === undefined ? "no outline in the frame" : "no rendered body"}`);
+      else if (id === "markets") {
+        // the markets' panel follows its table: never higher than its outline, never lower than a header and two rows, and at the outline's height when the table still scrolls
+        if (c > a + 0.5) problems.push(`${tag}: the markets' panel is ${c}px rendered, higher than its outline of ${a}px`);
+        else if (c < 120) problems.push(`${tag}: the markets' panel is ${c}px rendered: it has collapsed`);
+        else if (c < a - 0.5 && m.fills[id]) problems.push(`${tag}: the markets' panel is ${c}px rendered against ${a}px as its outline while its table still scrolls (it should fill the panel)`);
+      } else if (Math.abs(a - c) > 0.5) problems.push(`${tag}: panel ${id} is ${c}px rendered against ${a}px as its outline (the page shifts when the data arrives)`);
+    }
+    if (m.outlinesLeft !== 0) problems.push(`${tag}: ${m.outlinesLeft} outlines still on the screen after the page streamed`);
+    if (m.tiles !== 6) problems.push(`${tag}: ${m.tiles} tiles, expected 6`);
+    if (m.present !== "live" || m.updated !== "live") problems.push(`${tag}: after the page streamed the tiles are ${m.present} and the title row says ${m.updated}, expected the live present in both`);
+    if (m.filters !== 3) problems.push(`${tag}: ${m.filters} filter boxes after the page streamed, expected 3`);
+    if (m.cut.length > 0) problems.push(`${tag}: a panel cuts off its figures at its fixed height: ${m.cut.join(", ")}`);
+    if (m.cutTiles.length > 0) problems.push(`${tag}: a tile cuts off its figures: ${m.cutTiles.join(", ")}`);
+    if (m.scrollX) problems.push(`${tag}: the page scrolls horizontally`);
+    // a click shows its mark within 100 ms, before the answer is there (decision D14): a panel's toggle, the list's sort, the
+    // list's next page. The answer is held back so the mark's moment can be read
+    for (const [name, selector, after] of [
+      ["a panel's toggle", '[data-testid="active-survival-split"] a >> nth=1', /survival=channel/],
+      ["the list's sort", '[data-testid="active-sort-age_months"]', /sort=age_months/],
+      ["the list's next page", '[data-testid="active-pager"] a >> nth=-1', /after=/],
+    ]) {
+      const link = p.locator(selector);
+      if (await link.count() === 0) { problems.push(`${tag}: ${name} is not on the page`); continue; }
+      await link.scrollIntoViewIfNeeded();
+      // no click waits for the live read (decision D16): after the click the stored tiles are on the screen again before
+      // the live ones (the present's boundary is a new one on every view); seen from inside the page
+      await p.evaluate(() => {
+        window.__sawStored = false;
+        window.__watch?.disconnect();
+        window.__watch = new MutationObserver(() => {
+          if (document.querySelector('[data-testid="active-present"][data-settled="false"]')) window.__sawStored = true;
+        });
+        window.__watch.observe(document.body, { subtree: true, childList: true, attributes: true });
+      });
+      await p.route("**/reports/active?**", async (route) => { await new Promise((r) => setTimeout(r, provoke ? 0 : 500)); await route.continue().catch(() => undefined); });
+      const t0 = Date.now();
+      await link.click();
+      const marked = await link.locator('[data-link-pending="true"]').waitFor({ timeout: 400, state: "attached" }).then(() => Date.now() - t0, () => null);
+      if (marked === null || marked > 100) problems.push(`${tag}: a click on ${name} ${marked === null ? "did not mark the link" : `marked the link after ${marked} ms`} (within 100 ms)`);
+      await p.unroute("**/reports/active?**", { behavior: "ignoreErrors" });
+      await p.waitForURL(after, { timeout: 10_000 }).catch(() => problems.push(`${tag}: ${name} did not change the address`));
+      await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${tag}: after ${name} the page did not settle`));
+      const sawStored = await p.evaluate(() => window.__sawStored === true);
+      if (provoke ? sawStored : !sawStored) problems.push(`${tag}: after ${name} the stored tiles were not shown before the live ones (the click waited for the live read)`);
+    }
+    await ctx.close();
+  }
+
+  // the take's states, shown by test data (?take=): without a take nothing is a zero and the page says the history is being
+  // prepared; a stale take and a late one say so (decision D13)
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    const read = async (query) => {
+      await p.goto(BASE + "/reports/active?" + query);
+      await settle(p);
+      await p.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).catch(() => problems.push(`${where}?${query}: the page did not settle`));
+      return p.evaluate(() => {
+        const has = (sel) => document.querySelector(sel) !== null;
+        const text = (sel) => document.querySelector(sel)?.textContent ?? "";
+        return {
+          history: document.querySelector('[data-testid="active-history"]')?.getAttribute("data-history") ?? null,
+          churned: has('[data-testid="active-churned"]'), churnedPreparing: has('[data-testid="active-churned-preparing"]'),
+          channelSplit: has('[data-testid="active-split-channel"]'), tiles: document.querySelectorAll("[data-tile]").length,
+          customers: text('[data-testid="active-tile-customers"]'), preparing: document.querySelectorAll('[data-testid="active-history-preparing"]').length,
+          lateNote: has('[data-testid="active-note-late"]'), outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length,
+          presentPreparing: has('[data-testid="active-present-preparing"]'),
+          tilesPanel: text('[data-panel-body="tiles"]'),
+        };
+      });
+    };
+    const none = await read("take=none");
+    if (none.history !== "none" || none.churned || !none.churnedPreparing || none.channelSplit || none.tiles !== 6 || none.outlinesLeft !== 0 || none.preparing < 5
+      || !/[1-9]/.test(none.customers) || (provoke && none.history === "none")) {
+      problems.push(`${where}?take=none: without a take the page must show the live tiles, no churn count, no split by channel and "History is being prepared" (${JSON.stringify(none).slice(0, 300)})`);
+    }
+    const noneChannel = await read("take=none&channel=direct");
+    if (noneChannel.tiles !== 2 || noneChannel.outlinesLeft !== 0 || /\b0\b/.test(noneChannel.tilesPanel) || noneChannel.preparing < 5 || /\d/.test(noneChannel.customers)
+      || !noneChannel.presentPreparing) {
+      problems.push(`${where}?take=none&channel=direct: a channel filter without a take must show no tile of the present and no zero (${JSON.stringify(noneChannel).slice(0, 300)})`);
+    }
+    const stale = await read("take=stale");
+    if (stale.history !== "stale" || !stale.lateNote || stale.tiles !== 6 || !stale.churned) problems.push(`${where}?take=stale: a stale take is not shown as such (${JSON.stringify(stale).slice(0, 200)})`);
+    const late = await read("take=late");
+    if (late.history !== "late" || !late.lateNote || late.tiles !== 6) problems.push(`${where}?take=late: a late take is not shown as such (${JSON.stringify(late).slice(0, 200)})`);
+    await ctx.close();
+    // a tenant whose store or subscriptions are not set up: every part says so (never zeros) and the page still settles,
+    // so the Print button becomes ready (every part streamed, the present's too)
+    const ctx2 = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "invest-analyst" } });
+    const p2 = await ctx2.newPage();
+    await p2.goto(BASE + "/reports/active");
+    await settle(p2);
+    const ready = await p2.waitForSelector('[data-testid="active-print"][data-ready="true"]', { timeout: 10_000 }).then(() => true, () => false);
+    const m2 = await p2.evaluate(() => ({ notSetUp: document.querySelectorAll('[data-testid="active-not-set-up"]').length, tiles: document.querySelectorAll("[data-tile]").length,
+      outlinesLeft: document.querySelectorAll("[data-panel-skeleton]").length }));
+    if (!ready || (provoke ? m2.notSetUp > 0 : m2.notSetUp === 0) || m2.tiles !== 0 || m2.outlinesLeft !== 0) {
+      problems.push(`invest-analyst /reports/active: a tenant that is not set up must say so in every part and let the Print button become ready (ready ${ready}, ${JSON.stringify(m2)})`);
+    }
+    await ctx2.close();
   }
 }
 
@@ -2300,9 +2521,10 @@ async function expectFrame() {
     ["manager", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
     ["reader", "/reports/attempts?range=month", ["Welcome", "Sales", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
     ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Sales", "Attempts per agent"], ["/", "/reports/speed-to-lead", null]],
-    // A contact center's Live board (addition 0008zv): Live › the organisation's name; Reviews in Customers
+    // A contact center's Live board (addition 0008zv): Live › the organisation's name; Reviews in Customers, the group
+    // linking to Active, its first page since addition 0009l
     ["supervisor", "/live/newco", ["Welcome", "Live", "Newco"], ["/", "/live/newco", null]],
-    ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/cancellations", null]],
+    ["manager", "/reports/reviews", ["Welcome", "Customers", "Reviews"], ["/", "/reports/active", null]],
     // Assets (addition 0008zw): Installed base and Maintenance, the group linking to Installed base, its first page
     ["manager", "/reports/installed-base", ["Welcome", "Assets", "Installed base"], ["/", "/reports/installed-base", null]],
     ["reader", "/reports/maintenance", ["Welcome", "Assets", "Maintenance"], ["/", "/reports/installed-base", null]],
@@ -2378,7 +2600,7 @@ async function expectFrame() {
   // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
   // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it; since
   // 0008zw Installed base (Assets); since 0009a Courtesy (Customers)
-  for (const [subject, pages] of [["manager", 33], ["agent-one", 5]]) {
+  for (const [subject, pages] of [["manager", 34], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -3021,6 +3243,7 @@ await expectInstalledBaseModels();
 await expectAsOfTyping();
 await expectWelcomeOnOpen();
 await expectCampaigns();
+await expectActiveLayers();
 await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();

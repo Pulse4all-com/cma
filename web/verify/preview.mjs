@@ -104,7 +104,7 @@ const REPORTS = ["/reports/flash", "/reports/dashboard", "/reports/calls", "/rep
 const SALES = ["/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent",
   "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person"];
 // since addition 0008zw Maintenance is Assets', after Installed base
-const CUSTOMERS = ["/reports/cancellations", "/reports/reviews", "/reports/courtesy"];
+const CUSTOMERS = ["/reports/active", "/reports/courtesy", "/reports/reviews", "/reports/cancellations"];
 const ASSETS = ["/reports/installed-base", "/reports/maintenance"];
 const digits = (n) => Array.from({ length: n }, (_, i) => (i < 9 ? String(i + 1) : null));
 
@@ -139,11 +139,12 @@ const labels = (me, id) => visibleNav(me, copy).find((e) => e.kind === "group" &
 expect("the groups' labels: Reports, Sales, Customers, Assets (Verkoop, Klanten, Assets in Dutch)",
   [...visibleNav(READER, copy).flatMap((e) => (e.kind === "group" ? [e.label] : [])), ...visibleNav(READER, t("nl")).flatMap((e) => (e.kind === "group" ? [e.label] : []))],
   ["Reports", "Sales", "Customers", "Assets", "Campaigns", "Rapportages", "Verkoop", "Klanten", "Assets", "Campagnes"], ["Reports", "Campaigns"]);
-// Assets (addition 0008zw): Installed base and Maintenance, in en and nl, with the box icon; Customers keeps Cancellations and Reviews
-expect("Assets: Installed base then Maintenance (Geïnstalleerde basis, Onderhoud), the box icon; Customers: Cancellations, Reviews and Courtesy",
+// Assets (addition 0008zw): Installed base and Maintenance, in en and nl, with the box icon; Customers since addition 0009l
+// (Martin, 11 November 2026): Active first, then Courtesy, Reviews and Cancellations
+expect("Assets: Installed base then Maintenance (Geïnstalleerde basis, Onderhoud), the box icon; Customers: Active, Courtesy, Reviews, Cancellations",
   [labels(READER, "assets"), visibleNav(READER, t("nl")).find((e) => e.kind === "group" && e.id === "assets")?.items.map((i) => i.label) ?? null,
     visibleNav(READER, copy).find((e) => e.kind === "group" && e.id === "assets")?.icon ?? null, labels(READER, "customers")],
-  [["Installed base", "Maintenance"], ["Geïnstalleerde basis", "Onderhoud"], "box", ["Cancellations", "Reviews", "Courtesy"]],
+  [["Installed base", "Maintenance"], ["Geïnstalleerde basis", "Onderhoud"], "box", ["Active", "Courtesy", "Reviews", "Cancellations"]],
   [["Maintenance"], ["Onderhoud"], "person", ["Cancellations", "Reviews", "Maintenance"]]);
 expect("the Assets pages' breadcrumbs: Welcome › Assets › Installed base, Welcome › Assets › Maintenance, the group to Installed base",
   [breadcrumbs(READER, copy, "installed-base"), breadcrumbs(READER, copy, "maintenance")],

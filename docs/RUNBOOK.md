@@ -536,6 +536,35 @@ To pause the refresh (the figures then stand still and "Updated …" turns grey 
 `gcloud scheduler jobs pause cma-refresh-follow-up-minutely --project=p4a-cma-prod --location=europe-west4`
 (**Terminal**); `resume` in place of `pause` starts it again.
 
+## 7c. Addition 0009l: the stored take of Customers → Active
+
+Customers → Active reads its history from a take that the job `cma-refresh-active-customers` refreshes, the sibling of
+`cma-refresh-follow-up` and of the data-quality refresh `cma-refresh-data-quality` (decision D13). The job's script
+ships in the web image, so it is deployed with the image of the merge that brings it, after `172` ran in that database.
+The web of `main` runs unchanged on the migrated database; the page of this change says "History is being prepared"
+(never zeros) until the job's first run has made a take.
+
+1. **Terminal**: the job and its schedule, dev first, with the merge's image; then its first run in each.
+
+   ```bash
+   cd ~/cma && bash docs/scheduler/deploy-active-customers.sh dev <short sha>
+   gcloud run jobs execute cma-refresh-active-customers --project=p4a-cma-dev --region=europe-west4 --wait 2>&1 | tail -2
+   bash docs/scheduler/deploy-active-customers.sh prod <short sha>
+   gcloud run jobs execute cma-refresh-active-customers --project=p4a-cma-prod --region=europe-west4 --wait 2>&1 | tail -2
+   ```
+
+   Expected per environment: the job `cma-refresh-active-customers` on the image `<short sha>` and the schedule
+   `cma-refresh-active-customers-minutely` every minute (UTC), then gcloud's line that the execution has successfully
+   completed.
+
+2. **Browser**: Configuration → System health lists Refresh active customers (job `refresh_active_customers`) with a
+   run in the last minute; Customers → Active shows "History as of hh:mm" under the title.
+
+To pause the refresh (the page then keeps its last take and says so once it is older than
+`customers.history_notice_minutes`): `gcloud scheduler jobs pause cma-refresh-active-customers-minutely
+--project=p4a-cma-prod --location=europe-west4` (**Terminal**); `resume` in place of `pause` starts it again. Pause it
+as the other minutely jobs when a verifier holds a lock in dev.
+
 ## 8. Add a person to prod
 
 Since the night build of 8 October 2026 this is a screen, not a script (`db/people_add_prod.template.sql` is retired).

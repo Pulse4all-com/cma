@@ -179,6 +179,28 @@
       "class": "report"
     },
     {
+      "path": "/reports/active",
+      "subject": "manager",
+      "class": "report",
+      "layers": {
+        "frame": { "mark": "data-panel-skeleton=\"tiles\"", "p95": 150 },
+        "above_the_fold_stored": { "mark": "data-present=\"stored\"", "p95": 200 },
+        "below_the_fold": { "mark": "data-panel-body=\"markets\"", "p95": 250 },
+        "list": { "mark": "data-panel-body=\"list\"", "p95": 250 },
+        "live_present": { "mark": "data-present=\"live\"", "p95": 350 }
+      }
+    },
+    {
+      "path": "/reports/active?segment=unknown&channel=direct",
+      "subject": "manager",
+      "class": "report",
+      "layers": {
+        "above_the_fold_computed": { "mark": "data-present=\"stored\"", "p95": 400 },
+        "below_the_fold_computed": { "mark": "data-panel-body=\"markets\"", "p95": 500 },
+        "live_present": { "mark": "data-present=\"live\"", "p95": 400 }
+      }
+    },
+    {
       "path": "/reports/data-quality",
       "subject": "manager",
       "class": "report"
@@ -254,6 +276,7 @@
     "/reports/installed-base": 30,
     "/reports/reviews": 22,
     "/reports/courtesy": 30,
+    "/reports/active": 86,
     "/reports/data-quality": 16,
     "/configuration/sources": 78,
     "/configuration/health": 21,
@@ -279,6 +302,7 @@
     "/reports/installed-base": 169,
     "/reports/reviews": 169,
     "/reports/courtesy": 169,
+    "/reports/active": 169,
     "/reports/data-quality": 167,
     "/configuration/sources": 173,
     "/configuration/health": 167,

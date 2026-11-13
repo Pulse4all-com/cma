@@ -26,7 +26,7 @@ import { join, relative } from "node:path";
 
 const root = new URL("../src/", import.meta.url).pathname;
 const PURE = ["csv", "dashboard", "team", "roster", "live", "reports", "messages", "configuration", "follow-up",
-  "invitations", "sources", "period", "time", "nav", "alertRules", "corrections", "logout", "origin", "health", "email", "first-orders", "callbacks", "attempts", "funnel", "metrics", "reviews", "maintenance", "cohorts", "courtesy", "pledges",
+  "invitations", "sources", "period", "time", "nav", "alertRules", "corrections", "logout", "origin", "health", "email", "first-orders", "callbacks", "attempts", "funnel", "metrics", "reviews", "maintenance", "cohorts", "courtesy", "pledges", "active",
   // the cached Intl formatters (the Live board's speed review, 10 November 2026): no imports, read by time and reports
   "intl"];
 
@@ -68,7 +68,7 @@ export function check(files) {
         const rel = from.match(/^\.\/([A-Za-z-]+)\.ts$/)?.[1];
         if (rel === undefined || !PURE.includes(rel)) problems.push(`R3 ${at}: runtime import ${from}`);
       }
-      if (isApi && !/^(\.\/respond|@\/lib\/api\/respond|server-only|@\/lib\/reports|@\/lib\/sources|@\/lib\/email|@\/lib\/first-orders|@\/lib\/attempts|@\/lib\/funnel|@\/lib\/maintenance|@\/lib\/cohorts|@\/lib\/flash|@\/lib\/courtesy)$/.test(from)) problems.push(`R4 ${at}: imports ${from}`);
+      if (isApi && !/^(\.\/respond|@\/lib\/api\/respond|server-only|@\/lib\/reports|@\/lib\/sources|@\/lib\/email|@\/lib\/first-orders|@\/lib\/attempts|@\/lib\/funnel|@\/lib\/maintenance|@\/lib\/cohorts|@\/lib\/flash|@\/lib\/courtesy|@\/lib\/active)$/.test(from)) problems.push(`R4 ${at}: imports ${from}`);
       if (path === "lib/data/mock.ts" && /^@\/lib\/db(\/|$)/.test(from)) problems.push(`R5 ${at}: imports ${from}`);
     }
   }

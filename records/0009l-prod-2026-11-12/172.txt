@@ -1,0 +1,219 @@
+DO
+BEGIN
+SET
+SET
+DO
+INSERT 0 6
+CREATE FUNCTION
+psql:db/172_active_customers.sql:465: NOTICE:  view "active_customer_month" does not exist, skipping
+DROP VIEW
+psql:db/172_active_customers.sql:466: NOTICE:  view "customer_cohort" does not exist, skipping
+DROP VIEW
+psql:db/172_active_customers.sql:467: NOTICE:  function cma_read.active_customer_month_rows() does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:468: NOTICE:  function cma_read.customer_cohort_rows() does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:469: NOTICE:  function cma.active_page(date,text,text,text,text) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:470: NOTICE:  function cma.active_markets() does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:471: NOTICE:  function cma.active_page_of(uuid,date,text,text,text,text,timestamptz) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:472: NOTICE:  function cma.active_rows(text,text,text,text,pg_catalog.bool,pg_catalog.int4,pg_catalog.int4,pg_catalog.bool) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:473: NOTICE:  function cma.active_rows_of(uuid,text,text,text,text,pg_catalog.bool,pg_catalog.int4,pg_catalog.int4,timestamptz) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:474: NOTICE:  function cma.active_survival_of(uuid,text) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:475: NOTICE:  function cma.active_km_json(pg_catalog.int4[],pg_catalog.bool[]) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:476: NOTICE:  function cma.active_km_from(pg_catalog.int4[],pg_catalog.bool[]) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:477: NOTICE:  function cma.active_months_of(uuid,timestamptz) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:478: NOTICE:  function cma.active_cohorts_of(uuid,text,timestamptz) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:479: NOTICE:  function cma.active_spell_lengths_of(uuid,timestamptz,pg_catalog.bool) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:480: NOTICE:  function cma.active_channel_of(uuid) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:481: NOTICE:  function cma.active_spells_of(uuid) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:482: NOTICE:  function cma.active_customers_of(uuid,timestamptz,pg_catalog.bool) does not exist, skipping
+DROP FUNCTION
+psql:db/172_active_customers.sql:483: NOTICE:  function cma.active_base_of(uuid,timestamptz,pg_catalog.bool,date,pg_catalog.bool) does not exist, skipping
+DROP FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+psql:db/172_active_customers.sql:1054: NOTICE:  column "stale_marks" of relation "active_take" already exists, skipping
+ALTER TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+psql:db/172_active_customers.sql:1152: NOTICE:  column "customer_start_on" of relation "active_spell" already exists, skipping
+ALTER TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+psql:db/172_active_customers.sql:1196: NOTICE:  policy "tenant_app" for relation "active_take" does not exist, skipping
+psql:db/172_active_customers.sql:1196: NOTICE:  policy "tenant_readonly" for relation "active_take" does not exist, skipping
+psql:db/172_active_customers.sql:1196: NOTICE:  trigger "audit" for relation "active_take" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/172_active_customers.sql:1197: NOTICE:  policy "tenant_app" for relation "active_base" does not exist, skipping
+psql:db/172_active_customers.sql:1197: NOTICE:  policy "tenant_readonly" for relation "active_base" does not exist, skipping
+psql:db/172_active_customers.sql:1197: NOTICE:  trigger "audit" for relation "active_base" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/172_active_customers.sql:1198: NOTICE:  policy "tenant_app" for relation "active_customer" does not exist, skipping
+psql:db/172_active_customers.sql:1198: NOTICE:  policy "tenant_readonly" for relation "active_customer" does not exist, skipping
+psql:db/172_active_customers.sql:1198: NOTICE:  trigger "audit" for relation "active_customer" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/172_active_customers.sql:1199: NOTICE:  policy "tenant_app" for relation "active_spell" does not exist, skipping
+psql:db/172_active_customers.sql:1199: NOTICE:  policy "tenant_readonly" for relation "active_spell" does not exist, skipping
+psql:db/172_active_customers.sql:1199: NOTICE:  trigger "audit" for relation "active_spell" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/172_active_customers.sql:1200: NOTICE:  policy "tenant_app" for relation "active_month" does not exist, skipping
+psql:db/172_active_customers.sql:1200: NOTICE:  policy "tenant_readonly" for relation "active_month" does not exist, skipping
+psql:db/172_active_customers.sql:1200: NOTICE:  trigger "audit" for relation "active_month" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/172_active_customers.sql:1201: NOTICE:  policy "tenant_app" for relation "active_cohort" does not exist, skipping
+psql:db/172_active_customers.sql:1201: NOTICE:  policy "tenant_readonly" for relation "active_cohort" does not exist, skipping
+psql:db/172_active_customers.sql:1201: NOTICE:  trigger "audit" for relation "active_cohort" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/172_active_customers.sql:1202: NOTICE:  policy "tenant_app" for relation "active_document" does not exist, skipping
+psql:db/172_active_customers.sql:1202: NOTICE:  policy "tenant_readonly" for relation "active_document" does not exist, skipping
+psql:db/172_active_customers.sql:1202: NOTICE:  trigger "audit" for relation "active_document" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+psql:db/172_active_customers.sql:1250: NOTICE:  trigger "mark_active_take_stale" for relation "cma.tenant_setting" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+INSERT 0 1
+CREATE FUNCTION
+REVOKE
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE VIEW
+COMMENT
+CREATE VIEW
+COMMENT
+DO
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+INSERT 0 1
+COMMIT
+RESET

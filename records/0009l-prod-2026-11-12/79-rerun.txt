@@ -1,0 +1,14 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ false
+(1 row)
+
+psql:db/79_verify_system_health.sql:49: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 79 runs in dev only
+CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE

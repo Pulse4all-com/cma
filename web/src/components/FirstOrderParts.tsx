@@ -72,6 +72,12 @@ export function FirstOrderDateLine({ from, to, market, level, historyStart, phon
             phoneStart ? t.phoneFrom.replace("{date}", fmtDate(phoneStart, locale)) : t.phoneNone].filter(Boolean).join(" · ")}
         </p>
       ) : null}
+      {/* what the history's start means for the attribution (the same sentence as Customers → Active's, in this page's words) */}
+      {history && historyStart ? (
+        <p className="mt-1 max-w-prose text-caption text-p4a-muted" data-testid="first-order-history-meaning">
+          {t.historyMeaning.replace("{date}", fmtDate(historyStart, locale)).replace("{direct}", t.selfService.toLowerCase()).replace("{indirect}", t.callCenter.toLowerCase())}
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import { tenantCache } from "@/lib/cache";
 import type {
+  ActiveList, ActiveNow, ActiveReport,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
@@ -34,6 +35,7 @@ import { workdayStartsAt } from "@/lib/live";
 import { REMOVE_REFUSAL } from "@/lib/corrections";
 import { FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
+import { activeFromDb, activeNowFromDb, activeRowsFromDb } from "@/lib/active";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -3545,6 +3547,54 @@ export const postgresData: CmaData = {
         [query.check, query.market, query.limit, query.offset])).rows, "data_quality_rows").j;
       return { check: j.check, description: j.description, market: j.market, limit: j.limit, offset: j.offset, total: Number(j.total), rows: j.rows,
         computedAt: isoAny(j.computed_at ?? null) };
+    });
+  },
+
+  async getActiveTop(me, fromMonth, filter): Promise<ActiveReport> {
+    return withTenant(ctx(me), async (q) => {
+      // above the fold (addition 0009l, decisions D15 and D16): the function checks the permission and the parameters first
+      // and answers the document the refresh stored for these filters (a key lookup; computed from the take's rows for a
+      // combination of filters), as of the take; nothing live. One statement, one transaction
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_top($1::date, $2, $3, $4) as j`,
+        [fromMonth, filter.market, filter.segment, filter.channel])).rows, "active_top").j;
+      return activeFromDb(j);
+    });
+  },
+
+  async getActiveNow(me, filter): Promise<ActiveNow> {
+    return withTenant(ctx(me), async (q) => {
+      // the live present of the tiles (decision D16): its own statement and transaction, after the stored answer
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_now($1, $2, $3) as j`,
+        [filter.market, filter.segment, filter.channel])).rows, "active_now").j;
+      return activeNowFromDb(j);
+    });
+  },
+
+  async getActiveRest(me, fromMonth, filter, grouping): Promise<ActiveReport> {
+    return withTenant(ctx(me), async (q) => {
+      // below the fold, from the stored document (computed from the take's rows for a combination of filters or a later first
+      // month): its own statement and transaction
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rest($1::date, $2, $3, $4, $5) as j`,
+        [fromMonth, filter.market, filter.segment, filter.channel, grouping])).rows, "active_rest").j;
+      return activeFromDb(j);
+    });
+  },
+
+  async getActiveRows(me, request): Promise<ActiveList> {
+    return withTenant(ctx(me), async (q) => {
+      // the list's page from the stored take, by keyset (after or before a cursor: a customer's own id), with the contact's record link from the
+      // CRM connection's record_url_contact template; a file's read (file: true) answers every row up to the tenant's
+      // flash.file_max_rows
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8, $9) as j`,
+        [request.filter.market, request.filter.segment, request.filter.channel, request.sort, request.descending, request.after ?? null,
+          request.before ?? null, request.limit, request.file === true])).rows, "active_rows").j;
+      return activeRowsFromDb(j);
+    });
+  },
+
+  async recordActiveFile(me, filter, rows): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.active_file_record($1, $2, $3, $4)`, [filter.market, filter.segment, filter.channel, rows]);
     });
   },
 

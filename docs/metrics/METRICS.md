@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-615 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 116 · cadence_unconfirmed 74.
+645 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 146 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -37691,6 +37691,1801 @@ select count(*) filter (where crm_contact_source_id is not null) as orders, coun
 - Aircall calls linked to the logged CRM call (cma.call_link) (data quality check `telephony_call_unlinked`)
 
 **Documented in** features.md 5 (Customers -> Courtesy); kpis.md (the courtesy KPI); api.md, GET /api/v1/reports/courtesy; data-model/0008.md, 0009a; definitions.md, Courtesy terms; decisions.md, 6 Nov 2026 (Courtesy per order); decisions.md, 6 Nov 2026 (Courtesy state Not reached renamed Unreachable)
+
+### /reports/active
+
+#### `active.active_customers`
+
+**Active customers** on /reports/active · Active customers (Actieve klanten)
+
+Store customers with at least one subscription in a device-holding status: Flash's Active customer, unchanged. The tile splits them by segment and by acquisition channel.
+
+**Formula as computed**
+
+```
+active_customers = count(cma.flash_customer_figures_of(tenant) rows with holding_subscriptions > 0, under the page's filters); by_segment and by_channel the same per segment and per channel; equal to Flash's flash.customers.active_customers for every market and segment (173 B1: equality, never a tolerance)
+```
+
+**Unit** count · **Grain** now, per_market, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+| `cma.crm_contact` | source_id, segment, source_deleted_at | HubSpot | HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_contacts(); the segment from the connection's mapped property (addition 0008zt, connection_field contact.segment) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `crm.customer_segments` |  | B2B,B2C |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*)
+from cma.commerce_customer cu
+where cu.tenant_id = :tenant_id and cu.source_deleted_at is null
+  and exists (select 1
+              from cma.subscription s
+              join cma.integration_connection c on c.tenant_id = s.tenant_id and c.id = s.connection_id
+              join cma.commerce_store st on st.tenant_id = c.tenant_id and st.handle = lower(split_part(btrim(c.external_account_id), '.', 1))
+              where s.tenant_id = cu.tenant_id and st.connection_id = cu.connection_id and s.customer_source_id = cu.source_id
+                and s.source_deleted_at is null
+                and s.status = any (string_to_array(cma.setting_of(:tenant_id, 'flash.device_holding_statuses'), ',')));
+```
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+The present comes from cma.flash_customer_figures_of (decision D2), read for the customers with a subscription alone. The same figure as Reports -> Flash's Active customers.
+
+#### `active.total_subscriptions`
+
+**Total subscriptions** on /reports/active · Total subscriptions (Totaal abonnementen)
+
+Subscriptions in a device-holding status: Flash's Total subscriptions, unchanged, with the split by status.
+
+**Formula as computed**
+
+```
+total_subscriptions = count(subscriptions the latest read still returns whose status is in flash.device_holding_statuses, under the page's filters); by_status the same per status; equal to Flash's holding_subscriptions per market (173 B1)
+```
+
+**Unit** count · **Grain** now, per_market, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*)
+from cma.subscription s
+where s.tenant_id = :tenant_id and s.source_deleted_at is null
+  and s.status = any (string_to_array(cma.setting_of(:tenant_id, 'flash.device_holding_statuses'), ','));
+```
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A subscription whose customer the store does not hold counts here (segment and channel unknown) and in a data note.
+
+#### `active.monthly_recurring_amount`
+
+**Monthly recurring amount** on /reports/active · Monthly recurring amount (Maandelijks terugkerend bedrag)
+
+Per currency, the contracted amount per month of the subscriptions that hold a device and pay: each subscription's amount per cycle turned into a month. The subscription app's contracted amount, not revenue. Never added across currencies; an indicative euro total shows only while reports.fx_eur_rates holds a rate for every currency shown.
+
+**Formula as computed**
+
+```
+amount[currency] = sum(amount_per_cycle * factor) over subscriptions with status in flash.device_holding_statuses and in flash.active_subscription_statuses; factor = (day 365.25/12, week 365.25/84, month 1, year 1/12) / billing_interval_count (cma.active_month_factor_of); a month end's amount = the subscriptions holding then by the reconstruction, at their amount today, those that hold today without paying left out; eur = sum(amount * rate) only when every shown currency is EUR or has a rate, else absent
+```
+
+**Unit** currency · **Grain** now, per_currency, per_market, per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+| `cma.tenant_setting` | key, value | CMA | cma.set_tenant_setting() (Configuration), seed 02 for Pulse4all | on configuration change |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.active_subscription_statuses` | active | active (default) |
+| `reports.fx_eur_rates` | {} | {} (empty: no euro total until someone owns the rates, Open decisions) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select s.currency, round(sum(s.amount_per_cycle * (case s.billing_interval when 'day' then 365.25 / 12 when 'week' then 365.25 / 84 when 'month' then 1 when 'year' then 1.0 / 12 end) / s.billing_interval_count), 2)
+from cma.subscription s
+where s.tenant_id = :tenant_id and s.source_deleted_at is null
+  and s.status = any (string_to_array(cma.setting_of(:tenant_id, 'flash.device_holding_statuses'), ','))
+  and s.status = any (string_to_array(cma.setting_of(:tenant_id, 'flash.active_subscription_statuses'), ','))
+group by 1 order by 1;
+```
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Not revenue: invoices and payments stay NetSuite's. A paying subscription without an amount, an interval or a currency is left out and counted in a data note.
+
+#### `active.average_monthly_amount`
+
+**Average monthly amount per active customer** on /reports/active · Average monthly amount per active customer (Gemiddeld maandbedrag per actieve klant)
+
+Per currency, the Monthly recurring amount divided by the active customers with a subscription in that currency.
+
+**Formula as computed**
+
+```
+average[currency] = amount[currency] / count(distinct store customers with a subscription in a device-holding status in that currency); null without such a customer
+```
+
+**Unit** average · **Grain** now, per_currency, per_market, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.active_subscription_statuses` | active | active (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_present_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+The numerator holds the amount of a subscription whose customer the store does not hold; the denominator counts customers only. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.customer_age_median`
+
+**Median customer age** on /reports/active · Median customer age (Mediane klantduur)
+
+The median Customer age of the active customers in whole months: from the Customer start (the earliest of the customer's creation in the store and the creation of any of its subscriptions) to today.
+
+**Formula as computed**
+
+```
+median_age = percentile_cont(0.5) over cma.flash_age_months_of(customer_start, tenant zone, today) of the active customers; customer_start = least(commerce_customer.source_created_at, min(subscription.source_created_at) of its subscriptions in the store)
+```
+
+**Unit** median · **Grain** now, per_market, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Previous period** Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Counted per customer here; Flash's Subscription age counts per subscription. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.customer_age_bands`
+
+**Customer age** on /reports/active · Customer age (Klantduur)
+
+The active customers by Customer age in the bands of customers.age_months, with the customers of at least each of its first three ages (KPI 4's 12, 24 and 36 months, counted per customer).
+
+**Formula as computed**
+
+```
+per band of customers.age_months (cma.flash_age_band_of): count(active customers with that Customer age); more than N months = count(age >= N) for the first three bounds
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.age_months` | 12,24,36,48,60 | 12,24,36,48,60 (default, written by seed 02) |
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Bands and bounds as Flash's subscription age bands, on customers. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.customer_lifetime_median`
+
+**Customer lifetime (median)** on /reports/active · Customer lifetime (median) (Klantlevensduur (mediaan))
+
+How long a customer is expected to stay: the median of a Kaplan-Meier survival curve over the customers' active spells in whole months. An ended spell is an event at its length, an active spell is censored at its age today. While the curve has not fallen to 50 % the page says not reached yet: more than the longest observed age.
+
+**Formula as computed**
+
+```
+per age a (whole months): at_risk = spells of length >= a; events = ended spells of length a; survival(a) = product over ages <= a of (1 - events / at_risk); median = the first age with survival <= 0.5, else none (cma.active_km_from); a spell = a maximal stretch in which at least one of the customer's subscriptions holds, from the subscriptions' created and ended times (cma.active_spells_from)
+```
+
+**Unit** months · **Grain** now, per_segment, per_channel · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.ended_subscription_statuses` | canceled,expired | canceled,expired (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+No mean is shown: ended spells in a short history are biased towards short ones. A past pause counts as holding. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.retention`
+
+**Retention at an age** on /reports/active · Retention at an age (Retentie op een leeftijd)
+
+Retention (customer) at a Customer age: the Kaplan-Meier survival at that age, the share of active spells that still last after it. The comparison shows it at the first three ages of customers.age_months; the survival chart draws it per age, so a curve crosses 50 % at its median, the Customer lifetime.
+
+**Formula as computed**
+
+```
+retention(a) = survival(a) = product over ages <= a of (1 - events / at_risk) (cma.active_km_from's survival); a dash where no spell is that old (at_risk = 0)
+```
+
+**Unit** share · **Grain** now, per_segment, per_channel, per_age · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.age_months` | 12,24,36,48,60 | 12,24,36,48,60 (default, written by seed 02) |
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.ended_subscription_statuses` | canceled,expired | canceled,expired (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+One entry for every age (the ages are the tenant's setting). Retention at an age is the survival through that age: a spell that ends at exactly that length no longer counts, so a curve crosses 50 % at its median. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.clv_realised_average`
+
+**Customer lifetime value (realised), average** on /reports/active · Customer lifetime value (realised), average (Klantwaarde, gerealiseerd, gemiddeld)
+
+Per currency, the average of what the active customers have spent in the store so far, as the store states it. It covers the store's history only.
+
+**Formula as computed**
+
+```
+average[currency] = avg(commerce_customer.amount_spent) over active customers with an amount in that currency
+```
+
+**Unit** average · **Grain** now, per_currency, per_market, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Shopify's amountSpent; Open decisions keeps Shopify versus NetSuite as the source of value. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.clv_realised_median`
+
+**Customer lifetime value (realised), median** on /reports/active · Customer lifetime value (realised), median (Klantwaarde, gerealiseerd, mediaan)
+
+Per currency, the median of what the active customers have spent in the store so far.
+
+**Formula as computed**
+
+```
+median[currency] = percentile_cont(0.5) over commerce_customer.amount_spent of the active customers in that currency
+```
+
+**Unit** median · **Grain** now, per_currency, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+As the average, per currency. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.clv_realised_per_month`
+
+**Customer lifetime value (realised) per month of customer age** on /reports/active · Customer lifetime value (realised) per month of customer age (Klantwaarde, gerealiseerd, per maand klantduur)
+
+Per currency, the average over the active customers of what each has spent divided by its Customer age in months (an age of 0 counts as 1).
+
+**Formula as computed**
+
+```
+per_month[currency] = avg(amount_spent / greatest(customer age in months, 1)) over active customers in that currency
+```
+
+**Unit** average · **Grain** now, per_currency, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A customer whose store history is shorter than its Customer age reads low. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.acquisition_channel_share`
+
+**Indirect share** on /reports/active · Indirect share (Aandeel indirect)
+
+The active customers by acquisition channel, attributed as Sales -> First orders attributes over every order deal the CRM holds: Indirect (First orders attributed the customer's first order to the call center), Direct (to self-service) or Unknown, with the reasons for Unknown. Before the attribution's history start (the page's note) the attribution sees no touches older than the intake start, so some orders count as Direct that may have been Indirect. The Indirect share is Indirect over the customers with a known channel.
+
+**Formula as computed**
+
+```
+channel = the attribution cma.first_orders_of gives the customer's first order (the customer of the first order's linked store order; the earliest by the deal's creation), read over every order deal the CRM holds (cma.first_orders_of from -infinity to now): call_center -> indirect, self_service -> direct; else unknown with reason no_contact, before_history (the Customer start lies before the first order deal on record), no_first_order, order_not_matched or no_order_deal; indirect_share = indirect / (indirect + direct), null without a known channel
+```
+
+**Unit** share · **Grain** now, per_market, per_segment, per_channel · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_order` | customer_source_id, order_kind, source_created_at, is_test, cancelled_at, source_deleted_at | Shopify | Shopify webhook orders/* -> ingest POST /shopify/<key> -> read-back; order_kind from the renewal settings and prior order count | webhook read-back; reconcile 03:30 |
+| `cma.crm_record` | record_type, pipeline_id, stage_id, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhook -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records() | webhook read-back within seconds; sweep every minute; reconcile 03:30 (docs/ingest/deploy.sh) |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.tenant_setting` | key, value | CMA | cma.set_tenant_setting() (Configuration), seed 02 for Pulse4all | on configuration change |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `attribution.assisted_levels` | lead_deal,conversation,email,phone_match | lead_deal,conversation,email,phone_match (default) |
+| `attribution.window_days` | 90 | 90 (default) |
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- The attribution's history: First orders attributes order deals from intake.start_date + attribution.window_days only, and an order deal needs its store order (orders are held from 7 September 2026); customers that started before it are Unknown (before_history)
+- Store customers linked to their CRM contact (addition 0008h); without it the channel is Unknown (no_contact) (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12); definitions.md, Acquisition channel
+
+**Notes**
+
+No second rule: First orders' attribution with the same attribution.* settings. Unknown is never counted as direct. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.segment_difference`
+
+**Segment difference and ratio** on /reports/active · Segment difference and ratio (Verschil en verhouding per segment)
+
+The first two segments of crm.customer_segments side by side: per measure the first less the second and the first over the second. The unknown segment stands beside them and is never in the difference.
+
+**Formula as computed**
+
+```
+difference = a - b where both have a value; ratio = a / b only when both are above 0; a and b the measure's value over the customers of the first and the second segment of crm.customer_segments; an amount per currency, empty where a side has no customer in the currency
+```
+
+**Unit** ratio · **Grain** now, per_segment, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.crm_contact` | source_id, segment, source_deleted_at | HubSpot | HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_contacts(); the segment from the connection's mapped property (addition 0008zt, connection_field contact.segment) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `crm.customer_segments` |  | B2B,B2C |
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A difference between two segments is never coloured: it stands in Inkt with its sign (no better or worse between segments). verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.subscriptions_per_customer`
+
+**Subscriptions per customer** on /reports/active · Subscriptions per customer (Abonnementen per klant)
+
+The holding subscriptions of the active customers divided by the active customers.
+
+**Formula as computed**
+
+```
+subscriptions_per_customer = sum(holding_subscriptions of the active customers, Flash's figure) / active customers
+```
+
+**Unit** ratio · **Grain** now, per_segment, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Subscriptions whose customer the store does not hold are not in it. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.devices_per_customer`
+
+**Devices per customer** on /reports/active · Devices per customer (Apparaten per klant)
+
+The devices of the active customers in the asset register divided by the active customers.
+
+**Formula as computed**
+
+```
+devices_per_customer = sum(devices whose customer reference is the customer's id, of its store's market: Flash's figure) / active customers
+```
+
+**Unit** ratio · **Grain** now, per_segment, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Every device status counts, as Flash's customers list. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.base_over_time`
+
+**The base over time** on /reports/active · The base over time (Het klantenbestand in de tijd)
+
+Active customers and Total subscriptions at each month's end over the range, reconstructed from the subscriptions' created and ended times. The last point is now and equals the headline. A past pause counts as holding.
+
+**Formula as computed**
+
+```
+customers(month end) = customers with an active spell at that instant = spells started up to it less spells ended up to it (cma.active_month_cube_from: running sums, never a join of months with subscriptions); subscriptions(month end) the same over the holding intervals [created, Ended time or the current pause's start)
+```
+
+**Unit** count · **Grain** per_month, per_segment · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.history_months` | 60 | 60 (default, written by seed 02) |
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.ended_subscription_statuses` | canceled,expired | canceled,expired (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Ended time = canceled_at, else the latest event into a status of flash.ended_subscription_statuses; an ended subscription without one is left out and counted in a data note. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.inflow`
+
+**Inflow** on /reports/active · Inflow (Instroom)
+
+Customers whose active spell starts in a month, split by acquisition channel.
+
+**Formula as computed**
+
+```
+inflow(month) = count(spells whose start falls in the month), per acquisition channel
+```
+
+**Unit** count · **Grain** per_month, per_channel · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.history_months` | 60 | 60 (default, written by seed 02) |
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Not a new customer in the store's sense: a returning customer's new spell counts. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.outflow`
+
+**Outflow** on /reports/active · Outflow (Uitstroom)
+
+Customers whose active spell ends in a month.
+
+**Formula as computed**
+
+```
+outflow(month) = count(spells whose end falls in the month)
+```
+
+**Unit** count · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.history_months` | 60 | 60 (default, written by seed 02) |
+| `flash.ended_subscription_statuses` | canceled,expired | canceled,expired (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Not Churn (subscription), which counts subscription events; a customer with two subscriptions that cancels one stays in its spell. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.net_change`
+
+**Net change** on /reports/active · Net change (Netto verandering)
+
+Inflow less outflow of a month, which equals the difference between two month ends; per market also over the last 30 days.
+
+**Formula as computed**
+
+```
+net(month) = inflow - outflow = customers(month end) - customers(previous month end) (173 B3, P2); net_30d = spells started in the last 30 days - spells ended in them
+```
+
+**Unit** count · **Grain** per_month, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.history_months` | 60 | 60 (default, written by seed 02) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+The identity is a verify check. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.churned_30d`
+
+**Churned, last 30 days** on /reports/active · Churned, last 30 days (Uitval, laatste 30 dagen)
+
+Subscriptions that moved into an ended status in the last 30 business dates: Flash's Churn (subscription), under the page's filters.
+
+**Formula as computed**
+
+```
+churned_30d = count(cma.flash_churn_of(tenant, today - 29, today) rows under the page's filters)
+```
+
+**Unit** count · **Grain** period, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.ended_subscription_statuses` | canceled,expired | canceled,expired (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_top` (0009l); `cma.active_top_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `cma.flash_churn_of` (0008zn); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Counts subscriptions, not customers; links to Flash's churn overview.
+
+#### `active.by_market`
+
+**Markets** on /reports/active · Markets (Markten)
+
+The present figures per market with the totals row the same read computes: active customers with their share and segments, subscriptions, devices, the Monthly recurring amount and its average per currency, median customer age, realised value, churned and net change over 30 days, the indirect share and the customers at the last twelve month ends.
+
+**Formula as computed**
+
+```
+per market (the store's market): the page's measures over that market's customers and subscriptions; share = market's active customers / all active customers; the totals row is the same read without the market grouping
+```
+
+**Unit** count · **Grain** now, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+| `cma.crm_contact` | source_id, segment, source_deleted_at | HubSpot | HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_contacts(); the segment from the connection's mapped property (addition 0008zt, connection_field contact.segment) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `crm.customer_segments` |  | B2B,B2C |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Sorted by a column in the page; the totals row is the database's, never summed in the browser. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.cohort_retention`
+
+**Customer cohorts** on /reports/active · Customer cohorts (Klantcohorten)
+
+Customers grouped by the month or quarter of their Customer start, followed at the ages of customers.cohort_ages_months: the share still in an active spell at their own start plus the age. A dash where the cohort is not Mature at the age.
+
+**Formula as computed**
+
+```
+started = customers whose Customer start falls in the cohort's period; still_active(age) = those with an active spell at customer_start + age months; mature(age) = every customer of the row is that old; share = still_active / started when mature (cma.active_cohort_cube_from)
+```
+
+**Unit** share · **Grain** per_cohort, per_age, per_segment, per_channel · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `customers.cohort_ages_months` | 3,6,12,24,36 | 3,6,12,24,36 (default, written by seed 02) |
+| `customers.history_months` | 60 | 60 (default, written by seed 02) |
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A note names a cohort that holds more than 40 % of the customers in range: subscriptions moved into the subscription app carry the date they moved. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.subscription_mix`
+
+**Subscription mix** on /reports/active · Subscription mix (Abonnementenmix)
+
+The subscriptions in a device-holding status by billing interval, by devices in the field (Flash's device band), the devices on them by model, and the subscriptions by payment state.
+
+**Formula as computed**
+
+```
+billing = count per cma.active_billing_of(interval, count); device_band = count per cma.flash_count_band_of(devices in the field, flash.device_bands); model = count(devices in the field on holding subscriptions) per model; payment_state = count per cma.subscription_payment_state_of's state (paid, in_retry, failed, paused)
+```
+
+**Unit** count · **Grain** now, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.device_bands` | 1,2,3 | 1,2,3 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `cma.subscription_payment_state_of` (0008zl); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+In retry and Failed link to Flash's subscriptions overview. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.list`
+
+**Customer list** on /reports/active · Customer list (Klantenlijst)
+
+The active customers under the filters, 50 a page, sorted and paged in the database: the store's id of the customer, store, market, segment, acquisition channel with First orders' level, Customer start and age, subscriptions, devices, the Monthly recurring amount, realised value, the worst payment state and the CRM contact's link. The download holds the whole filtered list.
+
+**Formula as computed**
+
+```
+one row per active customer (cma.active_rows); monthly amount = the sum of its paying holding subscriptions in its main currency; worst payment state = failed, then in_retry, then paused, then paid over its subscriptions; default order the monthly amount descending within currency
+```
+
+**Unit** text · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+| `cma.crm_contact` | source_id, segment, source_deleted_at | HubSpot | HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_contacts(); the segment from the connection's mapped property (addition 0008zt, connection_field contact.segment) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.commerce_order` | customer_source_id, order_kind, source_created_at, is_test, cancelled_at, source_deleted_at | Shopify | Shopify webhook orders/* -> ingest POST /shopify/<key> -> read-back; order_kind from the renewal settings and prior order count | webhook read-back; reconcile 03:30 |
+| `cma.crm_record` | record_type, pipeline_id, stage_id, contact_source_id, source_created_at, source_deleted_at | HubSpot | HubSpot webhook -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records() | webhook read-back within seconds; sweep every minute; reconcile 03:30 (docs/ingest/deploy.sh) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.active_subscription_statuses` | active | active (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rows` (0009l); `cma.active_rows_of` (0009l); `cma.active_file_record` (0009l); `cma.active_refresh_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `GET` in src/app/api/v1/reports/active/file/route.ts; `postgresData.getActiveRows` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+Ids, codes, dates and amounts only. Every read through the API and every file is recorded in the audit log (cma.active_file_record). verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+
+#### `active.churn_rate`
+
+**Churn rate** on /reports/active · Churn rate (Uitvalpercentage)
+
+The subscriptions churned in a month over the Total subscriptions at the previous month's end. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+
+**Formula as computed**
+
+```
+Pending: no code computes it. As intended: churn_rate(month) = subscriptions churned in the month / Total subscriptions at the previous month end
+```
+
+**Unit** share · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Kira confirms Churn (subscription) (Open decisions, The Flash definitions)
+- Three complete months of the subscription app's events per store (GB since 29 October 2026, the other stores since 5 November 2026)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+
+#### `active.cac`
+
+**Cost of acquisition** on /reports/active · Cost of acquisition (Acquisitiekosten)
+
+The acquisition cost of a month over that month's inflow of customers. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+
+**Formula as computed**
+
+```
+Pending: no code computes it. As intended: cac(month) = (marketing spend of the month + call center cost of the month) / inflow of the month; call center cost = paid hours x an hourly rate per employer
+```
+
+**Unit** currency · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- Marketing spend per market and month from the ad platforms (no source connected; Open decisions)
+- An hourly rate per employer as configuration (not built)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+
+#### `active.cost_per_subscription`
+
+**Cost per subscription** on /reports/active · Cost per subscription (Kosten per abonnement)
+
+The acquisition cost of a month over the subscriptions created in it. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+
+**Formula as computed**
+
+```
+Pending: no code computes it. As intended: cost_per_subscription(month) = acquisition cost of the month / subscriptions created in the month
+```
+
+**Unit** currency · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- The acquisition cost's sources (see active.cac)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+
+#### `active.clv_projected`
+
+**Customer lifetime value (projected)** on /reports/active · Customer lifetime value (projected) (Klantwaarde, verwacht)
+
+The average monthly amount per active customer over the churn rate. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+
+**Formula as computed**
+
+```
+Pending: no code computes it. As intended: clv_projected = average monthly amount per active customer / churn rate, per currency
+```
+
+**Unit** currency · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- The churn rate (see active.churn_rate)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+
+#### `active.clv_to_cac`
+
+**Customer lifetime value to cost of acquisition** on /reports/active · Customer lifetime value to cost of acquisition (Klantwaarde ten opzichte van acquisitiekosten)
+
+The projected customer lifetime value over the cost of acquisition. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+
+**Formula as computed**
+
+```
+Pending: no code computes it. As intended: clv_to_cac = clv_projected / cac
+```
+
+**Unit** ratio · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- active.clv_projected and active.cac
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+
+#### `active.payback_months`
+
+**Payback (months)** on /reports/active · Payback (months) (Terugverdientijd (maanden))
+
+The months it takes to earn the cost of acquisition back. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+
+**Formula as computed**
+
+```
+Pending: no code computes it. As intended: payback_months = cac / average monthly amount per active customer
+```
+
+**Unit** months · **Grain** per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
+
+**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+
+**Data prerequisites**
+
+- active.cac
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+
+**Notes**
+
+A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
 
 ## Configuration
 

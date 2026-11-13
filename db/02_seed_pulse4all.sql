@@ -635,3 +635,29 @@ begin
   where t.id = o.tenant_id and t.slug = 'pulse4all-subscriptions' and o.key = 'newco' and not o.is_contact_center;
 end
 $$;
+
+-- Customers → Active (after addition 0009l; Martin, 11 November 2026): Pulse4all's customer cohorts at 3, 6, 12, 24 and 36
+-- months, the Customer age bands at 12, 24, 36, 48 and 60 months (the first three are KPI 4's 12, 24 and 36), at most 60
+-- months of history, and no indicative euro rates: reports.fx_eur_rates stays empty until someone owns the rates (Open
+-- decisions), so the page shows no euro total. A rerun keeps a value set since (on conflict do nothing). A database
+-- without the settings yet says so; rerun this seed after 172_active_customers.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null then
+    raise notice 'Customers → Active does not exist yet (addition 0009l): rerun this seed after 172_active_customers.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'customers.cohort_ages_months') then
+    raise notice 'Customers → Active does not exist yet (addition 0009l): rerun this seed after 172_active_customers.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'customers.cohort_ages_months', '3,6,12,24,36'),
+    (v_subs, 'customers.age_months', '12,24,36,48,60'),
+    (v_subs, 'customers.history_months', '60'),
+    (v_subs, 'reports.fx_eur_rates', '{}')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;

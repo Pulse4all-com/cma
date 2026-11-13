@@ -73,6 +73,8 @@ import {
 import { COHORT_PERIODS, COHORT_SPLITS, LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, leadAgesOf, leadCohortsReport, parseLeadAges, type LeadCohortDeal } from "@/lib/cohorts";
 import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
 import { mockDataQualityRows, mockFlashHeadline, mockFlashOverview, mockFlashPage, mockFlashRows, mockFlashSnapshots, mockRecordFlashFile } from "./mock-flash";
+import { activePartOf } from "@/lib/active";
+import { mockActive, mockActiveNow, mockActiveRows } from "./mock-active";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -4893,6 +4895,33 @@ export const mockData: CmaData = {
 
   async recordFlashFile(me, read) {
     mockRecordFlashFile(me, read);
+  },
+
+  // The page's reads answer after a moment, as a database does (the page streams: its frame is sent first and each part
+  // follows when its read is there; an answer in the same instant would be drawn into the frame and leave nothing to
+  // see). The stored answers are quick, the live present of the tiles takes longer, as in the database (decision D16)
+  async getActiveTop(me, fromMonth, filter) {
+    await new Promise((r) => setTimeout(r, 60));
+    return activePartOf(mockActive(me, fromMonth, filter, "month"), "top");
+  },
+
+  async getActiveNow(me, filter) {
+    await new Promise((r) => setTimeout(r, 260));
+    return mockActiveNow(me, filter);
+  },
+
+  async getActiveRest(me, fromMonth, filter, grouping) {
+    await new Promise((r) => setTimeout(r, 120));
+    return activePartOf(mockActive(me, fromMonth, filter, grouping), "rest");
+  },
+
+  async getActiveRows(me, request) {
+    await new Promise((r) => setTimeout(r, 90));
+    return mockActiveRows(me, request);
+  },
+
+  async recordActiveFile() {
+    // nothing is kept in the mock: the audit log is the database's
   },
 
   async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {

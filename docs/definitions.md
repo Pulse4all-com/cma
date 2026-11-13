@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in) with Remove day of 9 November 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Active customer terms of 11 November 2026 (Proposed), the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in) with Remove day of 9 November 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -1244,7 +1244,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 5 Nov 2026, "Definitions: Total subscriptions and Active customer count device-holding statuses" (addition 0008zu, #234) |
 | Dims | Since 0008zt `segment` (Customer segment) beside `market`; no breakdown on the card |
-| Used by | `cma.flash_customers_of`, `cma.flash_customer_figures_of`, the overview `customers` (`active_customers`, `paused_customers`, by `segment`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files |
+| Used by | `cma.flash_customers_of`, `cma.flash_customer_figures_of`, the overview `customers` (`active_customers`, `paused_customers`, by `segment`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files; Customers → Active (`active.active_customers`, the population, read through `cma.flash_customer_figures_of`) |
 | As built today | `cma.flash_customers_of` (`122`), over `cma.flash_customer_figures_of` (`138`, definition `0008zu`; `cma.flash_store_customers_of` is a wrapper with 0008zt's columns); `139` proves it. Matches the definition |
 
 ### Total subscriptions
@@ -1263,7 +1263,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "All statuses" or "Subscriptions" for it (every status); "Active subscriptions" for it |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Total subscriptions and Active customer count device-holding statuses" and "Flash headlines count device-holding statuses" (addition 0008zu, #234) |
-| Used by | `flash.subscriptions.holding_subscriptions`; Reports → Flash (the Subscriptions card and overview) and its files |
+| Used by | `flash.subscriptions.holding_subscriptions`; Reports → Flash (the Subscriptions card and overview) and its files; Customers → Active (`active.total_subscriptions`) |
 | As built today | `138` (`cma.flash_headline` returns `split` and `definition_version`; `cma.flash_page` the stored split); `139` proves it. Matches the definition |
 
 ### Open deal
@@ -1358,7 +1358,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Cancellation" for it (another term, still to define); "lost" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
-| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting); `flash.churn.churned`; Reports → Flash (`/reports/flash`) (Churn) and its files |
+| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting); `flash.churn.churned`; Reports → Flash (`/reports/flash`) (Churn) and its files; Customers → Active (`active.churned_30d`, Churned, last 30 days, linked to Flash's Churn overview) |
 | As built today | `cma.flash_churn_of` (`122`). Matches the definition |
 
 ### Flash snapshot
@@ -1410,12 +1410,12 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Counts / does not count | A stock is always compared. A source not set up is ignored; a set-up source never read keeps the period open. As of a date, the stored figures are compared as stored, without (b) |
 | Unit and display | The arrow, the size and the date ("↓ 221 since Tue 3 November"), "→ unchanged since ...", "Nothing to compare with yet", or the open-period line "So far; compared once the period is complete" (nl "Tot nu toe; vergeleken zodra de periode compleet is"). Muted text, never a colour that judges |
 | Time rule | (a) The period's last business date is before the tenant's today. (b) A read counts as after the end when its business date in the tenant's zone is later than the period's last date |
-| Scope | The landing's cards, live (Now) and As of |
+| Scope | The landing's cards, live (Now) and As of; Customers → Active's tiles compare month ends only (the previous month end and the same month end a year before), and the line is absent where the history does not reach, never 0 |
 | Equivalent in the source system | None |
 | Not to use | "Open period" as a UI label (Open means not closed in Open deal, Open ticket and Open task) |
 | Status | Decided (Martin, 4 November 2026) |
 | Decided | 4 Nov 2026, "Definitions: a Flash change line compares a complete period only: ..." and "Flash's change line, build choices, accepted by Martin" (#222) |
-| Used by | Reports → Flash (`/reports/flash`), the landing's cards |
+| Used by | Reports → Flash (`/reports/flash`), the landing's cards; Customers → Active's tiles (`ActiveChange`, `web/src/lib/active.ts`) |
 | As built today | Matches the definition. "Last read" here is the source kind's latest succeeded run of any job and any active connection (Last read below: the per-kind meaning), so one store read after midnight completes the period for every store (a known limit Martin accepted on 4 November 2026; since addition 0008zq the per-connection read exists in `cma.sources()` for the Sources page, and the Change line still reads per kind). The stores' last read is the nightly reconcile (03:30 Amsterdam time, `ingest-reconcile`; webhooks write no `sync_run`), so Yesterday's Orders and Payments compare from about 03:30; a commerce connection without a scheduled read would never compare (data prerequisite: each feeding source needs a scheduled succeeded read after the period's end). The presets This week and This month always contain today on the live landing, so a whole week or month compares only as a custom range that has ended (or As of) |
 
 ### Updated
@@ -1423,19 +1423,19 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Updated (nl: Bijgewerkt) |
-| Key | Copy key `live.updatedAt` ("Updated {time}"); the Live board's title row |
+| Key | Copy keys `live.updatedAt` ("Updated {time}"; the Live board's title row) and `active.updated` ("Updated {time}", nl "Bijgewerkt {time}"; Customers → Active's title row) |
 | Definition | The instant of the Live board's last successful read, shown as hh:mm:ss with "Updates every 10 seconds while this tab is open". After two failed polls in a row the board says its figures are old: a Warning badge "Not updated since hh:mm:ss" and "Trying again. Reload the page if this stays." |
 | Source | The instant the server read the board for the last successful poll (`readAt` in the answer of `GET /api/v1/live/board`, the page's own read at first) |
 | Counts / does not count | A successful poll counts; a failed or timed-out one (a poll gives up after 8 seconds) does not move it; the first failed poll shows nothing, the second in a row shows the badge |
 | Unit and display | hh:mm:ss in the viewer's zone, on the title row |
 | Time rule | As of the last successful poll; the board polls every 10 seconds while the tab is visible |
-| Scope | The Live board, for `monitoring.live` |
+| Scope | The Live board, for `monitoring.live`; Customers → Active, where it is the instant of the live present's read (the four tiles that state the present) while the tenant setting `active.present_source` is `live` (the default; with `take` the title row says As of instead), for `reports.view` or `performance.team` |
 | Equivalent in the source system | None |
 | Not to use | "Last read" (a job's read of a source), "Refreshed at" (a stored result's), "Last sync" |
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Definitions: Updated (nl: Bijgewerkt)..." (#261) |
-| Used by | The Live board (`/live/<organisation key>`) |
-| As built today | Matches the definition (`LiveBoardLive.tsx`) |
+| Used by | The Live board (`/live/<organisation key>`); Customers → Active's title row ("Tiles as of" until the live present is in, under the setting `live` only) |
+| As built today | Matches the definition (`LiveBoardLive.tsx`); on Customers → Active it is the read time of `cma.active_now` when its `source` is `live`, shown once the read is in |
 
 ### Last read
 
@@ -1675,7 +1675,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Time rule | Against the business date |
 | Scope | The tenant; per market |
 | Equivalent in the source system | Juo's subscription `createdAt` |
-| Not to use | "Tenure", "lifetime" |
+| Not to use | "Tenure"; "lifetime" for an age: Customer lifetime is a term of its own (the length of an active spell, Active customer terms) and is never an age |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Juo's created date is the subscription's start for age" (addition 0008zt, #233) |
 | Used by | `flash.subscriptions.active_subscriptions` by `age_band`; Reports → Flash (Subscriptions) |
@@ -1697,7 +1697,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Customer type" as the CMA's word; "B2B" for a rule of the CMA |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Customer segment comes from a mapped CRM contact property"; "The customer segment's mapped CRM property may be of any type" (addition 0008zt, #233) |
-| Used by | `cma.flash_store_customers_of`, `cma.flash_segment_of`; `flash.customers.active_customers` by `segment`; Reports → Flash (Active customers) |
+| Used by | `cma.flash_store_customers_of`, `cma.flash_segment_of`; `flash.customers.active_customers` by `segment`; Reports → Flash (Active customers); Customers → Active (the segment filter, the comparison B2B versus B2C) |
 | As built today | `136` (column, trigger, ingest, bands); seed `02` maps the property and sets `B2B,B2C`; `137` proves them. Matches the definition |
 
 ### Status meaning
@@ -1829,6 +1829,485 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Used by | `flash.orders.orders` (the Renewal part); Reports → Flash (Orders) |
 | As built today | As Order kind. Matches the definition |
 
+## Active customer terms
+
+Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 with addendum A: Customers → Active follows the active customer base: who the active customers are, in which markets and segments, how they were acquired, how long they stay, what they are worth, how the base grows and shrinks, and how cohorts retain. The population is Flash's (Active customer, Total subscriptions); the history is reconstructed from the subscriptions the CMA holds and stored by a refresh (the Take), so a figure of the past is an estimate, and a past pause counts as holding. Time rules: the four tiles of the present (Active customers, Total subscriptions, Monthly recurring amount and its average) are live, as of the page's Updated; Customer age, Customer lifetime, CLV realised, Churned last 30 days, the Acquisition channel and every series are as of the take (History as of). On this page "customer" in a label means an Active customer (a store customer of the population), as in "Subscriptions per customer"; the term "customer" alone stays pending (Domains still to define, Customers and orders). Settings (tenant; no Configuration screen yet): `customers.cohort_ages_months` (default `3,6,12,24,36`; one to eight increasing whole numbers, each at most 120), `customers.age_months` (default `12,24,36,48,60`; one to ten), `customers.history_months` (60; 12 to 120), `customers.refresh_minutes` (5; 1 to 1440), `customers.history_notice_minutes` (15; 1 to 1440) and `reports.fx_eur_rates` (default `{}`; a JSON object of currency codes with the euros one unit is worth, and `as_of`). Labels are written out in the UI because the style allows no all-caps word (`verify:copy`): CLV, CAC and EUR are what sales says, in hints at most.
+
+### Active (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Active (nl: Actief; copy key `nav.active`); the page title is "Active customers" (nl: Actieve klanten) |
+| Key | Page key `active`; href `/reports/active`; catalog `active.*` |
+| Definition | The label of Customers → Active, the first page of the Customers group. It defines no figure: the figures carry their own terms. |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Shown to `reports.view` or `performance.team`; team figures only, never per person. The Customers group's breadcrumb leads to it |
+| Unit and display | First in the group, which runs Active, Courtesy, Reviews, Cancellations; the digit keys of the group's pages follow that order |
+| Time rule | None |
+| Scope | The rail of every tenant |
+| Equivalent in the source system | None |
+| Not to use | None yet |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Customers → Active (`/reports/active`) is a new page, first in the Customers group, …" and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows` and `/file` |
+| As built today | Matches the definition |
+
+### Customer start
+
+| Field | Value |
+|---|---|
+| Term | Customer start (nl: Klant sinds; `active.colCustomerStart`) |
+| Key | `customer_start` (the list's column and the file's); `customerStart` in the API |
+| Definition | The earliest of the store customer's creation in the store (`commerce_customer.source_created_at`) and the creation of any of its subscriptions in the store's subscription connection (`subscription.source_created_at`). |
+| Source | `cma.commerce_customer` (Shopify), `cma.subscription` (Juo) |
+| Counts / does not count | Counts the customer's own subscriptions of its store, whatever their status. A subscription moved into the subscription app carries the date it was moved, so a customer of that migration starts then unless the store knows the customer earlier |
+| Unit and display | A date, in the tenant's zone |
+| Time rule | The creation instant's business date in the tenant's zone |
+| Scope | The Active customers of the tenant; per store |
+| Equivalent in the source system | None: the earlier of Shopify's customer `createdAt` and Juo's subscription `createdAt` |
+| Not to use | None yet |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.customer_age_median`, `active.customer_age_bands`, `active.cohort_retention`, `active.list`; Customers → Active (the list, Customer age, Cohorts) |
+| As built today | `cma.active_base_of` (`172`) takes the least of the two; the data note names a dominant cohort, because migrated subscriptions carry the move date. Whether the old CRM's or Shopify's created date is better is an Open decision |
+
+### Customer age
+
+| Field | Value |
+|---|---|
+| Term | Customer age (nl: Klantduur; `active.customerAge`) |
+| Key | `age_months` (the list's column), API `ageMonths`, `customerAge`, `ageBands`; setting `customers.age_months`; catalog `active.customer_age_median`, `active.customer_age_bands` |
+| Definition | The whole months, as PostgreSQL's `age()` counts them (`cma.flash_age_months_of`), from Customer start to the business date. The bands over the Active customers are `<12`, `12-24`, … from the setting; the page also shows the cumulative "More than 12 / 24 / 36 months" (the first three values), counted per customer here and per subscription in Flash (Subscription age). |
+| Source | Customer start; the setting |
+| Counts / does not count | Active customers only. "More than N months" includes a customer of exactly N whole months |
+| Unit and display | Months; the median, the bands and the three shares |
+| Time rule | Against the business date in the tenant's zone |
+| Scope | The Active customers of the tenant; per market, segment and Direct / Indirect |
+| Equivalent in the source system | None |
+| Not to use | "Tenure" and "lifetime" (Customer lifetime is a different term: the length of an active spell, never an age); "Subscription age" for it (the age of one subscription) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "The new terms of the page are Proposed for Kira to confirm, …" and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.customer_age_median`, `active.customer_age_bands`; Customers → Active (tile, Customer age, the comparison, the list) |
+| As built today | `cma.active_base_of` (`172`) uses `cma.flash_age_months_of`. Matches the definition |
+
+### Monthly recurring amount
+
+| Field | Value |
+|---|---|
+| Term | Monthly recurring amount (nl: Maandelijks terugkerend bedrag; `active.monthlyAmount`) |
+| Key | `monthly_amount` (the list), API `amounts`, `monthlyAmount`; catalog `active.monthly_recurring_amount`; SQL `cma.active_month_factor_of`, `cma.active_billing_of`, `cma.active_eur_of`, `cma.active_fx_ok`; setting `reports.fx_eur_rates` |
+| Definition | Per currency, the sum over the Holding subscriptions in a paying status (`flash.active_subscription_statuses`, as Flash's `amount_per_cycle`) of the amount per cycle turned into one month: day 365.25/12, week 365.25/84, month 1, year 1/12, each divided by `billing_interval_count`. It is Juo's contracted amount, not revenue. |
+| Source | `cma.subscription` (`amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count`, `status`) |
+| Counts / does not count | Counts a holding subscription that pays. Does not count a failed subscription's amount (Flash's amount rule), a pause, or an ended subscription; never summed across currencies. The indicative euro line is shown only while `reports.fx_eur_rates` holds a rate for every currency shown, labelled "≈ euros, indicative" with the rates' date (nl: "≈ euro, indicatief"), and is otherwise absent, never computed from a guess |
+| Unit and display | An amount per currency, one line each; the average per active customer beside it (Average monthly amount per active customer) |
+| Time rule | Live for the present tile (Updated); per month end for the history, as of the take (History as of), by the reconstruction (a past pause counts as holding) |
+| Scope | The Active customers of the tenant; per market, segment and Direct / Indirect |
+| Equivalent in the source system | Juo's price per billing cycle; sales often calls the figure MRR |
+| Not to use | "Revenue" (invoices and payments stay NetSuite's); "MRR" as the CMA's word |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Amounts are per currency and never summed across currencies; …" (D4) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.monthly_recurring_amount`, `active.average_monthly_amount`; Customers → Active (tile, the amounts over time, Markets, the comparison, the list) |
+| As built today | `cma.active_month_factor_of` and `cma.active_base_of` (`172`); `173` proves the factors and that no currencies are added |
+
+### Average monthly amount per active customer
+
+| Field | Value |
+|---|---|
+| Term | Average monthly amount per active customer (nl: Gemiddeld maandbedrag per actieve klant; `active.averageAmount`) |
+| Key | API `average` of an amount; catalog `active.average_monthly_amount` |
+| Definition | Per currency, the Monthly recurring amount divided by the Active customers that have a holding subscription in that currency. |
+| Source | Monthly recurring amount, Active customer |
+| Counts / does not count | A customer with subscriptions in two currencies counts in each, in its own amounts; a currency with no customer shows no average (an empty cell, never 0) |
+| Unit and display | An amount per currency |
+| Time rule | As Monthly recurring amount |
+| Scope | The Active customers of the tenant; per market, segment and Direct / Indirect |
+| Equivalent in the source system | None |
+| Not to use | "Revenue" (as Monthly recurring amount) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.average_monthly_amount`; Customers → Active (tile, Markets, the comparison) |
+| As built today | `cma.active_top` and `cma.active_rest` (`172`). Matches the definition |
+
+### Ended time (subscription)
+
+| Field | Value |
+|---|---|
+| Term | Ended time (no label of its own; used in the data note) |
+| Key | SQL `cma.active_spells_of`; API `notes.noEndedTime` |
+| Definition | The moment a subscription ended: its `canceled_at`; else the `occurred_at` of its latest event into a status of `flash.ended_subscription_statuses`; else unknown. |
+| Source | `cma.subscription` (`canceled_at`), `cma.subscription_event` |
+| Counts / does not count | A subscription in an ended status with an unknown Ended time is left out of the history and counted in a data note, never guessed. A current pause ends the holding interval at `paused_at`; past pauses are not in Juo's data and count as holding |
+| Unit and display | An instant; shown only as the count in the data note |
+| Time rule | The instant, placed in a month end by the tenant's zone |
+| Scope | The tenant's subscriptions |
+| Equivalent in the source system | Juo's cancellation time |
+| Not to use | None yet |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "The history is reconstructed per request from the subscriptions the CMA holds, …" (D3) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.base_over_time`, `active.inflow`, `active.outflow`, `active.net_change`; Customers → Active (the data note above the base over time) |
+| As built today | `cma.active_base_of` (`172`). Juo's events exist only since late October and early November 2026, so an older expiry has no Ended time until a later read finds one |
+
+### Inflow, Outflow and Net change
+
+| Field | Value |
+|---|---|
+| Term | Inflow, Outflow and Net change (nl: Instroom, Uitstroom, Netto verandering; in the UI a spell is an "active period", nl "actieve periode") |
+| Key | `inflow`, `outflow`, `net` (API `months`, `inflowByChannel`); catalog `active.inflow`, `active.outflow`, `active.net_change`; SQL `cma.active_spells_from`, `cma.active_month_cube_from`, `cma_read.active_customer_month` |
+| Definition | An active spell of a store customer starting (Inflow) or ending (Outflow) in a month. A spell is a maximal stretch in which at least one of the customer's subscriptions holds by the reconstruction (created to Ended time, or the start of a current pause). Net change = Inflow − Outflow, which equals the difference of two month ends. |
+| Source | `cma.subscription`, `cma.subscription_event` (Ended time) |
+| Counts / does not count | A customer whose subscriptions overlap or leave a gap counts as one spell or two, by the reconstruction; a reactivation starts a new spell. It is not Churn (subscription), which counts subscription events, and not a "new customer", which stays in Domains still to define |
+| Unit and display | Customers per month; Inflow split by Direct / Indirect in the bars, Outflow in one colour, Net change as the line |
+| Time rule | The month of the spell's start or end, in the tenant's zone |
+| Scope | The Active customers' stores; per market, segment and Direct / Indirect |
+| Equivalent in the source system | None |
+| Not to use | "Churn" for Outflow; "New customers" for Inflow |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.inflow`, `active.outflow`, `active.net_change`, `active.base_over_time`; Customers → Active (Inflow and outflow, Markets' net change); `cma_read.active_customer_month` |
+| As built today | `cma.active_spells_of` and `cma.active_month_cube_from` (`172`); `173` A3 proves Net change = month end − previous month end = Inflow − Outflow |
+
+### Customer cohort
+
+| Field | Value |
+|---|---|
+| Term | Customer cohort (nl: Klantcohort; `active.cohortsCard` "Customer cohorts", "Klantcohorten") |
+| Key | `cohort`, API `cohorts`, `cohortSplits`, `grouping` (`month`, `quarter`); setting `customers.cohort_ages_months`; catalog `active.cohort_retention`; SQL `cma.active_cohorts_of`, `cma.active_cohort_cube_from`, `cma_read.customer_cohort` |
+| Definition | The active spells grouped by the month or quarter of the customer's Customer start, followed at the ages of `customers.cohort_ages_months`. The share at an age is the share of the cohort still in a spell at its start plus the age. Mature as in Cohort terms: a cell is a dash until every customer in the cohort is that old. |
+| Source | Customer start; the spells (Ended time) |
+| Counts / does not count | A cohort that holds more than 40% of the customers in the range gets a note: subscriptions moved into the subscription app carry the date they moved. |
+| Unit and display | A heatmap with the share and the number in every cell, and the curves of the last six mature cohorts; a split (none, segment, Direct / Indirect) pools the cohorts in range per value |
+| Time rule | The Customer start's month or quarter in the tenant's zone; Mature as of now |
+| Scope | The Active customers' stores; per market, segment and Direct / Indirect |
+| Equivalent in the source system | None |
+| Not to use | "Cohort" for a group of a period report; "Lead cohort" or "Order cohort" for it |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.cohort_retention`; Customers → Active (Cohorts); `cma_read.customer_cohort` |
+| As built today | `cma.active_cohort_cube_from` (`172`); `173` A5 checks sizes, shares and maturity against hand counts |
+
+### Acquisition channel
+
+| Field | Value |
+|---|---|
+| Term | Acquisition channel (nl: Acquisitiekanaal). The column and filter label is "Direct / Indirect" (nl: Direct / Indirect); the values are "Indirect · call center" (nl: Indirect · callcenter), "Direct · self-service" (nl: Direct · selfservice) and "Unknown" (nl: Onbekend) |
+| Key | API `channel` (the filter `&channel=`, the list row), `byChannel`, `inflowByChannel`, `unknownChannel`, `level`; reader views `acquisition_channel`; values `indirect`, `direct`, `unknown`; catalog `active.acquisition_channel_share`; SQL `cma.active_channel_of`. These keys are this page's: Review channel's `byChannel` and `channel` are another term's on another page |
+| Definition | How the store customer's first order was acquired, by the attribution Sales → First orders gives it (`cma.first_orders_of`, the `attribution.*` settings, no second rule): Indirect when the attribution is `call_center`, Direct when it is `self_service`, Unknown when the first order is not attributed. It is attributed exactly as Sales → First orders attributes: every first order from the first order deal the CRM holds, over every order deal and not from the attribution's history start. A customer with several attributed first orders takes the earliest by T. |
+| Source | `cma.first_orders_of` over the attribution's history (the order's deal, contact and calls), the store customer of its linked order; the settings `attribution.*` |
+| Counts / does not count | Unknown is shown with its count and a data note of its reasons, never folded into Direct. Five reasons as built: `no_contact` (no CRM contact, or First orders' kind no_contact), `before_history` (the Customer start lies before the date of the first order deal the CRM holds; UI label "Started before the first order deal on record", nl "Gestart vóór de eerste bekende besteldeal"), `no_first_order`, `no_order_deal` (no first order deal) and `order_not_matched` (a first order that matches no store order of the customer; a fifth case, derived, beside the four of the decision). Changing `attribution.assisted_levels` moves a customer between Indirect and Direct with no other change |
+| Unit and display | A count and a share per value; "Indirect n% · Direct n% · Unknown n%" under Active customers, in whole percents that add up to 100 (largest remainder); the Indirect share is over the customers with a known channel (n known in its title); in the list the Direct / Indirect cell holds First orders' level code under the channel, with its label ("Acquired through") on hover |
+| Time rule | As First orders' (every order deal; the attribution's history start only dates the note: before it the attribution sees no touches older than the intake start, so some orders count as Direct that may have been Indirect); the Customer start against the first order deal for `before_history` |
+| Scope | The Active customers of the tenant; every panel, the list and the file take the filter |
+| Equivalent in the source system | None: First orders' attribution, read per customer |
+| Not to use | "Channel" alone (Review channel; the CMA's channel rows); "assisted" in a label |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Every active customer has an Acquisition channel: …" (D8), "The labels are the column and filter "Direct / Indirect" …" (D9) and "Definitions: Acquisition channel, Direct order, Indirect order, …" (this PR, addition 0009l); 12 November 2026 (Martin), "Customers → Active attributes as Sales → First orders ..." and "Definitions: Acquisition channel is attributed as Sales → First orders ..." (#267, addition 0009n) |
+| Used by | `active.acquisition_channel_share`; Customers → Active (the filter, tiles, Inflow, Markets, the survival split, Cohorts' split, the list and the file); `cma_read.active_customer_month`, `cma_read.customer_cohort` |
+| As built today | `cma.active_channel_of` reads `cma.first_orders_of` once over every order deal (from `-infinity` to now) and re-implements no evidence; `177` A2 proves it against First orders' attribution rows over every order deal, both ways, in each database it runs in. The note's date is `cma.active_take.attribution_start`. Read live: at three times prod's volume the page's read misses its 500 ms target (Open decisions) |
+
+### Direct order and Indirect order
+
+| Field | Value |
+|---|---|
+| Term | Direct order and Indirect order (no Dutch label yet) |
+| Key | `self_service` (Direct order), `call_center` (Indirect order), the attribution of `cma.first_orders_of` |
+| Definition | A first order whose attribution is `self_service` (Direct order) or `call_center` (Indirect order), by Sales → First orders. |
+| Source | `cma.first_orders_of` |
+| Counts / does not count | Counts attributed first orders only; renewals, repeat orders and orders without a contact are counted apart, never attributed (KPIs 2) |
+| Unit and display | Sales → First orders keeps its own labels (self-service, call center); Customers → Active says Direct and Indirect for the customer |
+| Time rule | As First orders |
+| Scope | The tenant's attribution |
+| Equivalent in the source system | None |
+| Not to use | "Assisted" in a label (Acquisition channel) |
+| Status | Proposed (for Kira to confirm with the attribution rules open in docs/open-decisions.md, Indirect sales) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Acquisition channel, Direct order, Indirect order, …" (this PR, addition 0009l) |
+| Used by | `first_orders.*`, `active.acquisition_channel_share`; Sales → First orders; Customers → Active |
+| As built today | Matches the definition; the First orders hints say the call center is Indirect and self-service is Direct on Customers → Active |
+
+### Customer lifetime
+
+| Field | Value |
+|---|---|
+| Term | Customer lifetime (nl: Klantlevensduur; `active.lifetimeMedian` "Customer lifetime (median)") |
+| Key | API `lifetime`, `survival`, `median`; catalog `active.customer_lifetime_median`; SQL `cma.active_km_from`, `cma.active_km_json`, `cma.active_survival_of`, `cma.active_spell_lengths_of` |
+| Definition | The expected length of an active spell, estimated as the median of a Kaplan–Meier survival curve over all spells in whole months: an ended spell is an event at its length, an active spell is censored at its age today. At an age the survival is the product over the ages up to it of (1 − events ÷ spells at risk), at risk being the spells with length at least the age. |
+| Source | The spells (Customer start, Ended time) |
+| Counts / does not count | Every spell, ended or running. No mean is shown, because ended spells in a short history are biased towards short ones. When the curve has not fallen to 50% within the observed history the page says "Not reached yet: more than N months" (nl: "Nog niet bereikt: langer dan N maanden"), N the longest observed age, never a number |
+| Unit and display | Whole months, the median and the curve per segment or per Direct / Indirect, the 50% line marked, each median labelled where reached |
+| Time rule | The spells as of the take, on a monthly age grid |
+| Scope | The Active customers' stores; per market, segment and Direct / Indirect |
+| Equivalent in the source system | None |
+| Not to use | "Lifetime" for Customer age or Subscription age (Customer lifetime is never an age); "average lifetime"; "tenure" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Customer lifetime is a new term: …" (D10) and "Definitions: Acquisition channel, Direct order, Indirect order, Customer lifetime, …" (this PR, addition 0009l) |
+| Used by | `active.customer_lifetime_median`, `active.retention`; Customers → Active (tile, the comparison, Survival) |
+| As built today | `cma.active_km_from` and `cma.active_survival_of` (`172`); `173` A12 checks a hand-computed table (ties, censoring at an event's age, a split value with one spell, not reached) |
+
+### Retention (customer)
+
+| Field | Value |
+|---|---|
+| Term | Retention (customer) (nl: Retentie; `active.m_retention` "Retention at {n} months", "Retentie na {n} maanden") |
+| Key | API comparison measure `retention`; catalog `active.retention`; settings `customers.age_months` (its first three values are the ages shown) |
+| Definition | At an age, the Kaplan–Meier survival at that age: the product through that age (Customer lifetime), so the curve crosses 50% at its median. The cells of Customer cohort's heatmap are another figure, the share of the cohort still active at an age. |
+| Source | The spells |
+| Counts / does not count | Spells running or ended, as Customer lifetime counts them; a dash with a hint where no spell is that old |
+| Unit and display | A share at 12, 24 and 36 months in the comparison |
+| Time rule | As Customer lifetime |
+| Scope | Per segment (B2B, B2C, Unknown) and for all |
+| Equivalent in the source system | None |
+| Not to use | None yet; a heatmap cell of Customer cohort is that term's share, not this one |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Definitions: Acquisition channel, Direct order, Indirect order, Customer lifetime, Retention (customer) …" (this PR, addition 0009l) |
+| Used by | `active.retention`; Customers → Active (the comparison) |
+| As built today | `cma.active_survival_of` (`172`); the survival at the age, not the age minus one |
+
+### Customer lifetime value (realised)
+
+| Field | Value |
+|---|---|
+| Term | Customer lifetime value (realised) (nl: Klantwaarde, gerealiseerd; CLV realised is what sales says; the UI writes it out) |
+| Key | `clv` (the list), API `clv`, `clvCurrency`; catalog `active.clv_realised_average`, `active.clv_realised_median`, `active.clv_realised_per_month` |
+| Definition | The store's lifetime amount spent of a store customer (`commerce_customer.amount_spent`, Shopify's `amountSpent`), in the store's currency. The average and the median are over the Active customers; "per month of customer age" is the average of each customer's value divided by its Customer age in months (age 0 counts as 1). It covers the store's history only. |
+| Source | `cma.commerce_customer.amount_spent` (Shopify) |
+| Counts / does not count | Per currency, never summed across currencies; a customer without an amount counts in no average. Open decisions keeps Shopify versus NetSuite as the source of value |
+| Unit and display | An amount per currency: the average with the median under it, per customer in the list |
+| Time rule | As of the CMA's last read of the store at the take (History as of) |
+| Scope | The Active customers of the tenant; per market, segment and Direct / Indirect |
+| Equivalent in the source system | Shopify's customer `amountSpent` |
+| Not to use | "Customer value (realised)" (renamed, D11); "revenue" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "\"Customer value (realised)\" is renamed Customer lifetime value (realised) …" (D11) and "Definitions: Acquisition channel, Direct order, Indirect order, Customer lifetime, …" (this PR, addition 0009l) |
+| Used by | `active.clv_realised_average`, `active.clv_realised_median`, `active.clv_realised_per_month`, `active.segment_difference`; Customers → Active (tile, the comparison, the list) |
+| As built today | `cma.active_top`, `cma.active_rest` and `cma.active_rows` (`172`). Matches the definition |
+
+### Churn rate
+
+| Field | Value |
+|---|---|
+| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); a placeholder. Its card alone carries one related figure under its badge, the subscriptions churned in the last 30 days, linked to Flash's Churn overview: a figure that exists, never the rate |
+| Key | `churn_rate`; catalog `active.churn_rate` |
+| Definition | As intended: the subscriptions churned in a month (Churn (subscription)) divided by the Total subscriptions at the previous month end. |
+| Source | `cma.subscription_event` (the subscription app's events) |
+| Counts / does not count | Never computed yet: the card shows no number, no zero and no dash that reads as zero, only "Not connected yet" (nl: Nog niet gekoppeld), "Fed by: …" and Pending. Beside it the real figure "Churned, last 30 days", Churn (subscription), links to Flash |
+| Unit and display | A share of the base, once defined |
+| Time rule | By month |
+| Scope | The tenant; per market once defined |
+| Equivalent in the source system | None |
+| Not to use | "Churn rate" for Churned, last 30 days (Churn (subscription)'s count) |
+| Status | Pending: Kira confirms Churn (subscription) and from when the rate starts; it needs at least three complete months of the subscription app's events per store (GB since 29 October 2026, the other stores since 5 November 2026) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.churn_rate`; Customers → Active (Unit economics) |
+| As built today | A placeholder card with no figure; `173` A7 proves the JSON holds none |
+
+### Cost of acquisition
+
+| Field | Value |
+|---|---|
+| Term | Cost of acquisition (nl: Acquisitiekosten; `active.slot_cac`); a placeholder. CAC is what sales says |
+| Key | `cac`; catalog `active.cac` |
+| Definition | As intended: the acquisition cost of a month divided by the Inflow of that month. |
+| Source | Marketing spend per market and month (the ad platforms) and the call center's cost (paid hours from the CMA × an hourly rate per employer, configuration): neither is connected |
+| Counts / does not count | Never computed yet; no number, zero or dash that reads as zero |
+| Unit and display | An amount per currency, once defined |
+| Time rule | By month |
+| Scope | The tenant; per market once defined |
+| Equivalent in the source system | None |
+| Not to use | "CAC" in a label |
+| Status | Pending: the sources and their owners (ad spend per market and month; an hourly rate per employer) are open |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.cac`; Customers → Active (Unit economics) |
+| As built today | A placeholder card with no figure |
+
+### Cost per subscription
+
+| Field | Value |
+|---|---|
+| Term | Cost per subscription (nl: Kosten per abonnement; `active.slot_cost_per_subscription`); a placeholder |
+| Key | `cost_per_subscription`; catalog `active.cost_per_subscription` |
+| Definition | As intended: the acquisition cost of a month divided by the subscriptions created in that month. |
+| Source | As Cost of acquisition, and `cma.subscription` (creation) |
+| Counts / does not count | Never computed yet; no number, zero or dash that reads as zero |
+| Unit and display | An amount per currency, once defined |
+| Time rule | By month |
+| Scope | The tenant; per market once defined |
+| Equivalent in the source system | None |
+| Not to use | None yet |
+| Status | Pending: as Cost of acquisition |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.cost_per_subscription`; Customers → Active (Unit economics) |
+| As built today | A placeholder card with no figure |
+
+### Customer lifetime value (projected)
+
+| Field | Value |
+|---|---|
+| Term | Customer lifetime value (projected) (nl: Klantwaarde, verwacht; `active.slot_clv_projected`); a placeholder |
+| Key | `clv_projected`; catalog `active.clv_projected` |
+| Definition | As intended: the Average monthly amount per active customer divided by the Churn rate. |
+| Source | Average monthly amount per active customer and Churn rate |
+| Counts / does not count | Never computed yet; no number, zero or dash that reads as zero. The comparison panel shows its row as "Not connected yet" |
+| Unit and display | An amount per currency, once defined |
+| Time rule | As Churn rate |
+| Scope | The tenant; per segment once defined |
+| Equivalent in the source system | None |
+| Not to use | "Projected customer value" (renamed, D11) |
+| Status | Pending: it waits for the Churn rate's definition |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "\"Customer value (realised)\" is renamed Customer lifetime value (realised) …" (D11) and "Definitions: Acquisition channel, Direct order, Indirect order, Customer lifetime, …" (this PR, addition 0009l) |
+| Used by | `active.clv_projected`; Customers → Active (Unit economics, the comparison) |
+| As built today | A placeholder card and row with no figure; no formula in code |
+
+### Customer lifetime value to cost of acquisition
+
+| Field | Value |
+|---|---|
+| Term | Customer lifetime value to cost of acquisition (nl: Klantwaarde ten opzichte van acquisitiekosten; `active.slot_clv_to_cac`); a placeholder. "CLV to CAC" is what sales says |
+| Key | `clv_to_cac`; catalog `active.clv_to_cac` |
+| Definition | As intended: Customer lifetime value (projected) divided by Cost of acquisition. |
+| Source | The two figures it divides |
+| Counts / does not count | Never computed yet; no number, zero or dash that reads as zero |
+| Unit and display | A ratio, once defined |
+| Time rule | By month |
+| Scope | The tenant; per market once defined |
+| Equivalent in the source system | None |
+| Not to use | "Customer value to CAC" (renamed, D11) |
+| Status | Pending: it waits for both figures |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "\"Customer value (realised)\" is renamed Customer lifetime value (realised) …" (D11) and "Definitions: Acquisition channel, …" (this PR, addition 0009l) |
+| Used by | `active.clv_to_cac`; Customers → Active (Unit economics) |
+| As built today | A placeholder card with no figure |
+
+### Payback
+
+| Field | Value |
+|---|---|
+| Term | Payback (months) (nl: Terugverdientijd (maanden); `active.slot_payback_months`); a placeholder |
+| Key | `payback_months`; catalog `active.payback_months` |
+| Definition | As intended: Cost of acquisition divided by the Average monthly amount per active customer. |
+| Source | Cost of acquisition and Average monthly amount per active customer |
+| Counts / does not count | Never computed yet; no number, zero or dash that reads as zero |
+| Unit and display | Months, once defined |
+| Time rule | By month |
+| Scope | The tenant; per market once defined |
+| Equivalent in the source system | None |
+| Not to use | None yet |
+| Status | Pending: it waits for Cost of acquisition |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.payback_months`; Customers → Active (Unit economics) |
+| As built today | A placeholder card with no figure |
+
+### History as of
+
+| Field | Value |
+|---|---|
+| Term | History as of (nl: Geschiedenis per; `active.historyAsOf` "History as of {time}", `active.historyLate` "History as of {time}, {minutes} min old", `active.historyStale` "History as of {time}, being recomputed after a settings change") |
+| Key | `take.computedAt` of `GET /api/v1/reports/active` (with `businessDate`, `stale`, `ageMinutes`, `late`) |
+| Definition | The moment the Take that Customers → Active reads its history from was last computed or found unchanged against its inputs' change markers (a quiet run moves it without computing). It is Customers → Active's form of Refreshed at: the page shows its take as History as of, and the figures beside it are those of that instant, whatever the page's own time. The markers hold the subscriptions, their events, the devices, the stores' customers with their link to a contact, the orders, the CRM's contacts, the stores, the device statuses and models, the markets, the connections' kind and account and the tenant's time zone. They do not hold the CRM's deals, calls, emails and associations, nor the telephony behind the acquisition channel and the courtesy calls: those follow at the next change of a marker or at the next business date, at most a day. |
+| Source | `cma.active_take.computed_at`, written by `cma.active_refresh_of` |
+| Counts / does not count | The tiles of the present are not as of it (Updated). A take that is stale (a setting changed) or older than `customers.history_notice_minutes` shows a notice beside it |
+| Unit and display | hh:mm in the viewer's zone, on the title row, next to Updated |
+| Time rule | The transaction time of the refresh that last computed the take or found it unchanged, shown in the viewer's zone |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Refreshed at" on this page (it is the same idea, with the page's own label) and "Last updated" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and "Definitions: History as of, Tiles as of, ..." (#267); 12 Nov 2026, "Definitions: History as of ..." (#267) |
+| Used by | Customers → Active (title row, the notices); `GET /api/v1/reports/active` (`take`) |
+| As built today | `172`; `174` (the quiet run, `cma.active_take.inputs_key`); `173` proves the stale and late states, `175` the quiet run |
+
+### Tiles as of
+
+| Field | Value |
+|---|---|
+| Term | Tiles as of (nl: Tegels per; `active.tilesAsOf` "Tiles as of {time}") |
+| Key | `presentAt` of `GET /api/v1/reports/active` (the stored tiles' instant) |
+| Definition | The moment the stored tiles of Customers → Active are of. It is shown until the live present's read is in, and then replaced by Updated: the four tiles of the present take their places without a shift in the layout. |
+| Source | The Take's document (`cma.active_top`) until `cma.active_now` answers |
+| Counts / does not count | A page where the live read fails keeps the stored tiles and this label |
+| Unit and display | hh:mm in the viewer's zone, on the title row |
+| Time rule | As of the take |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Cached" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D16 and "Definitions: History as of, Tiles as of, ..." (#267) |
+| Used by | Customers → Active (title row) |
+
+### As of
+
+| Field | Value |
+|---|---|
+| Term | As of (nl: Per; `active.tilesFromTake` "As of {time}", nl "Per {time}") |
+| Key | `presentSource` (`live` or `take`) and `presentAt` of `GET /api/v1/reports/active`; `source` and `computed_at` of `cma.active_now`; the tenant setting `active.present_source` |
+| Definition | The moment the four present tiles of Customers → Active are of when the tenant's setting `active.present_source` is `take`: the Take's moment, not the read's. With `live` (the default) the title row says Updated and the tiles are of the read. |
+| Source | `cma.active_now`, from the Take's own present rows (`cma.active_present_stored_of`); a tenant without a take yet is answered live |
+| Counts / does not count | D2's equality with Flash's Active customers is checked at the take's moment. Choosing take changes D13 for the tiles (they are no longer live). The choice is Martin's, after the 08:10 measurement of both paths (`tools/perf/active-present-breakdown.sql`); no default is changed in code |
+| Unit and display | hh:mm in the viewer's zone, with the take's date when the take is not of today, on the title row |
+| Time rule | As of the take |
+| Scope | Per tenant, for `reports.view` or `performance.team` |
+| Equivalent in the source system | None |
+| Not to use | "Cached" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 12 November 2026 (Martin); docs/decisions.md, 12 Nov 2026, "The tiles' present of Customers → Active can be read from the take ..." and "Definitions: Acquisition channel is attributed as Sales → First orders ..." (#267, addition 0009n) |
+| Used by | Customers → Active (title row) |
+| As built today | `176`; `177` T1 and T2 prove the tiles from the take equal the live ones at the take's moment |
+
+### Attribution history note
+
+| Field | Value |
+|---|---|
+| Term | Attribution history note (nl: no label of its own; `active.noteAttributionStart` on Customers → Active and `firstOrders.historyMeaning` on Sales → First orders: "Before {date} the attribution sees no touches older than the intake start, so some orders count as {direct} that may have been {indirect}.", nl "Vóór {date} ziet de toerekening geen contactmomenten van vóór de start van de intake, dus sommige bestellingen tellen als {direct} die mogelijk {indirect} waren.") |
+| Key | `cma.active_take.attribution_start`; `cma.first_orders_history_start_of`; `settings.attribution` |
+| Definition | The attribution's history start (`intake.start_date` plus `attribution.window_days`) stated as a note, with what it means: before it the attribution sees no touches older than the intake start, so some orders count as Direct (Sales → First orders: self-service) that may have been Indirect (call center). It does not bound the attribution: every first order from the first order deal is attributed. |
+| Source | `cma.first_orders_history_start_of` |
+| Counts / does not count | The same sentence in en and nl on both pages, each filling in its own two words; Customers → Active shows it whenever a history start exists |
+| Unit and display | A date and the sentence, as a note |
+| Time rule | The date is the history start |
+| Scope | Customers → Active; Sales → First orders |
+| Equivalent in the source system | None |
+| Not to use | "Unknown until" (the attribution is no longer Unknown before it) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 12 November 2026 (Martin); docs/decisions.md, 12 Nov 2026, "Customers → Active attributes as Sales → First orders ..." (#267, addition 0009n) |
+| Used by | `active.acquisition_channel_share`; Customers → Active; Sales → First orders |
+| As built today | `177` A3 proves the note's date is the history start |
+| As built today | `ActivePending.tsx` (Streamed) swaps the tiles when `cma.active_now` is in |
+
+### History is being prepared
+
+| Field | Value |
+|---|---|
+| Term | History is being prepared (nl: De geschiedenis wordt voorbereid; `active.historyPreparing`) |
+| Key | `history` of `GET /api/v1/reports/active` (the state without a take) |
+| Definition | The state of Customers → Active while its tenant has no Take: the page says so and shows no figure of the history, never zeros. |
+| Source | No row in `cma.active_take` for the tenant |
+| Counts / does not count | The tiles of the present stay live. No churn count, no split by acquisition channel and no tile under a channel filter until a take exists; `tiles.activeCustomers.byChannel` and `unitEconomics.churned30d` are null; the list's total is null and the file answers 409 `history_not_ready` |
+| Unit and display | A notice in place of the history panels |
+| Time rule | Until the first refresh has run |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | A zero, a dash that reads as zero |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 (#267) |
+| Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows`, `/file` |
+| As built today | `172`; `173` proves that no figure appears without a take |
+
+### Take (Customers → Active)
+
+| Field | Value |
+|---|---|
+| Term | Take (the stored results of Customers → Active; no label of its own: the page shows its instant as History as of; Flash's is Current take) |
+| Key | `cma.active_take`, `cma.active_base`, `cma.active_customer`, `cma.active_spell`, `cma.active_month`, `cma.active_cohort`, `cma.active_document`; settings `customers.refresh_minutes`, `customers.history_notice_minutes`, `active.present_source`; `cma.active_refresh()` |
+| Definition | The stored results the history of Customers → Active is read from: the active customer base, its customers, spells, months and cohorts, and the page's answers per filter (the documents), as one refresh computed them at one instant. One take per tenant, kept by the job `cma-refresh-active-customers` every minute for a tenant whose take is older than `customers.refresh_minutes` or marked stale. |
+| Source | `cma.active_refresh_of` over the CMA's mirrors (`cma.active_base_of` and the fresh reads) |
+| Counts / does not count | A change of a setting the stored rows depend on marks the take stale in the setting's own transaction and never refreshes there; a mark set while a refresh runs is kept. The four tiles of the present are not in it (they are live) unless the tenant setting `active.present_source` is `take`, when they are read from its own present rows and say As of |
+| Unit and display | Shown as History as of; no customer data, ids, codes, amounts and times only |
+| Time rule | The instant of the refresh |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Cache" (no request cache; it is a stored result) and "snapshot" (a dated, never-changed take) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and D16 (#267) |
+| Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows`, `/file`; `cma_read.active_customer_month`, `cma_read.customer_cohort` |
+| As built today | `172` (tables, refresh, stale mark); `173` proves the take equals a fresh computation row for row |
+
 ## Rail terms
 
 Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
@@ -1896,7 +2375,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers' requests, opinions and devices: Cancellations, Reviews and Courtesy (Maintenance moved to Assets, addition 0008zw, #236; Courtesy added in addition 0009a). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers: Active, Courtesy, Reviews and Cancellations, in that order (Maintenance moved to Assets, addition 0008zw, #236; Courtesy added in addition 0009a; Active added first in addition 0009l, 11 November 2026, Martin). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
 | Unit and display | A group with a person icon, after Sales and before Assets |
@@ -1905,9 +2384,9 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Customers" or "Klanten" for a count of people or as the term "customer" (see Active customer: Store customer, Webwinkelklant) |
 | Status | Decided (the label only; the term "customer" stays pending) |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zv, #235) |
-| Used by | `cancellations.*`, `reviews.*`, `courtesy.*`; Customers → Cancellations, Reviews, Courtesy (`/reports/courtesy`) |
-| As built today | Matches the definition |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zv, #235); 11 Nov 2026, "Customers → Active (`/reports/active`) is a new page, first in the Customers group, …" and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Used by | `active.*`, `courtesy.*`, `reviews.*`, `cancellations.*`; Customers → Active (`/reports/active`), Courtesy (`/reports/courtesy`), Reviews, Cancellations |
+| As built today | Matches the definition; the group's breadcrumb leads to Active, and the digit keys of its pages follow the visible order (Courtesy, Reviews and Cancellations moved by one) |
 
 ### Assets (rail group)
 
@@ -2029,7 +2508,7 @@ Status: Pending for every term below; none is defined yet. Each is added term by
 Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
 
 ### Customers and orders
-Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Order kind (First, Renewal, Repeat, Unknown) and Renewal (order) are defined under Flash terms (addition 0008zw, #236); the store's First is not the attributed first order below. Contact, customer, new customer, first order, direct order, indirect order, cancellation, minimum term. B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
+Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Order kind (First, Renewal, Repeat, Unknown) and Renewal (order) are defined under Flash terms (addition 0008zw, #236); the store's First is not the attributed first order below. Contact, customer, new customer, first order, cancellation, minimum term. Direct order and Indirect order are defined under Active customer terms (addition 0009l). B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here. Customers → Active's terms (Customer start, Customer age, Monthly recurring amount, Inflow, Outflow and Net change, Customer cohort, Acquisition channel, Customer lifetime, Retention (customer), Customer lifetime value (realised) and the placeholders) are defined under Active customer terms (addition 0009l); there "customer" in a label means an Active customer, and new customer stays here.
 
 ### Tickets and tasks
 Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zn).
