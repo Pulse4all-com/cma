@@ -2084,12 +2084,12 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -2193,12 +2193,12 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -2312,7 +2312,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.waiting_max_minutes",
@@ -2322,8 +2322,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -2452,7 +2452,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.service_level_seconds",
@@ -2466,8 +2466,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -2574,13 +2574,13 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [],
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -2683,12 +2683,12 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -2905,7 +2905,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()",
       "settings": [],
       "computed_in": {
         "sql": [
@@ -3024,7 +3024,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()",
       "settings": [
         {
           "key": "telephony.connected_min_seconds",
@@ -3152,7 +3152,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()",
       "settings": [
         {
           "key": "telephony.connected_min_seconds",
@@ -3303,7 +3303,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()",
       "settings": [
         {
           "key": "telephony.connected_min_seconds",
@@ -3439,7 +3439,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()",
       "settings": [
         {
           "key": "telephony.connected_min_seconds",
@@ -3567,7 +3567,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()",
       "settings": [
         {
           "key": "telephony.connected_min_seconds",
@@ -3711,7 +3711,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -3860,7 +3860,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -4018,7 +4018,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -4172,7 +4172,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -4315,7 +4315,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)",
+      "refresh": "On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)",
       "settings": [
         {
           "key": "telephony.callback_lookback_days",
@@ -82967,8 +82967,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -83081,8 +83081,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -83195,8 +83195,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",
@@ -83309,8 +83309,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.inbound_now",
-            "migration": "0009k"
+            "object": "cma.inbound_now_first",
+            "migration": "0009q"
           },
           {
             "object": "cma.inbound_today_live_of",

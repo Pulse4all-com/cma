@@ -63,7 +63,8 @@ export default async function WelcomePage() {
     attention: hasAttention ? Promise.all([
       d.getFollowUpSummary(me),
       hasTeam ? d.getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
-      hasLive ? d.getInboundNow(me) : Promise.resolve(null),
+      // the missed callers' count alone (addition 0009q): no caller is listed here
+      hasLive ? d.getInboundNow(me, 0) : Promise.resolve(null),
     ]) : null,
     day: hasClock ? Promise.all([d.getWorkday(me, today), d.listStatuses(me)]) : null,
     mine: hasOwn ? d.getMyFollowUp(me) : null,
@@ -330,7 +331,7 @@ function AttentionBlock({ summary, team, inbound, permissions, copy }: {
   const t = copy.welcome;
   const lines = attentionLines(summary,
     team ? team.days.filter((d) => d.needsCorrection).length : null,
-    inbound && inbound.telephony ? inbound.callbacks.length + inbound.anonymousCount : null);
+    inbound && inbound.telephony ? inbound.callbacksTotal + inbound.anonymousCount : null);
   // the courtesy orders Unreachable (addition 0009a; renamed in 0009c), from the same snapshot read: only while courtesy is set up and the count
   // is above 0, for monitoring.live or performance.team
   const courtesy = courtesyAttention(summary, permissions);

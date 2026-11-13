@@ -17,10 +17,10 @@
  * "Show all" for the rest (the choice survives the poll). The table has zebra rows and a hover row (7.6). A client module:
  * it is rendered by the board's poll (LiveBoardLive) only.
  */
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { InboundNow, MissedCallback } from "@/lib/data";
-import { callbackWaiting, INBOUND_TILES, inboundTileValue, type InboundTileKey } from "@/lib/live";
+import { callbackWaiting, INBOUND_TILES, inboundTileValue, MISSED_SHOWN, type InboundTileKey } from "@/lib/live";
 import type { LiveHints } from "@/lib/live";
 import { fillHint, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, fmtTalk } from "@/lib/reports";
 import { Stat, StatPanel } from "./StatPanel";
@@ -94,19 +94,22 @@ export function InboundLive({ inbound, copy, locale, canOpenMetrics = false, sco
  * The missed calls not called back, the Live board's last section (addition 0008z): nothing while the tenant has no
  * telephony, since the inbound part above already says so
  */
-/** The missed callers shown before "Show all": a screen's worth, oldest first (the Live board's UX pass, 10 November 2026) */
-export const MISSED_SHOWN = 20;
-
-export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
+export function MissedCallbacks({ inbound, copy, locale, timeZone, scope, all, busy, onAll }: {
   inbound: InboundNow; copy: InboundCopy; locale: Locale; timeZone: string;
   /** A caption after the title on what the list covers (a contact center's Live board: all its counted lines, addition 0008zv) */
   scope?: string;
+  /** Every caller is asked for ("Show all"); the board holds the choice, because its poll reads what the list shows (addition 0009q) */
+  all: boolean;
+  /** Every caller was asked for and the answer is not in yet: the button pulses and still says "Show all"; pressing it again takes the choice back */
+  busy: boolean;
+  onAll: (all: boolean) => void;
 }) {
-  const [all, setAll] = useState(false);
   if (!inbound.telephony) return null;
   const t = copy.live;
   const h = copy.hints;
   const today = inbound.today;
+  // the first screen, or every caller the read holds once "Show all" is answered (the read itself lists the first
+  // MISSED_SHOWN until then, so the slice only matters right after "Show fewer")
   const listed = all ? inbound.callbacks : inbound.callbacks.slice(0, MISSED_SHOWN);
   const fill = (text: string) => fillHint(text, {
     hours: h.officeHours, seconds: today?.serviceLevelSeconds ?? null, minutes: today?.waitingMaxMinutes ?? null, days: inbound.lookbackDays,
@@ -131,7 +134,7 @@ export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
           {scope ? <p className="text-small text-p4a-muted" data-testid="missed-scope">{scope}</p> : null}
         </div>
         <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}</p>
-        {inbound.callbacks.length === 0 ? (
+        {inbound.callbacksTotal === 0 ? (
           <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
         ) : (
           <div className="overflow-x-auto">
@@ -176,10 +179,10 @@ export function MissedCallbacks({ inbound, copy, locale, timeZone, scope }: {
             </table>
           </div>
         )}
-        {inbound.callbacks.length > MISSED_SHOWN ? (
-          <button type="button" onClick={() => setAll(!all)} aria-expanded={all} data-testid="missed-more"
-            className="mt-3 text-small font-semibold text-p4a-deepblue hover:underline">
-            {all ? t.missedShowFewer : t.missedShowAll.replace("{n}", fmtCount(inbound.callbacks.length, locale))}
+        {inbound.callbacksTotal > MISSED_SHOWN ? (
+          <button type="button" onClick={() => onAll(!all)} aria-expanded={all && !busy} aria-busy={busy || undefined} data-testid="missed-more"
+            className={`mt-3 text-small font-semibold text-p4a-deepblue hover:underline ${busy ? "animate-pulse" : ""}`}>
+            {all && !busy ? t.missedShowFewer : t.missedShowAll.replace("{n}", fmtCount(inbound.callbacksTotal, locale))}
           </button>
         ) : null}
         {inbound.anonymousCount > 0 ? (

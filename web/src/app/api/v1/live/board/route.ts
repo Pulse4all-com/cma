@@ -1,6 +1,6 @@
 import { ApiError, forPrincipal, ok, requireAnyPermission } from "@/lib/api/respond";
 import { data } from "@/lib/data";
-import { boardOfOrganisation } from "@/lib/live";
+import { boardOfOrganisation, missedListedOf } from "@/lib/live";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +19,23 @@ export const dynamic = "force-dynamic";
  * the missed callers and follow-up stay tenant-wide. A key that is no contact center of the caller's tenant (an unknown
  * organisation, or one not flagged) is a 404, after the permission check. Without the parameter the whole tenant's
  * board, as before.
+ *
+ * The missed callers (addition 0009q): `inbound.callbacks` holds the oldest twenty (lib/live MISSED_SHOWN), which is
+ * what the board shows, and `inbound.callbacksTotal` how many the whole list holds; ?missed=all answers every caller
+ * (the board asks for it after "Show all"; ?missed=first is the default said out loud; anything else 400
+ * invalid_missed). /api/v1/telephony/inbound-now answers every caller by default.
  */
 export async function GET(request: Request) {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, ["monitoring.live"]);
-    const key = new URL(request.url).searchParams.get("organisation");
-    if (key === null) return ok(await data().getLiveBoard(me));
+    const params = new URL(request.url).searchParams;
+    const key = params.get("organisation");
+    const missed = missedListedOf(params.get("missed"));
+    if (missed === null) throw new ApiError(400, "invalid_missed", "missed takes all or first");
+    if (key === null) return ok(await data().getLiveBoard(me, missed));
     if (!me.contactCenters.some((c) => c.key === key)) {
       throw new ApiError(404, "not_found", "organisation is not a contact center of this tenant");
     }
-    return ok(boardOfOrganisation(await data().getLiveBoard(me), key));
+    return ok(boardOfOrganisation(await data().getLiveBoard(me, missed), key));
   });
 }

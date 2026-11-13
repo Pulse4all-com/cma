@@ -397,9 +397,22 @@ expect("the board's hints are a small part of the whole hints object (gzip, in t
   sliceKb < wholeKb / 4, true, false);
 // The missed callers' first page: the component shows MISSED_SHOWN before "Show all"
 const inboundLive = readFileSync(new URL("../src/components/InboundLive.tsx", import.meta.url), "utf8");
-expect("the missed callers show the oldest 20 first, the rest on request",
-  [/export const MISSED_SHOWN = 20;/.test(inboundLive), /inbound\.callbacks\.slice\(0, MISSED_SHOWN\)/.test(inboundLive), /data-testid="missed-more"/.test(inboundLive)],
-  [true, true, true], [false, true, true]);
+const liveLib = readFileSync(new URL("../src/lib/live.ts", import.meta.url), "utf8");
+const boardLive = readFileSync(new URL("../src/components/LiveBoardLive.tsx", import.meta.url), "utf8");
+const pgLive = readFileSync(new URL("../src/lib/data/postgres.ts", import.meta.url), "utf8");
+const { MISSED_SHOWN, missedListedOf } = await import("../src/lib/live.ts");
+expect("the missed callers show the oldest 20 first, the rest on request: the read lists the first screen with the whole count (0009q), Show all asks for every caller",
+  [MISSED_SHOWN, /const listed = all \? inbound\.callbacks : inbound\.callbacks\.slice\(0, MISSED_SHOWN\);/.test(inboundLive),
+    /inbound\.callbacksTotal > MISSED_SHOWN \?/.test(inboundLive) && /t\.missedShowAll\.replace\("\{n\}", fmtCount\(inbound\.callbacksTotal, locale\)\)/.test(inboundLive),
+    /readCallsNow\(q, true, missed === "all" \? null : MISSED_SHOWN\)/.test(pgLive) && /select cma\.inbound_now_first\(\$1\) as j, cma\.outbound_now\(\) as o/.test(pgLive),
+    /\$\{all \? "&missed=all" : ""\}/.test(boardLive) && /if \(all === missedRef\.current\) \{ if \(all\) startTransition\(\(\) => setData\(body\.data\)\); else setData\(body\.data\); \}/.test(boardLive),
+    [missedListedOf("all"), missedListedOf(null), missedListedOf("everything"), missedListedOf("first")], /export const MISSED_SHOWN = 20;/.test(liveLib)],
+  [20, true, true, true, true, ["all", "first", null, "first"], true], [0, false, false, false, false, [], false]);
+expect("an unknown ?missed= is refused, and only the latest Show all choice is acted on",
+  [/if \(missed === null\) throw new ApiError\(400, "invalid_missed"/.test(readFileSync(new URL("../src/app/api/v1/live/board/route.ts", import.meta.url), "utf8")),
+    /const choice = \(choiceRef\.current \+= 1\);/.test(boardLive) && /if \(choice !== choiceRef\.current\) return;/.test(boardLive),
+    /aria-expanded=\{all && !busy\}/.test(inboundLive)],
+  [true, true, true], [false, false, false]);
 
 // Longest waiting is gone everywhere the web holds its keys: the copy's (inboundLongestWaiting, liveLongestWaiting and
 // nobodyWaiting, en and nl), the registry's and the catalog's (live.inbound.longest_waiting), the field and the tile

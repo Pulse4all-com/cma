@@ -14,7 +14,7 @@
  * and the server's rows stay equal between two reads of an unchanged team.
  */
 import type { Copy } from "./copy";
-import type { DateKey, Instant, InboundToday, MissedCallback, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
+import type { DateKey, Instant, InboundToday, MissedCallback, MissedListed, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
 import { GROUPS, groupOf, type Group } from "./dashboard.ts";
@@ -371,6 +371,20 @@ export function niceCeiling(max: number): number {
 
 /** A poll that has not answered after this long is given up and counts as failed (the Live board's UX pass, 10 November 2026) */
 export const LIVE_POLL_TIMEOUT_MS = 8_000;
+
+/**
+ * The missed callers shown before "Show all": a screen's worth, oldest first (the Live board's UX pass, 10 November
+ * 2026). Since addition 0009q the board's read and its poll ask the database for these alone, with the whole list's
+ * count (cma.inbound_now_first); "Show all" asks for every caller
+ */
+export const MISSED_SHOWN = 20;
+
+/**
+ * What the board's read lists of the missed callers, from the address's ?missed=: left out, the first screen; "all",
+ * every caller; anything else is no choice (null: the route answers 400)
+ */
+export const missedListedOf = (v: string | null | undefined): MissedListed | null =>
+  (v === null || v === undefined ? "first" : v === "all" ? "all" : v === "first" ? "first" : null);
 
 /**
  * Whether the board says its figures are old: after two failed polls in a row (at least 30 seconds without a new read,

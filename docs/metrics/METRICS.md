@@ -1319,9 +1319,9 @@ offered = count(telephony calls with direction='inbound', source_deleted_at null
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1369,9 +1369,9 @@ answered = count(today's inbound calls as live.inbound.offered with answered_at 
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1426,9 +1426,9 @@ unanswered = count(not answered and not waiting); waiting = not answered, not en
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `unansweredPct` in src/lib/reports.ts; `inboundTileValue` in src/lib/live.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `unansweredPct` in src/lib/reports.ts; `inboundTileValue` in src/lib/live.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1485,9 +1485,9 @@ numerator = count(answered and answer_seconds <= telephony.service_level_seconds
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1537,9 +1537,9 @@ inbound_talk_seconds = sum(talk_seconds) over today's answered inbound calls on 
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008zx); `inboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008zx); `inboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1587,9 +1587,9 @@ avg_answer_seconds = round1(avg(answered_at − started_at in seconds, floored a
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `inboundTileValue` in src/lib/live.ts; `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -1691,7 +1691,7 @@ attempts = count(outbound telephony calls, not deleted, with a start, on a count
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()
 
 **Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
@@ -1750,7 +1750,7 @@ connected = count(is_connected_outbound) over today's outbound calls, cma.is_con
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()
 
 **Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
@@ -1809,7 +1809,7 @@ connected_rate = round1(100 * connected / attempts); null (a dash) without an at
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()
 
 **Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
@@ -1871,7 +1871,7 @@ conversations = count(is_conversation) over today's outbound calls; cma.is_conve
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()
 
 **Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_conversation` (0008zc); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
@@ -1930,7 +1930,7 @@ outbound_talk_seconds = sum(talk_seconds) over today's connected outbound calls 
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()
 
 **Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
@@ -1989,7 +1989,7 @@ outbound_talk_avg = round1(avg(talk_seconds) over today's connected outbound cal
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now()
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; outbound computed on request by cma.outbound_now() from live tables (no snapshot), in the statement that reads cma.inbound_now_first()
 
 **Computed in** `cma.outbound_now` (0009h); `cma.outbound_today_of` (0009i); `cma.is_connected` (0008zc); `outboundTileValue` in src/lib/live.ts; `getLiveBoard` in src/lib/data/postgres.ts
 
@@ -2051,7 +2051,7 @@ rows = per counterpart_hash the latest (started_at desc, id desc) missed inbound
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts; `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -2113,7 +2113,7 @@ started_at of the listed call, shown as a time in the VIEWER'S zone (me.timeZone
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -2177,7 +2177,7 @@ waiting_business_seconds = cma.business_seconds_of(tenant, market, started_at, n
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `cma.business_seconds_of` (0007d); `callbackWaiting` in src/lib/live.ts; `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -2240,7 +2240,7 @@ missed_count = count(the caller's missed calls in the lookback, EVERY reason (ne
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks` (0008i); `cma.missed_callbacks_of` (0008i); `cma.inbound_calls_of` (0008i); `missedCallbacks` in src/lib/live.ts
 
@@ -2301,7 +2301,7 @@ anonymous_count = count(missed calls in the lookback whose reason needs_callback
 
 **Who may see it** `monitoring.live`
 
-**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now() from live tables (no snapshot)
+**Refresh** On page load; the Live board polls GET /api/v1/live/board every 10 s while the tab is visible (LiveBoardLive, since 5 Nov 2026), never hidden, backing off after a failure; inbound computed on request by cma.inbound_now_first() from live tables (no snapshot)
 
 **Computed in** `cma.missed_callbacks_summary` (0008i); `cma.missed_callbacks_summary_of` (0008i); `cma.inbound_calls_of` (0008i); `MissedCallbacks` in src/components/InboundLive.tsx
 
@@ -47673,7 +47673,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -47728,7 +47728,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -47783,7 +47783,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -47838,7 +47838,7 @@ As cma.inbound_today_of computes it over today's inbound calls in the tenant's z
 
 **Refresh** computed on request
 
-**Computed in** `cma.inbound_now` (0009k); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
+**Computed in** `cma.inbound_now_first` (0009q); `cma.inbound_today_live_of` (0009k); `cma.inbound_calls_of` (0008i); `getInboundNow` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

@@ -17,7 +17,7 @@
  * so every figure fits on the first screen; Inbound today by hour (LiveHours, for a holder of reports.view or
  * performance.team) sits between the team and the missed callers, which stay last.
  */
-import { useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { FollowUpLive } from "./FollowUpLive";
 import { InboundLive, MissedCallbacks } from "./InboundLive";
 import { LiveBoard } from "./LiveBoard";
@@ -68,18 +68,43 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
   // and the follow-up counts the whole business line's leads, tickets and tasks (Martin, 5 November 2026)
   const wholeBusinessLine = t.followUpWholeBusinessLine.replace("{organisation}", organisation.name);
 
+  // The missed callers: the board's read lists the oldest MISSED_SHOWN; "Show all" asks the poll for every caller, at
+  // once and on every poll while it is open (addition 0009q). The latest choice wins: a poll answered for another one
+  // is dropped, so "Show fewer" is never overwritten by a late answer with every caller
+  const [allMissed, setAllMissed] = useState(false);
+  const [missedBusy, setMissedBusy] = useState(false);
+  const missedRef = useRef(false);
+  // each choice has a number: only the latest one's answer or failure is acted on (an earlier "Show all" that times
+  // out must not close a later one that was answered)
+  const choiceRef = useRef(0);
   const poll = useCallback(async (): Promise<boolean> => {
+    const all = missedRef.current;
     try {
-      const res = await fetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}`,
+      const res = await fetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}${all ? "&missed=all" : ""}`,
         { cache: "no-store", signal: AbortSignal.timeout(LIVE_POLL_TIMEOUT_MS) });
       if (!res.ok) return false;
       const body = (await res.json()) as { data: LiveBoardData };
-      setData(body.data);
+      // every caller is a long list to draw: as a transition, so the board stays responsive while its rows mount
+      if (all === missedRef.current) { if (all) startTransition(() => setData(body.data)); else setData(body.data); }
       return true;
     } catch {
       return false;
     }
   }, [organisationKey]);
+  const showMissed = useCallback((all: boolean) => {
+    const choice = (choiceRef.current += 1);
+    missedRef.current = all;
+    setAllMissed(all);
+    if (!all) { setMissedBusy(false); return; }
+    // every caller, now: the button says it is busy until the answer is in. A read that fails leaves the first screen
+    // and the button as they were ("Show all" can be pressed again; the polls go on asking for the first screen)
+    setMissedBusy(true);
+    void poll().then((ok) => {
+      if (choice !== choiceRef.current) return;
+      setMissedBusy(false);
+      if (!ok) { missedRef.current = false; setAllMissed(false); }
+    });
+  }, [poll]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -176,7 +201,8 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
       ) : null}
 
       <div className="mt-6">
-        <MissedCallbacks inbound={data.inbound} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines} />
+        <MissedCallbacks inbound={data.inbound} copy={copy} locale={viewer.locale} timeZone={viewer.timeZone} scope={allLines}
+          all={allMissed} busy={missedBusy} onAll={showMissed} />
       </div>
     </div>
   );
