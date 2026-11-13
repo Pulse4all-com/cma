@@ -23,7 +23,7 @@ import type {
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
-  Journey, JourneyStatus, CallbackOwner, CallbacksKept, DashboardData,
+  Journey, JourneyStatus, CallbackOwner, CallbacksKept, DashboardReads,
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
   ReviewsReport, MaintenanceFilter, MaintenanceReport, PledgeFile, PledgeFileRow, PledgePage, MaintenanceRows, MaintenanceView, LeadCohortsReport,
@@ -3350,16 +3350,22 @@ export const mockData: CmaData = {
     return { ...range, rows };
   },
 
-  /** The Dashboard's reads together, as the database answers them in one transaction */
-  async getDashboard(me, range): Promise<DashboardData> {
-    assertReportRange(range);
-    return {
-      time: await mockData.getTeamStatusTime(me, range, null),
-      intake: await mockData.getIntake(me, range),
-      records: await mockData.getCrmRecordsPerDay(me, range),
-      speed: await mockData.getSpeedToLeadRows(me, range),
-      callbacks: await mockData.getCallbacksKept(me, range),
-    };
+  /**
+   * The Dashboard's three parts as the database answers them: the time, then the counts; the speed to lead beside them,
+   * without a record link and only for performance.team. Nothing is thrown to the caller: a refusal fails the promises
+   */
+  getDashboardReads(me, range): DashboardReads {
+    const time = (async () => { assertReportRange(range); return mockData.getTeamStatusTime(me, range, null); })();
+    const counts = time.then(async () => ({
+      intake: await mockData.getIntake(me, range), records: await mockData.getCrmRecordsPerDay(me, range), callbacks: await mockData.getCallbacksKept(me, range),
+    }));
+    const speed = (async () => {
+      assertReportRange(range);
+      assertPerformance(me);
+      return (await mockData.getSpeedToLeadRows(me, range)).map((r) => ({ ...r, recordUrl: null }));
+    })();
+    for (const p of [time, counts, speed]) p.catch(() => undefined);
+    return { time, counts, speed };
   },
 
   /** Today per person, the way cma.team_now derives it from the day's effective events */

@@ -3587,13 +3587,18 @@ export interface FollowUpCallbacks {
   callbackOwners: CallbackOwner[] | null;
 }
 
-/** Reports → Dashboard in one read: the time per status of the period, the Intake row's reads and the callbacks kept */
-export interface DashboardData {
-  time: TeamStatusTime;
+/** The counts of Reports → Dashboard's Intake row, read in one transaction: the intake of the period, the records created and the callbacks kept */
+export interface DashboardIntake {
   intake: Intake;
   records: CrmRecordsDay[];
-  speed: SpeedToLeadRow[];
   callbacks: CallbacksKept;
+}
+
+/** Reports → Dashboard's three parts, each a promise of its own (getDashboardReads) */
+export interface DashboardReads {
+  time: Promise<TeamStatusTime>;
+  counts: Promise<DashboardIntake>;
+  speed: Promise<SpeedToLeadRow[]>;
 }
 
 /** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
@@ -3896,10 +3901,15 @@ export interface CmaData {
   /** Seconds per person per day per status, for the Dashboard. Needs performance.team (CMA06) */
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
   /**
-   * Reports → Dashboard in one transaction: getTeamStatusTime for everyone, getIntake, getCrmRecordsPerDay, getSpeedToLeadRows and
-   * getCallbacksKept of the period, the same reads one after the other. Needs performance.team (CMA06); at most 92 days (CMA04)
+   * Reports → Dashboard's reads (12 November 2026), on two connections side by side: one transaction reads the time per
+   * status of everyone (getTeamStatusTime) and hands it over, then the Intake row's counts (getIntake, getCrmRecordsPerDay
+   * and getCallbacksKept, as before); the other reads the speed to lead's rows (getSpeedToLeadRows without each record's
+   * link, which the tile never shows: recordUrl is null), the dearest read, after asking the database for performance.team
+   * (cma.speed_to_lead_rows alone takes reports.view too). Each promise settles on its own; a transaction that fails
+   * leaves its unanswered parts failed. Needs performance.team (CMA06); at most 92 days (CMA04). Not async: the reads
+   * start at once
    */
-  getDashboard(me: Principal, range: HoursRange): Promise<DashboardData>;
+  getDashboardReads(me: Principal, range: HoursRange): DashboardReads;
   /** The app links the caller may see, in the tenant's order (cma.app_links); any person of the tenant */
   listAppLinks(me: Principal): Promise<AppLink[]>;
   /** Everyone whose time is kept, with today's day and status, for the Live board. Needs monitoring.live (CMA06) */

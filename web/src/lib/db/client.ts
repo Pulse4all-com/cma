@@ -26,7 +26,8 @@ import { CMA_SQLSTATE, CmaDbError, isCmaSqlState } from '@/lib/data/errors';
  *   CMA_DB_USER       cma-web@p4a-cma-dev.iam                (IAM database user, required)
  *   CMA_DB_NAME       cma                                     (default cma)
  *   CMA_DB_POOL_MAX   10                                      (per Cloud Run instance; a Flash page holds two, 0008zz; Customers → Active
- *                                                             four for a moment: its reads run side by side, 0009l)
+ *                                                             four for a moment: its reads run side by side, 0009l; Reports →
+ *                                                             Dashboard two: the time and the counts beside the speed to lead)
  *   CMA_DB_POOL_MIN   1                                       (kept open between requests; within the budget's ceiling)
  *   CMA_DB_STATEMENT_TIMEOUT_MS  15000                        (a statement longer than this is cancelled: 57014 → DB_ERROR)
  *   CMA_DB_IP         PUBLIC | PRIVATE                        (default PUBLIC)
@@ -115,9 +116,11 @@ const streamedScope = (gsc.__cmaDbStreamed ??= new AsyncLocalStorage<true>());
 
 /**
  * Runs a read as a streamed part of the request (addition 0008zz): counted in the request's totals and apart in its
- * streamed part, which the first paint's cost leaves out. Nothing else changes: the same transaction, context and errors
+ * streamed part, which the first paint's cost leaves out. Nothing else changes: the same transaction, context and errors.
+ * fn returns a promise, or an object of promises whose reads it started (Reports → Dashboard's parts): what starts
+ * inside it is marked
  */
-export function streamed<T>(fn: () => Promise<T>): Promise<T> {
+export function streamed<T>(fn: () => T): T {
   return streamedScope.run(true, fn);
 }
 

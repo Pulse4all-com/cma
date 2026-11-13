@@ -978,6 +978,85 @@ async function expectActiveLayers() {
   }
 }
 
+// Reports → Dashboard's parts (12 November 2026, lib/head-start): the page's three reads run side by side and a read
+// still on its way streams in behind outlines. With every part held back (the test data's ?late=) the outlines are on
+// the screen first, and when the figures land no tile and no section moves or changes its size; without it a short
+// period is drawn whole, with no outline in between. A click on a period marks its link within 100 ms, and so does a
+// choice of a person, before the answer is there (the answer is held back so the mark's moment can be read).
+// --provoke demands tiles 3 px taller than their outlines and no mark
+async function expectDashboardParts() {
+  const where = "manager /reports/dashboard";
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.addInitScript(() => {
+    const snap = () => {
+      if (document.querySelector("[data-route-skeleton]")) return;
+      const tiles = [...document.querySelectorAll('[data-testid="intake-row"] [data-tile]')];
+      const box = (el) => { const r = el.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
+      const time = document.querySelector('[data-testid="dashboard-time-outline"], [data-testid="dashboard-time"]');
+      const state = {
+        tiles: Object.fromEntries(tiles.map((el) => [el.getAttribute("data-testid"), box(el)])), timeTop: time ? Math.round(time.getBoundingClientRect().top) : null,
+        waiting: tiles.filter((el) => el.hasAttribute("data-tile-waiting")).length, timeWaits: Boolean(document.querySelector('[data-testid="dashboard-time-outline"]')),
+      };
+      if (state.waiting > 0 || state.timeWaits) window.__everWaited = true;
+      if (tiles.length === 7 && state.waiting === 7 && state.timeWaits) window.__outlined = state;
+      window.__now = state;
+    };
+    new MutationObserver(snap).observe(document, { subtree: true, childList: true, attributes: true });
+  });
+  const landed = () => p.waitForFunction(() => window.__now && window.__now.waiting === 0 && !window.__now.timeWaits && Object.keys(window.__now.tiles).length === 7, null, { timeout: 10_000 })
+    .then(() => true, () => false);
+  await p.goto(BASE + "/reports/dashboard?range=week&late=time,counts,speed");
+  if (!(await landed())) problems.push(`${where}: with every part held back the page did not settle`);
+  const held = await p.evaluate(() => ({ outlined: window.__outlined ?? null, now: window.__now ?? null }));
+  if (!held.outlined) problems.push(`${where}: with every part held back no outline was on the screen (seven waiting tiles and the time section's outline)`);
+  else if (held.now) {
+    for (const [id, a] of Object.entries(held.outlined.tiles)) {
+      const c = held.now.tiles[id];
+      const want = provoke ? [a[0], a[1], a[2], a[3] + 3] : a;
+      if (!c || want.some((v, i) => Math.abs(v - c[i]) > 1)) problems.push(`${where}: tile ${id} is at ${JSON.stringify(c)} with its figure against ${JSON.stringify(want)} as its outline (the page shifts when the figures land)`);
+    }
+    if (held.outlined.timeTop === null || held.now.timeTop === null || Math.abs(held.outlined.timeTop - held.now.timeTop) > 1) {
+      problems.push(`${where}: the time section starts at ${held.now.timeTop}px against ${held.outlined.timeTop}px as its outline (the page shifts when the figures land)`);
+    }
+  }
+  // a short period: every read is in within the head start, so no outline is ever on the screen
+  await p.goto(BASE + "/reports/dashboard?range=week");
+  if (!(await landed())) problems.push(`${where}: the page did not settle`);
+  if (await p.evaluate(() => window.__everWaited === true)) problems.push(`${where}: an outline was shown although every read was in within the head start`);
+  // a click shows its mark within 100 ms, before the answer is there
+  await p.route("**/reports/dashboard?**", async (route) => { await new Promise((r) => setTimeout(r, 500)); await route.continue().catch(() => undefined); });
+  // the mark's moment is read inside the page, from the click's own event to the mark in the document, so the driver's
+  // overhead is not counted
+  const markAfter = (event, selector) => p.evaluate(([ev, sel]) => {
+    window.__from = null; window.__mark = null;
+    document.addEventListener(ev, () => { window.__from = performance.now(); }, { capture: true, once: true });
+    window.__markWatch?.disconnect();
+    window.__markWatch = new MutationObserver(() => { if (window.__mark === null && window.__from !== null && document.querySelector(sel)) window.__mark = performance.now(); });
+    window.__markWatch.observe(document.body, { subtree: true, childList: true, attributes: true });
+  }, [event, selector]);
+  const markedIn = () => p.waitForFunction(() => window.__mark !== null, null, { timeout: 400 }).then(() => p.evaluate(() => Math.round(window.__mark - window.__from)), () => null);
+  const link = p.locator('main nav a[href*="range=month"]');
+  await markAfter("click", 'main nav a [data-link-pending="true"]');
+  await link.click();
+  let marked = provoke ? null : await markedIn();
+  if (marked === null || marked > 100) problems.push(`${where}: a click on This month ${marked === null ? "did not mark the link" : `marked the link after ${marked} ms`} (within 100 ms)`);
+  await p.waitForURL(/range=month/, { timeout: 10_000 }).catch(() => problems.push(`${where}: This month did not change the address`));
+  await landed();
+  const people = await p.locator('select[data-shortcut="p"] option').count();
+  if (people < 2) problems.push(`${where}: the person filter lists nobody`);
+  else {
+    await markAfter("change", '[data-filter-pending="true"]');
+    await p.selectOption('select[data-shortcut="p"]', { index: 1 });
+    marked = provoke ? null : await markedIn();
+    if (marked === null || marked > 100) problems.push(`${where}: a choice of a person ${marked === null ? "showed no mark" : `showed its mark after ${marked} ms`} (within 100 ms)`);
+    await p.waitForURL(/person=/, { timeout: 10_000 }).catch(() => problems.push(`${where}: a choice of a person did not change the address`));
+  }
+  await p.unroute("**/reports/dashboard?**", { behavior: "ignoreErrors" });
+  await ctx.close();
+  console.log(`${problems.some((x) => x.startsWith(where)) ? "FAIL" : "PASS"}  the Dashboard's parts: outlines of the figures' size, a short period whole, a click and a choice marked within 100 ms`);
+}
+
 // Campaign monitoring (addition 0008v, brief N19-A part 3), per identity at 1280 px: in the rail's Campaigns group and
 // on the page for reports.view or performance.team (the agent gets the no-permission card and no journey); a card per
 // journey, the archived one absent, each card inside the main area; the page never scrolls sideways; a journey's page
@@ -3331,6 +3410,7 @@ await expectWelcomeOnOpen();
 await expectFiltersPending();
 await expectCampaigns();
 await expectActiveLayers();
+await expectDashboardParts();
 await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();

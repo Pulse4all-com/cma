@@ -9,7 +9,7 @@ import type {
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
-  CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
+  CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
@@ -172,11 +172,14 @@ function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
 }
 
 /** One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days) */
-async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<SpeedToLeadRow[]> {
-  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
+async function readSpeedToLeadRows(q: Querier, range: HoursRange, links = true): Promise<SpeedToLeadRow[]> {
+  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one. links false
+  // (the Dashboard's tile, which shows three figures and no record): no link is built, a call per row saved
   const r = await q.query<SpeedDbRow>(
-    `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
-       from cma.speed_to_lead_rows($1::date, $2::date) r`,
+    links
+      ? `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
+           from cma.speed_to_lead_rows($1::date, $2::date) r`
+      : `select r.*, null::text as record_url from cma.speed_to_lead_rows($1::date, $2::date) r`,
     [range.from, range.to],
   );
   return r.rows.map(toSpeedRow);
@@ -1926,18 +1929,37 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), (q) => readTeamStatusTime(q, range, userId));
   },
 
-  // The Dashboard in one transaction (23 October 2026, the round-trips budget): the same reads as the routes of
-  // each part, one after the other on one connection instead of five checkouts; each function checks its own
-  // permission and range (performance.team for the time and the records; reports.view or performance.team else)
-  async getDashboard(me, range): Promise<DashboardData> {
-    assertReportRange(range);
-    return withTenant(ctx(me), async (q) => ({
-      time: await readTeamStatusTime(q, range, null),
-      intake: await readIntake(q, range),
-      records: await readCrmRecordsPerDay(q, range),
-      speed: await readSpeedToLeadRows(q, range),
-      callbacks: await readCallbacksKept(q, range),
-    }));
+  // The Dashboard on two connections (12 November 2026; one transaction of five reads before, 23 October 2026, in which
+  // the dearest read held the page back). The first: the time per status, handed over as it returns, then the Intake
+  // row's counts. The second: the speed to lead, after cma.assert_permission('performance.team'), so the database still
+  // refuses this page's read to someone who holds reports.view alone (cma.speed_to_lead_rows takes either; in the single
+  // transaction cma.team_status_time had refused first). Each function checks its own permission and range as before
+  getDashboardReads(me, range): DashboardReads {
+    let timeOk: (v: TeamStatusTime) => void = () => undefined;
+    let timeNo: (e: unknown) => void = () => undefined;
+    const time = new Promise<TeamStatusTime>((ok, no) => { timeOk = ok; timeNo = no; });
+    time.catch(() => undefined); // awaited by the page; a failure nobody awaits yet must not count as unhandled
+    let counts: Promise<DashboardIntake>;
+    let speed: Promise<SpeedToLeadRow[]>;
+    try {
+      assertReportRange(range);
+      counts = withTenant(ctx(me), async (q) => {
+        timeOk(await readTeamStatusTime(q, range, null));
+        return { intake: await readIntake(q, range), records: await readCrmRecordsPerDay(q, range), callbacks: await readCallbacksKept(q, range) };
+      });
+      speed = withTenant(ctx(me), async (q) => {
+        await q.query(`select cma.assert_permission('performance.team')`);
+        return readSpeedToLeadRows(q, range, false);
+      });
+    } catch (e) {
+      // a range out of bounds (or no tenant in the context): every part fails with it, as an awaited read would
+      counts = Promise.reject(e);
+      speed = Promise.reject(e);
+    }
+    // the time has no answer when its transaction fails before or at its read: settling it twice does nothing
+    counts.catch((e: unknown) => timeNo(e));
+    speed.catch(() => undefined);
+    return { time, counts, speed };
   },
 
   // Addition 0003e: team_now() checks monitoring.live and raises CMA06 otherwise, so the plain read
