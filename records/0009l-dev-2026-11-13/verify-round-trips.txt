@@ -1,0 +1,3 @@
+  admin /api/v1/reports/pledge-lists: status 403
+  admin /api/v1/reports/pledge-lists/files/today: status 403
+round-trips: FAIL (2 problems)
