@@ -8,6 +8,7 @@ import { CmaDbError } from "@/lib/data/errors";
 import { sourceSections } from "@/lib/sources";
 import { resolve } from "../../../access";
 import { ConfigurationPage, mayConfigure } from "../../gate";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -67,11 +68,11 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   return (
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare trail={[{ label: detail.connection.name }]}>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
-      <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} categories={categories} copy={copy} locale={me.locale} timeZone={me.timeZone}
+      <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} categories={categories} copy={{ ...pickCopy(copy, "configHealth", "configSources", "configuration"), hints: pickHints(copy, "about") }} locale={me.locale} timeZone={me.timeZone}
         connectedMinSeconds={threshold === undefined ? null : Number(threshold)}
         conversationMinSeconds={conversation === undefined ? null : Number(conversation)} email={email} reviews={reviews} />
-      {crm ? <SourceReasons key={`reasons:${JSON.stringify(detail.fields)}`} detail={detail} copy={copy} /> : null}
-      {crm ? <SourceKindRules detail={detail} kinds={kinds} copy={copy} /> : null}
+      {crm ? <SourceReasons key={`reasons:${JSON.stringify(detail.fields)}`} detail={detail} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} /> : null}
+      {crm ? <SourceKindRules detail={detail} kinds={kinds} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} /> : null}
     </ConfigurationPage>
   );
 }

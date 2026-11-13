@@ -60,7 +60,7 @@ const EMAIL_NUMBER_MAX = { reply: 10080, days: 90 } as const;
 
 export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, conversationMinSeconds = null, email = null,
   reviews = null }: {
-  detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+  detail: SourceDetail; markets: MarketConfig[]; copy: Pick<Copy, "configHealth" | "configSources" | "configuration"> & { hints: Pick<Copy["hints"], "about"> }; locale: Locale; timeZone: string;
   /** The tenant's review settings (addition 0008ze), on a reviews connection */
   reviews?: ReviewSettingsValues | null;
   /** The tenant's email settings (addition 0008t), shown in words on a CRM connection */

@@ -13,6 +13,7 @@ import { resolvePeriod } from "@/lib/period";
 import { fillHint, MAX_REPORT_DAYS } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
 import { resolve } from "../../access";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 /**
  * Email per agent (Report, addition 0008t; brief N19-A part 1): the email figures per person for a period,
@@ -64,7 +65,7 @@ export default async function EmailPerAgentPage({ searchParams }: PageProps<"/re
         {agents.email ? (
           <div className="mb-6">
             <EmailFilters pathname="/reports/email-per-agent" markets={agents.markets} inboxes={agents.inboxes} accounts={agents.accounts} filter={filter}
-              query={periodQuery} copy={copy} />
+              query={periodQuery} copy={pickCopy(copy, "email", "reports")} />
           </div>
         ) : null}
       </div>
@@ -95,7 +96,7 @@ export default async function EmailPerAgentPage({ searchParams }: PageProps<"/re
           <p className="text-body text-p4a-muted">{t.empty}</p>
         ) : (
           <>
-            <EmailPerAgentTable rows={agents.rows} total={agents.total} hints={hints} copy={copy} locale={me.locale} />
+            <EmailPerAgentTable rows={agents.rows} total={agents.total} hints={hints} copy={{ ...pickCopy(copy, "emailPerAgent", "reports"), hints: pickHints(copy, "about") }} locale={me.locale} />
             <p className="mt-4 text-caption text-p4a-grey">{t.keyboard}</p>
           </>
         )}

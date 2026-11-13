@@ -16,7 +16,7 @@ import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card } from "../primitives";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 
-export function FormCategories({ categories, copy }: { categories: FormCategory[]; copy: Copy }) {
+export function FormCategories({ categories, copy }: { categories: FormCategory[]; copy: Pick<Copy, "configSources" | "configuration"> & { hints: Pick<Copy["hints"], "about"> } }) {
   const c = copy.configuration;
   const t = copy.configSources;
   const { state, save } = useSave(c);

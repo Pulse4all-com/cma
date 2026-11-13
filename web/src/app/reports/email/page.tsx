@@ -15,6 +15,7 @@ import { fillHint, fmtCount, fmtShare, fmtTalk, MAX_REPORT_DAYS, REPORT_PERMISSI
 import { dateKeyInZone } from "@/lib/time";
 import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /**
  * Email (Report, addition 0008t; brief N19-A part 1): every counted email of a period, per day or ISO week (G),
@@ -82,7 +83,7 @@ export default async function EmailPage({ searchParams }: PageProps<"/reports/em
         {report.email ? (
           <div className="mb-6">
             <EmailFilters pathname="/reports/email" markets={report.markets} inboxes={report.inboxes} accounts={report.accounts} filter={filter}
-              query={{ ...periodQuery, group }} copy={copy} />
+              query={{ ...periodQuery, group }} copy={pickCopy(copy, "email", "reports")} />
           </div>
         ) : null}
       </div>

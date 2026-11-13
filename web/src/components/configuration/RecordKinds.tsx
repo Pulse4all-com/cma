@@ -17,7 +17,7 @@ import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSav
 
 const KEY_RE = /^[a-z][a-z0-9_-]{1,40}$/;
 
-export function RecordKinds({ kinds, copy }: { kinds: RecordKindConfig[]; copy: Copy }) {
+export function RecordKinds({ kinds, copy }: { kinds: RecordKindConfig[]; copy: Pick<Copy, "configSources" | "configuration"> & { hints: Pick<Copy["hints"], "about"> } }) {
   const c = copy.configuration;
   const t = copy.configSources;
   const { state, save } = useSave(c);

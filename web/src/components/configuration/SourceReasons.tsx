@@ -20,7 +20,7 @@ import { SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 const RECORD_TYPES = ["deal", "ticket"] as const;
 const PROPERTY_RE = /^[A-Za-z0-9_.:@/+=-]{1,100}$/;
 
-export function SourceReasons({ detail, copy }: { detail: SourceDetail; copy: Copy }) {
+export function SourceReasons({ detail, copy }: { detail: SourceDetail; copy: Pick<Copy, "configSources" | "configuration"> & { hints: Pick<Copy["hints"], "about"> } }) {
   const c = copy.configuration;
   const t = copy.configSources;
   const base = `/api/v1/configuration/sources/${detail.connection.id}`;

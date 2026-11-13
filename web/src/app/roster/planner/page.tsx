@@ -5,6 +5,7 @@ import { data, dataIsMock } from "@/lib/data";
 import { absenceKeywordList } from "@/lib/roster";
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "../../access";
+import { pickCopy } from "@/lib/copy";
 
 /** Saved weeks shown for browsing: this many weeks back and ahead of the week on screen */
 const WEEKS_AROUND = 12;
@@ -66,7 +67,7 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
         today={today}
         thisWeek={thisWeek}
         viewerZone={me.timeZone}
-        copy={copy}
+        copy={pickCopy(copy, "dayEditor", "roster")}
         locale={me.locale}
       />
 

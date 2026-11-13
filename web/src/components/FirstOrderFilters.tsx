@@ -22,7 +22,7 @@ export function FirstOrderFilters({ pathname, markets, levels, filter, query, co
   filter: FirstOrderFilter;
   /** The period and grouping part of the query string, kept when a filter changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "firstOrders" | "reports">;
 }) {
   const t = copy.firstOrders;
   const router = useRouter();

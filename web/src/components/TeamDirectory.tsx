@@ -47,7 +47,7 @@ export function TeamDirectory({
   linked: LinkedAccounts;
   /** What the Invite dialog needs (addition 0008l) */
   invite: InviteContext;
-  copy: Copy;
+  copy: Pick<Copy, "invitations" | "team"> & { hints: Pick<Copy["hints"], "about"> };
 }) {
   const t = copy.team;
   const router = useRouter();

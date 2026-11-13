@@ -8344,6 +8344,25 @@ function shared(all: AllCopy): Copy {
 }
 
 export const copy: Record<Locale, Copy> = { en: shared(en), nl: shared(nl) };
+
+/**
+ * The parts of the catalog a client component reads, and no more (12 November 2026). A client component's props travel
+ * to the browser with the page and again with every click, and the whole catalog is 59 kB gzipped: eleven pages carried
+ * it for a filter's labels. A page hands a client component `pickCopy(copy, "calls", "reports")`, and the component's
+ * prop is typed `Pick<Copy, "calls" | "reports">`; verify:copy refuses a client file that types anything as the whole
+ * Copy and a server file that hands a client component the bare catalog.
+ */
+export function pickCopy<K extends keyof Copy>(from: Copy, ...keys: K[]): Pick<Copy, K> {
+  return Object.fromEntries(keys.map((k) => [k, from[k]])) as Pick<Copy, K>;
+}
+
+/**
+ * The hints a client component reads, and no more: the hints are the catalog's largest part (12 kB gzipped) and a
+ * component reads one or a handful. Handed beside pickCopy: `{ ...pickCopy(copy, "team"), hints: pickHints(copy, "about") }`
+ */
+export function pickHints<K extends keyof Copy["hints"]>(from: Copy, ...keys: K[]): Pick<Copy["hints"], K> {
+  return Object.fromEntries(keys.map((k) => [k, from.hints[k]])) as Pick<Copy["hints"], K>;
+}
 export const activeCopy: Record<Locale, ActiveCopy> = { en: en.active, nl: nl.active };
 export function t(locale: Locale): Copy {
   return copy[locale];

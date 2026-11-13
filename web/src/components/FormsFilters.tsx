@@ -30,7 +30,7 @@ export function FormsFilters({ markets, categories, forms, filter, query, copy }
   filter: FormsFilter;
   /** The period and grouping part of the query string, kept when a filter changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "forms" | "reports">;
 }) {
   const t = copy.forms;
   const router = useRouter();
@@ -84,7 +84,7 @@ export function AnswerFilters({ fields, field, value, query, copy }: {
   value: string | null;
   /** The period, grouping and filters of the page, kept when a choice changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: Pick<Copy, "forms" | "reports">;
 }) {
   const t = copy.forms;
   const router = useRouter();

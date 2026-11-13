@@ -14,8 +14,11 @@
  *      manifest names (.next/server/app/<route>/page_client-reference-manifest.js) plus the root main files of
  *      .next/build-manifest.json, each chunk read from .next/static and compressed; and the page's HTML (the RSC payload
  *      with the copy object rides in it), gzip-compressed, from the measured response. Both against perf.json's per-route
- *      budgets in kB (night N06's measured values, rounded up; a route that still carries the whole copy object has minus
- *      25 % as its next target, docs/night-2026-11-06/NIGHT_NOTES.md). A request row may carry its own html_kb, which wins
+ *      budgets in kB (night N06's measured values, rounded up; since 12 November 2026 no route carries the whole copy
+ *      object any more (verify:copy holds the forms it can see: a client file's `: Copy` and a bare `copy` handed to a
+ *      client component): the six routes that did have budgets of what they weigh without it, measured on the mock
+ *      server, not on the volume fixture, plus a margin of a quarter to a half (a page carries more on the fixture):
+ *      provisional until --observed on the fixture). A request row may carry its own html_kb, which wins
  *      over the route's: Assets → Installed base's default view and each panel (addition 0009f).
  *   3. The layers of a page that streams in parts (a row's layers; Customers → Active, addition 0009l, decisions D15 and
  *      D16): when each layer's mark first arrives in the stream, the 95th percentile against the layer's budget in

@@ -11,6 +11,7 @@ import { resolvePeriod } from "@/lib/period";
 import { DATA_QUALITY_PERMISSIONS, fillHint, filterQuery, MAX_REPORT_DAYS, parseCallsFilter, PER_AGENT_PERMISSION } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
 import { resolve } from "../../access";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 /**
  * Calls per agent (Report, addition 0008j, brief B16; Aircall's User Activity view): the calls figures
@@ -62,7 +63,7 @@ export default async function CallsPerAgentPage({ searchParams }: PageProps<"/re
         </div>
         {agents.telephony ? (
           <div className="mb-6">
-            <CallsFilters pathname="/reports/calls-per-agent" markets={agents.markets} lines={agents.lines} filter={filter} query={periodQuery} copy={copy} />
+            <CallsFilters pathname="/reports/calls-per-agent" markets={agents.markets} lines={agents.lines} filter={filter} query={periodQuery} copy={pickCopy(copy, "calls", "reports")} />
           </div>
         ) : null}
       </div>
@@ -92,7 +93,7 @@ export default async function CallsPerAgentPage({ searchParams }: PageProps<"/re
           <p className="text-body text-p4a-muted">{t.empty}</p>
         ) : (
           <>
-            <CallsPerAgentTable rows={agents.rows} total={agents.total} tags={tags.rows} copy={copy} locale={me.locale}
+            <CallsPerAgentTable rows={agents.rows} total={agents.total} tags={tags.rows} copy={{ ...pickCopy(copy, "callsPerAgent", "reports"), hints: pickHints(copy, "about", "agentAnswered", "agentConnected", "agentConnectedMin", "agentFirstLast", "agentInboundAvg", "agentName", "agentOutbound", "agentOutboundAvg", "agentUntagged") }} locale={me.locale}
               threshold={agents.connectedMinSeconds} dataQuality={holdsAny(me, DATA_QUALITY_PERMISSIONS)} />
             <p className="mt-4 text-caption text-p4a-grey">{t.keyboard}</p>
             <p className="mt-1 text-caption text-p4a-grey">
