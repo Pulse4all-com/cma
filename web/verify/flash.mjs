@@ -873,7 +873,7 @@ expect("the records' read starts before the document is awaited (again after the
     /\.then\(\(rows\) => \(\{ rows, error: null \}\), \(error: unknown\) => \(\{ rows: null, error \}\)\)/.test(overviewSrc)],
   [true, true, true, true], [false, false, false, false]);
 expect("the first paint's cost leaves the streamed read out (the Shell's meta); the records' meta and the request log count it",
-  [/requestDbTrace\(\{ firstPaint: true \}\)/.test(shellSrc), /export function streamed<T>\(fn: \(\) => Promise<T>\): Promise<T> \{\s*return streamedScope\.run\(true, fn\);/.test(clientSrc),
+  [/requestDbTrace\(\{ firstPaint: true \}\)/.test(shellSrc), /export function streamed<T>\(fn: \(\) => T\): T \{\s*return streamedScope\.run\(true, fn\);/.test(clientSrc),
     /if \(s\) s\.tx \+= 1;\s*if \(part\) part\.tx \+= 1;/.test(clientSrc) && /if \(s\) s\.rt \+= 1; if \(part\) part\.rt \+= 1;/.test(clientSrc),
     /const p = firstPaint && s\.streamed \? s\.streamed : \{ tx: 0, rt: 0, dbMs: 0 \};/.test(clientSrc)],
   [true, true, true, true], [false, false, false, false]);
