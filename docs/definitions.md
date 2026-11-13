@@ -1867,7 +1867,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Equivalent in the source system | None |
 | Not to use | None yet |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Customers → Active (`/reports/active`) is a new page, first in the Customers group, …" and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Customers → Active (`/reports/active`) is a new page, first in the Customers group, …" and "Definitions: Active (rail page), Customer start, …" (addition 0009l); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
 | Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows` and `/file` |
 | As built today | Matches the definition |
 
@@ -2329,7 +2329,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 
 ## Rail terms
 
-Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures.
+Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures. The rail pages with no figure yet (Subscriptions, Payments, Compliance, Quality monitoring, Purchase orders) are placeholders (Decision log, 13 Nov 2026).
 
 ### Contact-center organisation
 
@@ -2369,6 +2369,25 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Used by | `live.*` (`live.outbound.*` for Outbound today, `live.inbound.talk` for Inbound today's Talk time); the Live group; `GET /api/v1/live/board`; `live.inbound.hours` for the chart (copy key `live.hoursTitle`); the title row's Updated (`live.updatedAt`) |
 | As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption (copy key `live.callsAllLines`; Inbound today, Outbound today, Inbound today by hour and Missed, not called back) is "All counted {organisation} lines" (nl: "Alle meetellende lijnen van {organisation}"). The Follow-up now strip's caption is "The whole business line, not only {organisation}'s." (nl: "De hele businesslijn, niet alleen die van {organisation}."; copy key `live.followUpWholeBusinessLine`). The mapping of lines to an organisation is an Open decision |
 
+### Team (rail group)
+
+| Field | Value |
+|---|---|
+| Term | Team (nl: Team), a rail group label |
+| Key | Copy key `nav.team`; group id `team` |
+| Definition | The rail group of the pages about the people of the contact center: People, Quality monitoring and Roster, in that order. The word names a group of pages; "team" for a group of people inside an organisation is Team (Live board's Not to use). |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Every page keeps its href and its permission; a group with no page the person may see is absent. A person with `performance.team` and no other permission of the group sees Quality monitoring alone |
+| Unit and display | A group after Time and before Reports. The group's breadcrumb leads to the first page of it the person may see: People for a manager, Quality monitoring for a supervisor or analyst. The digit keys of its pages follow the visible order |
+| Time rule | None |
+| Scope | The rail of every tenant; agents hold none of the group's permissions and see no Team group |
+| Equivalent in the source system | None |
+| Not to use | "Team" for one group of people (a team inside an organisation is a different term) |
+| Status | Decided (the label and the order) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `nav.team`, `nav.people`, `nav.qualityMonitoring`, `nav.roster`; Team → People, Quality monitoring, Roster |
+| As built today | Matches the definition |
+
 ### Sales (rail group)
 
 | Field | Value |
@@ -2394,7 +2413,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers: Active, Courtesy, Reviews and Cancellations, in that order (Maintenance moved to Assets, addition 0008zw, #236; Courtesy added in addition 0009a; Active added first in addition 0009l, 11 November 2026, Martin). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews and Cancellations, in that order. Subscriptions, Payments and Compliance are placeholders. The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
 | Unit and display | A group with a person icon, after Sales and before Assets |
@@ -2404,8 +2423,8 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Not to use | "Customers" or "Klanten" for a count of people or as the term "customer" (see Active customer: Store customer, Webwinkelklant) |
 | Status | Decided (the label only; the term "customer" stays pending) |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Reports splits into Reports, Sales and Customers" and "Definitions: Live board (per contact-center organisation), Contact-center organisation, Sales and Customers (rail groups)" (addition 0008zv, #235); 11 Nov 2026, "Customers → Active (`/reports/active`) is a new page, first in the Customers group, …" and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
-| Used by | `active.*`, `courtesy.*`, `reviews.*`, `cancellations.*`; Customers → Active (`/reports/active`), Courtesy (`/reports/courtesy`), Reviews, Cancellations |
-| As built today | Matches the definition; the group's breadcrumb leads to Active, and the digit keys of its pages follow the visible order (Courtesy, Reviews and Cancellations moved by one) |
+| Used by | `active.*`, `courtesy.*`, `reviews.*`, `cancellations.*`, `nav.subscriptions`, `nav.payments`, `nav.compliance`, `placeholders.*`; Customers → Active (`/reports/active`), Subscriptions, Payments, Courtesy (`/reports/courtesy`), Compliance, Reviews, Cancellations |
+| As built today | Matches the definition; the group's breadcrumb leads to Active, and the digit keys of its pages follow the visible order |
 
 ### Assets (rail group)
 
@@ -2413,7 +2432,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Assets (nl: Assets), a rail group label |
 | Key | Copy key `nav.assets`; group id `assets` |
-| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Maintenance and Pledge lists. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
+| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Maintenance, Purchase orders and Pledge lists, in that order. Purchase orders is a placeholder. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/maintenance`, `/reports/pledge-lists`) and its permission (`reports.view` or `performance.team`; `pledges.view` for Pledge lists); a group with no page the person may see is absent |
 | Unit and display | A group with a box icon, after Customers. Installed base is a "now" view of its own with no As of, light by default (the filters, the tiles, In the field per model as a donut, Per market stacked per model, from the stored current take) and its breakdowns, lists and serial search loaded only when asked as address state (`panel=`, `serial=`; addition 0009f); Flash keeps its own Installed base overview, with As of and history |
@@ -2422,9 +2441,104 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Assets" for one device or a count of devices (Device); "Customers → Maintenance" (Maintenance moved here) |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236) |
-| Used by | `flash.installed_base.*`, `maintenance.*`; Assets → Installed base, Maintenance, Pledge lists |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `flash.installed_base.*`, `maintenance.*`, `nav.purchaseOrders`, `placeholders.*`; Assets → Installed base, Maintenance, Purchase orders, Pledge lists |
 | As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash) |
+
+### Subscriptions (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Subscriptions (nl: Abonnementen), a rail page |
+| Key | Copy key `nav.subscriptions`; `/reports/subscriptions` |
+| Definition | The page, in the Customers group, that will hold the subscription app's view of the subscriptions of each store. It is not Flash's Subscriptions overview. |
+| Source | Will be fed by the subscription app of each store (Juo: `cma.subscription`, `cma.subscription_event`) |
+| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. Links to Today in Flash: Active subscriptions (`/reports/flash?o=subscriptions`). |
+| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
+| Time rule | None until built |
+| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Equivalent in the source system | None |
+| Not to use | "Subscriptions" for a count of people; Flash's Subscriptions overview as this page |
+| Status | Pending: how this page differs from Flash's Subscriptions overview (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `nav.subscriptions`, `placeholders.*`; Customers → Subscriptions (the rail and its breadcrumb) |
+| As built today | Matches the definition; no read, no transaction |
+
+### Payments (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Payments (nl: Betalingen), a rail page |
+| Key | Copy key `nav.payments`; `/reports/payments` |
+| Definition | The page, in the Customers group, that will hold the financial status the store gives each order and the subscription app's renewals and failed renewals. It is not Flash's Payments overview and not NetSuite's payments. |
+| Source | Will be fed by the financial status the store gives each order (Shopify) and the subscription app's renewals and failed renewals (Juo), per the Decision log of 1 Nov 2026 |
+| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. Links to Today in Flash: Payments (`/reports/flash?o=payments`). The page says financial status, in the store's own word. |
+| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
+| Time rule | None until built |
+| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Equivalent in the source system | None |
+| Not to use | "Failed payment" (Failed renewal); "dunning"; "payment status" (Payment state); NetSuite's payments (out of scope, Decision log, 1 Nov 2026) |
+| Status | Pending: how this page differs from Flash's Payments overview (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `nav.payments`, `placeholders.*`; Customers → Payments (the rail and its breadcrumb) |
+| As built today | Matches the definition; no read, no transaction |
+
+### Compliance (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Compliance (nl: Compliance), a rail page |
+| Key | Copy key `nav.compliance`; `/reports/compliance` |
+| Definition | The page, in the Customers group, that will hold complaint and vulnerable-case follow-up and the checks a market's regulator requires on calls. It is tenant-neutral: no regulator is named in code. |
+| Source | Will be fed by complaint and vulnerable-case tickets in the CRM (HubSpot ticket category and contact field) and the checks a market's regulator requires on calls (Aircall) |
+| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. When built, a case shows only its status and a link to the CRM (README, Source of truth; KPI 6). |
+| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
+| Time rule | None until built |
+| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Equivalent in the source system | None |
+| Not to use | "Complaint" or "vulnerable customer" as defined terms (neither is defined yet) |
+| Status | Pending: which regulated checks apply per market; whether vulnerable cases need a narrower permission than the report permissions; the definitions of complaint and vulnerable case (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `nav.compliance`, `placeholders.*`; Customers → Compliance (the rail and its breadcrumb) |
+| As built today | Matches the definition; no read, no transaction |
+
+### Quality monitoring (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Quality monitoring (nl: Kwaliteitsmonitoring), a rail page |
+| Key | Copy key `nav.qualityMonitoring`; `/team/quality-monitoring` |
+| Definition | The page, in the Team group, that will hold the quality of calls and tickets: the telephony system's AI and tags, reopened tickets and repeat contacts, and the scorecards and coaching the CMA keeps (KPI 10, docs/product/kpis.md). |
+| Source | Will be fed by the telephony system's AI (transcripts, sentiment, playbook results) and tags (Aircall), reopened tickets and repeat contacts (HubSpot), and scorecards and coaching kept in the CMA |
+| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. A supervisor or analyst sees the Team group with this page alone. |
+| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
+| Time rule | None until built |
+| Scope | Per tenant, for `performance.team`; a person without it is refused |
+| Equivalent in the source system | None |
+| Not to use | "QA score" or a per-person ranking before the permission question is decided |
+| Status | Pending: access to Aircall's AI; whether per-person figures sit under `reports.per_person`; which permission applies, `performance.team` as built or the existing `quality.manage` (Quality scorecards and coaching notes; manager and analytics, not supervisor) (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `nav.qualityMonitoring`, `placeholders.*`; Team → Quality monitoring (the rail and its breadcrumb) |
+| As built today | Matches the definition; gated by `performance.team`; no read, no transaction |
+
+### Purchase orders (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Purchase orders (nl: Inkooporders), a rail page |
+| Key | Copy key `nav.purchaseOrders`; `/reports/purchase-orders` |
+| Definition | The page, in the Assets group, that will hold the purchase-order reference of each device. It is the register's reference, not a NetSuite record. |
+| Source | Will be fed by the asset register's purchase-order reference on each device (Pulse4all: Airtable 2.0 Installed Base) |
+| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. NetSuite is out of scope (Decision log, 1 Nov 2026). |
+| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
+| Time rule | None until built |
+| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Equivalent in the source system | None |
+| Not to use | NetSuite's purchase order; "purchase order" for a record the CMA holds |
+| Status | Pending: whether the register's purchase-order field is complete enough; the register adapter maps no purchase-order field today (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
+| Used by | `nav.purchaseOrders`, `placeholders.*`; Assets → Purchase orders (the rail and its breadcrumb) |
+| As built today | Matches the definition; no read, no transaction |
 
 ## Time terms
 

@@ -24,6 +24,7 @@ import { fmtAmount, fmtNumber } from "./FlashParts";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
 import { RecordLink } from "./RecordLink";
+import { StatusBadge } from "./StatusBadge";
 import { Badge } from "./primitives";
 
 /** The words these parts read: the shared ones with the page's own beside them (the page puts the two together; neither part hands it to a client component) */
@@ -39,10 +40,8 @@ const thD = "h-10 px-[3px] py-1 align-bottom font-semibold leading-tight";
 const tdD = "h-10 whitespace-nowrap px-[3px] tabular text-right";
 const row = "border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
 
-/** A definition's status as a badge: Proposed (for Kira to confirm) or Pending (an open question, named in the hint) */
-export function StatusBadge({ status, copy }: { status: "Proposed" | "Pending" | "Decided"; copy: Copy }) {
-  return <Badge tone={status === "Decided" ? "success" : status === "Proposed" ? "info" : "warning"}>{copy.flash[`status_${status}`]}</Badge>;
-}
+/** A definition's status as a badge (components/StatusBadge, re-exported for the Active page's imports) */
+export { StatusBadge };
 
 /** A panel's title with the hint that holds its definition, its status badge and, for those who may open it, How this is computed */
 export function PanelTitle({ label, hint, status = "Proposed", more, copy, children }: {

@@ -6,8 +6,28 @@ import type { Journey } from "@/lib/data";
 /**
  * The parts of Campaign monitoring (addition 0008v, brief N19-A part 3): a journey's status badge, its market, its
  * prerequisites count, its design link and the planned sections drawn as muted, dashed placeholders. No figures:
- * every journey is a placeholder until its monitor is built.
+ * every journey is a placeholder until its monitor is built. The banner and the dashed section also draw the placeholder
+ * pages of the rail (components/PlaceholderPage, 13 November 2026), so a placeholder looks the same wherever it stands.
  */
+
+/** The Muted banner above a placeholder: it is not built yet and nothing on it is real data */
+export function PlaceholderBanner({ children, testId }: { children: ReactNode; testId: string }) {
+  return (
+    <p role="note" className="mb-6 rounded-button border-l-4 border-p4a-muted bg-p4a-neutral-surface px-4 py-3 text-body text-p4a-muted" data-testid={testId}>
+      {children}
+    </p>
+  );
+}
+
+/** A planned section: a dashed card with its title and its text in Muted, never a figure */
+export function DashedSection({ title, children, testId, data }: { title: ReactNode; children: ReactNode; testId: string; data?: Record<`data-${string}`, string> }) {
+  return (
+    <section className="rounded-card border-2 border-dashed border-p4a-border bg-white p-6" data-testid={testId} {...data}>
+      <h3 className="flex items-center gap-2 text-body font-semibold text-p4a-muted">{title}</h3>
+      <div className="mt-2 text-small text-p4a-muted">{children}</div>
+    </section>
+  );
+}
 
 /** The status as a badge in words (7.5): a placeholder Neutral, being built Info, live Success */
 export function JourneyStatusBadge({ status, copy }: { status: Journey["status"]; copy: Copy }) {
@@ -53,14 +73,10 @@ export function PlannedCard({ plan, copy }: { plan: Planned; copy: Copy }) {
   const t = copy.campaigns;
   const locked = plan === "drillDown";
   return (
-    <section className="rounded-card border-2 border-dashed border-p4a-border bg-white p-6" data-testid="planned-card" data-plan={plan}>
-      <h3 className="flex items-center gap-2 text-body font-semibold text-p4a-muted">
-        {locked ? <LockIcon /> : null}
-        {t[`plan_${plan}`]}
-        {locked ? <Badge tone="neutral">{t.locked}</Badge> : null}
-      </h3>
-      <p className="mt-2 text-small text-p4a-muted">{t[`plan_${plan}Text`]}</p>
-    </section>
+    <DashedSection testId="planned-card" data={{ "data-plan": plan }}
+      title={<>{locked ? <LockIcon /> : null}{t[`plan_${plan}`]}{locked ? <Badge tone="neutral">{t.locked}</Badge> : null}</>}>
+      <p>{t[`plan_${plan}Text`]}</p>
+    </DashedSection>
   );
 }
 
