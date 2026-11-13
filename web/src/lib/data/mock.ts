@@ -27,7 +27,7 @@ import type {
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
   ReviewsReport, MaintenanceFilter, MaintenanceReport, PledgeFile, PledgeFileRow, PledgePage, MaintenanceRows, MaintenanceView, LeadCohortsReport,
-  CourtesyReport,
+  CourtesyReport, FlashHeadlineView, FlashStoredCard,
 } from "./types";
 import {
   ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptOutcomes,
@@ -74,6 +74,7 @@ import { COHORT_PERIODS, COHORT_SPLITS, LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING
 import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
 import { mockDataQualityRows, mockFlashHeadline, mockFlashOverview, mockFlashPage, mockFlashRows, mockFlashSnapshots, mockRecordFlashFile } from "./mock-flash";
 import { activePartOf } from "@/lib/active";
+import { FLASH_CARD_ORDER, FLASH_OVERVIEWS } from "@/lib/flash";
 import { mockActive, mockActiveNow, mockActiveRows } from "./mock-active";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
@@ -4869,16 +4870,20 @@ export const mockData: CmaData = {
 
   async getFlashOverview(me, overview, market, asOf, from, to) {
     const document = mockFlashOverview(me, overview, market, asOf, from, to);
-    // now's current take of the installed base (addition 0009e, the default flash.current_overviews): the stored instant, in
-    // the mock the minute's start, as getFlashView answers it; null as of a date and for the other overviews (live)
-    return { ...document, refreshedAt: overview === "installed_base" && asOf === null ? mockRefreshedAt() : null };
+    // now's current take of a stock overview but data quality (addition 0009e; every one of them since 0009p, the default
+    // flash.current_overviews): the stored instant, in the mock the minute's start, as getFlashView answers it; null as
+    // of a date and for a flow (live)
+    const taken = FLASH_OVERVIEWS.some((o) => o.key === overview && o.kind === "stock" && o.key !== "data_quality");
+    return { ...document, refreshedAt: taken && asOf === null ? mockRefreshedAt() : null };
   },
 
   async getFlashView(me, request) {
     const document = mockFlashOverview(me, request.overview, request.market, request.asOf, request.from, request.to);
-    // data quality's Refreshed at (addition 0008zr) and now's current take of the installed base (addition 0009e, the
-    // default flash.current_overviews): the stored instant, in the mock the minute's start; null as of a date
-    const stored = request.overview === "data_quality" || (request.overview === "installed_base" && request.asOf === null);
+    // data quality's Refreshed at (addition 0008zr) and now's current take of a stock overview (addition 0009e; every
+    // stock overview but data quality since 0009p, the default flash.current_overviews): the stored instant, in the mock
+    // the minute's start; null as of a date and for a flow
+    const stock = FLASH_OVERVIEWS.some((o) => o.key === request.overview && o.kind === "stock");
+    const stored = request.overview === "data_quality" || (stock && request.asOf === null);
     return { document: { ...document, refreshedAt: stored ? mockRefreshedAt() : null },
       rows: request.withRows ? mockFlashRows(me, { ...request, asOf: request.rowsAsOf }) : null };
   },
@@ -4889,6 +4894,31 @@ export const mockData: CmaData = {
 
   async getFlashHeadline(me, overview, market, from, to) {
     return mockFlashHeadline(me, overview, market, from, to);
+  },
+
+  // The stock overviews but data quality keep a current take (addition 0009p): the mock's is always of this moment.
+  // The live cards arrive one after the other, 20 ms apart, as the database's statements do
+  getFlashCardReads(me, market, from, to) {
+    // as the database's: every headline read once, one promise per card made here, nothing thrown to the caller (a
+    // refusal, such as a period the tenant's today does not allow, settles the promises as failed; done never fails)
+    const never = Promise.resolve(null);
+    try {
+      const refreshedAt = new Date().toISOString();
+      const headlines = new Map(FLASH_OVERVIEWS.map((o) => [o.key as string, mockFlashHeadline(me, o.key, market, o.kind === "flow" ? from : null, o.kind === "flow" ? to : null)]));
+      const cards = FLASH_OVERVIEWS.map((o) => {
+        const h = headlines.get(o.key)!;
+        return o.kind === "stock" && o.key !== "data_quality" && h.setUp
+          ? { overview: o.key, stored: true, setUp: true, value: h.value, split: h.split, definitionVersion: h.definitionVersion, refreshedAt }
+          : { overview: o.key, stored: false, setUp: h.setUp, value: null, split: null, definitionVersion: null, refreshedAt: null };
+      });
+      const asked = FLASH_CARD_ORDER.filter((o) => cards.some((c) => c.overview === o.key && !c.stored && c.setUp));
+      const live = new Map(asked.map((o, at) => [o.key as string, new Promise<FlashHeadlineView | null>((r) => { setTimeout(() => r(headlines.get(o.key) ?? null), 20 * (at + 1)); })]));
+      return { stored: Promise.resolve(cards), live: (overview) => live.get(overview) ?? never, done: new Promise((r) => { setTimeout(r, 20 * asked.length); }) };
+    } catch (e) {
+      const failed = Promise.reject(e);
+      failed.catch(() => undefined);
+      return { stored: failed as Promise<FlashStoredCard[]>, live: () => failed as Promise<FlashHeadlineView | null>, done: Promise.resolve() };
+    }
   },
 
   async getFlashSnapshots(me, from, to) {

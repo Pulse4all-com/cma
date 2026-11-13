@@ -187,7 +187,7 @@ const periodControlsSrc = readFileSync(path.join(here, "..", "src", "components"
 const periodPartsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
 expect("the landing reads it: a live card's open flag from the tenant's today, zone and sources; the live and the stored line through changeLineOf",
   [/const open = asOf === null && !periodComplete\(o\.key, o\.kind === "flow" \? to : null, page\.today \|\| today, page\.timeZone \|\| me\.timeZone, page\.sources\);/.test(periodPageSrc),
-    /open=\{open\}/.test(periodPageSrc) && /openPeriod: t\.openPeriod/.test(periodPageSrc),
+    /previousDefinitionVersion: card\?\.previousDefinitionVersion \?\? null, open, locale,/.test(periodPageSrc) && /openPeriod: t\.openPeriod/.test(periodPageSrc),
     /changeLineOf\(shown, previous, labels\.previousOnText, open, labels, n\)/.test(periodControlsSrc), /return changeLineOf\(/.test(periodPartsSrc)],
   [true, true, true, true], [false, false, false, false]);
 expect("a definition's status and tone: Decided success, Proposed info (also when the catalog says nothing), Pending warning",
@@ -694,10 +694,23 @@ const partsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "
 const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page uses them: a live card's split and its definition's line, a stored card's split and note, the totals' split under the headline",
   [/splitLine\(read\.split, n, /.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
-    /previousDefinitionVersion=\{card\?\.previousDefinitionVersion \?\? null\}/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
+    /previousDefinitionVersion: card\?\.previousDefinitionVersion \?\? null/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
     /note=\{asOf && card && definitionChanged\(card\.definitionVersion, card\.previousDefinitionVersion, card\.previous\)/.test(pageSrc0008zu),
     /splitOf\(def, doc\.rows, null, splitOrderOf\(def, doc\.statusSettings, doc\.splitOrder\)\)/.test(partsSrc0008zu)],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
+// addition 0009p: the landing's cards are read on the server: the stored ones with the page, the live ones streamed, none
+// fetched by the browser when the page hands the figure over
+const { FLASH_CARD_ORDER } = await import("../src/lib/flash.ts");
+expect("the landing's cards come with the page (0009p): one transaction for the cards, the stored ones first and each live one as it returns, a figure handed over is not fetched, Refreshed at with its date",
+  [/streamed\(\(\) => data\(\)\.getFlashCardReads\(me, st\.market, st\.from, st\.to\)\)/.test(periodPageSrc), /cards && setUp \? cards\.live\(o\.key\)/.test(periodPageSrc),
+    /<FlashLiveFigure \{\.\.\.props\} initial=\{\{ value: s\.value, split: s\.split, version: s\.definitionVersion \}\}/.test(periodPageSrc),
+    /refreshedAt: s\.refreshedAt \? t\.refreshedAt\.replace\("\{time\}", fmtDateTime\(/.test(periodPageSrc),
+    /if \(initial !== undefined\) return undefined;/.test(periodControlsSrc), /const read = initial \?\? fetched;/.test(periodControlsSrc),
+    !/getFlashHeadline\(/.test(periodPageSrc)],
+  [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
+expect("the cards without a stored figure are read cheapest first: data quality, the flows, then the stock overviews; every overview once",
+  [FLASH_CARD_ORDER.map((o) => o.key), [...FLASH_CARD_ORDER].map((o) => o.key).sort().join() === FLASH_OVERVIEWS.map((o) => o.key).sort().join()],
+  [["data_quality", "churn", "orders", "payments", "reviews", "customers", "subscriptions", "installed_base", "open_deals", "open_tickets", "open_tasks"], true], [[], false]);
 const mockCust0008zu = mockFlashOverview(reader, "customers", null, null, null, null);
 const mockRowsCust = (await import("../src/lib/data/mock-flash.ts")).mockFlashRows(reader, { overview: "customers", market: null, asOf: null, from: null, to: null,
   filters: { measure: "active_customers" }, sort: "customer_id", descending: false, limit: 500, offset: 0 });

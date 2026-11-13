@@ -147,11 +147,16 @@ export function FlashChoice({ dim, value, choices, query, labels, keycap, testId
 }
 
 /**
- * A landing card's live figure: its overview's headline read once after the page painted. While it reads, a calm line;
- * a failed read shows the dash, never an error code. The change against the figure to compare with is written here too,
- * since it needs the live value; a flow whose period is open (open: lib/flash periodComplete) says "so far" instead
+ * A landing card's figure. Since addition 0009p the page hands it over (initial): the overview's stored current take, or
+ * the live headline the server read and streamed, so no card fetches after the page painted. Without one (initial left
+ * out) the headline is read once in the browser, as before; while it reads, a calm line. A failed read shows the dash,
+ * never an error code. The change against the figure to compare with is written here too, since it needs the value; a
+ * flow whose period is open (open: lib/flash periodComplete) says "so far" instead. A stored figure says its
+ * Refreshed at
  */
-export function FlashLiveFigure({ overview, market, from, to, previous, previousDefinitionVersion, open, locale, labels }: {
+export function FlashLiveFigure({ overview, market, from, to, previous, previousDefinitionVersion, open, locale, labels, initial }: {
+  /** The figure the server read: the value, its split and its definition, or "failed"; left out: read in the browser */
+  initial?: { value: number | null; split: FlashSplitItem[] | null; version: string | null } | "failed";
   overview: string;
   market: string | null;
   from: string | null;
@@ -163,13 +168,19 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
   open: boolean;
   locale: string;
   labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; openPeriod: string; previousOnText: string | null;
+    /** "Refreshed at <weekday, date, time>" of a figure read from its stored current take; none for a live one */
+    refreshedAt?: string | null;
+    /** What a stored figure is, behind its Refreshed at (the overview page's own hint) */
+    refreshedHint?: string;
     /** "The figure of <date> was counted by an earlier definition", its date filled in; none without a date */
     definitionEarlier?: string | null;
     /** The words of the split's keys (the order kinds, addition 0008zw: lib/flash splitLabelsOf); a key without one shows itself */
     splitLabels?: Record<string, string> };
 }) {
-  const [read, setRead] = useState<{ value: number | null; split: FlashSplitItem[] | null; version: string | null } | "loading" | "failed">("loading");
+  const [fetched, setRead] = useState<{ value: number | null; split: FlashSplitItem[] | null; version: string | null } | "loading" | "failed">("loading");
+  const read = initial ?? fetched;
   useEffect(() => {
+    if (initial !== undefined) return undefined;
     const q = new URLSearchParams({ overview, part: "headline", ...(market ? { market } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
     let gone = false;
     fetch(`/api/v1/reports/flash?${q.toString()}`, { headers: { accept: "application/json" } })
@@ -182,7 +193,7 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
       })
       .catch(() => { if (!gone) setRead("failed"); });
     return () => { gone = true; };
-  }, [overview, market, from, to]);
+  }, [overview, market, from, to, initial]);
   const n = (x: number) => new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", { maximumFractionDigits: 1 }).format(x);
   if (read === "loading") return <p className="text-small text-p4a-muted" data-testid={`flash-live-${overview}`}>{labels.loading}</p>;
   const shown = read === "failed" ? null : read.value;
@@ -201,6 +212,7 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
       {split ? <p className="tabular text-small text-p4a-body" data-testid={`flash-split-${overview}`}>{split}</p> : null}
       <p className="text-small text-p4a-muted">{change}</p>
       {earlier ? <p className="text-small text-p4a-muted" data-testid={`flash-definition-${overview}`}>{earlier}</p> : null}
+      {labels.refreshedAt ? <p className="text-caption text-p4a-grey" data-testid={`flash-refreshed-${overview}`} title={labels.refreshedHint}>{labels.refreshedAt}</p> : null}
     </>
   );
 }

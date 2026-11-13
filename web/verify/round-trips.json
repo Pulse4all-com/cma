@@ -160,8 +160,10 @@
   {
     "path": "/reports/flash",
     "subject": "manager",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 24,
+    "firstTx": 2,
+    "firstRt": 9
   },
   {
     "path": "/reports/flash?o=customers",
