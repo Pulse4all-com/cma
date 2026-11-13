@@ -5,9 +5,9 @@
  * needs no catalog read. Choosing a market keeps the period and loads the page for that market.
  */
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { Keycap } from "./primitives";
+import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 export function MarketFilter({
   markets,
@@ -24,20 +24,20 @@ export function MarketFilter({
   copy: Pick<Copy, "intake" | "reports">;
 }) {
   const t = copy.intake;
-  const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice(market);
 
   function filter(code: string) {
     const qs = new URLSearchParams({ ...query, ...(code ? { market: code } : {}) });
-    router.push(`/reports/intake?${qs.toString()}` as Route);
+    choose(code, `/reports/intake?${qs.toString()}` as Route);
   }
 
   return (
-    <label className="flex flex-col gap-2 text-small font-semibold">
+    <label className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} data-testid="intake-market-filter" aria-busy={pending || undefined}>
       <span className="flex items-center gap-2">
         {t.marketFilter} <Keycap>F</Keycap>
       </span>
       <select
-        value={market}
+        value={shown}
         data-shortcut="f"
         onChange={(e) => filter(e.target.value)}
         className="h-10 min-w-48 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"

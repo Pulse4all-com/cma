@@ -3196,6 +3196,92 @@ async function expectDealRow(p, where) {
   if (closed.focus !== "attempts-toggle") problems.push(`${where}: after Esc the focus is on ${closed.focus}, expected the deal`);
 }
 
+// A filter's choice shows something within 100 ms (12 November 2026, components/usePendingPush): a change of the
+// address's parameters shows no route skeleton, so the filter's row says aria-busy and its controls dim from the choice
+// until the report's answer is there, and the changed select shows the choice at once (the optimistic result). Per
+// report: the answer is held back 500 ms, the row's first select with another choice than its current one is changed,
+// and inside the page, from the change's own event: the row's aria-busy (within 100 ms), the select dimmed and showing
+// the chosen value while the answer is held, the busy state lasting until the answer (not a flicker), and the address
+// changed. --provoke demands a pending state before the choice was made (no row can meet it) and takes the row's
+// classes away before the choice, so the control is not dimmed and that clause fails on what the page shows
+async function expectFiltersPending() {
+  const rows = [
+    ["/reports/calls?range=month", '[data-testid="calls-filters"]'], ["/reports/email?range=month", '[data-testid="email-filters"]'],
+    ["/reports/first-orders?range=month", '[data-testid="first-order-filters"]'], ["/reports/forms?range=month", '[data-testid="forms-filters"]'],
+    ["/reports/attempts?range=month", '[data-testid="attempts-filters"]'], ["/reports/funnel?range=month", '[data-testid="funnel-filters"]'],
+    ["/reports/follow-up", '[data-testid="follow-up-filters"]'], ["/reports/courtesy", '[data-testid="courtesy-filters"]'],
+    ["/reports/maintenance", '[data-testid="maintenance-filters"]'], ["/reports/intake?range=month", '[data-testid="intake-market-filter"]'],
+    ["/team/hours?range=week", '[data-testid="team-hours-person-filter"]'], ["/reports/flash", '[data-testid="flash-market-row"]'],
+    ["/roster/planner", '[data-testid="planner-filters"]'],
+  ];
+  const HOLD_MS = 500;
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  const before = problems.length;
+  let passed = 0;
+  for (const [path, row] of rows) {
+    const where = `manager ${path}`;
+    const start = problems.length;
+    await p.goto(BASE + path, { waitUntil: "networkidle" });
+    await settle(p);
+    // the row's first enabled select that has a choice other than its current one, and that choice
+    const pick = await p.evaluate((sel) => {
+      const selects = [...document.querySelectorAll(`${sel} select`)];
+      for (let i = 0; i < selects.length; i += 1) {
+        const el = selects[i];
+        const other = [...el.options].find((o) => o.value !== el.value && o.value !== "");
+        // a select that is a menu (it shows the same word whatever is chosen: the planner's week jump) is not read here
+        if (!el.disabled && other && el.dataset.menu === undefined) return { at: i, value: other.value };
+      }
+      return null;
+    }, row);
+    if (pick === null) { problems.push(`${where}: no filter with another choice in ${row}`); continue; }
+    const address = p.url();
+    await p.evaluate(([sel, at, bare]) => {
+      const el = document.querySelectorAll(`${sel} select`)[at];
+      if (bare) document.querySelector(sel).className = "";
+      window.__f = { from: null, busy: null, opacity: null, shown: null, end: null };
+      document.addEventListener("change", () => { window.__f.from = performance.now(); }, { capture: true, once: true });
+      window.__busyWatch?.disconnect();
+      window.__busyWatch = new MutationObserver(() => {
+        const f = window.__f;
+        if (f.from === null) return;
+        const busy = document.querySelector(`${sel}[aria-busy="true"]`) !== null;
+        if (f.busy === null && busy) {
+          f.busy = performance.now();
+          // what a person sees at that moment: the changed control dimmed, and showing the choice
+          const now = document.querySelectorAll(`${sel} select`)[at] ?? el;
+          f.opacity = Number(getComputedStyle(now).opacity);
+          f.shown = now.value;
+        }
+        if (f.busy !== null && f.end === null && !busy) f.end = performance.now();
+      });
+      window.__busyWatch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["aria-busy"] });
+    }, [row, pick.at, provoke]);
+    const held = path.replace(/\?.*$/, "");
+    await p.route(`**${held}?**`, async (route) => { await new Promise((r) => setTimeout(r, HOLD_MS)); await route.continue().catch(() => undefined); });
+    await p.locator(`${row} select`).nth(pick.at).selectOption(pick.value);
+    // the moments are latched inside the page, so this wait only has to outlast a slow machine
+    await p.waitForFunction(() => window.__f.end !== null, null, { timeout: 15_000 }).catch(() => undefined);
+    // a choice that loads a new document takes the page's notes with it: a problem by name, not a crash
+    const f = await p.evaluate(() => window.__f ?? null).catch(() => null);
+    if (f === null) { problems.push(`${where}: the choice loaded a new document, so no pending state can be read`); await p.unroute(`**${held}?**`, { behavior: "ignoreErrors" }); continue; }
+    const after = f.busy === null ? null : Math.round(f.busy - f.from);
+    if (after === null || after > (provoke ? -1 : 100)) problems.push(`${where}: a filter's choice ${after === null ? "showed no pending state" : `showed its pending state after ${after} ms`} (within 100 ms)`);
+    if (after !== null) {
+      if (!(f.opacity < 1)) problems.push(`${where}: the changed control is not dimmed while its choice is on its way (opacity ${f.opacity})`);
+      if (f.shown !== pick.value) problems.push(`${where}: the changed control shows ${JSON.stringify(f.shown)} while its choice ${JSON.stringify(pick.value)} is on its way`);
+      if (f.end === null) problems.push(`${where}: the filter's row stays busy after the answer`);
+      else if (f.end - f.from < HOLD_MS - 100) problems.push(`${where}: the pending state ended after ${Math.round(f.end - f.from)} ms, before the answer held back ${HOLD_MS} ms`);
+    }
+    await p.waitForFunction((a) => window.location.href !== a, address, { timeout: 10_000 }).catch(() => problems.push(`${where}: the choice did not change the address`));
+    await p.unroute(`**${held}?**`, { behavior: "ignoreErrors" });
+    if (problems.length === start) passed += 1;
+  }
+  await ctx.close();
+  console.log(`${problems.length === before ? "PASS" : "FAIL"}  a filter's choice shows its pending state within 100 ms, dimmed and showing the choice, busy until the answer, on ${passed} of ${rows.length} reports`);
+}
+
 // Welcome on open (addition 0008z): a browser with an identity and no browser session (a fresh sign-in, a new session) that
 // opens a deep link lands on Welcome; from then on a deep link opens as asked; the API is never redirected. The mock
 // identity travels as the cma-mock-subject cookie here, as a browser after ?as= or IAP's sign-in, not the verifiers' header.
@@ -3242,6 +3328,7 @@ await expectFunnel();
 await expectInstalledBaseModels();
 await expectAsOfTyping();
 await expectWelcomeOnOpen();
+await expectFiltersPending();
 await expectCampaigns();
 await expectActiveLayers();
 await expectCallbacks();
