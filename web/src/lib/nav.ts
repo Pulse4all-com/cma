@@ -63,6 +63,13 @@ export type ShellPage =
   | "courtesy"
   /** Active (addition 0009l, brief B35): the active customer base, its state and its movement */
   | "active"
+  /**
+   * The placeholder pages (Martin, 13 November 2026): Subscriptions, Payments and Compliance in Customers, Quality monitoring in
+   * Team, Purchase orders in Assets. Each reserves its slot under decision D5 extended to whole pages: no figure, no customer data
+   */
+  | "subscriptions" | "payments" | "compliance" | "quality-monitoring" | "purchase-orders"
+  /** Fulfillment and Storage (placeholders, Martin, 14 November 2026): two more pages of Assets under the same rule */
+  | "fulfillment" | "storage"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
   /** Pledge lists (addition 0009j): the quarter files of the loans' pledged devices, and today's version */
@@ -85,9 +92,10 @@ export type ShellPage =
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
-  | "/" | "/messages" | `/live/${string}` | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
+  | "/" | "/messages" | `/live/${string}` | "/team/people" | "/team/quality-monitoring" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/active" | "/reports/maintenance" | "/reports/pledge-lists"
+  | "/reports/subscriptions" | "/reports/payments" | "/reports/compliance" | "/reports/purchase-orders" | "/reports/fulfillment" | "/reports/storage"
   | "/reports/installed-base" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
@@ -179,12 +187,19 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       // Team (night build, 7 October 2026): the people and, with 0005, the roster. After Time since addition 0008zw
       // (Martin, 5 November 2026; after Live and before Time before), so the keys of Time's pages come first for a
       // manager and an admin; an agent's keys (Welcome, Messages, My day, My hours) do not move: agents hold none of these.
+      // Since 13 November 2026 (Martin) People, Quality monitoring, Roster. Quality monitoring needs quality.manage (Martin,
+      // 14 November 2026), which the default ladder gives the manager, the admin and analytics, not the supervisor: an
+      // analyst sees the group with Quality monitoring alone, and a supervisor has no Team group, as on main
       kind: "group",
       id: "team",
       label: copy.nav.team,
       icon: "people",
       items: [
         { page: "people", href: "/team/people", label: copy.nav.people, permission: ["users.manage_agents", "users.manage_all"] },
+        // Quality monitoring (placeholder, 13 November 2026): which calls and replies to review per agent, scorecards and
+        // coaching (KPI 10); quality.manage, the permission that already means quality scorecards and coaching notes
+        // (Martin, 14 November 2026)
+        { page: "quality-monitoring", href: "/team/quality-monitoring", label: copy.nav.qualityMonitoring, permission: "quality.manage" },
         { page: "roster", href: "/roster/planner", label: copy.nav.roster, permission: "roster.manage" },
       ],
     },
@@ -259,7 +274,9 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       // group opens with Active and runs Active, Courtesy, Reviews, Cancellations: the state of the base first, then
       // what is done for it, what customers say and who asks to leave. The digit keys follow the visible order, so the
       // keys of Courtesy, Reviews and Cancellations move for everyone who sees the group, and the group's breadcrumb
-      // leads to Active
+      // leads to Active. Since 13 November 2026 (Martin) Active, Subscriptions, Payments, Courtesy, Compliance, Reviews,
+      // Cancellations: the three new pages are placeholders (decision D5 extended to whole pages), so the keys of Courtesy,
+      // Reviews and Cancellations move again for everyone who sees the group
       kind: "group",
       id: "customers",
       label: copy.nav.customers,
@@ -268,10 +285,17 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // Active (addition 0009l, brief B35 with addendum A): the active customer base in one page, Flash's population,
         // its history reconstructed from the subscriptions; team figures only, no per-person figure
         { page: "active", href: "/reports/active", label: copy.nav.active, permission: ["reports.view", "performance.team"] },
+        // Subscriptions and Payments (placeholders, 13 November 2026): the subscriptions per store and status, and the payment
+        // status of store orders and renewals; neither is Flash's overview of the same name
+        { page: "subscriptions", href: "/reports/subscriptions", label: copy.nav.subscriptions, permission: ["reports.view", "performance.team"] },
+        { page: "payments", href: "/reports/payments", label: copy.nav.payments, permission: ["reports.view", "performance.team"] },
         // Courtesy (addition 0009a, brief B31, Martin, 6 November 2026): a courtesy call per First or Repeat store order from
         // its due day, completed by the telephony tags' completed meanings; team figures for the report permissions, per
         // person on the page for performance.team (as Follow-up's, not under reports.per_person)
         { page: "courtesy", href: "/reports/courtesy", label: copy.nav.courtesy, permission: ["reports.view", "performance.team"] },
+        // Compliance (placeholder, 13 November 2026): complaints, vulnerable cases and the checks a market's regulator requires
+        // on calls; when built, a case shows only its status and a link to the customer records (KPI 6)
+        { page: "compliance", href: "/reports/compliance", label: copy.nav.compliance, permission: ["reports.view", "performance.team"] },
         // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
         // average rating, the negative reviews and how they link to an order or a contact
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
@@ -282,7 +306,8 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
     },
     {
       // Assets (addition 0008zw, Martin, 5 November 2026): the devices the asset register holds, after Customers. Team
-      // figures only, for the report permissions, as Flash
+      // figures only, for the report permissions, as Flash. Since 14 November 2026 (Martin) Installed base, Fulfillment,
+      // Maintenance, Storage, Purchase orders, Pledge lists (Fulfillment, Storage and Purchase orders are placeholders)
       kind: "group",
       id: "assets",
       label: copy.nav.assets,
@@ -291,9 +316,18 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // Installed base: Flash's Installed base overview (cma.flash_overview and its first page of records, the same
         // filters, As of and files) as a page of its own; Flash keeps its own overview
         { page: "installed-base", href: "/reports/installed-base", label: copy.nav.installedBase, permission: ["reports.view", "performance.team"] },
+        // Fulfillment (placeholder, 14 November 2026): which ordered devices are shipped, on their way or delivered, from the
+        // store's fulfillment status of each order and the register's devices in transit (read by a status flag once one exists)
+        { page: "fulfillment", href: "/reports/fulfillment", label: copy.nav.fulfillment, permission: ["reports.view", "performance.team"] },
         // Maintenance (addition 0008zi; in Customers from 0008zv to 0008zw): the asset register's devices' due components
         // and end of life per month, market and model, bundled into planned exchanges, with the device list of a cell
         { page: "maintenance", href: "/reports/maintenance", label: copy.nav.maintenance, permission: ["reports.view", "performance.team"] },
+        // Storage (placeholder, 14 November 2026): which devices are in storage, where and of which model, by the device status
+        // flagged in stock; not the pledge lists' In Storage
+        { page: "storage", href: "/reports/storage", label: copy.nav.storage, permission: ["reports.view", "performance.team"] },
+        // Purchase orders (placeholder, 13 November 2026): which devices came in on which purchase order, from the register's
+        // reference on each device; not a record of the finance system
+        { page: "purchase-orders", href: "/reports/purchase-orders", label: copy.nav.purchaseOrders, permission: ["reports.view", "performance.team"] },
         // Pledge lists (addition 0009j, Martin, 10 November 2026): the quarter files of the early-stage investors' loans, frozen
         // on each quarter's first day, and today's version; pledges.view alone, a permission no default role holds (D7)
         { page: "pledge-lists", href: "/reports/pledge-lists", label: copy.nav.pledgeLists, permission: "pledges.view" },

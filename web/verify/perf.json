@@ -169,6 +169,41 @@
       "class": "report"
     },
     {
+      "path": "/reports/subscriptions",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/payments",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/compliance",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/team/quality-monitoring",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/purchase-orders",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/fulfillment",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/storage",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
       "path": "/reports/reviews?range=all",
       "subject": "manager",
       "class": "report"
