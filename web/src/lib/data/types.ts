@@ -2280,7 +2280,7 @@ export type ActiveSort = "monthly_amount" | "clv" | "store_customer" | "store" |
 export type ActiveSlotKey = "churn_rate" | "cac" | "cost_per_subscription" | "clv_projected" | "clv_to_cac" | "payback_months";
 /** The comparison's measures (the two segments side by side) */
 export type ActiveMeasure = "customers" | "share" | "lifetime_median" | "retention" | "median_age" | "clv_average" | "clv_median" | "clv_per_month"
-  | "average_monthly_amount" | "subscriptions_per_customer" | "devices_per_customer" | "indirect_share";
+  | "average_monthly_amount" | "subscriptions_per_customer" | "devices_per_customer" | "devices_from_share" | "indirect_share";
 /** A figure at the previous month's end and at the month end twelve months before that; null where the history does not reach */
 export interface ActiveChange { prevMonth: number | null; prevYear: number | null }
 /** The Monthly recurring amount of one currency: the amount, the active customers with a subscription in it, their average */
@@ -2314,6 +2314,22 @@ export interface ActiveGroupStat {
   medianAge: number | null; clv: Record<string, ActiveClv>; churned30d: number; net30d: number; indirect: number; direct: number; unknownChannel: number;
   /** Indirect over the customers with a known channel; null without one */
   indirectShare: number | null; subscriptionsPerCustomer: number | null; devicesPerCustomer: number | null;
+  /** The share of the active customers that hold at least the count the bands name (ActiveDeviceCustomers.from); absent in a document stored before addition 0009r */
+  devicesFromShare?: number | null;
+}
+/** One band of Devices per active customer: its key (0, 1, 3-5, 11+), the customers and their devices, the shares, and both per segment and per acquisition channel */
+export interface ActiveDeviceBand {
+  band: string; customers: number; devices: number; share: number | null; devicesShare: number | null;
+  bySegment: Record<string, { customers: number; devices: number }>; byChannel: Record<string, { customers: number; devices: number }>;
+}
+/**
+ * Devices per active customer (addition 0009r): the active customers by the devices in the field on their holding
+ * subscriptions, in the bands of customers.device_bands (band 0: no linked device), with the average, the median, and
+ * the customers that hold at least `from` devices (the bands' third bound) with their share of customers and of devices
+ */
+export interface ActiveDeviceCustomers {
+  bounds: number[]; from: number; customers: number; devices: number; average: number | null; median: number | null; notLinked: number;
+  fromCustomers: number; fromDevices: number; fromShare: number | null; fromDevicesShare: number | null; bands: ActiveDeviceBand[];
 }
 export interface ActiveMarketRow extends ActiveGroupStat { market: string; share: number | null; spark: number[] }
 /** One row of the comparison: a the first segment, b the second, unknown beside them, never in the difference */
@@ -2398,6 +2414,8 @@ export interface ActiveReport {
     billing: { key: string; subscriptions: number }[]; deviceBand: { key: string; subscriptions: number }[];
     model: { key: string; label: string | null; devices: number }[]; paymentState: { key: string; subscriptions: number }[];
   } | null;
+  /** Devices per active customer in bands; null above the fold, without figures, and in a document stored before addition 0009r (the next refresh writes it) */
+  deviceCustomers: ActiveDeviceCustomers | null;
   notes: ActiveNotes | null;
 }
 /** One active customer of the list: the store's id of the customer, codes, dates, amounts and the CRM contact's id with its link */
@@ -2421,6 +2439,8 @@ export interface ActiveRowsRequest {
   /** Continue after this cursor (a page's next) or end before this one (a page's prev); never both */
   after?: string | null; before?: string | null;
   limit: number; file?: boolean;
+  /** A band of Devices per active customer (a key of the tenant's customers.device_bands, such as 0, 1 or 3-5): the customers of that band alone */
+  band?: string | null;
 }
 
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
@@ -3781,6 +3801,33 @@ export interface FlashRowsView {
   rows: Record<string, unknown>[];
 }
 
+/**
+ * One card of the Flash landing as its overview's stored current take answers it (cma.flash_cards_now, addition 0009p).
+ * stored false: no readable take (a flow, data quality, an overview that keeps none, or a take too old or of an earlier
+ * definition): the page reads that card live, when setUp says its source is set up. refreshedAt is the take's instant
+ * (the card's Refreshed at)
+ */
+export interface FlashStoredCard {
+  overview: string;
+  stored: boolean;
+  setUp: boolean;
+  value: number | null;
+  split: FlashSplitItem[] | null;
+  definitionVersion: string | null;
+  refreshedAt: string | null;
+}
+/**
+ * The landing's cards as one transaction reads them (addition 0009p): the stored cards first, then each card that has no
+ * stored figure, one statement after the other, each answer handed over as it comes
+ */
+export interface FlashCardReads {
+  /** Every overview's card in the landing's order, stored or not: the transaction's first statement */
+  stored: Promise<FlashStoredCard[]>;
+  /** A card's live headline, there when its statement returns; null for a card that is stored or whose source is not set up */
+  live(overview: string): Promise<FlashHeadlineView | null>;
+  /** The transaction is over, whatever its outcome: never rejects (the request's database cost is whole from here on) */
+  done: Promise<void>;
+}
 /** One overview's live headline (cma.flash_headline), as a landing card reads it */
 export interface FlashHeadlineView {
   overview: string;
@@ -4201,7 +4248,7 @@ export interface CmaData {
   /** The customer list's page (cma.active_rows); file: every row up to the tenant's flash.file_max_rows */
   getActiveRows(me: Principal, request: ActiveRowsRequest): Promise<ActiveList>;
   /** A file read of the customer list in the audit log (cma.active_file_record): who, which filters, how many rows */
-  recordActiveFile(me: Principal, filter: ActiveFilter, rows: number): Promise<void>;
+  recordActiveFile(me: Principal, filter: ActiveFilter, rows: number, band?: string | null): Promise<void>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
   getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;
@@ -4268,6 +4315,14 @@ export interface CmaData {
   getFlashRows(me: Principal, request: FlashRowsRequest): Promise<FlashRowsView>;
   /** One overview's live headline (cma.flash_headline), as a landing card reads it */
   getFlashHeadline(me: Principal, overview: string, market: string | null, from: string | null, to: string | null): Promise<FlashHeadlineView>;
+  /**
+   * The landing's cards in one transaction (addition 0009p): cma.flash_cards_now first (every overview, stored or not),
+   * then cma.flash_headline for each card without a stored figure whose source is set up: data quality, the flows over
+   * from and to, then a stock overview without a readable take. One connection whatever the takes' state; a statement
+   * that fails leaves that card and the ones after it without a figure. Not async: the reads start at once and each
+   * promise settles on its own
+   */
+  getFlashCardReads(me: Principal, market: string | null, from: string, to: string): FlashCardReads;
   /** The snapshot dates of a period and the open watch findings (cma.flash_snapshots) */
   getFlashSnapshots(me: Principal, from: string | null, to: string | null): Promise<FlashSnapshotsView>;
   /** A data-quality check's findings (cma.data_quality_rows): reports.view or tenant.configure */

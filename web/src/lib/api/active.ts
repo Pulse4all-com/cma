@@ -1,5 +1,5 @@
 import { ApiError } from "@/lib/api/respond";
-import { ACTIVE_CURSOR, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_SORTS, parseActiveFilter } from "@/lib/active";
+import { ACTIVE_CURSOR, ACTIVE_GROUPINGS, ACTIVE_PAGE_SIZE, ACTIVE_SORTS, activeBandOf, parseActiveFilter } from "@/lib/active";
 import type { ActiveFilter, ActiveGrouping, ActiveRowsRequest, ActiveSort } from "@/lib/data";
 
 /** The filter of the Active routes: &market (a market code or unknown), &segment (a segment's code or unknown), &channel (indirect, direct or unknown) */
@@ -31,7 +31,9 @@ export function activeParams(sp: URLSearchParams): { fromMonth: string | null; g
  * The query of the list's routes: the filter, &sort (a sort key of the list; monthly_amount when left out), &dir=asc|desc
  * (desc when left out), &after or &before (a page's next or prev cursor, never both: keyset paging, no offset; a cursor
  * is the CMA's own id of a customer of the list and nothing else, since the address is logged) and
- * &limit (1 to 200; 50 when left out). A file takes the filter and the sort alone: every row, up to the tenant's
+ * &limit (1 to 200; 50 when left out), and &band (a band of Devices per active customer as the report names it, such
+ * as 0, 1 or 3-5: the customers of that band alone; a key that is no band of the tenant's customers.device_bands is
+ * refused by the database). A file takes the filter, the band and the sort alone: every row, up to the tenant's
  * flash.file_max_rows.
  */
 export function activeRowsParams(sp: URLSearchParams, opts: { file?: boolean } = {}): ActiveRowsRequest {
@@ -58,7 +60,11 @@ export function activeRowsParams(sp: URLSearchParams, opts: { file?: boolean } =
   const after = cursor("after");
   const before = cursor("before");
   if (after !== null && before !== null) throw new ApiError(400, "invalid_cursor", "after and before do not go together");
+  const rawBand = sp.get("band");
+  const band = rawBand === null || rawBand === "" ? null : activeBandOf(rawBand);
+  if (rawBand !== null && rawBand !== "" && band === null) throw new ApiError(400, "invalid_band", "band must be a band of the report, such as 0, 1 or 3-5");
   return {
+    band,
     filter: filterOf(sp), sort, descending: dir === "desc", after, before,
     limit: opts.file ? ACTIVE_PAGE_SIZE : whole("limit", ACTIVE_PAGE_SIZE, 1, 200), file: opts.file === true,
   };

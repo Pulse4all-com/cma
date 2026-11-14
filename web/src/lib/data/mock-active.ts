@@ -10,7 +10,7 @@
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { ACTIVE_CHANNELS, ACTIVE_SLOTS, billingOf, curveOf, monthsBack, retentionAt, spellsOf, unitFactor } from "@/lib/active";
+import { ACTIVE_CHANNELS, ACTIVE_SLOTS, billingOf, curveOf, deviceBandKeys, deviceBandOf, deviceFromOf, monthsBack, retentionAt, spellsOf, unitFactor } from "@/lib/active";
 import { dateKeyInZone } from "@/lib/time";
 import type {
   ActiveAmount, ActiveChannel, ActiveClv, ActiveCohort, ActiveCohortSplit, ActiveComparisonRow, ActiveCurve, ActiveFilter, ActiveGroupStat, ActiveGrouping,
@@ -23,11 +23,13 @@ const ZONE = "Europe/Amsterdam";
 const SEGMENTS = ["B2B", "B2C"];
 const AGES = [3, 6, 12, 24, 36];
 const BANDS = [12, 24, 36, 48, 60];
+/** customers.device_bands in the test data: the default */
+const DEVICE_BOUNDS = [1, 2, 3, 6, 11];
 const HISTORY_MONTHS = 60;
 const HOLDING = ["active", "failed"];
 const FX = { asOf: "2026-11-01", rates: { GBP: 1.15 } as Record<string, number> };
 const STORES = [
-  { store: "mock-nl", market: "NL", currency: "EUR", customers: 180 },
+  { store: "mock-nl", market: "NL", currency: "EUR", customers: 182 },
   { store: "mock-gb", market: "GB", currency: "GBP", customers: 110 },
   { store: "mock-de", market: "DE", currency: "EUR", customers: 70 },
 ] as const;
@@ -109,6 +111,10 @@ function buildBase(now: number): Customer[] {
           amount: base, currency: s.currency, interval: "month", count: 1, devices: 1, model: "aed_plus",
         });
       }
+      // a few fleets among the B2B customers and a few customers without a linked device (by the customer's number, so
+      // the random sequence of everything else stays as it was)
+      if (segment === "B2B" && i % 7 === 0) subs[0]!.devices = 3 + (i % 12);
+      else if (i % 19 === 4) subs[0]!.devices = 0;
       let channel: ActiveChannel = "unknown";
       let level: string | null = null;
       // before_history: the Customer start lies before the first order deal the CRM holds (in this test data that deal's
@@ -175,6 +181,7 @@ function statOf(all: Customer[], now: number, spells: { key: string; start: numb
     net30d: own.filter((s) => s.start > now - 30 * DAY).length - own.filter((s) => s.end !== null && s.end > now - 30 * DAY).length,
     indirect, direct, unknownChannel: active.length - indirect - direct, indirectShare: indirect + direct > 0 ? round4(indirect / (indirect + direct)) : null,
     subscriptionsPerCustomer: active.length > 0 ? round2(subs / active.length) : null, devicesPerCustomer: active.length > 0 ? round2(devices / active.length) : null,
+    devicesFromShare: active.length > 0 ? round4(active.filter((c) => c.devices >= deviceFromOf(DEVICE_BOUNDS)).length / active.length) : null,
   };
 }
 
@@ -219,7 +226,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
     return {
       ...head, setUp: { commerce: false, subscriptions: false }, figures: false, history: false, take: null, presentAt: null, ageOver: [], filters: { markets: [], segments: [...SEGMENTS, "unknown"], channels: [...ACTIVE_CHANNELS] },
       tiles: null, unitEconomics: null, months: [], markets: [], marketsTotal: null, comparison: null, survival: null, ageBands: [], cohorts: [], cohortSplits: null,
-      mix: null, notes: null,
+      mix: null, deviceCustomers: null, notes: null,
     };
   }
   const base = buildBase(now);
@@ -304,6 +311,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   for (const cur of currencies) push("average_monthly_amount", (k) => segStat[k]!.amounts[cur]?.average ?? null, { currency: cur });
   push("subscriptions_per_customer", (k) => segStat[k]!.subscriptionsPerCustomer);
   push("devices_per_customer", (k) => segStat[k]!.devicesPerCustomer);
+  push("devices_from_share", (k) => segStat[k]!.devicesFromShare ?? null);
   push("indirect_share", (k) => segStat[k]!.indirectShare);
 
   // the cohorts: the customers by the month or quarter of their start, at each age still in a spell or not
@@ -412,6 +420,7 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
         { key: "paused", subscriptions: Math.round(all.length * 0.02) },
       ],
     },
+    deviceCustomers: deviceCustomersOf(active),
     notes: {
       noEndedTime: filter.market === null || filter.market === "GB" ? 3 : 0, noCreatedTime: 0, noAmount: 0, unmatchedSubscriptions: filter.market === null ? 2 : 0,
       reconstructionGap: 0,
@@ -424,12 +433,43 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
   };
 }
 
+/** Devices per active customer in bands, as cma.active_rest_body_of's part device_customers */
+function deviceCustomersOf(active: Customer[]): NonNullable<ActiveReport["deviceCustomers"]> {
+  const from = deviceFromOf(DEVICE_BOUNDS);
+  const devices = active.reduce((n, c) => n + c.devices, 0);
+  const several = active.filter((c) => c.devices >= from);
+  const severalDevices = several.reduce((n, c) => n + c.devices, 0);
+  const split = (rows: Customer[], of: (c: Customer) => string) => rows.reduce<Record<string, { customers: number; devices: number }>>((o, c) => {
+    const k = of(c);
+    o[k] = { customers: (o[k]?.customers ?? 0) + 1, devices: (o[k]?.devices ?? 0) + c.devices };
+    return o;
+  }, {});
+  const m = median(active.map((c) => c.devices));
+  return {
+    bounds: DEVICE_BOUNDS, from, customers: active.length, devices, average: active.length > 0 ? round2(devices / active.length) : null,
+    median: m === null ? null : Math.round(m * 10) / 10, notLinked: active.filter((c) => c.devices === 0).length,
+    fromCustomers: several.length, fromDevices: severalDevices, fromShare: active.length > 0 ? round4(several.length / active.length) : null,
+    fromDevicesShare: devices > 0 ? round4(severalDevices / devices) : null,
+    bands: deviceBandKeys(DEVICE_BOUNDS).map((band) => {
+      const rows = active.filter((c) => deviceBandOf(c.devices, DEVICE_BOUNDS) === band);
+      const d = rows.reduce((n, c) => n + c.devices, 0);
+      return {
+        band, customers: rows.length, devices: d, share: active.length > 0 ? round4(rows.length / active.length) : null,
+        devicesShare: devices > 0 ? round4(d / devices) : null, bySegment: split(rows, (c) => c.segment), byChannel: split(rows, (c) => c.channel),
+      };
+    }),
+  };
+}
+
 /** The customer list for the mock (cma.active_rows): the active customers under the filter, sorted and paged */
 export function mockActiveRows(me: Principal, request: ActiveRowsRequest): ActiveList {
   assertAllowed(me);
   const now = Date.now();
   if (me.tenantId === MOCK_TENANT_2) return { setUp: false, history: false, take: null, timeZone: ZONE, total: 0, rows: [], next: null, prev: null };
-  const rows: ActiveListRow[] = buildBase(now).filter((c) => matches(c, request.filter) && isActive(c)).map((c) => {
+  // a band that is no band of the setting is refused, as the database refuses it
+  if (request.band && !deviceBandKeys(DEVICE_BOUNDS).includes(request.band)) throw new CmaDbError("CMA04", "the band is one of the bands of customers.device_bands");
+  const rows: ActiveListRow[] = buildBase(now).filter((c) => matches(c, request.filter) && isActive(c)
+    && (!request.band || deviceBandOf(c.devices, DEVICE_BOUNDS) === request.band)).map((c) => {
     const subs = c.subs.filter(holding);
     const paying = subs.filter((s) => s.status === "active");
     return {

@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     requireAnyPermission(me, REPORT_PERMISSIONS);
     const q = activeRowsParams(new URL(request.url).searchParams);
     const list = await data().getActiveRows(me, q);
-    await data().recordActiveFile(me, q.filter, list.rows.length);
+    await data().recordActiveFile(me, q.filter, list.rows.length, q.band ?? null);
     return ok(list);
   });
 }

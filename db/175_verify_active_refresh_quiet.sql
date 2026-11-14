@@ -57,6 +57,9 @@
 -- Since addition 0009n (176_active_attribution_present.sql; edited by that change): Active attributes every order deal,
 -- so W1 no longer shows that opening the window is what gives customers a channel (177's A2 proves the channels against
 -- First orders' rows); W1 still passes, and its detail says so where 0009n is recorded.
+-- Since addition 0009r (184_active_device_bands.sql; edited by that change): where 0009r is recorded, the comparisons
+-- with 172's refresh (R1, and Q1's later moment) leave out the customers' devices and the stored documents: the page's
+-- Devices are another term from then on, which 185_verify_active_device_bands.sql compares with 174's refresh.
 -- Collation: every ordering that feeds a compared text says collate "C".
 -- =============================================================================================
 
@@ -545,6 +548,11 @@ declare
   v_comp integer; v_hist integer;
   d_later text; d_later_172 text;
   v_due interval; v_mid boolean;
+  -- since addition 0009r (184): the customers' devices are another term than 172's refresh writes, so the comparisons
+  -- with 172's refresh leave out that column and the documents that state it (185 compares those)
+  v_0009r boolean := exists (select 1 from cma.schema_migration m where m.version = '0009r');
+  v_wo text[] := case when v_0009r then array['devices'] else '{}'::text[] end;
+  v_cmp text[] := case when v_0009r then array['active_base', 'active_customer', 'active_spell', 'active_month', 'active_cohort'] else v_tables end;
 begin
   for t in select x.id, x.slug from cma.tenant x
            where x.status = 'active' and exists (select 1 from cma.subscription s where s.tenant_id = x.id) order by x.slug collate "C" loop
@@ -577,7 +585,7 @@ begin
       begin
         perform pg_temp.v0009m_refresh_172(t.id, true, v_now);
         perform set_config('role', 'cma_owner', true);
-        d_old := (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
+        d_old := (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, case when x = 'active_customer' then v_wo else '{}'::text[] end), ' | ' order by o) from unnest(v_cmp) with ordinality u(x, o))
                  || ' | take ' || pg_temp.v0009m_digest('active_take', t.id, array['duration_ms', 'inputs_key']);
         raise exception using errcode = 'CMAOK', message = 'rollback';
       exception
@@ -588,7 +596,7 @@ begin
       j := cma.active_refresh_of(t.id, true, v_now);
       v_calls := v_calls + 1; v_comp := v_comp + 1; v_hist := v_hist + 1;
       perform set_config('role', 'cma_owner', true);
-      d_new := (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
+      d_new := (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, case when x = 'active_customer' then v_wo else '{}'::text[] end), ' | ' order by o) from unnest(v_cmp) with ordinality u(x, o))
                || ' | take ' || pg_temp.v0009m_digest('active_take', t.id, array['duration_ms', 'inputs_key']);
 
       -- A1. the planner's row counts follow the fill; a second call finds nothing to analyze
@@ -635,7 +643,7 @@ begin
       v_calls := v_calls + 1;
       perform set_config('role', 'cma_owner', true);
       d_later := format('unchanged %s | ', j2 ->> 'unchanged')
-                 || (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
+                 || (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, case when x = 'active_customer' then v_wo else '{}'::text[] end), ' | ' order by o) from unnest(v_cmp) with ordinality u(x, o))
                  || ' | take ' || pg_temp.v0009m_digest('active_take', t.id, array['duration_ms', 'inputs_key']);
       begin
         -- 172's own due run at that moment: the take aged again, not forced (a forced refresh also writes the history
@@ -645,7 +653,7 @@ begin
         j2 := pg_temp.v0009m_refresh_172(t.id, false, v_now + v_due);
         perform set_config('role', 'cma_owner', true);
         d_later_172 := case when (j2 ->> 'refreshed')::boolean and j2 ->> 'reason' is null then 'unchanged true | ' else 'the run of 172 did not compute: ' || j2::text || ' | ' end
-                 || (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
+                 || (select string_agg(x || ' ' || pg_temp.v0009m_digest(x, t.id, case when x = 'active_customer' then v_wo else '{}'::text[] end), ' | ' order by o) from unnest(v_cmp) with ordinality u(x, o))
                  || ' | take ' || pg_temp.v0009m_digest('active_take', t.id, array['duration_ms', 'inputs_key']);
         raise exception using errcode = 'CMAOK', message = 'rollback';
       exception

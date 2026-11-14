@@ -1462,16 +1462,16 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Refreshed at (nl: Ververst om) |
-| Key | `cma.data_quality_snapshot.computed_at`, read by `cma.data_quality_computed_at()`, and `cma.flash_current_take.computed_at` (addition 0009e; the document's `refreshed_at`); API fields `computedAt` (`GET /api/v1/reports/data-quality/rows`, the Data quality page's read) and `refreshedAt` (`GET /api/v1/reports/flash` for an overview whose figures are stored: data quality's, or a current take's; null otherwise); copy keys `dataQuality.refreshedAt`, `dataQuality.refreshedHint`, `flash.refreshedAt`, `flash.storedHint`, `flash.rowsLive` |
+| Key | `cma.data_quality_snapshot.computed_at`, read by `cma.data_quality_computed_at()`, and `cma.flash_current_take.computed_at` (addition 0009e; the document's `refreshed_at`); API fields `computedAt` (`GET /api/v1/reports/data-quality/rows`, the Data quality page's read) and `refreshedAt` (`GET /api/v1/reports/flash` for an overview whose figures are stored: data quality's, or a current take's; null otherwise); copy keys `dataQuality.refreshedAt`, `dataQuality.refreshedHint`, `flash.refreshedAt`, `flash.storedHint`, `flash.storedCardHint`, `flash.rowsLive` |
 | Definition | The instant a stored result was computed: a tenant's stored data-quality result (below), or a Flash overview's current take (Current take). A data-quality result: every check of `cma.data_quality_of` evaluated once by the refresh job `cma-refresh-data-quality` (or once on demand when a tenant has no result yet), its findings stored in `cma.data_quality_finding`. Reports → Data quality, Flash's data-quality overview and list, the Flash snapshot take and the watch read that result; the counts and the records they show are those of the last refresh, not of the instant of the page (addition 0008zr, night N06). The meaning widened on 8 November 2026 from data quality's stored result to any stored result (addition 0009e): the figures beside it are those of that instant, whatever the page's own time |
 | Source | `cma.data_quality_snapshot` (`computed_at`, `duration_ms`, `findings`), written by `cma.refresh_data_quality_of()`; the job runs every minute and refreshes a tenant whose result is older than its setting `data_quality.refresh_minutes` (5 by default, 1 to 1440) |
 | Counts / does not count | A refresh that skipped (the result fresh, another refresh running, or backoff: a computation failed and the next attempt waits `data_quality.refresh_minutes`, not one minute) leaves the instant as it was. A tenant without a result computes one on the first read. A transaction that writes and reads data quality (a verify script) sees its own writes: a result computed earlier in the same transaction is computed again on the next read |
-| Unit and display | The weekday, date and time in the viewer's zone ("Refreshed at Thu 5 Nov 2026, 07:14"), under the page's intro on Data quality (its hint says the checks run every few minutes in the background) and under Flash's data-quality card's intro, and under the heading of Assets → Installed base and of Flash's overview whose figures come from a current take (the records' count then says it is read live); absent until a result exists |
+| Unit and display | The weekday, date and time in the viewer's zone ("Refreshed at Thu 5 Nov 2026, 07:14"), under the page's intro on Data quality (its hint says the checks run every few minutes in the background) and under Flash's data-quality card's intro, and under the heading of Assets → Installed base and of Flash's overview whose figures come from a current take (the records' count then says it is read live), and on a stock card of Flash's landing whose figure is stored (the same form, with a hint of its own, `flash.storedCardHint`); absent until a result exists |
 | Time rule | The transaction time of the refresh (`now()`), in the tenant's database; shown in the viewer's zone |
 | Scope | Per tenant |
 | Equivalent in the source system | None: the result is the CMA's own computation over its mirrors |
-| Used by | Reports → Data quality, Reports → Flash (data quality, and an overview from a current take), Assets → Installed base, `cma.data_quality()`, `cma.data_quality_rows()`, `cma.flash_findings_of()`, `cma.flash_document_of()` |
-| Decided | 5 Nov 2026, "Data quality on stored results" (addition 0008zr, night N06; backlog CMA-087); 8 Nov 2026, "The page shows \"Refreshed at\" beside the stored figures" and "Definitions: \"Refreshed at\" widens ..." (addition 0009e); 12 Nov 2026, "Definitions: `follow_up.recompute_minutes` ..." (addition 0009o) |
+| Used by | Reports → Data quality, Reports → Flash (data quality, an overview from a current take, and the landing's stock cards), Assets → Installed base, `cma.data_quality()`, `cma.data_quality_rows()`, `cma.flash_findings_of()`, `cma.flash_document_of()` |
+| Decided | 5 Nov 2026, "Data quality on stored results" (addition 0008zr, night N06; backlog CMA-087); 8 Nov 2026, "The page shows \"Refreshed at\" beside the stored figures" and "Definitions: \"Refreshed at\" widens ..." (addition 0009e); 11 Nov 2026, "The Flash landing's stock cards are read from the stored current takes" and "Definitions: Current take and Refreshed at ..." (#268); 12 Nov 2026, "Definitions: `follow_up.recompute_minutes` ..." (addition 0009o) |
 
 ### Follow-up refresh
 
@@ -1496,19 +1496,19 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Current take (no label on screen and none in `copy.ts`: the page shows its instant as Refreshed at) |
-| Key | `cma.flash_current_take` (`cma_read.flash_current_take`); settings `flash.current_overviews` (default `installed_base`; stock overviews but data quality, each once, comma-separated, or empty for every now live) and `flash.current_refresh_minutes` (5 by default, 1 to 1440); `cma.flash_current_refresh(tenant)`, `cma.flash_current_state_of(...)` |
-| Definition | The stored "now" of a stock overview: the rows `cma.flash_compute_of` gave for the overview at one instant (the same shape as a Flash snapshot: overview, grouping set, dims, measures, definition version, computed_at), one per tenant and overview, replaced whole when the job refreshes it. The overview's heading, tiles, per-market bars and breakdowns (Assets → Installed base and Flash's installed_base overview) are read from it, shown with Refreshed at. It is fresh when younger than `flash.current_refresh_minutes` and usable when younger than three times that; a missing, older, other-definition-version or pre-migration take means the live read as before (slow but correct), never silently old figures |
+| Key | `cma.flash_current_take` (`cma_read.flash_current_take`); settings `flash.current_overviews` (default every stock overview but data quality: customers, subscriptions, installed_base, open_deals, open_tickets, open_tasks; each once, comma-separated, or empty for every now live) and `flash.current_refresh_minutes` (5 by default, 1 to 1440); `cma.flash_current_refresh(tenant)`, `cma.flash_current_state_of(...)`, `cma.flash_cards_now(market)` |
+| Definition | The stored "now" of a stock overview: the rows `cma.flash_compute_of` gave for the overview at one instant (the same shape as a Flash snapshot: overview, grouping set, dims, measures, definition version, computed_at), one per tenant and overview, replaced whole when the job refreshes it. The overview's heading, tiles, per-market bars and breakdowns (Assets → Installed base and the six stock overviews' pages) are read from it, shown with Refreshed at, and so is the figure of the stock overview's card on Flash's landing. It is fresh when younger than `flash.current_refresh_minutes` and usable when younger than three times that; a missing, older, other-definition-version or pre-migration take means the live read as before (slow but correct), never silently old figures |
 | Source | `cma.flash_compute_of` at the refresh (`cma.flash_current_refresh_of`, called by `cma.flash_current_refresh` from the job `cma-snapshot-flash`, which runs every minute and refreshes the takes that are due) |
-| Counts / does not count | The records list (`cma.flash_rows`), its file and As of (the dated snapshots) are not from the take; the Sources line and the landing's cards stay live. The breakdown file follows the document, so its figures, its as_of column and its file name stamp are the take's (Martin, 8 November 2026, #250). A tenant setting written, changed or reset removes that tenant's takes, and so does a change of a column the take reads in one of seven catalogs: device status, device component kind, maintenance rule, connection pipeline, stage, task status and task type (addition 0009f, D9); models, markets and market aliases do not, as the device row stores the mapped keys at the register's read. No take for a flow overview (a flow's now is a period) or data quality (its own stored result) |
+| Counts / does not count | The records list (`cma.flash_rows`), its file and As of (the dated snapshots) are not from the take; the Sources line stays live, and so do the landing's flow cards (churn, orders, payments, reviews) and its data-quality card, read on the server. A stock card without a readable take is read live too. The landing's stock card and the Customers overview show the stored figure with its Refreshed at, while Customers → Active's tiles of the present are live (`cma.flash_headline` is unchanged and equals Active's live tile), so they can differ by what changed since the take: at most three times `flash.current_refresh_minutes`, after which the card is read live. The breakdown file follows the document, so its figures, its as_of column and its file name stamp are the take's (Martin, 8 November 2026, #250). A tenant setting written, changed or reset removes that tenant's takes, and so does a change of a column the take reads in one of seven catalogs: device status, device component kind, maintenance rule, connection pipeline, stage, task status and task type (addition 0009f, D9); models, markets and market aliases do not, as the device row stores the mapped keys at the register's read. No take for a flow overview (a flow's now is a period) or data quality (its own stored result) |
 | Unit and display | "Refreshed at {time}" under the overview's heading; under the records' count "Read live: this count can differ from the figures above until their next refresh." |
 | Time rule | The instant of the refresh; the document's `as_of` is that instant |
 | Scope | Per tenant and overview |
 | Equivalent in the source system | None |
 | Not to use | "Cache" (no request cache, no per-user data) and "snapshot" for it (a snapshot is a dated, never-changed take) |
 | Status | Decided (Martin, 8 November 2026) |
-| Decided | 8 Nov 2026, "The \"now\" of an overview ... is read from a stored current take" and "Definitions: \"Refreshed at\" widens ..." (addition 0009e) |
-| Used by | Assets → Installed base (`/reports/installed-base`) and Reports → Flash's installed_base overview, `GET /api/v1/reports/flash` (`refreshedAt`), the watch kind `current_stale`; docs/metrics/catalog.json `flash.installed_base.*` (refresh) |
-| As built today | `158` (table, settings, functions, trigger), `159` proves a take equals the live document row for row, keeps tenants apart, covers the fallback states and `current_stale` |
+| Decided | 8 Nov 2026, "The \"now\" of an overview ... is read from a stored current take" and "Definitions: \"Refreshed at\" widens ..." (addition 0009e); 11 Nov 2026, "The Flash landing's stock cards are read from the stored current takes" and "Definitions: Current take and Refreshed at ..." (#268) |
+| Used by | Assets → Installed base (`/reports/installed-base`), Reports → Flash's six stock overviews and the landing's stock cards (`cma.flash_cards_now`), `GET /api/v1/reports/flash` (`refreshedAt`), the watch kind `current_stale`; docs/metrics/catalog.json `flash.*` (refresh) |
+| As built today | `158` (table, settings, functions, trigger), `159` proves a take equals the live document row for row, keeps tenants apart, covers the fallback states and `current_stale`; `180` (default of the setting, `cma.flash_cards_now`, the set-up guard of `cma.flash_compute_of`), `181` proves the cards equal `cma.flash_headline` after a refresh |
 
 ### Device-holding status
 
@@ -1637,7 +1637,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Time rule | As of the instant or of the snapshot's date |
 | Scope | The tenant; per market |
 | Equivalent in the source system | None |
-| Not to use | "Devices" alone for it (Device) |
+| Not to use | "Devices" alone for it (Device), except on Customers → Active, where the label "Devices" is Devices per active customer, which sums this term per customer (Martin, 12 November 2026, "One meaning: D1's"); before addition 0009r that page's Devices counted the register's devices carrying the customer's id in any status |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" |
 | Used by | `flash.subscriptions.devices_on_holding`; Reports → Flash (Subscriptions) and its files |
@@ -1678,8 +1678,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Tier", "bucket" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Bands and segments are tenant settings" (addition 0008zt, #233) |
-| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Subscriptions) |
-| As built today | `136`; `137` proves the default and a custom setting. Matches the definition |
+| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Subscriptions). Customers → Active applies the same banding rule to Devices per active customer under its own setting `customers.device_bands` (default `1,2,3,6,11`: `0`, `1`, `2`, `3-5`, `6-10`, `11+`; one to eight increasing whole numbers from 1, each at most 1000), in the panel "Customers by number of devices" and the customer list's band filter; "Customers with n or more devices" takes its n from the third bound of `customers.device_bands`, or the last bound of a shorter list (Martin, 12 November 2026) |
+| As built today | `136`; `137` proves the default and a custom setting. Matches the definition. For Customers → Active, `184` (addition 0009r); `185` proves the bands by hand |
 
 ### Subscription age
 
@@ -2326,6 +2326,25 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and D16 (#267) |
 | Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows`, `/file`; `cma_read.active_customer_month`, `cma_read.customer_cohort` |
 | As built today | `172` (tables, refresh, stale mark); `173` proves the take equals a fresh computation row for row |
+
+### Devices per active customer
+
+| Field | Value |
+|---|---|
+| Term | Devices per active customer (nl: Apparaten per actieve klant; `active.devicesTerm`, `active.devicesCard` "Customers by number of devices"); on Customers → Active the label "Devices" (the list's column, the markets' column, "Devices in the band") is this term |
+| Key | The document part `device_customers` of `GET /api/v1/reports/active` (`deviceCustomers`); `cma.active_customer.devices`; setting `customers.device_bands`; catalog `active.devices_per_customer`, `active.device_band_customers`, `active.device_from_share` |
+| Definition | The devices in the field (a Device status that counts as in the field) of the asset register whose subscription reference is a Holding subscription of the customer, in the subscription's market, per Active customer: what Flash counts as Devices on holding subscriptions, summed per customer. A customer with Holding subscriptions and no such device counts 0 and is never left out (band `0`). Devices per customer on the page is this term averaged over the Active customers. Beside the bands the panel shows the average, the median and the customers with n or more devices (Device band). |
+| Source | `cma.active_customer.devices`, written by `cma.active_refresh_of` from `cma.active_base`'s `devices_in_field` of the customer's holding rows |
+| Counts / does not count | Devices in the field on Holding subscriptions only; not the devices that carry the customer's id in any status (Flash's customer figure, `cma.active_base.customer_devices`, which no read of the page uses any more); devices without a subscription reference are Data quality's check |
+| Unit and display | A count; bands as in Device band; the average to two decimals |
+| Time rule | As of the take (History as of) |
+| Scope | Per tenant; per Active customer; narrowed by the page's filters |
+| Equivalent in the source system | None |
+| Not to use | "AED" in a label or a key (Device); "Average devices per customer" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 12 November 2026 (Martin); docs/decisions.md, 12 Nov 2026, "Definitions: Devices per active customer ..." (#273, brief B36, addition 0009r) |
+| Used by | Customers → Active (the panel after Subscription mix, the markets' and the comparison's figures, the customer list and its band filter); `GET /api/v1/reports/active` (`deviceCustomers`, `devicesFromShare`), `/rows` and `/file` (`band`) |
+| As built today | `184`; `185` proves it by hand and against a fresh computation. Matches the definition |
 
 ## Rail terms
 

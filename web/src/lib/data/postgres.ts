@@ -27,13 +27,13 @@ import type {
   CohortAge, LeadCohortRow, LeadCohortsReport,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, PledgeFile, PledgePage, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
-  DataQualityRowsView, FlashDocumentView, FlashHeadlineView, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
+  DataQualityRowsView, FlashCardReads, FlashDocumentView, FlashHeadlineView, FlashStoredCard, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
 import { REMOVE_REFUSAL } from "@/lib/corrections";
-import { FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
+import { FLASH_CARD_ORDER, FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
 import { activeFromDb, activeNowFromDb, activeRowsFromDb } from "@/lib/active";
 
@@ -1468,6 +1468,13 @@ interface DataQualityRowsDb {
   check: string; description: string | null; market: string | null; limit: number; offset: number; total: number | string; rows: Record<string, unknown>[];
   /** When the stored result was computed (addition 0008zr; Refreshed at) */
   computed_at?: string | null;
+}
+
+/** One overview's live headline in a transaction already open (cma.flash_headline checks the permission and the parameters) */
+async function readFlashHeadline(q: Querier, overview: string, market: string | null, from: string | null, to: string | null): Promise<FlashHeadlineView> {
+  const j = one((await q.query<{ j: FlashHeadlineDb }>(`select cma.flash_headline($1, $2, $3::date, $4::date) as j`, [overview, market, from, to])).rows, "flash_headline").j;
+  return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value),
+    split: splitItemsOf(j.split), definitionVersion: j.definition_version ?? null };
 }
 
 function flashNumber(v: unknown): number | null {
@@ -3544,13 +3551,43 @@ export const postgresData: CmaData = {
     });
   },
 
-  async getFlashHeadline(me, overview, market, from, to): Promise<FlashHeadlineView> {
-    return withTenant(ctx(me), async (q) => {
-      const j = one((await q.query<{ j: FlashHeadlineDb }>(`select cma.flash_headline($1, $2, $3::date, $4::date) as j`,
-        [overview, market, from, to])).rows, "flash_headline").j;
-      return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value),
-        split: splitItemsOf(j.split), definitionVersion: j.definition_version ?? null };
+  getFlashCardReads(me, market, from, to): FlashCardReads {
+    // one promise per answer, settled as its statement returns (addition 0009p): the stored cards, then each live card
+    let storedOk: (v: FlashStoredCard[]) => void = () => undefined;
+    let storedNo: (e: unknown) => void = () => undefined;
+    const stored = new Promise<FlashStoredCard[]>((ok, no) => { storedOk = ok; storedNo = no; });
+    const live = new Map(FLASH_CARD_ORDER.map((o) => {
+      let ok: (v: FlashHeadlineView | null) => void = () => undefined;
+      let no: (e: unknown) => void = () => undefined;
+      const promise = new Promise<FlashHeadlineView | null>((a, b) => { ok = a; no = b; });
+      promise.catch(() => undefined); // a card nobody awaits (not on the page) must not count as an unhandled failure
+      return [o.key, { promise, ok, no }] as const;
+    }));
+    stored.catch(() => undefined);
+    const done = withTenant(ctx(me), async (q) => {
+      // the function checks the permission and the market first; one statement over the current takes
+      const j = one((await q.query<{ j: { cards: { overview: string; stored: boolean; set_up?: boolean; value?: unknown; split?: unknown; definition_version?: string | null;
+        refreshed_at?: string | null }[] } }>(`select cma.flash_cards_now($1) as j`, [market])).rows, "flash_cards_now").j;
+      const cards = j.cards.map((c) => ({ overview: c.overview, stored: c.stored === true, setUp: c.set_up === true, value: c.stored ? flashNumber(c.value) : null,
+        split: c.stored ? splitItemsOf(c.split) : null, definitionVersion: c.definition_version ?? null, refreshedAt: c.refreshed_at ?? null }));
+      storedOk(cards);
+      // the cheapest first: data quality's stored result, the flows over their period, then a stock overview whose take
+      // may not be read now (the job is behind, a setting was just saved, a migration just ran)
+      for (const o of FLASH_CARD_ORDER) {
+        const card = cards.find((c) => c.overview === o.key);
+        if (!card || card.stored || !card.setUp) { live.get(o.key)?.ok(null); continue; }
+        live.get(o.key)?.ok(await readFlashHeadline(q, o.key, market, o.kind === "flow" ? from : null, o.kind === "flow" ? to : null));
+      }
+    }).catch((e: unknown) => {
+      // whatever has no answer yet has none: settling a promise twice does nothing
+      storedNo(e);
+      for (const d of live.values()) d.no(e);
     });
+    return { stored, live: (overview) => live.get(overview as FlashKey)?.promise ?? Promise.resolve(null), done };
+  },
+
+  async getFlashHeadline(me, overview, market, from, to): Promise<FlashHeadlineView> {
+    return withTenant(ctx(me), (q) => readFlashHeadline(q, overview, market, from, to));
   },
 
   async getFlashSnapshots(me, from, to): Promise<FlashSnapshotsView> {
@@ -3607,16 +3644,16 @@ export const postgresData: CmaData = {
       // the list's page from the stored take, by keyset (after or before a cursor: a customer's own id), with the contact's record link from the
       // CRM connection's record_url_contact template; a file's read (file: true) answers every row up to the tenant's
       // flash.file_max_rows
-      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8, $9) as j`,
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) as j`,
         [request.filter.market, request.filter.segment, request.filter.channel, request.sort, request.descending, request.after ?? null,
-          request.before ?? null, request.limit, request.file === true])).rows, "active_rows").j;
+          request.before ?? null, request.limit, request.file === true, request.band ?? null])).rows, "active_rows").j;
       return activeRowsFromDb(j);
     });
   },
 
-  async recordActiveFile(me, filter, rows): Promise<void> {
+  async recordActiveFile(me, filter, rows, band): Promise<void> {
     await withTenant(ctx(me), async (q) => {
-      await q.query(`select cma.active_file_record($1, $2, $3, $4)`, [filter.market, filter.segment, filter.channel, rows]);
+      await q.query(`select cma.active_file_record($1, $2, $3, $4, $5)`, [filter.market, filter.segment, filter.channel, rows, band ?? null]);
     });
   },
 

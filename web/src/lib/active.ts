@@ -37,7 +37,7 @@ export const ACTIVE_PAGE_SIZE = 50;
  */
 export const ACTIVE_PANEL_HEIGHT = {
   tiles: 372, churn: 40, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
-  cohortTable: 424, cohortCurves: 348, mix: 232, list: 656,
+  cohortTable: 424, cohortCurves: 348, mix: 232, devices: 376, list: 656,
 } as const;
 export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
 /** The streamed parts of the page (decisions D15 and D16): above the fold, the live present of the tiles, below the fold, the customer list */
@@ -73,7 +73,7 @@ export const ACTIVE_MEASURE_METRIC: Readonly<Record<ActiveMeasure, string>> = {
   retention: "active.retention", median_age: "active.customer_age_median", clv_average: "active.clv_realised_average",
   clv_median: "active.clv_realised_median", clv_per_month: "active.clv_realised_per_month", average_monthly_amount: "active.average_monthly_amount",
   subscriptions_per_customer: "active.subscriptions_per_customer", devices_per_customer: "active.devices_per_customer",
-  indirect_share: "active.acquisition_channel_share",
+  devices_from_share: "active.device_from_share", indirect_share: "active.acquisition_channel_share",
 };
 
 /** A difference with its sign, always written: +2, −2, 0 */
@@ -402,6 +402,36 @@ export const ACTIVE_FILE_COLUMNS = [
  * keys are kept as the database writes them; every other key turns from snake_case to camelCase (convention 3)
  */
 const DATA_KEYED = new Set(["by_segment", "by_channel", "by_status", "inflow_by_channel", "amounts", "clv", "reasons", "other_amounts", "status_meanings"]);
+/** A band's key of Devices per active customer as the database writes it: 0, a count, a range or the open last band (0, 2, 3-5, 11+) */
+export const ACTIVE_DEVICE_BAND = /^(0|[1-9]\d{0,3})(-[1-9]\d{0,3}|\+)?$/;
+/**
+ * The bands of a list of bounds as the database names them (cma.flash_count_bands_of): 0, then from 1 to below the first
+ * bound where it is above 1, each bound to below the next, and the last bound open-ended (1,2,3,6,11 reads 0, 1, 2, 3-5,
+ * 6-10, 11+; 2,4 reads 0, 1, 2-3, 4+)
+ */
+export function deviceBandKeys(bounds: readonly number[]): string[] {
+  const keys = ["0"];
+  const span = (lo: number, hi: number) => (lo === hi ? String(lo) : `${lo}-${hi}`);
+  if (bounds.length > 0 && bounds[0]! > 1) keys.push(span(1, bounds[0]! - 1));
+  bounds.forEach((b, i) => keys.push(i === bounds.length - 1 ? `${b}+` : span(b, bounds[i + 1]! - 1)));
+  return keys;
+}
+/** The band a count falls in (cma.flash_count_band_of) */
+export function deviceBandOf(count: number, bounds: readonly number[]): string {
+  const keys = deviceBandKeys(bounds);
+  if (count <= 0 || bounds.length === 0) return "0";
+  let at = bounds[0]! > 1 ? 1 : 0;                       // the band from 1 to below the first bound, where there is one
+  for (let i = 0; i < bounds.length; i++) if (count >= bounds[i]!) at = (bounds[0]! > 1 ? 2 : 1) + i;
+  return keys[at]!;
+}
+/** The count from which the page counts "customers with n or more devices": the bands' third bound, or the last of a shorter list */
+export function deviceFromOf(bounds: readonly number[]): number {
+  return bounds[Math.min(3, bounds.length) - 1] ?? 1;
+}
+/** The band asked for in an address (&band): a key in the bands' form, or null (the database refuses a key that is no band of the tenant's setting) */
+export function activeBandOf(value: unknown): string | null {
+  return typeof value === "string" && value.length <= 10 && ACTIVE_DEVICE_BAND.test(value) ? value : null;
+}
 
 const camel = (k: string) => k.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
 
@@ -459,6 +489,8 @@ export function activeFromDb(j: Record<string, unknown>): import("@/lib/data").A
     cohorts: figures ? ((c.cohorts as ActiveCohort[] | undefined) ?? []) : [],
     cohortSplits: figures ? ((c.cohortSplits as R["cohortSplits"] | undefined) ?? null) : null,
     mix: figures && c.mix ? mixFromDb(c.mix as Record<string, { key: string; name?: string | null; subscriptions?: number; devices?: number }[]>) : null,
+    // a document stored before addition 0009r holds no such part: null until the next refresh writes it
+    deviceCustomers: figures ? ((c.deviceCustomers as R["deviceCustomers"] | undefined) ?? null) : null,
     notes: figures && notes ? notesOf(notes) : null,
   } as R;
 }
@@ -481,7 +513,7 @@ function notesOf(n: Partial<import("@/lib/data").ActiveNotes>): import("@/lib/da
 
 /** The keys each read answers (decision D15): above the fold and below it; the rest of a report is shared (the head) */
 const TOP_KEYS = ["tiles", "unitEconomics", "filters"] as const;
-const REST_KEYS = ["markets", "marketsTotal", "comparison", "survival", "ageBands", "ageOver", "cohorts", "cohortSplits", "mix"] as const;
+const REST_KEYS = ["markets", "marketsTotal", "comparison", "survival", "ageBands", "ageOver", "cohorts", "cohortSplits", "mix", "deviceCustomers"] as const;
 const TOP_MONTH = ["customers", "bySegment", "subscriptions"] as const;
 const TOP_NOTES = ["noEndedTime", "noCreatedTime", "unmatchedSubscriptions", "reconstructionGap", "historyStarts"] as const;
 
