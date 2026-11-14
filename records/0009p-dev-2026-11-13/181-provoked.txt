@@ -1,0 +1,45 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ 50
+(1 row)
+
+psql:/tmp/provoke.sql:41: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+DO
+DO
+DO
+DO
+DROP FUNCTION
+                                                                check_name                                                                 |        result        |                                                                                                                                                                                                                                                                                                                                                      detail                                                                                                                                                                                                                                                                                                                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009p is recorded, after 0009o                                                                                            | FAIL                 | found 0009o,0009p | expected 0009o,0009p [provoked: a deliberate difference]
+ S2 cma.flash_cards_now the application's only, in the caller's rights; cma.flash_compute_of with jit off, its grants, one source's set-up | FAIL                 | found  | expected  [provoked: a deliberate difference]
+ S3 flash.current_overviews defaults to every stock overview but data quality                                                              | FAIL                 | found customers,subscriptions,installed_base,open_deals,open_tickets,open_tasks | expected customers,subscriptions,installed_base,open_deals,open_tickets,open_tasks [provoked: a deliberate difference]
+ A1 without a take every card is marked not stored and says whether its source is set up, in the landing's order                           | FAIL                 | found 11 cards, 0 stored, order as the overviews true, keys overview,set_up,stored, set up: data_quality | expected 11 cards, 0 stored, order as the overviews true, keys overview,set_up,stored, set up: data_quality [provoked: a deliberate difference]
+ A2 a readable take is the card with its Refreshed at; too old, of another definition or left out of the setting it is not                 | FAIL                 | found stored true value 5 set up true refreshed now true keys definition_version,headline,market,overview,refreshed_at,set_up,split,stored,value | others stored 0 | NL 3 | a market without a row 0 | due for a refresh: stored true | too old: stored false | another definition: stored false | not in the setting: stored false | expected stored true value 5 set up true refreshed now true keys definition_version,headline,market,overview,refreshed_at,set_up,split,stored,value | others stored 0 | NL 3 | a market without a row 0 | due for a refresh: stored true | too old: stored false | another definition: stored false | not in the setting: stored false [provoked: a deliberate difference]
+ A3 an agent is refused, a market out of its form too; the other tenant sees no card of this one                                           | FAIL                 | found agent CMA06 | market nl CMA04 | one sees 1 stored | two sees 0 stored and 0 take rows | expected agent CMA06 | market nl CMA04 | one sees 1 stored | two sees 0 stored and 0 take rows [provoked: a deliberate difference]
+ D1 pulse4all-invest: cma.flash_compute_of equals 0008zy's definition, row for row                                                         | FAIL                 | 22 computations compared, 2 differ data_quality data_quality 
+ D1 pulse4all-subscriptions: cma.flash_compute_of equals 0008zy's definition, row for row                                                  | FAIL                 | 22 computations compared, 20 differ customers customers subscriptions subscriptions installed_base installed_base churn churn orders orders payments payments open_deals open_deals open_tickets open_tickets open_tasks open_tasks data_quality data_quality 
+ D2 pulse4all-invest: the stored cards equal the live headlines                                                                            | FAIL                 | no active scheduler user or no person holding reports.view or performance.team
+ D2 pulse4all-subscriptions: after a refresh every set-up stock overview of the setting is a stored card, each equal to the live headline  | FAIL                 | 6 stored cards of 6 expected; 0 of 102 cards equal the live headline over no market and each market; 0 of 5 cards not stored say their source's set-up as the live headline does
+ E1 pulse4all-invest: the stored cards' read within the stored budget                                                                      | FAIL                 | no person holding reports.view or performance.team
+ E1 pulse4all-subscriptions: the stored cards' read within the stored budget                                                               | FAIL                 | 2.8 ms (best of 3, after six calls) against 0 ms; 0 cards stored now
+ verdict                                                                                                                                   | PROVOKED, NOT A PASS | 181_verify_flash_stored_cards: 0 PASS, 12 FAIL, 0 info, 0 skip
+(13 rows)
+
+DROP TABLE
+RESET
