@@ -3781,6 +3781,33 @@ export interface FlashRowsView {
   rows: Record<string, unknown>[];
 }
 
+/**
+ * One card of the Flash landing as its overview's stored current take answers it (cma.flash_cards_now, addition 0009p).
+ * stored false: no readable take (a flow, data quality, an overview that keeps none, or a take too old or of an earlier
+ * definition): the page reads that card live, when setUp says its source is set up. refreshedAt is the take's instant
+ * (the card's Refreshed at)
+ */
+export interface FlashStoredCard {
+  overview: string;
+  stored: boolean;
+  setUp: boolean;
+  value: number | null;
+  split: FlashSplitItem[] | null;
+  definitionVersion: string | null;
+  refreshedAt: string | null;
+}
+/**
+ * The landing's cards as one transaction reads them (addition 0009p): the stored cards first, then each card that has no
+ * stored figure, one statement after the other, each answer handed over as it comes
+ */
+export interface FlashCardReads {
+  /** Every overview's card in the landing's order, stored or not: the transaction's first statement */
+  stored: Promise<FlashStoredCard[]>;
+  /** A card's live headline, there when its statement returns; null for a card that is stored or whose source is not set up */
+  live(overview: string): Promise<FlashHeadlineView | null>;
+  /** The transaction is over, whatever its outcome: never rejects (the request's database cost is whole from here on) */
+  done: Promise<void>;
+}
 /** One overview's live headline (cma.flash_headline), as a landing card reads it */
 export interface FlashHeadlineView {
   overview: string;
@@ -4268,6 +4295,14 @@ export interface CmaData {
   getFlashRows(me: Principal, request: FlashRowsRequest): Promise<FlashRowsView>;
   /** One overview's live headline (cma.flash_headline), as a landing card reads it */
   getFlashHeadline(me: Principal, overview: string, market: string | null, from: string | null, to: string | null): Promise<FlashHeadlineView>;
+  /**
+   * The landing's cards in one transaction (addition 0009p): cma.flash_cards_now first (every overview, stored or not),
+   * then cma.flash_headline for each card without a stored figure whose source is set up: data quality, the flows over
+   * from and to, then a stock overview without a readable take. One connection whatever the takes' state; a statement
+   * that fails leaves that card and the ones after it without a figure. Not async: the reads start at once and each
+   * promise settles on its own
+   */
+  getFlashCardReads(me: Principal, market: string | null, from: string, to: string): FlashCardReads;
   /** The snapshot dates of a period and the open watch findings (cma.flash_snapshots) */
   getFlashSnapshots(me: Principal, from: string | null, to: string | null): Promise<FlashSnapshotsView>;
   /** A data-quality check's findings (cma.data_quality_rows): reports.view or tenant.configure */

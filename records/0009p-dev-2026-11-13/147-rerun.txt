@@ -1,0 +1,42 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/147_verify_installed_base_models.sql:46: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                             check_name                                                                                             |     result      |                                                                                                                      detail                                                                                                                      
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0008zy recorded, after 0008zw                                                                                                                                                          | ok              | 
+ S2 privileges: the application's only, the caller's rights, nothing for the readers; JIT off on the computation                                                                                    | ok              | 
+ S3 the catalog: installed_base's sets with [market, model, subscription_status]; its split by model; definition 0008zt; the other splits as 0008zw                                                 | ok              | [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"]] 0008zt subscriptions:status:market/status,installed_base:model:market/status/model/warehouse/link,orders:kind:market/store/kind
+ A1 the split's order: the register's active models by sort order then key, an inactive one left out; none without models; none for another overview                                                | ok              | mb,ma |  | null
+ A2 the split's helper: summed over the other dims, the register's models with zeros, an inactive model and unknown only above 0, the register's names, one market or all, other sets never counted | ok              | mb 0 (Model B), ma 3 (Model A), mc 3 (Model C), unknown 2 | mb 0 (Model B), ma 3 (Model A), mc 3 (Model C) | mb 0 (Model B), ma 0 (Model A), unknown 2 | mb 0 (Model B), ma 0 (Model A)
+ A3 the live headline: In the field and its split per model adding up, in all and per market (an inactive model and unknown only where they have devices)                                           | ok              | * 6 mb 1 (Model B), ma 3 (Model A), mc 1 (Model C), unknown 1 | GB 4 mb 1 (Model B), ma 2 (Model A), mc 1 (Model C) | NL 2 mb 0 (Model B), ma 1 (Model A), unknown 1 | 
+ A4 the new set: per market, model and subscription status; summed over the statuses each model's figures of [market, status, model, warehouse, link]                                               | ok              | GB/ma/none:2,2 GB/mb/none:2,1 GB/mc/none:1,1 NL/ma/none:1,1 NL/mb/none:1,0 NL/unknown/none:1,1
+ A5 as of a date: the stored rows' split per model, per market too; none for a snapshot without the set's rows                                                                                      | ok              | * 6 mb 1 (Model B), ma 3 (Model A), mc 1 (Model C), unknown 1 | GB 4 mb 1 (Model B), ma 2 (Model A), mc 1 (Model C) | 30 6 none
+ A6 the document's split_order: the register's models, the order kinds, none for an overview without a split; as of a date too                                                                      | ok              | ["mb", "ma"] ["first", "renewal", "repeat"] null ["mb", "ma"]
+ D1 every tenant with an asset register: the split adds up to In the field, in all and per market                                                                                                   | ok              | 1 tenant(s)
+ D2 every such tenant: the installed base's rows are 0008zu's, the new set summed over the models its [market, subscription_status] rows                                                            | ok              | 1 tenant(s)
+ D3 every such tenant: the models' figures of [market, status, model, warehouse, link] add up to the totals; in_field_on_holding per model the same from either set                                 | ok              | 1 tenant(s)
+ verdict                                                                                                                                                                                            | 0008zy verified | 147_verify_installed_base_models: 12 ok, 0 FAIL, 0 skip
+(13 rows)
+
+DROP TABLE
+RESET
