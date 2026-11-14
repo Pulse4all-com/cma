@@ -226,6 +226,15 @@ const pages = [
   { path: "/campaigns", subject: "manager" },
   { path: "/campaigns/fca-uk-consumers", subject: "analyst" },
   { path: "/campaigns", subject: "invest-analyst" },
+  // The placeholder pages (13 November 2026): the Muted banner, the Neutral and Pending badges, the dashed section; no
+  // figure, so no header hint to open
+  { path: "/reports/subscriptions", subject: "manager", noHint: true },
+  { path: "/reports/payments", subject: "manager", noHint: true },
+  { path: "/reports/compliance", subject: "reader", noHint: true },
+  { path: "/team/quality-monitoring", subject: "analyst" },
+  { path: "/reports/purchase-orders", subject: "manager", noHint: true },
+  { path: "/reports/fulfillment", subject: "manager", noHint: true },
+  { path: "/reports/storage", subject: "reader", noHint: true },
   { path: "/configuration/sources", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { DesignLink, JourneyStatusBadge, journeyMarket, PLANNED, PlannedCard } from "@/components/CampaignParts";
+import { DesignLink, JourneyStatusBadge, journeyMarket, PLANNED, PlaceholderBanner, PlannedCard } from "@/components/CampaignParts";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, PageTitle } from "@/components/primitives";
@@ -37,9 +37,7 @@ export default async function JourneyPage({ params }: { params: Promise<{ code: 
   return (
     <Shell copy={copy} me={me} active="campaigns" wide trail={[{ label: journey.name }]}>
       <PageTitle>{journey.name}</PageTitle>
-      <p role="note" className="mb-6 rounded-button border-l-4 border-p4a-muted bg-p4a-neutral-surface px-4 py-3 text-body text-p4a-muted" data-testid="journey-banner">
-        {t.banner}
-      </p>
+      <PlaceholderBanner testId="journey-banner">{t.banner}</PlaceholderBanner>
 
       <div className="mb-6 flex flex-wrap items-center gap-4">
         <JourneyStatusBadge status={journey.status} copy={copy} />
