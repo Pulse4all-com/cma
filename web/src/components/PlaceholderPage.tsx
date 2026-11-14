@@ -19,7 +19,7 @@ import { holdsAny, navEntries, type NavItem } from "@/lib/nav";
  * Campaign monitoring's (CampaignParts: the banner, the dashed section) and Active's (StatusBadge, the definition's status).
  * The permission is the rail item's own (lib/nav), so the page and the rail can never disagree.
  */
-export type PlaceholderKey = "subscriptions" | "payments" | "compliance" | "qualityMonitoring" | "purchaseOrders";
+export type PlaceholderKey = "subscriptions" | "payments" | "compliance" | "qualityMonitoring" | "purchaseOrders" | "fulfillment" | "storage";
 
 const PAGES: Record<PlaceholderKey, { page: NavItem["page"]; flash?: "subscriptions" | "payments" }> = {
   subscriptions: { page: "subscriptions", flash: "subscriptions" },
@@ -27,6 +27,8 @@ const PAGES: Record<PlaceholderKey, { page: NavItem["page"]; flash?: "subscripti
   compliance: { page: "compliance" },
   qualityMonitoring: { page: "quality-monitoring" },
   purchaseOrders: { page: "purchase-orders" },
+  fulfillment: { page: "fulfillment" },
+  storage: { page: "storage" },
 };
 
 /** The rail's item of a page: its label and its permission */

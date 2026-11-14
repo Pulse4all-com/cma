@@ -194,6 +194,16 @@
       "class": "report"
     },
     {
+      "path": "/reports/fulfillment",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
+      "path": "/reports/storage",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
       "path": "/reports/reviews?range=all",
       "subject": "manager",
       "class": "report"

@@ -1932,8 +1932,8 @@ const MOCK_ROLES: Omit<RoleInfo, "assignable">[] = [
   { key: "agent", name: "Agent", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "leads.accept", "performance.own"] },
   { key: "analytics", name: "Analytics", isSystem: true, isManaging: false, permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"] },
   { key: "supervisor", name: "Supervisor", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "workday.team", "performance.team", "monitoring.live", "messages.send"] },
-  { key: "manager", name: "Call center manager", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "workday.export"] },
-  { key: "admin", name: "Administrator", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "users.manage_all", "tenant.configure", "workday.export", "messages.withdraw"] },
+  { key: "manager", name: "Call center manager", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "workday.export", "quality.manage"] },
+  { key: "admin", name: "Administrator", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "users.manage_all", "tenant.configure", "workday.export", "messages.withdraw", "quality.manage"] },
 ];
 
 function mockSkill(key: string, level: number | null): DirectoryPerson["skills"][number] {
@@ -2984,10 +2984,11 @@ export const mockData: CmaData = {
         roleKey: identity.subject,
         // As the default ladder after 0004: the manager also exports, manages agents and skills and plans the
         // roster; the supervisor does not; both watch the Live board
-        // Both push messages to agents (messages.send, migration 0008)
+        // Both push messages to agents (messages.send, migration 0008). The manager holds quality.manage as in the default
+        // ladder (db/94), which Team → Quality monitoring needs (14 November 2026); the supervisor does not
         permissions: identity.subject === "manager"
           ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
-             "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send"]
+             "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send", "quality.manage"]
           : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"],
       };
     }
@@ -3002,7 +3003,7 @@ export const mockData: CmaData = {
         roleKey: "admin",
         permissions: ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
                       "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view", "messages.send",
-                      "messages.withdraw"],
+                      "messages.withdraw", "quality.manage"],
       };
     }
     // An analytics user as in the default ladder: reports and the Dashboard, no clock, no corrections

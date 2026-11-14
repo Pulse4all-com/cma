@@ -225,31 +225,32 @@ async function expectNavigation() {
     // Since 0008zw (Martin, 5 November 2026) Assets follows Customers: Installed base (Flash's Installed base overview on a
     // page of its own) and Maintenance, which leaves Customers; Time comes before Team, so a manager's and an admin's Time
     // pages take the keys after Live and Team's follow them
-    // Since 13 November 2026 (Martin) the placeholder pages: Team runs People, Quality monitoring (performance.team), Roster,
-    // so the supervisor and the analyst see Team with Quality monitoring alone; Customers runs Active, Subscriptions,
-    // Payments, Courtesy, Compliance, Reviews, Cancellations; Assets Installed base, Maintenance, Purchase orders, Pledge
+    // Since 13 November 2026 (Martin) the placeholder pages: Team runs People, Quality monitoring, Roster, and Quality
+    // monitoring needs quality.manage (14 November 2026), so the analyst sees Team with Quality monitoring alone and the
+    // supervisor no Team group; Customers runs Active, Subscriptions, Payments, Courtesy, Compliance, Reviews,
+    // Cancellations; since 14 November Assets runs Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge
     // lists. The agent holds none of their permissions, so its rail and keys do not change
     ["analyst", ["/", "/messages", "/live/newco", "/team/quality-monitoring", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
       "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
       "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
       "/reports/orders-per-person", "/reports/active", "/reports/subscriptions",
-      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance",
-      "/reports/purchase-orders", "/campaigns"], false],
+      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
       "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
       "/reports/first-orders", "/reports/active", "/reports/subscriptions",
-      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance",
-      "/reports/purchase-orders", "/campaigns"], false],
+      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/quality-monitoring", "/reports/flash", "/reports/dashboard", "/reports/calls",
+    ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/calls",
       "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms",
       "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts",
       "/reports/first-orders", "/reports/orders-per-person", "/reports/active", "/reports/subscriptions",
-      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance",
-      "/reports/purchase-orders", "/campaigns"], true],
+      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin), since 0008zw
     // between Time and Reports; the supervisor and the agent see no Team group, so their keys do not move. The planner
     // (0005) joins it.
@@ -258,15 +259,15 @@ async function expectNavigation() {
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
       "/reports/active", "/reports/subscriptions",
-      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance",
-      "/reports/purchase-orders", "/campaigns"], true],
+      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/team/quality-monitoring", "/roster/planner", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
       "/reports/active", "/reports/subscriptions",
-      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/maintenance",
-      "/reports/purchase-orders", "/campaigns"], true],
+      "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -1158,16 +1159,20 @@ async function expectCampaigns() {
   // The placeholder pages (Martin, 13 November 2026; decision D5 extended to whole pages): the purpose, the Muted banner,
   // a Neutral "Not connected yet" badge, the definition's Pending badge and the dashed "What will feed it"; no table, no
   // tile and no digit anywhere in the page's own content (a number, a zero or a count). Subscriptions and Payments link
-  // to their Flash overview. The agent sees none of them. --provoke writes a zero into the first page's content
+  // to their Flash overview. The agent sees none of them, the supervisor not Quality monitoring (quality.manage). --provoke
+  // writes a zero into the first page's content
   {
     const PLACEHOLDERS = [
       ["/reports/subscriptions", "/reports/flash?o=subscriptions"], ["/reports/payments", "/reports/flash?o=payments"],
       ["/reports/compliance", null], ["/team/quality-monitoring", null], ["/reports/purchase-orders", null],
+      ["/reports/fulfillment", null], ["/reports/storage", null],
     ];
-    for (const subject of ["manager", "agent-one"]) {
+    // the supervisor holds performance.team but not quality.manage: Quality monitoring refuses them (14 November 2026)
+    for (const subject of ["manager", "agent-one", "supervisor"]) {
       const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
       const p = await ctx.newPage();
       for (const [path, flash] of PLACEHOLDERS) {
+        if (subject === "supervisor" && path !== "/team/quality-monitoring") continue;
         await p.goto(BASE + path);
         await settle(p);
         await p.waitForLoadState("networkidle");
@@ -1186,13 +1191,15 @@ async function expectCampaigns() {
             dashed: fed ? getComputedStyle(fed).borderTopStyle === "dashed" : false,
             digits: own.map((e) => e.textContent ?? "").filter((t) => /\d/.test(t)),
             figures: main ? main.querySelectorAll("table, [data-tile]").length : 0,
+            refusal: main?.querySelector("section h2")?.textContent?.trim() ?? null,
             flash: document.querySelector('[data-testid="placeholder-flash"]')?.getAttribute("href") ?? null,
             scrollX: document.documentElement.scrollWidth > window.innerWidth,
           };
         }, provoke && subject === "manager" && path === PLACEHOLDERS[0][0]);
         const where = `${subject} ${path}`;
-        if (subject === "agent-one") {
-          if (d.banner) problems.push(`${where}: a placeholder page is shown to an agent`);
+        if (subject !== "manager") {
+          if (d.banner) problems.push(`${where}: a placeholder page is shown without its permission`);
+          if (d.refusal !== "This page needs a permission your role does not have") problems.push(`${where}: the refusal is not shown (${d.refusal})`);
           continue;
         }
         if (!d.banner || d.banner.text !== "Placeholder: this page is not built yet. Nothing here is real data." || !d.banner.muted) problems.push(`${where}: the Muted banner is missing (${JSON.stringify(d.banner)})`);
@@ -2673,10 +2680,11 @@ async function expectFrame() {
     // Assets (addition 0008zw): Installed base and Maintenance, the group linking to Installed base, its first page
     ["manager", "/reports/installed-base", ["Welcome", "Assets", "Installed base"], ["/", "/reports/installed-base", null]],
     ["reader", "/reports/maintenance", ["Welcome", "Assets", "Maintenance"], ["/", "/reports/installed-base", null]],
-    // The placeholder pages (13 November 2026): Team leads to People for a manager and to Quality monitoring, the first
-    // page they may see in it, for a supervisor; Customers to Active; Assets to Installed base
+    // The placeholder pages (13 and 14 November 2026): Team leads to People for a manager and to Quality monitoring, the
+    // first page they may see in it, for an analyst; Customers to Active; Assets to Installed base
     ["manager", "/team/quality-monitoring", ["Welcome", "Team", "Quality monitoring"], ["/", "/team/people", null]],
-    ["supervisor", "/team/quality-monitoring", ["Welcome", "Team", "Quality monitoring"], ["/", "/team/quality-monitoring", null]],
+    ["analyst", "/team/quality-monitoring", ["Welcome", "Team", "Quality monitoring"], ["/", "/team/quality-monitoring", null]],
+    ["manager", "/reports/storage", ["Welcome", "Assets", "Storage"], ["/", "/reports/installed-base", null]],
     ["manager", "/reports/payments", ["Welcome", "Customers", "Payments"], ["/", "/reports/active", null]],
     ["reader", "/reports/purchase-orders", ["Welcome", "Assets", "Purchase orders"], ["/", "/reports/installed-base", null]],
   ]) {
@@ -2751,8 +2759,8 @@ async function expectFrame() {
   // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
   // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it; since
   // 0008zw Installed base (Assets); since 0009a Courtesy (Customers); since 13 November 2026 the five placeholder pages
-  // (Subscriptions, Payments, Compliance, Quality monitoring, Purchase orders)
-  for (const [subject, pages] of [["manager", 39], ["agent-one", 5]]) {
+  // (Subscriptions, Payments, Compliance, Quality monitoring, Purchase orders) and on 14 November Fulfillment and Storage
+  for (const [subject, pages] of [["manager", 41], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");

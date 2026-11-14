@@ -94,7 +94,7 @@ const mock = (permissions, roleKey, contactCenters = [{ key: "newco", name: "New
   ({ ...principal(permissions, roleKey), perPerson: ["email", "orders", "attempts", "deals"], contactCenters });
 const AGENT = mock(["workday.own", "roster.view"], "agent");
 const SUPERVISOR = mock(["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"], "supervisor");
-const ADMIN_MOCK = mock([...ADMIN, "messages.withdraw"], "admin");
+const ADMIN_MOCK = mock([...ADMIN, "messages.withdraw", "quality.manage"], "admin");
 const READER = mock(["reports.view"], "reader");
 const hrefs = (me) => visiblePages(me, copy).map((p) => p.href);
 const keys = (me) => visiblePages(me, copy).map((p) => p.key);
@@ -104,18 +104,19 @@ const REPORTS = ["/reports/flash", "/reports/dashboard", "/reports/calls", "/rep
 const SALES = ["/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent",
   "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person"];
 // since addition 0008zw Maintenance is Assets', after Installed base; since 13 November 2026 (Martin) the placeholder pages
-// Subscriptions, Payments and Compliance in Customers, Purchase orders in Assets (Pledge lists, pledges.view, after it)
+// Subscriptions, Payments and Compliance in Customers; since 14 November Assets runs Installed base, Fulfillment,
+// Maintenance, Storage, Purchase orders (Pledge lists, pledges.view, after it)
 const CUSTOMERS = ["/reports/active", "/reports/subscriptions", "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews",
   "/reports/cancellations"];
-const ASSETS = ["/reports/installed-base", "/reports/maintenance", "/reports/purchase-orders"];
+const ASSETS = ["/reports/installed-base", "/reports/fulfillment", "/reports/maintenance", "/reports/storage", "/reports/purchase-orders"];
 const digits = (n) => Array.from({ length: n }, (_, i) => (i < 9 ? String(i + 1) : null));
 
 expect("the agent: Welcome, Messages and Time, keys 1 to 5",
   [hrefs(AGENT), keys(AGENT)], [["/", "/messages", "/day", "/hours", "/schedule"], digits(5)], [["/", "/messages", "/day", "/hours"], digits(4)]);
 expect("the agent sees none of Reports, Sales, Customers and Assets", groups(AGENT), ["time"], ["time", "assets"]);
-// since 13 November 2026 the supervisor (performance.team) sees Team with Quality monitoring alone
-expect("the supervisor: the Live board of Newco, Time, Team, Reports, Sales, Customers, Assets, Campaigns",
-  hrefs(SUPERVISOR), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/quality-monitoring", ...REPORTS, ...SALES, ...CUSTOMERS, ...ASSETS, "/campaigns"],
+// Quality monitoring needs quality.manage (14 November 2026), which the supervisor does not hold: no Team group
+expect("the supervisor: the Live board of Newco, Time, Reports, Sales, Customers, Assets, Campaigns",
+  hrefs(SUPERVISOR), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, ...ASSETS, "/campaigns"],
   ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", ...REPORTS, ...SALES, ...CUSTOMERS, "/reports/maintenance", "/campaigns"]);
 expect("the supervisor's keys: 1 to 9 without gaps, none from the tenth",
   keys(SUPERVISOR), digits(hrefs(SUPERVISOR).length), digits(hrefs(SUPERVISOR).length).map((k, i) => (i === 3 ? "5" : k)));
@@ -144,21 +145,25 @@ expect("the groups' labels: Reports, Sales, Customers, Assets (Verkoop, Klanten,
   ["Reports", "Sales", "Customers", "Assets", "Campaigns", "Rapportages", "Verkoop", "Klanten", "Assets", "Campagnes"], ["Reports", "Campaigns"]);
 // Assets (addition 0008zw): Installed base and Maintenance, in en and nl, with the box icon; Customers since addition 0009l
 // (Martin, 11 November 2026): Active first, then Courtesy, Reviews and Cancellations
-expect("Assets: Installed base, Maintenance, Purchase orders (Geïnstalleerde basis, Onderhoud, Inkooporders), the box icon; Customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews, Cancellations",
+expect("Assets: Installed base, Fulfillment, Maintenance, Storage, Purchase orders (Geïnstalleerde basis, Fulfilment, Onderhoud, Opslag, Inkooporders), the box icon; Customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews, Cancellations",
   [labels(READER, "assets"), visibleNav(READER, t("nl")).find((e) => e.kind === "group" && e.id === "assets")?.items.map((i) => i.label) ?? null,
     visibleNav(READER, copy).find((e) => e.kind === "group" && e.id === "assets")?.icon ?? null, labels(READER, "customers")],
-  [["Installed base", "Maintenance", "Purchase orders"], ["Geïnstalleerde basis", "Onderhoud", "Inkooporders"], "box",
+  [["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders"], ["Geïnstalleerde basis", "Fulfilment", "Onderhoud", "Opslag", "Inkooporders"], "box",
     ["Active", "Subscriptions", "Payments", "Courtesy", "Compliance", "Reviews", "Cancellations"]],
   [["Maintenance"], ["Onderhoud"], "person", ["Cancellations", "Reviews", "Maintenance"]]);
-// Team (13 November 2026): People, Quality monitoring, Roster for the admin (Mensen, Kwaliteitsmonitoring, Rooster); the
-// supervisor's Team holds Quality monitoring alone, and its crumb leads there; Assets with Pledge lists last for pledges.view
-expect("Team: People, Quality monitoring, Roster; the supervisor's Team is Quality monitoring; Pledge lists after Purchase orders",
+// Team (13 November 2026): People, Quality monitoring, Roster for the admin (Mensen, Kwaliteitsmonitoring, Rooster); Quality
+// monitoring needs quality.manage (14 November 2026): the analytics role's Team holds it alone and its crumb leads there, the
+// supervisor sees no Team group; Assets with Pledge lists last for pledges.view
+const ANALYTICS = mock(["reports.view", "performance.team", "monitoring.live", "quality.manage"], "analytics");
+expect("Team: People, Quality monitoring, Roster; analytics' Team is Quality monitoring, the supervisor has none; Pledge lists last",
   [labels(ADMIN_MOCK, "team"), visibleNav(ADMIN_MOCK, t("nl")).find((e) => e.kind === "group" && e.id === "team")?.items.map((i) => i.label) ?? null,
-    labels(SUPERVISOR, "team"), breadcrumbs(SUPERVISOR, copy, "quality-monitoring")[1], breadcrumbs(ADMIN_MOCK, copy, "quality-monitoring")[1],
-    labels(mock(["reports.view", "pledges.view"], "reader"), "assets")],
+    labels(ANALYTICS, "team"), breadcrumbs(ANALYTICS, copy, "quality-monitoring")[1], breadcrumbs(ADMIN_MOCK, copy, "quality-monitoring")[1],
+    labels(SUPERVISOR, "team"), labels(mock(["reports.view", "pledges.view"], "reader"), "assets")],
   [["People", "Quality monitoring", "Roster"], ["Mensen", "Kwaliteitsmonitoring", "Rooster"], ["Quality monitoring"],
-    { label: "Team", href: "/team/quality-monitoring" }, { label: "Team", href: "/team/people" }, ["Installed base", "Maintenance", "Purchase orders", "Pledge lists"]],
-  [["People", "Roster"], ["Mensen", "Rooster"], [], { label: "Team", href: undefined }, { label: "Team", href: "/roster/planner" }, ["Installed base", "Maintenance", "Pledge lists"]]);
+    { label: "Team", href: "/team/quality-monitoring" }, { label: "Team", href: "/team/people" }, null,
+    ["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders", "Pledge lists"]],
+  [["People", "Roster"], ["Mensen", "Rooster"], [], { label: "Team", href: undefined }, { label: "Team", href: "/roster/planner" }, ["Quality monitoring"],
+    ["Installed base", "Maintenance", "Pledge lists"]]);
 expect("the Assets pages' breadcrumbs: Welcome › Assets › Installed base, Welcome › Assets › Maintenance, the group to Installed base",
   [breadcrumbs(READER, copy, "installed-base"), breadcrumbs(READER, copy, "maintenance")],
   [[{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Installed base" }],
