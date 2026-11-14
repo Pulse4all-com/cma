@@ -1060,12 +1060,18 @@ export interface MissedCallback {
   recordUrl: string | null;
 }
 
+/** What the Live board's read lists of the missed callers: the first screen (lib/live MISSED_SHOWN), or every caller (after "Show all") */
+export type MissedListed = "first" | "all";
+
 /** The Live board's inbound part (monitoring.live) */
 export interface InboundNow {
   /** False when the tenant has no telephony connected: the board says so, never 0 */
   telephony: boolean;
   today: InboundToday | null;
+  /** The missed callers, oldest first: every caller, or the first so many when the read asked for a count (addition 0009q) */
   callbacks: MissedCallback[];
+  /** How many callers the whole list holds, whatever callbacks lists of it (addition 0009q) */
+  callbacksTotal: number;
   /** Missed calls without a caller's hash in the lookback that need a callback: counted, never listed */
   anonymousCount: number;
   lookbackDays: number;
@@ -4189,10 +4195,18 @@ export interface CmaData {
   // ---- Inbound service and callbacks (addition 0008i): the database checks the permission on every call (CMA06)
   /** Inbound calls per group with the total and the catalog. Needs reports.view or performance.team; at most 92 days */
   getInboundService(me: Principal, range: HoursRange, group: InboundGroup): Promise<InboundService>;
-  /** Today's inbound and the missed calls not called back, for the Live board. Needs monitoring.live */
-  getInboundNow(me: Principal): Promise<InboundNow>;
-  /** The Live board's reads in one transaction (addition 0008zr's web): the board, its tiles, inbound and follow-up. Needs monitoring.live */
-  getLiveBoard(me: Principal): Promise<LiveBoardData>;
+  /**
+   * Today's inbound and the missed calls not called back, for the Live board (cma.inbound_now_first, addition 0009q).
+   * first: how many of the oldest missed callers the answer holds (0: none, their count alone); left out or null: every
+   * caller. Needs monitoring.live
+   */
+  getInboundNow(me: Principal, first?: number | null): Promise<InboundNow>;
+  /**
+   * The Live board's reads in one transaction (addition 0008zr's web): the board, its tiles, inbound and follow-up.
+   * missed "first" (the default, addition 0009q): the oldest MISSED_SHOWN missed callers with the whole list's count,
+   * which is what the board shows; "all": every caller, after "Show all". Needs monitoring.live
+   */
+  getLiveBoard(me: Principal, missed?: MissedListed): Promise<LiveBoardData>;
 
   // ---- Calls overview and calls per agent (addition 0008j): the database checks the permission on every call (CMA06)
   /** Calls per group with the total, the previous period's total and the filter lists. Needs reports.view or performance.team; at most 92 days */

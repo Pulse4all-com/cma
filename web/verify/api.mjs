@@ -1762,6 +1762,22 @@ async function inboundChecks() {
     [true, true, true], [false, true, true]);
   expect("inbound: the board's lookback and anonymous count are whole numbers",
     [Number.isInteger(live?.lookbackDays), Number.isInteger(live?.anonymousCount)], [true, true], [false, true]);
+  // addition 0009q: the missed callers' count beside the list; ?listed=<n> the oldest n alone; the board's read the first
+  // twenty with the count, every caller on ?missed=all
+  const firstOne = (await now(SUPERVISOR).then(() => get(SUPERVISOR, "/api/v1/telephony/inbound-now?first=1"))).body?.data;
+  const countOnly = (await get(SUPERVISOR, "/api/v1/telephony/inbound-now?first=0")).body?.data;
+  const boardFirst = (await get(SUPERVISOR, "/api/v1/live/board?organisation=newco")).body?.data?.inbound;
+  const boardEvery = (await get(SUPERVISOR, "/api/v1/live/board?organisation=newco&missed=all")).body?.data?.inbound;
+  expect("inbound: the missed callers' count beside the list; first=1 the oldest alone, first=0 the count alone, a bad first 400",
+    [Number.isInteger(live?.callbacksTotal) && live.callbacksTotal === (live.callbacks ?? []).length,
+      firstOne?.callbacks?.length === Math.min(1, firstOne?.callbacksTotal ?? -1),
+      countOnly?.callbacks?.length === 0 && Number.isInteger(countOnly?.callbacksTotal),
+      (await get(SUPERVISOR, "/api/v1/telephony/inbound-now?first=-1")).status, (await get(SUPERVISOR, "/api/v1/telephony/inbound-now?first=many")).status],
+    [true, true, true, 400, 400], [false, false, false, 200, 200]);
+  expect("the Live board's read lists the oldest twenty missed callers with the whole count; ?missed=all every caller; an unknown ?missed= 400",
+    [boardFirst?.callbacks?.length === Math.min(20, boardFirst?.callbacksTotal ?? -1), boardEvery?.callbacks?.length === boardEvery?.callbacksTotal,
+      (await get(SUPERVISOR, "/api/v1/live/board?organisation=newco&missed=everything")).status],
+    [true, true, 400], [false, false, 200]);
 
   // The missed-reason catalog on a telephony connection (Configuration > Sources), as the admin
   const sources = (await get(ADMIN, "/api/v1/configuration/sources")).body?.data ?? [];

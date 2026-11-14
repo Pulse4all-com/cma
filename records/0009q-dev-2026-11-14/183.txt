@@ -1,0 +1,49 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 8
+(1 row)
+
+ set_config 
+------------
+ 1.5
+(1 row)
+
+psql:db/183_verify_live_missed_first.sql:45: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                      check_name                                                                       | result |                                                                                                                              detail                                                                                                                              
+-------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0009q recorded once, after 0009p                                                                                                          | PASS   | 
+ S2 cma.inbound_now_first(integer): plpgsql, stable, invoker, cma_owner, jsonb, the application's only; cma.inbound_now() still there                  | PASS   | 
+ B1 an agent is refused (CMA06); a count below 0 is refused (CMA04)                                                                                    | PASS   | agent CMA06 | below 0 CMA04
+ B2 every caller (null): cma.inbound_now()'s answer without waiting_now and longest_waiting_seconds, plus shown; 25 listed and shown                   | PASS   | 25 callers; today's keys answered,answered_within_target,avg_answer_seconds,business_date,inbound_talk_seconds,offered,p80_answer_seconds,service_level_base,service_level_pct,service_level_seconds,unanswered,unanswered_by_reason,waiting,waiting_max_minutes
+ B3 the first 0, 1, 20 and 30: cma.inbound_now()'s first so many in its order, listed stays 25, shown what the answer holds, today as for every caller | PASS   | 0: 0 shown of 25; 1: 1 shown of 25; 20: 20 shown of 25; 30: 25 shown of 25; 
+ B4 a tenant without a call: no caller, listed 0, shown 0, nothing of the first tenant                                                                 | PASS   | 0 callbacks, listed 0, shown 0
+ E pulse4all-invest: the first 20 against every caller                                                                                                 | skip   | no active person holds monitoring.live
+ E1 pulse4all-subscriptions: every caller (null) equals cma.inbound_now() without the two kept keys, plus shown                                        | PASS   | 0 callers listed
+ E2 pulse4all-subscriptions: the first 20 are cma.inbound_now()'s first 20, listed its whole count                                                     | PASS   | 0 shown of 0 listed; 447 bytes against 486 for every caller
+ E3 pulse4all-subscriptions: the first 20 are read no slower than every caller                                                                         | PASS   | 0.69 ms against 0.68 ms for every caller (best of 8 each after six untimed, alternating; 1.5 ms of noise allowed); 447 bytes against 486
+ verdict                                                                                                                                               | PASS   | 183_verify_live_missed_first: 9 PASS, 0 FAIL, 1 skip
+(11 rows)
+
+DROP TABLE
+RESET

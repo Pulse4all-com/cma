@@ -31,7 +31,7 @@ import type {
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
-import { workdayStartsAt } from "@/lib/live";
+import { MISSED_SHOWN, workdayStartsAt } from "@/lib/live";
 import { REMOVE_REFUSAL } from "@/lib/corrections";
 import { FLASH_CARD_ORDER, FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
@@ -1580,14 +1580,15 @@ async function readFollowUpSummary(q: Querier): Promise<FollowUpSummaryAt> {
 }
 
 /**
- * cma.inbound_now()'s JSON (addition 0008zr): the three reads the board made, in one statement; the figures as JSON gives
- * them. Today's inbound_talk_seconds since addition 0009k; its waiting_now and longest_waiting_seconds are not read
+ * cma.inbound_now_first()'s JSON (addition 0009q; cma.inbound_now()'s of 0008zr with the callers cut to the first so
+ * many): the three reads the board made, in one statement; the figures as JSON gives them. Today's inbound_talk_seconds
+ * since addition 0009k; the summary's listed is the whole list's count, shown what this answer lists
  */
 type InboundNowDb = {
   today: (Omit<InboundDbRow, "group_key" | "group_label"> & { business_date: string; inbound_talk_seconds: number;
     service_level_seconds: number; waiting_max_minutes: number }) | null;
   callbacks: (Omit<CallbackDbRow, "started_at"> & { started_at: string })[];
-  summary: { listed: number; anonymous_count: number; lookback_days: number };
+  summary: { listed: number; shown: number; anonymous_count: number; lookback_days: number };
 };
 
 /** cma.outbound_now()'s JSON (addition 0009h); the numerics as JSON gives them */
@@ -1596,19 +1597,22 @@ type OutboundNowDb = {
   outbound_talk_seconds: number; outbound_talk_avg: number | null;
 };
 
-async function readInboundNow(q: Querier): Promise<InboundNow> {
-  return (await readCallsNow(q, false)).inbound;
+async function readInboundNow(q: Querier, first: number | null): Promise<InboundNow> {
+  return (await readCallsNow(q, false, first)).inbound;
 }
 
 /**
  * The Live board's call parts: inbound (addition 0008zr) and, for the board, today's outbound (addition 0009h) in the
  * same statement, so the board's poll gains no round trip; outbound is null for a tenant without telephony
  */
-async function readCallsNow(q: Querier, withOutbound: boolean): Promise<{ inbound: InboundNow; outbound: OutboundNow | null }> {
+async function readCallsNow(q: Querier, withOutbound: boolean, first: number | null): Promise<{ inbound: InboundNow; outbound: OutboundNow | null }> {
   // One statement (addition 0008zr): today's figures, the missed callers (each with its record link from the connection's
-  // record_url_call template; null without one) and the summary, the list computed once in the database
+  // record_url_call template; null without one) and the summary, the list computed once in the database. Since addition
+  // 0009q cma.inbound_now_first: the oldest `first` callers alone with the whole list's count (null: every caller), so
+  // the board's poll no longer carries every caller with a record link each
   const row = one((await q.query<{ j: InboundNowDb; o: OutboundNowDb | null }>(
-    withOutbound ? `select cma.inbound_now() as j, cma.outbound_now() as o` : `select cma.inbound_now() as j, null::jsonb as o`)).rows, "inbound_now");
+    withOutbound ? `select cma.inbound_now_first($1) as j, cma.outbound_now() as o` : `select cma.inbound_now_first($1) as j, null::jsonb as o`,
+    [first])).rows, "inbound_now_first");
   const j = row.j;
   const o = row.o;
   const connections = await readConnections(q);
@@ -1624,6 +1628,7 @@ async function readCallsNow(q: Querier, withOutbound: boolean): Promise<{ inboun
       reasonCode: x.reason_code, reasonLabel: x.reason_label, startedAt: isoAny(x.started_at)!, missedCount: x.missed_count,
       waitingSeconds: x.waiting_seconds, waitingBusinessSeconds: x.waiting_business_seconds, recordUrl: x.record_url,
     })) : [],
+    callbacksTotal: connections.telephony ? j.summary.listed : 0,
     anonymousCount: connections.telephony ? j.summary.anonymous_count : 0,
     lookbackDays: j.summary.lookback_days,
   };
@@ -1991,13 +1996,13 @@ export const postgresData: CmaData = {
   // The Live board in one transaction (addition 0008zr's web, night N06; the IT audit's 5.6-01): the six reads the page
   // made in parallel transactions, one after the other on one connection, each function checking its own permission
   // (monitoring.live first: cma.team_now refuses before anything else is read)
-  async getLiveBoard(me): Promise<LiveBoardData> {
+  async getLiveBoard(me, missed = "first"): Promise<LiveBoardData> {
     return withTenant(ctx(me), async (q) => {
       const now = await readTeamNow(q);
       const memberships = await readTeamMembersNow(q);
       const shifts = await readRosterToday(q);
       const settings = await readSettings(q);
-      const { inbound, outbound } = await readCallsNow(q, true);
+      const { inbound, outbound } = await readCallsNow(q, true, missed === "all" ? null : MISSED_SHOWN);
       const followUp = await readFollowUpSummary(q);
       const numberSetting = (key: string): number | null => {
         const v = settings.find((x) => x.key === key)?.value;
@@ -3250,8 +3255,8 @@ export const postgresData: CmaData = {
     });
   },
 
-  async getInboundNow(me): Promise<InboundNow> {
-    return withTenant(ctx(me), (q) => readInboundNow(q));
+  async getInboundNow(me, first = null): Promise<InboundNow> {
+    return withTenant(ctx(me), (q) => readInboundNow(q, first));
   },
 
   async getCallsOverview(me, range, group, filter): Promise<CallsOverview> {

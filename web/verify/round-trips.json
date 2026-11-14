@@ -398,6 +398,12 @@
     "rt": 16
   },
   {
+    "path": "/api/v1/live/board?organisation=newco&missed=all",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 16
+  },
+  {
     "path": "/api/v1/team/shifts-today",
     "subject": "manager",
     "tx": 2,

@@ -59,7 +59,7 @@ import {
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
   type CallRecord, type CallRules, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
-import { inboundTalkToday, missedCallbacks, outboundToday, type CallerCall } from "@/lib/live";
+import { MISSED_SHOWN, inboundTalkToday, missedCallbacks, outboundToday, type CallerCall } from "@/lib/live";
 import {
   cancellationRecords, cancellationsReport, DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION, dealsPerPerson, FUNNEL_GROUPS, funnelDeals, funnelFilter,
   funnelLists, funnelPrevious, funnelReport, lostReasonsReport, parseFunnelFilter, reasonStateOf, type CancellationTicketFixture, type FunnelDeal,
@@ -1354,8 +1354,9 @@ function noFigures(): InboundFigures {
     avgAnswerSeconds: null, p80AnswerSeconds: null, unansweredByReason: {} };
 }
 
-function mockInboundNow(me: Principal): InboundNow {
-  if (!connectionsOf(me).telephony) return { telephony: false, today: null, callbacks: [], anonymousCount: 0, lookbackDays: MOCK_LOOKBACK_DAYS };
+/** first: the oldest so many missed callers (null: every caller), with the whole list's count, as cma.inbound_now_first answers */
+function mockInboundNow(me: Principal, first: number | null = null): InboundNow {
+  if (!connectionsOf(me).telephony) return { telephony: false, today: null, callbacks: [], callbacksTotal: 0, anonymousCount: 0, lookbackDays: MOCK_LOOKBACK_DAYS };
   const now = Date.now();
   const today = mockToday(me);
   const midnight = localMs(today, "00:00", me.timeZone);
@@ -1370,7 +1371,8 @@ function mockInboundNow(me: Principal): InboundNow {
     telephony: true,
     today: { ...(todays.length ? inboundFigures(todays, MOCK_SL_SECONDS) : noFigures()), date: today, inboundTalkSeconds: talk,
       serviceLevelSeconds: MOCK_SL_SECONDS, waitingMaxMinutes: MOCK_WAITING_MAX },
-    callbacks: rows,
+    callbacks: first === null ? rows : rows.slice(0, first),
+    callbacksTotal: rows.length,
     anonymousCount,
     lookbackDays: MOCK_LOOKBACK_DAYS,
   };
@@ -4392,16 +4394,17 @@ export const mockData: CmaData = {
     return mockInboundService(me, range, group);
   },
 
-  async getInboundNow(me): Promise<InboundNow> {
+  async getInboundNow(me, first = null): Promise<InboundNow> {
     assertLive(me);
-    return mockInboundNow(me);
+    if (first !== null && (!Number.isInteger(first) || first < 0)) throw new CmaDbError("CMA04", "first takes 0 or more, or null for every caller");
+    return mockInboundNow(me, first);
   },
 
   // The Live board in one read (addition 0008zr's web): the six reads composed, as the database does in one transaction
-  async getLiveBoard(me): Promise<LiveBoardData> {
+  async getLiveBoard(me, missed = "first"): Promise<LiveBoardData> {
     const [now, memberships, shifts, settings, inbound, followUp] = await Promise.all([
       mockData.getTeamNow(me), mockData.listTeamMembersNow(me), mockData.getRosterToday(me), mockData.listSettings(me),
-      mockData.getInboundNow(me), mockData.getFollowUpSummary(me),
+      mockData.getInboundNow(me, missed === "all" ? null : MISSED_SHOWN), mockData.getFollowUpSummary(me),
     ]);
     const outbound = mockOutboundNow(me);
     const numberSetting = (key: string): number | null => {

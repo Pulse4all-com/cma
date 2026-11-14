@@ -14,8 +14,9 @@
 -- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql; since
 -- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
 -- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
--- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009r (the
--- customer list under a device band), after 184_active_device_bands.sql. Prod is the proof; dev's shared core is for
+-- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009q (the
+-- Live board's first missed callers), after 182_live_missed_first.sql; since addition 0009r (the customer list under a
+-- device band), after 184_active_device_bands.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
@@ -98,6 +99,10 @@ begin
   -- the Flash landing's stored cards (cma.flash_cards_now) since addition 0009p
   if not exists (select 1 from cma.schema_migration where version = '0009p') then
     raise exception 'addition 0009p (180_flash_stored_cards.sql) has not run in this database';
+  end if;
+  -- the Live board's first missed callers (cma.inbound_now_first) since addition 0009q
+  if not exists (select 1 from cma.schema_migration where version = '0009q') then
+    raise exception 'addition 0009q (182_live_missed_first.sql) has not run in this database';
   end if;
   -- the customer list under a band of Devices per active customer (cma.active_rows' band) since addition 0009r
   if not exists (select 1 from cma.schema_migration where version = '0009r') then
@@ -195,9 +200,14 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'polls', 'inbound today', $q$select * from cma.inbound_today()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks', $q$select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks summary', $q$select * from cma.missed_callbacks_summary()$q$, 'poll', array['monitoring.live']),
-('a', 'polls', 'inbound now (one statement)', $q$select cma.inbound_now()$q$, 'poll', array['monitoring.live']),
+-- since addition 0009q the board's read lists the oldest twenty missed callers with the whole list's count
+-- (cma.inbound_now_first). Every caller is read after "Show all" only: at once, and then with every poll for as long
+-- as the list stays open, which is what every poll read before 0009q. Its row is timed as a list (it is one, and it
+-- is asked for), so it is a known exception to the poll's budget while a list is open (docs/open-decisions.md)
+('a', 'polls', 'inbound now (one statement)', $q$select cma.inbound_now_first(20)$q$, 'poll', array['monitoring.live']),
+('a', 'polls', 'inbound now, every missed caller (Show all)', $q$select cma.inbound_now_first(null)$q$, 'list', array['monitoring.live']),
 ('a', 'polls', 'outbound now', $q$select cma.outbound_now()$q$, 'poll', array['monitoring.live']),
-('a', 'polls', 'live board calls (one statement)', $q$select cma.inbound_now() as j, cma.outbound_now() as o$q$, 'poll', array['monitoring.live']),
+('a', 'polls', 'live board calls (one statement)', $q$select cma.inbound_now_first(20) as j, cma.outbound_now() as o$q$, 'poll', array['monitoring.live']),
 -- Inbound today by hour, the Live board's chart (10 November 2026): Reports → Inbound's read for today, once a minute per open board
 ('a', 'polls', 'inbound today by hour (the board chart)', $q$select * from cma.inbound_service('{today}', '{today}', 'hour')$q$, 'poll', array['reports.view', 'performance.team']),
 ('a', 'polls', 'shifts today', $q$select * from cma.roster_today()$q$, 'poll', array['monitoring.live']),
@@ -219,6 +229,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'welcome agent', 'waiting for you', $q$select cma.my_follow_up()$q$, 'agent', array['leads.accept', 'workday.own']),
 ('a', 'welcome manager', 'team hours 31 days', $q$select t.* from cma.team_hours(date '{today}' - 31, date '{today}' - 1, null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
 ('a', 'welcome manager', 'follow-up summary', $q$select * from cma.follow_up_summary()$q$, 'agent', array['monitoring.live', 'performance.team', 'workday.team']),
+-- the missed callers' count alone, for Needs attention (addition 0009q: no caller is listed on Welcome)
+('a', 'welcome manager', 'missed callers count', $q$select cma.inbound_now_first(0) as j, null::jsonb as o$q$, 'agent', array['monitoring.live']),
 ('a', 'welcome admin', 'roles', $q$select * from cma.roles()$q$, 'agent', array['users.manage_all']),
 ('a', 'my hours', 'own days 7 days', $q$select s.business_date, s.status, s.started_at, s.ended_at, s.working_seconds,
    coalesce((select sum(i.seconds) from cma.time_interval i join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = i.status_id
