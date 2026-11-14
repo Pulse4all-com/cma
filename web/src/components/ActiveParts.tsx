@@ -13,12 +13,12 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 import type { ActiveCopy, Copy as SharedCopy, Locale } from "@/lib/copy";
 import type {
-  ActiveCohort, ActiveComparisonRow, ActiveGrouping, ActiveList, ActiveMarketRow, ActiveMeasure, ActiveReport, ActiveSlotKey, ActiveSort,
+  ActiveCohort, ActiveComparisonRow, ActiveDeviceCustomers, ActiveGrouping, ActiveList, ActiveMarketRow, ActiveMeasure, ActiveReport, ActiveSlotKey, ActiveSort,
 } from "@/lib/data";
 import { ACTIVE_SLOTS, changeAgainst, cohortLabel, cohortShare, counted, heatColour, signed, wholePercents } from "@/lib/active";
 import { fmtCount, fmtPct, fmtShare } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
-import { Sparkline } from "./ActiveCharts";
+import { FLOW_BG, SERIES_BG, Sparkline } from "./ActiveCharts";
 import { LinkMark } from "./ActivePending";
 import { fmtAmount, fmtNumber } from "./FlashParts";
 import { HeaderHint } from "./HeaderHint";
@@ -179,7 +179,7 @@ export function Amounts({ amounts, locale, pick }: { amounts: Record<string, num
   return <span className="flex flex-col items-end">{lines}</span>;
 }
 
-export const MARKET_SORTS = ["customers", "share", "subscriptions", "devices", "medianAge", "churned30d", "net30d", "indirectShare", "market"] as const;
+export const MARKET_SORTS = ["customers", "share", "subscriptions", "devices", "devicesPerCustomer", "medianAge", "churned30d", "net30d", "indirectShare", "market"] as const;
 export type MarketSort = (typeof MARKET_SORTS)[number];
 
 /** The markets in the chosen order: a column's value, the higher first when descending; the market's code breaks ties */
@@ -206,15 +206,22 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
   const n = (x: number) => fmtCount(x, locale);
   // a header: a short label that may break over two lines (in these narrow columns the info mark may stand under the
   // label's last word); its hint is named with the column's full name
-  const head = (label: string, text: string, key?: MarketSort, full = label) => {
+  // under: a second figure that shares the column (Devices per customer under Devices), with its own sort link; the header
+  // keeps one info mark, whose text explains both
+  const head = (label: string, text: string, key?: MarketSort, full = label, under?: { label: string; key: MarketSort; text: string }) => {
     const current = key !== undefined && key === sort;
-    const next = current && descending ? "asc" : "desc";
+    const sorted = current || (under !== undefined && under.key === sort);
+    const link = (k: MarketSort, shown: string, name: string) => {
+      const on = k === sort;
+      return (
+        <Link href={href({ msort: k, mdir: on && descending ? "asc" : "desc" })} prefetch={false} scroll={false} className="whitespace-normal underline-offset-2 hover:underline" data-testid={`active-msort-${k}`}
+          title={t.sortBy.replace("{column}", name)}>{shown}{on ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
+      );
+    };
     return (
-      <th className={`${thD} ${key === "market" ? "" : "text-right"}`} aria-sort={current ? (descending ? "descending" : "ascending") : undefined} data-full={full}>
-        <HintLabel label={key ? (
-          <Link href={href({ msort: key, mdir: next })} prefetch={false} scroll={false} className="whitespace-normal underline-offset-2 hover:underline" data-testid={`active-msort-${key}`}
-            title={t.sortBy.replace("{column}", full)}>{label}{current ? (descending ? " ↓" : " ↑") : ""}<LinkMark /></Link>
-        ) : label}>{hint(full, text)}</HintLabel>
+      <th className={`${thD} ${key === "market" ? "" : "text-right"}`} aria-sort={sorted ? (descending ? "descending" : "ascending") : undefined} data-full={full}>
+        <HintLabel label={key ? link(key, label, full) : label}>{hint(full, under ? `${text} ${under.label}: ${under.text}` : text)}</HintLabel>
+        {under ? <span className="block font-normal" data-under={under.label}>{link(under.key, under.label, under.label)}</span> : null}
       </th>
     );
   };
@@ -238,7 +245,10 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
       <td className={tdD}>{isTotal ? fmtShare(r.share, locale) : splitPercent(shares.get(r.market!) ?? 0, r.customers, locale)}</td>
       {segCols.map((s) => <td key={s} className={tdD}>{n(r.bySegment[s] ?? 0)}</td>)}
       <td className={tdD}>{n(r.subscriptions)}</td>
-      <td className={tdD}>{n(r.devices)}</td>
+      <td className={`${tdD} leading-tight`}>
+        <span className="block">{n(r.devices)}</span>
+        <span className="block text-caption text-p4a-muted">{r.devicesPerCustomer === null ? "–" : fmtNumber(r.devicesPerCustomer, locale, 2)}</span>
+      </td>
       <td className={tdD}><Amounts amounts={r.amounts} locale={locale} pick="amount" /></td>
       <td className={tdD}><Amounts amounts={r.amounts} locale={locale} pick="average" /></td>
       <td className={tdD}>{r.medianAge === null ? "–" : fmtNumber(r.medianAge, locale, 1)}</td>
@@ -261,7 +271,7 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
           {/* a segment's header: its info mark may stand under the word, as under the sortable headers of this narrow table */}
           {segCols.map((s) => <th key={s} className={`${thD} text-right`}>{s === "unknown" ? t.unknownSegment : s} {hint(s === "unknown" ? t.unknownSegment : s, hints.mh_col_segment!)}</th>)}
           {head(t.shortSubscriptions, hints.mh_total_subscriptions!, "subscriptions", t.totalSubscriptions)}
-          {head(t.colDevices, hints.mh_col_devices!, "devices")}
+          {head(t.colDevices, hints.mh_col_devices!, "devices", t.colDevices, { label: t.devicesPerCustomerUnder, key: "devicesPerCustomer", text: hints.mh_devices_per_customer! })}
           {head(t.shortMonthlyAmount, hints.mh_monthly_amount!, undefined, t.monthlyAmount)}
           {head(t.shortAverageAmount, hints.mh_average_amount!, undefined, t.averageAmount)}
           {head(t.shortMedianAge, hints.mh_customer_age!, "medianAge", t.medianAge)}
@@ -284,7 +294,7 @@ export function MarketsTable({ rows, total, sort, descending, href, hints, copy,
 export function measureText(measure: ActiveMeasure, value: number, currency: string | null, locale: Locale, t: T): string {
   switch (measure) {
     case "customers": return fmtCount(value, locale);
-    case "share": case "retention": case "indirect_share": return fmtShare(value, locale);
+    case "share": case "retention": case "indirect_share": case "devices_from_share": return fmtShare(value, locale);
     case "lifetime_median": return counted(t.monthsValue, value, fmtNumber(value, locale, 0));
     case "median_age": return counted(t.monthsValue, Number(value.toFixed(1)), fmtNumber(value, locale, 1));
     case "clv_average": case "clv_median": case "clv_per_month": case "average_monthly_amount": return currency ? fmtAmount(value, currency, locale) : fmtNumber(value, locale, 2);
@@ -295,7 +305,7 @@ export function measureText(measure: ActiveMeasure, value: number, currency: str
 /** A difference in the measure's unit: shares in percentage points, the rest as the measure itself */
 function differenceText(measure: ActiveMeasure, value: number, currency: string | null, locale: Locale, t: T): string {
   const abs = Math.abs(value);
-  const text = measure === "share" || measure === "retention" || measure === "indirect_share"
+  const text = measure === "share" || measure === "retention" || measure === "indirect_share" || measure === "devices_from_share"
     ? counted(t.pointsValue, Math.round(abs * 1000) / 10, fmtNumber(abs * 100, locale, 1))
     : measureText(measure, abs, currency, locale, t);
   return value === 0 ? text : signed(text, value);
@@ -307,13 +317,18 @@ function differenceText(measure: ActiveMeasure, value: number, currency: string 
  * worse: every difference and ratio stands in Inkt with its sign (Martin, 12 November 2026); a currency one side lacks
  * leaves its cell empty with the reason in its title
  */
-export function ComparisonTable({ comparison, hints, copy, locale }: { comparison: NonNullable<ActiveReport["comparison"]>; hints: Record<string, string>; copy: Copy; locale: Locale }) {
+export function ComparisonTable({ comparison, hints, copy, locale, devicesFrom }: {
+  comparison: NonNullable<ActiveReport["comparison"]>; hints: Record<string, string>; copy: Copy; locale: Locale;
+  /** The count the row "customers with n or more devices" names (the bands' third bound); null in a document without that row */
+  devicesFrom: number | null;
+}) {
   const t = copy.active;
   const hint = hintOf(copy);
   const a = comparison.a ?? "–";
   const b = comparison.b ?? "–";
   const label = (r: ActiveComparisonRow) => {
-    const base = r.measure === "retention" ? counted(t.m_retention, r.months ?? 0) : t[`m_${r.measure}`];
+    const base = r.measure === "retention" ? counted(t.m_retention, r.months ?? 0)
+      : r.measure === "devices_from_share" ? t.m_devices_from_share.replace("{n}", devicesFrom === null ? "" : fmtCount(devicesFrom, locale)) : t[`m_${r.measure}`];
     return r.currency ? `${base} (${r.currency})` : base;
   };
   // the share of the base is a split over the two segments and the unknown one: whole percents that add up to 100
@@ -430,8 +445,10 @@ const LIST_SORT: Partial<Record<string, ActiveSort>> = {
  * The active customers, a page of them, sorted and paged by the database: the store's id of the customer, codes, dates,
  * amounts, the worst payment state and the CRM contact's link. No name, email, phone or address exists to show
  */
-export function CustomerList({ list, sort, descending, page, pageSize, href, hints, copy, locale }: {
+export function CustomerList({ list, sort, descending, page, pageSize, href, hints, copy, locale, band }: {
   list: ActiveList; sort: ActiveSort; descending: boolean; page: number; pageSize: number; href: ActiveHref; hints: Record<string, string>; copy: Copy; locale: Locale;
+  /** The band of Devices per active customer the list is narrowed to, or null */
+  band: string | null;
 }) {
   const t = copy.active;
   const hint = hintOf(copy);
@@ -521,6 +538,7 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
       <div className="flex flex-wrap items-center justify-between gap-4 text-small" data-testid="active-pager">
         <p className="text-p4a-muted">
           {t.listRange.replace("{first}", n(first)).replace("{last}", n(Math.min(total, first + list.rows.length - 1))).replace("{total}", n(total))}
+          {band ? <BandChip band={band} href={href} t={t} /> : null}
         </p>
         <nav aria-label={t.listCard} className="flex items-center gap-2 print:hidden">
           {list.prev
@@ -532,6 +550,125 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
             : null}
         </nav>
       </div>
+    </div>
+  );
+}
+
+/** A band of Devices per active customer in words: "No device linked", "1 device", "3–5 devices", "11+ devices" */
+export function deviceBandLabel(band: string, t: T): string {
+  return band === "0" ? t.devicesBandNone : counted(t.devicesBand, band === "1" ? 1 : 2, band.replace("-", "–"));
+}
+
+/** The band the list is narrowed to, with the link that shows every customer again */
+export function BandChip({ band, href, t }: { band: string; href: ActiveHref; t: T }) {
+  return (
+    <span className="ml-3 inline-flex items-center gap-2" data-testid="active-list-band">
+      <span className="font-semibold text-p4a-heading">{t.listBand.replace("{band}", deviceBandLabel(band, t))}</span>
+      <Link href={href({ band: null, after: null, before: null, page: null })} prefetch={false} scroll={false} className="text-p4a-deepblue underline-offset-2 hover:underline print:hidden">
+        {t.listBandAll}<LinkMark />
+      </Link>
+    </span>
+  );
+}
+
+// The parts of a split bar: the segments in the series order of Pulse4all-Style 7.7 (SERIES_BG), the channels as the
+// flow chart colours them (FLOW_BG), unknown in the border's grey; every part is also named with its count under the bar,
+// so colour is never the only signal
+
+/**
+ * Devices per active customer in bands (addition 0009r): a horizontal bar per band with its customers, their share, the
+ * band's devices and their share; split by segment or by acquisition channel the bar is stacked and its parts are
+ * named under it. Beside the bars the average, the median, and the customers from the bands' third bound on. A band's
+ * label leads to the customer list narrowed to it. The rows share the panel's fixed height, however many bands the
+ * tenant set
+ */
+export function DeviceBands({ part, split, segments, href, copy, locale, dataQuality }: {
+  part: ActiveDeviceCustomers; split: "none" | "segment" | "channel"; segments: string[]; href: ActiveHref; copy: Copy; locale: Locale;
+  /** The link to Data quality's findings, for the note on customers without a linked device */
+  dataQuality: ReactNode;
+}) {
+  const t = copy.active;
+  const n = (x: number) => fmtCount(x, locale);
+  const largest = Math.max(1, ...part.bands.map((b) => b.customers));
+  const keys = split === "segment" ? [...segments, "unknown"] : split === "channel" ? ["indirect", "direct", "unknown"] : [];
+  const keyLabel = (k: string) => (split === "segment" ? (k === "unknown" ? t.unknownSegment : k) : t[`channelShort_${k as "indirect" | "direct" | "unknown"}`]);
+  const keyBg = (k: string, i: number) => (split === "channel" ? FLOW_BG[k]! : k === "unknown" ? "bg-p4a-border" : SERIES_BG[i % SERIES_BG.length]!);
+  const shares = wholePercents(part.bands.map((b) => b.share ?? 0));
+  const deviceShares = wholePercents(part.bands.map((b) => b.devicesShare ?? 0));
+  return (
+    <div className="grid h-full min-h-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+      <div className="flex min-h-0 flex-col" data-testid="active-devices-bands" data-split={split}>
+        <div className="grid grid-cols-[9rem_minmax(0,1fr)_5rem_5rem_5rem_5rem] items-end gap-3 border-b border-p4a-border pb-2 text-small font-semibold text-p4a-heading">
+          <span>{t.devicesColBand}</span>
+          <span>
+            {keys.length > 0 ? (
+              <span className="flex flex-wrap gap-x-4 gap-y-1 font-normal" data-testid="active-devices-legend">
+                {keys.map((k, i) => (
+                  <span key={k} className="inline-flex items-center gap-2"><span aria-hidden="true" className={`inline-block h-3 w-3 rounded-sm ${keyBg(k, i)}`} />{keyLabel(k)}</span>
+                ))}
+              </span>
+            ) : null}
+          </span>
+          <span className="text-right">{t.devicesColCustomers}</span>
+          <span className="text-right">{t.devicesColShare}</span>
+          <span className="text-right">{t.devicesColDevices}</span>
+          <span className="text-right">{t.devicesColDevicesShare}</span>
+        </div>
+        <ul className="flex min-h-0 flex-1 flex-col" aria-label={t.devicesCard}>
+          {part.bands.map((b, at) => {
+            const label = deviceBandLabel(b.band, t);
+            const by = split === "segment" ? b.bySegment : split === "channel" ? b.byChannel : {};
+            const parts = keys.map((k, i) => ({ k, i, customers: by[k]?.customers ?? 0 })).filter((x) => x.customers > 0);
+            return (
+              <li key={b.band} className="grid min-h-0 flex-1 grid-cols-[9rem_minmax(0,1fr)_5rem_5rem_5rem_5rem] items-center gap-3 border-b border-p4a-border text-small last:border-b-0"
+                data-testid="active-devices-band" data-band={b.band}>
+                <Link href={{ ...href({ band: b.band, after: null, before: null, page: null }), hash: "active-list" }} prefetch={false} className="truncate text-p4a-deepblue underline-offset-2 hover:underline"
+                  title={t.devicesShowInList.replace("{band}", label)}>{label}<LinkMark /></Link>
+                <span className="min-w-0">
+                  <span className="block h-3 rounded-full bg-p4a-neutral-surface">
+                    <span className="flex h-3 overflow-hidden rounded-full" style={{ width: `${(b.customers / largest) * 100}%` }}>
+                      {keys.length === 0 ? <span className="block h-3 w-full bg-p4a-deepblue" />
+                        : parts.map((x) => <span key={x.k} className={`block h-3 ${keyBg(x.k, x.i)}`} style={{ width: `${(x.customers / Math.max(1, b.customers)) * 100}%` }} />)}
+                    </span>
+                  </span>
+                  {keys.length > 0 ? (
+                    <span className="mt-1 block truncate text-caption text-p4a-muted" data-testid="active-devices-parts">
+                      {parts.length === 0 ? "–" : parts.map((x) => t.devicesSplitCount.replace("{label}", keyLabel(x.k)).replace("{n}", n(x.customers))).join(" · ")}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="tabular text-right">{n(b.customers)}</span>
+                <span className="tabular text-right">{splitPercent(shares[at]!, b.customers, locale)}</span>
+                <span className="tabular text-right">{n(b.devices)}</span>
+                <span className="tabular text-right">{splitPercent(deviceShares[at]!, b.devices, locale)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <dl className="flex min-h-0 flex-col justify-between gap-3" data-testid="active-devices-figures">
+        <div>
+          <dt className="text-small font-semibold text-p4a-muted">{t.devicesTerm}</dt>
+          <dd className="mt-1 flex gap-6">
+            <span><span className="block text-h2 font-bold tabular text-p4a-heading" data-testid="active-devices-average">{part.average === null ? "–" : fmtNumber(part.average, locale, 2)}</span><span className="text-small text-p4a-muted">{t.devicesAverage}</span></span>
+            <span><span className="block text-h2 font-bold tabular text-p4a-heading" data-testid="active-devices-median">{part.median === null ? "–" : fmtNumber(part.median, locale, 1)}</span><span className="text-small text-p4a-muted">{t.devicesMedian}</span></span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-small font-semibold text-p4a-muted">{t.devicesFrom.replace("{n}", n(part.from))}</dt>
+          <dd className="mt-1">
+            <span className="block text-h2 font-bold tabular text-p4a-heading" data-testid="active-devices-from">{n(part.fromCustomers)}</span>
+            <span className="text-small text-p4a-muted">
+              {t.devicesFromOf.replace("{share}", part.fromShare === null ? "–" : fmtShare(part.fromShare, locale)).replace("{devicesShare}", part.fromDevicesShare === null ? "–" : fmtShare(part.fromDevicesShare, locale))}
+            </span>
+          </dd>
+        </div>
+        {part.notLinked > 0 ? (
+          <p className="rounded-button border-l-4 border-p4a-border bg-p4a-offwhite px-3 py-2 text-small text-p4a-muted" role="note" data-testid="active-note-devices">
+            {counted(t.devicesNoteNotLinked, part.notLinked, n(part.notLinked))} {dataQuality}
+          </p>
+        ) : <span />}
+      </dl>
     </div>
   );
 }

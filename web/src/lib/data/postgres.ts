@@ -3644,16 +3644,16 @@ export const postgresData: CmaData = {
       // the list's page from the stored take, by keyset (after or before a cursor: a customer's own id), with the contact's record link from the
       // CRM connection's record_url_contact template; a file's read (file: true) answers every row up to the tenant's
       // flash.file_max_rows
-      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8, $9) as j`,
+      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_rows($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) as j`,
         [request.filter.market, request.filter.segment, request.filter.channel, request.sort, request.descending, request.after ?? null,
-          request.before ?? null, request.limit, request.file === true])).rows, "active_rows").j;
+          request.before ?? null, request.limit, request.file === true, request.band ?? null])).rows, "active_rows").j;
       return activeRowsFromDb(j);
     });
   },
 
-  async recordActiveFile(me, filter, rows): Promise<void> {
+  async recordActiveFile(me, filter, rows, band): Promise<void> {
     await withTenant(ctx(me), async (q) => {
-      await q.query(`select cma.active_file_record($1, $2, $3, $4)`, [filter.market, filter.segment, filter.channel, rows]);
+      await q.query(`select cma.active_file_record($1, $2, $3, $4, $5)`, [filter.market, filter.segment, filter.channel, rows, band ?? null]);
     });
   },
 

@@ -1637,7 +1637,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Time rule | As of the instant or of the snapshot's date |
 | Scope | The tenant; per market |
 | Equivalent in the source system | None |
-| Not to use | "Devices" alone for it (Device) |
+| Not to use | "Devices" alone for it (Device), except on Customers → Active, where the label "Devices" is Devices per active customer, which sums this term per customer (Martin, 12 November 2026, "One meaning: D1's"); before addition 0009r that page's Devices counted the register's devices carrying the customer's id in any status |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" |
 | Used by | `flash.subscriptions.devices_on_holding`; Reports → Flash (Subscriptions) and its files |
@@ -1678,8 +1678,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Tier", "bucket" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 5 November 2026 (Proposed); docs/decisions.md, 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …"; "Bands and segments are tenant settings" (addition 0008zt, #233) |
-| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Subscriptions) |
-| As built today | `136`; `137` proves the default and a custom setting. Matches the definition |
+| Used by | `cma.flash_count_band_of`, `cma.flash_count_bands_of`; Reports → Flash (Subscriptions). Customers → Active applies the same banding rule to Devices per active customer under its own setting `customers.device_bands` (default `1,2,3,6,11`: `0`, `1`, `2`, `3-5`, `6-10`, `11+`; one to eight increasing whole numbers from 1, each at most 1000), in the panel "Customers by number of devices" and the customer list's band filter; "Customers with n or more devices" takes its n from the third bound of `customers.device_bands`, or the last bound of a shorter list (Martin, 12 November 2026) |
+| As built today | `136`; `137` proves the default and a custom setting. Matches the definition. For Customers → Active, `184` (addition 0009r); `185` proves the bands by hand |
 
 ### Subscription age
 
@@ -2326,6 +2326,25 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, D13 and D16 (#267) |
 | Used by | Customers → Active; `GET /api/v1/reports/active`, `/rows`, `/file`; `cma_read.active_customer_month`, `cma_read.customer_cohort` |
 | As built today | `172` (tables, refresh, stale mark); `173` proves the take equals a fresh computation row for row |
+
+### Devices per active customer
+
+| Field | Value |
+|---|---|
+| Term | Devices per active customer (nl: Apparaten per actieve klant; `active.devicesTerm`, `active.devicesCard` "Customers by number of devices"); on Customers → Active the label "Devices" (the list's column, the markets' column, "Devices in the band") is this term |
+| Key | The document part `device_customers` of `GET /api/v1/reports/active` (`deviceCustomers`); `cma.active_customer.devices`; setting `customers.device_bands`; catalog `active.devices_per_customer`, `active.device_band_customers`, `active.device_from_share` |
+| Definition | The devices in the field (a Device status that counts as in the field) of the asset register whose subscription reference is a Holding subscription of the customer, in the subscription's market, per Active customer: what Flash counts as Devices on holding subscriptions, summed per customer. A customer with Holding subscriptions and no such device counts 0 and is never left out (band `0`). Devices per customer on the page is this term averaged over the Active customers. Beside the bands the panel shows the average, the median and the customers with n or more devices (Device band). |
+| Source | `cma.active_customer.devices`, written by `cma.active_refresh_of` from `cma.active_base`'s `devices_in_field` of the customer's holding rows |
+| Counts / does not count | Devices in the field on Holding subscriptions only; not the devices that carry the customer's id in any status (Flash's customer figure, `cma.active_base.customer_devices`, which no read of the page uses any more); devices without a subscription reference are Data quality's check |
+| Unit and display | A count; bands as in Device band; the average to two decimals |
+| Time rule | As of the take (History as of) |
+| Scope | Per tenant; per Active customer; narrowed by the page's filters |
+| Equivalent in the source system | None |
+| Not to use | "AED" in a label or a key (Device); "Average devices per customer" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 12 November 2026 (Martin); docs/decisions.md, 12 Nov 2026, "Definitions: Devices per active customer ..." (#273, brief B36, addition 0009r) |
+| Used by | Customers → Active (the panel after Subscription mix, the markets' and the comparison's figures, the customer list and its band filter); `GET /api/v1/reports/active` (`deviceCustomers`, `devicesFromShare`), `/rows` and `/file` (`band`) |
+| As built today | `184`; `185` proves it by hand and against a fresh computation. Matches the definition |
 
 ## Rail terms
 
