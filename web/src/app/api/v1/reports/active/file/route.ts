@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     const [settingsList, list] = await Promise.all([data().listSettings(me), data().getActiveRows(me, q)]);
     if (!list.setUp) throw new ApiError(409, "not_set_up", "the store or the subscriptions are not set up, so there is no customer list");
     const zone = list.timeZone || me.timeZone;
-    const chosen = Object.entries(activeQuery(q.filter)).map(([k, v]) => `${k}=${v}`);
+    const chosen = [...Object.entries(activeQuery(q.filter)), ...(q.band ? [["band", q.band]] : [])].map(([k, v]) => `${k}=${v}`);
     let filters = chosen.length > 0 ? chosen.join("; ") : "all";
     if (!list.take) throw new ApiError(409, "history_not_ready", "the stored take the list is read from is being prepared, so there is no customer list yet");
     if (list.total !== null && list.total > list.rows.length) filters = `${filters}; rows ${list.rows.length} of ${list.total}`;
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     }));
     const columns: FlashFileColumn[] = ACTIVE_FILE_COLUMNS.map((key) => ({ key, kind: KINDS[key] ?? "text" }));
     const text = flashCsv(list.take.computedAt, filters, columns, rows, exportSettingsFrom(settingsList), zone);
-    await data().recordActiveFile(me, q.filter, list.rows.length);
+    await data().recordActiveFile(me, q.filter, list.rows.length, q.band ?? null);
     return csvFile(text, activeFileName(q.filter, asOfStamp(null, new Date(list.take.computedAt), zone)));
   });
 }

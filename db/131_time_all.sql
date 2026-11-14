@@ -15,7 +15,8 @@
 -- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
 -- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
 -- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009q (the
--- Live board's first missed callers), after 182_live_missed_first.sql. Prod is the proof; dev's shared core is for
+-- Live board's first missed callers), after 182_live_missed_first.sql; since addition 0009r (the customer list under a
+-- device band), after 184_active_device_bands.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
@@ -102,6 +103,10 @@ begin
   -- the Live board's first missed callers (cma.inbound_now_first) since addition 0009q
   if not exists (select 1 from cma.schema_migration where version = '0009q') then
     raise exception 'addition 0009q (182_live_missed_first.sql) has not run in this database';
+  end if;
+  -- the customer list under a band of Devices per active customer (cma.active_rows' band) since addition 0009r
+  if not exists (select 1 from cma.schema_migration where version = '0009r') then
+    raise exception 'addition 0009r (184_active_device_bands.sql) has not run in this database';
   end if;
 end
 $$;
@@ -364,6 +369,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'active customers', 'active rest, a later first month by quarter (stored document)', $q$select cma.active_rest((date '{month}' - interval '12 months')::date, null, null, null, 'quarter')$q$, 'agent', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active rest computed (two filters)', $q$select cma.active_rest(null, null, 'unknown', 'direct', 'month')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active list filtered, by age', $q$select cma.active_rows(null, 'unknown', 'direct', 'age_months', false, null, null, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active list under a device band', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, null, null, 50, false, '0')$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'active customers', 'active list under the last device band', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, null, null, 50, false,
+   (select u.b from unnest(cma.flash_count_bands_of(cma.flash_bounds_of(cma.setting_of(cma.current_tenant_id(), 'customers.device_bands')))) with ordinality u(b, o)
+    order by u.o desc limit 1))$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active file', $q$select cma.active_rows(null, null, null, 'monthly_amount', true, null, null, null, true)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'pledge lists now', 'pledge page', $q$select cma.pledge_page()$q$, 'overview', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge check serials', $q$select * from cma.pledge_finding_rows('no_language', 500)$q$, 'list', array['pledges.view']),

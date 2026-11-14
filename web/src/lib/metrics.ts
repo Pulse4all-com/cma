@@ -439,6 +439,8 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "active.segment_difference",
     "active.subscriptions_per_customer",
     "active.devices_per_customer",
+    "active.device_band_customers",
+    "active.device_from_share",
     "active.base_over_time",
     "active.inflow",
     "active.outflow",

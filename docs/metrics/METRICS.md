@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-645 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 146 · cadence_unconfirmed 74.
+647 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 148 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -38578,12 +38578,12 @@ Subscriptions whose customer the store does not hold are not in it. verify_sql i
 
 **Devices per customer** on /reports/active · Devices per customer (Apparaten per klant)
 
-The devices of the active customers in the asset register divided by the active customers.
+Devices per active customer, averaged: the devices in the field on the active customers' holding subscriptions divided by the active customers.
 
 **Formula as computed**
 
 ```
-devices_per_customer = sum(devices whose customer reference is the customer's id, of its store's market: Flash's figure) / active customers
+devices_per_customer = sum(Devices per active customer) / active customers; Devices per active customer = the asset register's devices in a status that counts as in the field whose subscription reference is a holding subscription of the customer, in the subscription's market (cma.active_customer.devices)
 ```
 
 **Unit** ratio · **Grain** now, per_segment, per_market · **Status** prerequisite_missing
@@ -38592,6 +38592,7 @@ devices_per_customer = sum(devices whose customer reference is the customer's id
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
 | `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
 | `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
 | `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
@@ -38615,23 +38616,148 @@ devices_per_customer = sum(devices whose customer reference is the customer's id
 
 **Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
-**Computed in** `cma.active_rest` (0009l); `cma.active_rest_of` (0009l); `cma.active_refresh_of` (0009l); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_body_of` (0009r); `cma.active_refresh_of` (0009r); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+**Fixture check** Not run against prod data here. db/185_verify_active_device_bands.sql checks the part on a take written by hand in two throwaway tenants (H1 to H5: a customer at 0 devices and at every band's edge, two segments, three channels, a segment and a market filter, another setting) and, per tenant, that the take's devices are the devices in the field on the holding subscriptions and that every stored document equals a fresh computation (D1, D2); web/verify/active.mjs checks the page's library and the mock's mirror. Martin runs 185 and 131.
 
 **Data prerequisites**
 
 - Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
 - The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
 - Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+- Every device in the field carries the subscription reference of a holding subscription in the asset register; without it its customer falls in the band of no linked device, and the average, the median and the share from n devices on are understated (data quality check `field_device_without_subscription_ref`)
 
-**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: Devices per active customer in bands (addition 0009r); definitions.md, Devices per active customer; decisions.md, 12 Nov 2026 (Customers -> Active shows the active customers by the devices they hold)
 
 **Notes**
 
-Every device status counts, as Flash's customers list. verify_sql is null: the figure is a reconstruction over every subscription and customer of the tenant; db/173_verify_active_customers.sql is the independent check (a hand-computed base, and the pure functions against a brute force).
+Since addition 0009r the page's Devices is this term everywhere (the list's column, the markets' Devices and Devices per customer, the comparison's row); before it they counted the register's devices that carry the customer's id, in any status. verify_sql is null: the figure is read from the stored take; db/185_verify_active_device_bands.sql is the independent check.
+
+#### `active.device_band_customers`
+
+**Customers by number of devices** on /reports/active · Customers by number of devices (Klanten naar aantal apparaten)
+
+The active customers by their Devices per active customer, in the bands of the tenant's setting customers.device_bands (band 0: a customer whose holding subscriptions carry no device in the field, never left out): per band the customers, their share of the active customers, the band's devices and their share of all those devices, with the customers and devices per segment and per acquisition channel; beside them the average and the median.
+
+**Formula as computed**
+
+```
+band = cma.flash_count_band_of(Devices per active customer, customers.device_bands); customers = count(active customers) per band; share = customers / active customers; devices = sum(Devices per active customer) per band; devices_share = devices / all devices; average = devices / active customers; median = percentile_cont(0.5) of Devices per active customer
+```
+
+**Unit** count · **Grain** now, per_segment, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `customers.device_bands` | 1,2,3,6,11 | 1,2,3,6,11 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_body_of` (0009r); `cma.active_refresh_of` (0009r); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/185_verify_active_device_bands.sql checks the part on a take written by hand in two throwaway tenants (H1 to H5: a customer at 0 devices and at every band's edge, two segments, three channels, a segment and a market filter, another setting) and, per tenant, that the take's devices are the devices in the field on the holding subscriptions and that every stored document equals a fresh computation (D1, D2); web/verify/active.mjs checks the page's library and the mock's mirror. Martin runs 185 and 131.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+- Every device in the field carries the subscription reference of a holding subscription in the asset register; without it its customer falls in the band of no linked device, and the average, the median and the share from n devices on are understated (data quality check `field_device_without_subscription_ref`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: Devices per active customer in bands (addition 0009r); definitions.md, Devices per active customer; decisions.md, 12 Nov 2026 (Customers -> Active shows the active customers by the devices they hold)
+
+**Notes**
+
+A band's label leads to the customer list narrowed to that band (cma.active_rows' band). In the page the shares are whole percents that add up to 100 (largest remainder). verify_sql is null: the figure is read from the stored take; db/185_verify_active_device_bands.sql is the independent check.
+
+#### `active.device_from_share`
+
+**Customers with n or more devices** on /reports/active · Customers with n or more devices (Klanten met n of meer apparaten)
+
+The active customers whose Devices per active customer are at least n, as a count, as a share of the active customers and as the share of all devices they hold; n is the third bound of customers.device_bands (3 by default; the last bound of a shorter list), so the figure adds up with the bands.
+
+**Formula as computed**
+
+```
+n = customers.device_bands[least(3, its length)]; from_customers = count(active customers with Devices per active customer >= n); from_share = from_customers / active customers; from_devices_share = sum(their devices) / all devices; per segment and per market: devices_from_share = customers with >= n / active customers
+```
+
+**Unit** share · **Grain** now, per_segment, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.commerce_customer` | source_id, connection_id, source_created_at, amount_spent, amount_currency, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify webhooks and read-back -> cma.ingest_upsert_commerce_customers(); amount_spent is Shopify's amountSpent; the customer's contact link is the CMA's own (addition 0008h, cma.set_commerce_customer_contact()) | webhook read-back; reconcile 03:30 |
+| `cma.device` | model_key, market, device_status_key, customer_ref, subscription_ref, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.commerce_store` | handle, market, currency, connection_id | CMA | the store row is written when the connection is set up (PROD_RUNBOOK phase 9); its market is configuration | on demand (configuration) |
+
+**Filters**
+
+- tenant: cma.active_top, cma.active_now, cma.active_rest and cma.active_rows under RLS + the current tenant (cma.active_top_of, cma.active_now_of, cma.active_rest_of, cma.active_rows_of and the stored take's tables with the tenant passed explicitly)
+- population: Flash's, unchanged (docs/definitions.md, Active customer): the store customers the latest read still returns with a subscription of their store in a status of flash.device_holding_statuses; Total subscriptions the subscriptions in one; merged and never-subscribed subscriptions are not read
+- the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only
+- a source not set up (no store, or no subscriptions connection) gives no figure, never zero
+
+**Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `customers.device_bands` | 1,2,3,6,11 | 1,2,3,6,11 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the live present of the tiles, cma.active_rows the list's page). No polling.
+
+**Computed in** `cma.active_rest` (0009l); `cma.active_rest_body_of` (0009r); `cma.active_refresh_of` (0009r); `cma.active_base_of` (0009l); `default (ActivePage)` in src/app/reports/active/page.tsx; `activeFromDb` in src/lib/active.ts; `postgresData.getActive` in src/lib/data/postgres.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run against prod data here. db/185_verify_active_device_bands.sql checks the part on a take written by hand in two throwaway tenants (H1 to H5: a customer at 0 devices and at every band's edge, two segments, three channels, a segment and a market filter, another setting) and, per tenant, that the take's devices are the devices in the field on the holding subscriptions and that every stored document equals a fresh computation (D1, D2); web/verify/active.mjs checks the page's library and the mock's mirror. Martin runs 185 and 131.
+
+**Data prerequisites**
+
+- Every store connected with its subscriptions connection, and the subscriptions read in full (Open decisions, Rolling out the other 13 stores)
+- The original start date of subscriptions moved into the subscription app (they carry the date they moved: the dominant cohort note; Open decisions)
+- Store customers linked to their CRM contact with a segment (addition 0008h and 0008zt); without it the segment is unknown (data quality check `commerce_unmatched`)
+- Every device in the field carries the subscription reference of a holding subscription in the asset register; without it its customer falls in the band of no linked device, and the average, the median and the share from n devices on are understated (data quality check `field_device_without_subscription_ref`)
+
+**Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: Devices per active customer in bands (addition 0009r); definitions.md, Devices per active customer; decisions.md, 12 Nov 2026 (Customers -> Active shows the active customers by the devices they hold)
+
+**Notes**
+
+The brief named the key active.customers_3plus_share; the 3 became the bands' third bound (Martin, 12 November 2026), so the key does not carry a number. verify_sql is null: the figure is read from the stored take; db/185_verify_active_device_bands.sql is the independent check.
 
 #### `active.base_over_time`
 
@@ -38940,7 +39066,7 @@ Counts subscriptions, not customers; links to Flash's churn overview.
 
 **Markets** on /reports/active · Markets (Markten)
 
-The present figures per market with the totals row the same read computes: active customers with their share and segments, subscriptions, devices, the Monthly recurring amount and its average per currency, median customer age, realised value, churned and net change over 30 days, the indirect share and the customers at the last twelve month ends.
+The present figures per market with the totals row the same read computes: active customers with their share and segments, subscriptions, devices, the Monthly recurring amount and its average per currency, median customer age, realised value, churned and net change over 30 days, the indirect share and the customers at the last twelve month ends. Since addition 0009r the devices are Devices per active customer, with their average per customer under the devices' count.
 
 **Formula as computed**
 
@@ -39125,7 +39251,7 @@ In retry and Failed link to Flash's subscriptions overview. verify_sql is null: 
 
 **Customer list** on /reports/active · Customer list (Klantenlijst)
 
-The active customers under the filters, 50 a page, sorted and paged in the database: the store's id of the customer, store, market, segment, acquisition channel with First orders' level, Customer start and age, subscriptions, devices, the Monthly recurring amount, realised value, the worst payment state and the CRM contact's link. The download holds the whole filtered list.
+The active customers under the filters, 50 a page, sorted and paged in the database: the store's id of the customer, store, market, segment, acquisition channel with First orders' level, Customer start and age, subscriptions, devices, the Monthly recurring amount, realised value, the worst payment state and the CRM contact's link. The download holds the whole filtered list. The list can be narrowed to one band of Devices per active customer (the band of the devices panel).
 
 **Formula as computed**
 
