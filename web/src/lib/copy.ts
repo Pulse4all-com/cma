@@ -1791,7 +1791,7 @@ const en = {
     fedBy_purchaseOrders: "The purchase-order reference the asset register holds on each device. It is the register's reference, not a record of the finance system.",
     intro_fulfillment: "Which ordered devices are shipped, on their way or delivered.",
     fedBy_fulfillment: "The fulfillment status the store gives each order, and the asset register's devices that are in transit.",
-    intro_storage: "Which devices are in storage, where, and of which model.",
+    intro_storage: "Which devices are in stock, in which warehouse and of which model.",
     fedBy_storage: "The asset register's devices in a status flagged in stock, per warehouse and model. Not the pledge lists' In Storage.",
   },
   maintenanceFile: {
@@ -6021,7 +6021,7 @@ const nl = {
     fedBy_purchaseOrders: "De inkooporderverwijzing die het assetregister bij elk apparaat bijhoudt. Het is de verwijzing van het register, geen record van het financiële systeem.",
     intro_fulfillment: "Welke bestelde apparaten verzonden, onderweg of afgeleverd zijn.",
     fedBy_fulfillment: "De fulfilmentstatus die de winkel aan elke order geeft, en de apparaten van het assetregister die onderweg zijn.",
-    intro_storage: "Welke apparaten in opslag zijn, waar, en van welk model.",
+    intro_storage: "Welke apparaten op voorraad zijn, in welk magazijn en van welk model.",
     fedBy_storage: "De apparaten van het assetregister in een status die als op voorraad geldt, per magazijn en model. Niet de In Storage van de pandlijsten.",
   },
   maintenanceFile: {

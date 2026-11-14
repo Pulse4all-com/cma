@@ -2584,7 +2584,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Storage (nl: Opslag), a rail page |
 | Key | Copy key `nav.storage`; `/reports/storage` |
-| Definition | The page, in the Assets group, that will show which devices are in storage, where, and of which model. It counts devices by the Device status flag in stock (`is_in_stock`); it is not the pledge lists' In Storage. |
+| Definition | The page, in the Assets group, that will show which devices are in stock, in which warehouse and of which model. It counts devices by the Device status flag in stock (`is_in_stock`); it is not the pledge lists' In Storage. |
 | Source | Will be fed by the asset register's devices in a status flagged in stock (Device status flag `is_in_stock`), per warehouse and model |
 | Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. Counts by the flag in stock, never by a device with no customer reference (In Storage's rule). |
 | Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
@@ -2592,7 +2592,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
 | Equivalent in the source system | The register's statuses flagged in stock |
 | Not to use | "In Storage" (the pledge lists' term: a device with no customer reference); "In stock" as a status name (Device status) |
-| Status | Pending: whether the register holds a reliable warehouse per device (docs/open-decisions.md, Placeholder pages to build). The intro says "in storage" in lower case, Martin's wording, which sits close to the defined term In Storage |
+| Status | Pending: whether the register holds a reliable warehouse per device (docs/open-decisions.md, Placeholder pages to build). The page's copy uses the flag's words ("in stock", nl "op voorraad"), never "in storage", which is the pledge lists' term |
 | Decided | 14 November 2026 (Martin); docs/decisions.md, 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278) |
 | Used by | `nav.storage`, `placeholders.*`; Assets → Storage (the rail and its breadcrumb) |
 | As built today | Matches the definition; no read, no transaction |
