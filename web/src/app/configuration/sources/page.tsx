@@ -5,6 +5,7 @@ import { Card } from "@/components/primitives";
 import { data } from "@/lib/data";
 import { resolve } from "../../access";
 import { ConfigurationPage, mayConfigure } from "../gate";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 /**
  * Sources (Configuration, addition 0008e): the tenant's connections, one row each; a row opens its page. Since
@@ -23,8 +24,8 @@ export default async function SourcesPage() {
       <Card>
         <SourcesList sources={sources} copy={copy} locale={me.locale} timeZone={me.timeZone} />
       </Card>
-      <FormCategories categories={categories} copy={copy} />
-      <RecordKinds kinds={kinds} copy={copy} />
+      <FormCategories categories={categories} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} />
+      <RecordKinds kinds={kinds} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} />
     </ConfigurationPage>
   );
 }

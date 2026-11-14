@@ -6,8 +6,8 @@
  * closes. The address keys are from, market and model.
  */
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import { Keycap } from "./primitives";
+import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
 
@@ -29,7 +29,7 @@ export function MaintenanceFilters({ months, markets, models, fromMonth, current
   query: Record<string, string>;
   copy: MaintenanceFilterCopy;
 }) {
-  const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice({ from: fromMonth, market, model });
   const marketList = market && !markets.includes(market) ? [...markets, market] : markets;
   const modelList = model && !models.some((m) => m.key === model) ? [...models, { key: model, name: null }] : models;
 
@@ -38,29 +38,29 @@ export function MaintenanceFilters({ months, markets, models, fromMonth, current
     if (next.from !== currentMonth) qs.set("from", next.from);
     if (next.market) qs.set("market", next.market);
     if (next.model) qs.set("model", next.model);
-    router.push(`/reports/maintenance?${qs.toString()}` as Route);
+    choose(next, `/reports/maintenance?${qs.toString()}` as Route);
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-4" data-testid="maintenance-filters">
+    <div className={`flex flex-wrap items-end gap-4 ${PENDING_ROW}`} data-testid="maintenance-filters" aria-busy={pending || undefined}>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span>{copy.from}</span>
-        <select value={fromMonth} data-testid="maintenance-from" className={select} onChange={(e) => go({ from: e.target.value, market, model })}>
+        <select value={shown.from} data-testid="maintenance-from" className={select} onChange={(e) => go({ ...shown, from: e.target.value })}>
           {months.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span className="flex items-center gap-2">{copy.marketFilter} <Keycap>K</Keycap></span>
-        <select value={market ?? ""} data-shortcut="k" data-testid="maintenance-market" className={select}
-          onChange={(e) => go({ from: fromMonth, market: e.target.value || null, model })}>
+        <select value={shown.market ?? ""} data-shortcut="k" data-testid="maintenance-market" className={select}
+          onChange={(e) => go({ ...shown, market: e.target.value || null })}>
           <option value="">{copy.allMarkets}</option>
           {marketList.map((m) => <option key={m} value={m}>{m === "unknown" ? copy.unknownMarket : m}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
         <span className="flex items-center gap-2">{copy.modelFilter} <Keycap>D</Keycap></span>
-        <select value={model ?? ""} data-shortcut="d" data-testid="maintenance-model" className={select}
-          onChange={(e) => go({ from: fromMonth, market, model: e.target.value || null })}>
+        <select value={shown.model ?? ""} data-shortcut="d" data-testid="maintenance-model" className={select}
+          onChange={(e) => go({ ...shown, model: e.target.value || null })}>
           <option value="">{copy.allModels}</option>
           {modelList.map((m) => <option key={m.key} value={m.key}>{m.key === "unknown" ? copy.unknownModel : m.name ?? m.key}</option>)}
         </select>

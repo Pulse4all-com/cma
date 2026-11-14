@@ -978,6 +978,85 @@ async function expectActiveLayers() {
   }
 }
 
+// Reports → Dashboard's parts (12 November 2026, lib/head-start): the page's three reads run side by side and a read
+// still on its way streams in behind outlines. With every part held back (the test data's ?late=) the outlines are on
+// the screen first, and when the figures land no tile and no section moves or changes its size; without it a short
+// period is drawn whole, with no outline in between. A click on a period marks its link within 100 ms, and so does a
+// choice of a person, before the answer is there (the answer is held back so the mark's moment can be read).
+// --provoke demands tiles 3 px taller than their outlines and no mark
+async function expectDashboardParts() {
+  const where = "manager /reports/dashboard";
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.addInitScript(() => {
+    const snap = () => {
+      if (document.querySelector("[data-route-skeleton]")) return;
+      const tiles = [...document.querySelectorAll('[data-testid="intake-row"] [data-tile]')];
+      const box = (el) => { const r = el.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
+      const time = document.querySelector('[data-testid="dashboard-time-outline"], [data-testid="dashboard-time"]');
+      const state = {
+        tiles: Object.fromEntries(tiles.map((el) => [el.getAttribute("data-testid"), box(el)])), timeTop: time ? Math.round(time.getBoundingClientRect().top) : null,
+        waiting: tiles.filter((el) => el.hasAttribute("data-tile-waiting")).length, timeWaits: Boolean(document.querySelector('[data-testid="dashboard-time-outline"]')),
+      };
+      if (state.waiting > 0 || state.timeWaits) window.__everWaited = true;
+      if (tiles.length === 7 && state.waiting === 7 && state.timeWaits) window.__outlined = state;
+      window.__now = state;
+    };
+    new MutationObserver(snap).observe(document, { subtree: true, childList: true, attributes: true });
+  });
+  const landed = () => p.waitForFunction(() => window.__now && window.__now.waiting === 0 && !window.__now.timeWaits && Object.keys(window.__now.tiles).length === 7, null, { timeout: 10_000 })
+    .then(() => true, () => false);
+  await p.goto(BASE + "/reports/dashboard?range=week&late=time,counts,speed");
+  if (!(await landed())) problems.push(`${where}: with every part held back the page did not settle`);
+  const held = await p.evaluate(() => ({ outlined: window.__outlined ?? null, now: window.__now ?? null }));
+  if (!held.outlined) problems.push(`${where}: with every part held back no outline was on the screen (seven waiting tiles and the time section's outline)`);
+  else if (held.now) {
+    for (const [id, a] of Object.entries(held.outlined.tiles)) {
+      const c = held.now.tiles[id];
+      const want = provoke ? [a[0], a[1], a[2], a[3] + 3] : a;
+      if (!c || want.some((v, i) => Math.abs(v - c[i]) > 1)) problems.push(`${where}: tile ${id} is at ${JSON.stringify(c)} with its figure against ${JSON.stringify(want)} as its outline (the page shifts when the figures land)`);
+    }
+    if (held.outlined.timeTop === null || held.now.timeTop === null || Math.abs(held.outlined.timeTop - held.now.timeTop) > 1) {
+      problems.push(`${where}: the time section starts at ${held.now.timeTop}px against ${held.outlined.timeTop}px as its outline (the page shifts when the figures land)`);
+    }
+  }
+  // a short period: every read is in within the head start, so no outline is ever on the screen
+  await p.goto(BASE + "/reports/dashboard?range=week");
+  if (!(await landed())) problems.push(`${where}: the page did not settle`);
+  if (await p.evaluate(() => window.__everWaited === true)) problems.push(`${where}: an outline was shown although every read was in within the head start`);
+  // a click shows its mark within 100 ms, before the answer is there
+  await p.route("**/reports/dashboard?**", async (route) => { await new Promise((r) => setTimeout(r, 500)); await route.continue().catch(() => undefined); });
+  // the mark's moment is read inside the page, from the click's own event to the mark in the document, so the driver's
+  // overhead is not counted
+  const markAfter = (event, selector) => p.evaluate(([ev, sel]) => {
+    window.__from = null; window.__mark = null;
+    document.addEventListener(ev, () => { window.__from = performance.now(); }, { capture: true, once: true });
+    window.__markWatch?.disconnect();
+    window.__markWatch = new MutationObserver(() => { if (window.__mark === null && window.__from !== null && document.querySelector(sel)) window.__mark = performance.now(); });
+    window.__markWatch.observe(document.body, { subtree: true, childList: true, attributes: true });
+  }, [event, selector]);
+  const markedIn = () => p.waitForFunction(() => window.__mark !== null, null, { timeout: 400 }).then(() => p.evaluate(() => Math.round(window.__mark - window.__from)), () => null);
+  const link = p.locator('main nav a[href*="range=month"]');
+  await markAfter("click", 'main nav a [data-link-pending="true"]');
+  await link.click();
+  let marked = provoke ? null : await markedIn();
+  if (marked === null || marked > 100) problems.push(`${where}: a click on This month ${marked === null ? "did not mark the link" : `marked the link after ${marked} ms`} (within 100 ms)`);
+  await p.waitForURL(/range=month/, { timeout: 10_000 }).catch(() => problems.push(`${where}: This month did not change the address`));
+  await landed();
+  const people = await p.locator('select[data-shortcut="p"] option').count();
+  if (people < 2) problems.push(`${where}: the person filter lists nobody`);
+  else {
+    await markAfter("change", '[data-filter-pending="true"]');
+    await p.selectOption('select[data-shortcut="p"]', { index: 1 });
+    marked = provoke ? null : await markedIn();
+    if (marked === null || marked > 100) problems.push(`${where}: a choice of a person ${marked === null ? "showed no mark" : `showed its mark after ${marked} ms`} (within 100 ms)`);
+    await p.waitForURL(/person=/, { timeout: 10_000 }).catch(() => problems.push(`${where}: a choice of a person did not change the address`));
+  }
+  await p.unroute("**/reports/dashboard?**", { behavior: "ignoreErrors" });
+  await ctx.close();
+  console.log(`${problems.some((x) => x.startsWith(where)) ? "FAIL" : "PASS"}  the Dashboard's parts: outlines of the figures' size, a short period whole, a click and a choice marked within 100 ms`);
+}
+
 // Campaign monitoring (addition 0008v, brief N19-A part 3), per identity at 1280 px: in the rail's Campaigns group and
 // on the page for reports.view or performance.team (the agent gets the no-permission card and no journey); a card per
 // journey, the archived one absent, each card inside the main area; the page never scrolls sideways; a journey's page
@@ -3196,6 +3275,92 @@ async function expectDealRow(p, where) {
   if (closed.focus !== "attempts-toggle") problems.push(`${where}: after Esc the focus is on ${closed.focus}, expected the deal`);
 }
 
+// A filter's choice shows something within 100 ms (12 November 2026, components/usePendingPush): a change of the
+// address's parameters shows no route skeleton, so the filter's row says aria-busy and its controls dim from the choice
+// until the report's answer is there, and the changed select shows the choice at once (the optimistic result). Per
+// report: the answer is held back 500 ms, the row's first select with another choice than its current one is changed,
+// and inside the page, from the change's own event: the row's aria-busy (within 100 ms), the select dimmed and showing
+// the chosen value while the answer is held, the busy state lasting until the answer (not a flicker), and the address
+// changed. --provoke demands a pending state before the choice was made (no row can meet it) and takes the row's
+// classes away before the choice, so the control is not dimmed and that clause fails on what the page shows
+async function expectFiltersPending() {
+  const rows = [
+    ["/reports/calls?range=month", '[data-testid="calls-filters"]'], ["/reports/email?range=month", '[data-testid="email-filters"]'],
+    ["/reports/first-orders?range=month", '[data-testid="first-order-filters"]'], ["/reports/forms?range=month", '[data-testid="forms-filters"]'],
+    ["/reports/attempts?range=month", '[data-testid="attempts-filters"]'], ["/reports/funnel?range=month", '[data-testid="funnel-filters"]'],
+    ["/reports/follow-up", '[data-testid="follow-up-filters"]'], ["/reports/courtesy", '[data-testid="courtesy-filters"]'],
+    ["/reports/maintenance", '[data-testid="maintenance-filters"]'], ["/reports/intake?range=month", '[data-testid="intake-market-filter"]'],
+    ["/team/hours?range=week", '[data-testid="team-hours-person-filter"]'], ["/reports/flash", '[data-testid="flash-market-row"]'],
+    ["/roster/planner", '[data-testid="planner-filters"]'],
+  ];
+  const HOLD_MS = 500;
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  const before = problems.length;
+  let passed = 0;
+  for (const [path, row] of rows) {
+    const where = `manager ${path}`;
+    const start = problems.length;
+    await p.goto(BASE + path, { waitUntil: "networkidle" });
+    await settle(p);
+    // the row's first enabled select that has a choice other than its current one, and that choice
+    const pick = await p.evaluate((sel) => {
+      const selects = [...document.querySelectorAll(`${sel} select`)];
+      for (let i = 0; i < selects.length; i += 1) {
+        const el = selects[i];
+        const other = [...el.options].find((o) => o.value !== el.value && o.value !== "");
+        // a select that is a menu (it shows the same word whatever is chosen: the planner's week jump) is not read here
+        if (!el.disabled && other && el.dataset.menu === undefined) return { at: i, value: other.value };
+      }
+      return null;
+    }, row);
+    if (pick === null) { problems.push(`${where}: no filter with another choice in ${row}`); continue; }
+    const address = p.url();
+    await p.evaluate(([sel, at, bare]) => {
+      const el = document.querySelectorAll(`${sel} select`)[at];
+      if (bare) document.querySelector(sel).className = "";
+      window.__f = { from: null, busy: null, opacity: null, shown: null, end: null };
+      document.addEventListener("change", () => { window.__f.from = performance.now(); }, { capture: true, once: true });
+      window.__busyWatch?.disconnect();
+      window.__busyWatch = new MutationObserver(() => {
+        const f = window.__f;
+        if (f.from === null) return;
+        const busy = document.querySelector(`${sel}[aria-busy="true"]`) !== null;
+        if (f.busy === null && busy) {
+          f.busy = performance.now();
+          // what a person sees at that moment: the changed control dimmed, and showing the choice
+          const now = document.querySelectorAll(`${sel} select`)[at] ?? el;
+          f.opacity = Number(getComputedStyle(now).opacity);
+          f.shown = now.value;
+        }
+        if (f.busy !== null && f.end === null && !busy) f.end = performance.now();
+      });
+      window.__busyWatch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["aria-busy"] });
+    }, [row, pick.at, provoke]);
+    const held = path.replace(/\?.*$/, "");
+    await p.route(`**${held}?**`, async (route) => { await new Promise((r) => setTimeout(r, HOLD_MS)); await route.continue().catch(() => undefined); });
+    await p.locator(`${row} select`).nth(pick.at).selectOption(pick.value);
+    // the moments are latched inside the page, so this wait only has to outlast a slow machine
+    await p.waitForFunction(() => window.__f.end !== null, null, { timeout: 15_000 }).catch(() => undefined);
+    // a choice that loads a new document takes the page's notes with it: a problem by name, not a crash
+    const f = await p.evaluate(() => window.__f ?? null).catch(() => null);
+    if (f === null) { problems.push(`${where}: the choice loaded a new document, so no pending state can be read`); await p.unroute(`**${held}?**`, { behavior: "ignoreErrors" }); continue; }
+    const after = f.busy === null ? null : Math.round(f.busy - f.from);
+    if (after === null || after > (provoke ? -1 : 100)) problems.push(`${where}: a filter's choice ${after === null ? "showed no pending state" : `showed its pending state after ${after} ms`} (within 100 ms)`);
+    if (after !== null) {
+      if (!(f.opacity < 1)) problems.push(`${where}: the changed control is not dimmed while its choice is on its way (opacity ${f.opacity})`);
+      if (f.shown !== pick.value) problems.push(`${where}: the changed control shows ${JSON.stringify(f.shown)} while its choice ${JSON.stringify(pick.value)} is on its way`);
+      if (f.end === null) problems.push(`${where}: the filter's row stays busy after the answer`);
+      else if (f.end - f.from < HOLD_MS - 100) problems.push(`${where}: the pending state ended after ${Math.round(f.end - f.from)} ms, before the answer held back ${HOLD_MS} ms`);
+    }
+    await p.waitForFunction((a) => window.location.href !== a, address, { timeout: 10_000 }).catch(() => problems.push(`${where}: the choice did not change the address`));
+    await p.unroute(`**${held}?**`, { behavior: "ignoreErrors" });
+    if (problems.length === start) passed += 1;
+  }
+  await ctx.close();
+  console.log(`${problems.length === before ? "PASS" : "FAIL"}  a filter's choice shows its pending state within 100 ms, dimmed and showing the choice, busy until the answer, on ${passed} of ${rows.length} reports`);
+}
+
 // Welcome on open (addition 0008z): a browser with an identity and no browser session (a fresh sign-in, a new session) that
 // opens a deep link lands on Welcome; from then on a deep link opens as asked; the API is never redirected. The mock
 // identity travels as the cma-mock-subject cookie here, as a browser after ?as= or IAP's sign-in, not the verifiers' header.
@@ -3242,8 +3407,10 @@ await expectFunnel();
 await expectInstalledBaseModels();
 await expectAsOfTyping();
 await expectWelcomeOnOpen();
+await expectFiltersPending();
 await expectCampaigns();
 await expectActiveLayers();
+await expectDashboardParts();
 await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();

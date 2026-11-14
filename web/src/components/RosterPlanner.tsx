@@ -24,6 +24,7 @@ import { addDays, fmtDate, fmtMinutes, fmtDateTime } from "@/lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Keycap, LinkButton, Notice } from "./primitives";
 import { WeekBar } from "./WeekBar";
+import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 type CellState = { status: "idle" } | { status: "saving" } | { status: "saved" } | { status: "problem"; problem: CellProblem | "past" | "conflict" | "scope" | "failed" };
 
@@ -53,11 +54,13 @@ export function RosterPlanner({
   today: string;
   thisWeek: string;
   viewerZone: string;
-  copy: Copy;
+  copy: Pick<Copy, "dayEditor" | "roster">;
   locale: Locale;
 }) {
   const t = copy.roster;
   const router = useRouter();
+  // the team and the week navigate as a transition: the row says it is busy and the team select shows the choice at once
+  const [choosing, shownTeam, choose] = usePendingChoice(team ?? "all");
   const [pending, startTransition] = useTransition();
   const weekStart = week.header.weekStart;
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
@@ -173,15 +176,15 @@ export function RosterPlanner({
   return (
     <div className="flex flex-col gap-6">
       <WeekBar pathname="/roster/planner" weekStart={weekStart} thisWeek={thisWeek} copy={copy} locale={locale} keep={keep}>
-        <form method="get" action="/roster/planner" className="flex items-end gap-3">
+        <form method="get" action="/roster/planner" className={`flex items-end gap-3 ${PENDING_ROW}`} data-testid="planner-filters" aria-busy={choosing || undefined}>
           <input type="hidden" name="week" value={weekStart} />
           <label className="flex flex-col gap-2 text-small font-semibold">
             <span className="flex items-center gap-2">{t.team} <Keycap>T</Keycap></span>
             <select
               name="team"
-              value={team ?? "all"}
+              value={shownTeam}
               data-shortcut="t"
-              onChange={(e) => router.push(`/roster/planner?week=${weekStart}&team=${e.target.value}`)}
+              onChange={(e) => choose(e.target.value, `/roster/planner?week=${weekStart}&team=${e.target.value}`)}
               className="h-10 min-w-48 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
               {teams.map((x) => (
@@ -194,7 +197,8 @@ export function RosterPlanner({
             {t.weeks}
             <select
               value=""
-              onChange={(e) => { if (e.target.value) router.push(`/roster/planner?week=${e.target.value}&team=${team ?? "all"}`); }}
+              data-menu=""
+              onChange={(e) => { if (e.target.value) choose(shownTeam, `/roster/planner?week=${e.target.value}&team=${shownTeam}`); }}
               className="h-10 min-w-56 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
               <option value="">{weeks.length === 0 ? t.noWeeks : `${weeks.length} ${t.weeks.toLowerCase()}`}</option>

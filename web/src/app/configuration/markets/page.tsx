@@ -2,6 +2,7 @@ import { MarketsConfig } from "@/components/configuration/MarketsConfig";
 import { data } from "@/lib/data";
 import { resolve } from "../../access";
 import { ConfigurationPage, mayConfigure } from "../gate";
+import { pickCopy, pickHints } from "@/lib/copy";
 
 /** Markets (Configuration, addition 0008e): markets with their aliases, office hours and holidays */
 export default async function MarketsPage() {
@@ -12,7 +13,7 @@ export default async function MarketsPage() {
   const [markets, skills] = mayConfigure(me) ? await Promise.all([data().getMarkets(me), data().listSkills(me)]) : [{ markets: [], hours: [], holidays: [] }, []];
   return (
     <ConfigurationPage me={me} copy={copy} active="config-markets" title={t.title} intro={t.intro} bare>
-      <MarketsConfig data={markets} skills={skills} copy={copy} />
+      <MarketsConfig data={markets} skills={skills} copy={{ ...pickCopy(copy, "configMarkets", "configuration"), hints: pickHints(copy, "about") }} />
     </ConfigurationPage>
   );
 }

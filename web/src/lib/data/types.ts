@@ -3587,13 +3587,18 @@ export interface FollowUpCallbacks {
   callbackOwners: CallbackOwner[] | null;
 }
 
-/** Reports → Dashboard in one read: the time per status of the period, the Intake row's reads and the callbacks kept */
-export interface DashboardData {
-  time: TeamStatusTime;
+/** The counts of Reports → Dashboard's Intake row, read in one transaction: the intake of the period, the records created and the callbacks kept */
+export interface DashboardIntake {
   intake: Intake;
   records: CrmRecordsDay[];
-  speed: SpeedToLeadRow[];
   callbacks: CallbacksKept;
+}
+
+/** Reports → Dashboard's three parts, each a promise of its own (getDashboardReads) */
+export interface DashboardReads {
+  time: Promise<TeamStatusTime>;
+  counts: Promise<DashboardIntake>;
+  speed: Promise<SpeedToLeadRow[]>;
 }
 
 /** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
@@ -3776,6 +3781,33 @@ export interface FlashRowsView {
   rows: Record<string, unknown>[];
 }
 
+/**
+ * One card of the Flash landing as its overview's stored current take answers it (cma.flash_cards_now, addition 0009p).
+ * stored false: no readable take (a flow, data quality, an overview that keeps none, or a take too old or of an earlier
+ * definition): the page reads that card live, when setUp says its source is set up. refreshedAt is the take's instant
+ * (the card's Refreshed at)
+ */
+export interface FlashStoredCard {
+  overview: string;
+  stored: boolean;
+  setUp: boolean;
+  value: number | null;
+  split: FlashSplitItem[] | null;
+  definitionVersion: string | null;
+  refreshedAt: string | null;
+}
+/**
+ * The landing's cards as one transaction reads them (addition 0009p): the stored cards first, then each card that has no
+ * stored figure, one statement after the other, each answer handed over as it comes
+ */
+export interface FlashCardReads {
+  /** Every overview's card in the landing's order, stored or not: the transaction's first statement */
+  stored: Promise<FlashStoredCard[]>;
+  /** A card's live headline, there when its statement returns; null for a card that is stored or whose source is not set up */
+  live(overview: string): Promise<FlashHeadlineView | null>;
+  /** The transaction is over, whatever its outcome: never rejects (the request's database cost is whole from here on) */
+  done: Promise<void>;
+}
 /** One overview's live headline (cma.flash_headline), as a landing card reads it */
 export interface FlashHeadlineView {
   overview: string;
@@ -3896,10 +3928,15 @@ export interface CmaData {
   /** Seconds per person per day per status, for the Dashboard. Needs performance.team (CMA06) */
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
   /**
-   * Reports → Dashboard in one transaction: getTeamStatusTime for everyone, getIntake, getCrmRecordsPerDay, getSpeedToLeadRows and
-   * getCallbacksKept of the period, the same reads one after the other. Needs performance.team (CMA06); at most 92 days (CMA04)
+   * Reports → Dashboard's reads (12 November 2026), on two connections side by side: one transaction reads the time per
+   * status of everyone (getTeamStatusTime) and hands it over, then the Intake row's counts (getIntake, getCrmRecordsPerDay
+   * and getCallbacksKept, as before); the other reads the speed to lead's rows (getSpeedToLeadRows without each record's
+   * link, which the tile never shows: recordUrl is null), the dearest read, after asking the database for performance.team
+   * (cma.speed_to_lead_rows alone takes reports.view too). Each promise settles on its own; a transaction that fails
+   * leaves its unanswered parts failed. Needs performance.team (CMA06); at most 92 days (CMA04). Not async: the reads
+   * start at once
    */
-  getDashboard(me: Principal, range: HoursRange): Promise<DashboardData>;
+  getDashboardReads(me: Principal, range: HoursRange): DashboardReads;
   /** The app links the caller may see, in the tenant's order (cma.app_links); any person of the tenant */
   listAppLinks(me: Principal): Promise<AppLink[]>;
   /** Everyone whose time is kept, with today's day and status, for the Live board. Needs monitoring.live (CMA06) */
@@ -4258,6 +4295,14 @@ export interface CmaData {
   getFlashRows(me: Principal, request: FlashRowsRequest): Promise<FlashRowsView>;
   /** One overview's live headline (cma.flash_headline), as a landing card reads it */
   getFlashHeadline(me: Principal, overview: string, market: string | null, from: string | null, to: string | null): Promise<FlashHeadlineView>;
+  /**
+   * The landing's cards in one transaction (addition 0009p): cma.flash_cards_now first (every overview, stored or not),
+   * then cma.flash_headline for each card without a stored figure whose source is set up: data quality, the flows over
+   * from and to, then a stock overview without a readable take. One connection whatever the takes' state; a statement
+   * that fails leaves that card and the ones after it without a figure. Not async: the reads start at once and each
+   * promise settles on its own
+   */
+  getFlashCardReads(me: Principal, market: string | null, from: string, to: string): FlashCardReads;
   /** The snapshot dates of a period and the open watch findings (cma.flash_snapshots) */
   getFlashSnapshots(me: Principal, from: string | null, to: string | null): Promise<FlashSnapshotsView>;
   /** A data-quality check's findings (cma.data_quality_rows): reports.view or tenant.configure */

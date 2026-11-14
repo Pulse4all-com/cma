@@ -26,7 +26,8 @@ import { CMA_SQLSTATE, CmaDbError, isCmaSqlState } from '@/lib/data/errors';
  *   CMA_DB_USER       cma-web@p4a-cma-dev.iam                (IAM database user, required)
  *   CMA_DB_NAME       cma                                     (default cma)
  *   CMA_DB_POOL_MAX   10                                      (per Cloud Run instance; a Flash page holds two, 0008zz; Customers → Active
- *                                                             four for a moment: its reads run side by side, 0009l)
+ *                                                             four for a moment: its reads run side by side, 0009l; Reports →
+ *                                                             Dashboard two: the time and the counts beside the speed to lead)
  *   CMA_DB_POOL_MIN   1                                       (kept open between requests; within the budget's ceiling)
  *   CMA_DB_STATEMENT_TIMEOUT_MS  15000                        (a statement longer than this is cancelled: 57014 → DB_ERROR)
  *   CMA_DB_IP         PUBLIC | PRIVATE                        (default PUBLIC)
@@ -98,7 +99,9 @@ export interface DbStats {
   /**
    * The part of those counts read under streamed() (addition 0008zz): a read a page starts with its first paint's and
    * awaits after it, in a boundary of its own (a Flash overview's records). Included in tx, rt and dbMs; the Shell's
-   * meta leaves it out, so the first paint's cost stays its own
+   * meta leaves it out, so the first paint's cost stays its own. The Flash landing's cards (addition 0009p) are one
+   * such transaction whose first statement (cma.flash_cards_now) the first paint does await: a transaction cannot be
+   * counted in two parts, so that statement is in the streamed part and in the request's total, not in the first paint's
    */
   streamed?: { tx: number; rt: number; dbMs: number };
 }
@@ -115,9 +118,11 @@ const streamedScope = (gsc.__cmaDbStreamed ??= new AsyncLocalStorage<true>());
 
 /**
  * Runs a read as a streamed part of the request (addition 0008zz): counted in the request's totals and apart in its
- * streamed part, which the first paint's cost leaves out. Nothing else changes: the same transaction, context and errors
+ * streamed part, which the first paint's cost leaves out. Nothing else changes: the same transaction, context and errors.
+ * fn returns a promise, or an object of promises whose reads it started (Reports → Dashboard's parts; the Flash
+ * landing's cards, addition 0009p): what starts inside it is marked
  */
-export function streamed<T>(fn: () => Promise<T>): Promise<T> {
+export function streamed<T>(fn: () => T): T {
   return streamedScope.run(true, fn);
 }
 

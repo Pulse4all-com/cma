@@ -98,6 +98,16 @@ export const FLASH_OVERVIEWS: readonly FlashOverviewDef[] = [
     headline: "findings", sorts: ["object_id", "check", "market"], defaultDescending: false },
 ];
 
+/**
+ * The order in which the landing reads the cards that have no stored figure (addition 0009p), in one transaction: the
+ * cheapest first, so a card never waits for a dearer one before it: data quality (its own stored result), the flows over
+ * their period, then a stock overview whose current take may not be read now
+ */
+export const FLASH_CARD_ORDER: readonly FlashOverviewDef[] = [
+  ...FLASH_OVERVIEWS.filter((o) => o.key === "data_quality"), ...FLASH_OVERVIEWS.filter((o) => o.kind === "flow"),
+  ...FLASH_OVERVIEWS.filter((o) => o.kind === "stock" && o.key !== "data_quality"),
+];
+
 /** The address keys of /reports/flash: the overview, the market (K), As of (A), the period, the list's sort and page, the
  * list's filters (f_<dim> and the measure) and, on Data quality, the check */
 export const FLASH_ADDRESS = {

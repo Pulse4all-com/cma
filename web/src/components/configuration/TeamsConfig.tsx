@@ -19,7 +19,7 @@ const DIMENSIONS: SkillDimension[] = ["language", "work_type", "channel"];
 type TeamForm = { key: string; name: string; markets: string; sortOrder: number };
 type SkillForm = { dimension: SkillDimension; key: string; name: string; sortOrder: number };
 
-export function TeamsConfig({ teams, skills, copy }: { teams: TeamInfo[]; skills: SkillInfo[]; copy: Copy }) {
+export function TeamsConfig({ teams, skills, copy }: { teams: TeamInfo[]; skills: SkillInfo[]; copy: Pick<Copy, "configTeams" | "configuration" | "nav"> }) {
   const c = copy.configuration;
   const t = copy.configTeams;
   const { state, save } = useSave(c);

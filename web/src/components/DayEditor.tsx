@@ -68,7 +68,7 @@ export function DayEditor({
   /** Latest date Add day offers, in the viewer's zone; the database checks the person's zone */
   today: DateKey;
   statuses: WorkStatus[];
-  copy: Copy;
+  copy: Pick<Copy, "dayEditor">;
   locale: Locale;
   onClose: () => void;
   onSaved: () => void;

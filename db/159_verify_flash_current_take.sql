@@ -12,7 +12,8 @@
 -- ok or FAIL, and the last row is the verdict, because Cloud SQL Studio shows no notices: "0009e verified |
 -- 159_verify_flash_current_take: 12 ok, 0 FAIL, 0 skip" (D1 reads skip for a database without a tenant whose asset
 -- register is set up: 11 ok, 1 skip). Run as your own IAM login after 158_flash_current_take.sql, dev first, then prod;
--- then 123, 137, 139 and 147 again (158's header).
+-- then 123, 137, 139 and 147 again (158's header). Since 180_flash_stored_cards.sql (0009p) S4 expects
+-- flash.current_overviews' default to be every stock overview but data quality (an edit of 0009p, conditional on its row).
 --   S1  the addition 0009e is recorded after 0009d
 --   S2  the table: its columns, key and checks; row-level security with the tenant policy, no audit trigger; read only for
 --       the application, nothing for the readers; cma_read.flash_current_take's columns, readable by the readers
@@ -373,7 +374,12 @@ begin
                                where t.tgrelid = 'cma.tenant_setting'::regclass and t.tgname in ('check_flash_current_setting', 'forget_flash_current_takes')
                                  and not t.tgisinternal), 'no trigger');
   insert into verify_0009e values (4, 'S4 the two settings with their types and defaults; the check trigger and the trigger that forgets a tenant''s takes on a setting change',
-    case when v_txt = 'flash.current_overviews:text:installed_base flash.current_refresh_minutes:integer:5 check_flash_current_setting,forget_flash_current_takes'
+    -- since 0009p (180_flash_stored_cards.sql) the default is every stock overview but data quality (an edit of 0009p,
+    -- conditional on its row)
+    case when v_txt = 'flash.current_overviews:text:'
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009p')
+                               then 'customers,subscriptions,installed_base,open_deals,open_tickets,open_tasks' else 'installed_base' end)
+                      || ' flash.current_refresh_minutes:integer:5 check_flash_current_setting,forget_flash_current_takes'
               and not current_setting('verify.provoke')::boolean then 'ok' else 'FAIL' end, v_txt);
 end
 $$;

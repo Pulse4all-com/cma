@@ -1,0 +1,45 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/143_verify_reviews_all_order_kinds.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                       check_name                                                                                                        |     result      |                                                                                                                                   detail                                                                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0008zw recorded, after 0008zv                                                                                                                                                                               | ok              | 
+ S2 privileges: the application's only, the caller's rights, nothing for the readers; JIT off on the headline                                                                                                            | ok              | 
+ S3 the split catalog: subscriptions per status by [market, status], orders per kind by [market, store, kind] (first, renewal, repeat), no other; orders still 0008zn                                                    | ok              | customers:-:-,subscriptions:status:market/status,installed_base:model:market/status/model/warehouse/link,churn:-:-,orders:kind:market/store/kind,payments:-:-,open_deals:-:-,open_tickets:-:-,open_tasks:-:-,reviews:-:-,data_quality:-:- first/renewal/repeat none 0008zn
+ A1 the split's helper: the orders summed over the stores, zeros, unknown only where held, one market or all, other sets never counted; the subscriptions as 0008zu's                                                    | ok              | first 4, renewal 2, repeat 1, unknown 2 | first 3, renewal 2, repeat 1 | first 0, renewal 0, repeat 0 | first 0, renewal 0, repeat 0 | none
+ A2 All: from the first counted review to the end, every month, the sum of every counted review, the groups adding up, no previous period                                                                                | ok              | 2025-12-10..2026-10-14 all true reviews 8 avg 3.63 groups 11 first 2025-12-01 last 2026-10-01 sum 8 2025-12-01=1,2026-01-01=1,2026-03-01=1,2026-06-01=1,2026-07-01=1,2026-10-01=3 prev null..null:false:0 dist-prev 0 markets GB=4/0,NL=3/0,unknown=1/0 start 2025-12-10
+ A3 All with a market: the tenant's period, the market's reviews and history start; a tenant without reviews: one month, zeros                                                                                           | ok              | 2025-12-10..2026-10-14 reviews 3 groups 11 start 2026-01-20 | 2026-10-14..2026-10-14 reviews 0 groups 2026-10-01=0 start null prev null
+ A4 a period answers as 0008ze's definition, key for key (four periods, every market, unknown and all); its from and to the period's, all false                                                                          | ok              | 20 pages equal
+ A5 the read's parameters: All by month to today or the day after passes; All by week, without a group or an end, past tomorrow, a period by month, 200 days, a bad market refused (CMA04); no report permission (CMA06) | ok              | ok ok CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok CMA04 CMA04 9 2025-12-10 CMA06
+ A6 the orders' live headline per kind: summed over the GB stores, unknown only where an order has it, the test order out; adding up in all and per market                                                               | ok              | * 7 first 4, renewal 1, repeat 1, unknown 1 | GB 5 first 3, renewal 1, repeat 1 | NL 2 first 1, renewal 0, repeat 0, unknown 1 | DE 0 first 0, renewal 0, repeat 0 | 
+ A7 the orders' split as of a date: the stored rows of [market, store, kind] over the period, per market; none for a snapshot without them                                                                               | ok              | * 7 first 4, renewal 1, repeat 1, unknown 1 | GB 5 first 3, renewal 1, repeat 1 | NL 2 first 1, renewal 0, repeat 0, unknown 1 | 29 1 none | stored first 3, renewal 0, repeat 0 | none none
+ D1 every active tenant: the subscriptions' live split as 0008zu's, in all and per market                                                                                                                                | ok              | 2 tenant(s)
+ D2 every active tenant: the orders' split over the previous month adding up in all and per market, the three kinds, unknown only above 0                                                                                | ok              | 2 tenant(s)
+ D3 every active tenant: All the count of every counted review by now, monthly from its first month to this one, no previous period; 92 days as 0008ze's                                                                 | ok              | 2 tenant(s)
+ verdict                                                                                                                                                                                                                 | 0008zw verified | 143_verify_reviews_all_order_kinds: 13 ok, 0 FAIL, 0 skip
+(14 rows)
+
+DROP TABLE
+RESET

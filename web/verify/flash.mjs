@@ -187,7 +187,7 @@ const periodControlsSrc = readFileSync(path.join(here, "..", "src", "components"
 const periodPartsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
 expect("the landing reads it: a live card's open flag from the tenant's today, zone and sources; the live and the stored line through changeLineOf",
   [/const open = asOf === null && !periodComplete\(o\.key, o\.kind === "flow" \? to : null, page\.today \|\| today, page\.timeZone \|\| me\.timeZone, page\.sources\);/.test(periodPageSrc),
-    /open=\{open\}/.test(periodPageSrc) && /openPeriod: t\.openPeriod/.test(periodPageSrc),
+    /previousDefinitionVersion: card\?\.previousDefinitionVersion \?\? null, open, locale,/.test(periodPageSrc) && /openPeriod: t\.openPeriod/.test(periodPageSrc),
     /changeLineOf\(shown, previous, labels\.previousOnText, open, labels, n\)/.test(periodControlsSrc), /return changeLineOf\(/.test(periodPartsSrc)],
   [true, true, true, true], [false, false, false, false]);
 expect("a definition's status and tone: Decided success, Proposed info (also when the catalog says nothing), Pending warning",
@@ -694,10 +694,23 @@ const partsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "
 const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page uses them: a live card's split and its definition's line, a stored card's split and note, the totals' split under the headline",
   [/splitLine\(read\.split, n, /.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
-    /previousDefinitionVersion=\{card\?\.previousDefinitionVersion \?\? null\}/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
+    /previousDefinitionVersion: card\?\.previousDefinitionVersion \?\? null/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
     /note=\{asOf && card && definitionChanged\(card\.definitionVersion, card\.previousDefinitionVersion, card\.previous\)/.test(pageSrc0008zu),
     /splitOf\(def, doc\.rows, null, splitOrderOf\(def, doc\.statusSettings, doc\.splitOrder\)\)/.test(partsSrc0008zu)],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
+// addition 0009p: the landing's cards are read on the server: the stored ones with the page, the live ones streamed, none
+// fetched by the browser when the page hands the figure over
+const { FLASH_CARD_ORDER } = await import("../src/lib/flash.ts");
+expect("the landing's cards come with the page (0009p): one transaction for the cards, the stored ones first and each live one as it returns, a figure handed over is not fetched, Refreshed at with its date",
+  [/streamed\(\(\) => data\(\)\.getFlashCardReads\(me, st\.market, st\.from, st\.to\)\)/.test(periodPageSrc), /cards && setUp \? cards\.live\(o\.key\)/.test(periodPageSrc),
+    /<FlashLiveFigure \{\.\.\.props\} initial=\{\{ value: s\.value, split: s\.split, version: s\.definitionVersion \}\}/.test(periodPageSrc),
+    /refreshedAt: s\.refreshedAt \? t\.refreshedAt\.replace\("\{time\}", fmtDateTime\(/.test(periodPageSrc),
+    /if \(initial !== undefined\) return undefined;/.test(periodControlsSrc), /const read = initial \?\? fetched;/.test(periodControlsSrc),
+    !/getFlashHeadline\(/.test(periodPageSrc)],
+  [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
+expect("the cards without a stored figure are read cheapest first: data quality, the flows, then the stock overviews; every overview once",
+  [FLASH_CARD_ORDER.map((o) => o.key), [...FLASH_CARD_ORDER].map((o) => o.key).sort().join() === FLASH_OVERVIEWS.map((o) => o.key).sort().join()],
+  [["data_quality", "churn", "orders", "payments", "reviews", "customers", "subscriptions", "installed_base", "open_deals", "open_tickets", "open_tasks"], true], [[], false]);
 const mockCust0008zu = mockFlashOverview(reader, "customers", null, null, null, null);
 const mockRowsCust = (await import("../src/lib/data/mock-flash.ts")).mockFlashRows(reader, { overview: "customers", market: null, asOf: null, from: null, to: null,
   filters: { measure: "active_customers" }, sort: "customer_id", descending: false, limit: 500, offset: 0 });
@@ -761,7 +774,7 @@ expect("Flash renders an overview through components/FlashOverview; Assets → I
   [true, true, true, true, true, "/reports/installed-base?market=GB&f_status=field", "/reports/flash"],
   [false, false, false, false, false, "/reports/flash?market=GB&f_status=field", "/reports/flash?"]);
 expect("every link and control of an overview keeps its page: the cells, the bands, the sort, the As of and the market",
-  [(partsSrc0008zu.match(/, path\)/g) ?? []).length >= 3, /router\.push\(flashHref\(path, q\) as Route\)/.test(controlsSrc0008zu),
+  [(partsSrc0008zu.match(/, path\)/g) ?? []).length >= 3, /^  push\(flashHref\(path, q\) as Route\);$/m.test(controlsSrc0008zu),
     (overviewSrc.match(/path=\{path\}/g) ?? []).length >= 5, /\/reports\/flash/.test(overviewSrc.replace(/"\/reports\/flash"/g, "").replace(/\/api\/v1\/reports\/flash/g, ""))],
   [true, true, true, false], [false, false, false, true]);
 expect("the orders' kind is the split's word in the breakdown and the records too; the code stays in the files and on hover",
@@ -873,7 +886,7 @@ expect("the records' read starts before the document is awaited (again after the
     /\.then\(\(rows\) => \(\{ rows, error: null \}\), \(error: unknown\) => \(\{ rows: null, error \}\)\)/.test(overviewSrc)],
   [true, true, true, true], [false, false, false, false]);
 expect("the first paint's cost leaves the streamed read out (the Shell's meta); the records' meta and the request log count it",
-  [/requestDbTrace\(\{ firstPaint: true \}\)/.test(shellSrc), /export function streamed<T>\(fn: \(\) => Promise<T>\): Promise<T> \{\s*return streamedScope\.run\(true, fn\);/.test(clientSrc),
+  [/requestDbTrace\(\{ firstPaint: true \}\)/.test(shellSrc), /export function streamed<T>\(fn: \(\) => T\): T \{\s*return streamedScope\.run\(true, fn\);/.test(clientSrc),
     /if \(s\) s\.tx \+= 1;\s*if \(part\) part\.tx \+= 1;/.test(clientSrc) && /if \(s\) s\.rt \+= 1; if \(part\) part\.rt \+= 1;/.test(clientSrc),
     /const p = firstPaint && s\.streamed \? s\.streamed : \{ tx: 0, rt: 0, dbMs: 0 \};/.test(clientSrc)],
   [true, true, true, true], [false, false, false, false]);

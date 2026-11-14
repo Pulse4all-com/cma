@@ -16,6 +16,8 @@
 -- own definition version (the watch compares no overview across a change of its definition); 139_verify_flash_totals.sql
 -- is 0008zu's own check. Since 158_flash_current_take.sql (0009e) A3 expects its two settings, flash.current_overviews and
 -- flash.current_refresh_minutes (an edit of 0009e, conditional on its row); 159_verify_flash_current_take.sql is its check.
+-- Since 180_flash_stored_cards.sql (0009p) A3 expects flash.current_overviews' default to be every stock overview but data
+-- quality (an edit of 0009p, conditional on its row).
 -- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
 -- 40 ok, 0 FAIL, 4 skip" (44 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
 -- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 43 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
@@ -227,7 +229,11 @@ begin
      is distinct from 'assets.required_refs:text:,commerce.required_contact_refs:text:,flash.active_subscription_statuses:text:active,'
                       -- since 0009e (158): the two settings of the current takes
                       || (case when exists (select 1 from cma.schema_migration where version = '0009e')
-                               then 'flash.current_overviews:text:installed_base,flash.current_refresh_minutes:integer:5,' else '' end)
+                               then 'flash.current_overviews:text:'
+                                    -- since 0009p (180): every stock overview but data quality keeps a current take by default
+                                    || (case when exists (select 1 from cma.schema_migration where version = '0009p')
+                                             then 'customers,subscriptions,installed_base,open_deals,open_tickets,open_tasks' else 'installed_base' end)
+                                    || ',flash.current_refresh_minutes:integer:5,' else '' end)
                       || 'flash.device_bands:text:1,2,3,flash.device_holding_statuses:text:active,flash.ended_subscription_statuses:text:canceled,expired,'
                       || 'flash.file_max_rows:integer:50000,flash.id_list_retention_months:integer:84,flash.snapshot_local_time:time:00:30,'
                       || 'flash.subscription_age_months:text:12,24,36,48,60,'

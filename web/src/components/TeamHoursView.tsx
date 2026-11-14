@@ -15,6 +15,7 @@ import type { Copy, Locale } from "@/lib/copy";
 import type { DateKey, TeamPerson, WorkStatus } from "@/lib/data";
 import { Badge, Button, Keycap, LinkButton } from "./primitives";
 import { DayEditor, type EditorTarget } from "./DayEditor";
+import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 export interface HoursRow {
   key: string;
@@ -58,7 +59,7 @@ export function TeamHoursView({
   meId: string;
   today: DateKey;
   statuses: WorkStatus[];
-  copy: Copy;
+  copy: Pick<Copy, "exports" | "teamHours" | "dayEditor">;
   locale: Locale;
   /** Download links for the period and person shown; null without workday.export */
   downloads: { hours: string; statusChanges: string } | null;
@@ -67,6 +68,7 @@ export function TeamHoursView({
 }) {
   const t = copy.teamHours;
   const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice(person);
   const [target, setTarget] = useState<EditorTarget | null>(null);
   const [opened, setOpened] = useState(0);
   const body = useRef<HTMLTableSectionElement>(null);
@@ -106,7 +108,7 @@ export function TeamHoursView({
 
   function filter(userId: string) {
     const qs = new URLSearchParams({ ...query, ...(userId ? { person: userId } : {}) });
-    router.push(`/team/hours?${qs.toString()}` as Route);
+    choose(userId, `/team/hours?${qs.toString()}` as Route);
   }
 
   /** Arrow keys move between the Correct buttons, like the status buttons on My day */
@@ -123,12 +125,12 @@ export function TeamHoursView({
   return (
     <>
       <div className="mb-4 flex items-end justify-between gap-4">
-        <label className="flex flex-col gap-2 text-small font-semibold">
+        <label className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} data-testid="team-hours-person-filter" aria-busy={pending || undefined}>
           <span className="flex items-center gap-2">
             {t.person} <Keycap>P</Keycap>
           </span>
           <select
-            value={person}
+            value={shown}
             data-shortcut="p"
             onChange={(e) => filter(e.target.value)}
             className="h-10 min-w-64 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"

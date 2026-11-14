@@ -5691,7 +5691,7 @@
         ],
         "ts": [
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           },
           {
@@ -5777,7 +5777,7 @@
         ],
         "ts": [
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           },
           {
@@ -5863,7 +5863,7 @@
         ],
         "ts": [
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           },
           {
@@ -5999,7 +5999,7 @@
             "export": "percentileCont"
           },
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           }
         ]
@@ -6091,7 +6091,7 @@
         ],
         "ts": [
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           },
           {
@@ -6196,7 +6196,7 @@
         ],
         "ts": [
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           },
           {
@@ -6364,12 +6364,12 @@
             "export": "keptShare"
           },
           {
-            "file": "src/components/ReportParts.tsx",
+            "file": "src/components/IntakeRow.tsx",
             "export": "IntakeRow"
           },
           {
             "file": "src/lib/data/postgres.ts",
-            "export": "getDashboard"
+            "export": "getDashboardReads"
           }
         ]
       },
@@ -83465,7 +83465,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -83640,7 +83640,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -83815,7 +83815,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -83990,7 +83990,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84165,7 +84165,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84299,7 +84299,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84429,7 +84429,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84559,7 +84559,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84689,7 +84689,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84810,7 +84810,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -84965,7 +84965,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -85112,7 +85112,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86148,7 +86148,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86289,7 +86289,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86430,7 +86430,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86571,7 +86571,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86716,7 +86716,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -86861,7 +86861,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87006,7 +87006,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87151,7 +87151,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87290,7 +87290,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87429,7 +87429,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87568,7 +87568,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87706,7 +87706,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87839,7 +87839,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -87972,7 +87972,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88108,7 +88108,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88249,7 +88249,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88377,7 +88377,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88500,7 +88500,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88623,7 +88623,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {
@@ -88784,7 +88784,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
+      "refresh": "On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).",
       "computed_in": {
         "sql": [
           {

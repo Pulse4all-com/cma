@@ -3207,7 +3207,7 @@ sum over cma.intake_per_day rows of form_submissions (intakeTotals); counts only
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/ReportParts.tsx; `intakeTotals` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -3268,7 +3268,7 @@ recordsOfType(getCrmRecordsPerDay(period), 'deal') = sum of records over cma.crm
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/ReportParts.tsx; `recordsOfType` in src/lib/reports.ts
+**Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/IntakeRow.tsx; `recordsOfType` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -3326,7 +3326,7 @@ recordsOfType(getCrmRecordsPerDay(period), 'ticket') = sum of records over cma.c
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/ReportParts.tsx; `recordsOfType` in src/lib/reports.ts
+**Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/IntakeRow.tsx; `recordsOfType` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -3394,7 +3394,7 @@ value = round1(percentileCont(businessSeconds of the rows, 0.5) / 60) over getSp
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.speed_to_lead_rows` (0007d); `cma.speed_to_lead_of` (0007d); `speedFigures` in src/lib/reports.ts; `percentileCont` in src/lib/reports.ts; `IntakeRow` in src/components/ReportParts.tsx
+**Computed in** `cma.speed_to_lead_rows` (0007d); `cma.speed_to_lead_of` (0007d); `speedFigures` in src/lib/reports.ts; `percentileCont` in src/lib/reports.ts; `IntakeRow` in src/components/IntakeRow.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -3497,7 +3497,7 @@ value = (totals.callsIn ?? 0) + (totals.callsOut ?? 0) over cma.intake_per_day, 
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/ReportParts.tsx; `intakeTotals` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -3568,7 +3568,7 @@ value = totals.firstOrders over cma.intake_per_day when connections.commerce; hi
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/ReportParts.tsx; `intakeTotals` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -3638,7 +3638,7 @@ value = keptShare(total) = kept / (kept + not_kept), null (dash) when none decid
 
 **Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.callbacks_kept_report` (0008w); `cma.callbacks_kept_report_of` (0008w); `cma.callbacks_kept_figures_of` (0008w); `cma.callbacks_kept_of` (0008w); `cma.callbacks_kept_connected` (0008w); `keptShare` in src/lib/callbacks.ts; `IntakeRow` in src/components/ReportParts.tsx; `getDashboard` in src/lib/data/postgres.ts
+**Computed in** `cma.callbacks_kept_report` (0008w); `cma.callbacks_kept_report_of` (0008w); `cma.callbacks_kept_figures_of` (0008w); `cma.callbacks_kept_of` (0008w); `cma.callbacks_kept_connected` (0008w); `keptShare` in src/lib/callbacks.ts; `IntakeRow` in src/components/IntakeRow.tsx; `getDashboardReads` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -34088,7 +34088,7 @@ count(*) of cma.flash_customers_of(tenant): store customers not deleted, per sto
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34151,7 +34151,7 @@ count(*) where holding_subscriptions > 0 (cma.flash_customer_figures_of, 0008zu)
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34214,7 +34214,7 @@ count(*) where holding_subscriptions = 0 and paused_subscriptions > 0 (0008zu; b
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_customer_figures_of` (0008zu); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34277,7 +34277,7 @@ count(*) where the customer is linked to a CRM contact (commerce_customer.crm_co
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34340,7 +34340,7 @@ count(*) where linked, the contact held, and every ref of commerce.required_cont
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_customers_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34399,7 +34399,7 @@ count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full re
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34457,7 +34457,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34515,7 +34515,7 @@ count(*) where status = 'paused'. Grouping sets: the totals, per market and the 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34573,7 +34573,7 @@ sum(amount_per_cycle) per currency (an object of currency codes; never summed ac
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_subscriptions_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34631,7 +34631,7 @@ count(*) where status = any(flash.device_holding_statuses). Grouping sets: the t
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zu); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zu); `cma.flash_headline` (0008zu); `cma.flash_split_of` (0008zu); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34690,7 +34690,7 @@ sum(devices_in_field) over the subscriptions where status = any(flash.device_hol
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_subscriptions_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -34749,7 +34749,7 @@ round(devices_on_holding::numeric / holding_subscriptions, 2), left out when hol
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zt); `cma.flash_ratio_of` (0008zt); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zt); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35162,7 +35162,7 @@ count(*) of cma.flash_churn_of(tenant, from, to): per business date a subscripti
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_churn_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35215,7 +35215,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35268,7 +35268,7 @@ sum(quantity) of the orders' lines (commerce_order_line), per set; the SKU rows 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35321,7 +35321,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_orders_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35374,7 +35374,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35427,7 +35427,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35480,7 +35480,7 @@ count(*) of subscription events renewed in the period (kind renewal). Grouping s
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35533,7 +35533,7 @@ count(*) of subscription events renew_failed in the period (kind renewal); never
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_payments_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35586,7 +35586,7 @@ count(*) of cma.flash_deals_of(tenant): 0008y's counted deals, not deleted, is_c
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35639,7 +35639,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35692,7 +35692,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_deals_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35745,7 +35745,7 @@ count(*) of cma.flash_tickets_of(tenant): 0008o's open tickets of counted pipeli
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35794,7 +35794,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35843,7 +35843,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tickets_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35892,7 +35892,7 @@ count(*) of cma.flash_tasks_of(tenant): 0008o's open tasks (status not done in t
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tasks_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -35945,7 +35945,7 @@ count(*) where the due date in the tenant's zone is before today. Grouping sets:
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_tasks_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -36003,7 +36003,7 @@ count(*) of cma.flash_reviews_of(tenant, from, to): 0008ze's published reviews o
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -36057,7 +36057,7 @@ sum(rating); the page shows rating_sum / reviews as the average rating (two deci
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -36111,7 +36111,7 @@ count(*) where the whole star is at most reviews.negative_max_rating. Grouping s
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_reviews_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 
@@ -36168,7 +36168,7 @@ count(*) of cma.flash_findings_of(tenant): every finding of cma.data_quality_of 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (one read per view; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+**Refresh** On page load, on the server: the landing's stored figures in one read, a stock overview's card from its stored current take (cma.flash_cards_now, with its Refreshed at; the snapshot job refreshes the take once it is older than flash.current_refresh_minutes), a flow's card and data quality live (cma.flash_headline, streamed). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
 **Computed in** `cma.flash_compute_of` (0008zn); `cma.flash_findings_of` (0008zn); `cma.flash_overview` (0008zn); `cma.flash_page` (0008zn); `FlashPage` in src/app/reports/flash/page.tsx; `postgresData.getFlashView` in src/lib/data/postgres.ts
 

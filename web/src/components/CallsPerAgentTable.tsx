@@ -28,7 +28,7 @@ export function CallsPerAgentTable({ rows, total, tags, copy, locale, threshold,
   rows: CallsPerson[];
   total: CallsPerson;
   tags: CallsPersonTag[];
-  copy: Copy;
+  copy: Pick<Copy, "callsPerAgent" | "reports"> & { hints: Pick<Copy["hints"], "about" | "agentAnswered" | "agentConnected" | "agentConnectedMin" | "agentFirstLast" | "agentInboundAvg" | "agentName" | "agentOutbound" | "agentOutboundAvg" | "agentUntagged"> };
   locale: Locale;
   /** telephony.connected_min_seconds, for the hints */
   threshold: number;

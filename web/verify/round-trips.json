@@ -104,8 +104,10 @@
   {
     "path": "/reports/dashboard",
     "subject": "manager",
-    "tx": 2,
-    "rt": 15
+    "tx": 3,
+    "rt": 19,
+    "firstTx": 1,
+    "firstRt": 5
   },
   {
     "path": "/reports/speed-to-lead",
@@ -158,8 +160,10 @@
   {
     "path": "/reports/flash",
     "subject": "manager",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 24,
+    "firstTx": 2,
+    "firstRt": 9
   },
   {
     "path": "/reports/flash?o=customers",
@@ -420,8 +424,10 @@
   {
     "path": "/reports/dashboard",
     "subject": "supervisor",
-    "tx": 2,
-    "rt": 15
+    "tx": 3,
+    "rt": 19,
+    "firstTx": 1,
+    "firstRt": 5
   },
   {
     "path": "/",

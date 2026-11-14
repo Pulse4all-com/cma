@@ -30,7 +30,7 @@ function formOf(m: MarketConfig | null): Form {
     : { code: "", name: "", timeZone: "", languageCode: "", currency: "", languageSkillKey: null, minLanguageLevel: null, sortOrder: 100, active: true };
 }
 
-export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skills: SkillInfo[]; copy: Copy }) {
+export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skills: SkillInfo[]; copy: Pick<Copy, "configMarkets" | "configuration"> & { hints: Pick<Copy["hints"], "about"> } }) {
   const c = copy.configuration;
   const t = copy.configMarkets;
   const { state, save } = useSave(c);

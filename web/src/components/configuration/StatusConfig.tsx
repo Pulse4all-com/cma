@@ -22,7 +22,7 @@ function formOf(s: ConfigStatus | null): Form {
     : { key: "", name: "", isWorking: true, isProductive: true, isPaid: true, isBillable: true, sortOrder: 100 };
 }
 
-export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; copy: Copy }) {
+export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; copy: Pick<Copy, "configStatuses" | "configuration"> }) {
   const c = copy.configuration;
   const t = copy.configStatuses;
   const [showRetired, setShowRetired] = useState(false);

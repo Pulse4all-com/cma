@@ -13,7 +13,7 @@ import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
 
 export function OrdersPerPersonTable({ rows, total, hints, copy, locale }: {
-  rows: OrderPerson[]; total: OrderPerson; hints: Record<string, string>; copy: Copy; locale: Locale;
+  rows: OrderPerson[]; total: OrderPerson; hints: Record<string, string>; copy: Pick<Copy, "firstOrders" | "ordersPerPerson" | "reports"> & { hints: Pick<Copy["hints"], "about"> }; locale: Locale;
 }) {
   const t = copy.ordersPerPerson;
   const f = copy.firstOrders;

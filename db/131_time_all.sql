@@ -13,8 +13,8 @@
 -- after 142_reviews_all_order_kinds.sql; since addition 0009a (Customers → Courtesy), after 150_courtesy.sql; since
 -- addition 0009e (the installed base's first paint from a stored current take), after 158_flash_current_take.sql; since
 -- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
--- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql.
--- Prod is the proof; dev's shared core is for
+-- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
+-- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person.
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
@@ -44,9 +44,10 @@
 -- Since addition 0009f Assets -> Installed base reads its lists on demand (a page of 50 records, the devices past due, the
 -- devices without a subscription reference, the serial search): each is a list row of the page, outside its set.
 -- Since addition 0009e the Installed base's document now is read from its stored current take: in part a each tenant's
--- current takes are refreshed first as its scheduler user (cma.flash_current_refresh, inside the timed part, so rolled
--- back with it; a row per tenant says what the refresh answered), and the document's row times the stored read the page
--- makes whenever the snapshot job keeps the take fresh. A take that cannot be made (a source not set up, an error)
+-- current takes are taken again first under its scheduler user (every overview of its setting, forced, by the owner's
+-- writer; inside the timed part, so rolled back with it), and the document's row times the stored read the page
+-- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
+-- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
 -- Provoke: set verify.provoke below to true; every budget is then 0 ms, every timed read FAILs, and the verdict says
 -- PROVOKED, NOT A PASS.
@@ -93,6 +94,10 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0009m') then
     raise exception 'addition 0009m (174_active_refresh_quiet.sql) has not run in this database';
   end if;
+  -- the Flash landing's stored cards (cma.flash_cards_now) since addition 0009p
+  if not exists (select 1 from cma.schema_migration where version = '0009p') then
+    raise exception 'addition 0009p (180_flash_stored_cards.sql) has not run in this database';
+  end if;
 end
 $$;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every timed read fail
@@ -107,6 +112,7 @@ select set_config('verify.max_dq_ms', '500', false);                 -- data qua
 select set_config('verify.max_top_ms', '400', false);                -- Customers → Active: the live present of the tiles, and above the fold computed (decisions D15, D16)
 select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh of Customers → Active's stored take, the history and the documents written again
 select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
+select set_config('verify.max_takes_ms', '5000', false);             -- the refresh of Flash's current takes, every overview of the tenant's setting (0009p; to confirm from prod's first runs)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
 
 drop table if exists pg_temp.time_0131;
@@ -262,6 +268,15 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- Flash
 ('a', 'flash', 'landing', $q$select cma.flash_page(null, null, '{from}', '{to}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'flash', 'snapshots', $q$select cma.flash_snapshots(null, null)$q$, 'agent', array['reports.view', 'performance.team']),
+-- The landing's cards (addition 0009p): the stock overviews' figures from their stored current takes in one read (the
+-- takes are refreshed before the reads, above), and the cards the page still reads live, each its own read: the four
+-- flows over today and data quality's own stored result
+('a', 'flash', 'cards now (the stored cards)', $q$select cma.flash_cards_now(null)$q$, 'agent', array['reports.view', 'performance.team']),
+('a', 'flash', 'headline churn today', $q$select cma.flash_headline('churn', null, '{today}', '{today}')$q$, 'agent', array['reports.view', 'performance.team']),
+('a', 'flash', 'headline orders today', $q$select cma.flash_headline('orders', null, '{today}', '{today}')$q$, 'agent', array['reports.view', 'performance.team']),
+('a', 'flash', 'headline payments today', $q$select cma.flash_headline('payments', null, '{today}', '{today}')$q$, 'agent', array['reports.view', 'performance.team']),
+('a', 'flash', 'headline reviews today', $q$select cma.flash_headline('reviews', null, '{today}', '{today}')$q$, 'agent', array['reports.view', 'performance.team']),
+('a', 'flash', 'headline data quality', $q$select cma.flash_headline('data_quality', null, null, null)$q$, 'agent', array['reports.view', 'performance.team']),
 -- Reviews' period All (addition 0008zw): every counted review from the tenant's first to today by month, no cap and no
 -- previous period; the same read whatever the report period, so it is timed once, in part a
 ('a', 'reviews all', 'reviews all by month', $q$select cma.reviews_page(null, '{today}', null, 'month')$q$, 'overview', array['reports.view', 'performance.team']),
@@ -368,7 +383,8 @@ declare
   v_stop    timestamptz := clock_timestamp() + make_interval(secs => current_setting('verify.time_budget_s')::numeric);
   t record; rd record; o record;
   v_user uuid; v_sys text; v_ext text; v_conn uuid; v_today date; v_monday date; v_month date; v_from date; v_to date; v_from92 date;
-  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb; v_mark0 timestamptz;
+  v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb;
+  v_t0 timestamptz; v_key text; v_mark0 timestamptz;
   -- per page and tenant: the sum of its reads and whether one failed
   v_pages text[]; v_sums numeric[]; v_bad boolean[]; p integer;
   -- per page: a read in its set had nothing to time (and why); a read outside its set (a page that loads in two parts)
@@ -395,26 +411,36 @@ begin
       r_name := r_name || (t.slug || ' periods'); r_result := r_result || 'info'::text;
       r_detail := r_detail || format('previous month %s to %s; 92 days %s to %s; today %s; connection %s', v_from, v_to, v_from92, v_today, v_today, coalesce(v_conn::text, 'none'));
       r_ms := r_ms || null::numeric;
-      -- the current takes (addition 0009e), refreshed as the tenant's scheduler before the reads (rolled back with them), so
-      -- the installed base's document times the stored read; what the refresh answered is an info row
+      -- the current takes (addition 0009e; every stock overview's since 0009p), taken again under the tenant's scheduler
+      -- before the reads (rolled back with them), so the documents and the landing's cards time the stored read. The
+      -- refresh itself is timed against verify.max_takes_ms: every overview of the tenant's setting, forced, by the
+      -- owner's writer (the job's entry takes only what is due), which is what the snapshot job does when all are due
       if v_part in ('a', 'all') then
         select u.id into v_sched from cma.app_user u
         where u.tenant_id = t.id and u.kind = 'system' and u.email = 'scheduler@system.invalid' and u.status = 'active';
-        v_cur := null;
+        v_cur := null; v_ms := null;
         if v_sched is not null then
-          perform set_config('role', 'cma_app', true);
           perform set_config('app.user_id', v_sched::text, true);
           begin
-            v_cur := cma.flash_current_refresh(t.id);
+            v_t0 := clock_timestamp();
+            foreach v_key in array cma.flash_current_overviews_of(t.id) loop
+              perform cma.flash_current_refresh_of(t.id, v_key, true);
+            end loop;
+            v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+            v_cur := jsonb_build_object('overviews', to_jsonb(cma.flash_current_overviews_of(t.id)),
+                                        'rows', (select count(*) from cma.flash_current_take c where c.tenant_id = t.id));
           exception when others then
-            v_cur := jsonb_build_object('error', sqlstate);
+            v_cur := jsonb_build_object('error', sqlstate); v_ms := null;
           end;
-          perform set_config('role', 'cma_owner', true);
           perform set_config('app.user_id', '', true);
         end if;
-        r_name := r_name || (t.slug || ' current takes'); r_result := r_result || 'info'::text;
-        r_detail := r_detail || coalesce('refreshed before the reads: ' || v_cur::text, 'no active scheduler user: the documents read live');
-        r_ms := r_ms || null::numeric;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_takes_ms')::numeric end;
+        r_name := r_name || (t.slug || ' current takes refresh');
+        r_result := r_result || case when v_provoke then 'FAIL' when v_sched is null then 'skip'
+                                     when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time, the documents and the cards read live'
+                                     else coalesce(v_ms || ' ms (every overview of the setting taken again, once) against ' || v_max || ' ms: ', '') || v_cur::text end;
+        r_ms := r_ms || v_ms;
       end if;
       -- the stored take of Customers → Active (addition 0009l, decision D13), refreshed as the tenant's scheduler: the
       -- history and the documents written again, timed once against verify.max_refresh_ms, in a step of its own that is

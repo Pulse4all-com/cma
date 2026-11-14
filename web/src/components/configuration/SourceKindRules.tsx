@@ -14,7 +14,7 @@ import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card } from "../primitives";
 import { FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 
-export function SourceKindRules({ detail, kinds, copy }: { detail: SourceDetail; kinds: RecordKindConfig[]; copy: Copy }) {
+export function SourceKindRules({ detail, kinds, copy }: { detail: SourceDetail; kinds: RecordKindConfig[]; copy: Pick<Copy, "configSources" | "configuration"> & { hints: Pick<Copy["hints"], "about"> } }) {
   const c = copy.configuration;
   const t = copy.configSources;
   const id = detail.connection.id;

@@ -7,12 +7,12 @@
  * once from the stored figures whatever the volume. Ids, codes and counts only.
  */
 import type { Route } from "next";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { appliedAsOf, changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
+import { PENDING_ROW, usePendingChoice, usePendingPush } from "./usePendingPush";
 
-function go(router: ReturnType<typeof useRouter>, path: FlashPath, query: Record<string, string>, change: Record<string, string | null>) {
+function go(push: (href: Route) => void, path: FlashPath, query: Record<string, string>, change: Record<string, string | null>) {
   const q: Record<string, string> = { ...query };
   for (const [k, v] of Object.entries(change)) {
     if (v === null || v === "") delete q[k];
@@ -20,7 +20,7 @@ function go(router: ReturnType<typeof useRouter>, path: FlashPath, query: Record
   }
   // a new As of or market starts the list at its first page
   delete q.page;
-  router.push(flashHref(path, q) as Route);
+  push(flashHref(path, q) as Route);
 }
 
 export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flash" }: {
@@ -35,7 +35,7 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
   /** The page whose address the control changes (Reports → Flash, or Assets → Installed base, 0008zw) */
   path?: FlashPath;
 }) {
-  const router = useRouter();
+  const [pending, push] = usePendingPush();
   // applied on Enter or blur only, when complete and in range (lib/flash appliedAsOf); typing never navigates. The field
   // keeps what is typed (uncontrolled) and starts again from the address's date when that changes (its key)
   const apply = (input: HTMLInputElement, leaving: boolean) => {
@@ -48,10 +48,10 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
     // next address's date replaces (its key), so Now, Back or another date never meet an old mark
     if (next === asOf || input.dataset.applied === String(next)) return;
     input.dataset.applied = String(next);
-    go(router, path, query, { asOf: next });
+    go(push, path, query, { asOf: next });
   };
   return (
-    <div className="flex flex-col gap-2 text-small font-semibold">
+    <div className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} data-testid="flash-as-of-row" aria-busy={pending || undefined}>
       <label htmlFor="flash-as-of" className="flex items-center gap-2">{labels.asOf} <Keycap>A</Keycap></label>
       <div className="flex items-center gap-2">
         <input id="flash-as-of" key={asOf ?? "now"} type="date" data-shortcut="a" data-testid="flash-as-of" defaultValue={asOf ?? ""}
@@ -61,7 +61,7 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
           onBlur={(e) => apply(e.currentTarget, true)} />
         <button type="button" data-testid="flash-now" aria-pressed={asOf === null}
           className={`h-10 rounded-button border px-4 font-semibold ${asOf === null ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-deepblue bg-white text-p4a-deepblue"}`}
-          onClick={() => go(router, path, query, { asOf: null })}>
+          onClick={() => go(push, path, query, { asOf: null })}>
           {labels.now}
         </button>
       </div>
@@ -77,11 +77,11 @@ export function FlashMarket({ market, markets, query, labels, path = "/reports/f
   /** The page whose address the control changes (0008zw) */
   path?: FlashPath;
 }) {
-  const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice(market ?? "");
   return (
-    <label className="flex flex-col gap-2 text-small font-semibold">
+    <label className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} data-testid="flash-market-row" aria-busy={pending || undefined}>
       <span className="flex items-center gap-2">{labels.market} <Keycap>K</Keycap></span>
-      <select value={market ?? ""} data-shortcut="k" data-testid="flash-market" onChange={(e) => go(router, path, query, { market: e.target.value || null })}
+      <select value={shown} data-shortcut="k" data-testid="flash-market" onChange={(e) => go((href) => choose(e.target.value, href), path, query, { market: e.target.value || null })}
         className="h-10 min-w-48 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue">
         <option value="">{labels.allMarkets}</option>
         {markets.map((m) => <option key={m.code} value={m.code}>{m.name === m.code ? m.code : `${m.name} (${m.code})`}</option>)}
@@ -103,12 +103,12 @@ export function FlashModel({ model, models, query, labels, path = "/reports/flas
   labels: { model: string; allModels: string; unknownModel: string };
   path?: FlashPath;
 }) {
-  const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice(model ?? "");
   const list = model && !models.some((m) => m.key === model) ? [...models, { key: model, name: null }] : models;
   return (
-    <label className="flex flex-col gap-2 text-small font-semibold">
+    <label className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} aria-busy={pending || undefined}>
       <span className="flex items-center gap-2">{labels.model} <Keycap>D</Keycap></span>
-      <select value={model ?? ""} data-shortcut="d" data-testid="flash-model" onChange={(e) => go(router, path, query, { f_model: e.target.value || null })}
+      <select value={shown} data-shortcut="d" data-testid="flash-model" onChange={(e) => go((href) => choose(e.target.value, href), path, query, { f_model: e.target.value || null })}
         className="h-10 min-w-48 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue">
         <option value="">{labels.allModels}</option>
         {list.map((m) => <option key={m.key} value={m.key}>{m.key === "unknown" ? labels.unknownModel : m.name ?? m.key}</option>)}
@@ -132,12 +132,12 @@ export function FlashChoice({ dim, value, choices, query, labels, keycap, testId
   testId: string;
   path?: FlashPath;
 }) {
-  const router = useRouter();
+  const [pending, shown, choose] = usePendingChoice(value ?? "");
   const list = value && !choices.some((c) => c.key === value) ? [...choices, { key: value, name: null }] : choices;
   return (
-    <label className="flex flex-col gap-2 text-small font-semibold">
+    <label className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} aria-busy={pending || undefined}>
       <span className="flex items-center gap-2">{labels.label} <Keycap>{keycap.toUpperCase()}</Keycap></span>
-      <select value={value ?? ""} data-shortcut={keycap.toLowerCase()} data-testid={testId} onChange={(e) => go(router, path, query, { [`f_${dim}`]: e.target.value || null })}
+      <select value={shown} data-shortcut={keycap.toLowerCase()} data-testid={testId} onChange={(e) => go((href) => choose(e.target.value, href), path, query, { [`f_${dim}`]: e.target.value || null })}
         className="h-10 min-w-48 rounded-button border border-p4a-border bg-white px-3 text-body font-normal text-p4a-body focus:border-p4a-deepblue focus:outline-none focus:ring-2 focus:ring-p4a-lightblue">
         <option value="">{labels.all}</option>
         {list.map((c) => <option key={c.key} value={c.key}>{c.key === "unknown" ? labels.unknown : c.name ?? c.key}</option>)}
@@ -147,11 +147,16 @@ export function FlashChoice({ dim, value, choices, query, labels, keycap, testId
 }
 
 /**
- * A landing card's live figure: its overview's headline read once after the page painted. While it reads, a calm line;
- * a failed read shows the dash, never an error code. The change against the figure to compare with is written here too,
- * since it needs the live value; a flow whose period is open (open: lib/flash periodComplete) says "so far" instead
+ * A landing card's figure. Since addition 0009p the page hands it over (initial): the overview's stored current take, or
+ * the live headline the server read and streamed, so no card fetches after the page painted. Without one (initial left
+ * out) the headline is read once in the browser, as before; while it reads, a calm line. A failed read shows the dash,
+ * never an error code. The change against the figure to compare with is written here too, since it needs the value; a
+ * flow whose period is open (open: lib/flash periodComplete) says "so far" instead. A stored figure says its
+ * Refreshed at
  */
-export function FlashLiveFigure({ overview, market, from, to, previous, previousDefinitionVersion, open, locale, labels }: {
+export function FlashLiveFigure({ overview, market, from, to, previous, previousDefinitionVersion, open, locale, labels, initial }: {
+  /** The figure the server read: the value, its split and its definition, or "failed"; left out: read in the browser */
+  initial?: { value: number | null; split: FlashSplitItem[] | null; version: string | null } | "failed";
   overview: string;
   market: string | null;
   from: string | null;
@@ -163,13 +168,19 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
   open: boolean;
   locale: string;
   labels: { loading: string; changeSince: string; changeFlat: string; noCompare: string; openPeriod: string; previousOnText: string | null;
+    /** "Refreshed at <weekday, date, time>" of a figure read from its stored current take; none for a live one */
+    refreshedAt?: string | null;
+    /** What a stored figure is, behind its Refreshed at (the overview page's own hint) */
+    refreshedHint?: string;
     /** "The figure of <date> was counted by an earlier definition", its date filled in; none without a date */
     definitionEarlier?: string | null;
     /** The words of the split's keys (the order kinds, addition 0008zw: lib/flash splitLabelsOf); a key without one shows itself */
     splitLabels?: Record<string, string> };
 }) {
-  const [read, setRead] = useState<{ value: number | null; split: FlashSplitItem[] | null; version: string | null } | "loading" | "failed">("loading");
+  const [fetched, setRead] = useState<{ value: number | null; split: FlashSplitItem[] | null; version: string | null } | "loading" | "failed">("loading");
+  const read = initial ?? fetched;
   useEffect(() => {
+    if (initial !== undefined) return undefined;
     const q = new URLSearchParams({ overview, part: "headline", ...(market ? { market } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
     let gone = false;
     fetch(`/api/v1/reports/flash?${q.toString()}`, { headers: { accept: "application/json" } })
@@ -182,7 +193,7 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
       })
       .catch(() => { if (!gone) setRead("failed"); });
     return () => { gone = true; };
-  }, [overview, market, from, to]);
+  }, [overview, market, from, to, initial]);
   const n = (x: number) => new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB", { maximumFractionDigits: 1 }).format(x);
   if (read === "loading") return <p className="text-small text-p4a-muted" data-testid={`flash-live-${overview}`}>{labels.loading}</p>;
   const shown = read === "failed" ? null : read.value;
@@ -201,6 +212,7 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
       {split ? <p className="tabular text-small text-p4a-body" data-testid={`flash-split-${overview}`}>{split}</p> : null}
       <p className="text-small text-p4a-muted">{change}</p>
       {earlier ? <p className="text-small text-p4a-muted" data-testid={`flash-definition-${overview}`}>{earlier}</p> : null}
+      {labels.refreshedAt ? <p className="text-caption text-p4a-grey" data-testid={`flash-refreshed-${overview}`} title={labels.refreshedHint}>{labels.refreshedAt}</p> : null}
     </>
   );
 }

@@ -9,7 +9,7 @@ import type {
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
-  CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
+  CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
@@ -27,13 +27,13 @@ import type {
   CohortAge, LeadCohortRow, LeadCohortsReport,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, PledgeFile, PledgePage, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
-  DataQualityRowsView, FlashDocumentView, FlashHeadlineView, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
+  DataQualityRowsView, FlashCardReads, FlashDocumentView, FlashHeadlineView, FlashStoredCard, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
 import { REMOVE_REFUSAL } from "@/lib/corrections";
-import { FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
+import { FLASH_CARD_ORDER, FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
 import { activeFromDb, activeNowFromDb, activeRowsFromDb } from "@/lib/active";
 
@@ -172,11 +172,14 @@ function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
 }
 
 /** One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days) */
-async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<SpeedToLeadRow[]> {
-  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
+async function readSpeedToLeadRows(q: Querier, range: HoursRange, links = true): Promise<SpeedToLeadRow[]> {
+  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one. links false
+  // (the Dashboard's tile, which shows three figures and no record): no link is built, a call per row saved
   const r = await q.query<SpeedDbRow>(
-    `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
-       from cma.speed_to_lead_rows($1::date, $2::date) r`,
+    links
+      ? `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
+           from cma.speed_to_lead_rows($1::date, $2::date) r`
+      : `select r.*, null::text as record_url from cma.speed_to_lead_rows($1::date, $2::date) r`,
     [range.from, range.to],
   );
   return r.rows.map(toSpeedRow);
@@ -1467,6 +1470,13 @@ interface DataQualityRowsDb {
   computed_at?: string | null;
 }
 
+/** One overview's live headline in a transaction already open (cma.flash_headline checks the permission and the parameters) */
+async function readFlashHeadline(q: Querier, overview: string, market: string | null, from: string | null, to: string | null): Promise<FlashHeadlineView> {
+  const j = one((await q.query<{ j: FlashHeadlineDb }>(`select cma.flash_headline($1, $2, $3::date, $4::date) as j`, [overview, market, from, to])).rows, "flash_headline").j;
+  return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value),
+    split: splitItemsOf(j.split), definitionVersion: j.definition_version ?? null };
+}
+
 function flashNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : Number(v);
@@ -1926,18 +1936,37 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), (q) => readTeamStatusTime(q, range, userId));
   },
 
-  // The Dashboard in one transaction (23 October 2026, the round-trips budget): the same reads as the routes of
-  // each part, one after the other on one connection instead of five checkouts; each function checks its own
-  // permission and range (performance.team for the time and the records; reports.view or performance.team else)
-  async getDashboard(me, range): Promise<DashboardData> {
-    assertReportRange(range);
-    return withTenant(ctx(me), async (q) => ({
-      time: await readTeamStatusTime(q, range, null),
-      intake: await readIntake(q, range),
-      records: await readCrmRecordsPerDay(q, range),
-      speed: await readSpeedToLeadRows(q, range),
-      callbacks: await readCallbacksKept(q, range),
-    }));
+  // The Dashboard on two connections (12 November 2026; one transaction of five reads before, 23 October 2026, in which
+  // the dearest read held the page back). The first: the time per status, handed over as it returns, then the Intake
+  // row's counts. The second: the speed to lead, after cma.assert_permission('performance.team'), so the database still
+  // refuses this page's read to someone who holds reports.view alone (cma.speed_to_lead_rows takes either; in the single
+  // transaction cma.team_status_time had refused first). Each function checks its own permission and range as before
+  getDashboardReads(me, range): DashboardReads {
+    let timeOk: (v: TeamStatusTime) => void = () => undefined;
+    let timeNo: (e: unknown) => void = () => undefined;
+    const time = new Promise<TeamStatusTime>((ok, no) => { timeOk = ok; timeNo = no; });
+    time.catch(() => undefined); // awaited by the page; a failure nobody awaits yet must not count as unhandled
+    let counts: Promise<DashboardIntake>;
+    let speed: Promise<SpeedToLeadRow[]>;
+    try {
+      assertReportRange(range);
+      counts = withTenant(ctx(me), async (q) => {
+        timeOk(await readTeamStatusTime(q, range, null));
+        return { intake: await readIntake(q, range), records: await readCrmRecordsPerDay(q, range), callbacks: await readCallbacksKept(q, range) };
+      });
+      speed = withTenant(ctx(me), async (q) => {
+        await q.query(`select cma.assert_permission('performance.team')`);
+        return readSpeedToLeadRows(q, range, false);
+      });
+    } catch (e) {
+      // a range out of bounds (or no tenant in the context): every part fails with it, as an awaited read would
+      counts = Promise.reject(e);
+      speed = Promise.reject(e);
+    }
+    // the time has no answer when its transaction fails before or at its read: settling it twice does nothing
+    counts.catch((e: unknown) => timeNo(e));
+    speed.catch(() => undefined);
+    return { time, counts, speed };
   },
 
   // Addition 0003e: team_now() checks monitoring.live and raises CMA06 otherwise, so the plain read
@@ -3522,13 +3551,43 @@ export const postgresData: CmaData = {
     });
   },
 
-  async getFlashHeadline(me, overview, market, from, to): Promise<FlashHeadlineView> {
-    return withTenant(ctx(me), async (q) => {
-      const j = one((await q.query<{ j: FlashHeadlineDb }>(`select cma.flash_headline($1, $2, $3::date, $4::date) as j`,
-        [overview, market, from, to])).rows, "flash_headline").j;
-      return { overview: j.overview, headline: j.headline, market: j.market, asOf: j.as_of, from: j.from, to: j.to, setUp: j.set_up, value: flashNumber(j.value),
-        split: splitItemsOf(j.split), definitionVersion: j.definition_version ?? null };
+  getFlashCardReads(me, market, from, to): FlashCardReads {
+    // one promise per answer, settled as its statement returns (addition 0009p): the stored cards, then each live card
+    let storedOk: (v: FlashStoredCard[]) => void = () => undefined;
+    let storedNo: (e: unknown) => void = () => undefined;
+    const stored = new Promise<FlashStoredCard[]>((ok, no) => { storedOk = ok; storedNo = no; });
+    const live = new Map(FLASH_CARD_ORDER.map((o) => {
+      let ok: (v: FlashHeadlineView | null) => void = () => undefined;
+      let no: (e: unknown) => void = () => undefined;
+      const promise = new Promise<FlashHeadlineView | null>((a, b) => { ok = a; no = b; });
+      promise.catch(() => undefined); // a card nobody awaits (not on the page) must not count as an unhandled failure
+      return [o.key, { promise, ok, no }] as const;
+    }));
+    stored.catch(() => undefined);
+    const done = withTenant(ctx(me), async (q) => {
+      // the function checks the permission and the market first; one statement over the current takes
+      const j = one((await q.query<{ j: { cards: { overview: string; stored: boolean; set_up?: boolean; value?: unknown; split?: unknown; definition_version?: string | null;
+        refreshed_at?: string | null }[] } }>(`select cma.flash_cards_now($1) as j`, [market])).rows, "flash_cards_now").j;
+      const cards = j.cards.map((c) => ({ overview: c.overview, stored: c.stored === true, setUp: c.set_up === true, value: c.stored ? flashNumber(c.value) : null,
+        split: c.stored ? splitItemsOf(c.split) : null, definitionVersion: c.definition_version ?? null, refreshedAt: c.refreshed_at ?? null }));
+      storedOk(cards);
+      // the cheapest first: data quality's stored result, the flows over their period, then a stock overview whose take
+      // may not be read now (the job is behind, a setting was just saved, a migration just ran)
+      for (const o of FLASH_CARD_ORDER) {
+        const card = cards.find((c) => c.overview === o.key);
+        if (!card || card.stored || !card.setUp) { live.get(o.key)?.ok(null); continue; }
+        live.get(o.key)?.ok(await readFlashHeadline(q, o.key, market, o.kind === "flow" ? from : null, o.kind === "flow" ? to : null));
+      }
+    }).catch((e: unknown) => {
+      // whatever has no answer yet has none: settling a promise twice does nothing
+      storedNo(e);
+      for (const d of live.values()) d.no(e);
     });
+    return { stored, live: (overview) => live.get(overview as FlashKey)?.promise ?? Promise.resolve(null), done };
+  },
+
+  async getFlashHeadline(me, overview, market, from, to): Promise<FlashHeadlineView> {
+    return withTenant(ctx(me), (q) => readFlashHeadline(q, overview, market, from, to));
   },
 
   async getFlashSnapshots(me, from, to): Promise<FlashSnapshotsView> {

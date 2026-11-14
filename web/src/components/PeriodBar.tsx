@@ -1,12 +1,14 @@
 /**
  * Yesterday, today, this week, this month and a custom range, with Y, T, W, M and C as shortcuts. A
  * server component: every choice is a plain link or a GET form, so the period lives in the URL. Reports → Reviews
- * alone adds All (addition 0008zw: range=all, key A) after this month, by passing its label.
+ * alone adds All (addition 0008zw: range=all, key A) after this month, by passing its label. Each link carries a pending
+ * mark (components/PendingMark): a dot in its corner from the click until the period's page is on the screen.
  */
 import Link from "next/link";
 import type { Copy } from "@/lib/copy";
 import type { HoursRange } from "@/lib/data";
 import { ALL_RANGE_KEY, RANGE_KEYS, RANGES, type Range } from "@/lib/period";
+import { LinkPending } from "./PendingMark";
 import { Keycap } from "./primitives";
 
 export function PeriodBar({
@@ -55,7 +57,7 @@ export function PeriodBar({
             aria-current={k === range ? "page" : undefined}
             data-shortcut={keys[k].toLowerCase()}
             className={[
-              "inline-flex h-10 items-center gap-2 rounded-button border px-4 text-body font-semibold",
+              "relative inline-flex h-10 items-center gap-2 rounded-button border px-4 text-body font-semibold",
               k === range
                 ? "border-p4a-deepblue bg-p4a-deepblue text-white"
                 : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue",
@@ -63,6 +65,7 @@ export function PeriodBar({
           >
             {labels[k]}
             <Keycap>{keys[k]}</Keycap>
+            <LinkPending />
           </Link>
         ))}
       </nav>
