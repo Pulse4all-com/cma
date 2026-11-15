@@ -1069,8 +1069,8 @@ expect("CMA-104 (2): the centre total's size fits the hole (28 px, smaller for a
   [[28, 28, 21, 18, 21, 12], true, true, true], [[], false, false, false]);
 const flashParts0009f = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
 expect("CMA-104 (3): the installed base's lists show a device's dims (model, market, status, warehouse, subscription status) by the breakdown's names (dimLabel), the key on hover; not a frozen list",
-  [/def\.key === "installed_base" && !frozen && def\.dims\.includes\(c\.key\)/.test(flashParts0009f),
-    /<NamedValue text=\{dimLabel\(def, labels, c\.key, dimsOfRow\(def, r\), t\)\} code=\{String\(r\[c\.key\]\)\} \/>/.test(flashParts0009f),
+  [/const dims = def\.key === "installed_base" && !frozen \? dimsOfRow\(def, r\) : null;/.test(flashParts0009f) && /: dims && def\.dims\.includes\(c\.key\)/.test(flashParts0009f),
+    /<NamedValue text=\{dimLabel\(def, labels, c\.key, dims, t\)\} code=\{String\(r\[c\.key\]\)\} \/>/.test(flashParts0009f),
     /return text !== code \? <span title=\{code\}>\{text\}<\/span> : <>\{code\}<\/>;/.test(flashParts0009f),
     ["market", "status", "model", "warehouse", "subscription_status"].every((d) => ibDef0009f.dims.includes(d))],
   [true, true, true, true], [false, false, false, false]);

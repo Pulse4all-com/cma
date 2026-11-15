@@ -117,10 +117,11 @@ export default async function WelcomePage() {
               <WaitingBlockLoader read={reads.mine} copy={copy} />
             </Suspense>
           ) : null}
+          {/* above the streamed app links, so it never moves when they arrive */}
+          <PlanBCard copy={copy} />
           <Suspense fallback={null}>
             <AppLinksLoader read={reads.links} copy={copy} />
           </Suspense>
-          <PlanBCard copy={copy} />
         </div>
       </div>
       {traced ? (

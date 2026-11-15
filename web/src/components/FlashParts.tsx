@@ -515,7 +515,10 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
           </tr>
         </thead>
         <tbody>
-          {shown.map((r, i) => (
+          {shown.map((r, i) => {
+            // a device's dims once per row, for the names its cells show (CMA-104)
+            const dims = def.key === "installed_base" && !frozen ? dimsOfRow(def, r) : null;
+            return (
             <tr key={i} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
               {columns.map((c) => (
                 <td key={c.key} className={`px-3 py-2 ${c.kind === "number" ? "tabular text-right" : ""}`}>
@@ -525,13 +528,14 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
                     ? <span title={String(r[c.key])}>{splitKeyLabel(def.key, String(r[c.key]), t, labels)}</span>
                     // a device's dims (its model, market, status, warehouse, subscription status) by the names the breakdown
                     // gives them, the catalog's key on hover (CMA-104); the file keeps the keys
-                    : def.key === "installed_base" && !frozen && def.dims.includes(c.key) && typeof r[c.key] === "string" && r[c.key] !== ""
-                    ? <NamedValue text={dimLabel(def, labels, c.key, dimsOfRow(def, r), t)} code={String(r[c.key])} />
+                    : dims && def.dims.includes(c.key) && typeof r[c.key] === "string" && r[c.key] !== ""
+                    ? <NamedValue text={dimLabel(def, labels, c.key, dims, t)} code={String(r[c.key])} />
                     : cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t, !frozen && FLASH_LABELLED_DIMS[def.key]?.[c.key] !== undefined)}
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
