@@ -508,5 +508,15 @@
       200,
       404
     ]
+  },
+  {
+    "path": "/api/v1/plan-b",
+    "subject": "agent-two",
+    "tx": 1,
+    "rt": 5,
+    "status": [
+      200,
+      404
+    ]
   }
 ]

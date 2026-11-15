@@ -17,8 +17,8 @@ import type { Copy } from "@/lib/copy";
 import { CmaDbError, requestDbTrace, type FlashDocumentView, type FlashRowsView } from "@/lib/data";
 import { FLASH_ADDRESS, filtersShown, filtersText, listUnavailable, splitKeyLabel, type FlashDocRow, type FlashOverviewDef } from "@/lib/flash";
 import {
-  breakdownChart, donutArcs, INSTALLED_BASE_ADDRESS, INSTALLED_BASE_HIDDEN_COLUMNS, INSTALLED_BASE_PAGE_ROWS, INSTALLED_BASE_PANELS, INSTALLED_BASE_PATH,
-  installedBaseHref, LIST_PANELS, marketStacks, OTHER_KEY, panelSet, seriesClass, widthShare, type BreakdownChart, type InstalledBasePanel, type InstalledBaseState,
+  breakdownChart, donutArcs, DONUT_THICKNESS, INSTALLED_BASE_ADDRESS, INSTALLED_BASE_HIDDEN_COLUMNS, INSTALLED_BASE_PAGE_ROWS, INSTALLED_BASE_PANELS, INSTALLED_BASE_PATH,
+  installedBaseHref, LIST_PANELS, marketStacks, OTHER_KEY, panelSet, ringFontSize, seriesClass, widthShare, type BreakdownChart, type InstalledBasePanel, type InstalledBaseState,
   type MarketStack, type Slice,
 } from "@/lib/installed-base";
 import { fmtPercent } from "@/lib/time";
@@ -84,16 +84,19 @@ export function PanelTabs({ st, copy }: { st: InstalledBaseState; copy: Copy }) 
 function Ring({ slices, total, locale, label, size = 176 }: { slices: readonly Slice[]; total: number; locale: Locale; label: string; size?: number }) {
   const arcs = donutArcs(slices, size);
   const c = size / 2;
+  const text = fmtNumber(total, locale);
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label} className="shrink-0">
-      {total <= 0 ? <circle cx={c} cy={c} r={c - 15} fill="none" stroke="currentColor" strokeWidth="30" className="text-p4a-bgblue" /> : null}
+      {total <= 0 ? <circle cx={c} cy={c} r={c - DONUT_THICKNESS / 2} fill="none" stroke="currentColor" strokeWidth={DONUT_THICKNESS} className="text-p4a-bgblue" /> : null}
       {arcs.filter((a) => a.d !== "").map((a) => (
         <path key={a.slice.key} d={a.d} fill="currentColor" className={seriesClass(a.slice.colour)}>
           <title>{`${a.slice.key}: ${fmtNumber(a.slice.value, locale)}`}</title>
         </path>
       ))}
-      <text x={c} y={c} textAnchor="middle" dominantBaseline="central" fill="currentColor" className="tabular text-p4a-heading" fontSize="28" fontWeight="700">
-        {fmtNumber(total, locale)}
+      {/* the total fits the hole, in the smaller breakdown donut too (CMA-104) */}
+      <text x={c} y={c} textAnchor="middle" dominantBaseline="central" fill="currentColor" className="tabular text-p4a-heading" fontSize={ringFontSize(text, size)} fontWeight="700"
+        data-testid="ib-ring-total">
+        {text}
       </text>
     </svg>
   );
@@ -167,9 +170,12 @@ export function MarketStacks({ stacks, labels, locale, copy, marketName }: {
             ))}
           </span>
           <span className="tabular text-right">{fmtNumber(s.total, locale)}</span>
-          <span className="tabular col-span-2 col-start-2 text-caption text-p4a-grey">
-            {s.parts.map((p) => `${modelLabel(p.key, labels, copy)} ${fmtNumber(p.value, locale)}`).join(" · ")}
-          </span>
+          {/* no split line under a market whose total is 0 (CMA-104): a line of zeros says nothing the total does not */}
+          {s.total > 0 ? (
+            <span className="tabular col-span-2 col-start-2 text-caption text-p4a-grey" data-testid={`ib-market-split-${s.market}`}>
+              {s.parts.map((p) => `${modelLabel(p.key, labels, copy)} ${fmtNumber(p.value, locale)}`).join(" · ")}
+            </span>
+          ) : null}
         </li>
       ))}
     </ul>

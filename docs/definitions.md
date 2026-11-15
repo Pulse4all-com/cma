@@ -2462,7 +2462,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Status | Decided |
 | Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278) |
 | Used by | `flash.installed_base.*`, `maintenance.*`, `nav.fulfillment`, `nav.storage`, `nav.purchaseOrders`, `placeholders.*`; Assets → Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists |
-| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash) |
+| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash); its lists show a device's dims by the breakdown's names, the files keep the keys |
 
 ### Subscriptions (rail page)
 

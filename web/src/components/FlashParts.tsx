@@ -245,7 +245,7 @@ export function TotalsRow({ def, doc, locale, t, unavailable = [], filtered = fa
  * A dim's value as the breakdown shows it: the market's name, a store's, a pipeline's or a stage's label (a stage by its
  * row's pipeline and its own id: lib/flash dimText), else the value itself
  */
-function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, dims: Record<string, string>, t: T): string {
+function dimLabel(def: FlashOverviewDef, labels: FlashDocumentView["labels"] | null | undefined, dim: string, dims: Record<string, string>, t: T): string {
   if (dims[dim] === "unknown" && dim === "market") return t.unknownMarket;
   // a segment, an age band without a creation date (addition 0008zt)
   if (dims[dim] === "unknown" && (dim === "segment" || dim === "age_band")) return t.unknownValue;
@@ -255,8 +255,8 @@ function dimLabel(def: FlashOverviewDef, doc: FlashDocumentView, dim: string, di
   // an order's kind in the reader's language, as the headline's split names it (addition 0008zw)
   if (def.key === "orders" && dim === "kind") return splitKeyLabel(def.key, dims[dim] ?? "", t);
   // a device's model by its name in the register, as the headline's split names it (addition 0008zy)
-  if (def.key === "installed_base" && dim === "model") return splitKeyLabel(def.key, dims[dim] ?? "", t, doc.labels);
-  return dimText(def.key, doc.labels, dim, dims);
+  if (def.key === "installed_base" && dim === "model") return splitKeyLabel(def.key, dims[dim] ?? "", t, labels);
+  return dimText(def.key, labels, dim, dims);
 }
 
 /**
@@ -315,7 +315,7 @@ export function BreakdownTable({ def, doc, set, query, locale, t, path }: {
                 {set.map((d) => (
                   <td key={d} className="px-3 py-2">
                     <Link href={cellLink(r, null)} className="text-p4a-deepblue underline"
-                      title={FLASH_LABELLED_DIMS[def.key]?.[d] && dimLabel(def, doc, d, r.dims, t) !== r.dims[d] ? r.dims[d] : undefined}>{dimLabel(def, doc, d, r.dims, t)}</Link>
+                      title={FLASH_LABELLED_DIMS[def.key]?.[d] && dimLabel(def, doc.labels, d, r.dims, t) !== r.dims[d] ? r.dims[d] : undefined}>{dimLabel(def, doc.labels, d, r.dims, t)}</Link>
                   </td>
                 ))}
                 {measures.map((m) => (
@@ -420,7 +420,7 @@ export function MarketBars({ def, doc, locale, t }: { def: FlashOverviewDef; doc
         const v = typeof r.measures[measure] === "number" ? (r.measures[measure] as number) : 0;
         return (
           <li key={r.dims.market} className="grid grid-cols-[10rem_1fr_6rem] items-center gap-3 text-small">
-            <span>{dimLabel(def, doc, "market", r.dims, t)}</span>
+            <span>{dimLabel(def, doc.labels, "market", r.dims, t)}</span>
             <span className="h-3 rounded-button bg-p4a-bgblue">
               <span className="block h-3 rounded-button bg-p4a-deepblue" style={{ width: `${Math.round(barShare(v, max) * 100)}%` }} />
             </span>
@@ -461,6 +461,16 @@ function cellOf(key: string, kind: string, value: unknown, row: Record<string, u
   }
   if (text === "") return <span className="text-p4a-muted">–</span>;
   return url ? <a href={url} target="_blank" rel="noreferrer" className="text-p4a-deepblue underline">{text}</a> : text;
+}
+
+/** A record's dims as text, for the names the breakdown gives them */
+function dimsOfRow(def: FlashOverviewDef, r: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(def.dims.filter((d) => typeof r[d] === "string").map((d) => [d, r[d] as string]));
+}
+
+/** A value by its name, the key on hover when the name differs from it */
+function NamedValue({ text, code }: { text: string; code: string }) {
+  return text !== code ? <span title={code}>{text}</span> : <>{code}</>;
 }
 
 /** The records: the overview's columns (the links on the ids), sortable on the whitelist, 500 a page */
@@ -505,20 +515,27 @@ export function RowsTable({ def, rows, sort, descending, query, locale, timeZone
           </tr>
         </thead>
         <tbody>
-          {shown.map((r, i) => (
+          {shown.map((r, i) => {
+            // a device's dims once per row, for the names its cells show (CMA-104)
+            const dims = def.key === "installed_base" && !frozen ? dimsOfRow(def, r) : null;
+            return (
             <tr key={i} className="h-10 border-b border-p4a-border even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
               {columns.map((c) => (
                 <td key={c.key} className={`px-3 py-2 ${c.kind === "number" ? "tabular text-right" : ""}`}>
                   {/* an order's kind in the reader's language (addition 0008zw), a device's model by its register name (addition
                       0008zy): as the breakdown and the headline's split name them, the code on hover */}
-                  {((def.key === "orders" && c.key === "kind") || (def.key === "installed_base" && c.key === "model" && !frozen))
-                    && typeof r[c.key] === "string" && r[c.key] !== ""
+                  {(def.key === "orders" && c.key === "kind") && typeof r[c.key] === "string" && r[c.key] !== ""
                     ? <span title={String(r[c.key])}>{splitKeyLabel(def.key, String(r[c.key]), t, labels)}</span>
+                    // a device's dims (its model, market, status, warehouse, subscription status) by the names the breakdown
+                    // gives them, the catalog's key on hover (CMA-104); the file keeps the keys
+                    : dims && def.dims.includes(c.key) && typeof r[c.key] === "string" && r[c.key] !== ""
+                    ? <NamedValue text={dimLabel(def, labels, c.key, dims, t)} code={String(r[c.key])} />
                     : cellOf(c.key, c.kind, r[c.key], r, locale, timeZone, t, !frozen && FLASH_LABELLED_DIMS[def.key]?.[c.key] !== undefined)}
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -8,7 +8,8 @@
  */
 import type { Route } from "next";
 import { useEffect, useState } from "react";
-import { appliedAsOf, changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
+import { commitDate } from "@/lib/date-field";
+import { changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
 import { PENDING_ROW, usePendingChoice, usePendingPush } from "./usePendingPush";
 
@@ -36,20 +37,11 @@ export function FlashAsOf({ asOf, min, max, query, labels, path = "/reports/flas
   path?: FlashPath;
 }) {
   const [pending, push] = usePendingPush();
-  // applied on Enter or blur only, when complete and in range (lib/flash appliedAsOf); typing never navigates. The field
-  // keeps what is typed (uncontrolled) and starts again from the address's date when that changes (its key)
-  const apply = (input: HTMLInputElement, leaving: boolean) => {
-    const next = appliedAsOf(input.value, min, max);
-    if (next === false) {
-      if (leaving) input.value = asOf ?? "";
-      return;
-    }
-    // asked once per field: the blur that may follow Enter asks nothing more. The mark lives on this input, which the
-    // next address's date replaces (its key), so Now, Back or another date never meet an old mark
-    if (next === asOf || input.dataset.applied === String(next)) return;
-    input.dataset.applied = String(next);
-    go(push, path, query, { asOf: next });
-  };
+  // applied on Enter or blur only, when complete and in range (lib/date-field commitDate, the rule lib/flash appliedAsOf
+  // names); typing never navigates. The field keeps what is typed (uncontrolled) and starts again from the address's date
+  // when that changes (its key), so Now, Back or another date never meet the mark of a date asked once
+  const apply = (input: HTMLInputElement, leaving: boolean) =>
+    commitDate(input, leaving, asOf, min, max, (next) => go(push, path, query, { asOf: next }));
   return (
     <div className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} data-testid="flash-as-of-row" aria-busy={pending || undefined}>
       <label htmlFor="flash-as-of" className="flex items-center gap-2">{labels.asOf} <Keycap>A</Keycap></label>

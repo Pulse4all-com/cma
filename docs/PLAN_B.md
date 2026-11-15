@@ -3,7 +3,7 @@
 What the contact center does when the CMA Workspace (`workspace.pulse4all.app`) does not load or does not
 save, for an hour, a day or a week; how the hours are put back afterwards; and how the catch-up is checked.
 Backlog CMA-032 (README Open decisions: "today: HubSpot and Aircall as they work now"). Roles, not names:
-the call center manager, the agents, the CMA owner (Martin), compliance and data protection. Written for the
+the call center manager, the agents, the CMA owner, compliance and data protection. Written for the
 full IT audit of 17 October 2026; the agents' own short copy, in their language, is the manager's to make from
 the sections "For the agents". The operator's side is `docs/OPERATIONS.md`.
 
@@ -105,7 +105,7 @@ the same way, with these rules:
   is anything stable per person (the sheet's number); the map file links it to the person's work email, and
   the CMA matches the email to a person at load time. The file never enters the repository and is deleted
   after the load (import README, steps 1 and 11).
-- The owner runs the import from the Chromebook and Studio exactly as the import README says, with a batch
+- The owner runs the import from the owner's terminal and Studio exactly as the import README says, with a batch
   key `outage-<first date>` and the zone `Europe/Amsterdam` (or the person's zone). What it does with the file
   is fixed: a session without a logout ends at the default close time (17:00), every session is clipped to the
   window (07:00 to 22:00), overlapping sessions are merged, a date the CMA already has a day for is skipped,

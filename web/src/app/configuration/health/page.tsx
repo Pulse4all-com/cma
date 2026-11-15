@@ -6,7 +6,7 @@ import { Card } from "@/components/primitives";
 import { config } from "@/lib/config";
 import { data, requestDbTrace } from "@/lib/data";
 import { isHttpsUrl } from "@/lib/health";
-import { readManifest } from "../../api/v1/configuration/documents/[name]/route";
+import { readManifest } from "@/lib/documents";
 import { resolve } from "../../access";
 import { ConfigurationPage, mayConfigure } from "../gate";
 
