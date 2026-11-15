@@ -295,7 +295,7 @@ Test users: `agent-two`, `supervisor`, `manager`, `admin`, `analyst` (one tenant
 Against dev, through the proxy from step 4:
 
 ```bash
-cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL n PASS: 271 in dev since addition 0008p (records/audit-2026-10-18), six notes for checks dev lacks an identity or a connection for
+cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL n PASS: 345 in dev, a note for each check dev lacks an identity or a connection for (invest-analyst and reader exist only in the mock and the local fixture)
 node verify/api.mjs --provoke; echo "exit $?"                     # ALL n PROVOKED CHECKS FAILED, exit 0
 ```
 
