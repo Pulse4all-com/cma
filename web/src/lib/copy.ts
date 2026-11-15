@@ -1796,7 +1796,7 @@ const en = {
     intro_storage: "Which devices are in stock, in which warehouse and of which model.",
     fedBy_storage: "The asset register's devices in a status flagged in stock, per warehouse and model. Not the pledge lists' In Storage.",
     intro_fleetManagement: "The remote monitoring of the devices' readiness: their self-test results, their connectivity and the devices that need attention.",
-    fedBy_fleetManagement: "Not decided yet: which system will report the devices' readiness. Whatever it is, its data reaches the Workspace only through the ingest service, the one way in for data from outside.",
+    fedBy_fleetManagement: "Not decided yet: which system will report the devices' readiness. Whatever it is, its data will come in the way every other source's does, never straight into the Workspace.",
   },
   maintenanceFile: {
     bucket: "Month",
@@ -6028,7 +6028,7 @@ const nl = {
     intro_storage: "Welke apparaten op voorraad zijn, in welk magazijn en van welk model.",
     fedBy_storage: "De apparaten van het assetregister in een status die als op voorraad geldt, per magazijn en model. Niet de In Storage van de pandlijsten.",
     intro_fleetManagement: "De bewaking op afstand van de gereedheid van de apparaten: hun zelftestresultaten, hun verbinding en de apparaten die aandacht nodig hebben.",
-    fedBy_fleetManagement: "Nog niet besloten: welk systeem de gereedheid van de apparaten doorgeeft. Wat het ook wordt, de gegevens bereiken de Workspace alleen via de ingestdienst, de enige weg naar binnen voor gegevens van buiten.",
+    fedBy_fleetManagement: "Nog niet besloten: welk systeem de gereedheid van de apparaten doorgeeft. Wat het ook wordt, de gegevens komen binnen zoals die van elke andere bron, nooit rechtstreeks in de Workspace.",
   },
   maintenanceFile: {
     bucket: "Maand",
