@@ -105,10 +105,10 @@ const SALES = ["/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel"
   "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person"];
 // since addition 0008zw Maintenance is Assets', after Installed base; since 13 November 2026 (Martin) the placeholder pages
 // Subscriptions, Payments and Compliance in Customers; since 14 November Assets runs Installed base, Fulfillment,
-// Maintenance, Storage, Purchase orders (Pledge lists, pledges.view, after it)
+// Maintenance, Storage, Purchase orders (Pledge lists, pledges.view, after it); since 15 November Fleet management last
 const CUSTOMERS = ["/reports/active", "/reports/subscriptions", "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews",
   "/reports/cancellations"];
-const ASSETS = ["/reports/installed-base", "/reports/fulfillment", "/reports/maintenance", "/reports/storage", "/reports/purchase-orders"];
+const ASSETS = ["/reports/installed-base", "/reports/fulfillment", "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management"];
 const digits = (n) => Array.from({ length: n }, (_, i) => (i < 9 ? String(i + 1) : null));
 
 expect("the agent: Welcome, Messages and Time, keys 1 to 5",
@@ -145,31 +145,34 @@ expect("the groups' labels: Reports, Sales, Customers, Assets (Verkoop, Klanten,
   ["Reports", "Sales", "Customers", "Assets", "Campaigns", "Rapportages", "Verkoop", "Klanten", "Assets", "Campagnes"], ["Reports", "Campaigns"]);
 // Assets (addition 0008zw): Installed base and Maintenance, in en and nl, with the box icon; Customers since addition 0009l
 // (Martin, 11 November 2026): Active first, then Courtesy, Reviews and Cancellations
-expect("Assets: Installed base, Fulfillment, Maintenance, Storage, Purchase orders (Geïnstalleerde basis, Fulfilment, Onderhoud, Opslag, Inkooporders), the box icon; Customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews, Cancellations",
+expect("Assets: Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Fleet management (Geïnstalleerde basis, Fulfilment, Onderhoud, Opslag, Inkooporders, Vlootbeheer), the box icon; Customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews, Cancellations",
   [labels(READER, "assets"), visibleNav(READER, t("nl")).find((e) => e.kind === "group" && e.id === "assets")?.items.map((i) => i.label) ?? null,
     visibleNav(READER, copy).find((e) => e.kind === "group" && e.id === "assets")?.icon ?? null, labels(READER, "customers")],
-  [["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders"], ["Geïnstalleerde basis", "Fulfilment", "Onderhoud", "Opslag", "Inkooporders"], "box",
+  [["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders", "Fleet management"],
+    ["Geïnstalleerde basis", "Fulfilment", "Onderhoud", "Opslag", "Inkooporders", "Vlootbeheer"], "box",
     ["Active", "Subscriptions", "Payments", "Courtesy", "Compliance", "Reviews", "Cancellations"]],
   [["Maintenance"], ["Onderhoud"], "person", ["Cancellations", "Reviews", "Maintenance"]]);
 // Team (13 November 2026): People, Quality monitoring, Roster for the admin (Mensen, Kwaliteitsmonitoring, Rooster); Quality
 // monitoring needs quality.manage (14 November 2026): the analytics role's Team holds it alone and its crumb leads there, the
-// supervisor sees no Team group; Assets with Pledge lists last for pledges.view
+// supervisor sees no Team group; Assets with Pledge lists for pledges.view, then Fleet management last (15 November 2026)
 const ANALYTICS = mock(["reports.view", "performance.team", "monitoring.live", "quality.manage"], "analytics");
-expect("Team: People, Quality monitoring, Roster; analytics' Team is Quality monitoring, the supervisor has none; Pledge lists last",
+expect("Team: People, Quality monitoring, Roster; analytics' Team is Quality monitoring, the supervisor has none; Pledge lists, then Fleet management last",
   [labels(ADMIN_MOCK, "team"), visibleNav(ADMIN_MOCK, t("nl")).find((e) => e.kind === "group" && e.id === "team")?.items.map((i) => i.label) ?? null,
     labels(ANALYTICS, "team"), breadcrumbs(ANALYTICS, copy, "quality-monitoring")[1], breadcrumbs(ADMIN_MOCK, copy, "quality-monitoring")[1],
     labels(SUPERVISOR, "team"), labels(mock(["reports.view", "pledges.view"], "reader"), "assets")],
   [["People", "Quality monitoring", "Roster"], ["Mensen", "Kwaliteitsmonitoring", "Rooster"], ["Quality monitoring"],
     { label: "Team", href: "/team/quality-monitoring" }, { label: "Team", href: "/team/people" }, null,
-    ["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders", "Pledge lists"]],
+    ["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders", "Pledge lists", "Fleet management"]],
   [["People", "Roster"], ["Mensen", "Rooster"], [], { label: "Team", href: undefined }, { label: "Team", href: "/roster/planner" }, ["Quality monitoring"],
     ["Installed base", "Maintenance", "Pledge lists"]]);
-expect("the Assets pages' breadcrumbs: Welcome › Assets › Installed base, Welcome › Assets › Maintenance, the group to Installed base",
-  [breadcrumbs(READER, copy, "installed-base"), breadcrumbs(READER, copy, "maintenance")],
+expect("the Assets pages' breadcrumbs: Welcome › Assets › Installed base, › Maintenance, › Fleet management, the group to Installed base",
+  [breadcrumbs(READER, copy, "installed-base"), breadcrumbs(READER, copy, "maintenance"), breadcrumbs(READER, copy, "fleet-management")],
   [[{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Installed base" }],
-    [{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Maintenance" }]],
+    [{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Maintenance" }],
+    [{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Fleet management" }]],
   [[{ label: "Welcome", href: "/" }, { label: "Reports", href: "/reports/flash" }, { label: "Installed base" }],
-    [{ label: "Welcome", href: "/" }, { label: "Customers", href: "/reports/cancellations" }, { label: "Maintenance" }]]);
+    [{ label: "Welcome", href: "/" }, { label: "Customers", href: "/reports/cancellations" }, { label: "Maintenance" }],
+    [{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/fleet-management" }, { label: "Fleet management" }]]);
 expect("an agent sees no Assets page, and their crumbs give no link to the group",
   [hrefs(AGENT).filter((h) => ASSETS.includes(h)), breadcrumbs(AGENT, copy, "installed-base")[1]],
   [[], { label: "Assets", href: undefined }], [ASSETS, { label: "Assets", href: "/reports/installed-base" }]);

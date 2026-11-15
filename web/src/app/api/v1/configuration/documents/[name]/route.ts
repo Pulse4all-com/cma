@@ -8,12 +8,13 @@ import { documentResponse } from "@/lib/documents";
  * The name must be on the allowlist in lib/health AND in the manifest the build wrote: anything else is a
  * 404 before the file system is asked, so there is no traversal and no listing. Markdown and CSV are sent
  * as attachments with a fixed content type and nosniff; never from public/, never rendered as HTML here
- * (lib/documents, which Plan B's route shares since CMA-032).
+ * (lib/documents). The only route that serves them, for tenant.configure alone (Plan B's route was removed on
+ * 15 November 2026).
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ name: string }> }) {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, ["tenant.configure"]);
     const { name } = await params;
-    return documentResponse(name, "attachment");
+    return documentResponse(name);
   });
 }

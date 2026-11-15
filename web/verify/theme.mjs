@@ -236,6 +236,8 @@ const pages = [
   { path: "/reports/purchase-orders", subject: "manager", noHint: true },
   { path: "/reports/fulfillment", subject: "manager", noHint: true },
   { path: "/reports/storage", subject: "reader", noHint: true },
+  // Fleet management (placeholder, 15 November 2026), last in Assets
+  { path: "/reports/fleet-management", subject: "manager", noHint: true },
   { path: "/configuration/sources", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },

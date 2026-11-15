@@ -7,10 +7,10 @@ import { documentContentType, documentEntry, isDocumentName, parseManifest } fro
 
 /**
  * The documents the build copied into the image (addition 0008r): the directory, its manifest and one document as a
- * response. Two routes serve them: Configuration → System health's (every name on the allowlist, tenant.configure) and,
- * since CMA-032, Plan B's (PLAN_B.md alone, every person with a role). A name must be on the allowlist in lib/health AND
- * in the manifest the build wrote: anything else is a 404 before the file system is asked, so there is no traversal and
- * no listing; never from public/, never rendered as HTML.
+ * response. One route serves them: Configuration → System health's (every name on the allowlist, tenant.configure; Plan
+ * B's route of CMA-032 was removed on 15 November 2026). A name must be on the allowlist in lib/health AND in the
+ * manifest the build wrote: anything else is a 404 before the file system is asked, so there is no traversal and no
+ * listing; never from public/, never rendered as HTML.
  */
 
 /** documents/ next to the server: /app/documents in the image (Dockerfile), web/documents locally */
@@ -27,11 +27,8 @@ export async function readManifest() {
   }
 }
 
-/**
- * One document as a private response: an attachment with its fixed type (System health), or inline as plain text, which
- * a browser shows as it is and never renders (Plan B); nosniff and no-store either way
- */
-export async function documentResponse(name: string, disposition: "attachment" | "inline"): Promise<NextResponse> {
+/** One document as a private response: an attachment with its fixed type, nosniff and no-store */
+export async function documentResponse(name: string): Promise<NextResponse> {
   const entry = documentEntry(await readManifest(), name);
   if (!entry || !isDocumentName(name)) throw new ApiError(404, "not_found", "No such document in this build");
   let body: Buffer;
@@ -44,9 +41,9 @@ export async function documentResponse(name: string, disposition: "attachment" |
     status: 200,
     headers: {
       "cache-control": "no-store",
-      "content-type": disposition === "inline" ? "text/plain; charset=utf-8" : documentContentType(entry.name),
+      "content-type": documentContentType(entry.name),
       "content-length": String(body.byteLength),
-      "content-disposition": `${disposition}; filename="${entry.name}"`,
+      "content-disposition": `attachment; filename="${entry.name}"`,
       "x-content-type-options": "nosniff",
       ...dbTraceHeader(),
     },

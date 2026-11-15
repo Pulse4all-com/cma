@@ -204,6 +204,11 @@
       "class": "report"
     },
     {
+      "path": "/reports/fleet-management",
+      "subject": "manager",
+      "class": "report"
+    },
+    {
       "path": "/reports/reviews?range=all",
       "subject": "manager",
       "class": "report"
