@@ -33,6 +33,9 @@ import { HeaderHint } from "./HeaderHint";
 const PLOT_PX = 128;
 const pad = (h: number) => String(h).padStart(2, "0");
 
+/** A header cell of the table view, as the Live board's people table has it */
+const th = "px-3 py-2 font-semibold";
+
 export function LiveHours({ date, copy, locale, timeZone, scope }: {
   /** Today's date in the tenant's zone, as Inbound today's */
   date: string;
@@ -228,15 +231,18 @@ export function LiveHours({ date, copy, locale, timeZone, scope }: {
 
       {/* the chart's table view, for screen readers (Reports → Inbound has the same figures for everyone) */}
       {hours && any ? (
-        <table className="sr-only">
+        // the report tables' classes (Pulse4all-Style 7.6), though it is never painted: one table style in main (backlog CMA-120)
+        <table className="sr-only border-collapse text-body leading-table">
           <caption>{t.hoursTitle}</caption>
           <thead>
-            <tr><th scope="col">{copy.inbound.hour}</th><th scope="col">{t.inboundOffered}</th><th scope="col">{t.inboundAnswered}</th>
-              <th scope="col">{t.inboundUnanswered}</th><th scope="col">{copy.inbound.waiting}</th><th scope="col">{t.inboundServiceLevel}</th></tr>
+            <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
+              <th scope="col" className={th}>{copy.inbound.hour}</th><th scope="col" className={th}>{t.inboundOffered}</th>
+              <th scope="col" className={th}>{t.inboundAnswered}</th><th scope="col" className={th}>{t.inboundUnanswered}</th>
+              <th scope="col" className={th}>{copy.inbound.waiting}</th><th scope="col" className={th}>{t.inboundServiceLevel}</th></tr>
           </thead>
           <tbody>
             {hours.filter((h) => h.offered > 0).map((h) => (
-              <tr key={h.hour}><th scope="row">{range(h.hour)}</th><td>{h.offered}</td><td>{h.answered}</td><td>{h.unanswered}</td><td>{h.waiting}</td><td>{fmtPct(h.serviceLevelPct, locale)}</td></tr>
+              <tr key={h.hour} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite"><th scope="row" className="px-3 text-left font-normal">{range(h.hour)}</th><td>{h.offered}</td><td>{h.answered}</td><td>{h.unanswered}</td><td>{h.waiting}</td><td>{fmtPct(h.serviceLevelPct, locale)}</td></tr>
             ))}
           </tbody>
         </table>

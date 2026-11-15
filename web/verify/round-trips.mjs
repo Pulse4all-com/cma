@@ -3,7 +3,11 @@
  *
  * A regression guard from the IT audit of 17 October 2026 (section 5.6): each row of round-trips.json names a
  * path, a mock subject and the highest number of transactions (tx) and statements (rt) the request may cost, and
- * optionally the statuses it accepts (status, default [200]).
+ * optionally the statuses it accepts (status, default [200]) and the permission it needs (permission). A row with a permission
+ * is measured only when its subject holds it: no default role holds pledges.view (168, D7), so in dev the admin's Pledge
+ * lists rows are a note, not a failure, and the local fixture's role (round-trips-fixture.sql) measures them in full
+ * (backlog CMA-117). Whether a subject holds a permission is asked of the API itself: PROBES names a route that answers 200
+ * with it and 403 not_permitted without it.
  * The server reports the cost itself when CMA_DB_TRACE=1 and sign-in is mock (never in iap mode, whatever the
  * environment says): pages render <meta name="cma-db" content="tx=…;rt=…;ms=…"> from the Shell, and a page that
  * streams reads after the Shell (System health) renders a second one after them, so the last meta counts; API
@@ -37,9 +41,32 @@ function parse(s) {
   return m ? { tx: Number(m[1]), rt: Number(m[2]), ms: Number(m[3]) } : null;
 }
 
+/** A route per permission a row may name: 200 when the subject holds it, 403 not_permitted when not */
+const PROBES = { "pledges.view": "/api/v1/reports/pledge-lists?limit=1" };
+const held = new Map();
+async function holds(subject, permission) {
+  const key = `${subject} ${permission}`;
+  if (!held.has(key)) {
+    const probe = PROBES[permission];
+    if (!probe) held.set(key, `no probe for ${permission}`);
+    else {
+      const res = await fetch(BASE + probe, { headers: { "x-cma-mock-subject": subject, accept: "application/json" }, redirect: "manual" });
+      const body = await res.json().catch(() => null);
+      held.set(key, res.status === 200 ? true : res.status === 403 && body?.error?.code === "not_permitted" ? false : `the probe ${probe} answered ${res.status}`);
+    }
+  }
+  return held.get(key);
+}
+
 const problems = [];
+const notes = [];
 const observed = [];
 for (const row of budget) {
+  if (row.permission) {
+    const h = await holds(row.subject, row.permission);
+    if (typeof h === "string") { problems.push(`${row.subject} ${row.path}: ${h}`); continue; }
+    if (!h) { notes.push(`${row.subject} ${row.path}: not measured, ${row.subject} does not hold ${row.permission}`); continue; }
+  }
   const res = await fetch(BASE + row.path, { headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json" }, redirect: "manual" });
   const type = res.headers.get("content-type") ?? "";
   let cost = null;
@@ -76,9 +103,10 @@ if (observedOnly) {
   console.log(JSON.stringify(observed, null, 2));
   process.exit(0);
 }
+for (const n of notes) console.log("  note: " + n);
 if (problems.length) {
   for (const p of problems) console.log("  " + p);
   console.log(`round-trips: FAIL (${problems.length} problems)`);
   process.exit(1);
 }
-console.log(`round-trips: PASS (${budget.length} requests within their transaction and statement budgets)`);
+console.log(`round-trips: PASS (${budget.length - notes.length} requests within their transaction and statement budgets${notes.length ? `, ${notes.length} not measured without their permission (notes above)` : ""})`);

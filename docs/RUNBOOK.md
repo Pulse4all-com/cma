@@ -343,7 +343,11 @@ so a scheduled refresh does not take the lock the verifier's second session hold
 
 The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `configuration`, `messages`, `import`, `datamap`, `reports`, `period`, `signed-out`, `invitations`, `preview`, `follow-up`, `health`, `boundaries`, `jobs`, `theme`, `layout`, `hints`, `iap-token`) run locally, `theme`, `layout` and `hints` against a local mock server on port 8080 and `iap-token` against a local server in iap mode that reads the script's test key set; see the header
 of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
-workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do.
+workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do. `layout` writes its screenshots to a new
+temporary folder outside the repository and prints it; for evidence, `OUT_DIR=../records/<increment>-<env>-<date>` names
+the records folder (backlog CMA-076). The mock's today holds a whole weekday's records at any date (from about 06:00), and
+`web/verify/lib/fake-now.mjs` (`CMA_FAKE_NOW`) runs a verifier or the mock server on another date (backlog CMA-113;
+`web/verify/README.md`).
 
 ## 6. Logs
 
