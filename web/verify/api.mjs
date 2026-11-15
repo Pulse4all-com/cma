@@ -1508,8 +1508,12 @@ async function flashChecks() {
       head?.definitionVersion],
     [true, "0008zn"], [false, "0008zw"]);
   // Installed base by model (addition 0008zy): In the field split per model in the document's order, each part with its
-  // name, adding up; the document narrowed to a model (its In the field that model's part); the page's first paint (the
-  // tiles) before the records' placeholder, the records after it in the stream; the breakdown file names the model
+  // name, adding up; the document narrowed to a model (its In the field that model's part); the breakdown file names the
+  // model. The pages with the Model filter: Flash's Installed base tab (0008zy, unchanged by 0009f D1) paints its tiles first
+  // and streams the records after them; Assets → Installed base (0009f D1, D4) shows its tiles and no records until the
+  // Records panel is asked, whose list then follows the tiles (0008zz). Either page's records may come under their
+  // placeholder or, when their read was done before the first paint, without it: tiles first, the placeholder if any
+  // between them and the records
   const ibHead = (await call(ANALYST, "/api/v1/reports/flash?overview=installed_base&part=headline")).body?.data;
   const ibDoc = (await call(ANALYST, "/api/v1/reports/flash?overview=installed_base")).body?.data;
   const firstModel = (ibHead?.split ?? []).find((x) => x.value > 0);
@@ -1520,15 +1524,23 @@ async function flashChecks() {
     [true, true], [false, false]);
   if (firstModel) {
     const narrowed = (await call(ANALYST, `/api/v1/reports/flash?overview=installed_base&f_model=${encodeURIComponent(firstModel.key)}`)).body?.data;
-    const page = await download(ANALYST, `/reports/installed-base?f_model=${encodeURIComponent(firstModel.key)}`);
-    const at = (s) => page.text.indexOf(s);
-    const file = await download(ANALYST, `/api/v1/reports/flash/file?overview=installed_base&part=breakdown&f_model=${encodeURIComponent(firstModel.key)}`);
-    expect("flash: the Model filter: the document's In the field that model's part; the page's tiles before the records' placeholder, the records after it; the file names the model",
-      [narrowed?.totals?.in_field === firstModel.value, narrowed?.filter?.model === firstModel.key, page.status,
-        at('data-testid="flash-totals"') >= 0 && at('data-testid="flash-totals"') < at('data-testid="flash-rows-loading"')
-          && at('data-testid="flash-rows-loading"') < at('data-testid="flash-rows-count"'),
+    const model = encodeURIComponent(firstModel.key);
+    const tab = await download(ANALYST, `/reports/flash?o=installed_base&f_model=${model}`);
+    const assets = await download(ANALYST, `/reports/installed-base?f_model=${model}`);
+    const records = await download(ANALYST, `/reports/installed-base?f_model=${model}&panel=records`);
+    // tiles first, then the records; the placeholder, when the stream holds one, between the two
+    const streamsAfter = (text, placeholder) => {
+      const at = (id) => text.indexOf(`data-testid="${id}"`);
+      const tiles = at("flash-totals"), wait = at(placeholder), rows = at("flash-rows-count");
+      return tiles >= 0 && rows > tiles && (wait < 0 || (tiles < wait && wait < rows));
+    };
+    const tilesAlone = (text) => text.includes('data-testid="flash-totals"') && !text.includes('data-testid="flash-rows-count"') && !text.includes('data-testid="ib-list-loading"');
+    const file = await download(ANALYST, `/api/v1/reports/flash/file?overview=installed_base&part=breakdown&f_model=${model}`);
+    expect("flash: the Model filter: the document's In the field that model's part; Flash's tab and the Assets page's Records panel paint the tiles, then the records (their placeholder, if any, between); the Assets page alone has no records; the file names the model",
+      [narrowed?.totals?.in_field === firstModel.value, narrowed?.filter?.model === firstModel.key, [tab.status, assets.status, records.status],
+        streamsAfter(tab.text, "flash-rows-loading"), tilesAlone(assets.text), streamsAfter(records.text, "ib-list-loading"),
         file.status, file.text.split(/\r?\n/)[1]?.includes(`model=${firstModel.key}`) ?? false],
-      [true, true, 200, true, 200, true], [false, false, 200, false, 200, false]);
+      [true, true, [200, 200, 200], true, true, true, 200, true], [false, false, [200, 200, 200], false, false, false, 200, false]);
   }
   // Assets → Installed base (addition 0008zw): Flash's Installed base overview on its own page, the same document; an agent
   // sees the no-permission card. Rendered pages: the totals' tiles or the not-set-up line, no overviews' strip
@@ -1552,9 +1564,14 @@ async function flashChecks() {
   const snaps = (await call(ANALYST, `/api/v1/reports/flash/snapshots?from=${day(-30)}&to=${day(0)}`)).body?.data;
   expect("flash: the snapshots of a period and the open watch findings, no id of a record",
     [Array.isArray(snaps?.dates), Array.isArray(snaps?.watch), JSON.stringify(snaps?.watch ?? []).includes("@")], [true, true, false], [false, false, true]);
-  const invest = (await call(INVEST, "/api/v1/reports/flash?overview=orders")).body?.data;
-  expect("flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop)", [invest?.setUp, invest?.totals ?? null, invest?.rows?.length ?? -1],
-    [false, null, 0], [true, {}, 1]);
+  // A tenant without a shop (the mock fixture's and the local fixture's invest tenant; absent in dev): a note, never a PASS
+  if ((await get(INVEST, "/api/v1/me")).status === 200) {
+    const invest = (await call(INVEST, "/api/v1/reports/flash?overview=orders")).body?.data;
+    expect("flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop)", [invest?.setUp, invest?.totals ?? null, invest?.rows?.length ?? -1],
+      [false, null, 0], [true, {}, 1]);
+  } else {
+    console.log(`note  ${INVEST} has no access here: the check of a source not set up (Pulse4all Invest's shop) is left out`);
+  }
 }
 
 // Customers → Active (addition 0009l): the page's document, its list and its file for reports.view or performance.team (an
