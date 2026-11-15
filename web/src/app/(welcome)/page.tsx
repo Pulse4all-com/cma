@@ -120,6 +120,7 @@ export default async function WelcomePage() {
           <Suspense fallback={null}>
             <AppLinksLoader read={reads.links} copy={copy} />
           </Suspense>
+          <PlanBCard copy={copy} />
         </div>
       </div>
       {traced ? (
@@ -392,6 +393,24 @@ function WaitingBlock({ mine, copy }: { mine: MyFollowUp; copy: Copy }) {
 }
 
 /** The tenant's app links, already filtered by the database to what this person may see */
+/**
+ * Plan B (CMA-032, 15 November 2026): for every person with a role, what to do when the Workspace is not available,
+ * docs/PLAN_B.md served by /api/v1/plan-b in a new tab. No read: the card is the same for everyone
+ */
+function PlanBCard({ copy }: { copy: Copy }) {
+  const t = copy.welcome;
+  return (
+    <Card title={t.planB}>
+      <div data-testid="welcome-plan-b">
+        <p className="text-body">{t.planBBody}</p>
+        <a href="/api/v1/plan-b" target="_blank" rel="noopener noreferrer" className="mt-3 inline-block font-semibold text-p4a-deepblue hover:underline">
+          {t.planBOpen} <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </Card>
+  );
+}
+
 function AppLinks({ links, copy }: { links: AppLink[]; copy: Copy }) {
   const t = copy.welcome;
   return (

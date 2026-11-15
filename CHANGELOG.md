@@ -2,6 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 15 November 2026 (#PR): AI in the CMA proposes, never applies (backlog CMA-083): a rule in CLAUDE.md (Principles) and a row in docs/decisions.md extending the Gemini rule of 11 October 2026 to all AI.
 - 14 November 2026 (#278): Storage's intro says "in stock" (nl "op voorraad"), the Device status flag's words, never "in storage", the pledge lists' term (docs/decisions.md, docs/definitions.md Storage (rail page)).
 - 14 November 2026 (#278): two more placeholder pages, Assets → Fulfillment and Storage (`/reports/fulfillment`, `/reports/storage`; same component and rules, no read, no migration, data map untouched), the Assets order Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists, and Quality monitoring on `quality.manage` instead of `performance.team` (docs/decisions.md, docs/definitions.md, docs/open-decisions.md, docs/product/features.md).
 - 13 November 2026 (#278): five rail pages as placeholders, Customers → Subscriptions, Payments and Compliance, Team → Quality monitoring and Assets → Purchase orders (web only, no migration, no read; `web/src/components/PlaceholderPage.tsx`, `StatusBadge` moved to `web/src/components/StatusBadge.tsx`), and the new rail order of Team, Customers and Assets; D5's placeholder rule now covers whole pages (docs/decisions.md, docs/definitions.md Rail terms, docs/open-decisions.md, docs/product/features.md).

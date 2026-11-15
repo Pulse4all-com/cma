@@ -25,6 +25,8 @@ import {
   formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
   TAG_MEANINGS, tagsWithoutNotReached, readState, jobLabel, readsCaption, readDurationSeconds, readCountsText,
 } from "../src/lib/sources.ts";
+import { readFileSync } from "node:fs";
+import { appliedDate, commitDate } from "../src/lib/date-field.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -245,6 +247,40 @@ expect("polling: a value out of range gives the default and is named", pollCaden
 expect("polling: a typed value is a whole number within its range",
   [parsePollSetting("formsIntervalMinutes", " 1440 "), parsePollSetting("formsIntervalMinutes", "1441"), parsePollSetting("floorPct", "0"), parsePollSetting("floorPct", "2.5")],
   [1440, null, null, null], [null, 1441, 0, 2.5]);
+
+// CMA-099 (15 November 2026): the reviews history start saves on Enter or blur only, a complete date from intake.start_date
+// (the tenant's earliest data; Martin) to today, through the As of field's rule (lib/date-field, one copy)
+const hsMin = "2026-10-01";
+const hsMax = "2026-11-15";
+expect("history start: typing 2026 passes 0002, 0020 and 0202, which apply nothing; empty clears; a date in range applies",
+  ["", "0002-11-03", "0020-11-03", "0202-11-03", "2026-11-03", "2026-11-31", "2026-09-30", "2026-10-01", "2026-11-15", "2026-11-16"].map((v) => appliedDate(v, hsMin, hsMax)),
+  [null, false, false, false, "2026-11-03", false, false, "2026-10-01", "2026-11-15", false],
+  [false, "0002-11-03", "0020-11-03", "0202-11-03", false, "2026-11-31", "2026-09-30", false, false, "2026-11-16"]);
+// a fake date input: the value, the dataset mark; every save counted
+const field = (value) => ({ value, dataset: {} });
+const commits = (steps, stored) => {
+  const saved = [];
+  const input = field("");
+  for (const [value, leaving] of steps) { input.value = value; commitDate(input, leaving, stored, hsMin, hsMax, (next) => saved.push(next)); }
+  return { saved, shown: input.value };
+};
+const typedThenEnterBlur = commits([["0002-11-03", true], ["0020-11-03", true], ["0202-11-03", true], ["2026-11-03", false], ["2026-11-03", true]], null);
+const outOfRange = commits([["2026-09-30", true]], "2026-10-05");
+const same = commits([["2026-10-05", false], ["2026-10-05", true]], "2026-10-05");
+const cleared = commits([["", true]], "2026-10-05");
+expect("history start: digit by digit then Enter and blur saves exactly once; out of range shows the stored date again; the stored date saves nothing; empty saves null once",
+  [typedThenEnterBlur.saved, outOfRange.saved, outOfRange.shown, same.saved, cleared.saved],
+  [["2026-11-03"], [], "2026-10-05", [], [null]],
+  [["0002-11-03", "0020-11-03", "0202-11-03", "2026-11-03", "2026-11-03"], ["2026-09-30"], "2026-09-30", ["2026-10-05"], []]);
+const sourceConfigSrc = readFileSync(new URL("../src/components/configuration/SourceConfig.tsx", import.meta.url), "utf8");
+const sourcePageSrc = readFileSync(new URL("../src/app/configuration/sources/[id]/page.tsx", import.meta.url), "utf8");
+expect("history start: the field saves through commitDate on Enter and blur, keyed by the stored date, its range from intake.start_date to today; no save on change",
+  [/commitDate\(input, leaving, reviews\.historyStartDate, reviews\.historyMin, reviews\.historyMax,/.test(sourceConfigSrc),
+    /onKeyDown=\{\(e\) => \{ if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); saveHistoryStart\(e\.currentTarget, false\); \} \}\}/.test(sourceConfigSrc),
+    /onBlur=\{\(e\) => saveHistoryStart\(e\.currentTarget, true\)\}/.test(sourceConfigSrc), /key=\{reviews\.historyStartDate \?\? "none"\}/.test(sourceConfigSrc),
+    /historyMin: isDate\(valueOf\("intake\.start_date"\)\) \? valueOf\("intake\.start_date"\) : null, historyMax: dateKeyInZone\(new Date\(\), me\.timeZone\)/.test(sourcePageSrc),
+    /reviews\.history_start_date", value: e\.target\.value/.test(sourceConfigSrc)],
+  [true, true, true, true, true, false], [false, false, false, false, false, true]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

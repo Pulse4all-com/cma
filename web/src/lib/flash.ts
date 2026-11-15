@@ -10,6 +10,7 @@
  * with the tenant's own meanings. Pure: no database, no React.
  */
 
+import { appliedDate, isDate } from "@/lib/date-field";
 import { dateKeyInZone } from "@/lib/time";
 
 export type FlashKey =
@@ -144,26 +145,17 @@ export function overviewOfShortcut(key: string): FlashOverviewDef | null {
   return FLASH_OVERVIEWS.find((o) => o.shortcut === k) ?? null;
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** A YYYY-MM-DD that is a real date */
-export function isDate(value: unknown): value is string {
-  if (typeof value !== "string" || !DATE.test(value)) return false;
-  const d = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
-}
+/** A YYYY-MM-DD that is a real date: the date field's own check (lib/date-field), one copy */
+export { isDate };
 
 /**
  * What the As of field applies (addition 0008zz), on Enter or blur only, never while typing: an empty field is now (null);
  * a complete date (a year of four digits, 1000 on, and a real calendar day) within the field's range (from the first
  * snapshot, when there is one, to the last date that can have one) is that date; anything else applies nothing (false).
- * A date field reports a value as soon as its year's digits make one: typing 2026 passes 0002, 0020 and 0202 first
+ * The rule is lib/date-field's appliedDate, which Configuration → Sources' reviews history start shares (CMA-099)
  */
 export function appliedAsOf(value: string, min: string | null, max: string): string | null | false {
-  if (value === "") return null;
-  if (!isDate(value) || value < "1000-01-01") return false;
-  if ((min !== null && value < min) || value > max) return false;
-  return value;
+  return appliedDate(value, min, max);
 }
 
 /**

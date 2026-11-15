@@ -160,8 +160,22 @@ export function arcPath(cx: number, cy: number, outer: number, inner: number, st
   return `M${f(x1)},${f(y1)} A${outer},${outer} 0 ${large} 1 ${f(x2)},${f(y2)} L${f(x3)},${f(y3)} A${inner},${inner} 0 ${large} 0 ${f(x4)},${f(y4)} Z`;
 }
 
+/** The ring's thickness in px, the same in every donut */
+export const DONUT_THICKNESS = 30;
+
+/**
+ * The font size of a donut's centre total (CMA-104): 28 px, smaller when the text would not fit 80 % of the hole (the
+ * size less both rings) at Montserrat Bold's figure width (0.62 em a character, separators counted as figures), never
+ * below 12 px. So 1,234 fits the 144 px breakdown donut at 21 px and 42 stays at 28 px in both
+ */
+export function ringFontSize(text: string, size: number, thickness = DONUT_THICKNESS): number {
+  const hole = Math.max(0, size - 2 * thickness);
+  const fit = Math.floor((hole * 0.8) / (0.62 * Math.max(1, text.length)));
+  return Math.max(12, Math.min(28, fit));
+}
+
 /** Each slice's arc for a donut of the given size and ring thickness; a slice of 0 draws nothing (an empty path) */
-export function donutArcs(slices: readonly Slice[], size = 176, thickness = 30): { slice: Slice; d: string }[] {
+export function donutArcs(slices: readonly Slice[], size = 176, thickness = DONUT_THICKNESS): { slice: Slice; d: string }[] {
   const total = slices.reduce((n, s) => n + s.value, 0);
   const c = size / 2;
   const outer = size / 2;

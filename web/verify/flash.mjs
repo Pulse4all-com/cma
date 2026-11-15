@@ -508,7 +508,7 @@ expect("the overview's heading names a filter by its label; the file's filters c
   ["measure=open_deals; pipeline=default; stage=1000000001", ""]);
 const pgSrc = readFileSync(path.join(here, "..", "src", "lib", "data", "postgres.ts"), "utf8");
 expect("the screen and the files use them: breakdown and records (FlashParts), the heading (page), both file parts, the records read (one statement with the list)",
-  [/dimText\(def\.key, doc\.labels, dim, dims\)/.test(flashPartsSrc), /row\[labelColumnOf\(key\)\]/.test(flashPartsSrc),
+  [/dimText\(def\.key, labels, dim, dims\)/.test(flashPartsSrc), /row\[labelColumnOf\(key\)\]/.test(flashPartsSrc),
     /filtersShown\(def\.key, /.test(pageSrc), /breakdownRows\(def, all, doc\.labels\)/.test(fileSrc), /withLabelColumns\(def\.key, FLASH_LIST_COLUMNS\[def\.key\]\)/.test(fileSrc),
     /cma\.flash_rows\(\$1[^`]*as j,\s*case when \$10 then cma\.flash_labels_of\(cma\.current_tenant_id\(\), \$1\) end as l`/.test(pgSrc),
     /toFlashRows\(r\.r, r\.d\.labels\)/.test(pgSrc)],
@@ -898,11 +898,15 @@ expect("As of applies a complete date within its range only: empty is now; a yea
   [asOfCases.map(([v, min, max]) => appliedAsOf(v, min, max))],
   [[null, "2026-10-31", false, false, false, false, "1999-01-01", false, false, false, "2026-10-16", "2026-11-05", false]],
   [[]]);
+// since CMA-099 the rule lives once in lib/date-field (commitDate over appliedDate), which the As of field and Configuration →
+// Sources' reviews history start share; appliedAsOf is appliedDate with the field's range
+const dateFieldSrc = readFileSync(path.join(here, "..", "src", "lib", "date-field.ts"), "utf8");
 expect("the As of field navigates on Enter or blur only, through appliedAsOf, once per date; typing never navigates",
   [/onKeyDown=\{\(e\) => \{ if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); apply\(e\.currentTarget, false\); \} \}\}/.test(controlsSrc0008zu),
-    /onBlur=\{\(e\) => apply\(e\.currentTarget, true\)\}/.test(controlsSrc0008zu), /const next = appliedAsOf\(input\.value, min, max\);/.test(controlsSrc0008zu),
+    /onBlur=\{\(e\) => apply\(e\.currentTarget, true\)\}/.test(controlsSrc0008zu),
+    /const next = appliedDate\(input\.value, min, max\);/.test(dateFieldSrc) && /commitDate\(input, leaving, asOf, min, max, \(next\) => go\(push, path, query, \{ asOf: next \}\)\)/.test(controlsSrc0008zu),
     /onChange=\{\(e\) => go\(router, path, query, \{ asOf/.test(controlsSrc0008zu),
-    /if \(next === asOf \|\| input\.dataset\.applied === String\(next\)\) return;\s*input\.dataset\.applied = String\(next\);/.test(controlsSrc0008zu)
+    /if \(next === stored \|\| input\.dataset\.applied === String\(next\)\) return;\s*input\.dataset\.applied = String\(next\);/.test(dateFieldSrc)
       && !/useRef/.test(controlsSrc0008zu),
     /key=\{asOf \?\? "now"\}[^>]*defaultValue=\{asOf \?\? ""\}/.test(controlsSrc0008zu)],
   [true, true, true, false, true, true], [false, false, false, true, false, false]);
@@ -1046,6 +1050,35 @@ expect("the copy of the now view: the status filter, Other, the panels, the sear
     .every((k) => typeof copyAll.en.installedBase[k] === "string" && copyAll.en.installedBase[k] !== "" && typeof copyAll.nl.installedBase[k] === "string" && copyAll.nl.installedBase[k] !== ""),
     /achterstallig/.test(copyAll.nl.installedBase.panelPastDue), /te laat/i.test(copyAll.nl.installedBase.panelPastDue), /AED/.test(copyAll.en.installedBase.panelRecords + copyAll.en.installedBase.panelPastDue)],
   [true, true, false, false], [false, false, true, true]);
+
+// CMA-104 (15 November 2026): every slice its own colour of the series (7.7), the centre total inside its ring, the lists'
+// dims by the breakdown's names (the files keep the keys), no split line under a market whose total is 0
+const coloursOf = (slices) => slices.map((s) => ibLib.seriesClass(s.colour));
+const distinct = (xs) => new Set(xs).size === xs.length;
+const donutsDistinct = [1, 2, 3, 4, 5, 6, 7, 9].every((n) => distinct(coloursOf(ibLib.donutSlices(parts(Array.from({ length: n }, (_, i) => n - i))).slices)));
+const chartFive = ibLib.breakdownChart(["a", "b", "c", "d", "e"].map((k, i) => ({ dims: { market: "GB", status: k, model: "ma", warehouse: "w", link: "none" }, measures: { devices: 10 - i } })),
+  ["market", "status", "model", "warehouse", "link"], "status", "devices");
+const ringCases = [["42", 176], ["42", 144], ["1,234", 144], ["12,345", 144], ["123,456", 176], ["1.234.567", 144]];
+const ringSizes = ringCases.map(([t, size]) => ibLib.ringFontSize(t, size));
+const ringFits = ringCases.every(([t, size], i) => ringSizes[i] === 12 || 0.62 * t.length * ringSizes[i] <= 0.8 * (size - 2 * ibLib.DONUT_THICKNESS));
+expect("CMA-104 (1): a donut's slices never repeat a colour, from one to nine models and in a breakdown's five; the series is six distinct tokens",
+  [donutsDistinct, chartFive.kind, distinct(chartFive.items.map((i) => ibLib.seriesClass(i.colour))), distinct([...ibLib.SERIES_CLASSES]), ibLib.SERIES_CLASSES.length],
+  [true, "donut", true, true, 6], [false, "bars", false, false, 0]);
+expect("CMA-104 (2): the centre total's size fits the hole (28 px, smaller for a long figure in the 144 px donut, never below 12); the ring draws it so",
+  [ringSizes, ringFits, /fontSize=\{ringFontSize\(text, size\)\}/.test(ibParts0009f), !/fontSize="28"/.test(ibParts0009f)],
+  [[28, 28, 21, 18, 21, 12], true, true, true], [[], false, false, false]);
+const flashParts0009f = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
+expect("CMA-104 (3): the installed base's lists show a device's dims (model, market, status, warehouse, subscription status) by the breakdown's names (dimLabel), the key on hover; not a frozen list",
+  [/def\.key === "installed_base" && !frozen && def\.dims\.includes\(c\.key\)/.test(flashParts0009f),
+    /<NamedValue text=\{dimLabel\(def, labels, c\.key, dimsOfRow\(def, r\), t\)\} code=\{String\(r\[c\.key\]\)\} \/>/.test(flashParts0009f),
+    /return text !== code \? <span title=\{code\}>\{text\}<\/span> : <>\{code\}<\/>;/.test(flashParts0009f),
+    ["market", "status", "model", "warehouse", "subscription_status"].every((d) => ibDef0009f.dims.includes(d))],
+  [true, true, true, true], [false, false, false, false]);
+const zeroStacks = ibLib.marketStacks([...rowsZf, mRow({ market: "BE", status: "stock", model: "ma", warehouse: "w1", link: "none" }, 2, 0, 2, 0, 0, 0)],
+  ["market", "status", "model", "warehouse", "link"], "in_field", stackSlices);
+expect("CMA-104 (4): a market whose In the field is 0 keeps its bar and total, and the page writes no split line under it",
+  [zeroStacks.map((x) => `${x.market}=${x.total}`), /\{s\.total > 0 \? \(\s*<span className="tabular col-span-2 col-start-2/.test(ibParts0009f)],
+  [["GB=7", "NL=4", "BE=0"], true], [[], false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

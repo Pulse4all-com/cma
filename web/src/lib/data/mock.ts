@@ -2070,6 +2070,8 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "cohorts.lead_ages_days": "1,7,30,60,90", "lead_to_order.max_days": "90",
   "workday.clock_in_again": "false",
   "courtesy.start_date": "", "courtesy.order_kinds": "first,repeat", "courtesy.due_days": "10", "courtesy.alert_attempts": "3", "courtesy.ages_days": "10,14,21,30",
+  // the reviews settings' catalog defaults (104), so emptying the history start resets it as the database does (CMA-099)
+  "reviews.negative_max_rating": "2", "reviews.history_start_date": "",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -2975,18 +2977,21 @@ export const mockData: CmaData = {
     if (identity.provider === MOCK_IDENTITY.provider && identity.subject === MOCK_IDENTITY.subject) {
       return MOCK_PRINCIPAL;
     }
-    // The dev seed's test supervisor and manager: they may see and correct the fictional team
-    if (identity.provider === MOCK_IDENTITY.provider && (identity.subject === "supervisor" || identity.subject === "manager")) {
+    // The dev seed's test supervisor and manager: they may see and correct the fictional team. manager-nl is the same
+    // manager reading the screens in Dutch (verify:layout's Dutch check at 1280 px, CMA-077); the mock only
+    if (identity.provider === MOCK_IDENTITY.provider && (identity.subject === "supervisor" || identity.subject === "manager" || identity.subject === "manager-nl")) {
+      const role = identity.subject === "supervisor" ? "supervisor" : "manager";
       return {
         ...MOCK_PRINCIPAL,
-        userId: identity.subject === "supervisor" ? MOCK_SUPERVISOR_ID : MOCK_MANAGER_ID,
-        displayName: identity.subject === "supervisor" ? "Test supervisor" : "Test manager",
-        roleKey: identity.subject,
+        userId: role === "supervisor" ? MOCK_SUPERVISOR_ID : MOCK_MANAGER_ID,
+        displayName: role === "supervisor" ? "Test supervisor" : "Test manager",
+        roleKey: role,
+        ...(identity.subject === "manager-nl" ? { locale: "nl" as const } : {}),
         // As the default ladder after 0004: the manager also exports, manages agents and skills and plans the
         // roster; the supervisor does not; both watch the Live board
         // Both push messages to agents (messages.send, migration 0008). The manager holds quality.manage as in the default
         // ladder (db/94), which Team → Quality monitoring needs (14 November 2026); the supervisor does not
-        permissions: identity.subject === "manager"
+        permissions: role === "manager"
           ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
              "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send", "quality.manage"]
           : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"],

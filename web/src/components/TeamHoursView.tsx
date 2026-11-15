@@ -124,7 +124,8 @@ export function TeamHoursView({
   const th = "h-10 whitespace-nowrap px-3 font-semibold";
   return (
     <>
-      <div className="mb-4 flex items-end justify-between gap-4">
+      {/* the filter and the buttons wrap rather than push past the card (CMA-077: Dutch labels at 1280 px) */}
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <label className={`flex flex-col gap-2 text-small font-semibold ${PENDING_ROW}`} data-testid="team-hours-person-filter" aria-busy={pending || undefined}>
           <span className="flex items-center gap-2">
             {t.person} <Keycap>P</Keycap>
@@ -143,7 +144,7 @@ export function TeamHoursView({
             ))}
           </select>
         </label>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           {downloads ? (
             <>
               <LinkButton href={downloads.hours} download shortcut="H" data-shortcut="h" title={copy.exports.hint}>
@@ -163,6 +164,8 @@ export function TeamHoursView({
       {rows.length === 0 ? (
         <p className="text-body text-p4a-muted">{emptyLabel ?? t.empty}</p>
       ) : (
+        // a table wider than its card scrolls inside it, never the main area (12 October 2026; CMA-077, Dutch at 1280 px)
+        <div className="overflow-x-auto" data-testid="team-hours-scroll">
         <table className="w-full border-collapse text-body">
           <thead>
             <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
@@ -229,6 +232,7 @@ export function TeamHoursView({
             </tr>
           </tfoot>
         </table>
+        </div>
       )}
       {rows.length > 0 ? <p className="mt-3 text-caption text-p4a-grey">{t.keysHint}</p> : null}
 

@@ -78,7 +78,11 @@
  * group. The frame fixed to the viewport (23 October 2026): on the Live board, Speed to lead and Follow-up at 1280 and
  * 1920 px the wheel and End never scroll the page, only main, down to its last line, fixed elements still sit against
  * the window, and at 1280x600 the rail with its longest group open scrolls on its own to its toggle.
- * Saves screenshots under records/ for the release note.
+ * Since 15 November 2026: the reviews history start on Configuration → Sources typed digit by digit (en-GB) and left saves
+ * exactly once (CMA-099); Team hours in Dutch (the mock's manager-nl) with a custom range at 1280 px never scrolls main
+ * sideways, its filter row and table inside their card (CMA-077); Welcome links Plan B for an agent, the manager and the
+ * admin, its route open to all three while System health's documents stay 403 for the first two (CMA-032).
+ * Saves screenshots under records/ for the release note (OUT_DIR elsewhere).
  *
  * The two widths come from src/lib/desktop-fit.ts and the gate's words from src/lib/copy.ts, which Node reads with its type
  * stripping (on by default from Node 22.18; npm run verify:layout passes the flag for earlier 22s).
@@ -102,6 +106,8 @@
  *       every dialog before it is read and the role off the tiles, expects Time still open after Reports opens,
  *       breaks the line before one header's mark per page, lets the attempts list and the lost deals per period spill out
  *       of their cards, puts the frame of before back (rows that grow, main not positioned, the rail not scrolling),
+ *       expects no save of the typed history start, lets Team hours' table spill out of its card in Dutch and expects
+ *       the agent refused Plan B,
  *       expect FAIL, exit 1
  */
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -3251,6 +3257,134 @@ async function expectAsOfTyping() {
   await gb.close();
 }
 
+/**
+ * CMA-099 (15 November 2026): Configuration → Sources' reviews history start saves on Enter or blur only, through the As of
+ * field's rule. Typed digit by digit as a person does (day, month, year in an en-GB browser: the field reports 0002, 0020
+ * and 0202 on the way to 2026), then left: exactly one save with the typed date. --provoke expects none
+ */
+async function expectHistoryStartTyping() {
+  const gb = await chromium.launch({ env: { ...process.env, LANG: "en_GB.UTF-8", LANGUAGE: "en_GB:en" } });
+  const ctx = await gb.newContext({ viewport: { width: 1280, height: 800 }, locale: "en-GB", extraHTTPHeaders: { "x-cma-mock-subject": "admin" } });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on("pageerror", (e) => errors.push(e.message));
+  const saves = [];
+  p.on("request", (r) => {
+    if (r.method() === "PUT" && r.url().endsWith("/api/v1/configuration/settings")) {
+      const body = r.postDataJSON?.() ?? null;
+      if (body?.key === "reviews.history_start_date") saves.push(body.value);
+    }
+  });
+  await p.goto(BASE + "/configuration/sources");
+  await settle(p);
+  // the row that names the reviews connection, and its Open link
+  const href = await p.locator("tr", { hasText: "Reviews (test)" }).locator('a[href^="/configuration/sources/"]').first().getAttribute("href").catch(() => null);
+  if (!href) {
+    problems.push("history start: no reviews connection on Configuration → Sources");
+  } else {
+    await p.goto(BASE + href);
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    const box = p.locator('[data-testid="source-history-start"]');
+    const max = await box.getAttribute("max");
+    const stored = await box.inputValue();
+    // three days back, or four when a run before this one left that date stored (a stored date saves nothing)
+    const back = (n) => new Date(Date.parse(`${max}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+    const day = back(3) === stored ? back(4) : back(3);
+    const typed = `${day.slice(8, 10)}${day.slice(5, 7)}${day.slice(0, 4)}`;
+    await box.focus();
+    await p.keyboard.type(typed, { delay: 40 });
+    await p.waitForTimeout(400);
+    const whileTyping = saves.length;
+    await box.blur();
+    await p.waitForLoadState("networkidle");
+    await p.waitForTimeout(600);
+    const want = provoke ? 0 : 1;
+    if (whileTyping !== 0) problems.push(`history start: typing ${typed} saved ${whileTyping} time(s) before the field was left (${saves.join(", ")})`);
+    if (saves.length !== want || (want === 1 && saves[0] !== day)) problems.push(`history start: typing ${typed} and leaving saved ${saves.length} time(s) (${saves.join(", ")}), expected ${want}${want ? ` with ${day}` : ""}`);
+    await p.screenshot({ path: `${outDir}/admin-history-start-typed.png` });
+    // put the fixture back: empty (the catalog default), saved once on Enter
+    const shown = p.locator('[data-testid="source-history-start"]');
+    await shown.fill("");
+    await shown.press("Enter");
+    await p.waitForLoadState("networkidle");
+    await p.waitForTimeout(400);
+  }
+  if (errors.length > 0) problems.push(`history start: page errors: ${errors.join("; ")}`);
+  await ctx.close();
+  await gb.close();
+}
+
+/**
+ * CMA-077 (15 November 2026): Team hours in Dutch with a custom range at 1280 px. The main area never scrolls sideways; the
+ * filter row and the buttons wrap inside the card, and the table ends inside its card or scrolls inside it. manager-nl is
+ * the mock's manager reading Dutch. --provoke lets the table spill out of its card again
+ */
+async function expectTeamHoursDutch() {
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager-nl" } });
+  const p = await ctx.newPage();
+  const today = new Date();
+  const from = new Date(today.getTime() - 13 * 86_400_000).toISOString().slice(0, 10);
+  const to = new Date(today.getTime() - 86_400_000).toISOString().slice(0, 10);
+  await p.goto(`${BASE}/team/hours?range=custom&from=${from}&to=${to}`);
+  await settle(p);
+  await p.waitForLoadState("networkidle");
+  const m = await p.evaluate((spill) => {
+    if (spill) {
+      const sc = document.querySelector('[data-testid="team-hours-scroll"]');
+      if (sc) sc.style.overflowX = "visible";
+      const t = sc?.querySelector("table");
+      if (t) t.style.minWidth = "1400px";
+    }
+    const main = document.querySelector("main");
+    const card = document.querySelector('[data-testid="team-hours-scroll"]')?.closest("section, .rounded-card");
+    const cardRight = card ? card.getBoundingClientRect().right : null;
+    const sc = document.querySelector('[data-testid="team-hours-scroll"]');
+    const spills = [...document.querySelectorAll('[data-testid="team-hours-person-filter"], [data-testid="team-hours-scroll"]')]
+      .some((e) => cardRight !== null && e.getBoundingClientRect().right > cardRight + 0.5);
+    return {
+      heading: document.querySelector("h1")?.textContent?.trim() ?? "", mainX: main ? main.scrollWidth - main.clientWidth : -1,
+      pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth, spills, rows: sc?.querySelectorAll("tbody tr").length ?? 0,
+      buttonsInside: [...(card?.querySelectorAll("a, button") ?? [])].filter((e) => e.closest("table") === null).every((e) => cardRight === null || e.getBoundingClientRect().right <= cardRight + 0.5),
+    };
+  }, provoke);
+  const where = "manager-nl /team/hours (custom range)";
+  if (m.heading !== "Teamuren") problems.push(`${where}: heading "${m.heading}", expected Teamuren (Dutch)`);
+  if (m.rows === 0) problems.push(`${where}: no rows to check`);
+  if (m.pageX > 0) problems.push(`${where}: the page scrolls sideways by ${m.pageX}px at 1280`);
+  if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px at 1280`);
+  if (m.spills || !m.buttonsInside) problems.push(`${where}: the table or the filter row does not end inside its card at 1280`);
+  await p.screenshot({ path: `${outDir}/manager-nl-team-hours-1280.png` });
+  await ctx.close();
+}
+
+/**
+ * CMA-032 (15 November 2026): Welcome links Plan B for every person with a role (an agent, the manager, the admin), and the
+ * link's route is open to them all: never the 403 of System health's documents, which stay behind tenant.configure.
+ * --provoke expects the agent refused
+ */
+async function expectPlanB() {
+  for (const subject of ["agent-two", "manager", "admin"]) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    const link = await p.locator('[data-testid="welcome-plan-b"] a').getAttribute("href").catch(() => null);
+    if (link !== "/api/v1/plan-b") problems.push(`${subject} /: no Plan B link on Welcome (${link})`);
+    const plan = await ctx.request.get(BASE + "/api/v1/plan-b");
+    const body = plan.status() === 200 ? await plan.text() : "";
+    const refused = plan.status() === 403;
+    if (refused !== (provoke && subject === "agent-two")) problems.push(`${subject} /api/v1/plan-b: ${plan.status()}`);
+    if (plan.status() === 200 && (!body.startsWith("# Plan B") || !/^text\/plain/.test(plan.headers()["content-type"] ?? ""))) problems.push(`${subject} /api/v1/plan-b: not Plan B as plain text`);
+    if (plan.status() !== 200 && plan.status() !== 404) problems.push(`${subject} /api/v1/plan-b: ${plan.status()}, expected 200 (or 404 in a build without the documents)`);
+    const other = await ctx.request.get(BASE + "/api/v1/configuration/documents/REPORT.md");
+    if (subject !== "admin" && other.status() !== 403) problems.push(`${subject} System health's documents: ${other.status()}, expected 403`);
+    if (subject === "agent-two") await p.screenshot({ path: `${outDir}/agent-two-welcome-plan-b.png` });
+    await ctx.close();
+  }
+}
+
 async function expectFunnel() {
   // [subject, sees the pages, sees deals per person]
   const cases = [
@@ -3487,6 +3621,9 @@ await expectAttempts();
 await expectFunnel();
 await expectInstalledBaseModels();
 await expectAsOfTyping();
+await expectHistoryStartTyping();
+await expectTeamHoursDutch();
+await expectPlanB();
 await expectWelcomeOnOpen();
 await expectFiltersPending();
 await expectCampaigns();
@@ -3503,5 +3640,5 @@ await expectGate(FIT_FLOOR_PX - 1, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the grids as at ${DESIGN_WIDTH_PX}, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, without JavaScript, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the grids as at ${DESIGN_WIDTH_PX}, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, without JavaScript, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar, the reviews history start saved once after typing it digit by digit, Team hours in Dutch with a custom range inside its card, Plan B on Welcome for 3 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);
