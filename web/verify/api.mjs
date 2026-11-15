@@ -1528,11 +1528,15 @@ async function flashChecks() {
     const tab = await download(ANALYST, `/reports/flash?o=installed_base&f_model=${model}`);
     const assets = await download(ANALYST, `/reports/installed-base?f_model=${model}`);
     const records = await download(ANALYST, `/reports/installed-base?f_model=${model}&panel=records`);
-    // tiles first, then the records; the placeholder, when the stream holds one, between the two
+    // tiles first, then the records: streamed after their placeholder, or, without one, inside a Suspense boundary React
+    // closed before the first flush (its markers <!--$--> … <!--/$-->, React 19's output) that opens after the tiles, so a
+    // page that waits for its records before the first paint (no boundary) fails
     const streamsAfter = (text, placeholder) => {
       const at = (id) => text.indexOf(`data-testid="${id}"`);
       const tiles = at("flash-totals"), wait = at(placeholder), rows = at("flash-rows-count");
-      return tiles >= 0 && rows > tiles && (wait < 0 || (tiles < wait && wait < rows));
+      const open = rows < 0 ? -1 : text.lastIndexOf("<!--$-->", rows);
+      const inBoundary = open > tiles && text.indexOf("<!--/$-->", open) > rows;
+      return tiles >= 0 && rows > tiles && (wait >= 0 ? tiles < wait && wait < rows : inBoundary);
     };
     const tilesAlone = (text) => text.includes('data-testid="flash-totals"') && !text.includes('data-testid="flash-rows-count"') && !text.includes('data-testid="ib-list-loading"');
     const file = await download(ANALYST, `/api/v1/reports/flash/file?overview=installed_base&part=breakdown&f_model=${model}`);
