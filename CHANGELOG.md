@@ -2,6 +2,10 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 15 November 2026 (#PR): Configuration → Sources' reviews history start saves a complete date from `intake.start_date` to today on Enter or blur, the As of rule in `web/src/lib/date-field.ts` (backlog CMA-099; docs/decisions.md, docs/product/features.md).
+- 15 November 2026 (#PR): Team hours' filter row wraps and its table scrolls inside its card (backlog CMA-077; docs/decisions.md, docs/product/features.md).
+- 15 November 2026 (#PR): Installed base's lists show dims by names, the donut's centre total fits its hole, no split line under a market with 0 in the field (backlog CMA-104; docs/decisions.md, docs/product/features.md, docs/definitions.md Assets (rail group)).
+- 15 November 2026 (#PR): Plan B for everyone with a role, `GET /api/v1/plan-b`, a Welcome card, PLAN_B.md without names (backlog CMA-032; docs/decisions.md, docs/architecture/api.md, docs/product/features.md).
 - 15 November 2026 (#PR): AI in the CMA proposes, never applies (backlog CMA-083): a rule in CLAUDE.md (Principles) and a row in docs/decisions.md extending the Gemini rule of 11 October 2026 to all AI.
 - 14 November 2026 (#278): Storage's intro says "in stock" (nl "op voorraad"), the Device status flag's words, never "in storage", the pledge lists' term (docs/decisions.md, docs/definitions.md Storage (rail page)).
 - 14 November 2026 (#278): two more placeholder pages, Assets → Fulfillment and Storage (`/reports/fulfillment`, `/reports/storage`; same component and rules, no read, no migration, data map untouched), the Assets order Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists, and Quality monitoring on `quality.manage` instead of `performance.team` (docs/decisions.md, docs/definitions.md, docs/open-decisions.md, docs/product/features.md).
