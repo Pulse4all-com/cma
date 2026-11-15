@@ -3343,6 +3343,7 @@ async function expectTeamHoursDutch() {
     const spills = [...document.querySelectorAll('[data-testid="team-hours-person-filter"], [data-testid="team-hours-scroll"]')]
       .some((e) => cardRight !== null && e.getBoundingClientRect().right > cardRight + 0.5);
     return {
+      card: cardRight !== null,
       heading: document.querySelector("h1")?.textContent?.trim() ?? "", mainX: main ? main.scrollWidth - main.clientWidth : -1,
       pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth, spills, rows: sc?.querySelectorAll("tbody tr").length ?? 0,
       buttonsInside: [...(card?.querySelectorAll("a, button") ?? [])].filter((e) => e.closest("table") === null).every((e) => cardRight === null || e.getBoundingClientRect().right <= cardRight + 0.5),
@@ -3351,6 +3352,7 @@ async function expectTeamHoursDutch() {
   const where = "manager-nl /team/hours (custom range)";
   if (m.heading !== "Teamuren") problems.push(`${where}: heading "${m.heading}", expected Teamuren (Dutch)`);
   if (m.rows === 0) problems.push(`${where}: no rows to check`);
+  if (!m.card) problems.push(`${where}: no card around the table to check against`);
   if (m.pageX > 0) problems.push(`${where}: the page scrolls sideways by ${m.pageX}px at 1280`);
   if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px at 1280`);
   if (m.spills || !m.buttonsInside) problems.push(`${where}: the table or the filter row does not end inside its card at 1280`);

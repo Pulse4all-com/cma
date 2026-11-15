@@ -166,72 +166,72 @@ export function TeamHoursView({
       ) : (
         // a table wider than its card scrolls inside it, never the main area (12 October 2026; CMA-077, Dutch at 1280 px)
         <div className="overflow-x-auto" data-testid="team-hours-scroll">
-        <table className="w-full border-collapse text-body">
-          <thead>
-            <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-              <th className={th}>{t.date}</th>
-              <th className={th}>{t.person}</th>
-              <th className={th}>{t.employer}</th>
-              <th className={`${th} text-right`}>{t.clockedIn}</th>
-              <th className={`${th} text-right`}>{t.clockedOut}</th>
-              <th className={`${th} text-right`}>{t.worked}</th>
-              <th className={`${th} text-right`}>{t.paid}</th>
-              <th className={th}>{t.notes}</th>
-              <th className={th} aria-label={t.correct} />
-            </tr>
-          </thead>
-          <tbody ref={body} onKeyDown={move}>
-            {rows.map((r) => (
-              <tr
-                key={r.key}
-                className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50 focus-within:bg-p4a-bgblue"
-              >
-                <td className="whitespace-nowrap px-3">{r.dateLabel}</td>
-                <td className="whitespace-nowrap px-3">{r.displayName}</td>
-                <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
-                <td className="tabular whitespace-nowrap px-3 text-right">
-                  {r.inLabel}
-                  {r.zoneLabel ? <span className="ml-1 text-caption text-p4a-grey">{r.zoneLabel}</span> : null}
-                </td>
-                <td className="tabular whitespace-nowrap px-3 text-right">{r.outLabel ?? ""}</td>
-                <td className="tabular whitespace-nowrap px-3 text-right">{r.workedLabel}</td>
-                <td className="tabular whitespace-nowrap px-3 text-right">{r.paidLabel}</td>
-                <td className="px-3">
-                  <span className="flex flex-wrap gap-1 whitespace-nowrap">
-                    {r.chips.map((c) => (
-                      <Badge key={c.label} tone={c.tone}>
-                        {c.label}
-                      </Badge>
-                    ))}
-                  </span>
-                </td>
-                <td className="px-3 py-1 text-right">
-                  <Button
-                    variant="outlined"
-                    size="sm"
-                    disabled={r.own}
-                    title={r.own ? t.ownDay : undefined}
-                    onClick={() =>
-                      open({ mode: "correct", userId: r.userId, displayName: r.displayName, date: r.date, timeZone: r.timeZone })
-                    }
-                  >
-                    {t.correct}
-                  </Button>
-                </td>
+          <table className="w-full border-collapse text-body">
+            <thead>
+              <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
+                <th className={th}>{t.date}</th>
+                <th className={th}>{t.person}</th>
+                <th className={th}>{t.employer}</th>
+                <th className={`${th} text-right`}>{t.clockedIn}</th>
+                <th className={`${th} text-right`}>{t.clockedOut}</th>
+                <th className={`${th} text-right`}>{t.worked}</th>
+                <th className={`${th} text-right`}>{t.paid}</th>
+                <th className={th}>{t.notes}</th>
+                <th className={th} aria-label={t.correct} />
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="h-10 font-semibold">
-              <td className="px-3" colSpan={5}>
-                {t.total}
-              </td>
-              <td className="tabular px-3 text-right">{totals.worked}</td>
-              <td className="tabular px-3 text-right">{totals.paid}</td>
-              <td colSpan={2} />
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody ref={body} onKeyDown={move}>
+              {rows.map((r) => (
+                <tr
+                  key={r.key}
+                  className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50 focus-within:bg-p4a-bgblue"
+                >
+                  <td className="whitespace-nowrap px-3">{r.dateLabel}</td>
+                  <td className="whitespace-nowrap px-3">{r.displayName}</td>
+                  <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
+                  <td className="tabular whitespace-nowrap px-3 text-right">
+                    {r.inLabel}
+                    {r.zoneLabel ? <span className="ml-1 text-caption text-p4a-grey">{r.zoneLabel}</span> : null}
+                  </td>
+                  <td className="tabular whitespace-nowrap px-3 text-right">{r.outLabel ?? ""}</td>
+                  <td className="tabular whitespace-nowrap px-3 text-right">{r.workedLabel}</td>
+                  <td className="tabular whitespace-nowrap px-3 text-right">{r.paidLabel}</td>
+                  <td className="px-3">
+                    <span className="flex flex-wrap gap-1 whitespace-nowrap">
+                      {r.chips.map((c) => (
+                        <Badge key={c.label} tone={c.tone}>
+                          {c.label}
+                        </Badge>
+                      ))}
+                    </span>
+                  </td>
+                  <td className="px-3 py-1 text-right">
+                    <Button
+                      variant="outlined"
+                      size="sm"
+                      disabled={r.own}
+                      title={r.own ? t.ownDay : undefined}
+                      onClick={() =>
+                        open({ mode: "correct", userId: r.userId, displayName: r.displayName, date: r.date, timeZone: r.timeZone })
+                      }
+                    >
+                      {t.correct}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="h-10 font-semibold">
+                <td className="px-3" colSpan={5}>
+                  {t.total}
+                </td>
+                <td className="tabular px-3 text-right">{totals.worked}</td>
+                <td className="tabular px-3 text-right">{totals.paid}</td>
+                <td colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
         </div>
       )}
       {rows.length > 0 ? <p className="mt-3 text-caption text-p4a-grey">{t.keysHint}</p> : null}

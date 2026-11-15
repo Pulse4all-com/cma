@@ -393,7 +393,6 @@ function WaitingBlock({ mine, copy }: { mine: MyFollowUp; copy: Copy }) {
   );
 }
 
-/** The tenant's app links, already filtered by the database to what this person may see */
 /**
  * Plan B (CMA-032, 15 November 2026): for every person with a role, what to do when the Workspace is not available,
  * docs/PLAN_B.md served by /api/v1/plan-b in a new tab. No read: the card is the same for everyone
@@ -412,6 +411,7 @@ function PlanBCard({ copy }: { copy: Copy }) {
   );
 }
 
+/** The tenant's app links, already filtered by the database to what this person may see */
 function AppLinks({ links, copy }: { links: AppLink[]; copy: Copy }) {
   const t = copy.welcome;
   return (

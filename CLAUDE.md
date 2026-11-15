@@ -18,7 +18,7 @@
 4. Step by step: the smallest working version, but the clean option over the shortcut.
 5. One source of truth per data type (README, Source of truth). Postgres mirrors the owning system and never overrules it. HubSpot stays the CRM; never propose moving CMA features into HubSpot.
 6. Data first: flag when a feature or metric depends on a HubSpot or Aircall data prerequisite that is not in place.
-- AI in the CMA proposes, never applies (Decision log, 15 November 2026, CMA-083): no autonomous change to code, migrations, configuration or data. Every AI output (brief, PR, finding, digest, configuration proposal) reaches the system through a pull request or a permission-checked, audited write path; an AI that ever writes is an `app_user` of the worker kind AI agent with its own grants, never a shared service account. This extends the Gemini rule of 11 October 2026 to all AI, this session's included.
+- AI in the CMA proposes, never applies (Decision log, 15 November 2026, CMA-083): no autonomous change to code, migrations, configuration or data. Every AI output (brief, PR, finding, digest, configuration proposal) reaches the system through a pull request or a permission-checked, audited write path; an AI that ever writes is an `app_user` of the worker kind AI agent with its own grants, never a shared service account. This extends the Gemini rule of 11 October 2026 to all AI, Claude Code's sessions included.
 - The CMA UI shows no customer data: ids, statuses and links to HubSpot or Aircall only.
 - Flag anything that weakens configurability, tenant separation, security, data protection or the source-of-truth rules.
 
