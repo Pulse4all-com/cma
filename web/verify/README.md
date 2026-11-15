@@ -53,9 +53,9 @@ BASE=https://<dev host> OUT_DIR=../records/<increment>-dev-<date> npm run verify
 `theme.mjs` skips Next.js's dev overlay (the `nextjs-portal` element and its contents), so it runs against `next dev`
 as against a production build (backlog CMA-076).
 
-The mock's dates (backlog CMA-113): today always holds a whole weekday's records, whatever the date and the hour (a
+The mock's dates (backlog CMA-113): today always holds a whole weekday's records, whatever the date, from about 06:00 (a
 record the mock would place after now is folded into the part of today that has passed, today is never thinned as a
-weekend, and today's fixed cases hold every missed-call reason, every tag, an attempted deal won and one lost, and a deal
+weekend, and today's fixed cases hold every missed-call reason, an answered call of every tag, an attempted deal won and one lost, and a deal
 lost for every reason and one without), so every period preset has rows on the 1st, on a Monday and on a Sunday.
 `lib/fake-now.mjs` sets the clock for a run: with `CMA_FAKE_NOW` (an instant) `new Date()` and `Date.now()` start there,
 in a verifier and in the mock server alike.

@@ -170,7 +170,8 @@ function mockStartDate(me: Principal): DateKey {
 
 // ---- The fixture's today (backlog CMA-113, 15 November 2026) -----------------------------------------------------
 // On the 1st of a month This month is today alone, on a Monday This week is, and today can be a Sunday: so the
-// generators give today a whole weekday's records whatever the date and the hour. Today is never thinned as a weekend
+// generators give today a whole weekday's records whatever the date and the hour of the working day (the fixed cases sit
+// hours before now, so from about 06:00). Today is never thinned as a weekend
 // (mockWeekend), and a record of today that the fixture would place after now is folded into the part of today that has
 // passed, at the same share of the day (mockPast). Earlier days, and today's records already past, keep their times.
 
@@ -232,7 +233,7 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
       const market = markets[Math.floor(h("market") * markets.length)]!;
       const known = market !== "unknown";
       const pipeline = MOCK_PIPELINES[h("pipe") < 0.7 ? 0 : 1]!;
-      const createdMs = mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 10)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, me.timeZone), now, me.timeZone, 60_000);
+      const createdMs = Math.min(now - 60_000, mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 10)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, me.timeZone), now, me.timeZone, 60_000));
       const createdAt = new Date(createdMs).toISOString();
       const recent = addDays(date, 3) >= today;
       const roll = h("status");
@@ -382,7 +383,7 @@ function mockInboundOn(me: Principal, date: DateKey, line: InboundLine, now: num
     });
   }
   // today's fixed cases on the NL line (backlog CMA-113): an unanswered call of every missed-call reason and one without, and
-  // a conversation of every tag, each telephony user taking some, so every reason and tag column shows on the 1st of a month
+  // an answered call of every tag, each telephony user taking some, so every reason and tag column shows on the 1st of a month
   if (date === mockToday(me) && line.lineRef === "l-1") {
     const fixed: [string | null, string | null][] = [
       ...MOCK_MISSED_CODES.map((code): [string | null, string | null] => [code, null]),
@@ -726,7 +727,7 @@ function mockOrderDeals(me: Principal): OrderDealFixture[] {
       const h = (k: string) => hashOf(`${me.tenantId}:order:${date}:${i}:${k}`);
       const market = markets[Math.floor(h("market") * markets.length)]!;
       const zone = MOCK_ORDER_ZONES[market] ?? me.timeZone;
-      const t = mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 12)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, zone), now, zone, 60_000);
+      const t = Math.min(now - 60_000, mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 12)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, zone), now, zone, 60_000));
       const roll = h("kind");
       const touches: OrderTouch[] = [];
       if (h("lead") < 0.35) touches.push(touch("lead_deal", t, 1 + h("leadAt") * 20, Math.floor(h("leadOwner") * 4)));
@@ -819,7 +820,7 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
       const h = (k: string) => mixedHashOf(`${me.tenantId}:attempt:${date}:${i}:${k}`);
       const market = markets[Math.floor(h("market") * markets.length)]!;
       const zone = MOCK_ATTEMPT_ZONES[market] ?? MOCK_TENANT_ZONE;
-      const t = mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 10)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, zone), now, zone, 30 * 60_000);
+      const t = Math.min(now - 30 * 60_000, mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 10)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, zone), now, zone, 30 * 60_000));
       const id = `4${date.replaceAll("-", "").slice(2)}${String(i).padStart(2, "0")}`;
       const tries = invest ? 0 : [0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 8][Math.floor(h("tries") * 11)]!;
       const calls: AttemptCallFixture[] = [];
@@ -1069,7 +1070,7 @@ function mockTickets(me: Principal): CancellationTicketFixture[] {
     for (let i = 0; i < n; i++) {
       const h = (k: string) => mixedHashOf(`${me.tenantId}:ticket:${date}:${i}:${k}`);
       const market = markets[Math.floor(h("market") * markets.length)]!;
-      const t = mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 9)).padStart(2, "0")}:15`, MOCK_TENANT_ZONE), now, MOCK_TENANT_ZONE, 20 * 60_000);
+      const t = Math.min(now - 20 * 60_000, mockPast(localMs(date, `${String(8 + Math.floor(h("hour") * 9)).padStart(2, "0")}:15`, MOCK_TENANT_ZONE), now, MOCK_TENANT_ZONE, 20 * 60_000));
       const id = `5${date.replaceAll("-", "").slice(2)}${String(i).padStart(2, "0")}`;
       const roll = h("pipeline");
       const pipelineId = roll < 0.6 ? "p-cancel" : "p-support";

@@ -345,7 +345,7 @@ The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, 
 of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
 workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do. `layout` writes its screenshots to a new
 temporary folder outside the repository and prints it; for evidence, `OUT_DIR=../records/<increment>-<env>-<date>` names
-the records folder (backlog CMA-076). The mock's today holds a whole weekday's records at any date and hour, and
+the records folder (backlog CMA-076). The mock's today holds a whole weekday's records at any date (from about 06:00), and
 `web/verify/lib/fake-now.mjs` (`CMA_FAKE_NOW`) runs a verifier or the mock server on another date (backlog CMA-113;
 `web/verify/README.md`).
 
