@@ -31,7 +31,8 @@
  * Welcome and Inbound, the hidden keycaps (cma-hints), the breadcrumbs, and the admin previewing as agent
  * (cma-preview-role: the banner and the select) on Welcome and My account. Since the IT audit of 17 October
  * 2026 no visible element is set in capitals by CSS (text-transform: uppercase) except a two-letter code such
- * as a market (style guide rule 4: the copy verifier cannot see a transform).
+ * as a market (style guide rule 4: the copy verifier cannot see a transform). Since 15 November 2026 (backlog CMA-076)
+ * Next.js's dev overlay (the nextjs-portal element and its contents) is skipped, so it passes against `next dev` too.
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
@@ -312,8 +313,11 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
   const found = await p.evaluate(() => {
     const out = { fonts: new Set(), colours: [], headings: [], body: null, capitals: [] };
     const vis = (el) => el.getClientRects().length > 0;
+    // Next.js's dev overlay (the nextjs-portal element and what it holds) is the framework's, never the app's: skipped, so
+    // the verifier passes against `next dev` as against a production build, which has no such element (backlog CMA-076)
+    const app = (el) => !el.closest("nextjs-portal");
     for (const el of document.querySelectorAll("body *")) {
-      if (!vis(el)) continue;
+      if (!vis(el) || !app(el)) continue;
       const cs = getComputedStyle(el);
       out.fonts.add(cs.fontFamily.split(",")[0].trim().replace(/^["']|["']$/g, ""));
       // Capitals by CSS (style guide rule 4): only two-letter codes, such as a team's markets, may be set that way
@@ -330,7 +334,7 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
         out.colours.push([el.tagName.toLowerCase() + (cls ? "." + cls.split(" ")[0] : "") + (heat ? "[heat]" : ""), prop, cs[prop]]);
       }
     }
-    for (const h of document.querySelectorAll("h1, h2")) if (vis(h)) out.headings.push([h.textContent?.trim().slice(0, 30), getComputedStyle(h).color]);
+    for (const h of document.querySelectorAll("h1, h2")) if (vis(h) && app(h)) out.headings.push([h.textContent?.trim().slice(0, 30), getComputedStyle(h).color]);
     out.body = getComputedStyle(document.body).color;
     return { ...out, fonts: [...out.fonts] };
   });

@@ -137,7 +137,8 @@ export function ModelDonut({ slices, total, labels, locale, copy }: {
               <td className="tabular px-3 py-2 text-right">{fmtPercent(total > 0 ? s.share : null, locale)}</td>
             </tr>
           ))}
-          <tr className="h-10 font-semibold">
+          {/* in the zebra too (7.6): with one model filtered the total is the second row (backlog CMA-120) */}
+          <tr className="h-10 font-semibold even:bg-p4a-offwhite">
             <td className="px-3 py-2">{copy.flash.totalRow}</td>
             <td className="tabular px-3 py-2 text-right">{fmtNumber(total, locale)}</td>
             <td className="tabular px-3 py-2 text-right">{fmtPercent(total > 0 ? 1 : null, locale)}</td>
