@@ -70,6 +70,8 @@ export type ShellPage =
   | "subscriptions" | "payments" | "compliance" | "quality-monitoring" | "purchase-orders"
   /** Fulfillment and Storage (placeholders, Martin, 14 November 2026): two more pages of Assets under the same rule */
   | "fulfillment" | "storage"
+  /** Fleet management (placeholder, Martin, 15 November 2026): the last page of Assets under the same rule */
+  | "fleet-management"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
   /** Pledge lists (addition 0009j): the quarter files of the loans' pledged devices, and today's version */
@@ -95,7 +97,7 @@ export type NavHref =
   | "/" | "/messages" | `/live/${string}` | "/team/people" | "/team/quality-monitoring" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/courtesy" | "/reports/active" | "/reports/maintenance" | "/reports/pledge-lists"
-  | "/reports/subscriptions" | "/reports/payments" | "/reports/compliance" | "/reports/purchase-orders" | "/reports/fulfillment" | "/reports/storage"
+  | "/reports/subscriptions" | "/reports/payments" | "/reports/compliance" | "/reports/purchase-orders" | "/reports/fulfillment" | "/reports/storage" | "/reports/fleet-management"
   | "/reports/installed-base" | "/reports/data-quality" | "/reports/flash" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
@@ -307,7 +309,8 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
     {
       // Assets (addition 0008zw, Martin, 5 November 2026): the devices the asset register holds, after Customers. Team
       // figures only, for the report permissions, as Flash. Since 14 November 2026 (Martin) Installed base, Fulfillment,
-      // Maintenance, Storage, Purchase orders, Pledge lists (Fulfillment, Storage and Purchase orders are placeholders)
+      // Maintenance, Storage, Purchase orders, Pledge lists, and since 15 November Fleet management last (Fulfillment,
+      // Storage, Purchase orders and Fleet management are placeholders)
       kind: "group",
       id: "assets",
       label: copy.nav.assets,
@@ -331,6 +334,10 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // Pledge lists (addition 0009j, Martin, 10 November 2026): the quarter files of the early-stage investors' loans, frozen
         // on each quarter's first day, and today's version; pledges.view alone, a permission no default role holds (D7)
         { page: "pledge-lists", href: "/reports/pledge-lists", label: copy.nav.pledgeLists, permission: "pledges.view" },
+        // Fleet management (placeholder, Martin, 15 November 2026): the remote monitoring of the devices' readiness
+        // (self-test results, connectivity, the devices that need attention); its source is not decided, and device data
+        // reaches the CMA only through cma-ingest
+        { page: "fleet-management", href: "/reports/fleet-management", label: copy.nav.fleetManagement, permission: ["reports.view", "performance.team"] },
       ],
     },
     {

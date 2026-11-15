@@ -162,7 +162,7 @@ export function runsByJob(runs: HealthRun[]): { job: string; runs: HealthRun[] }
  * documents directory and writes the manifest; a name missing from the manifest is "not in this build".
  */
 export const DOCUMENT_ALLOWLIST: readonly string[] = [
-  "REPORT.md", "PERFORMANCE.md", "READINESS.md", "UX_REVIEW.md", "FINDINGS.csv", "METHOD.md", "OPERATIONS.md", "PLAN_B.md",
+  "REPORT.md", "PERFORMANCE.md", "READINESS.md", "UX_REVIEW.md", "FINDINGS.csv", "METHOD.md", "OPERATIONS.md",
 ];
 
 export interface DocumentEntry {
