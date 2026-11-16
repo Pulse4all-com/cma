@@ -10,7 +10,7 @@ import { courtesyAttention } from "@/lib/courtesy";
 import { attentionLines, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, type AttentionLine } from "@/lib/follow-up";
 import { workedSeconds } from "@/lib/live";
 import {
-  data, dataIsMock, requestDbTrace, type AppLink, type FollowUpSummaryAt, type InboundNow, type MyFollowUp, type MyMessages, type MyRosterDay, type TeamHours,
+  data, dataIsMock, requestDbTrace, type AppLink, type FollowUpSummaryAt, type InboundNow, type MyFollowUpCounts, type MyMessages, type MyRosterDay, type TeamHours,
   type WorkStatus, type Workday,
 } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
@@ -66,7 +66,8 @@ export default async function WelcomePage() {
       hasLive ? d.getInboundNow(me) : Promise.resolve(null),
     ]) : null,
     day: hasClock ? Promise.all([d.getWorkday(me, today), d.listStatuses(me)]) : null,
-    mine: hasOwn ? d.getMyFollowUp(me) : null,
+    // the three counts only (addition 0009u): the block shows how many, the rows are on /me/follow-up
+    mine: hasOwn ? d.getMyFollowUpCounts(me) : null,
     links: d.listAppLinks(me),
   };
   const traced = requestDbTrace() !== null;
@@ -186,8 +187,8 @@ async function DayBlockLoader({ read, me, now, copy }: { read: Promise<[Workday 
   return <DayBlock workday={workday} statuses={statuses} timeZone={me.timeZone} locale={me.locale} now={now} copy={copy} />;
 }
 
-/** Waiting for you (addition 0008o): the person's own rows */
-async function WaitingBlockLoader({ read, copy }: { read: Promise<MyFollowUp> | null; copy: Copy }) {
+/** Waiting for you (addition 0008o): how many of the person's own rows each list holds (counted since 0009u) */
+async function WaitingBlockLoader({ read, copy }: { read: Promise<MyFollowUpCounts> | null; copy: Copy }) {
   if (!read) return null;
   const mine = await read;
   return <WaitingBlock mine={mine} copy={copy} />;
@@ -370,14 +371,14 @@ function AttentionBlock({ summary, team, inbound, permissions, copy }: {
 }
 
 /** Waiting for you (addition 0008o): how much of the follow-up is the person's own, and the page with the rows */
-function WaitingBlock({ mine, copy }: { mine: MyFollowUp; copy: Copy }) {
+function WaitingBlock({ mine, copy }: { mine: MyFollowUpCounts; copy: Copy }) {
   const t = copy.welcome;
-  const n = mine.leads.length + mine.tickets.length + mine.tasks.length;
+  const n = mine.leads + mine.tickets + mine.tasks;
   const count = (k: number, one: string, many: string) => (k === 1 ? one : many.replace("{n}", String(k)));
   const line = n === 0 ? t.waitingNone
-    : t.waitingLine.replace("{leads}", count(mine.leads.length, t.waitingLeadsOne, t.waitingLeads))
-      .replace("{tickets}", count(mine.tickets.length, t.waitingTicketsOne, t.waitingTickets))
-      .replace("{tasks}", count(mine.tasks.length, t.waitingTasksOne, t.waitingTasks));
+    : t.waitingLine.replace("{leads}", count(mine.leads, t.waitingLeadsOne, t.waitingLeads))
+      .replace("{tickets}", count(mine.tickets, t.waitingTicketsOne, t.waitingTickets))
+      .replace("{tasks}", count(mine.tasks, t.waitingTasksOne, t.waitingTasks));
   return (
     <Card title={t.waitingForYou}>
       <p className="flex items-center gap-3 text-body" data-testid="waiting-for-you">

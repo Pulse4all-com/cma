@@ -15,7 +15,7 @@ import type {
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  DueState, FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
+  DueState, FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, MyFollowUpCounts, OpenLead, OpenTask, OpenTicket, SlaState,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
@@ -3487,6 +3487,15 @@ export const postgresData: CmaData = {
         tasks: j.tasks.map((x) => toOpenTask(x, me.displayName)),
         computedAt: isoAny(j.computed_at)!,
       };
+    });
+  },
+
+  async getMyFollowUpCounts(me): Promise<MyFollowUpCounts> {
+    return withTenant(ctx(me), async (q) => {
+      // the caller's own items counted per kind (addition 0009u): the same checks and the same counts as the lists' lengths
+      const r = one((await q.query<{ leads: number; tickets: number; tasks: number; computed_at: Date }>(
+        `select * from cma.my_follow_up_counts()`)).rows, "my_follow_up_counts");
+      return { leads: r.leads, tickets: r.tickets, tasks: r.tasks, computedAt: r.computed_at.toISOString() };
     });
   },
 

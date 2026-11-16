@@ -9,10 +9,10 @@
 -- (reruns): 73_verify_follow_up.sql (unchanged), 81_verify_follow_up_snapshot.sql (edited by this change: B3),
 -- 151_verify_courtesy.sql and 155_verify_courtesy_bases.sql (unchanged), 179_verify_job_reads.sql (edited by this change:
 -- its copy of 154's refresh stores the row as 0009u does, so E8 still compares like with like); then 131_time_all.sql part
--- a. Prod the same, in or outside office hours. Every read keeps its shape; the PR changes no application code in web/,
--- only the metric catalog's words (web/src/lib/metrics-catalog.json: the five row fields are as of the read), so its
--- merge builds and deploys prod without a change of behaviour, and the order of merge and prod run is free. Main's web
--- and its refresh job run unchanged on it: the job calls cma.refresh_follow_up() and reads the same answer keys;
+-- a. Prod the same, in or outside office hours, BEFORE the merge of this addition's PR: its web reads Welcome's Waiting
+-- for you from cma.my_follow_up_counts(), which this script adds (on a database without it Welcome's block would fail).
+-- Every other read keeps its shape. Main's web (bab9720) and its refresh job run unchanged on a database with 190 (the
+-- PR: main's verify:api against a copy before and after 190, the same results), so the database goes first: the job calls cma.refresh_follow_up() and reads the same answer keys;
 -- the page, its API, an agent's own follow-up and the report lists read the same keys, now derived at the read.
 --
 -- Why (Martin, 16 November 2026; Decision log, 16 Nov 2026): tools/perf/follow-up-diff.sql in prod, Monday 16 November
@@ -41,6 +41,10 @@
 --            past_target, as cma.open_tickets_of and cma.open_leads_of (178) compute them; a task's row unchanged. One
 --            expression, inlined into its caller's query; sql, stable (jsonb_build_object is stable, and an immutable function
 --            over a stable call is never inlined: 136)
+--   cma.my_follow_up_counts()   the caller's own leads, tickets and tasks counted, and computed_at: Welcome's Waiting for
+--            you, which shows three counts, reads these instead of cma.my_follow_up's every row (65 to 78 ms against its
+--            50 ms at three times prod's volume with the rows derived; the same permissions, acting user and fallback).
+--            plpgsql, rows 1. The web of this addition's PR calls it, so 190 runs before that PR's merge
 -- What it changes (each answer as before at the same instant, but where said)
 --   cma.refresh_follow_up_of (based on 178)   stores a lead's and a ticket's row without the three fields, so neither the
 --            row nor the fingerprint (cma.follow_up_item_print over the stored row, unchanged) moves with the clock alone.
@@ -74,8 +78,9 @@
 -- of two, before → after; two runs after, the machine's spread about 10 ms): Reports → Follow-up with callbacks 426.3 →
 -- 439.6 and 444.9 ms (budget 500); the report lists, every row, leads 137.1 → 86.6 and 80.3 ms, tickets 341.1 → 216.9 and
 -- 190.1 ms (the stored row is smaller; budget 500, rows new in 131); Welcome's Waiting for you (cma.my_follow_up(), every
--- row the agent owns: 136 leads, 400 tickets, 834 tasks) 47.4 → 64.6 and 77.7 ms against 50 ms, a miss (the agent page's
--- set 59.8 → 75.8 and 88.8 ms against 100): the block shows three counts and reads every row, see the PR. The seventh
+-- row the agent owns: 136 leads, 400 tickets, 834 tasks) 47.4 → 64.6 and 77.7 ms against 50 ms with every row's fields
+-- derived; the block shows three counts, so it reads cma.my_follow_up_counts() instead: 3.4 ms (the agent page's set
+-- 59.8 → 17.0 ms against 100). /me/follow-up keeps every row (131's 'my follow-up: my rows', 64.9 ms against 50: open). The seventh
 -- call of a session as the first (N06): my_follow_up 70 to 82 ms, the page's follow-up part 56 to 66, open_tickets()
 -- 140 to 180, open_leads() 54 to 82. The derivation is inlined into each read (a wrapper with a subquery, run per row as a plan of its own, took the
 -- tickets list to 44 s), each row's office seconds computed once (offset 0), the task list's path as before.
@@ -373,6 +378,33 @@ begin
 end
 $$;
 
+-- The caller's own items counted per kind, plus when they were computed: what Welcome's Waiting for you shows (the
+-- lengths of cma.my_follow_up's three lists), without reading or deriving a row. The same permissions, the same acting
+-- user (CMA01 without one) and the same fallback (a tenant without a snapshot computes it once) as cma.my_follow_up;
+-- each count one range of follow_up_item_owner_idx (tenant, kind, owner) (0009u)
+create or replace function cma.my_follow_up_counts()
+returns table (leads integer, tickets integer, tasks integer, computed_at timestamptz)
+language plpgsql
+rows 1
+as $$
+declare
+  v_tenant uuid := cma.current_tenant_id();
+  v_user   uuid := cma.current_user_id();
+  s        cma.follow_up_snapshot;
+begin
+  perform cma.assert_any_permission(array['leads.accept', 'workday.own']);
+  if v_user is null then
+    raise exception 'no acting user' using errcode = 'CMA01';
+  end if;
+  s := cma.follow_up_snapshot_of(v_tenant);
+  return query
+    select (select count(*)::integer from cma.follow_up_item i where i.tenant_id = v_tenant and i.kind = 'lead' and i.owner_user_id = v_user),
+           (select count(*)::integer from cma.follow_up_item i where i.tenant_id = v_tenant and i.kind = 'ticket' and i.owner_user_id = v_user),
+           (select count(*)::integer from cma.follow_up_item i where i.tenant_id = v_tenant and i.kind = 'task' and i.owner_user_id = v_user),
+           s.computed_at;
+end
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- 4. Grants, the addition
 -- ---------------------------------------------------------------------------------------------
@@ -384,7 +416,7 @@ begin
   foreach f in array array[
     'cma.follow_up_clock_row(text,jsonb,integer,integer,integer)',
     'cma.refresh_follow_up_of(uuid,boolean)', 'cma.follow_up_list_of(uuid,text,text,uuid,boolean,boolean,integer)',
-    'cma.open_leads()', 'cma.open_tickets()'
+    'cma.open_leads()', 'cma.open_tickets()', 'cma.my_follow_up_counts()'
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);

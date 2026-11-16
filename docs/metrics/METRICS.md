@@ -561,7 +561,7 @@ How many of the waiting items are the viewer's own: their uncalled leads, open t
 **Formula as computed**
 
 ```
-badge n = mine.leads.length + mine.tickets.length + mine.tasks.length from cma.my_follow_up(): the snapshot items whose owner_user_id = the caller (owner mapped through app_user_external_id), every row, no cap. 0 shows a green badge and 'Nothing is waiting for you right now'.
+badge n = mine.leads + mine.tickets + mine.tasks from cma.my_follow_up_counts() (since 0009u; before it the lengths of cma.my_follow_up()'s three arrays, the same counts): the snapshot items whose owner_user_id = the caller (owner mapped through app_user_external_id), counted per kind, every item, no cap; no row is read. 0 shows a green badge and 'Nothing is waiting for you right now'.
 ```
 
 **Unit** count · **Grain** now, per_person · **Status** verified
@@ -584,7 +584,7 @@ badge n = mine.leads.length + mine.tickets.length + mine.tasks.length from cma.m
 
 **Refresh** follow-up snapshot once a minute; the Welcome page reads it on page load only
 
-**Computed in** `cma.my_follow_up` (0008s); `cma.follow_up_list_of` (0008s); `cma.my_follow_up_of` (0008o); `default` in src/app/page.tsx
+**Computed in** `cma.my_follow_up_counts` (0009u); `cma.my_follow_up` (0008s); `cma.follow_up_list_of` (0008s); `cma.my_follow_up_of` (0008o); `default` in src/app/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -613,7 +613,7 @@ The card's sentence: the viewer's own waiting items split into leads, tickets an
 **Formula as computed**
 
 ```
-mine.leads.length, mine.tickets.length, mine.tasks.length (cma.my_follow_up's three arrays: snapshot items of each kind with owner_user_id = the caller), each with singular/plural copy.
+mine.leads, mine.tickets, mine.tasks from cma.my_follow_up_counts() (since 0009u; the same counts as cma.my_follow_up's three arrays' lengths: snapshot items of each kind with owner_user_id = the caller), each with singular/plural copy.
 ```
 
 **Unit** count · **Grain** now, per_person · **Status** verified
@@ -635,7 +635,7 @@ mine.leads.length, mine.tickets.length, mine.tasks.length (cma.my_follow_up's th
 
 **Refresh** follow-up snapshot once a minute; read on page load only
 
-**Computed in** `cma.my_follow_up` (0008s); `default` in src/app/page.tsx
+**Computed in** `cma.my_follow_up_counts` (0009u); `cma.my_follow_up` (0008s); `default` in src/app/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
