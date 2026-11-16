@@ -103,7 +103,7 @@ function filtered(me: Principal, f: FleetFilter): MockFleetDevice[] {
 /** cma.fleet_areas in mock mode */
 export function mockFleetAreas(me: Principal, filter: FleetFilter): FleetPage {
   assertRead(me, filter.market, filter.model);
-  if (!setUp(me)) return { setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [] };
+  if (!setUp(me)) return { setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [], pastDueNotInField: 0 };
   const ds = filtered(me, filter);
   const count = (xs: MockFleetDevice[]): Omit<FleetArea, "areaId" | "country" | "areaCode" | "label" | "lat" | "lon"> => ({
     inField: xs.filter((d) => d.inField).length, ready: xs.filter((d) => d.state === "ready").length,
@@ -115,13 +115,14 @@ export function mockFleetAreas(me: Principal, filter: FleetFilter): FleetPage {
     .filter((x) => x.xs.length > 0)
     .sort((x, y) => (x.a.country + x.a.code < y.a.country + y.a.code ? -1 : 1))
     .map(({ a, xs }) => ({ areaId: a.id, country: a.country, areaCode: a.code, label: a.label, lat: a.lat, lon: a.lon, ...count(xs) }));
-  areas.push({ areaId: null, country: null, areaCode: null, label: null, lat: null, lon: null, ...count(ds.filter((d) => d.areaId === null)) });
+  areas.push({ areaId: null, country: null, areaCode: null, label: null, lat: null, lon: null, ...count(ds.filter((d) => d.inField && d.areaId === null)) });
   const all = devicesOf(me);
   return {
     setUp: true, filter, today: dateKeyInZone(new Date(), me.timeZone), timeZone: me.timeZone,
     markets: [{ code: "GB", name: "United Kingdom" }, { code: "NL", name: "Netherlands" }].filter((m) => all.some((d) => d.market === m.code)),
     models: MOCK_DEVICE_MODELS.filter((m) => all.some((d) => d.model === m.key)).map((m) => ({ key: m.key, name: m.name })),
     areas,
+    pastDueNotInField: ds.filter((d) => !d.inField && d.pastDueItems > 0).length,
   };
 }
 

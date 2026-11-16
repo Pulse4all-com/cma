@@ -62,11 +62,12 @@ export async function FleetManagement({ searchParams, me, copy }: {
     );
   }
 
-  const tiles = fleetTilesOf(doc.areas);
-  // the devices In the field without an area under the tile (the row without an area also counts, in past due alone, the
-  // devices past due not In the field: no location applies to them, so the note leaves them out)
+  const tiles = fleetTilesOf(doc.areas, doc.pastDueNotInField);
+  // the devices In the field without an area under the tile; the devices past due outside the field (in stock, internal
+  // use) are no device In the field: a note of their own (Martin, 16 November 2026, on #285)
   const noAreaRow = doc.areas.find((a) => a.areaId === null);
-  const withoutArea = noAreaRow ? (st.tile === "past_due" ? Math.min(noAreaRow.pastDue, noAreaRow.inField) : areaCountOf(noAreaRow, st.tile)) : 0;
+  const withoutArea = noAreaRow ? areaCountOf(noAreaRow, st.tile) : 0;
+  const notInField = st.tile === null || st.tile === "past_due" ? doc.pastDueNotInField : 0;
   const selected = st.areaId ? doc.areas.find((a) => a.areaId === st.areaId) ?? null : null;
   const nf = new Intl.NumberFormat(locale);
   const modelName = (key: string) => (key === "unknown" ? copy.flash.unknownModel : doc.models.find((m) => m.key === key)?.name ?? key);
@@ -105,6 +106,11 @@ export async function FleetManagement({ searchParams, me, copy }: {
           {withoutArea > 0 ? (
             <p className="mt-1 text-small text-p4a-muted" data-testid="fleet-without-area">
               {withoutArea === 1 ? t.withoutAreaOne : t.withoutArea.replace("{n}", nf.format(withoutArea))}
+            </p>
+          ) : null}
+          {notInField > 0 ? (
+            <p className="mt-1 text-small text-p4a-muted" data-testid="fleet-past-due-not-in-field">
+              {notInField === 1 ? t.pastDueNotInFieldOne : t.pastDueNotInField.replace("{n}", nf.format(notInField))}
             </p>
           ) : null}
         </section>

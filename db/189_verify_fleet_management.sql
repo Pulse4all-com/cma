@@ -28,6 +28,7 @@
 --       without an area; a device not In the field has no area and no state; the state is the hash's bucket; two reads
 --       give the same area and state per device; a register's reload (the device's row updated) keeps both
 --   A3  (4) on T: Ready + Needs attention + No connection + Not monitored = In the field in every row
+--   A7  by hand on T: R5's rule, and its figures counted by hand
 --   A4  (6) the analyst (reports.view) and the supervisor (performance.team) read both, the agent is refused (CMA06);
 --       under U's context T's devices are not read (row-level security), and U's reader sees U's device alone
 --   A5  (7) with dummy_preview false both reads answer {"set_up": false} and nothing more; with it true they answer
@@ -38,6 +39,10 @@
 --   R3  (3) per tenant: every device In the field of a market with areas has exactly one, of its market, the hash's pick;
 --       the state the hash's bucket; two reads the same
 --   R4  (4) per tenant: the states add up to In the field in every row
+--   R5  per tenant (Martin, 16 November 2026, on #285): the row without an area (kind no_area) holds the devices In the
+--       field without an area alone, never a device outside the field; the row not_in_field holds, in past_due alone,
+--       the devices past due outside the field; the in-field past due (the areas and no_area) plus the not-in-field past
+--       due equals Installed base's Devices past due
 --   E1  (8) per tenant, as cma_app: cma.fleet_areas_of, no filter, within verify.max_list_ms (300), the best of three
 --       after six calls
 --   E2  (8) per tenant, as cma_app: cma.fleet_rows_of, the devices that need attention, page 1, within verify.max_list_ms
@@ -216,6 +221,38 @@ begin
 end
 $$;
 
+-- R5 for a tenant (Martin, 16 November 2026, on #285): what the rows without an area say (found), and the same counted
+-- from the devices and Installed base's Devices past due (expected)
+create or replace function pg_temp.v0009t_kinds(p_tenant uuid)
+returns table (found text, expected text)
+language plpgsql
+as $$
+declare
+  v_today date := cma.tenant_today_of(p_tenant);
+  f       text := 'no_area: in field %s, past due %s, states %s; not_in_field: in field %s, states %s, past due %s; in-field past due + not-in-field past due = %s + %s = %s';
+begin
+  return query
+  with x as materialized (
+    select a.kind, a.in_field, a.past_due, a.ready + a.needs_attention + a.no_connection + a.not_monitored as states
+    from cma.fleet_areas_of(p_tenant, null, null) a
+  ), d as materialized (
+    select dd.is_in_field, dd.area_id, dd.past_due_items from cma.fleet_devices_of(p_tenant, v_today) dd
+  )
+  select format(f, (select x.in_field from x where x.kind = 'no_area'), (select x.past_due from x where x.kind = 'no_area'),
+                (select x.states from x where x.kind = 'no_area'), (select x.in_field from x where x.kind = 'not_in_field'),
+                (select x.states from x where x.kind = 'not_in_field'), (select x.past_due from x where x.kind = 'not_in_field'),
+                (select sum(x.past_due) from x where x.kind <> 'not_in_field'), (select x.past_due from x where x.kind = 'not_in_field'),
+                (select sum(x.past_due) from x)),
+         format(f, (select count(*) from d where d.is_in_field and d.area_id is null),
+                (select count(*) from d where d.is_in_field and d.area_id is null and d.past_due_items > 0),
+                (select count(*) from d where d.is_in_field and d.area_id is null), 0, 0,
+                (select count(*) from d where not d.is_in_field and d.past_due_items > 0),
+                (select count(*) from d where d.is_in_field and d.past_due_items > 0),
+                (select count(*) from d where not d.is_in_field and d.past_due_items > 0),
+                (cma.flash_rows_of(p_tenant, 'installed_base', '{"measure": "components_past_due"}'::jsonb, 'serial', false, 1, 0, null, null) ->> 'total'));
+end
+$$;
+
 -- Check 4 for a tenant: the rows whose states do not add up to In the field
 create or replace function pg_temp.v0009t_sums(p_tenant uuid)
 returns text
@@ -321,7 +358,7 @@ declare
   v_today date;
   c record;
   j jsonb; k jsonb;
-  v_a1 text; v_a1h text; v_a2 text; v_a2b text; v_a3 text; v_a4 text; v_a5 text; v_a6 text; v_a6b text;
+  v_a1 text; v_a1h text; v_a7 text; v_a7e text; v_a2 text; v_a2b text; v_a3 text; v_a4 text; v_a5 text; v_a6 text; v_a6b text;
   v_before text; v_after text;
   n_all bigint; n_sum bigint;
 begin
@@ -371,15 +408,19 @@ begin
     -- multiples of 7 (eleven); In the field 80 - 4 - 11 = 65. Without an area (LU: g mod 4 = 3; no market: g mod 10 = 0)
     -- and In the field: 16 of LU and 7 without a market = 23, so 42 on the map. Past due: m1 (even g), shipped in 2019
     -- (g mod 3 = 0), tracked (not gone): the multiples of 6, 6 to 78 = 13; 42 in stock (not In the field: the row without
-    -- an area), 30 and 60 without a market (that row too), so 10 on the map and 3 in the row without an area. The filters:
+    -- an area: the row not in the field), 30 and 60 without a market (the row without an area), so 10 on the map. The filters:
     -- none, the four markets (GB, NL, LU, unknown), the two models, and the five pairs that hold devices (GB m1, GB m2,
     -- NL m1, LU m2, unknown m1) = 12
     select format('filters %s; In the field differing %s; Devices past due differing %s', x.filters, x.field_differs, x.past_due_differs)
     into v_a1 from pg_temp.v0009t_compare(v_t) x;
-    select format('In the field %s; past due %s; past due on the map %s; the row without an area: in the field %s, past due %s',
-                  sum(a.in_field), sum(a.past_due), sum(a.past_due) filter (where a.area_id is not null),
-                  sum(a.in_field) filter (where a.area_id is null), sum(a.past_due) filter (where a.area_id is null))
+    select format('In the field %s; past due %s; past due on the map %s; the row without an area: in the field %s, past due %s; the row not in the field: past due %s',
+                  sum(a.in_field), sum(a.past_due), sum(a.past_due) filter (where a.kind = 'area'),
+                  sum(a.in_field) filter (where a.kind = 'no_area'), sum(a.past_due) filter (where a.kind = 'no_area'),
+                  sum(a.past_due) filter (where a.kind = 'not_in_field'))
     into v_a1h from cma.fleet_areas_of(v_t, null, null) a;
+    -- A7: R5's rule on T (counted by hand: 23 In the field without an area, 2 of them past due (30 and 60), 1 past due
+    -- not In the field (42); 12 + 1 = 13)
+    select x.found, x.expected into v_a7, v_a7e from pg_temp.v0009t_kinds(v_t) x;
 
     -- A2 (3): each device's area and state, the hash's; LU and no market: none; a reload keeps both
     v_a2 := pg_temp.v0009t_places(v_t);
@@ -390,7 +431,7 @@ begin
     into v_after from cma.fleet_devices_of(v_t, v_today) d;
     select format('LU or no market with an area %s; the row without an area holds them %s; not in the field with a state %s; a reload keeps area and state %s',
                   count(*) filter (where (d.market = 'LU' or d.market = 'unknown') and d.area_id is not null),
-                  (select a.in_field from cma.fleet_areas_of(v_t, null, null) a where a.area_id is null)
+                  (select a.in_field from cma.fleet_areas_of(v_t, null, null) a where a.kind = 'no_area')
                     = count(*) filter (where d.is_in_field and (d.market = 'LU' or d.market = 'unknown')),
                   count(*) filter (where not d.is_in_field and d.state is not null),
                   v_before is not distinct from v_after)
@@ -471,8 +512,11 @@ begin
 
   perform pg_temp.v0009t_row(10, 'A1', 'by hand: In the field and Devices past due equal Installed base''s for every filter', v_a1,
     'filters 12; In the field differing none; Devices past due differing none');
-  perform pg_temp.v0009t_row(11, 'A1', 'by hand: the figures counted by hand (the in-stock device past due in the row without an area)', v_a1h,
-    'In the field 65; past due 13; past due on the map 10; the row without an area: in the field 23, past due 3');
+  perform pg_temp.v0009t_row(11, 'A1', 'by hand: the figures counted by hand (the in-stock device past due in the row not in the field)', v_a1h,
+    'In the field 65; past due 13; past due on the map 10; the row without an area: in the field 23, past due 2; the row not in the field: past due 1');
+  perform pg_temp.v0009t_row(19, 'A7', 'by hand: the row without an area holds devices In the field alone; in-field past due + not-in-field past due = Installed base''s Devices past due', v_a7,
+    'no_area: in field 23, past due 2, states 23; not_in_field: in field 0, states 0, past due 1; in-field past due + not-in-field past due = 12 + 1 = 13');
+  perform pg_temp.v0009t_row(20, 'A7', 'by hand: the same rule against the devices and Installed base', v_a7, v_a7e);
   perform pg_temp.v0009t_row(12, 'A2', 'by hand: one area of the device''s market, the hash''s pick; the state the hash''s bucket; two reads the same', v_a2,
     'in the field with areas 42; without one area of their market 0; not the hash''s pick 0; with an area they should not have 0; states not the hash''s bucket 0; two reads the same t');
   perform pg_temp.v0009t_row(13, 'A2', 'by hand: no area for LU or no market (they count in the row without one), no state out of the field, a reload keeps both', v_a2b,
@@ -496,7 +540,7 @@ do $$
 declare
   t record;
   v_any boolean := false;
-  v_err text; v_r12 record; v_r3 text; v_r4 text; v_e1 numeric; v_e2 numeric; v_ms numeric; v_t0 timestamptz;
+  v_err text; v_r12 record; v_r3 text; v_r4 text; v_r5 record; v_e1 numeric; v_e2 numeric; v_ms numeric; v_t0 timestamptz;
   n bigint;
 begin
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
@@ -504,13 +548,14 @@ begin
       continue;
     end if;
     v_any := true;
-    v_err := null; v_r12 := null; v_r3 := null; v_r4 := null; v_e1 := null; v_e2 := null;
+    v_err := null; v_r12 := null; v_r3 := null; v_r4 := null; v_r5 := null; v_e1 := null; v_e2 := null;
     begin
       perform set_config('app.tenant_id', t.id::text, true);
       perform set_config('role', 'cma_app', true);
       select * into v_r12 from pg_temp.v0009t_compare(t.id);
       v_r3 := pg_temp.v0009t_places(t.id);
       v_r4 := pg_temp.v0009t_sums(t.id);
+      select x.found, x.expected into v_r5 from pg_temp.v0009t_kinds(t.id) x;
       -- E1 and E2: the best of three after six calls
       for i in 1 .. 9 loop
         v_t0 := clock_timestamp();
@@ -544,6 +589,8 @@ begin
                            'without one area of their market 0; not the hash''s pick 0; with an area they should not have 0; states not the hash''s bucket 0; two reads the same t'));
     perform pg_temp.v0009t_row(33, 'R4', t.slug || ': the states add up to In the field in every row', v_r4,
       regexp_replace(v_r4, 'do not add up to In the field [0-9]+$', 'do not add up to In the field 0'));
+    perform pg_temp.v0009t_row(34, 'R5', t.slug || ': the row without an area holds devices In the field alone; in-field past due + not-in-field past due = Installed base''s Devices past due',
+      v_r5.found, v_r5.expected);
     insert into pg_temp.verify_0009t values (40, 'E1 ' || t.slug || ': cma.fleet_areas_of, no filter, within its budget',
       case when v_e1 <= case when pg_temp.v0009t_p('E1') then 0 else current_setting('verify.max_list_ms')::numeric end then 'PASS' else 'FAIL' end,
       format('%s ms (best of 3, after six calls) against %s ms', v_e1, case when pg_temp.v0009t_p('E1') then '0' else current_setting('verify.max_list_ms') end));
@@ -558,6 +605,7 @@ begin
 end
 $$;
 
+drop function if exists pg_temp.v0009t_kinds(uuid);
 drop function if exists pg_temp.v0009t_sums(uuid);
 drop function if exists pg_temp.v0009t_places(uuid);
 drop function if exists pg_temp.v0009t_compare(uuid);

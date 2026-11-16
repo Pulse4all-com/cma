@@ -2781,7 +2781,7 @@ export const postgresData: CmaData = {
       // the function checks the permission (CMA06) and the filters (CMA04), and answers set_up false alone while the tenant's
       // fleet_management.dummy_preview is off (addition 0009t)
       const j = one((await q.query<{ j: FleetAreasDb }>(`select cma.fleet_areas($1, $2) as j`, [filter.market, filter.model])).rows, "fleet_areas").j;
-      if (!j.set_up) return { setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [] };
+      if (!j.set_up) return { setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [], pastDueNotInField: 0 };
       return {
         setUp: true, filter, today: j.today ?? null, timeZone: j.time_zone ?? null, markets: j.filter_markets ?? [], models: j.filter_models ?? [],
         areas: (j.areas ?? []).map((a) => ({
@@ -2789,6 +2789,7 @@ export const postgresData: CmaData = {
           lon: a.lon === null ? null : Number(a.lon), inField: Number(a.in_field), ready: Number(a.ready), needsAttention: Number(a.needs_attention),
           noConnection: Number(a.no_connection), notMonitored: Number(a.not_monitored), pastDue: Number(a.past_due),
         })),
+        pastDueNotInField: Number(j.past_due_not_in_field ?? 0),
       };
     });
   },
@@ -3710,6 +3711,7 @@ interface FleetAreasDb {
   areas?: { area_id: string | null; country: string | null; area_code: string | null; label: string | null; lat: string | number | null;
     lon: string | number | null; in_field: number; ready: number; needs_attention: number; no_connection: number; not_monitored: number;
     past_due: number }[];
+  past_due_not_in_field?: number;
 }
 
 /** cma.fleet_rows's answer (addition 0009t) */

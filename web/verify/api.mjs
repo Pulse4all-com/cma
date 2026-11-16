@@ -1606,8 +1606,8 @@ async function fleetChecks() {
   }
   const sum = (k) => (d.areas ?? []).reduce((n, a) => n + Number(a[k] ?? 0), 0);
   const tiles = d.tiles ?? {};
-  expect("fleet: the tiles are the areas summed; Monitored three states; the four states add up to In the field",
-    [tiles.in_field === sum("inField"), tiles.past_due === sum("pastDue"), tiles.monitored === tiles.ready + tiles.needs_attention + tiles.no_connection,
+  expect("fleet: the tiles are the areas summed (Devices past due with those outside the field); Monitored three states; the four states add up to In the field",
+    [tiles.in_field === sum("inField"), tiles.past_due === sum("pastDue") + Number(d.pastDueNotInField ?? 0), tiles.monitored === tiles.ready + tiles.needs_attention + tiles.no_connection,
       tiles.ready + tiles.needs_attention + tiles.no_connection + tiles.not_monitored === tiles.in_field],
     [true, true, true, true], [true, true, true, false]);
   // Installed base's In the field and Devices past due for the same filter: its list's total under the measure
@@ -1619,15 +1619,43 @@ async function fleetChecks() {
   };
   const filters = [[null, null], ...(d.markets ?? []).map((m) => [m.code, null]), ...(d.models ?? []).map((m) => [null, m.key])];
   const differ = [];
+  const byMarket = [];
   for (const [market, model] of filters) {
     const q = new URLSearchParams();
     if (market) q.set("market", market);
     if (model) q.set("model", model);
-    const f = (await call(ANALYST, `/api/v1/reports/fleet-management?${q}`)).body?.data?.tiles ?? {};
+    const doc = (await call(ANALYST, `/api/v1/reports/fleet-management?${q}`)).body?.data ?? {};
+    const f = doc.tiles ?? {};
+    if (market && !model) byMarket.push({ market, doc });
     const [field, due] = [await ibTotal("in_field", market, model), await ibTotal("components_past_due", market, model)];
     if (f.in_field !== field || f.past_due !== due) differ.push(`${market ?? "all"}/${model ?? "all"} ${f.in_field}:${field} ${f.past_due}:${due}`);
   }
   expect(`fleet: In the field and Devices past due equal Installed base's for ${filters.length} filters`, PROVOKE ? [...differ, "provoked"] : differ, [], []);
+  // Martin, 16 November 2026, on #285: the row without an area holds devices In the field alone (its states add up to its
+  // In the field; its past-due devices are listed with a state, in the field), the devices past due outside the field are
+  // apart (listed without a state), and the two past dues add up to Installed base's Devices past due
+  const noAreaOf = (doc) => (doc.areas ?? []).find((a) => a.areaId === null) ?? { inField: 0, ready: 0, needsAttention: 0, noConnection: 0, notMonitored: 0, pastDue: 0 };
+  const noArea = noAreaOf(d);
+  const inFieldPastDue = sum("pastDue");
+  // the list is read for the market with the fewest devices past due (at most 40 pages), so the check stays short at volume
+  const small = byMarket.filter((m) => (m.doc.tiles?.past_due ?? 0) > 0).sort((a, b) => a.doc.tiles.past_due - b.doc.tiles.past_due)[0] ?? { market: null, doc: d };
+  const smallNoArea = noAreaOf(small.doc);
+  let listed = { noAreaInField: 0, notInField: 0, pages: 0, complete: false };
+  for (let page = 1; page <= 40; page += 1) {
+    const rd = (await call(ANALYST, `/api/v1/reports/fleet-management/rows?state=past_due&page=${page}${small.market ? `&market=${small.market}` : ""}`)).body?.data;
+    for (const x of rd?.rows ?? []) {
+      if (x.state === null) listed.notInField += 1;
+      else if (x.areaId === null) listed.noAreaInField += 1;
+    }
+    listed.pages = page;
+    if (!rd || page * (rd.pageSize ?? 50) >= (rd.total ?? 0)) { listed.complete = true; break; }
+  }
+  const ibPastDue = await ibTotal("components_past_due", null, null);
+  expect("fleet: the row without an area holds devices in the field alone; in-field past due + not-in-field past due = Installed base's Devices past due",
+    [noArea.ready + noArea.needsAttention + noArea.noConnection + noArea.notMonitored === noArea.inField, noArea.pastDue <= noArea.inField,
+      listed.complete ? listed.noAreaInField === smallNoArea.pastDue && listed.notInField === small.doc.pastDueNotInField : "list longer than 40 pages",
+      typeof d.pastDueNotInField === "number" && inFieldPastDue + d.pastDueNotInField === ibPastDue, tiles.past_due === inFieldPastDue + d.pastDueNotInField],
+    [true, true, true, true, true], [true, true, true, false, true]);
   const personal = /(email|phone|address|firstName|lastName|customerName|contactName|displayName|customerRef|customer_id|customerId)/i;
   const keys = new Set((rows.body?.data?.rows ?? []).flatMap((x) => Object.keys(x)));
   expect("fleet: the list holds ids, codes, states and dates, never a customer reference, name, email, phone or address",

@@ -2464,7 +2464,8 @@ export interface FleetFilter {
   model: string | null;
 }
 
-/** One postcode area holding devices In the field (cma.fleet_areas_of), or the row without an area (areaId null) */
+/** One postcode area holding devices In the field (cma.fleet_areas_of), or the row of the devices In the field without an
+ * area (areaId null): devices In the field alone (Martin, 16 November 2026, on #285) */
 export interface FleetArea {
   areaId: string | null;
   country: string | null;
@@ -2478,7 +2479,7 @@ export interface FleetArea {
   needsAttention: number;
   noConnection: number;
   notMonitored: number;
-  /** The devices past due here; in the row without an area also those not In the field */
+  /** The devices past due here */
   pastDue: number;
 }
 
@@ -2492,6 +2493,8 @@ export interface FleetPage {
   markets: { code: string; name: string | null }[];
   models: { key: string; name: string | null }[];
   areas: FleetArea[];
+  /** The devices past due that are not In the field (in stock, internal use: not on the map); in Devices past due */
+  pastDueNotInField: number;
 }
 
 /** The list's query: the filters, a tile's state, an area, the devices that need attention only, a page of 50 */

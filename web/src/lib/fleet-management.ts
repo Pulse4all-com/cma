@@ -39,9 +39,12 @@ export const FLEET_STATE_SWATCH: Record<FleetState, string> = {
 
 export type FleetTiles = Record<FleetTileKey, number>;
 
-/** The tiles summed from the areas (the server's, D2: In the field and Devices past due as Installed base counts them) */
-export function fleetTilesOf(areas: readonly FleetArea[]): FleetTiles {
-  const t: FleetTiles = { in_field: 0, past_due: 0, monitored: 0, ready: 0, needs_attention: 0, no_connection: 0, not_monitored: 0 };
+/**
+ * The tiles summed from the areas and the devices past due not In the field (the server's, D2: In the field and Devices
+ * past due as Installed base counts them: the areas' past due, the row without an area's, and those outside the field)
+ */
+export function fleetTilesOf(areas: readonly FleetArea[], pastDueNotInField: number): FleetTiles {
+  const t: FleetTiles = { in_field: 0, past_due: pastDueNotInField, monitored: 0, ready: 0, needs_attention: 0, no_connection: 0, not_monitored: 0 };
   for (const a of areas) {
     t.in_field += a.inField;
     t.past_due += a.pastDue;
