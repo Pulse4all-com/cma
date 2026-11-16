@@ -2450,6 +2450,88 @@ export type MaintenanceView = "exchanges" | "components";
 /** How a due item's due date is known: the register's recorded expiry, the anchor date plus the rule's interval, or not at all */
 export type MaintenanceBasis = "recorded" | "rule" | "unknown";
 
+// ---- Assets → Fleet management (addition 0009t): the devices In the field by postcode area, dummy locations and states
+/** A monitoring state (Monitoring state, docs/definitions.md); dummy data until the readiness source is decided (D5) */
+export type FleetState = "ready" | "needs_attention" | "no_connection" | "not_monitored";
+/** Why a device needs attention: a dummy reason of its state, or items_past_due (real) */
+export type FleetReason = "self_test_failed" | "tracker_battery_low" | "items_past_due";
+/** Where a device's postcode area comes from: dummy now; the register's postcode or a GPS tracker once decided */
+export type FleetLocationSource = "dummy" | "postcode" | "gps";
+
+/** The page's filters: a market's code or unknown, a model's key or unknown */
+export interface FleetFilter {
+  market: string | null;
+  model: string | null;
+}
+
+/** One postcode area holding devices In the field (cma.fleet_areas_of), or the row of the devices In the field without an
+ * area (areaId null): devices In the field alone (Martin, 16 November 2026, on #285) */
+export interface FleetArea {
+  areaId: string | null;
+  country: string | null;
+  areaCode: string | null;
+  /** A place name of the area */
+  label: string | null;
+  lat: number | null;
+  lon: number | null;
+  inField: number;
+  ready: number;
+  needsAttention: number;
+  noConnection: number;
+  notMonitored: number;
+  /** The devices past due here */
+  pastDue: number;
+}
+
+/** The page's read (cma.fleet_areas): setUp false while the tenant's fleet_management.dummy_preview is off, and nothing more */
+export interface FleetPage {
+  setUp: boolean;
+  filter: FleetFilter;
+  today: DateKey | null;
+  timeZone: string | null;
+  /** The markets of the register's devices in the field or tracked, catalog order, unknown last; the name from the catalog */
+  markets: { code: string; name: string | null }[];
+  models: { key: string; name: string | null }[];
+  areas: FleetArea[];
+  /** The devices past due that are not In the field (in stock, internal use: not on the map); in Devices past due */
+  pastDueNotInField: number;
+}
+
+/** The list's query: the filters, a tile's state, an area, the devices that need attention only, a page of 50 */
+export interface FleetRowsQuery extends FleetFilter {
+  state: string | null;
+  areaId: string | null;
+  attentionOnly: boolean;
+  page: number;
+}
+
+/** One device of the list (cma.fleet_rows_of): ids, codes, dates and states only, never a customer reference or address */
+export interface FleetRow {
+  deviceId: string;
+  serial: string | null;
+  model: string;
+  market: string;
+  areaId: string | null;
+  areaCode: string | null;
+  areaLabel: string | null;
+  /** Null for a device not In the field (listed because it is past due) */
+  state: FleetState | null;
+  reason: FleetReason | null;
+  lastSelfTestOn: DateKey | null;
+  lastContactAt: string | null;
+  pastDueItems: number;
+  locationSource: FleetLocationSource | null;
+}
+
+export interface FleetRowsPage {
+  setUp: boolean;
+  page: number;
+  pageSize: number;
+  total: number;
+  timeZone: string | null;
+  rows: FleetRow[];
+}
+
 /** The forecast's horizon and filters: from the first day of a month (the current one or later) for 6, 12 or 24 months */
 export interface MaintenanceFilter {
   fromMonth: DateKey;
@@ -4257,6 +4339,11 @@ export interface CmaData {
   getMaintenance(me: Principal, filter: MaintenanceFilter): Promise<MaintenanceReport>;
   /** The device list of one cell (cma.maintenance_rows): bucket past_due, a month of the horizon, unknown or all; at most limit rows (1 to 5000) */
   getMaintenanceRows(me: Principal, filter: MaintenanceFilter, bucket: string, view: MaintenanceView, limit: number): Promise<MaintenanceRows>;
+  // ---- Fleet management (addition 0009t): reports.view or performance.team, checked by the database on every call (CMA06)
+  /** Assets → Fleet management's areas (cma.fleet_areas): setUp false while the tenant's preview setting is off */
+  getFleetAreas(me: Principal, filter: FleetFilter): Promise<FleetPage>;
+  /** A page of 50 of its devices (cma.fleet_rows) */
+  getFleetRows(me: Principal, query: FleetRowsQuery): Promise<FleetRowsPage>;
   // ---- Pledge lists (addition 0009j): pledges.view, checked by the database on every call (CMA06)
   /** Assets → Pledge lists in one transaction (cma.pledge_page, and cma.pledge_finding_rows for an open check, at most limit rows) */
   getPledgePage(me: Principal, check: string | null, limit: number): Promise<PledgePage>;

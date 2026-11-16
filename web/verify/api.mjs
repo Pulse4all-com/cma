@@ -167,6 +167,7 @@ if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data
 if (ONLY_REPORTS) {
   await reportChecks();
   await flashChecks();
+  await fleetChecks();
   await reviewsAllChecks();
   await courtesyChecks();
   await activeChecks();
@@ -1042,6 +1043,7 @@ expect("the stats keep it, marked withdrawn at that time", [!!wstat, wstat?.with
 
 await reportChecks();
 await flashChecks();
+await fleetChecks();
 await reviewsAllChecks();
 await courtesyChecks();
 await activeChecks();
@@ -1575,6 +1577,93 @@ async function flashChecks() {
       [false, null, 0], [true, {}, 1]);
   } else {
     console.log(`note  ${INVEST} has no access here: the check of a source not set up (Pulse4all Invest's shop) is left out`);
+  }
+}
+
+// Assets → Fleet management (addition 0009t, brief B37): both routes for reports.view or performance.team (an analyst and a
+// supervisor 200, an agent 403), no-store, a malformed parameter 400; with the tenant's preview on, In the field and Devices
+// past due equal Installed base's for the same filters (none, each market, each model: its list's totals under
+// measure in_field and components_past_due); the tiles the areas summed, the states adding up to In the field; the
+// list's rows without a customer reference, name, email, phone or address. A tenant with the preview off answers setUp
+// false alone (Pulse4all Invest in the mock)
+async function fleetChecks() {
+  const r = await call(ANALYST, "/api/v1/reports/fleet-management");
+  const d = r.body?.data;
+  const rows = await call(ANALYST, "/api/v1/reports/fleet-management/rows?attention=1");
+  const sup = await call(SUPERVISOR, "/api/v1/reports/fleet-management");
+  const agent = await call(AGENT, "/api/v1/reports/fleet-management");
+  const agentRows = await call(AGENT, "/api/v1/reports/fleet-management/rows");
+  const cacheControl = (await fetch(BASE + "/api/v1/reports/fleet-management", { headers: { "x-cma-mock-subject": ANALYST } })).headers.get("cache-control");
+  const bad = await Promise.all(["?market=gb", "?model=AED", "/rows?state=broken", "/rows?page=0", "/rows?area=1", "/rows?attention=yes"]
+    .map(async (q) => (await call(ANALYST, `/api/v1/reports/fleet-management${q.startsWith("/") ? q : `${q}`}`)).status));
+  expect("fleet: the analyst and the supervisor read both routes, the agent is refused, no-store; a malformed parameter is a 400",
+    [r.status, rows.status, sup.status, agent.status, agentRows.status, cacheControl, bad],
+    [200, 200, 200, 403, 403, "no-store", [400, 400, 400, 400, 400, 400]], [200, 200, 200, 200, 403, "no-store", [400, 400, 400, 400, 400, 200]]);
+  if (!d?.setUp) {
+    console.log("note  the analyst's tenant has Fleet management's preview off (fleet_management.dummy_preview): the figures are not compared");
+    expect("fleet: the preview off answers setUp false and no figure", [d?.setUp, Object.keys(d ?? {})], [false, ["setUp"]], [false, ["setUp", "tiles"]]);
+    return;
+  }
+  const sum = (k) => (d.areas ?? []).reduce((n, a) => n + Number(a[k] ?? 0), 0);
+  const tiles = d.tiles ?? {};
+  expect("fleet: the tiles are the areas summed (Devices past due with those outside the field); Monitored three states; the four states add up to In the field",
+    [tiles.in_field === sum("inField"), tiles.past_due === sum("pastDue") + Number(d.pastDueNotInField ?? 0), tiles.monitored === tiles.ready + tiles.needs_attention + tiles.no_connection,
+      tiles.ready + tiles.needs_attention + tiles.no_connection + tiles.not_monitored === tiles.in_field],
+    [true, true, true, true], [true, true, true, false]);
+  // Installed base's In the field and Devices past due for the same filter: its list's total under the measure
+  const ibTotal = async (measure, market, model) => {
+    const q = new URLSearchParams({ overview: "installed_base", measure, limit: "1" });
+    if (market) q.set("market", market);
+    if (model) q.set("f_model", model);
+    return (await call(ANALYST, `/api/v1/reports/flash/rows?${q}`)).body?.data?.total ?? null;
+  };
+  const filters = [[null, null], ...(d.markets ?? []).map((m) => [m.code, null]), ...(d.models ?? []).map((m) => [null, m.key])];
+  const differ = [];
+  const byMarket = [];
+  for (const [market, model] of filters) {
+    const q = new URLSearchParams();
+    if (market) q.set("market", market);
+    if (model) q.set("model", model);
+    const doc = (await call(ANALYST, `/api/v1/reports/fleet-management?${q}`)).body?.data ?? {};
+    const f = doc.tiles ?? {};
+    if (market && !model) byMarket.push({ market, doc });
+    const [field, due] = [await ibTotal("in_field", market, model), await ibTotal("components_past_due", market, model)];
+    if (f.in_field !== field || f.past_due !== due) differ.push(`${market ?? "all"}/${model ?? "all"} ${f.in_field}:${field} ${f.past_due}:${due}`);
+  }
+  expect(`fleet: In the field and Devices past due equal Installed base's for ${filters.length} filters`, PROVOKE ? [...differ, "provoked"] : differ, [], []);
+  // Martin, 16 November 2026, on #285: the row without an area holds devices In the field alone (its states add up to its
+  // In the field; its past-due devices are listed with a state, in the field), the devices past due outside the field are
+  // apart (listed without a state), and the two past dues add up to Installed base's Devices past due
+  const noAreaOf = (doc) => (doc.areas ?? []).find((a) => a.areaId === null) ?? { inField: 0, ready: 0, needsAttention: 0, noConnection: 0, notMonitored: 0, pastDue: 0 };
+  const noArea = noAreaOf(d);
+  const inFieldPastDue = sum("pastDue");
+  // the list is read for the market with the fewest devices past due (at most 40 pages), so the check stays short at volume
+  const small = byMarket.filter((m) => (m.doc.tiles?.past_due ?? 0) > 0).sort((a, b) => a.doc.tiles.past_due - b.doc.tiles.past_due)[0] ?? { market: null, doc: d };
+  const smallNoArea = noAreaOf(small.doc);
+  let listed = { noAreaInField: 0, notInField: 0, pages: 0, complete: false };
+  for (let page = 1; page <= 40; page += 1) {
+    const rd = (await call(ANALYST, `/api/v1/reports/fleet-management/rows?state=past_due&page=${page}${small.market ? `&market=${small.market}` : ""}`)).body?.data;
+    for (const x of rd?.rows ?? []) {
+      if (x.state === null) listed.notInField += 1;
+      else if (x.areaId === null) listed.noAreaInField += 1;
+    }
+    listed.pages = page;
+    if (!rd || page * (rd.pageSize ?? 50) >= (rd.total ?? 0)) { listed.complete = true; break; }
+  }
+  const ibPastDue = await ibTotal("components_past_due", null, null);
+  expect("fleet: the row without an area holds devices in the field alone; in-field past due + not-in-field past due = Installed base's Devices past due",
+    [noArea.ready + noArea.needsAttention + noArea.noConnection + noArea.notMonitored === noArea.inField, noArea.pastDue <= noArea.inField,
+      listed.complete ? listed.noAreaInField === smallNoArea.pastDue && listed.notInField === small.doc.pastDueNotInField : "list longer than 40 pages",
+      typeof d.pastDueNotInField === "number" && inFieldPastDue + d.pastDueNotInField === ibPastDue, tiles.past_due === inFieldPastDue + d.pastDueNotInField],
+    [true, true, true, true, true], [true, true, true, false, true]);
+  const personal = /(email|phone|address|firstName|lastName|customerName|contactName|displayName|customerRef|customer_id|customerId)/i;
+  const keys = new Set((rows.body?.data?.rows ?? []).flatMap((x) => Object.keys(x)));
+  expect("fleet: the list holds ids, codes, states and dates, never a customer reference, name, email, phone or address",
+    [[...keys].filter((k) => personal.test(k)), JSON.stringify(rows.body?.data ?? {}).includes("@"), (rows.body?.data?.rows ?? []).length <= 50],
+    [[], false, true], [["customerId"], false, true]);
+  if ((await get(INVEST, "/api/v1/me")).status === 200) {
+    const inv = (await call(INVEST, "/api/v1/reports/fleet-management")).body?.data;
+    expect("fleet: a tenant with the preview off answers setUp false and nothing more (Pulse4all Invest)", [inv?.setUp, Object.keys(inv ?? {})], [false, ["setUp"]], [true, ["setUp", "tiles"]]);
   }
 }
 

@@ -118,9 +118,10 @@ export const FLASH_ADDRESS = {
 
 /**
  * The pages that render a Flash overview (addition 0008zw): Reports → Flash (every overview, chosen by o) and Assets →
- * Installed base (the installed base's overview alone, so its address carries no o); a link of the overview stays on its page
+ * Installed base (the installed base's overview alone, so its address carries no o); a link of the overview stays on its page.
+ * Assets → Fleet management (addition 0009t) takes Installed base's Market and Model filters with the same address keys
  */
-export type FlashPath = "/reports/flash" | "/reports/installed-base";
+export type FlashPath = "/reports/flash" | "/reports/installed-base" | "/reports/fleet-management";
 
 /** A link to a Flash page with its address keys */
 export function flashHref(path: FlashPath, query: Record<string, string>): string {

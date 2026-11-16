@@ -749,3 +749,19 @@ export function mockRecordFlashFile(me: Principal, read: FlashFileRead): void {
 }
 
 export type { FlashKey };
+
+/**
+ * The register's devices of the mock tenant now, as Installed base counts them (Assets → Fleet management's mock,
+ * addition 0009t): every device In the field and every device past due, with its market, model and past-due items; none
+ * where the register is not set up (Pulse4all Invest)
+ */
+export function mockInstalledBaseDevices(me: Principal): { id: string; serial: string; market: string; model: string; inField: boolean; pastDueItems: number }[] {
+  const today = todayOf(me);
+  if (!sourcesOf(me, today).assets?.setUp) return [];
+  return fixtureOf(me, today).installed_base
+    .map((r) => ({ id: r.id, serial: String(r.serial), market: r.market, model: String(r.model), inField: r.in_field === true, pastDueItems: Number(r.past_due_items) }))
+    .filter((d) => d.inField || d.pastDueItems > 0);
+}
+
+/** The mock's model names (Assets → Fleet management's Model filter) */
+export const MOCK_DEVICE_MODELS: readonly { key: string; name: string }[] = MOCK_MODEL_ORDER.map((key) => ({ key, name: MOCK_MODEL_NAMES[key] as string }));

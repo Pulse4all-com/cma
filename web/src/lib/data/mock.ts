@@ -76,6 +76,7 @@ import { mockDataQualityRows, mockFlashHeadline, mockFlashOverview, mockFlashPag
 import { activePartOf } from "@/lib/active";
 import { FLASH_CARD_ORDER, FLASH_OVERVIEWS } from "@/lib/flash";
 import { mockActive, mockActiveNow, mockActiveRows } from "./mock-active";
+import { mockFleetAreas, mockFleetRows } from "./mock-fleet";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -4888,6 +4889,14 @@ export const mockData: CmaData = {
       from: range.from, to: range.to, period, split, filter, ages: leadAgesOf(mockSetting(LEAD_AGES_SETTING)),
       maxDays: Number(mockSetting(LEAD_TO_ORDER_SETTING)), historyStart: mockStartDate(me), now: new Date().toISOString(),
     });
+  },
+
+  async getFleetAreas(me, filter) {
+    return mockFleetAreas(me, filter);
+  },
+
+  async getFleetRows(me, query) {
+    return mockFleetRows(me, query);
   },
 
   async getMaintenance(me, filter): Promise<MaintenanceReport> {
