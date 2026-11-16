@@ -2348,7 +2348,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 
 ## Rail terms
 
-Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures. The rail pages with no figure yet (Subscriptions, Payments, Compliance, Quality monitoring, Fulfillment, Storage, Purchase orders, Fleet management) are placeholders (Decision log, 13, 14 and 15 Nov 2026).
+Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures. The rail pages with no figure yet (Subscriptions, Payments, Compliance, Quality monitoring, Fulfillment, Storage, Purchase orders; Fleet management while its setting is off) are placeholders (Decision log, 13, 14 and 15 Nov 2026).
 
 ### Contact-center organisation
 
@@ -2451,7 +2451,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Assets (nl: Assets), a rail group label |
 | Key | Copy key `nav.assets`; group id `assets` |
-| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists and Fleet management, in that order. Fulfillment, Storage, Purchase orders and Fleet management are placeholders. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
+| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists and Fleet management, in that order. Fulfillment, Storage and Purchase orders are placeholders; Fleet management is a placeholder until its tenant setting is on. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/fulfillment`, `/reports/maintenance`, `/reports/storage`, `/reports/purchase-orders`, `/reports/pledge-lists`, `/reports/fleet-management`) and its permission (`reports.view` or `performance.team`; `pledges.view` for Pledge lists; Fleet management is last); a group with no page the person may see is absent |
 | Unit and display | A group with a box icon, after Customers. Installed base is a "now" view of its own with no As of, light by default (the filters, the tiles, In the field per model as a donut, Per market stacked per model, from the stored current take) and its breakdowns, lists and serial search loaded only when asked as address state (`panel=`, `serial=`; addition 0009f); Flash keeps its own Installed base overview, with As of and history |
@@ -2460,7 +2460,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Assets" for one device or a count of devices (Device); "Customers → Maintenance" (Maintenance moved here) |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278); 15 Nov 2026, "Fleet management is a new placeholder rail page, …" and "Definitions: Fleet management (rail page) …" (this PR) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278); 15 Nov 2026, "Fleet management is a new placeholder rail page, …" and "Definitions: Fleet management (rail page) …" (this PR); 16 Nov 2026, "Definitions: Fleet management (rail page) changed …" (addition 0009t, this PR) |
 | Used by | `flash.installed_base.*`, `maintenance.*`, `nav.fulfillment`, `nav.storage`, `nav.purchaseOrders`, `nav.fleetManagement`, `placeholders.*`; Assets → Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists, Fleet management |
 | As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash); its lists show a device's dims by the breakdown's names, the files keep the keys |
 
@@ -2602,19 +2602,57 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Field | Value |
 |---|---|
 | Term | Fleet management (nl: Vlootbeheer), a rail page |
-| Key | Copy key `nav.fleetManagement`; page key `fleet-management`; `/reports/fleet-management` |
-| Definition | The page, last in the Assets group, that will show the remote monitoring of the devices' readiness: their self-test results, their connectivity and the devices that need attention. "Readiness", "self-test" and "the devices that need attention" are pending words, not defined terms; "readiness" is not READINESS.md's soft-launch gates. |
-| Source | Not decided yet; device data reaches the CMA only through the ingest API (README, Architecture, Ingest API: the only write path from outside Google Cloud) |
-| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data |
-| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
-| Time rule | None until built |
-| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Key | Copy key `nav.fleetManagement` and section `fleet.*`; page key `fleet-management`; `/reports/fleet-management`; tenant setting `fleet_management.dummy_preview`; `GET /api/v1/reports/fleet-management` and `.../rows` |
+| Definition | The page, last in the Assets group, for the remote monitoring of the devices' readiness: the devices In the field on a map, clustered by postcode area, with a tile per Monitoring state and the list of the devices that need attention. The map is how the page shows the monitoring. "Readiness" and "self-test" are pending words, not defined terms; "readiness" is not READINESS.md's soft-launch gates. |
+| Source | Devices: the asset register (In the field is Installed base's rule, and Device past due is Installed base's rule, both called and not copied, so the figures cannot drift). Location (Postcode area) and Monitoring state: dummy data until a real source is decided, derived per device by a hash of its id (docs/open-decisions.md, Placeholder pages to build). Last contact and Self-test date are dummy too; Location source says so per row (`dummy` today). |
+| Counts / does not count | Counts the devices In the field once, in one Postcode area or under "No postcode area" (a device whose market has no area; it is not on the map). Devices past due is a tracked device with at least one item past due, as Installed base counts it, also when the device is not In the field (the row without an area carries those). Shows no customer data, no full postcode, no coordinates of a device and no address. |
+| Unit and display | Setting off: a placeholder page (`web/src/components/PlaceholderPage.tsx`) with the banner "Placeholder: this page is not built yet. Nothing here is real data." Setting on: tiles (In the field, Devices past due, Monitored, Ready, Needs attention, No connection, Not monitored), the Europe map with clusters, the side panel "Devices that need attention" (or an area's counts and devices when one is selected) and the banner and the Dummy and Voorbeeld badges. Filters Market and Model, a Monitoring state tile and an area narrow the map and the list; 50 rows a page. Colours: Ready Deep Blue, Needs attention Warning amber, No connection Muted, Not monitored `#C3CAD3`, always with the label (Pulse4all-Style 2.3, 7.5). |
+| Time rule | The tenant's today; a dummy date is relative to it |
+| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused. The dummy never reaches `cma_read`, BigQuery or NocoDB. |
 | Equivalent in the source system | None decided |
-| Not to use | "Installed base" (the Assets page of the devices in the field); "Maintenance" (the Assets page of components due) |
-| Status | Pending: which system reports the devices' readiness, how its devices link to the asset register, and the three words above (docs/open-decisions.md, Placeholder pages to build) |
-| Decided | 15 November 2026 (Martin); docs/decisions.md, 15 Nov 2026, "Fleet management is a new placeholder rail page, …" and "Definitions: Fleet management (rail page) …" (this PR) |
-| Used by | `nav.fleetManagement`, `placeholders.*`; Assets → Fleet management (the rail and its breadcrumb) |
-| As built today | Matches the definition; no read, no transaction |
+| Not to use | "Installed base" (the Assets page of the devices in the field); "Maintenance" (the Assets page of components due); "AED" in a label |
+| Status | Pending: the location and readiness sources, and Self-test and Nightly check-in as words (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 15 November 2026 (Martin); 16 November 2026 (Martin), addition 0009t: docs/decisions.md, 15 Nov 2026, "Fleet management is a new placeholder rail page, …" and "Definitions: Fleet management (rail page) is a new term, …"; 16 Nov 2026, "Fleet management shows the devices In the field on a map, …" (D1), D2, D6 and "Definitions: Fleet management (rail page) changed …" (this PR) |
+| Used by | `nav.fleetManagement`, `fleet.*`, `placeholders.*`; Assets → Fleet management |
+| As built today | `db/188`, proved by `189`: `cma.fleet_settings_of`, `cma.fleet_devices_of`, `cma.fleet_areas`, `cma.fleet_rows`; the web page `web/src/components/FleetManagement.tsx` and `FleetMap.tsx`. With the setting off the API answers `setUp: false` and nothing more and the page is the placeholder. Dev's seed turns it on for Pulse4all Subscriptions; prod stays off until set in Studio. The map's outlines are `web/src/lib/fleet-map-outlines.ts` (Natural Earth, built by `tools/fleet/build-map.mjs`, no tiles, no request leaves the app) and cover Europe only. |
+
+### Postcode area
+
+| Field | Value |
+|---|---|
+| Term | Postcode area (nl: Postcodegebied) |
+| Key | Table `cma.postcode_area`; API `areaId`, `areaCode`, `label`, `lat`, `lon` (the area's centre, never a device's); copy `fleet.*` |
+| Definition | The part of a postcode that names an area, per market: NL, BE and AT 4 digits; GB the outward code; IE the Eircode routing key; DE the 2-digit Leitregion; FR the département; SE the first 3 digits. Other markets use an area of comparable size: DK, NO and CH 4 digits, FI the first 3 of 5 digits, ES the province's 2 digits, IT the first 2 digits (the last five await Martin's confirmation). |
+| Source | `cma.postcode_area`: geography reference data without a tenant, filled by migration 188 (place name, centre, weight) |
+| Counts / does not count | Never a customer's address: the CMA stores no full postcode, no coordinates of a device and no address. A device's area is dummy today (a hash of its id, weighted by the area's weight, within the market of `cma.device.market`) |
+| Unit and display | Area code with its place name ("Postcode area"); a device whose market has no area counts under "No postcode area" and is not on the map |
+| Time rule | None |
+| Scope | Read by the application role; written by migrations only; no row-level security |
+| Equivalent in the source system | None |
+| Not to use | "Location", "address" or "zip code" for the area |
+| Status | Decided (Martin, 16 November 2026) |
+| Decided | 16 Nov 2026, "A postcode area is per market: …" (D3), "`cma.postcode_area` is geography reference data …" and "Definitions: Fleet management (rail page) changed, Postcode area, Monitoring state …" (addition 0009t, this PR) |
+| Used by | `fleet.*`; `GET /api/v1/reports/fleet-management` (`areas`) and `.../rows` (`areaId`, `areaCode`, `areaLabel`); Assets → Fleet management |
+| As built today | `db/188` creates and fills `cma.postcode_area`; `189` proves the area is the weighted hash's pick, of the device's own market, stable across reads and a register's reload |
+
+### Monitoring state
+
+| Field | Value |
+|---|---|
+| Term | Monitoring state (nl: Bewakingsstatus), with the values Ready (nl Gereed), Needs attention (nl Aandacht nodig), No connection (nl Geen verbinding) and Not monitored (nl Niet bewaakt); Monitored (nl Bewaakt) is every value but Not monitored |
+| Key | API `state` (`ready`, `needs_attention`, `no_connection`, `not_monitored`), tile counts `ready`, `needs_attention`, `no_connection`, `not_monitored`, `monitored`; address state `f_state`; copy `fleet.*` |
+| Definition | Where a device In the field stands in the remote monitoring: Ready (self-test passed today or yesterday and last contact today), Needs attention (self-test failed or tracker battery low), No connection (last contact 2 to 11 days ago) or Not monitored (no monitoring). Last contact is the date and time of the device's latest sign of life; Self-test date is the day of its latest self-test. |
+| Source | Dummy until decided: `hashtextextended(device.id::text \|\| ':fleet-state-v1', 0)` mod 1000 (0-369 Not monitored, 370-391 Needs attention, 392-423 No connection, 424-999 Ready), the reason, the self-test date and the last contact from further hash bits relative to the tenant's today. Real: a device past due (Device past due) shows the reason "Items past due" next to its dummy state |
+| Counts / does not count | Each device In the field has exactly one state. "Needs attention" here is the monitoring state of a device: not the Welcome block "Needs attention" and not the Sources health state of that name |
+| Unit and display | A tile per value with its count, the colour with the label beside it (Ready Deep Blue, Needs attention Warning amber, No connection Muted, Not monitored `#C3CAD3`); the list's rows carry state, reason, last self-test, last contact and Location source (`dummy`) |
+| Time rule | The tenant's today |
+| Scope | The devices In the field; per tenant; narrowed by Market, Model, the state tile and the area |
+| Equivalent in the source system | None decided |
+| Not to use | "Healthy", "Online" or "Offline" as the state's words; Leaf Green for Ready (on the Live board it reads as Available) |
+| Status | Pending: the readiness source, and Self-test and Nightly check-in as words (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 16 Nov 2026, "The dummy monitoring state is …" (D5), "The state colours are …" (D8) and "Definitions: Fleet management (rail page) changed, Postcode area, Monitoring state …" (addition 0009t, this PR) |
+| Used by | `fleet.*`; `GET /api/v1/reports/fleet-management` (`tiles`, `areas`) and `.../rows` (`state`, `reason`, `lastSelfTestOn`, `lastContactAt`, `locationSource`); Assets → Fleet management |
+| As built today | `db/188` (`cma.fleet_devices_of`); `189` proves the state is the hash's bucket, stable across reads and a register's reload, and that the four states add up to In the field |
 
 ## Time terms
 

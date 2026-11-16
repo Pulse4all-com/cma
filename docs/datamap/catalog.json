@@ -498,6 +498,11 @@
           "how": "Defined by migrations"
         },
         {
+          "name": "postcode_area",
+          "what": "Geography reference: postcode areas per country with place name, centre and weight; no tenant, no device and no address; the map of Assets → Fleet management places a device In the field in one of its market's areas (0009t)",
+          "how": "Filled once by migration 188; no sync; read by the application role, not exposed in cma_read"
+        },
+        {
           "name": "organisation",
           "what": "Employers (Pulse4all, Newco); is_contact_center marks the contact centers, each with a Live board of its own (0008zv)",
           "how": "Configuration; the contact-center flag is set by seed 02 or in Studio, no screen writes it"
