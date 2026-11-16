@@ -78,7 +78,15 @@
  * group. The frame fixed to the viewport (23 October 2026): on the Live board, Speed to lead and Follow-up at 1280 and
  * 1920 px the wheel and End never scroll the page, only main, down to its last line, fixed elements still sit against
  * the window, and at 1280x600 the rail with its longest group open scrolls on its own to its toggle.
- * Saves screenshots under records/ for the release note.
+ * Since 15 November 2026: the reviews history start on Configuration → Sources typed digit by digit (en-GB) and left saves
+ * exactly once (CMA-099); Team hours in Dutch (the mock's manager-nl) with a custom range at 1280 px never scrolls main
+ * sideways, its filter row and table inside their card (CMA-077); Assets' placeholder Fleet management, last in the group,
+ * for every role that sees Assets, refused to the agent, with its breadcrumb; Welcome shows no Plan B card for an agent, the manager
+ * and the admin, /api/v1/plan-b answers 404 and System health's documents stay 403 for the first two (Plan B out of the
+ * application, reversing CMA-032).
+ * Saves its screenshots to OUT_DIR. Since 15 November 2026 (backlog CMA-076) OUT_DIR defaults to a new folder in the system's
+ * temporary directory, outside the repository; evidence for a release goes to records/<increment>-<env>-<date> only when
+ * OUT_DIR names that folder (OUT_DIR=../records/0009x-dev-2026-11-16 npm run verify:layout).
  *
  * The two widths come from src/lib/desktop-fit.ts and the gate's words from src/lib/copy.ts, which Node reads with its type
  * stripping (on by default from Node 22.18; npm run verify:layout passes the flag for earlier 22s).
@@ -102,9 +110,13 @@
  *       every dialog before it is read and the role off the tiles, expects Time still open after Reports opens,
  *       breaks the line before one header's mark per page, lets the attempts list and the lost deals per period spill out
  *       of their cards, puts the frame of before back (rows that grow, main not positioned, the rail not scrolling),
+ *       expects no save of the typed history start, lets Team hours' table spill out of its card in Dutch and expects
+ *       puts the Plan B card back on the agent's Welcome,
  *       expect FAIL, exit 1
  */
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { chromium } from "playwright";
 import { copy } from "../src/lib/copy.ts";
 import { DESIGN_WIDTH_PX, FIT_FLOOR_PX } from "../src/lib/desktop-fit.ts";
@@ -116,7 +128,8 @@ async function settle(page) {
 
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const provoke = process.argv.includes("--provoke");
-const outDir = process.env.OUT_DIR ?? new URL("../../records/layout", import.meta.url).pathname;
+// a temporary folder unless OUT_DIR names one: records/ holds evidence only when asked for (backlog CMA-076)
+const outDir = process.env.OUT_DIR ?? mkdtempSync(join(tmpdir(), "cma-layout-"));
 mkdirSync(outDir, { recursive: true });
 
 const problems = [];
@@ -229,20 +242,21 @@ async function expectNavigation() {
     // monitoring needs quality.manage (14 November 2026), so the analyst sees Team with Quality monitoring alone and the
     // supervisor no Team group; Customers runs Active, Subscriptions, Payments, Courtesy, Compliance, Reviews,
     // Cancellations; since 14 November Assets runs Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge
-    // lists. The agent holds none of their permissions, so its rail and keys do not change
+    // lists, and since 15 November Fleet management last (after Pledge lists, which none of these holds). The agent holds
+    // none of their permissions, so its rail and keys do not change
     ["analyst", ["/", "/messages", "/live/newco", "/team/quality-monitoring", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
       "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
       "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
       "/reports/orders-per-person", "/reports/active", "/reports/subscriptions",
       "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
-      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], false],
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/flash", "/reports/calls", "/reports/inbound", "/reports/email", "/reports/intake", "/reports/forms",
       "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/lead-cohorts",
       "/reports/first-orders", "/reports/active", "/reports/subscriptions",
       "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
-      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], false],
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/calls",
@@ -250,7 +264,7 @@ async function expectNavigation() {
       "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts",
       "/reports/first-orders", "/reports/orders-per-person", "/reports/active", "/reports/subscriptions",
       "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
-      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], true],
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin), since 0008zw
     // between Time and Reports; the supervisor and the agent see no Team group, so their keys do not move. The planner
     // (0005) joins it.
@@ -260,14 +274,14 @@ async function expectNavigation() {
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
       "/reports/active", "/reports/subscriptions",
       "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
-      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], true],
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/team/quality-monitoring", "/roster/planner", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
       "/reports/active", "/reports/subscriptions",
       "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
-      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/campaigns"], true],
+      "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -1165,7 +1179,7 @@ async function expectCampaigns() {
     const PLACEHOLDERS = [
       ["/reports/subscriptions", "/reports/flash?o=subscriptions"], ["/reports/payments", "/reports/flash?o=payments"],
       ["/reports/compliance", null], ["/team/quality-monitoring", null], ["/reports/purchase-orders", null],
-      ["/reports/fulfillment", null], ["/reports/storage", null],
+      ["/reports/fulfillment", null], ["/reports/storage", null], ["/reports/fleet-management", null],
     ];
     // the supervisor holds performance.team but not quality.manage: Quality monitoring refuses them (14 November 2026)
     for (const subject of ["manager", "agent-one", "supervisor"]) {
@@ -2047,7 +2061,7 @@ async function expectFit() {
   // PDF viewer, in Playwright's full chromium (the headless shell has none; npx playwright install chromium installs both),
   // and compared pixel by pixel: at most 0.1 % of the pixels may differ by more than 32 in a channel. The footer names the
   // minute, so a pair that differs is made once more. On a failure both PDFs and both rendered pages go to OUT_DIR (and a
-  // later pass removes them, as records/layout is tracked). --provoke zooms the paper to 0.9 from the band
+  // later pass removes them, so a records/ folder named by OUT_DIR keeps no stale failure). --provoke zooms the paper to 0.9 from the band
   {
     const before = problems.length;
     const files = [`print-${DESIGN_WIDTH_PX}.pdf`, `print-${FIT_MID}.pdf`, `print-${DESIGN_WIDTH_PX}.png`, `print-${FIT_MID}.png`];
@@ -2687,6 +2701,8 @@ async function expectFrame() {
     ["manager", "/reports/storage", ["Welcome", "Assets", "Storage"], ["/", "/reports/installed-base", null]],
     ["manager", "/reports/payments", ["Welcome", "Customers", "Payments"], ["/", "/reports/active", null]],
     ["reader", "/reports/purchase-orders", ["Welcome", "Assets", "Purchase orders"], ["/", "/reports/installed-base", null]],
+    // Fleet management (placeholder, 15 November 2026), last in Assets
+    ["manager", "/reports/fleet-management", ["Welcome", "Assets", "Fleet management"], ["/", "/reports/installed-base", null]],
   ]) {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
@@ -2759,8 +2775,9 @@ async function expectFrame() {
   // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
   // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it; since
   // 0008zw Installed base (Assets); since 0009a Courtesy (Customers); since 13 November 2026 the five placeholder pages
-  // (Subscriptions, Payments, Compliance, Quality monitoring, Purchase orders) and on 14 November Fulfillment and Storage
-  for (const [subject, pages] of [["manager", 41], ["agent-one", 5]]) {
+  // (Subscriptions, Payments, Compliance, Quality monitoring, Purchase orders), on 14 November Fulfillment and Storage and
+  // on 15 November Fleet management
+  for (const [subject, pages] of [["manager", 42], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -3251,6 +3268,145 @@ async function expectAsOfTyping() {
   await gb.close();
 }
 
+/**
+ * CMA-099 (15 November 2026): Configuration → Sources' reviews history start saves on Enter or blur only, through the As of
+ * field's rule. Typed digit by digit as a person does (day, month, year in an en-GB browser: the field reports 0002, 0020
+ * and 0202 on the way to 2026), then left: exactly one save with the typed date. --provoke expects none
+ */
+async function expectHistoryStartTyping() {
+  const gb = await chromium.launch({ env: { ...process.env, LANG: "en_GB.UTF-8", LANGUAGE: "en_GB:en" } });
+  const ctx = await gb.newContext({ viewport: { width: 1280, height: 800 }, locale: "en-GB", extraHTTPHeaders: { "x-cma-mock-subject": "admin" } });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on("pageerror", (e) => errors.push(e.message));
+  const saves = [];
+  p.on("request", (r) => {
+    if (r.method() === "PUT" && r.url().endsWith("/api/v1/configuration/settings")) {
+      const body = r.postDataJSON?.() ?? null;
+      if (body?.key === "reviews.history_start_date") saves.push(body.value);
+    }
+  });
+  await p.goto(BASE + "/configuration/sources");
+  await settle(p);
+  // the row that names the reviews connection, and its Open link
+  const href = await p.locator("tr", { hasText: "Reviews (test)" }).locator('a[href^="/configuration/sources/"]').first().getAttribute("href").catch(() => null);
+  if (!href) {
+    problems.push("history start: no reviews connection on Configuration → Sources");
+  } else {
+    await p.goto(BASE + href);
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    const box = p.locator('[data-testid="source-history-start"]');
+    const max = await box.getAttribute("max");
+    const stored = await box.inputValue();
+    // three days back, or four when a run before this one left that date stored (a stored date saves nothing)
+    const back = (n) => new Date(Date.parse(`${max}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+    const day = back(3) === stored ? back(4) : back(3);
+    const typed = `${day.slice(8, 10)}${day.slice(5, 7)}${day.slice(0, 4)}`;
+    await box.focus();
+    await p.keyboard.type(typed, { delay: 40 });
+    await p.waitForTimeout(400);
+    const whileTyping = saves.length;
+    await box.blur();
+    await p.waitForLoadState("networkidle");
+    await p.waitForTimeout(600);
+    const want = provoke ? 0 : 1;
+    if (whileTyping !== 0) problems.push(`history start: typing ${typed} saved ${whileTyping} time(s) before the field was left (${saves.join(", ")})`);
+    if (saves.length !== want || (want === 1 && saves[0] !== day)) problems.push(`history start: typing ${typed} and leaving saved ${saves.length} time(s) (${saves.join(", ")}), expected ${want}${want ? ` with ${day}` : ""}`);
+    await p.screenshot({ path: `${outDir}/admin-history-start-typed.png` });
+    // put the fixture back: empty (the catalog default), saved once on Enter
+    const shown = p.locator('[data-testid="source-history-start"]');
+    await shown.fill("");
+    await shown.press("Enter");
+    await p.waitForLoadState("networkidle");
+    await p.waitForTimeout(400);
+  }
+  if (errors.length > 0) problems.push(`history start: page errors: ${errors.join("; ")}`);
+  await ctx.close();
+  await gb.close();
+}
+
+/**
+ * CMA-077 (15 November 2026): Team hours in Dutch with a custom range at 1280 px. The main area never scrolls sideways; the
+ * filter row and the buttons wrap inside the card, and the table ends inside its card or scrolls inside it. manager-nl is
+ * the mock's manager reading Dutch. --provoke lets the table spill out of its card again
+ */
+async function expectTeamHoursDutch() {
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager-nl" } });
+  const p = await ctx.newPage();
+  const today = new Date();
+  const from = new Date(today.getTime() - 13 * 86_400_000).toISOString().slice(0, 10);
+  const to = new Date(today.getTime() - 86_400_000).toISOString().slice(0, 10);
+  await p.goto(`${BASE}/team/hours?range=custom&from=${from}&to=${to}`);
+  await settle(p);
+  await p.waitForLoadState("networkidle");
+  const m = await p.evaluate((spill) => {
+    if (spill) {
+      const sc = document.querySelector('[data-testid="team-hours-scroll"]');
+      if (sc) sc.style.overflowX = "visible";
+      const t = sc?.querySelector("table");
+      if (t) t.style.minWidth = "1400px";
+    }
+    const main = document.querySelector("main");
+    const card = document.querySelector('[data-testid="team-hours-scroll"]')?.closest("section, .rounded-card");
+    const cardRight = card ? card.getBoundingClientRect().right : null;
+    const sc = document.querySelector('[data-testid="team-hours-scroll"]');
+    const spills = [...document.querySelectorAll('[data-testid="team-hours-person-filter"], [data-testid="team-hours-scroll"]')]
+      .some((e) => cardRight !== null && e.getBoundingClientRect().right > cardRight + 0.5);
+    return {
+      card: cardRight !== null,
+      heading: document.querySelector("h1")?.textContent?.trim() ?? "", mainX: main ? main.scrollWidth - main.clientWidth : -1,
+      pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth, spills, rows: sc?.querySelectorAll("tbody tr").length ?? 0,
+      buttonsInside: [...(card?.querySelectorAll("a, button") ?? [])].filter((e) => e.closest("table") === null).every((e) => cardRight === null || e.getBoundingClientRect().right <= cardRight + 0.5),
+    };
+  }, provoke);
+  const where = "manager-nl /team/hours (custom range)";
+  if (m.heading !== "Teamuren") problems.push(`${where}: heading "${m.heading}", expected Teamuren (Dutch)`);
+  if (m.rows === 0) problems.push(`${where}: no rows to check`);
+  if (!m.card) problems.push(`${where}: no card around the table to check against`);
+  if (m.pageX > 0) problems.push(`${where}: the page scrolls sideways by ${m.pageX}px at 1280`);
+  if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px at 1280`);
+  if (m.spills || !m.buttonsInside) problems.push(`${where}: the table or the filter row does not end inside its card at 1280`);
+  await p.screenshot({ path: `${outDir}/manager-nl-team-hours-1280.png` });
+  await ctx.close();
+}
+
+/**
+ * Plan B out of the application (Martin, 15 November 2026, reversing CMA-032): Welcome shows no Plan B card and no link
+ * to /api/v1/plan-b for an agent, the manager and the admin; the route answers 404 for all three, and System health's
+ * documents stay 403 for the first two. --provoke puts the card back on the agent's Welcome before it is read
+ */
+async function expectNoPlanB() {
+  for (const subject of ["agent-two", "manager", "admin"]) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await settle(p);
+    await p.waitForLoadState("networkidle");
+    const d = await p.evaluate((spoil) => {
+      const main = document.querySelector("main");
+      if (spoil && main) {
+        const card = document.createElement("section");
+        card.setAttribute("data-testid", "welcome-plan-b");
+        card.innerHTML = '<h2>Plan B</h2><a href="/api/v1/plan-b">Read Plan B</a>';
+        main.append(card);
+      }
+      return {
+        card: document.querySelectorAll('[data-testid="welcome-plan-b"]').length,
+        link: document.querySelectorAll('a[href*="/api/v1/plan-b"]').length,
+        words: [...(main?.querySelectorAll("h1, h2, h3, a") ?? [])].some((e) => /Plan B/.test(e.textContent ?? "")),
+      };
+    }, provoke && subject === "agent-two");
+    if (d.card > 0 || d.link > 0 || d.words) problems.push(`${subject} /: Welcome shows Plan B (${JSON.stringify(d)})`);
+    const plan = await ctx.request.get(BASE + "/api/v1/plan-b");
+    if (plan.status() !== 404) problems.push(`${subject} /api/v1/plan-b: ${plan.status()}, expected 404`);
+    const other = await ctx.request.get(BASE + "/api/v1/configuration/documents/REPORT.md");
+    if (subject !== "admin" && other.status() !== 403) problems.push(`${subject} System health's documents: ${other.status()}, expected 403`);
+    if (subject === "agent-two") await p.screenshot({ path: `${outDir}/agent-two-welcome-no-plan-b.png` });
+    await ctx.close();
+  }
+}
+
 async function expectFunnel() {
   // [subject, sees the pages, sees deals per person]
   const cases = [
@@ -3487,6 +3643,9 @@ await expectAttempts();
 await expectFunnel();
 await expectInstalledBaseModels();
 await expectAsOfTyping();
+await expectHistoryStartTyping();
+await expectTeamHoursDutch();
+await expectNoPlanB();
 await expectWelcomeOnOpen();
 await expectFiltersPending();
 await expectCampaigns();
@@ -3503,5 +3662,5 @@ await expectGate(FIT_FLOOR_PX - 1, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the grids as at ${DESIGN_WIDTH_PX}, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, without JavaScript, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, the fit at ${FIT_WIDTHS.join(", ")} on Welcome and ${FIT_PAGES.manager.length + FIT_PAGES.admin.length} pages (zoom, the ${DESIGN_WIDTH_PX} px layout, no sideways scroll, the grids as at ${DESIGN_WIDTH_PX}, the Follow-up link column, the week bar, the Invite dialog, the frame fixed, a hint next to its mark, without JavaScript, a resize, print at A4), the gate at ${FIT_FLOOR_PX - 1} with its words, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar, the reviews history start saved once after typing it digit by digit, Team hours in Dutch with a custom range inside its card, no Plan B on Welcome for 3 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems; screenshots in ${outDir})`);
 process.exit(problems.length === 0 ? 0 : 1);

@@ -8,4 +8,3 @@ docs/audits/2026-10-17-full-audit/UX_REVIEW.md
 docs/audits/2026-10-17-full-audit/FINDINGS.csv
 docs/audits/2026-10-17-full-audit/METHOD.md
 docs/OPERATIONS.md
-docs/PLAN_B.md

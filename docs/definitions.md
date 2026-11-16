@@ -2348,7 +2348,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 
 ## Rail terms
 
-Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures. The rail pages with no figure yet (Subscriptions, Payments, Compliance, Quality monitoring, Fulfillment, Storage, Purchase orders) are placeholders (Decision log, 13 and 14 Nov 2026).
+Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group and the order Time before Team, addition 0008zw, #236): the left rail's groups and the Live board's unit. These are words of the navigation, not figures. The rail pages with no figure yet (Subscriptions, Payments, Compliance, Quality monitoring, Fulfillment, Storage, Purchase orders, Fleet management) are placeholders (Decision log, 13, 14 and 15 Nov 2026).
 
 ### Contact-center organisation
 
@@ -2451,18 +2451,18 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Assets (nl: Assets), a rail group label |
 | Key | Copy key `nav.assets`; group id `assets` |
-| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Fulfillment, Maintenance, Storage, Purchase orders and Pledge lists, in that order. Fulfillment, Storage and Purchase orders are placeholders. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
+| Definition | The rail group of the pages about the devices the asset register holds: Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists and Fleet management, in that order. Fulfillment, Storage, Purchase orders and Fleet management are placeholders. The word names a group of pages, not one device: "Asset" for one unit in a label stays retired (Asset terms, Device). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
-| Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/fulfillment`, `/reports/maintenance`, `/reports/storage`, `/reports/purchase-orders`, `/reports/pledge-lists`) and its permission (`reports.view` or `performance.team`; `pledges.view` for Pledge lists, last); a group with no page the person may see is absent |
+| Counts / does not count | Every page keeps its href (`/reports/installed-base`, `/reports/fulfillment`, `/reports/maintenance`, `/reports/storage`, `/reports/purchase-orders`, `/reports/pledge-lists`, `/reports/fleet-management`) and its permission (`reports.view` or `performance.team`; `pledges.view` for Pledge lists; Fleet management is last); a group with no page the person may see is absent |
 | Unit and display | A group with a box icon, after Customers. Installed base is a "now" view of its own with no As of, light by default (the filters, the tiles, In the field per model as a donut, Per market stacked per model, from the stored current take) and its breakdowns, lists and serial search loaded only when asked as address state (`panel=`, `serial=`; addition 0009f); Flash keeps its own Installed base overview, with As of and history |
 | Time rule | None |
 | Scope | The rail of every tenant |
 | Equivalent in the source system | None |
 | Not to use | "Assets" for one device or a count of devices (Device); "Customers → Maintenance" (Maintenance moved here) |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278) |
-| Used by | `flash.installed_base.*`, `maintenance.*`, `nav.fulfillment`, `nav.storage`, `nav.purchaseOrders`, `placeholders.*`; Assets → Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists |
-| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash) |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Assets is a rail group with its own Installed base page" and "Definitions: Assets (rail group), Order kind, Renewal (order) and Reviews' All" (addition 0008zw, #236); 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278); 15 Nov 2026, "Fleet management is a new placeholder rail page, …" and "Definitions: Fleet management (rail page) …" (this PR) |
+| Used by | `flash.installed_base.*`, `maintenance.*`, `nav.fulfillment`, `nav.storage`, `nav.purchaseOrders`, `nav.fleetManagement`, `placeholders.*`; Assets → Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge lists, Fleet management |
+| As built today | Matches the definition: Installed base is `/reports/installed-base` (`web/src/components/InstalledBase.tsx` and `web/src/lib/installed-base.ts`; building blocks stay shared with Flash); its lists show a device's dims by the breakdown's names, the files keep the keys |
 
 ### Subscriptions (rail page)
 
@@ -2595,6 +2595,25 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Status | Pending: whether the register holds a reliable warehouse per device (docs/open-decisions.md, Placeholder pages to build). The page's copy uses the flag's words ("in stock", nl "op voorraad"), never "in storage", which is the pledge lists' term |
 | Decided | 14 November 2026 (Martin); docs/decisions.md, 14 Nov 2026, "Two more placeholder pages in Assets: Fulfillment and Storage, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278) |
 | Used by | `nav.storage`, `placeholders.*`; Assets → Storage (the rail and its breadcrumb) |
+| As built today | Matches the definition; no read, no transaction |
+
+### Fleet management (rail page)
+
+| Field | Value |
+|---|---|
+| Term | Fleet management (nl: Vlootbeheer), a rail page |
+| Key | Copy key `nav.fleetManagement`; page key `fleet-management`; `/reports/fleet-management` |
+| Definition | The page, last in the Assets group, that will show the remote monitoring of the devices' readiness: their self-test results, their connectivity and the devices that need attention. "Readiness", "self-test" and "the devices that need attention" are pending words, not defined terms; "readiness" is not READINESS.md's soft-launch gates. |
+| Source | Not decided yet; device data reaches the CMA only through the ingest API (README, Architecture, Ingest API: the only write path from outside Google Cloud) |
+| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data |
+| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
+| Time rule | None until built |
+| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Equivalent in the source system | None decided |
+| Not to use | "Installed base" (the Assets page of the devices in the field); "Maintenance" (the Assets page of components due) |
+| Status | Pending: which system reports the devices' readiness, how its devices link to the asset register, and the three words above (docs/open-decisions.md, Placeholder pages to build) |
+| Decided | 15 November 2026 (Martin); docs/decisions.md, 15 Nov 2026, "Fleet management is a new placeholder rail page, …" and "Definitions: Fleet management (rail page) …" (this PR) |
+| Used by | `nav.fleetManagement`, `placeholders.*`; Assets → Fleet management (the rail and its breadcrumb) |
 | As built today | Matches the definition; no read, no transaction |
 
 ## Time terms

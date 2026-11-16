@@ -18,7 +18,12 @@
 -- Live board's first missed callers), after 182_live_missed_first.sql; since addition 0009r (the customer list under a
 -- device band), after 184_active_device_bands.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
--- read skip, as any read without such a person.
+-- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
+-- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
+-- web makes no such read (Email per agent, Orders per person and Attempts per agent answer 404, Funnel leaves out its
+-- per-person section), so the read reads skip with that reason, and so does its page's set when the page has no other
+-- read (Funnel's set sums its own two), where they read FAIL with CMA06 before (backlog CMA-102 point 1, 15 November
+-- 2026; prod's pulse4all-subscriptions holds email only).
 -- The statements are the web's own (web/src/lib/data/postgres.ts), with the parameters the pages pass by default:
 -- flows over the tenant's previous calendar month, and again over the last 92 days (the longest period a report takes);
 -- stocks at now; a list's first page as the page asks it; ids, codes and milliseconds only in the output.
@@ -176,7 +181,7 @@ $$;
 -- active connection, {sys} and {ext} the acting person's first external id), the budget class, the permissions
 drop table if exists pg_temp.reads_0131;
 create temporary table reads_0131 (ord serial, part text, page text, name text, sql text, cls text, perms text[],
-                                   skip_state text, skip_why text, in_set boolean not null default true);
+                                   skip_state text, skip_why text, in_set boolean not null default true, per_person text);
 insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- polls
 ('a', 'polls', 'identity principal', $q$select u.id, u.display_name, t.name, coalesce(o.name, ''), cma.user_timezone(u.id),
@@ -379,6 +384,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'pledge lists now', 'pledge file today', $q$select * from cma.pledge_file(null)$q$, 'overview', array['pledges.view']),
 ('b', 'pledge lists now', 'pledge file stored', $q$select * from cma.pledge_file(coalesce((select max(s.valuation_date) from cma.pledge_snapshot s), date '2000-01-01'))$q$, 'overview', array['pledges.view']);
 
+-- The per-person reads: timed only while the tenant's reports.per_person holds their key (cma.assert_per_person)
+update pg_temp.reads_0131 set per_person = case name when 'email per person' then 'email' when 'first orders per person' then 'orders'
+                                                     when 'attempts per person' then 'attempts' when 'deals per person' then 'deals' end
+ where part = 'b' and name in ('email per person', 'first orders per person', 'attempts per person', 'deals per person');
 -- An as-of read of a date without a snapshot has nothing to time (CMA02): skip with that reason, never a FAIL
 update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'
 where page = 'installed base as of month end';
@@ -530,10 +539,10 @@ begin
         r_ms := r_ms || v_ms;
       end if;
       for rd in
-        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, 1 as period
+        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, 1 as period, x.per_person
         from pg_temp.reads_0131 x where x.part = 'a' and v_part in ('a', 'all')
         union all
-        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, k.period
+        select x.ord, x.page, x.name, x.sql, x.cls, x.perms, x.skip_state, x.skip_why, x.in_set, k.period, x.per_person
         from pg_temp.reads_0131 x cross join (values (1), (2)) k(period)
         where x.part = 'b' and ((k.period = 1 and v_part in ('b', 'all')) or (k.period = 2 and v_part in ('c', 'all')))
         order by 10, 1
@@ -546,6 +555,16 @@ begin
         if p is null then
           v_pages := v_pages || v_page; v_sums := v_sums || 0::numeric; v_bad := v_bad || false; v_skip := v_skip || null::text;
           v_out := v_out || false; p := cardinality(v_pages);
+        end if;
+        -- a per-person read while the tenant's reports.per_person lacks its key: the web makes no such read, nothing to time
+        if rd.per_person is not null and not cma.per_person_on(t.id, rd.per_person) then
+          r_name := r_name || (t.slug || ' ' || v_page || ': ' || rd.name); r_result := r_result || 'skip'::text;
+          r_detail := r_detail || ('reports.per_person does not hold ' || rd.per_person || ' (the web makes no such read): not timed'); r_ms := r_ms || null::numeric;
+          -- the page's set too when it has no other read (the email, orders and attempts per-person pages); Funnel's set sums its own two
+          if not exists (select 1 from pg_temp.reads_0131 y where y.page = rd.page and y.per_person is null) then
+            v_skip[p] := coalesce(v_skip[p], 'reports.per_person does not hold ' || rd.per_person);
+          end if;
+          continue;
         end if;
         if v_user is null then
           r_name := r_name || (t.slug || ' ' || v_page || ': ' || rd.name); r_result := r_result || 'skip'::text;

@@ -18,6 +18,7 @@ import {
   ageSeconds, connectionState, documentContentType, documentEntry, heartbeatRun, heartbeatState, heartbeatThresholds,
   isDocumentName, jobState, parseManifest, probeState, runDurationMs, runsByJob,
 } from "../src/lib/health.ts";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -110,6 +111,31 @@ expect("a manifest missing a field is refused", [parseManifest({ documents: [] }
 expect("an entry by name, none for a name outside this build", [documentEntry(parseManifest(good), "FINDINGS.csv")?.bytes, documentEntry(parseManifest(good), "READINESS.md"), documentEntry(parseManifest(good), "../REPORT.md"), documentEntry(null, "REPORT.md")],
   [300, null, null, null], [1200, null, null, null]);
 expect("content types: csv and markdown as downloads", [documentContentType("FINDINGS.csv"), documentContentType("REPORT.md")], ["text/csv; charset=utf-8", "text/markdown; charset=utf-8"], ["text/plain", "text/html"]);
+
+// Plan B out of the application (Martin, 15 November 2026, reversing CMA-032): no route, no Welcome card, not on System
+// health's documents list; docs/PLAN_B.md stays a repository document. The documents route is System health's alone,
+// behind tenant.configure, as an attachment. No catch-all under app/api, so the removed route answers 404
+const srcFile = (rel) => readFileSync(new URL(`../src/${rel}`, import.meta.url), "utf8");
+const configDocs = srcFile("app/api/v1/configuration/documents/[name]/route.ts");
+const docsLib = srcFile("lib/documents.ts");
+const welcome = srcFile("app/(welcome)/page.tsx");
+const documentsTxt = readFileSync(new URL("../../docs/system-health/documents.txt", import.meta.url), "utf8");
+const apiRoutes = (dir) => readdirSync(new URL(`../src/app/api/${dir}`, import.meta.url), { recursive: true }).map(String);
+const noCode = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+expect("System health's documents list without PLAN_B.md (the allowlist and documents.txt), OPERATIONS.md still on it",
+  [DOCUMENT_ALLOWLIST.includes("PLAN_B.md"), /^docs\/PLAN_B\.md$/m.test(documentsTxt), DOCUMENT_ALLOWLIST.includes("OPERATIONS.md"), /^docs\/OPERATIONS\.md$/m.test(documentsTxt)],
+  [false, false, true, true], [true, true, false, false]);
+expect("/api/v1/plan-b answers 404: no route file and no catch-all under app/api",
+  [existsSync(new URL("../src/app/api/v1/plan-b", import.meta.url)), apiRoutes("").some((f) => /\[\.\.\.|\[\[/.test(f))],
+  [false, false], [true, true]);
+expect("the documents route: tenant.configure alone, an attachment; lib/documents serves nothing inline",
+  [/requireAnyPermission\(me, \["tenant\.configure"\]\);\s*const \{ name \} = await params;\s*return documentResponse\(name\);/.test(configDocs),
+    /const entry = documentEntry\(await readManifest\(\), name\);\s*if \(!entry \|\| !isDocumentName\(name\)\) throw new ApiError\(404/.test(docsLib),
+    /"x-content-type-options": "nosniff"/.test(docsLib) && /"cache-control": "no-store"/.test(docsLib),
+    /"content-disposition": `attachment; filename=/.test(docsLib), /inline/.test(noCode(docsLib))],
+  [true, true, true, true, false], [false, false, false, false, true]);
+expect("Welcome shows no Plan B: no card, no link to /api/v1/plan-b",
+  [/PlanB/.test(welcome), /\/api\/v1\/plan-b/.test(welcome)], [false, false], [true, true]);
 
 const passed = results.filter(Boolean).length;
 const verdict = PROVOKE ? (passed === 0 ? `ALL ${results.length} PROVOKED CHECKS FAILED` : `PROVOKE FAILED: ${passed} passed`) : (passed === results.length ? `ALL ${results.length} PASS` : `${results.length - passed} FAILED`);

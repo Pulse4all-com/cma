@@ -27,6 +27,7 @@ import {
   jobLabel, readCountsText, readDurationSeconds, type PollSettingName,
 } from "@/lib/sources";
 import { settingAnchor } from "@/lib/configuration";
+import { commitDate } from "@/lib/date-field";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HeaderHint } from "../HeaderHint";
@@ -52,6 +53,9 @@ export interface EmailSettingsInWords {
 export interface ReviewSettingsValues {
   negativeMaxRating: number;
   historyStartDate: string | null;
+  /** The history start's range (CMA-099): from the tenant's earliest data (intake.start_date; null without it) to today */
+  historyMin: string | null;
+  historyMax: string;
 }
 const NEGATIVE_CHOICES = [1, 2, 3, 4] as const;
 
@@ -226,6 +230,16 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
     setFormDraft({ isCounted: f.isCounted, isPolled: f.isPolled || f.isCounted, category: f.category ?? "", leadSource: f.leadSource ?? "", market: f.market ?? "" });
     setFormProblem(null);
     setFormEdit({ form: f, opened: tick() });
+  }
+
+  /** The reviews history start (CMA-099): one save per complete date in range, on Enter or blur; a refused save may be asked again */
+  function saveHistoryStart(input: HTMLInputElement, leaving: boolean) {
+    if (!reviews) return;
+    commitDate(input, leaving, reviews.historyStartDate, reviews.historyMin, reviews.historyMax, (next, el) => {
+      void save(() => send("PUT", "/api/v1/configuration/settings", { key: "reviews.history_start_date", value: next })).then((ok) => {
+        if (!ok) delete el.dataset.applied;
+      });
+    });
   }
 
   async function saveForm() {
@@ -1168,8 +1182,13 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                 </label>
                 <label className={label}>
                   {t.historyStartDate}
-                  <input type="date" className={field} defaultValue={reviews.historyStartDate ?? ""}
-                    onBlur={(e) => { if (e.target.value !== (reviews.historyStartDate ?? "")) void save(() => send("PUT", "/api/v1/configuration/settings", { key: "reviews.history_start_date", value: e.target.value || null })); }} />
+                  {/* saved on Enter or blur only, once a complete date in range (the As of field's rule, lib/date-field, CMA-099):
+                      typing a year never saves 0002, 0020 or 0202 on the way; anything else shows the stored date again on blur.
+                      Keyed by the stored date, so the field starts again from the database's answer after a save */}
+                  <input type="date" className={field} key={reviews.historyStartDate ?? "none"} defaultValue={reviews.historyStartDate ?? ""}
+                    min={reviews.historyMin ?? undefined} max={reviews.historyMax} data-testid="source-history-start"
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); saveHistoryStart(e.currentTarget, false); } }}
+                    onBlur={(e) => saveHistoryStart(e.currentTarget, true)} />
                   <span className="font-normal text-caption text-p4a-muted">{t.hintHistoryStartDate}</span>
                 </label>
               </div>

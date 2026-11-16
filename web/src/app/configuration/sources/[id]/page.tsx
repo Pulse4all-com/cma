@@ -9,6 +9,8 @@ import { sourceSections } from "@/lib/sources";
 import { resolve } from "../../../access";
 import { ConfigurationPage, mayConfigure } from "../../gate";
 import { pickCopy, pickHints } from "@/lib/copy";
+import { isDate } from "@/lib/date-field";
+import { dateKeyInZone } from "@/lib/time";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -61,7 +63,11 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   };
   // the tenant's review settings (addition 0008ze), on a reviews connection
   const reviews = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("reviewChannels")
-    ? { negativeMaxRating: Number(valueOf("reviews.negative_max_rating") ?? 2), historyStartDate: valueOf("reviews.history_start_date") || null } : null;
+    ? { negativeMaxRating: Number(valueOf("reviews.negative_max_rating") ?? 2), historyStartDate: valueOf("reviews.history_start_date") || null,
+        // the history start's range (CMA-099; Martin, 15 November 2026): from the tenant's earliest data, intake.start_date
+        // (the mirror's start), to today in the viewer's zone
+        historyMin: isDate(valueOf("intake.start_date")) ? valueOf("intake.start_date") : null, historyMax: dateKeyInZone(new Date(), me.timeZone) }
+    : null;
   // the reasons and the record kind rules (addition 0008zb), for a connection with customer records
   const crm = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("fields");
   const kinds = crm ? await data().getRecordKinds(me) : [];
