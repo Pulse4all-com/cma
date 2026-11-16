@@ -11,7 +11,8 @@
 -- tenant over a grid of instants. Block A works on a throwaway tenant inside a subtransaction that is always rolled back,
 -- so nothing stays and the script runs in dev and in prod. Every check writes one row, ok or FAIL, and the last row is the
 -- verdict, because Cloud SQL Studio shows no notices. Run as your own IAM login after 178_job_reads.sql, dev first, then
--- prod.
+-- prod. Edited by 0009u (190): the copy of 154's refresh stores a lead's and a ticket's row without the clock fields, as
+-- the refresh does since 0009u, so E8 still proves the write-only-what-changed logic; since 0009u it runs after 190.
 -- Expected verdict, in dev and in prod: "0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL, <k> skip" (a tenant
 -- without data reads ok on empty sets); provoked (verify.provoke true at the top): every E row reads FAIL (the previous
 -- definition's first row is dropped before the comparison, or the row says the set was empty), every S and A row reads
@@ -591,7 +592,8 @@ as $$
   left join sm on f.object_type = 'subscription' and sm.connection_id = f.connection_id
 $$;
 
--- refresh_follow_up_of as 154 defined it
+-- refresh_follow_up_of as 154 defined it; since 0009u (190) a lead's and a ticket's row stored without the clock fields, as
+-- the refresh stores them since, so E8 compares the write-only-what-changed logic on the same rows (edited by 0009u)
 create or replace function pg_temp.old_refresh_follow_up_of(p_tenant_id uuid, p_wait boolean default false)
 returns jsonb
 language plpgsql
@@ -622,12 +624,12 @@ begin
   insert into cma.follow_up_item (tenant_id, kind, sort_key, item_id, market, owner_user_id, state, row)
   select p_tenant_id, 'lead', o.ordinality, o.deal_id, coalesce(nullif(o.market, ''), 'unknown'), o.owner_user_id,
          case when o.past_target then 'past_target' when o.past_target is false then 'within_target' else 'no_hours' end,
-         to_jsonb(o) - 'tenant_id' - 'ordinality'
+         to_jsonb(o) - 'tenant_id' - 'ordinality' - 'waiting_business_seconds'   -- edited by 0009u (190): the row as it is stored since
   from cma.open_leads_of(p_tenant_id) with ordinality o;
   get diagnostics v_leads = row_count;
   insert into cma.follow_up_item (tenant_id, kind, sort_key, item_id, market, owner_user_id, state, row)
   select p_tenant_id, 'ticket', o.ordinality, o.ticket_id, coalesce(nullif(o.market, ''), 'unknown'), o.owner_user_id, o.sla_state,
-         to_jsonb(o) - 'tenant_id' - 'ordinality'
+         to_jsonb(o) - 'tenant_id' - 'ordinality' - 'open_business_seconds' - 'minutes_to_breach'   -- edited by 0009u (190), as above
   from cma.open_tickets_of(p_tenant_id) with ordinality o;
   get diagnostics v_tickets = row_count;
   insert into cma.follow_up_item (tenant_id, kind, sort_key, item_id, market, owner_user_id, state, row)

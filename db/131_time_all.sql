@@ -16,7 +16,8 @@
 -- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
 -- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009r (the
 -- customer list under a device band), after 184_active_device_bands.sql; since addition 0009t (Assets -> Fleet
--- management), after 188_fleet_management.sql. Prod is the proof; dev's shared core is for
+-- management), after 188_fleet_management.sql; the follow-up's report lists (cma.open_leads() and cma.open_tickets(), whose
+-- clock fields addition 0009u derives at the read) since 16 November 2026, after any addition. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -316,6 +317,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.callbacks_kept_connected() as callbacks_connected,
    array(select s.value from cma.tenant_settings() s where s.key = 'tasks.callback_window_minutes') as callback_window,
    (select coalesce(json_agg(o order by o.ordinality), '[]'::json) from cma.callbacks_kept_per_owner(date '{today}' - 55, '{today}') with ordinality o) as callback_owners$q$, 'overview', array['performance.team']),
+-- the follow-up's report lists, every row (GET /api/v1/reports/follow-up/leads and /tickets; since addition 0009u each
+-- row's clock fields are derived at the read, so they are timed here)
+('a', 'follow-up lists', 'open leads, every row', $q$select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url from cma.open_leads() r left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id$q$, 'overview', array['reports.view', 'performance.team', 'monitoring.live']),
+('a', 'follow-up lists', 'open tickets, every row', $q$select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'ticket', r.ticket_source_id) as record_url from cma.open_tickets() r left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id$q$, 'overview', array['reports.view', 'performance.team', 'monitoring.live']),
 -- Sources, a connection's page, System health
 ('a', 'sources', 'sources', $q$select * from cma.sources()$q$, 'sources', array['tenant.configure']),
 ('a', 'sources', 'form categories', $q$select * from cma.form_categories()$q$, 'agent', array['tenant.configure']),

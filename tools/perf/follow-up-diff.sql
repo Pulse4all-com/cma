@@ -1,26 +1,33 @@
 -- =============================================================================================
 -- tools/perf/follow-up-diff.sql: what changes between two computations of the follow-up's items (after 178, addition
--- 0009o; Martin, 13 November 2026: prod's refresh writes 2,000 to 3,200 rows a minute in office hours)
+-- 0009o; Martin, 13 November 2026: prod's refresh writes 2,000 to 3,200 rows a minute in office hours; since 190, addition
+-- 0009u, 16 November 2026: the stored row without the clock fields, the readers derive them)
 -- =============================================================================================
 -- Read-only: nothing is written but two temporary tables of this session, gone when it ends. Run by Martin in his own
--- terminal, as his own IAM login, against the database to look at (after 178):
+-- terminal, as his own IAM login, against the database to look at (after 178; the stored row's shape as 190 has it, so
+-- after 190 part 6 compares like with like):
 --
 --   cd ~/cma && cma_db prod && psql "$PGCONN" -X -f tools/perf/follow-up-diff.sql > /tmp/follow-up-diff.txt 2>&1
 --
 -- The tenant by slug (psql variable tenant_slug, default pulse4all-subscriptions); the gap between the two computations
--- in seconds (gap_s, default 60, the job's minute). Each computation is the one cma.refresh_follow_up_of (178) makes,
--- the same three reads and the same columns, as the application acting as the tenant's Scheduler user under row-level
+-- in seconds (gap_s, default 60, the job's minute). Each computation is the one cma.refresh_follow_up_of makes, the
+-- same three reads and the same columns, as the application acting as the tenant's Scheduler user under row-level
 -- security, each in a transaction of its own (now() differs between them as between two runs of the job). About
--- 70 seconds with the default gap.
+-- 70 seconds with the default gap. Each item keeps the live row (row) and the row as the refresh stores it since 190
+-- (stored: a lead's without waiting_business_seconds, a ticket's without open_business_seconds and minutes_to_breach);
+-- the fingerprints and the comparisons read the stored row, as the refresh does; part 1b reads the live row, as 178's
+-- refresh stored it, for the comparison with the evidence of 16 November 2026.
 --
 -- Output: kinds, column and key names, market codes, counts and seconds only; no id, name, number or value of an item.
 --
 -- Parts
 --   0  the two computations' instants and item counts; the stored items' age (the job's last write)
 --   1  per kind: items in both, only in the first or the second, items whose fingerprint differs (what the refresh
---      deletes and inserts again) and the rows it would write for them (deleted + inserted)
+--      deletes and inserts again) and the rows it would write for them (deleted + inserted); after 190 expected near 0
+--      for lead and ticket in office hours (a state that turns, an item that moves place, a real change)
+--   1b the same for the row as 178 stored it (the clock fields in it): what the refresh wrote before 190
 --   2  per column of the item (sort_key, market, owner_user_id, state): matched items whose value differs
---   3  per key of the item's row (jsonb): matched items whose value differs as a value; items where only its text
+--   3  per key of the item's stored row (jsonb): matched items whose value differs as a value; items where only its text
 --      differs (the same jsonb value printed otherwise: a scale, a key order); the key on one side only; json null
 --      against a missing key
 --   4  items whose fingerprint differs while every column and every key is equal as a value (a representation artefact)
@@ -45,17 +52,19 @@ select (select x.user_id from cma.app_user_external_id x
         where x.tenant_id = :'tid' and x.system = 'scheduler' and x.external_id = 'scheduler') as uid \gset
 drop table if exists pg_temp.fu_a;
 drop table if exists pg_temp.fu_b;
-create temporary table fu_a (kind text, sort_key integer, item_id uuid, market text, owner_user_id uuid, state text, row jsonb, at timestamptz);
-create temporary table fu_b (like fu_a);
+create temporary table fu_a (kind text, sort_key integer, item_id uuid, market text, owner_user_id uuid, state text, row jsonb, at timestamptz,
+  stored jsonb generated always as (case kind when 'lead' then row - 'waiting_business_seconds'
+                                              when 'ticket' then row - 'open_business_seconds' - 'minutes_to_breach' else row end) stored);
+create temporary table fu_b (like fu_a including generated);
 grant select, insert on pg_temp.fu_a, pg_temp.fu_b to cma_app;
 commit;
 
--- the computation of cma.refresh_follow_up_of (178), its three reads and columns, into the first table
+-- the computation of cma.refresh_follow_up_of (178, 190), its three reads and columns, into the first table
 begin;
 set local statement_timeout = '60s';
 select set_config('app.tenant_id', :'tid', true) is not null as tenant_set, set_config('app.user_id', :'uid', true) is not null as user_set;
 set local role cma_app;
-insert into fu_a
+insert into fu_a (kind, sort_key, item_id, market, owner_user_id, state, row, at)
 select 'lead', o.ordinality::integer, o.deal_id, coalesce(nullif(o.market, ''), 'unknown'), o.owner_user_id,
        case when o.past_target then 'past_target' when o.past_target is false then 'within_target' else 'no_hours' end,
        to_jsonb(o) - 'tenant_id' - 'ordinality', now()
@@ -77,7 +86,7 @@ begin;
 set local statement_timeout = '60s';
 select set_config('app.tenant_id', :'tid', true) is not null as tenant_set, set_config('app.user_id', :'uid', true) is not null as user_set;
 set local role cma_app;
-insert into fu_b
+insert into fu_b (kind, sort_key, item_id, market, owner_user_id, state, row, at)
 select 'lead', o.ordinality::integer, o.deal_id, coalesce(nullif(o.market, ''), 'unknown'), o.owner_user_id,
        case when o.past_target then 'past_target' when o.past_target is false then 'within_target' else 'no_hours' end,
        to_jsonb(o) - 'tenant_id' - 'ordinality', now()
@@ -110,6 +119,19 @@ select coalesce(a.kind, b.kind) as kind,
        count(*) filter (where b.item_id is null) as only_first,
        count(*) filter (where a.item_id is null) as only_second,
        count(*) filter (where a.item_id is not null and b.item_id is not null
+                          and cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.stored)
+                              <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.stored)) as changed,
+       2 * count(*) filter (where a.item_id is not null and b.item_id is not null
+                          and cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.stored)
+                              <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.stored))
+         + count(*) filter (where a.item_id is null or b.item_id is null) as rows_written
+from fu_a a full join fu_b b on b.kind = a.kind and b.item_id = a.item_id
+group by 1 order by 1;
+
+\echo
+\echo ==== 1b. The same with the row as 178 stored it (the clock fields in it): what the refresh wrote before 190 ====
+select coalesce(a.kind, b.kind) as kind,
+       count(*) filter (where a.item_id is not null and b.item_id is not null
                           and cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.row)
                               <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.row)) as changed,
        2 * count(*) filter (where a.item_id is not null and b.item_id is not null
@@ -126,16 +148,16 @@ select a.kind,
        count(*) filter (where a.market is distinct from b.market) as market,
        count(*) filter (where a.owner_user_id is distinct from b.owner_user_id) as owner_user_id,
        count(*) filter (where a.state is distinct from b.state) as state,
-       count(*) filter (where a.row is distinct from b.row) as row_any_key
+       count(*) filter (where a.stored is distinct from b.stored) as row_any_key
 from fu_a a join fu_b b on b.kind = a.kind and b.item_id = a.item_id
 group by 1 order by 1;
 
 \echo
 \echo ==== 3. Per key of the row: value differs, only the text differs, on one side only, json null against missing ====
 with k as (
-  select a.kind, x.key, a.row -> x.key as va, b.row -> x.key as vb, a.row ? x.key as in_a, b.row ? x.key as in_b
+  select a.kind, x.key, a.stored -> x.key as va, b.stored -> x.key as vb, a.stored ? x.key as in_a, b.stored ? x.key as in_b
   from fu_a a join fu_b b on b.kind = a.kind and b.item_id = a.item_id
-  cross join lateral (select jsonb_object_keys(a.row) as key union select jsonb_object_keys(b.row)) x
+  cross join lateral (select jsonb_object_keys(a.stored) as key union select jsonb_object_keys(b.stored)) x
 )
 select kind, key,
        count(*) filter (where in_a and in_b and va is distinct from vb) as value_differs,
@@ -153,18 +175,18 @@ order by 1, 3 desc, 2;
 \echo ==== 4. Fingerprint differs while every column and every key is equal as a value (a representation artefact) ====
 select a.kind, count(*) as items
 from fu_a a join fu_b b on b.kind = a.kind and b.item_id = a.item_id
-where cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.row)
-      <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.row)
+where cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.stored)
+      <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.stored)
   and a.sort_key = b.sort_key and a.market = b.market and a.owner_user_id is not distinct from b.owner_user_id
-  and a.state = b.state and a.row = b.row
+  and a.state = b.state and a.stored = b.stored
 group by 1 order by 1;
 
 \echo
 \echo ==== 5. Changed tickets and leads per market (open, changed, of which only sort_key) ====
 select a.kind, a.market, count(*) as items,
-       count(*) filter (where cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.row)
-                              <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.row)) as changed,
-       count(*) filter (where a.sort_key <> b.sort_key and a.row = b.row and a.state = b.state) as only_sort_key
+       count(*) filter (where cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.stored)
+                              <> cma.follow_up_item_print(b.sort_key, b.market, b.owner_user_id, b.state, b.stored)) as changed,
+       count(*) filter (where a.sort_key <> b.sort_key and a.stored = b.stored and a.state = b.state) as only_sort_key
 from fu_a a join fu_b b on b.kind = a.kind and b.item_id = a.item_id
 where a.kind in ('ticket', 'lead')
 group by 1, 2 order by 1, 4 desc, 2;
@@ -174,10 +196,10 @@ group by 1, 2 order by 1, 4 desc, 2;
 select coalesce(s.kind, a.kind) as kind,
        count(*) filter (where s.item_id is not null and a.item_id is not null
                           and cma.follow_up_item_print(s.sort_key, s.market, s.owner_user_id, s.state, s.row)
-                              = cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.row)) as same,
+                              = cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.stored)) as same,
        count(*) filter (where s.item_id is not null and a.item_id is not null
                           and cma.follow_up_item_print(s.sort_key, s.market, s.owner_user_id, s.state, s.row)
-                              <> cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.row)) as differs,
+                              <> cma.follow_up_item_print(a.sort_key, a.market, a.owner_user_id, a.state, a.stored)) as differs,
        count(*) filter (where a.item_id is null) as only_stored,
        count(*) filter (where s.item_id is null) as only_computed
 from (select * from cma.follow_up_item where tenant_id = :'tid') s
