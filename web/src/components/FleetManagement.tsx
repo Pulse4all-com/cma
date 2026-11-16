@@ -11,7 +11,7 @@ import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { data, dataIsMock, requestDbTrace, streamed, type FleetArea, type FleetRow, type FleetRowsPage, type FleetState } from "@/lib/data";
 import {
-  FLEET_DUMMY_TILES, FLEET_PATH, FLEET_STATE_SWATCH, FLEET_TILES, fleetHref, fleetQueryOf, fleetRowsQueryOf, fleetStateOf, fleetTilesOf,
+  areaCountOf, FLEET_DUMMY_TILES, FLEET_PATH, FLEET_STATE_SWATCH, FLEET_TILES, fleetHref, fleetQueryOf, fleetRowsQueryOf, fleetStateOf, fleetTilesOf,
   type FleetAddressState, type FleetTileKey,
 } from "@/lib/fleet-management";
 import { holdsAny } from "@/lib/nav";
@@ -63,7 +63,10 @@ export async function FleetManagement({ searchParams, me, copy }: {
   }
 
   const tiles = fleetTilesOf(doc.areas);
-  const withoutArea = doc.areas.find((a) => a.areaId === null)?.inField ?? 0;
+  // the devices In the field without an area under the tile (the row without an area also counts, in past due alone, the
+  // devices past due not In the field: no location applies to them, so the note leaves them out)
+  const noAreaRow = doc.areas.find((a) => a.areaId === null);
+  const withoutArea = noAreaRow ? (st.tile === "past_due" ? Math.min(noAreaRow.pastDue, noAreaRow.inField) : areaCountOf(noAreaRow, st.tile)) : 0;
   const selected = st.areaId ? doc.areas.find((a) => a.areaId === st.areaId) ?? null : null;
   const nf = new Intl.NumberFormat(locale);
   const modelName = (key: string) => (key === "unknown" ? copy.flash.unknownModel : doc.models.find((m) => m.key === key)?.name ?? key);
@@ -141,7 +144,7 @@ function Tiles({ st, tiles, t, nf }: { st: FleetAddressState; tiles: Record<Flee
         return (
           <FleetPushButton key={k} href={fleetHref(fleetQueryOf({ ...st, tile: active ? null : k, page: 1 }))} pressed={active} testId={`fleet-tile-${k}`}
             label={active ? t.tileShowAll.replace("{tile}", label) : undefined}
-            className={`flex min-w-0 flex-col items-start rounded-card border bg-white p-4 text-left ${active ? "border-2 border-p4a-deepblue" : "border-p4a-border hover:border-p4a-deepblue"}`}>
+            className="flex min-w-0 flex-col items-start rounded-card border border-p4a-border bg-white p-4 text-left hover:border-p4a-deepblue aria-pressed:border-2 aria-pressed:border-p4a-deepblue">
             <span className="flex min-h-9 items-start gap-2 text-caption text-p4a-grey">
               {k === "ready" || k === "needs_attention" || k === "no_connection" || k === "not_monitored"
                 ? <span className={`mt-0.5 inline-block h-3 w-3 shrink-0 rounded-full ${FLEET_STATE_SWATCH[k]}`} aria-hidden="true" /> : null}
@@ -240,7 +243,7 @@ async function FleetList({ read, st, t, modelName, timeZone, locale }: {
                   {body}
                 </FleetPushButton>
               ) : (
-                <div className="flex w-full flex-col items-start px-2 py-2" data-testid="fleet-row"
+                <div role="group" className="flex w-full flex-col items-start px-2 py-2" data-testid="fleet-row"
                   aria-label={t.rowNoArea.replace("{serial}", r.serial ?? "").replace("{state}", stateText)}>
                   {body}
                 </div>

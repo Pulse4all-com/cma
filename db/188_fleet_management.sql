@@ -82,7 +82,7 @@ $$;
 -- 1. The postcode areas: geography reference data
 -- ---------------------------------------------------------------------------------------------
 -- A country's postcode area (D3): a code of at most four letters or digits (an area, never a full postcode of a country
--- whose full postcode is longer), a place name, the area's centre to two decimals for the map, a weight (how many
+-- whose full postcode is longer), a place name, the area's centre (degrees; the sample to two decimals) for the map, a weight (how many
 -- devices the dummy places there, relatively), the source of the row. Not tenant data: the same for every tenant
 create table if not exists cma.postcode_area (
   id         uuid primary key default uuidv7(),
@@ -98,8 +98,8 @@ create table if not exists cma.postcode_area (
 comment on table cma.postcode_area is 'Postcode areas per country (geography reference data, not tenant data): a code of the country''s area (NL, BE, AT 4 digits; GB the outward code; IE the Eircode routing key; DE the 2-digit Leitregion; FR the département; SE 3 digits; DK, NO, CH 4 digits; FI 3 digits; ES, IT 2 digits), a place name and the area''s centre for Fleet management''s map. Never a customer''s address. Written by migrations only';
 comment on column cma.postcode_area.area_code is 'The area''s code in the country''s own form (D3, 16 November 2026); never a full postcode';
 comment on column cma.postcode_area.label is 'A place name in the area (its largest place)';
-comment on column cma.postcode_area.lat is 'The area''s centre, latitude to two decimals (WGS84): a place, never a device';
-comment on column cma.postcode_area.lon is 'The area''s centre, longitude to two decimals (WGS84): a place, never a device';
+comment on column cma.postcode_area.lat is 'The area''s centre, latitude in degrees (WGS84; the sample to two decimals): a place, never a device';
+comment on column cma.postcode_area.lon is 'The area''s centre, longitude in degrees (WGS84; the sample to two decimals): a place, never a device';
 comment on column cma.postcode_area.weight is 'How many of a market''s devices the dummy location places in this area, relative to the market''s other areas (D4)';
 comment on column cma.postcode_area.source is 'Where the row comes from: sample-2026-11, the sample areas of brief B37';
 
@@ -180,6 +180,7 @@ on conflict (key) do update
 create or replace function cma.fleet_settings_of(p_tenant_id uuid)
 returns table (dummy_preview boolean)
 language sql stable
+rows 1
 as $$
   select coalesce(cma.setting_of(p_tenant_id, 'fleet_management.dummy_preview'), 'false') = 'true'
 $$;
@@ -239,11 +240,9 @@ as $$
                 else 'ready' end as state,
            (h.hs >> 10) & 1023 as r1, (h.hs >> 20) & 1023 as r2, (h.hs >> 30) & 1023 as r3
   ) s
-  left join lateral (
-    select a.id from a
-    where b.is_in_field and a.country = b.market
-      and mod(mod(h.ha, a.total) + a.total, a.total) >= a.lo and mod(mod(h.ha, a.total) + a.total, a.total) < a.hi
-  ) ar on true
+  -- the area: a join on the country (a hash join, about 18 areas a country), the hash's place in its weights' range
+  left join a ar on b.is_in_field and ar.country = b.market
+                and mod(mod(h.ha, ar.total) + ar.total, ar.total) >= ar.lo and mod(mod(h.ha, ar.total) + ar.total, ar.total) < ar.hi
 $$;
 
 -- One row per postcode area that holds a device In the field after the filters (a market's code or unknown, a model's
@@ -257,8 +256,11 @@ returns table (area_id uuid, country text, area_code text, label text, lat numer
 language sql stable
 rows 200
 as $$
+  -- the tenant's date once, a value (offset 0 keeps it apart): passed on as a call, the inlined functions would read it
+  -- per device and per due item (night N06)
   with d as materialized (
-    select x.* from cma.fleet_devices_of(p_tenant_id, cma.tenant_today_of(p_tenant_id)) x
+    select x.* from (select cma.tenant_today_of(p_tenant_id) as day offset 0) td
+    cross join lateral cma.fleet_devices_of(p_tenant_id, td.day) x
     where (p_market is null or x.market = p_market) and (p_model is null or x.model = p_model)
   )
   select pa.id, pa.country, pa.area_code, pa.label, pa.lat, pa.lon,
@@ -290,7 +292,8 @@ language sql stable
 rows 50
 as $$
   with d as materialized (
-    select x.* from cma.fleet_devices_of(p_tenant_id, cma.tenant_today_of(p_tenant_id)) x
+    select x.* from (select cma.tenant_today_of(p_tenant_id) as day offset 0) td
+    cross join lateral cma.fleet_devices_of(p_tenant_id, td.day) x
     where (p_market is null or x.market = p_market) and (p_model is null or x.model = p_model)
       and (p_area_id is null or x.area_id = p_area_id)
       and case p_state when 'in_field' then x.is_in_field

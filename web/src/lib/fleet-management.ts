@@ -220,6 +220,23 @@ export function clusterPoints(points: readonly FleetPoint[], radiusKm: number): 
   return out;
 }
 
+/**
+ * At the closest zoom a group cannot be split by zooming further (two areas of one city a few km apart): its areas are
+ * shown each as a marker of its own, around the group's centre, apart by the given distance (the largest marker's
+ * diameter in km), so every marker can be seen and clicked
+ */
+export function spreadClusters(groups: readonly FleetCluster[], apartKm: number): FleetCluster[] {
+  return groups.flatMap((g) => {
+    if (g.members.length <= 1) return [g];
+    const n = g.members.length;
+    const r = apartKm / (2 * Math.sin(Math.PI / n));
+    return [...g.members].sort((a, b) => (a.areaId < b.areaId ? -1 : 1)).map((m, i) => ({
+      key: m.areaId, x: g.x + r * Math.cos((2 * Math.PI * i) / n - Math.PI / 2), y: g.y + r * Math.sin((2 * Math.PI * i) / n - Math.PI / 2),
+      count: m.count, attention: m.attention, members: [m],
+    }));
+  });
+}
+
 /** A view of the map: its centre and its width and height, in km */
 export interface FleetView {
   cx: number;
