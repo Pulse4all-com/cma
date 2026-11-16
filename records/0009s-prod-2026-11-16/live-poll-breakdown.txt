@@ -1,0 +1,309 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+SET
+ tenant_set 
+------------
+ t
+(1 row)
+
+
+==== 1. Sizes ====
+              tenant_id               |         measured_at          | server_version | has_0009q | lookback_days | missed_known_calls_in_lookback | distinct_callers_in_lookback | callers_listed_now | anonymous_missed_calls | inbound_calls_today | calls_in_lookback 
+--------------------------------------+------------------------------+----------------+-----------+---------------+--------------------------------+------------------------------+--------------------+------------------------+---------------------+-------------------
+ 01a10651-16ac-758c-bc28-e0e2825eefe4 | 2026-11-16 08:48:03.36363+00 | 18.6           | t         |             3 |                             40 |                           30 |                 20 |                      0 |                   4 |               390
+(1 row)
+
+
+==== 2. Missed inbound calls of known callers per day, the last 28 days (days of the tenant; counts only) ====
+    day     | weekday | missed_known_calls | distinct_callers 
+------------+---------+--------------------+------------------
+ 2026-10-20 | Tue     |                 17 |               15
+ 2026-10-21 | Wed     |                 25 |               21
+ 2026-10-22 | Thu     |                 10 |                9
+ 2026-10-23 | Fri     |                 14 |                9
+ 2026-10-24 | Sat     |                  3 |                3
+ 2026-10-25 | Sun     |                  3 |                3
+ 2026-10-26 | Mon     |                 15 |               14
+ 2026-10-27 | Tue     |                 21 |               17
+ 2026-10-28 | Wed     |                 16 |               14
+ 2026-10-29 | Thu     |                 24 |               19
+ 2026-10-30 | Fri     |                 16 |               15
+ 2026-10-31 | Sat     |                  2 |                2
+ 2026-11-01 | Sun     |                  1 |                1
+ 2026-11-02 | Mon     |                 21 |               18
+ 2026-11-03 | Tue     |                 19 |               14
+ 2026-11-04 | Wed     |                 15 |               13
+ 2026-11-05 | Thu     |                 25 |               21
+ 2026-11-06 | Fri     |                 20 |               16
+ 2026-11-07 | Sat     |                  3 |                2
+ 2026-11-08 | Sun     |                  1 |                1
+ 2026-11-09 | Mon     |                 16 |               13
+ 2026-11-10 | Tue     |                 21 |               17
+ 2026-11-11 | Wed     |                 29 |               19
+ 2026-11-12 | Thu     |                 25 |               20
+ 2026-11-13 | Fri     |                 29 |               19
+ 2026-11-14 | Sat     |                  6 |                6
+ 2026-11-15 | Sun     |                  4 |                3
+ 2026-11-16 | Mon     |                  3 |                3
+(28 rows)
+
+CREATE TABLE
+GRANT
+CREATE TABLE
+GRANT
+INSERT 0 13
+INSERT 0 2
+ reader_set 
+------------
+ t
+(1 row)
+
+SET
+DO
+
+==== 3. The stages, in milliseconds: planned at each call, and prepared (first call; best, median, worst of calls 7 to 9) ====
+ stage |                            what                            | rows | chars | plan_first | plan_best | plan_median | plan_worst | prep_first | prep_best | prep_median | prep_worst 
+-------+------------------------------------------------------------+------+-------+------------+-----------+-------------+------------+------------+-----------+-------------+------------
+ I1    | cma.inbound_today_live_of                                  |    1 |   109 |       10.1 |       1.3 |         1.4 |        1.5 |        1.8 |       2.7 |         2.7 |        2.8
+ I2    | cma.missed_callbacks_of with a record link per caller      |   20 |  3922 |       24.5 |       6.3 |         6.5 |        8.5 |        6.5 |       2.4 |         2.5 |        2.9
+ I2n   | cma.missed_callbacks_of without the record links           |   20 |  3902 |        5.6 |       6.0 |         6.2 |        6.2 |        5.7 |       2.0 |         2.4 |        2.8
+ I3    | cma.anonymous_missed_calls_of (the lookback)               |    1 |     3 |        1.6 |       0.4 |         0.4 |        0.4 |        0.4 |       0.1 |         0.1 |        0.2
+ I4    | cma.inbound_now() (main's poll)                            |    1 | 10016 |       10.2 |       3.9 |         4.0 |        4.1 |        3.7 |       3.7 |         4.0 |        4.5
+ N1    | cma.inbound_now_first(20) (addition 0009q)                 |    1 |  9976 |       10.8 |       4.1 |         4.3 |        5.0 |        4.2 |       3.9 |         4.1 |        4.4
+ N2    | cma.inbound_now_first(null) (addition 0009q: every caller) |    1 |  9976 |        6.3 |       4.7 |         4.9 |        5.1 |        5.0 |       4.1 |         4.3 |        7.3
+ O1    | cma.outbound_now()                                         |    1 |   182 |        5.3 |       0.6 |         0.6 |        0.7 |        0.6 |       0.5 |         0.5 |        0.5
+ L1    | inbound and outbound in one statement (main's board poll)  |    1 | 10197 |        5.0 |       4.5 |         4.8 |        4.9 |        4.9 |       4.4 |         4.5 |        4.5
+ T1    | cma.team_now() alone                                       |   20 |  3070 |       20.2 |       6.2 |         6.2 |        6.3 |        6.0 |       5.7 |         5.7 |        5.8
+ T2    | Team now as the page reads it                              |   20 |  3865 |       17.0 |       8.5 |         8.6 |       10.5 |       10.7 |       7.4 |         7.4 |        9.5
+ T3    | cma.team_now() with the day's end only                     |   20 |  3570 |        7.1 |       7.1 |         7.5 |        8.8 |        8.0 |       6.9 |         6.9 |        7.6
+ T4    | cma.team_now() with the sessions only                      |   20 |  3110 |        6.9 |       7.4 |         7.5 |        7.9 |        7.6 |       6.4 |         6.6 |        6.6
+ T5    | cma.team_now() with clock-in-again only                    |   20 |  3110 |        7.4 |       6.9 |         7.8 |        8.8 |        7.2 |       6.7 |         6.9 |        7.5
+ R1    | cma.roster_today()                                         |   20 |  1100 |        7.5 |       3.4 |         3.9 |        4.6 |        4.3 |       3.3 |         3.3 |        3.5
+(15 rows)
+
+
+==== 4a. The plan of the derivation of the callers (cma.missed_callbacks_of, inlined) ====
+                                                                                                                 QUERY PLAN                                                                                                                  
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=351.53..351.54 rows=1 width=8) (actual time=1.863..1.880 rows=1.00 loops=1)
+   Buffers: shared hit=251
+   ->  Sort  (cost=351.52..351.52 rows=1 width=244) (actual time=1.857..1.875 rows=20.00 loops=1)
+         Sort Key: u2.started_at, u2.source_id
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=251
+         CTE s
+           ->  Seq Scan on tenant t  (cost=0.00..1.29 rows=1 width=8) (actual time=0.172..0.173 rows=1.00 loops=1)
+                 Filter: (id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                 Rows Removed by Filter: 1
+                 Buffers: shared hit=4
+         CTE m
+           ->  Result  (cost=10.58..30.06 rows=2 width=253) (actual time=0.337..0.644 rows=40.00 loops=1)
+                 One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                 Buffers: shared hit=91
+                 InitPlan 2
+                   ->  CTE Scan on s  (cost=0.00..0.02 rows=1 width=8) (actual time=0.173..0.175 rows=1.00 loops=1)
+                         Storage: Memory  Maximum Storage: 17kB
+                         Buffers: shared hit=4
+                 InitPlan 3
+                   ->  Seq Scan on tenant t_1  (cost=0.00..1.28 rows=1 width=4) (never executed)
+                         Filter: (id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                 ->  Nested Loop Left Join  (cost=9.27..28.74 rows=2 width=201) (actual time=0.324..0.614 rows=40.00 loops=1)
+                       Join Filter: ((mr.source_system = tc.source_system) AND (mr.code = COALESCE(NULLIF(btrim(tc.missed_reason), ''::text), 'unknown'::text)))
+                       Rows Removed by Join Filter: 65
+                       Buffers: shared hit=91
+                       ->  Nested Loop Left Join  (cost=5.07..17.29 rows=2 width=192) (actual time=0.286..0.532 rows=40.00 loops=1)
+                             Buffers: shared hit=89
+                             ->  Hash Left Join  (cost=4.94..16.56 rows=2 width=192) (actual time=0.261..0.389 rows=40.00 loops=1)
+                                   Hash Cond: ((tc.connection_id = n.connection_id) AND (tc.number_ref = n.number_ref))
+                                   Filter: COALESCE(n.is_counted, true)
+                                   Buffers: shared hit=49
+                                   ->  Index Scan using telephony_call_missed_inbound_idx on telephony_call tc  (cost=0.28..11.88 rows=3 width=167) (actual time=0.199..0.308 rows=40.00 loops=1)
+                                         Index Cond: ((tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND (started_at IS NOT NULL) AND (started_at >= (InitPlan 2).col1) AND (started_at < 'infinity'::timestamp with time zone))
+                                         Filter: ((counterpart_hash IS NOT NULL) AND ((ended_at IS NOT NULL) OR (started_at < (now() - make_interval(0, 0, 0, 0, 0, (InitPlan 3).col1, '0'::double precision)))))
+                                         Index Searches: 1
+                                         Buffers: shared hit=46
+                                   ->  Hash  (cost=3.76..3.76 rows=60 width=66) (actual time=0.050..0.052 rows=60.00 loops=1)
+                                         Buckets: 1024  Batches: 1  Memory Usage: 14kB
+                                         Buffers: shared hit=3
+                                         ->  Result  (cost=0.01..3.76 rows=60 width=66) (actual time=0.012..0.033 rows=60.00 loops=1)
+                                               One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                               Buffers: shared hit=3
+                                               ->  Seq Scan on telephony_number n  (cost=0.01..3.76 rows=60 width=66) (actual time=0.008..0.019 rows=60.00 loops=1)
+                                                     Filter: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                                     Buffers: shared hit=3
+                             ->  Result  (cost=0.14..0.35 rows=1 width=19) (actual time=0.003..0.003 rows=0.97 loops=40)
+                                   One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                   Buffers: shared hit=40
+                                   ->  Index Only Scan using market_tenant_id_code_key on market mk  (cost=0.14..0.35 rows=1 width=19) (actual time=0.002..0.002 rows=0.97 loops=40)
+                                         Index Cond: ((tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND (code = n.market))
+                                         Heap Fetches: 0
+                                         Index Searches: 39
+                                         Buffers: shared hit=40
+                       ->  Materialize  (cost=4.19..11.31 rows=3 width=113) (actual time=0.001..0.001 rows=2.62 loops=40)
+                             Storage: Memory  Maximum Storage: 17kB
+                             Buffers: shared hit=2
+                             ->  Result  (cost=4.19..11.29 rows=3 width=113) (actual time=0.016..0.017 rows=5.00 loops=1)
+                                   One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                   Buffers: shared hit=2
+                                   ->  Bitmap Heap Scan on telephony_missed_reason mr  (cost=4.19..11.29 rows=3 width=113) (actual time=0.013..0.013 rows=5.00 loops=1)
+                                         Recheck Cond: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                         Heap Blocks: exact=1
+                                         Buffers: shared hit=2
+                                         ->  Bitmap Index Scan on telephony_missed_reason_pkey  (cost=0.00..4.17 rows=3 width=0) (actual time=0.004..0.005 rows=6.00 loops=1)
+                                               Index Cond: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                               Index Searches: 1
+                                               Buffers: shared hit=1
+         CTE cb
+           ->  Nested Loop  (cost=0.47..8.51 rows=1 width=40) (actual time=0.050..0.367 rows=25.00 loops=1)
+                 Buffers: shared hit=116
+                 ->  HashAggregate  (cost=0.04..0.05 rows=1 width=32) (actual time=0.024..0.030 rows=30.00 loops=1)
+                       Group Key: m_1.counterpart_hash
+                       Batches: 1  Memory Usage: 32kB
+                       ->  CTE Scan on m m_1  (cost=0.00..0.04 rows=1 width=32) (actual time=0.001..0.007 rows=40.00 loops=1)
+                             Filter: needs_callback
+                             Storage: Memory  Maximum Storage: 25kB
+                 ->  Result  (cost=0.43..8.45 rows=1 width=8) (actual time=0.010..0.011 rows=0.83 loops=30)
+                       One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                       Buffers: shared hit=116
+                       InitPlan 5
+                         ->  CTE Scan on s s_1  (cost=0.00..0.02 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=1)
+                               Storage: Memory  Maximum Storage: 17kB
+                       ->  Index Only Scan using telephony_call_callback_idx on telephony_call o  (cost=0.43..8.45 rows=1 width=8) (actual time=0.009..0.009 rows=0.83 loops=30)
+                             Index Cond: ((tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND (counterpart_hash = m_1.counterpart_hash) AND (started_at >= (InitPlan 5).col1))
+                             Heap Fetches: 26
+                             Index Searches: 30
+                             Buffers: shared hit=116
+         CTE bz
+           ->  Result  (cost=22.04..310.92 rows=14 width=113) (actual time=0.125..0.481 rows=14.00 loops=1)
+                 One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                 Buffers: shared hit=44
+                 ->  Nested Loop  (cost=22.04..310.92 rows=14 width=113) (actual time=0.121..0.475 rows=14.00 loops=1)
+                       Buffers: shared hit=44
+                       ->  Seq Scan on market mk_1  (cost=0.00..2.17 rows=14 width=17) (actual time=0.012..0.016 rows=14.00 loops=1)
+                             Filter: (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                             Buffers: shared hit=2
+                       ->  Aggregate  (cost=22.03..22.04 rows=1 width=96) (actual time=0.032..0.032 rows=1.00 loops=14)
+                             Buffers: shared hit=42
+                             InitPlan 7
+                               ->  Result  (cost=0.01..1.09 rows=1 width=0) (actual time=0.004..0.004 rows=0.00 loops=14)
+                                     One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                     Buffers: shared hit=14
+                                     ->  Seq Scan on business_hours h2  (cost=0.01..1.09 rows=1 width=0) (actual time=0.001..0.001 rows=0.00 loops=14)
+                                           Filter: ((tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND (market = mk_1.code))
+                                           Rows Removed by Filter: 5
+                                           Buffers: shared hit=14
+                             InitPlan 8
+                               ->  CTE Scan on s s_2  (cost=0.00..0.02 rows=1 width=8) (actual time=0.000..0.001 rows=1.00 loops=1)
+                                     Storage: Memory  Maximum Storage: 17kB
+                             ->  Result  (cost=1.13..20.79 rows=5 width=24) (actual time=0.024..0.026 rows=2.00 loops=14)
+                                   One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                   Buffers: shared hit=42
+                                   ->  Nested Loop Anti Join  (cost=1.13..20.79 rows=5 width=24) (actual time=0.022..0.025 rows=2.00 loops=14)
+                                         Join Filter: (b.day = (g.ts)::date)
+                                         Buffers: shared hit=42
+                                         ->  Hash Join  (cost=1.11..18.66 rows=5 width=24) (actual time=0.017..0.019 rows=2.00 loops=14)
+                                               Hash Cond: (EXTRACT(isodow FROM (g.ts)::date) = (h.weekday)::numeric)
+                                               Buffers: shared hit=28
+                                               ->  Function Scan on generate_series g  (cost=0.02..10.02 rows=1000 width=8) (actual time=0.005..0.005 rows=4.00 loops=14)
+                                               ->  Hash  (cost=1.07..1.07 rows=1 width=18) (actual time=0.010..0.010 rows=5.00 loops=14)
+                                                     Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                                     Buffers: shared hit=28
+                                                     ->  Seq Scan on business_hours h  (cost=0.00..1.07 rows=1 width=18) (actual time=0.006..0.007 rows=5.00 loops=14)
+                                                           Filter: ((tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid) AND (market = CASE WHEN (InitPlan 7).col1 THEN mk_1.code ELSE '*'::text END))
+                                                           Buffers: shared hit=28
+                                         ->  Materialize  (cost=0.01..2.04 rows=1 width=4) (actual time=0.002..0.002 rows=0.00 loops=28)
+                                               Storage: Memory  Maximum Storage: 17kB
+                                               Buffers: shared hit=14
+                                               ->  Result  (cost=0.01..2.03 rows=1 width=4) (actual time=0.004..0.004 rows=0.00 loops=14)
+                                                     One-Time Filter: ((NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid)
+                                                     Buffers: shared hit=14
+                                                     ->  Seq Scan on business_holiday b  (cost=0.01..2.03 rows=1 width=4) (actual time=0.001..0.001 rows=0.00 loops=14)
+                                                           Filter: ((market = ANY (ARRAY[mk_1.code, '*'::text])) AND (tenant_id = '01a10651-16ac-758c-bc28-e0e2825eefe4'::uuid))
+                                                           Buffers: shared hit=14
+         ->  Hash Right Join  (cost=0.37..0.72 rows=1 width=244) (actual time=1.498..1.841 rows=20.00 loops=1)
+               Hash Cond: (z.market = u2.market)
+               Buffers: shared hit=251
+               ->  CTE Scan on bz z  (cost=0.00..0.28 rows=14 width=32) (actual time=0.127..0.488 rows=14.00 loops=1)
+                     Storage: Memory  Maximum Storage: 19kB
+                     Buffers: shared hit=44
+               ->  Hash  (cost=0.36..0.36 rows=1 width=72) (actual time=1.330..1.333 rows=20.00 loops=1)
+                     Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                     Buffers: shared hit=207
+                     ->  Subquery Scan on u2  (cost=0.17..0.36 rows=1 width=72) (actual time=1.239..1.326 rows=20.00 loops=1)
+                           Filter: (u2.needs_callback AND (NOT COALESCE((u2.cb_last > u2.started_at), false)) AND (u2.rn = 1) AND (u2.kind = 0))
+                           Rows Removed by Filter: 10
+                           Buffers: shared hit=207
+                           ->  WindowAgg  (cost=0.17..0.31 rows=3 width=310) (actual time=1.237..1.318 rows=30.00 loops=1)
+                                 Window: w2 AS (PARTITION BY u1.h)
+                                 Filter: ((row_number() OVER w1) <= 1)
+                                 Rows Removed by Filter: 35
+                                 Storage: Memory  Maximum Storage: 17kB
+                                 Buffers: shared hit=207
+                                 ->  WindowAgg  (cost=0.17..0.25 rows=3 width=134) (actual time=1.221..1.258 rows=65.00 loops=1)
+                                       Window: w1 AS (PARTITION BY u1.h ORDER BY (((u1.kind = 0) AND u1.needs_callback)), u1.started_at, u1.call_id ROWS UNBOUNDED PRECEDING)
+                                       Run Condition: (row_number() OVER w1 <= 1)
+                                       Storage: Memory  Maximum Storage: 17kB
+                                       Buffers: shared hit=207
+                                       ->  Sort  (cost=0.17..0.17 rows=3 width=126) (actual time=1.209..1.214 rows=65.00 loops=1)
+                                             Sort Key: u1.h, (((u1.kind = 0) AND u1.needs_callback)) DESC, u1.started_at DESC, u1.call_id DESC
+                                             Sort Method: quicksort  Memory: 32kB
+                                             Buffers: shared hit=207
+                                             ->  Subquery Scan on u1  (cost=0.00..0.14 rows=3 width=126) (actual time=0.344..1.132 rows=65.00 loops=1)
+                                                   Buffers: shared hit=207
+                                                   ->  Result  (cost=0.00..0.10 rows=3 width=277) (actual time=0.343..1.118 rows=65.00 loops=1)
+                                                         Buffers: shared hit=207
+                                                         ->  Append  (cost=0.00..0.07 rows=3 width=125) (actual time=0.341..1.085 rows=65.00 loops=1)
+                                                               Buffers: shared hit=207
+                                                               ->  CTE Scan on m  (cost=0.00..0.04 rows=2 width=125) (actual time=0.341..0.697 rows=40.00 loops=1)
+                                                                     Storage: Memory  Maximum Storage: 25kB
+                                                                     Buffers: shared hit=91
+                                                               ->  CTE Scan on cb  (cost=0.00..0.02 rows=1 width=125) (actual time=0.053..0.380 rows=25.00 loops=1)
+                                                                     Storage: Memory  Maximum Storage: 19kB
+                                                                     Buffers: shared hit=116
+ Planning Time: 3.194 ms
+ Execution Time: 2.234 ms
+(177 rows)
+
+
+==== 4b. The plan of cma.inbound_now() (one node: the function is not inlined; its planning and execution time) ====
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Result  (cost=0.00..0.26 rows=1 width=32) (actual time=5.589..5.590 rows=1.00 loops=1)
+   Buffers: shared hit=370
+ Planning Time: 0.038 ms
+ Execution Time: 5.616 ms
+(4 rows)
+
+
+==== 4c. The plan of Team now as the page reads it ====
+                                                                            QUERY PLAN                                                                             
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=18.31..18346.77 rows=1000 width=327) (actual time=7.481..8.847 rows=20.00 loops=1)
+   Buffers: shared hit=1295
+   InitPlan 1
+     ->  Result  (cost=0.00..0.27 rows=1 width=1) (actual time=0.059..0.060 rows=1.00 loops=1)
+           Buffers: shared hit=4
+   ->  Function Scan on team_now n  (cost=0.25..10.25 rows=1000 width=305) (actual time=7.281..7.286 rows=20.00 loops=1)
+         Buffers: shared hit=1175
+   ->  Aggregate  (cost=17.79..17.80 rows=1 width=16) (actual time=0.006..0.006 rows=1.00 loops=20)
+         Buffers: shared hit=20
+         ->  Nested Loop Anti Join  (cost=0.43..17.79 rows=1 width=8) (actual time=0.005..0.005 rows=0.25 loops=20)
+               Buffers: shared hit=20
+               ->  Index Scan using time_event_workday_idx on time_event e  (cost=0.29..11.87 rows=1 width=40) (actual time=0.001..0.001 rows=0.25 loops=20)
+                     Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (workday_id = n.workday_id))
+                     Filter: ((kind = 'start'::text) AND (kind = ANY ('{start,status,end}'::text[])))
+                     Rows Removed by Filter: 0
+                     Index Searches: 5
+                     Buffers: shared hit=15
+               ->  Index Only Scan using time_event_supersedes_idx on time_event c  (cost=0.14..5.90 rows=1 width=32) (actual time=0.001..0.001 rows=0.00 loops=5)
+                     Index Cond: ((tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid) AND (supersedes_event_id = e.id))
+                     Heap Fetches: 0
+                     Index Searches: 5
+                     Buffers: shared hit=5
+ Planning Time: 0.726 ms
+ Execution Time: 8.937 ms
+(24 rows)
+
+ROLLBACK
