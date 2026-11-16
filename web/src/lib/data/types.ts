@@ -2497,6 +2497,35 @@ export interface FleetPage {
   pastDueNotInField: number;
 }
 
+/** The page's query (cma.fleet_page, addition 0009u): the filters, a tile's state and an area; the list's first page */
+export interface FleetPageQuery extends FleetFilter {
+  state: string | null;
+  areaId: string | null;
+}
+
+/** The tiles as the database sums them (cma.fleet_page_of): Devices past due split in the field and not in the field (E3) */
+export interface FleetPageTiles {
+  in_field: number;
+  past_due: number;
+  past_due_in_field: number;
+  past_due_not_in_field: number;
+  monitored: number;
+  ready: number;
+  needs_attention: number;
+  no_connection: number;
+  not_monitored: number;
+}
+
+/**
+ * The page's one read (cma.fleet_page, addition 0009u, E6): the areas' document of cma.fleet_areas, the tiles, and the
+ * list's first page (the devices that need attention when neither a state nor an area is chosen), from one computation of
+ * the devices. setUp false while the tenant's fleet_management.dummy_preview is off, and nothing more
+ */
+export interface FleetPageDoc extends FleetPage {
+  tiles: FleetPageTiles;
+  list: FleetRowsPage;
+}
+
 /** The list's query: the filters, a tile's state, an area, the devices that need attention only, a page of 50 */
 export interface FleetRowsQuery extends FleetFilter {
   state: string | null;
@@ -4344,6 +4373,8 @@ export interface CmaData {
   getFleetAreas(me: Principal, filter: FleetFilter): Promise<FleetPage>;
   /** A page of 50 of its devices (cma.fleet_rows) */
   getFleetRows(me: Principal, query: FleetRowsQuery): Promise<FleetRowsPage>;
+  /** The page's one read (cma.fleet_page, addition 0009u): the areas, the tiles and the list's first page */
+  getFleetPage(me: Principal, query: FleetPageQuery): Promise<FleetPageDoc>;
   // ---- Pledge lists (addition 0009j): pledges.view, checked by the database on every call (CMA06)
   /** Assets → Pledge lists in one transaction (cma.pledge_page, and cma.pledge_finding_rows for an open check, at most limit rows) */
   getPledgePage(me: Principal, check: string | null, limit: number): Promise<PledgePage>;

@@ -1585,7 +1585,10 @@ async function flashChecks() {
 // past due equal Installed base's for the same filters (none, each market, each model: its list's totals under
 // measure in_field and components_past_due); the tiles the areas summed, the states adding up to In the field; the
 // list's rows without a customer reference, name, email, phone or address. A tenant with the preview off answers setUp
-// false alone (Pulse4all Invest in the mock)
+// false alone (Pulse4all Invest in the mock). Since addition 0009u (brief B38, E6) the page's route
+// (/api/v1/reports/fleet-management/page, cma.fleet_page) equals the two routes it replaces for the page (the areas'
+// document and tiles, the list's first page: the devices that need attention, or a state's or an area's), and its
+// Devices past due split (in the field + not in the field) adds up to the tile and to Installed base's Devices past due
 async function fleetChecks() {
   const r = await call(ANALYST, "/api/v1/reports/fleet-management");
   const d = r.body?.data;
@@ -1593,12 +1596,15 @@ async function fleetChecks() {
   const sup = await call(SUPERVISOR, "/api/v1/reports/fleet-management");
   const agent = await call(AGENT, "/api/v1/reports/fleet-management");
   const agentRows = await call(AGENT, "/api/v1/reports/fleet-management/rows");
+  const pageRead = await call(ANALYST, "/api/v1/reports/fleet-management/page");
+  const agentPage = await call(AGENT, "/api/v1/reports/fleet-management/page");
   const cacheControl = (await fetch(BASE + "/api/v1/reports/fleet-management", { headers: { "x-cma-mock-subject": ANALYST } })).headers.get("cache-control");
-  const bad = await Promise.all(["?market=gb", "?model=AED", "/rows?state=broken", "/rows?page=0", "/rows?area=1", "/rows?attention=yes"]
+  const bad = await Promise.all(["?market=gb", "?model=AED", "/rows?state=broken", "/rows?page=0", "/rows?area=1", "/rows?attention=yes", "/page?state=broken", "/page?area=1"]
     .map(async (q) => (await call(ANALYST, `/api/v1/reports/fleet-management${q.startsWith("/") ? q : `${q}`}`)).status));
-  expect("fleet: the analyst and the supervisor read both routes, the agent is refused, no-store; a malformed parameter is a 400",
-    [r.status, rows.status, sup.status, agent.status, agentRows.status, cacheControl, bad],
-    [200, 200, 200, 403, 403, "no-store", [400, 400, 400, 400, 400, 400]], [200, 200, 200, 200, 403, "no-store", [400, 400, 400, 400, 400, 200]]);
+  expect("fleet: the analyst and the supervisor read the routes, the agent is refused, no-store; a malformed parameter is a 400",
+    [r.status, rows.status, pageRead.status, sup.status, agent.status, agentRows.status, agentPage.status, cacheControl, bad],
+    [200, 200, 200, 200, 403, 403, 403, "no-store", [400, 400, 400, 400, 400, 400, 400, 400]],
+    [200, 200, 200, 200, 200, 403, 403, "no-store", [400, 400, 400, 400, 400, 400, 400, 200]]);
   if (!d?.setUp) {
     console.log("note  the analyst's tenant has Fleet management's preview off (fleet_management.dummy_preview): the figures are not compared");
     expect("fleet: the preview off answers setUp false and no figure", [d?.setUp, Object.keys(d ?? {})], [false, ["setUp"]], [false, ["setUp", "tiles"]]);
@@ -1656,6 +1662,35 @@ async function fleetChecks() {
       listed.complete ? listed.noAreaInField === smallNoArea.pastDue && listed.notInField === small.doc.pastDueNotInField : "list longer than 40 pages",
       typeof d.pastDueNotInField === "number" && inFieldPastDue + d.pastDueNotInField === ibPastDue, tiles.past_due === inFieldPastDue + d.pastDueNotInField],
     [true, true, true, true, true], [true, true, true, false, true]);
+  // addition 0009u (E6): the page's route against the two it replaces, for no filter, the first three markets, two states
+  // and the first area; the split of Devices past due (E3)
+  const tileKeys = ["in_field", "past_due", "monitored", "ready", "needs_attention", "no_connection", "not_monitored"];
+  const firstArea = (d.areas ?? []).find((a) => a.areaId !== null)?.areaId ?? null;
+  const pageQueries = [[], ...(d.markets ?? []).slice(0, 3).map((m) => [["market", m.code]]), [["state", "past_due"]], [["state", "ready"]],
+    ...(firstArea ? [[["area", firstArea]]] : [])];
+  const pageDiffers = [];
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  let pageNone = null;
+  for (const pairs of pageQueries) {
+    const q = new URLSearchParams(pairs);
+    const pg = (await call(ANALYST, `/api/v1/reports/fleet-management/page?${q}`)).body?.data;
+    const areasDoc = (await call(ANALYST, `/api/v1/reports/fleet-management?${new URLSearchParams(pairs.filter(([k]) => k === "market"))}`)).body?.data;
+    const rq = new URLSearchParams(pairs);
+    if (!rq.has("state") && !rq.has("area")) rq.set("attention", "1");
+    const listDoc = (await call(ANALYST, `/api/v1/reports/fleet-management/rows?${rq}`)).body?.data;
+    if (pairs.length === 0) pageNone = pg;
+    const ok = pg?.setUp === true && areasDoc?.setUp === true && listDoc?.setUp === true
+      && tileKeys.every((k) => pg.tiles?.[k] === areasDoc.tiles?.[k])
+      && pg.tiles.past_due_in_field + pg.tiles.past_due_not_in_field === pg.tiles.past_due && pg.tiles.past_due_not_in_field === areasDoc.pastDueNotInField
+      && same(pg.areas, areasDoc.areas) && same(pg.markets, areasDoc.markets) && same(pg.models, areasDoc.models) && pg.today === areasDoc.today
+      && pg.pastDueNotInField === areasDoc.pastDueNotInField && pg.list?.total === listDoc.total && same(pg.list?.rows, listDoc.rows);
+    if (!ok) pageDiffers.push(q.toString() || "none");
+  }
+  expect(`fleet: the page's one read equals the areas' and the list's routes for ${pageQueries.length} queries (E6)`,
+    PROVOKE ? [...pageDiffers, "provoked"] : pageDiffers, [], []);
+  expect("fleet: the page's Devices past due: in the field + not in the field = the tile = Installed base's (E3)",
+    [pageNone?.tiles?.past_due_in_field + pageNone?.tiles?.past_due_not_in_field === pageNone?.tiles?.past_due, pageNone?.tiles?.past_due === ibPastDue],
+    [true, true], [true, false]);
   const personal = /(email|phone|address|firstName|lastName|customerName|contactName|displayName|customerRef|customer_id|customerId)/i;
   const keys = new Set((rows.body?.data?.rows ?? []).flatMap((x) => Object.keys(x)));
   expect("fleet: the list holds ids, codes, states and dates, never a customer reference, name, email, phone or address",
@@ -1664,6 +1699,9 @@ async function fleetChecks() {
   if ((await get(INVEST, "/api/v1/me")).status === 200) {
     const inv = (await call(INVEST, "/api/v1/reports/fleet-management")).body?.data;
     expect("fleet: a tenant with the preview off answers setUp false and nothing more (Pulse4all Invest)", [inv?.setUp, Object.keys(inv ?? {})], [false, ["setUp"]], [true, ["setUp", "tiles"]]);
+    const invPage = (await call(INVEST, "/api/v1/reports/fleet-management/page")).body?.data;
+    expect("fleet: the page's read with the preview off answers setUp false and nothing more (Pulse4all Invest)", [invPage?.setUp, Object.keys(invPage ?? {})],
+      [false, ["setUp"]], [true, ["setUp", "list"]]);
   }
 }
 

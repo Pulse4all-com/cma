@@ -8,7 +8,7 @@
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import type { FleetArea, FleetFilter, FleetPage, FleetReason, FleetRow, FleetRowsPage, FleetRowsQuery, FleetState } from "@/lib/data/types";
+import type { FleetArea, FleetFilter, FleetPage, FleetPageDoc, FleetPageQuery, FleetReason, FleetRow, FleetRowsPage, FleetRowsQuery, FleetState } from "@/lib/data/types";
 import { FLEET_PAGE_ROWS, FLEET_TILES } from "@/lib/fleet-management";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import { mockInstalledBaseDevices, MOCK_DEVICE_MODELS } from "./mock-flash";
@@ -156,4 +156,25 @@ export function mockFleetRows(me: Principal, q: FleetRowsQuery): FleetRowsPage {
     };
   });
   return { setUp: true, page: q.page, pageSize: FLEET_PAGE_ROWS, total: ds.length, timeZone: me.timeZone, rows };
+}
+
+/**
+ * cma.fleet_page in mock mode (addition 0009u, E6): the areas' document, the tiles summed from it (Devices past due split
+ * in the field and not in the field) and the list's first page, the devices that need attention when neither a state nor
+ * an area is chosen; the same answers as the two reads it replaces
+ */
+export function mockFleetPage(me: Principal, q: FleetPageQuery): FleetPageDoc {
+  const doc = mockFleetAreas(me, { market: q.market, model: q.model });
+  const list = mockFleetRows(me, { market: q.market, model: q.model, state: q.state, areaId: q.areaId,
+    attentionOnly: q.state === null && q.areaId === null, page: 1 });
+  const sum = (k: keyof Omit<FleetArea, "areaId" | "country" | "areaCode" | "label" | "lat" | "lon">) => doc.areas.reduce((n, a) => n + a[k], 0);
+  const pastDueInField = sum("pastDue");
+  return {
+    ...doc, list,
+    tiles: {
+      in_field: sum("inField"), past_due: pastDueInField + doc.pastDueNotInField, past_due_in_field: pastDueInField,
+      past_due_not_in_field: doc.pastDueNotInField, monitored: sum("ready") + sum("needsAttention") + sum("noConnection"),
+      ready: sum("ready"), needs_attention: sum("needsAttention"), no_connection: sum("noConnection"), not_monitored: sum("notMonitored"),
+    },
+  };
 }

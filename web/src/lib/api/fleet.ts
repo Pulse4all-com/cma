@@ -1,5 +1,5 @@
 import { ApiError } from "@/lib/api/respond";
-import type { FleetFilter, FleetRowsQuery } from "@/lib/data";
+import type { FleetFilter, FleetPageQuery, FleetRowsQuery } from "@/lib/data";
 import { FLEET_TILES } from "@/lib/fleet-management";
 
 /**
@@ -18,11 +18,10 @@ export function fleetParams(sp: URLSearchParams): FleetFilter {
 }
 
 /**
- * The list's query: the filters, &state (a tile: in_field, past_due, monitored, ready, needs_attention, no_connection or
- * not_monitored), &area (a postcode area's id), &attention=1 (the devices that need attention only) and &page (from 1;
- * 50 a page)
+ * The page's query (addition 0009u): the filters, &state (a tile: in_field, past_due, monitored, ready, needs_attention,
+ * no_connection or not_monitored) and &area (a postcode area's id)
  */
-export function fleetRowsParams(sp: URLSearchParams): FleetRowsQuery {
+export function fleetPageParams(sp: URLSearchParams): FleetPageQuery {
   const filter = fleetParams(sp);
   const state = sp.get("state");
   if (state !== null && !(FLEET_TILES as readonly string[]).includes(state)) {
@@ -30,6 +29,15 @@ export function fleetRowsParams(sp: URLSearchParams): FleetRowsQuery {
   }
   const area = sp.get("area");
   if (area !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(area)) throw new ApiError(400, "invalid_area", "area must be a postcode area's id");
+  return { ...filter, state, areaId: area };
+}
+
+/**
+ * The list's query: the page's (the filters, &state, &area), &attention=1 (the devices that need attention only) and &page
+ * (from 1; 50 a page)
+ */
+export function fleetRowsParams(sp: URLSearchParams): FleetRowsQuery {
+  const { state, areaId: area, ...filter } = fleetPageParams(sp);
   const attention = sp.get("attention");
   if (attention !== null && attention !== "1" && attention !== "0") throw new ApiError(400, "invalid_attention", "attention must be 1 or 0");
   const pageText = sp.get("page");

@@ -298,16 +298,16 @@
   {
     "path": "/reports/fleet-management",
     "subject": "manager",
-    "tx": 3,
-    "rt": 13,
+    "tx": 2,
+    "rt": 9,
     "firstTx": 2,
     "firstRt": 9
   },
   {
     "path": "/reports/fleet-management?f_state=needs_attention&f_model=hs1",
     "subject": "manager",
-    "tx": 3,
-    "rt": 13,
+    "tx": 2,
+    "rt": 9,
     "firstTx": 2,
     "firstRt": 9
   },
@@ -322,6 +322,20 @@
     "subject": "manager",
     "tx": 2,
     "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/fleet-management/page",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/fleet-management?page=2",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13,
+    "firstTx": 2,
+    "firstRt": 9
   },
   {
     "path": "/reports/pledge-lists",
