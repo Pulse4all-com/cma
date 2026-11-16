@@ -12,49 +12,69 @@
 -- hypotheses this script tells apart: the data outgrew the memory (audit_log, CMA-112; the new tables of 0009p and
 -- 0009t), stale statistics or bloat, a growing fixed load of the minute jobs. It measures; it fixes nothing.
 --
--- Read-only. SELECTs, EXPLAIN and DO blocks that only read, in one transaction that ends in ROLLBACK; no temporary
--- table, no function created. statement_timeout 60 s per statement, lock_timeout 2 s (the script only takes the
--- shared locks a read takes). Its last section proves it: no transaction id was assigned, so nothing was written,
--- not even a row the rollback would undo. Sections 0 to 5 read as the login (pg_stat_statements shows other roles'
--- statement texts only to a login holding pg_read_all_stats); sections 6 and 7 as cma_owner (prod-load-breakdown.sql's
--- switch); section 8 runs each read as 131 does: role cma_app under row-level security, app.tenant_id the tenant,
--- app.user_id the tenant's first active person (the oldest) holding the read's permission.
+-- Read-only. SELECTs, EXPLAIN and DO blocks that only read, in one READ ONLY transaction that ends in ROLLBACK; no
+-- temporary table, no function created. statement_timeout 60 s per statement, lock_timeout 2 s. The script takes only
+-- the shared locks a read takes, held until the ROLLBACK (the size functions take one on every relation they measure):
+-- a migration or an index build waits for it, so do not run it while one runs. Its last section proves it wrote
+-- nothing: no transaction id was assigned. A read that would compute a missing stored result (cma.data_quality() for a
+-- tenant without a snapshot) fails with 25006 instead and says so in its 8a and 8b lines. Sections 0 to 5 read as the
+-- login (pg_stat_statements shows other roles' statement texts only to a login holding pg_read_all_stats); 8, 6 and 7
+-- as cma_owner (prod-load-breakdown.sql's switch); section 8 runs each read as 131 does: role cma_app under row-level
+-- security, app.tenant_id the tenant, app.user_id the tenant's first active person (the oldest) holding the read's
+-- permission.
+--
+-- Order: 0 to 5 (settings and cumulative statistics only, no table read), then 8 (the reads), then 6 and 7, which read
+-- sync_run and audit_log through shared_buffers: run before 8 they would warm sync_run (which three of the five reads
+-- read) or push the reads' tables out, and fake or hide 8a's memory signal.
 --
 -- Where and when: prod (cma-prod-pg), outside office hours (after 22:00 Amsterdam), with no other run and no agents
 -- working, so section 8's times compare with 131's evening run. As your own IAM login. Terminal, in ~/cma:
 --
 --   cd ~/cma && cma_db prod && psql "$PGCONN" -X -f tools/perf/prod-slowdown-diagnosis.sql > /tmp/prod-slowdown-diagnosis.txt 2>&1
 --
--- Expected: about 30 to 90 s on prod (sections 7 and 8 are most of it), under 3 minutes in any case: section 7 stops
--- counting after audit_budget_s (default 30 s), section 8 starts no call after budget_s seconds into the run (default
--- 120), and a statement that reaches the 60 s statement_timeout in section 7 or 8 ends its own section or read, not the
+-- Expected: about 30 to 90 s on prod (sections 7 and 8 are most of it), under 3 minutes in any case: section 8 starts
+-- no call after budget_s seconds into the run (default 100), section 7 stops counting after audit_budget_s (default
+-- 30 s), and a statement that reaches the 60 s statement_timeout in section 7 or 8 ends its own section or read, not the
 -- run. Every statement is followed by psql's "Time:" line. The file ends with section 9: wrote_nothing t, an empty list
--- of written tables, and ROLLBACK (wrote_nothing f: a read computed a stored result that was due at that moment, the
--- list names its tables, and the rollback undid it). Then, before it goes into records/ (CLAUDE.md, Git and release):
+-- of written tables, and ROLLBACK. An output that ends before section 9 stopped on an error (a timeout or a lock wait in
+-- sections 0 to 6): the transaction was rolled back all the same, and the error is the file's last lines.
+-- Then, before it goes into records/ (CLAUDE.md, Git and release), Terminal, in ~/cma, the directory named after the
+-- day of the run:
 --
---   mkdir -p records/perf-prod-2026-11-16 && cp /tmp/prod-slowdown-diagnosis.txt records/perf-prod-2026-11-16/
---   node tools/check-records.mjs --login "$(gcloud config get-value account 2>/dev/null)" records/perf-prod-2026-11-16
+--   d=records/perf-prod-$(TZ=Europe/Amsterdam date +%F) && mkdir -p $d && cp /tmp/prod-slowdown-diagnosis.txt $d/
+--   node tools/check-records.mjs --login "$(gcloud config get-value account 2>/dev/null)" $d
 --
--- Options (psql -v name=value): tenant_slug (default pulse4all-subscriptions: section 8's tenant), budget_s (default 120:
--- section 8 starts no call later in the run), nested_ms (default 10:
+-- Expected: records clean: 1 files. When it names a line: replace the operator's login by <operator> (an address that
+-- is not the login: leave its rows out, with one line saying why), and run it again. Read 8c's plans once before the
+-- commit as well: check-records catches addresses, nothing else.
+--
+-- Options (psql -v name=value): tenant_slug (default pulse4all-subscriptions, the tenant of the evidence: section 8's
+-- tenant), budget_s (default 100: section 8 starts no call later in the run), memory_mb (default 3840: the instance's
+-- memory, section 2's comparison), nested_ms (default 10:
 -- section 8c prints the plan of every statement inside the reads that takes at least this long), audit_budget_s
 -- (default 30), audit_count_max (default 5000000: section 7 counts audit_log's rows per day only when the planner
 -- estimates at most this many over the 14 days).
 --
 -- Output: settings, role and table and index names, counts, sizes (MB), milliseconds, block counts, plans. No row of a
 -- table is selected. Statement texts (section 5) are pg_stat_statements' normalised texts with every quoted literal
--- replaced by '…', every address-like word by <address>, cut to 80 characters; a role that is a person's login reads
--- <login>. Plans show conditions with the ids, dates and codes the reads pass (the tenant's and the acting person's ids
--- among them), never a row's content. Section 8c's nested plans (auto_explain, when this login may load it) print
--- without bind parameters. A prod output is never committed before node tools/check-records.mjs passes on it.
+-- replaced by '…' (a dollar-quoted body or a comment is not masked; the cut at 80 characters keeps little of either),
+-- every address-like word by <address>, cut to 80 characters; a role that is a person's login reads <login>. Plans
+-- show conditions with the ids, dates, codes and setting values the reads pass (the tenant's and the acting person's
+-- ids among them), never a row's content. Section 8c's nested plans (auto_explain, when this login may load it) print
+-- without their Query Parameters line, but a custom plan folds a function's variable values into its Index Cond and
+-- Filter lines: ids, dates and settings for these five reads. A prod output is never committed before
+-- node tools/check-records.mjs passes on it.
 --
--- One deviation from 131: 131's part a refreshes the tenant's Flash current takes before its reads (a write, rolled
--- back); this script does not, and section 8 shows the takes' age instead. The landing reads the takes the snapshot job
--- keeps (flash.current_refresh_minutes, 15 in prod), as the page does, so its read is the same statement on the same kind
--- of data.
+-- Deviations from 131, none in the statements: 131's part a refreshes the tenant's Flash current takes before its reads
+-- (a write, rolled back). None of the five reads reads a take (the landing's cma.flash_page does not; 131 times the
+-- takes in its own 'cards now' row), so the refresh's only effect on them is cache: it reads the device, subscription,
+-- customer and deal tables just before, so 131's first calls start warmer than this script's. Compare 131 (the best of
+-- two) with 8a's second call. The reads run in this script's order (131 runs team hours first, then system health,
+-- data quality, the landing and the records), and each gets four calls: none reaches the generic plan a plpgsql
+-- function's statements turn to after five calls on a connection (CLAUDE.md, Performance).
 --
 -- Reading guide, section by section (what points where)
---   0 Instance. shared_buffers against 3.75 GB (Cloud SQL's default is about a third of the memory); hours since the
+--   0 Instance. shared_buffers against the memory (3.75 GB in prod) (Cloud SQL's default is about a third of the memory); hours since the
 --     server started (a restart or an HA failover empties the cache) and since the statistics were reset (the window
 --     of every cumulative count below); the oldest open transaction and replication slot (an old xmin keeps vacuum from
 --     removing dead rows: bloat). work_mem small with temp files in 1: sorts and hashes spill to disk (plans).
@@ -63,7 +83,7 @@
 --     evictions close to its reads say the buffer pool is churning: MEMORY. The tables and indexes with the most blocks
 --     read are the ones that no longer fit; a low hit ratio on one the five reads use (sync_run, device, flash tables,
 --     data quality tables, workday tables) ties the slowdown to it. Many temp bytes: PLANS (sorts, hashes over work_mem).
---   2 Sizes. The sum of the 25 largest against shared_buffers and against 3.75 GB: when the hot ones of section 1 add
+--   2 Sizes. The sum of the 25 largest against shared_buffers and against the memory (memory_mb): when the hot ones of section 1 add
 --     up to more than shared_buffers, and the database to more than the memory, the working set no longer fits: MEMORY.
 --     audit_log's share is CMA-112's question.
 --   3 Maintenance. dead_pct above about 20 % or "vacuum due": BLOAT (more pages per row read). "analyze due" or "never
@@ -88,7 +108,7 @@
 --     with many iterations: PLANS; Planning shared read high: catalog or statistics reads. 8c (auto_explain, when the
 --     login may load it) gives the plans of the statements inside the reads' functions that take nested_ms or longer:
 --     there the slow inner statement shows by name.
---   9 Proof: wrote nothing, and the script's own run time.
+--   9 Proof: wrote nothing (no transaction id; the tables written, none), and the script's own run time.
 -- =============================================================================================
 \set ON_ERROR_STOP on
 \pset pager off
@@ -107,7 +127,11 @@
 \endif
 \if :{?budget_s}
 \else
-  \set budget_s 120
+  \set budget_s 100
+\endif
+\if :{?memory_mb}
+\else
+  \set memory_mb 3840
 \endif
 \if :{?audit_count_max}
 \else
@@ -122,7 +146,7 @@ begin
 end
 $$;
 
-begin;
+begin transaction read only;
 set local statement_timeout = '60s';
 set local lock_timeout = '2s';
 select set_config('diag.t0', clock_timestamp()::text, true) as started_at,
@@ -130,7 +154,8 @@ select set_config('diag.t0', clock_timestamp()::text, true) as started_at,
        set_config('diag.nested_ms', :'nested_ms', true) as nested_ms,
        set_config('diag.audit_budget_s', :'audit_budget_s', true) as audit_budget_s,
        set_config('diag.audit_count_max', :'audit_count_max', true) as audit_count_max,
-       set_config('diag.budget_s', :'budget_s', true) as budget_s;
+       set_config('diag.budget_s', :'budget_s', true) as budget_s,
+       set_config('diag.memory_mb', :'memory_mb', true) as memory_mb;
 
 \echo
 \echo ==== 0. Instance ====
@@ -244,7 +269,7 @@ from pg_class c join pg_namespace n on n.oid = c.relnamespace
 where c.relkind in ('r', 'm', 'p') and n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg_toast%'
 order by pg_total_relation_size(c.oid) desc
 limit 25;
-\echo -- 2b their sum, and the database, against shared_buffers and the 3.75 GB of the instance (3,840 MB)
+\echo -- 2b their sum, and the database, against shared_buffers and the memory of the instance (memory_mb)
 with top as (
   select pg_total_relation_size(c.oid) as total_b, pg_relation_size(c.oid) as heap_b, pg_indexes_size(c.oid) as idx_b
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -257,7 +282,8 @@ select round(sum(top.total_b) / 1048576.0) as top25_total_mb, round(sum(top.heap
        round((select b from sb) / 1048576.0) as shared_buffers_mb,
        round(sum(top.total_b) / (select b from sb), 2) as top25_x_shared_buffers,
        round(pg_database_size(current_database()) / (select b from sb), 2) as database_x_shared_buffers,
-       round(pg_database_size(current_database()) / (3840 * 1048576.0), 2) as database_x_memory
+       current_setting('diag.memory_mb')::numeric as memory_mb,
+       round(pg_database_size(current_database()) / (current_setting('diag.memory_mb')::numeric * 1048576.0), 2) as database_x_memory
 from top;
 
 \echo
@@ -318,7 +344,7 @@ order by pg_relation_size(s.indexrelid) desc;
 select exists (select 1 from pg_extension where extname = 'pg_stat_statements') as has_pgss,
        coalesce((select n.nspname from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname = 'pg_stat_statements'), 'public')
          as pgss_schema,
-       current_setting('pg_stat_statements.track', true) as pgss_track
+       coalesce(current_setting('pg_stat_statements.track', true), 'unknown') as pgss_track
 \gset
 \if :has_pgss
 select has_schema_privilege(:'pgss_schema', 'USAGE') as pgss_usable, pg_has_role('pg_read_all_stats', 'USAGE') as reads_all_stats
@@ -351,108 +377,16 @@ reset role;
 \endif
 
 \echo
-\echo ==== 6. Jobs (sync_run, every tenant, the last 10 days by UTC day; runs that finished) ====
+\echo ==== 8. Plans of the five reads, as 131 calls them (run before 6 and 7, which read sync_run and audit_log) ====
 set local role cma_owner;
-select t.slug as tenant, r.job, (r.started_at at time zone 'UTC')::date as day_utc, count(*) as runs,
-       count(*) filter (where r.status = 'failed') as failed,
-       round(avg(extract(epoch from r.finished_at - r.started_at) * 1000)) as mean_ms,
-       round((percentile_cont(0.95) within group (order by extract(epoch from r.finished_at - r.started_at) * 1000))::numeric) as p95_ms,
-       round(max(extract(epoch from r.finished_at - r.started_at) * 1000)) as max_ms,
-       round(sum(extract(epoch from r.finished_at - r.started_at)) / 60, 1) as busy_min
-from cma.tenant t
-join lateral (select s.job, s.started_at, s.finished_at, s.status from cma.sync_run s
-              where s.tenant_id = t.id and s.started_at >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC' - interval '9 days'
-                and s.finished_at is not null) r on true
-group by 1, 2, 3 order by 1, 2, 3;
-\echo -- 6b sync_run itself (every system health read scans its last 30 days)
-select c.reltuples::bigint as est_rows, round(pg_relation_size(c.oid) / 1048576.0, 1) as heap_mb, round(pg_indexes_size(c.oid) / 1048576.0, 1) as indexes_mb,
-       (select count(*) from cma.sync_run s where s.started_at > now() - interval '30 days') as runs_last_30_days
-from pg_class c where c.oid = 'cma.sync_run'::regclass;
-
-\echo
-\echo ==== 7. audit_log ====
-select c.reltuples::bigint as est_rows,
-       round(pg_relation_size(c.oid) / 1048576.0, 1) as heap_mb,
-       round(coalesce(pg_total_relation_size(nullif(c.reltoastrelid, 0)), 0) / 1048576.0, 1) as toast_mb,
-       round(pg_indexes_size(c.oid) / 1048576.0, 1) as indexes_mb,
-       round(pg_total_relation_size(c.oid) / 1048576.0, 1) as total_mb,
-       round(pg_total_relation_size(c.oid)::numeric / nullif(c.reltuples, 0)) as bytes_per_row_with_indexes,
-       round(100.0 * pg_total_relation_size(c.oid) / pg_database_size(current_database()), 1) as pct_of_database
-from pg_class c where c.oid = 'cma.audit_log'::regclass;
-\echo -- 7a rows per UTC day, the last 14 days, per tenant: the estimate of the planner always; counted on audit_log_time_idx (tenant_id, changed_at) when the estimate is at most audit_count_max over the 14 days and audit_budget_s allows
 do $$
 declare
-  t record; d integer; j json; v_est numeric; v_est14 numeric; v_n bigint; v_from timestamptz; v_to timestamptz;
-  v_t0 timestamptz := clock_timestamp();
-  v_budget numeric := current_setting('diag.audit_budget_s')::numeric;
-  v_max numeric := current_setting('diag.audit_count_max')::numeric;
-  v_bpr numeric := (select pg_total_relation_size(c.oid)::numeric / nullif(c.reltuples, 0) from pg_class c where c.oid = 'cma.audit_log'::regclass);
-  v_day0 timestamptz := date_trunc('day', now() at time zone 'UTC') at time zone 'UTC';
-  v_count boolean; r record;
+  v_tenant uuid; v_today date; v_from date; v_to date; v_io text;
 begin
-  -- a statement_timeout (60 s) ends this section, not the script: query_canceled is caught below
-  begin
-  if not exists (select 1 from pg_indexes where schemaname = 'cma' and tablename = 'audit_log' and indexname = 'audit_log_time_idx') then
-    raise notice 'audit_log_time_idx does not exist: rows per day are not counted (a count would read the whole table); the estimate above stands';
-    return;
-  end if;
-  raise notice 'tenant | day (UTC) | estimated rows | counted rows | MB a day (counted, else estimated, x bytes per row)';
-  for t in select x.id, x.slug from cma.tenant x order by x.slug collate "C" loop
-    execute format('explain (format json) select 1 from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L', t.id, v_day0 - interval '13 days') into j;
-    v_est14 := (j -> 0 -> 'Plan' ->> 'Plan Rows')::numeric;
-    v_count := v_est14 <= v_max;
-    if not v_count then
-      raise notice '% | 14 days | % | not counted: the estimate is above audit_count_max (%), a count would read that many index entries and their heap pages', t.slug, v_est14, v_max;
-    end if;
-    for d in reverse 13 .. 0 loop
-      v_from := v_day0 - make_interval(days => d);
-      v_to := v_from + interval '1 day';
-      execute format('explain (format json) select 1 from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L and a.changed_at < %L', t.id, v_from, v_to) into j;
-      v_est := (j -> 0 -> 'Plan' ->> 'Plan Rows')::numeric;
-      v_n := null;
-      if v_count and extract(epoch from clock_timestamp() - v_t0) < v_budget then
-        execute format('select count(*) from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L and a.changed_at < %L', t.id, v_from, v_to) into v_n;
-      end if;
-      raise notice '% | % | % | % | %', t.slug, (v_from at time zone 'UTC')::date, v_est,
-        coalesce(v_n::text, case when v_count then 'not counted: budget' else '-' end),
-        round(coalesce(v_n, v_est) * coalesce(v_bpr, 0) / 1048576.0, 1);
-    end loop;
-  end loop;
-  -- which tables fed it over the last 24 hours (table_name is not in the time index: each row's heap page is read)
-  raise notice '-- 7b rows over the last 24 hours per tenant and table (counted when the estimate is at most audit_count_max / 14 and the budget allows)';
-  for t in select x.id, x.slug from cma.tenant x order by x.slug collate "C" loop
-    execute format('explain (format json) select 1 from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L', t.id, now() - interval '24 hours') into j;
-    v_est := (j -> 0 -> 'Plan' ->> 'Plan Rows')::numeric;
-    if v_est > v_max / 14 then
-      raise notice '% | last 24 hours | estimated % rows: not counted per table (above audit_count_max / 14)', t.slug, v_est;
-      continue;
-    end if;
-    if extract(epoch from clock_timestamp() - v_t0) >= v_budget then
-      raise notice '% | last 24 hours | not counted: budget', t.slug;
-      continue;
-    end if;
-    for r in execute format('select a.table_name, count(*) as n from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L
-                             group by 1 order by 2 desc, 1 limit 15', t.id, now() - interval '24 hours') loop
-      raise notice '% | % | % rows', t.slug, r.table_name, r.n;
-    end loop;
-  end loop;
-  exception when query_canceled then
-    raise notice 'section 7 stopped by statement_timeout after % s: the rows above are complete, the rest is not counted', round(extract(epoch from clock_timestamp() - v_t0), 1);
-  end;
-  raise notice 'section 7: % s', round(extract(epoch from clock_timestamp() - v_t0), 1);
-end
-$$;
-
-\echo
-\echo ==== 8. Plans of the five reads, as 131 calls them ====
-do $$
-declare
-  v_tenant uuid; v_today date; v_from date; v_to date; v_io text; v_flash text;
-begin
-  select x.id into v_tenant from cma.tenant x where x.slug = current_setting('diag.tenant_slug');
+  select x.id into v_tenant from cma.tenant x where x.slug = current_setting('diag.tenant_slug') and x.status = 'active';
   if v_tenant is null then
     perform set_config('diag.reads', '[]', true);
-    raise notice 'no tenant with the slug %: section 8 measures nothing', current_setting('diag.tenant_slug');
+    raise notice 'no active tenant with the slug %: section 8 measures nothing', current_setting('diag.tenant_slug');
     return;
   end if;
   perform set_config('app.tenant_id', v_tenant::text, true);
@@ -470,15 +404,13 @@ begin
   exception when others then
     v_io := current_setting('track_io_timing') || ' (this login may not set it: ' || sqlstate || ')';
   end;
-  select coalesce(string_agg(c.overview || ' ' || round(extract(epoch from now() - c.at) / 60) || ' min', ', ' order by c.overview), 'none')
-    into v_flash
-  from (select k.overview, max(k.computed_at) as at from cma.flash_current_take k where k.tenant_id = v_tenant group by k.overview) c;
   raise notice 'tenant % (%); today %, previous month % to %; track_io_timing %',
     current_setting('diag.tenant_slug'), v_tenant, v_today, v_from, v_to, v_io;
-  -- the stored results the reads read, and their age (the minute jobs keep them; a missing or due one is computed by the read: section 9 then lists its writes)
-  raise notice 'stored results, age in minutes: data quality %; Flash current takes %',
+  -- the stored result data quality's read reads, and its age (the minute job keeps it; a missing one makes the read
+  -- compute, which this read-only transaction refuses with 25006)
+  raise notice 'data quality stored result, age in minutes: %',
     coalesce((select round(extract(epoch from now() - d.computed_at) / 60) || ' (computed in ' || d.duration_ms || ' ms)'
-              from cma.data_quality_snapshot d where d.tenant_id = v_tenant), 'none'), v_flash;
+              from cma.data_quality_snapshot d where d.tenant_id = v_tenant), 'none: the data quality read will fail with 25006');
   -- the five reads: 131's statements (db/131_time_all.sql, part a) with its parameters, and the permissions it picks the acting person by
   perform set_config('diag.reads', json_build_array(
     json_build_object('name', 'data quality: data quality checks', 'perms', array['reports.view', 'tenant.configure'],
@@ -599,6 +531,9 @@ begin
   end;
   if v_ok and clock_timestamp() > v_stop then
     raise notice '8c skipped: the run is past budget_s (% s)', current_setting('diag.budget_s');
+    perform set_config('role', 'none', true);
+    perform set_config('auto_explain.log_min_duration', '-1', true);
+    perform set_config('role', 'cma_owner', true);
   elsif not v_ok then
     raise notice '8c auto_explain is not available to this login (%): no nested plans; section 5 names the slow statements inside the functions where pg_stat_statements.track is all (here %)',
       v_why, coalesce(current_setting('pg_stat_statements.track', true), 'unknown');
@@ -630,10 +565,105 @@ from generate_series(1, json_array_length(current_setting('diag.reads')::json)) 
 \gexec
 
 \echo
+\echo ==== 6. Jobs (sync_run, every tenant, the last 10 days by UTC day; runs that finished) ====
+set local role cma_owner;
+select t.slug as tenant, r.job, (r.started_at at time zone 'UTC')::date as day_utc, count(*) as runs,
+       count(*) filter (where r.status = 'failed') as failed,
+       round(avg(extract(epoch from r.finished_at - r.started_at) * 1000)) as mean_ms,
+       round((percentile_cont(0.95) within group (order by extract(epoch from r.finished_at - r.started_at) * 1000))::numeric) as p95_ms,
+       round(max(extract(epoch from r.finished_at - r.started_at) * 1000)) as max_ms,
+       round(sum(extract(epoch from r.finished_at - r.started_at)) / 60, 1) as busy_min
+from cma.tenant t
+join lateral (select s.job, s.started_at, s.finished_at, s.status from cma.sync_run s
+              where s.tenant_id = t.id and s.started_at >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC' - interval '9 days'
+                and s.finished_at is not null) r on true
+group by 1, 2, 3 order by 1, 2, 3;
+\echo -- 6b sync_run itself (every system health read scans its last 30 days)
+select c.reltuples::bigint as est_rows, round(pg_relation_size(c.oid) / 1048576.0, 1) as heap_mb, round(pg_indexes_size(c.oid) / 1048576.0, 1) as indexes_mb,
+       (select sum(n) from cma.tenant t
+         cross join lateral (select count(*) as n from cma.sync_run s where s.tenant_id = t.id and s.started_at > now() - interval '30 days') x)
+         as runs_last_30_days
+from pg_class c where c.oid = 'cma.sync_run'::regclass;
+
+\echo
+\echo ==== 7. audit_log ====
+select c.reltuples::bigint as est_rows,
+       round(pg_relation_size(c.oid) / 1048576.0, 1) as heap_mb,
+       round(coalesce(pg_total_relation_size(nullif(c.reltoastrelid, 0)), 0) / 1048576.0, 1) as toast_mb,
+       round(pg_indexes_size(c.oid) / 1048576.0, 1) as indexes_mb,
+       round(pg_total_relation_size(c.oid) / 1048576.0, 1) as total_mb,
+       round(pg_total_relation_size(c.oid)::numeric / nullif(c.reltuples, 0)) as bytes_per_row_with_indexes,
+       round(100.0 * pg_total_relation_size(c.oid) / pg_database_size(current_database()), 1) as pct_of_database
+from pg_class c where c.oid = 'cma.audit_log'::regclass;
+\echo -- 7a rows per UTC day, the last 14 days, per tenant: the estimate of the planner always; counted on audit_log_time_idx (tenant_id, changed_at) when the estimate is at most audit_count_max over the 14 days and audit_budget_s allows
+do $$
+declare
+  t record; d integer; j json; v_est numeric; v_est14 numeric; v_n bigint; v_from timestamptz; v_to timestamptz;
+  v_t0 timestamptz := clock_timestamp();
+  v_budget numeric := current_setting('diag.audit_budget_s')::numeric;
+  v_max numeric := current_setting('diag.audit_count_max')::numeric;
+  v_bpr numeric := (select pg_total_relation_size(c.oid)::numeric / nullif(c.reltuples, 0) from pg_class c where c.oid = 'cma.audit_log'::regclass);
+  v_day0 timestamptz := date_trunc('day', now() at time zone 'UTC') at time zone 'UTC';
+  v_count boolean; r record;
+begin
+  -- a statement_timeout (60 s) ends this section, not the script: query_canceled is caught below
+  begin
+  if not exists (select 1 from pg_indexes where schemaname = 'cma' and tablename = 'audit_log' and indexname = 'audit_log_time_idx') then
+    raise notice 'audit_log_time_idx does not exist: rows per day are not counted (a count would read the whole table); the estimate above stands';
+    return;
+  end if;
+  raise notice 'tenant | day (UTC) | estimated rows | counted rows | MB a day (counted, else estimated, x bytes per row)';
+  for t in select x.id, x.slug from cma.tenant x order by x.slug collate "C" loop
+    execute format('explain (format json) select 1 from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L', t.id, v_day0 - interval '13 days') into j;
+    v_est14 := (j -> 0 -> 'Plan' ->> 'Plan Rows')::numeric;
+    v_count := v_est14 <= v_max;
+    if not v_count then
+      raise notice '% | 14 days | % | not counted: the estimate is above audit_count_max (%), a count would read that many index entries and their heap pages', t.slug, v_est14, v_max;
+    end if;
+    for d in reverse 13 .. 0 loop
+      v_from := v_day0 - make_interval(days => d);
+      v_to := v_from + interval '1 day';
+      execute format('explain (format json) select 1 from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L and a.changed_at < %L', t.id, v_from, v_to) into j;
+      v_est := (j -> 0 -> 'Plan' ->> 'Plan Rows')::numeric;
+      v_n := null;
+      if v_count and extract(epoch from clock_timestamp() - v_t0) < v_budget then
+        execute format('select count(*) from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L and a.changed_at < %L', t.id, v_from, v_to) into v_n;
+      end if;
+      raise notice '% | % | % | % | %', t.slug, (v_from at time zone 'UTC')::date, v_est,
+        coalesce(v_n::text, case when v_count then 'not counted: budget' else '-' end),
+        round(coalesce(v_n, v_est) * coalesce(v_bpr, 0) / 1048576.0, 1);
+    end loop;
+  end loop;
+  -- which tables fed it over the last 24 hours (table_name is not in the time index: each row's heap page is read)
+  raise notice '-- 7b rows over the last 24 hours per tenant and table (counted when the estimate is at most audit_count_max / 14 and the budget allows)';
+  for t in select x.id, x.slug from cma.tenant x order by x.slug collate "C" loop
+    execute format('explain (format json) select 1 from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L', t.id, now() - interval '24 hours') into j;
+    v_est := (j -> 0 -> 'Plan' ->> 'Plan Rows')::numeric;
+    if v_est > v_max / 14 then
+      raise notice '% | last 24 hours | estimated % rows: not counted per table (above audit_count_max / 14)', t.slug, v_est;
+      continue;
+    end if;
+    if extract(epoch from clock_timestamp() - v_t0) >= v_budget then
+      raise notice '% | last 24 hours | not counted: budget', t.slug;
+      continue;
+    end if;
+    for r in execute format('select a.table_name, count(*) as n from cma.audit_log a where a.tenant_id = %L and a.changed_at >= %L
+                             group by 1 order by 2 desc, 1 limit 15', t.id, now() - interval '24 hours') loop
+      raise notice '% | % | % rows', t.slug, r.table_name, r.n;
+    end loop;
+  end loop;
+  exception when query_canceled or lock_not_available then
+    raise notice 'section 7 stopped (%) after % s: the rows above are complete, the rest is not counted', sqlstate, round(extract(epoch from clock_timestamp() - v_t0), 1);
+  end;
+  raise notice 'section 7: % s', round(extract(epoch from clock_timestamp() - v_t0), 1);
+end
+$$;
+
+\echo
 \echo ==== 9. Proof and run time ====
 select pg_current_xact_id_if_assigned() is null as wrote_nothing,
        round(extract(epoch from clock_timestamp() - current_setting('diag.t0')::timestamptz), 1) as script_seconds;
-\echo -- the tables this transaction wrote (none when wrote_nothing is true: a read that computed something, a stored result that was due, rolled back below)
+\echo -- the tables this transaction wrote (none: it is read only; a row here would mean a write the read-only setting let through)
 select x.schemaname as schema, x.relname as table_name, x.n_tup_ins as inserted, x.n_tup_upd as updated, x.n_tup_del as deleted
 from pg_stat_xact_user_tables x
 where x.n_tup_ins + x.n_tup_upd + x.n_tup_del > 0
