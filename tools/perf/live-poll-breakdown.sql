@@ -25,11 +25,11 @@
 --        I2n the same without the record links
 --        I3  cma.anonymous_missed_calls_of    the summary's anonymous count
 --        I4  cma.inbound_now()                the three together, as main's web polls it
---        N1  cma.inbound_now_first(20)        where addition 0009q has run: the first twenty and the whole count
---        N2  cma.inbound_now_first(null)      where addition 0009q has run: every caller
+--        N1  cma.inbound_now_first(20)        where the function exists (addition 0009q): the first twenty and the whole count
+--        N2  cma.inbound_now_first(null)      where the function exists (addition 0009q): every caller
 --            N1 and N2 are gone after addition 0009s (db/186_drop_live_missed_first.sql, 16 November 2026), which drops
 --            the function and keeps 0009q's row: they run only where the function exists, so the tool reads alike before
---            and after 0009s (has_0009q in 1. still says whether 0009q ran)
+--            and after 0009s (in 1., has_0009q says whether 0009q ran, has_first_read whether N1 and N2 were measured)
 --        O1  cma.outbound_now()
 --        L1  inbound and outbound in one statement, as the board's poll sends it
 --        T1  cma.team_now() alone
@@ -86,7 +86,7 @@ select exists (select 1 from cma.schema_migration m where m.version = '0009q') a
 \echo
 \echo ==== 1. Sizes ====
 select :'tenant_id' as tenant_id, now() as measured_at, current_setting('server_version') as server_version,
-       :'has_0009q'::boolean as has_0009q,
+       :'has_0009q'::boolean as has_0009q, :'has_first_read'::boolean as has_first_read,
        s.lookback_days,
        (select count(*) from cma.telephony_call tc
         where tc.tenant_id = :'tenant_id' and tc.direction = 'inbound' and tc.answered_at is null and tc.source_deleted_at is null

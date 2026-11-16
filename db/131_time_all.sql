@@ -64,8 +64,11 @@
 -- 35.7 ms and the board's calls 31.0 ms, where tools/perf/live-poll-breakdown.sql read the same functions at medians of
 -- 4 to 9 ms after six calls on 16 November (first calls 10 to 20 ms); locally a fresh session's second call of
 -- cma.roster_today() took 9.7 ms against 2.4 ms from the third on. Most of that Saturday's gap was the instance itself
--- (183's E3, warmed, read cma.inbound_now() at 20.1 ms then against 4.0 ms on Monday with as many callers; prod is one
+-- (183's E3, warmed, read cma.inbound_now() at 20.1 ms then with 18 callers listed, against 4.0 ms on Monday with 20; prod is one
 -- vCPU shared with the minute jobs), which no method removes: a run at such a moment still reads FAIL, as it should.
+-- The row's detail also gives the first untimed run (what a new connection pays after a deploy) and the worst timed one
+-- (a minute job's contention), for information; the verdict is the median's. The rows before 16 November 2026 are the
+-- best of two: the series breaks there, a change of method, not of speed.
 -- Provoke: set verify.provoke below to true; every budget is then 0 ms, every timed read FAILs, and the verdict says
 -- PROVOKED, NOT A PASS.
 -- =============================================================================================
@@ -178,20 +181,28 @@ returns numeric
 language plpgsql
 as $$
 declare
-  v_t0 timestamptz; a numeric[] := '{}'; r record;
+  v_t0 timestamptz; a numeric[] := '{}'; r record; v_ms numeric;
+  v_warmup integer := greatest(0, coalesce(p_warmup, 0));
+  v_runs integer := greatest(1, coalesce(p_runs, 1));          -- at least one timed run, whatever the setting says
 begin
   perform set_config('t0131.error', '', true);
   perform set_config('t0131.error_message', '', true);
+  perform set_config('t0131.poll_first', '', true);
   begin
-    for i in 1 .. p_warmup + p_runs loop
+    for i in 1 .. v_warmup + v_runs loop
       v_t0 := clock_timestamp();
       for r in execute p_sql loop
         null;
       end loop;
-      if i > p_warmup then
-        a := a || round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+      v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+      if i = 1 then
+        perform set_config('t0131.poll_first', v_ms::text, true);
+      end if;
+      if i > v_warmup then
+        a := a || v_ms;
       end if;
     end loop;
+    perform set_config('t0131.poll_worst', (select max(x) from unnest(a) x)::text, true);
   exception when others then
     perform set_config('t0131.error', sqlstate, true);
     perform set_config('t0131.error_message', left(sqlerrm, 80), true);
@@ -616,7 +627,7 @@ begin
         perform set_config('app.user_id', v_user::text, true);
         v_ms := case when clock_timestamp() > v_stop then null
                      when rd.cls = 'poll' then pg_temp.t0131_poll_ms(v_sql, current_setting('verify.poll_warmup')::integer,
-                                                                    current_setting('verify.poll_runs')::integer)
+                                                                    greatest(1, current_setting('verify.poll_runs')::integer))
                      else pg_temp.t0131_best_ms(v_sql, 2) end;
         v_err := case when v_ms = -1 then current_setting('t0131.error') end;
         -- an error the read names as nothing to time (CMA02: no snapshot, or no frozen list, for the as-of date) is a skip
@@ -628,8 +639,10 @@ begin
                                      when v_skipped then rd.skip_why || ' (' || v_err || ': ' || current_setting('t0131.error_message') || '): nothing to time'
                                      when v_ms = -1 then 'error ' || v_err
                                      else v_ms || ' ms (' || case when rd.cls = 'poll'
-                                                                 then 'median of ' || current_setting('verify.poll_runs') || ' after '
-                                                                      || current_setting('verify.poll_warmup') || ' untimed'
+                                                                 then 'median of ' || greatest(1, current_setting('verify.poll_runs')::integer)
+                                                                      || ' after ' || current_setting('verify.poll_warmup') || ' untimed; first '
+                                                                      || current_setting('t0131.poll_first') || ', worst '
+                                                                      || current_setting('t0131.poll_worst')
                                                                  else 'best of 2' end || ') against ' || v_max || ' ms' end;
         r_ms := r_ms || case when v_ms >= 0 then v_ms end;
         if rd.in_set then

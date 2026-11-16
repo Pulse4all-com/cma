@@ -1,6 +1,6 @@
 -- =============================================================================================
 -- 183_verify_live_missed_first.sql: verifies addition 0009q, the Live board's poll with the first missed callers
--- Reversed by 186 (addition 0009s, 16 Nov 2026); kept as the record of what ran.
+-- Reversed by 186 (addition 0009s, 16 Nov 2026); kept as the record of what ran: after 186 it reads FAIL and is not rerun (187 checks cma.inbound_now()).
 -- =============================================================================================
 -- Blocks S check the addition and the function (universal). Block B works on two throwaway tenants inside a
 -- subtransaction that is always rolled back, so nothing stays: 25 invented missed callers on a counted line. Block E

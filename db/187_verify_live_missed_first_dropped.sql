@@ -8,7 +8,7 @@
 -- or skip, and the last row is the verdict, because Cloud SQL Studio shows no notices:
 -- "PASS | 187_verify_live_missed_first_dropped: n PASS, 0 FAIL, n skip". Run as your own IAM login after
 -- 186_drop_live_missed_first.sql, dev first, then prod.
---   S1  the addition 0009s is recorded once, after 0009p; where 0009q ran, its row is still there once and 0009s is
+--   S1  the addition 0009s is recorded once, after 0009r; where 0009q ran, its row is still there once and 0009s is
 --       recorded after it (history kept); where it never ran, the detail says so
 --   S2  no function cma.inbound_now_first of any argument types, and no function or view of cma or cma_read names it
 --   S3  cma.inbound_now() unchanged: plpgsql, stable, in the caller's rights, cma_owner's, without settings, jsonb, the
@@ -111,8 +111,8 @@ begin
   if (select count(*) from cma.schema_migration where version = '0009s') <> 1 then
     v_bad := '0009s is not recorded once; ';
   end if;
-  if not exists (select 1 from cma.schema_migration where version = '0009p') then
-    v_bad := v_bad || '0009p is not recorded; ';
+  if not exists (select 1 from cma.schema_migration where version = '0009r') then
+    v_bad := v_bad || '0009r is not recorded; ';
   end if;
   if exists (select 1 from cma.schema_migration where version = '0009q') then
     if (select count(*) from cma.schema_migration where version = '0009q') <> 1 then
@@ -124,7 +124,7 @@ begin
   else
     v_txt := '0009q never ran here: 0009s recorded all the same';
   end if;
-  insert into verify_0009s values (1, 'S1 addition 0009s recorded once, after 0009p; 0009q''s row, where it ran, still there before it',
+  insert into verify_0009s values (1, 'S1 addition 0009s recorded once, after 0009r; 0009q''s row, where it ran, still there before it',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, case when v_provoke then 'provoked' when v_bad = '' then v_txt else v_bad end);
 
   -- S2

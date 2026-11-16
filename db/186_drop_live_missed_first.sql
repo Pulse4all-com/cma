@@ -1,12 +1,14 @@
 -- =============================================================================================
 -- 186_drop_live_missed_first.sql: addition 0009s, reverses addition 0009q (cma.inbound_now_first dropped)
 -- =============================================================================================
--- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 185 (the brief named this
--- script 185 and its verify 186; 184 and 185 were taken by addition 0009r, so they are 186 and 187). Rerunnable,
+-- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 184_active_device_bands.sql
+-- (0009r; the brief named this script 185 and its verify 186; 184 and 185 were taken by addition 0009r, so they are 186
+-- and 187). Rerunnable,
 -- forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 187_verify_live_missed_first_dropped.sql there (normal, then provoked), then prod the same way. No function is
 -- re-created and no table, view, column or index changes, so no other verify is run again: cma.inbound_now() stays
--- exactly as 170_live_inbound_talk.sql left it (133, 145, 165 and 171 read it and are not touched). The web of main never
+-- exactly as 170_live_inbound_talk.sql left it (133, 145, 165, 171 and 187 read it and are not touched). 183 reads the
+-- dropped function: after this script it reads FAIL (42883) and is never run again; 187 takes its place. The web of main never
 -- called cma.inbound_now_first (#270 was closed unmerged), so nothing the app runs changes, before or after the merge.
 --
 -- Why (Martin, 16 November 2026; Decision log): addition 0009q (182_live_missed_first.sql, #270) added
@@ -41,8 +43,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009p') then
-    raise exception 'addition 0009p (180_flash_stored_cards.sql) has not run in this database';
+  if not exists (select 1 from cma.schema_migration where version = '0009r') then
+    raise exception 'addition 0009r (184_active_device_bands.sql) has not run in this database';
   end if;
 end
 $$;
