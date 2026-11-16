@@ -16,8 +16,10 @@
 -- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
 -- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009r (the
 -- customer list under a device band), after 184_active_device_bands.sql; since addition 0009t (Assets -> Fleet
--- management), after 188_fleet_management.sql; since addition 0009u (its page in one read), after 190_fleet_page.sql.
--- Prod is the proof; dev's shared core is for
+-- management), after 188_fleet_management.sql; since addition 0009u (Welcome's Waiting for you reads
+-- cma.my_follow_up_counts(); the follow-up's report lists and /me/follow-up's rows, whose clock fields it derives at the
+-- read, are timed too), after 190_follow_up_clock_at_read.sql; since addition 0009v (Assets -> Fleet management's page in one read),
+-- after 192_fleet_page.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -128,9 +130,13 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0009t') then
     raise exception 'addition 0009t (188_fleet_management.sql) has not run in this database';
   end if;
-  -- Assets -> Fleet management's page in one read (cma.fleet_page) since addition 0009u
+  -- Welcome's Waiting for you reads cma.my_follow_up_counts() since addition 0009u
   if not exists (select 1 from cma.schema_migration where version = '0009u') then
-    raise exception 'addition 0009u (190_fleet_page.sql) has not run in this database';
+    raise exception 'addition 0009u (190_follow_up_clock_at_read.sql) has not run in this database';
+  end if;
+  -- Assets -> Fleet management's page in one read (cma.fleet_page) since addition 0009v
+  if not exists (select 1 from cma.schema_migration where version = '0009v') then
+    raise exception 'addition 0009v (192_fleet_page.sql) has not run in this database';
   end if;
 end
 $$;
@@ -286,7 +292,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
-('a', 'welcome agent', 'waiting for you', $q$select cma.my_follow_up()$q$, 'agent', array['leads.accept', 'workday.own']),
+-- Waiting for you reads the three counts since addition 0009u (cma.my_follow_up_counts); the rows are /me/follow-up's
+('a', 'welcome agent', 'waiting for you', $q$select * from cma.my_follow_up_counts()$q$, 'agent', array['leads.accept', 'workday.own']),
+('a', 'my follow-up', 'my rows', $q$select cma.my_follow_up()$q$, 'agent', array['leads.accept', 'workday.own']),
 ('a', 'welcome manager', 'team hours 31 days', $q$select t.* from cma.team_hours(date '{today}' - 31, date '{today}' - 1, null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
 ('a', 'welcome manager', 'follow-up summary', $q$select * from cma.follow_up_summary()$q$, 'agent', array['monitoring.live', 'performance.team', 'workday.team']),
 ('a', 'welcome admin', 'roles', $q$select * from cma.roles()$q$, 'agent', array['users.manage_all']),
@@ -321,6 +329,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.callbacks_kept_connected() as callbacks_connected,
    array(select s.value from cma.tenant_settings() s where s.key = 'tasks.callback_window_minutes') as callback_window,
    (select coalesce(json_agg(o order by o.ordinality), '[]'::json) from cma.callbacks_kept_per_owner(date '{today}' - 55, '{today}') with ordinality o) as callback_owners$q$, 'overview', array['performance.team']),
+-- the follow-up's report lists, every row (GET /api/v1/reports/follow-up/leads and /tickets; since addition 0009u each
+-- row's clock fields are derived at the read, so they are timed here)
+('a', 'follow-up lists', 'open leads, every row', $q$select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url from cma.open_leads() r left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id$q$, 'overview', array['reports.view', 'performance.team', 'monitoring.live']),
+('a', 'follow-up lists', 'open tickets, every row', $q$select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'ticket', r.ticket_source_id) as record_url from cma.open_tickets() r left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id$q$, 'overview', array['reports.view', 'performance.team', 'monitoring.live']),
 -- Sources, a connection's page, System health
 ('a', 'sources', 'sources', $q$select * from cma.sources()$q$, 'sources', array['tenant.configure']),
 ('a', 'sources', 'form categories', $q$select * from cma.form_categories()$q$, 'agent', array['tenant.configure']),
@@ -371,10 +383,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'installed base', 'serial search', $q$select cma.flash_rows('installed_base', jsonb_build_object('serial', coalesce((select d.serial from cma.device d where d.serial is not null order by d.id limit 1), 'none')), 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'document as of the month end', $q$select cma.flash_overview('installed_base', null, '{to}', null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'frozen list first page', $q$select cma.flash_rows('installed_base', '{}', null, false, 500, 0, '{to}', null, null)$q$, 'list', array['reports.view', 'performance.team']),
--- Assets -> Fleet management: since addition 0009u the page makes one read (cma.fleet_page: the tiles, the areas and the
+-- Assets -> Fleet management: since addition 0009v the page makes one read (cma.fleet_page: the tiles, the areas and the
 -- list of the devices that need attention, page 1, from one computation of the devices); the list's further pages read
 -- cma.fleet_rows after the first paint (a set of its own, page 2), and the API's areas cma.fleet_areas (addition 0009t; not
--- a page's read since 0009u, so not timed here). While the tenant's fleet_management.dummy_preview is off both answer set
+-- a page's read since 0009v, so not timed here). While the tenant's fleet_management.dummy_preview is off both answer set
 -- up false, a settings lookup; 191's E1 and E2 (the brief's 150 ms) and 189's E2 time the computations themselves whatever
 -- the setting. The page's read holds a list's first page: class list (300 ms at three times prod's volume)
 ('a', 'fleet management', 'page', $q$select cma.fleet_page(null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
@@ -675,7 +687,7 @@ begin
       perform set_config('role', 'cma_owner', true);
       for p in 1 .. cardinality(v_pages) loop
         v_set_max := case when v_provoke then 0
-                          when v_pages[p] in ('welcome agent', 'welcome manager', 'welcome admin', 'my hours', 'my schedule', 'messages', 'my account', 'live board',
+                          when v_pages[p] in ('welcome agent', 'welcome manager', 'welcome admin', 'my hours', 'my schedule', 'my follow-up', 'messages', 'my account', 'live board',
                                               'team people', 'team hours', 'roster week') then current_setting('verify.max_agent_set_ms')::numeric
                           else current_setting('verify.max_overview_ms')::numeric end;
         if v_pages[p] in ('polls', 'campaigns') then continue; end if;

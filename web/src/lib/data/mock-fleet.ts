@@ -159,7 +159,7 @@ export function mockFleetRows(me: Principal, q: FleetRowsQuery): FleetRowsPage {
 }
 
 /**
- * cma.fleet_page in mock mode (addition 0009u, E6): the areas' document, the tiles summed from it (Devices past due split
+ * cma.fleet_page in mock mode (addition 0009v, E6): the areas' document, the tiles summed from it (Devices past due split
  * in the field and not in the field) and the list's first page, the devices that need attention when neither a state nor
  * an area is chosen; the same answers as the two reads it replaces
  */

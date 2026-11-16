@@ -2497,7 +2497,7 @@ export interface FleetPage {
   pastDueNotInField: number;
 }
 
-/** The page's query (cma.fleet_page, addition 0009u): the filters, a tile's state and an area; the list's first page */
+/** The page's query (cma.fleet_page, addition 0009v): the filters, a tile's state and an area; the list's first page */
 export interface FleetPageQuery extends FleetFilter {
   state: string | null;
   areaId: string | null;
@@ -2517,7 +2517,7 @@ export interface FleetPageTiles {
 }
 
 /**
- * The page's one read (cma.fleet_page, addition 0009u, E6): the areas' document of cma.fleet_areas, the tiles, and the
+ * The page's one read (cma.fleet_page, addition 0009v, E6): the areas' document of cma.fleet_areas, the tiles, and the
  * list's first page (the devices that need attention when neither a state nor an area is chosen), from one computation of
  * the devices. setUp false while the tenant's fleet_management.dummy_preview is off, and nothing more
  */
@@ -3551,6 +3551,18 @@ export interface FollowUpOwner {
   tasksDueToday: number;
 }
 
+/**
+ * cma.my_follow_up_counts (addition 0009u): how many of the caller's own rows each list holds, without the rows: what
+ * Welcome's Waiting for you shows (the lengths of MyFollowUp's three lists)
+ */
+export interface MyFollowUpCounts {
+  leads: number;
+  tickets: number;
+  tasks: number;
+  /** When the snapshot was computed: at most about a minute ago */
+  computedAt: Instant;
+}
+
 /** cma.my_follow_up: the caller's own rows, with their record links, as the snapshot computed them */
 export interface MyFollowUp {
   leads: OpenLead[];
@@ -4373,7 +4385,7 @@ export interface CmaData {
   getFleetAreas(me: Principal, filter: FleetFilter): Promise<FleetPage>;
   /** A page of 50 of its devices (cma.fleet_rows) */
   getFleetRows(me: Principal, query: FleetRowsQuery): Promise<FleetRowsPage>;
-  /** The page's one read (cma.fleet_page, addition 0009u): the areas, the tiles and the list's first page */
+  /** The page's one read (cma.fleet_page, addition 0009v): the areas, the tiles and the list's first page */
   getFleetPage(me: Principal, query: FleetPageQuery): Promise<FleetPageDoc>;
   // ---- Pledge lists (addition 0009j): pledges.view, checked by the database on every call (CMA06)
   /** Assets → Pledge lists in one transaction (cma.pledge_page, and cma.pledge_finding_rows for an open check, at most limit rows) */
@@ -4412,6 +4424,8 @@ export interface CmaData {
   getFollowUpByOwner(me: Principal): Promise<FollowUpRowsAt<FollowUpOwner>>;
   /** The caller's own rows. Needs leads.accept or workday.own */
   getMyFollowUp(me: Principal): Promise<MyFollowUp>;
+  /** How many of the caller's own rows each list holds (Welcome's Waiting for you). Needs leads.accept or workday.own */
+  getMyFollowUpCounts(me: Principal): Promise<MyFollowUpCounts>;
 
   // System health (addition 0008r). Needs tenant.configure; the database checks again (CMA06)
   /** The jobs' runs per job and connection over the last 30 days (cma.system_health_runs) */

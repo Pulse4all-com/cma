@@ -1585,7 +1585,7 @@ async function flashChecks() {
 // past due equal Installed base's for the same filters (none, each market, each model: its list's totals under
 // measure in_field and components_past_due); the tiles the areas summed, the states adding up to In the field; the
 // list's rows without a customer reference, name, email, phone or address. A tenant with the preview off answers setUp
-// false alone (Pulse4all Invest in the mock). Since addition 0009u (brief B38, E6) the page's route
+// false alone (Pulse4all Invest in the mock). Since addition 0009v (brief B38, E6) the page's route
 // (/api/v1/reports/fleet-management/page, cma.fleet_page) equals the two routes it replaces for the page (the areas'
 // document and tiles, the list's first page: the devices that need attention, or a state's or an area's), and its
 // Devices past due split (in the field + not in the field) adds up to the tile and to Installed base's Devices past due
@@ -1662,7 +1662,7 @@ async function fleetChecks() {
       listed.complete ? listed.noAreaInField === smallNoArea.pastDue && listed.notInField === small.doc.pastDueNotInField : "list longer than 40 pages",
       typeof d.pastDueNotInField === "number" && inFieldPastDue + d.pastDueNotInField === ibPastDue, tiles.past_due === inFieldPastDue + d.pastDueNotInField],
     [true, true, true, true, true], [true, true, true, false, true]);
-  // addition 0009u (E6): the page's route against the two it replaces, for no filter, the first three markets, two states
+  // addition 0009v (E6): the page's route against the two it replaces, for no filter, the first three markets, two states
   // and the first area; the split of Devices past due (E3)
   const tileKeys = ["in_field", "past_due", "monitored", "ready", "needs_attention", "no_connection", "not_monitored"];
   const firstArea = (d.areas ?? []).find((a) => a.areaId !== null)?.areaId ?? null;

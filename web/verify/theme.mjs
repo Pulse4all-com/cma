@@ -240,7 +240,7 @@ const pages = [
   { path: "/reports/storage", subject: "reader", noHint: true },
   // Fleet management, last in Assets: a placeholder since 15 November 2026, the map with the tenant's preview on since
   // addition 0009t (the mock's Pulse4all Subscriptions), in English and Dutch: the country outlines, the markers, the
-  // states' colours (Not monitored #C3CAD3, D8); since addition 0009u the badge outside the marker, the list's Items past
+  // states' colours (Not monitored #C3CAD3, D8); since addition 0009v the badge outside the marker, the list's Items past
   // due badge (Warning surface, E5) and Devices past due's line under the tile (E3), and Devices past due's own list
   { path: "/reports/fleet-management", subject: "manager", noHint: true },
   { path: "/reports/fleet-management", subject: "manager-nl", noHint: true },

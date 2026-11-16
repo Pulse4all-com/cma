@@ -1,14 +1,19 @@
 -- =============================================================================================
--- 190_fleet_page.sql: addition 0009u, Assets → Fleet management's page in one read (brief B38, E6; backlog CMA-126)
+-- 192_fleet_page.sql: addition 0009v, Assets → Fleet management's page in one read (brief B38, E6; backlog CMA-126)
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 188_fleet_management.sql
--- (0009t). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
--- 191_verify_fleet_page.sql there (normal, then provoked), then prod the same way before the merge of its pull request.
+-- (0009t) and 190_follow_up_clock_at_read.sql (0009u; this script was written as 190, addition 0009u, while #287 took
+-- 190, 191 and 0009u first, so it is 192, its verify 193 and the addition 0009v; it refuses to run before 0009u is
+-- recorded, as 186 did before 0009r). A run of the earlier 190_fleet_page.sql (dev, 16 November 2026) created the two
+-- functions and recorded nothing (its insert of 0009u met #287's row: INSERT 0 0); this script creates them again as
+-- they are and records 0009v. Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM
+-- login: dev first, then 193_verify_fleet_page.sql there (normal, then provoked), then prod the same way before the merge
+-- of its pull request.
 -- No function is re-created and no table, view or column changes: the two new functions call 0009t's
 -- cma.fleet_devices_of (188) as it is, so In the field, Devices past due, the dummy area and the dummy state stay exactly
--- 0009t's, and 189_verify_fleet_management.sql keeps passing unchanged (191 runs it again on its own rows: R1, R2). No
+-- 0009t's, and 189_verify_fleet_management.sql keeps passing unchanged (193 runs it again on its own rows: R1, R2). No
 -- earlier verify reads the new functions, so none is run again for them; run 189 once after this script all the same,
--- as the brief asks. 131_time_all.sql gains the page's read (part a; a guard on 0009u).
+-- as the brief asks. 131_time_all.sql gains the page's read (part a; a guard on 0009v).
 -- Main's web runs unchanged on it (it never calls the new functions).
 --
 -- Why (Martin, 16 November 2026, brief B38; Decision log, 16 Nov 2026, E6): Fleet management's page read its areas
@@ -51,6 +56,9 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0009t') then
     raise exception 'addition 0009t (188_fleet_management.sql) has not run in this database';
   end if;
+  if not exists (select 1 from cma.schema_migration where version = '0009u') then
+    raise exception 'addition 0009u (190_follow_up_clock_at_read.sql) has not run in this database';
+  end if;
 end
 $$;
 
@@ -60,7 +68,7 @@ $$;
 -- The page's figures for a tenant after the filters (a market's code or unknown, a model's key or unknown), the list's
 -- state (a tile: in_field, past_due, monitored or a state; null for none) and area (a postcode area's id; null for none),
 -- from one computation of the devices (d, materialized: cma.fleet_devices_of once). The rules are 0009t's, written once
--- more over that one set, and 191 proves the answers equal cma.fleet_areas_of's and cma.fleet_rows_of's row for row:
+-- more over that one set, and 193 proves the answers equal cma.fleet_areas_of's and cma.fleet_rows_of's row for row:
 --   areas  as cma.fleet_areas_of: one row per postcode area holding a device In the field (kind area), the devices In the
 --          field without an area (no_area, always there), the devices past due not In the field (not_in_field: past_due
 --          alone, outside 'areas', in past_due_not_in_field); in cma.fleet_areas's order (by country and area code, "C",
@@ -220,7 +228,7 @@ $$;
 -- 4. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009u', 'Assets → Fleet management''s page in one read (brief B38, E6): cma.fleet_page_of (jsonb: dummy_preview, today, the tiles with Devices past due split in the field and not in the field, the areas as cma.fleet_areas, past_due_not_in_field, and the list''s first page of 50 as cma.fleet_rows_of with the page''s attention rule, from one computation of cma.fleet_devices_of) and cma.fleet_page (reports.view or performance.team; set_up false while fleet_management.dummy_preview is off; the time zone and the filters'' choices). No function re-created, no table, view or column changed; nothing in cma_read')
+values ('0009v', 'Assets → Fleet management''s page in one read (brief B38, E6): cma.fleet_page_of (jsonb: dummy_preview, today, the tiles with Devices past due split in the field and not in the field, the areas as cma.fleet_areas, past_due_not_in_field, and the list''s first page of 50 as cma.fleet_rows_of with the page''s attention rule, from one computation of cma.fleet_devices_of) and cma.fleet_page (reports.view or performance.team; set_up false while fleet_management.dummy_preview is off; the time zone and the filters'' choices). No function re-created, no table, view or column changed; nothing in cma_read')
 on conflict (version) do nothing;
 
 commit;

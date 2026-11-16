@@ -3605,7 +3605,7 @@ async function expectFiltersPending() {
  * the page with its tenant's preview on: its title, the Preview banner, seven tiles of which five carry the Dummy badge,
  * Monitored the sum of three states and the four states the sum In the field, the map with every marker a button with
  * an aria-label, the side panel's devices, no placeholder, and neither the page nor the main area scrolling sideways.
- * Since addition 0009u (brief B38), run with the local fixture's volume (verify/perf-volume-fixture.sql): at the start view,
+ * Since addition 0009v (brief B38), run with the local fixture's volume (verify/perf-volume-fixture.sql): at the start view,
  * after one zoom in and at the closest zoom (the areas of a group spread apart), no two markers' boxes intersect, no
  * badge's box intersects its count's text box, another marker's box or another badge (E1); at the start view every marker's centre is inside the map and the markers' counts add up to In the
  * field less the devices without an area, so every cluster is shown (E2), and the button back to it reads All markets

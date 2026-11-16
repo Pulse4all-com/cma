@@ -15,7 +15,7 @@ import type {
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  DueState, FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
+  DueState, FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, MyFollowUpCounts, OpenLead, OpenTask, OpenTicket, SlaState,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
@@ -2792,7 +2792,7 @@ export const postgresData: CmaData = {
 
   async getFleetPage(me, query): Promise<FleetPageDoc> {
     return withTenant(ctx(me), async (q) => {
-      // one read for the page (addition 0009u, E6): the function checks the permission (CMA06), the filters and the state
+      // one read for the page (addition 0009v, E6): the function checks the permission (CMA06), the filters and the state
       // (CMA04), answers set_up false alone while fleet_management.dummy_preview is off, and else computes the devices once
       // for the tiles, the areas and the list's first page
       const j = one((await q.query<{ j: FleetPageDb }>(`select cma.fleet_page($1, $2, $3, $4::uuid) as j`,
@@ -3515,6 +3515,15 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getMyFollowUpCounts(me): Promise<MyFollowUpCounts> {
+    return withTenant(ctx(me), async (q) => {
+      // the caller's own items counted per kind (addition 0009u): the same checks and the same counts as the lists' lengths
+      const r = one((await q.query<{ leads: number; tickets: number; tasks: number; computed_at: Date }>(
+        `select * from cma.my_follow_up_counts()`)).rows, "my_follow_up_counts");
+      return { leads: r.leads, tickets: r.tickets, tasks: r.tasks, computedAt: r.computed_at.toISOString() };
+    });
+  },
+
   // ---- System health (addition 0008r) --------------------------------------------------------
 
   async getSystemHealthRuns(me): Promise<SystemHealthRun[]> {
@@ -3726,14 +3735,14 @@ export const postgresData: CmaData = {
   },
 };
 
-/** An area's row in cma.fleet_areas's and cma.fleet_page's answers (additions 0009t, 0009u) */
+/** An area's row in cma.fleet_areas's and cma.fleet_page's answers (additions 0009t, 0009v) */
 interface FleetAreaDb {
   area_id: string | null; country: string | null; area_code: string | null; label: string | null; lat: string | number | null;
   lon: string | number | null; in_field: number; ready: number; needs_attention: number; no_connection: number; not_monitored: number;
   past_due: number;
 }
 
-/** A device's row in cma.fleet_rows's and cma.fleet_page's lists (additions 0009t, 0009u) */
+/** A device's row in cma.fleet_rows's and cma.fleet_page's lists (additions 0009t, 0009v) */
 interface FleetRowDb {
   device_id: string; serial: string | null; model: string; market: string; area_id: string | null; area_code: string | null;
   area_label: string | null; state: FleetState | null; reason: FleetReason | null; last_self_test_on: string | null;
@@ -3777,7 +3786,7 @@ interface FleetRowsDb {
   rows?: FleetRowDb[];
 }
 
-/** cma.fleet_page's answer (addition 0009u): cma.fleet_areas's document, the tiles and the list's first page */
+/** cma.fleet_page's answer (addition 0009v): cma.fleet_areas's document, the tiles and the list's first page */
 interface FleetPageDb extends FleetAreasDb {
   tiles?: { in_field: number; past_due: number; past_due_in_field: number; past_due_not_in_field: number; monitored: number; ready: number;
     needs_attention: number; no_connection: number; not_monitored: number };

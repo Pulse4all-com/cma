@@ -1,0 +1,115 @@
+Pager usage is off.
+BEGIN
+SET
+psql:tools/perf/follow-up-diff.sql:46: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+psql:tools/perf/follow-up-diff.sql:47: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE TABLE
+GRANT
+COMMIT
+BEGIN
+SET
+ tenant_set | user_set 
+------------+----------
+ t          | t
+(1 row)
+
+SET
+INSERT 0 4723
+COMMIT
+ pg_sleep 
+----------
+ 
+(1 row)
+
+BEGIN
+SET
+ tenant_set | user_set 
+------------+----------
+ t          | t
+(1 row)
+
+SET
+INSERT 0 4723
+COMMIT
+BEGIN
+SET
+ tenant_set 
+------------
+ t
+(1 row)
+
+
+==== 0. The two computations and the stored items ====
+           first_at            |           second_at           | gap_seconds | first_items | second_items | stored_age_seconds 
+-------------------------------+-------------------------------+-------------+-------------+--------------+--------------------
+ 2026-11-16 11:05:57.122428+00 | 2026-11-16 11:06:58.846051+00 |          62 |        4723 |         4723 |                 44
+(1 row)
+
+
+==== 1. Per kind: matched, only one side, fingerprint changed, rows the refresh would write ====
+  kind  | matched | only_first | only_second | changed | rows_written 
+--------+---------+------------+-------------+---------+--------------
+ lead   |     105 |          0 |           0 |     105 |          210
+ task   |    3050 |          0 |           0 |       0 |            0
+ ticket |    1568 |          0 |           0 |     912 |         1824
+(3 rows)
+
+
+==== 2. Per column: matched items whose value differs ====
+  kind  | sort_key | market | owner_user_id | state | row_any_key 
+--------+----------+--------+---------------+-------+-------------
+ lead   |        0 |      0 |             0 |     0 |         105
+ task   |        0 |      0 |             0 |     0 |           0
+ ticket |        0 |      0 |             0 |     0 |         912
+(3 rows)
+
+
+==== 3. Per key of the row: value differs, only the text differs, on one side only, json null against missing ====
+  kind  |           key            | value_differs | text_only_differs | one_side_only | null_against_missing 
+--------+--------------------------+---------------+-------------------+---------------+----------------------
+ lead   | waiting_business_seconds |           105 |                 0 |             0 |                    0
+ ticket | minutes_to_breach        |           912 |                 0 |             0 |                    0
+ ticket | open_business_seconds    |           912 |                 0 |             0 |                    0
+(3 rows)
+
+
+==== 4. Fingerprint differs while every column and every key is equal as a value (a representation artefact) ====
+ kind | items 
+------+-------
+(0 rows)
+
+
+==== 5. Changed tickets and leads per market (open, changed, of which only sort_key) ====
+  kind  | market  | items | changed | only_sort_key 
+--------+---------+-------+---------+---------------
+ lead   | GB      |    52 |      52 |             0
+ lead   | DE      |    18 |      18 |             0
+ lead   | SE      |    11 |      11 |             0
+ lead   | BE      |     8 |       8 |             0
+ lead   | FR      |     7 |       7 |             0
+ lead   | NL      |     7 |       7 |             0
+ lead   | AT      |     1 |       1 |             0
+ lead   | DK      |     1 |       1 |             0
+ ticket | GB      |   392 |     392 |             0
+ ticket | DE      |   269 |     269 |             0
+ ticket | NL      |    90 |      90 |             0
+ ticket | FR      |    85 |      85 |             0
+ ticket | SE      |    57 |      57 |             0
+ ticket | BE      |    14 |      14 |             0
+ ticket | AT      |     5 |       5 |             0
+ ticket | unknown |   656 |       0 |             0
+(16 rows)
+
+
+==== 6. The stored items (the last write of the job) against the first computation, by fingerprint ====
+  kind  | same | differs | only_stored | only_computed 
+--------+------+---------+-------------+---------------
+ lead   |    0 |     105 |           0 |             0
+ task   | 3050 |       0 |           0 |             0
+ ticket |  656 |     912 |           0 |             0
+(3 rows)
+
+ROLLBACK

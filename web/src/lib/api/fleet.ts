@@ -18,7 +18,7 @@ export function fleetParams(sp: URLSearchParams): FleetFilter {
 }
 
 /**
- * The page's query (addition 0009u): the filters, &state (a tile: in_field, past_due, monitored, ready, needs_attention,
+ * The page's query (addition 0009v): the filters, &state (a tile: in_field, past_due, monitored, ready, needs_attention,
  * no_connection or not_monitored) and &area (a postcode area's id)
  */
 export function fleetPageParams(sp: URLSearchParams): FleetPageQuery {

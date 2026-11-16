@@ -19,7 +19,7 @@ import type {
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
+  FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, MyFollowUpCounts, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
@@ -4618,6 +4618,16 @@ export const mockData: CmaData = {
     const now = Date.now();
     const { leads, tickets, tasks } = mockFollowUpRows(me, now);
     return { leads: ownRows(leads, me.userId), tickets: ownRows(tickets, me.userId), tasks: ownRows(tasks, me.userId), computedAt: new Date(now).toISOString() };
+  },
+
+  async getMyFollowUpCounts(me): Promise<MyFollowUpCounts> {
+    assertAny(me, [...MY_FOLLOW_UP_PERMISSIONS]);
+    const now = Date.now();
+    const { leads, tickets, tasks } = mockFollowUpRows(me, now);
+    return {
+      leads: ownRows(leads, me.userId).length, tickets: ownRows(tickets, me.userId).length, tasks: ownRows(tasks, me.userId).length,
+      computedAt: new Date(now).toISOString(),
+    };
   },
 
   // ---- System health (addition 0008r): invented runs around the current minute ------------------

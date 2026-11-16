@@ -899,7 +899,7 @@
         "nl": "Wacht op jou"
       },
       "definition": "How many of the waiting items are the viewer's own: their uncalled leads, open tickets and open tasks together.",
-      "formula": "badge n = mine.leads.length + mine.tickets.length + mine.tasks.length from cma.my_follow_up(): the snapshot items whose owner_user_id = the caller (owner mapped through app_user_external_id), every row, no cap. 0 shows a green badge and 'Nothing is waiting for you right now'.",
+      "formula": "badge n = mine.leads + mine.tickets + mine.tasks from cma.my_follow_up_counts() (since 0009u; before it the lengths of cma.my_follow_up()'s three arrays, the same counts): the snapshot items whose owner_user_id = the caller (owner mapped through app_user_external_id), counted per kind, every item, no cap; no row is read. 0 shows a green badge and 'Nothing is waiting for you right now'.",
       "unit": "count",
       "grain": [
         "now",
@@ -946,16 +946,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.my_follow_up",
-            "migration": "0008s"
-          },
-          {
-            "object": "cma.follow_up_list_of",
-            "migration": "0008s"
-          },
-          {
-            "object": "cma.my_follow_up_of",
-            "migration": "0008o"
+            "object": "cma.my_follow_up_counts",
+            "migration": "0009u"
           }
         ],
         "ts": [
@@ -992,7 +984,7 @@
         "nl": "{n} leads niet gebeld, {n} tickets, {n} taken"
       },
       "definition": "The card's sentence: the viewer's own waiting items split into leads, tickets and tasks.",
-      "formula": "mine.leads.length, mine.tickets.length, mine.tasks.length (cma.my_follow_up's three arrays: snapshot items of each kind with owner_user_id = the caller), each with singular/plural copy.",
+      "formula": "mine.leads, mine.tickets, mine.tasks from cma.my_follow_up_counts() (since 0009u; the same counts as cma.my_follow_up's three arrays' lengths: snapshot items of each kind with owner_user_id = the caller), each with singular/plural copy.",
       "unit": "count",
       "grain": [
         "now",
@@ -1028,8 +1020,8 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.my_follow_up",
-            "migration": "0008s"
+            "object": "cma.my_follow_up_counts",
+            "migration": "0009u"
           }
         ],
         "ts": [
@@ -22281,7 +22273,7 @@
       "filters": [
         "tenant: RLS plus cma.current_tenant_id()"
       ],
-      "time": "now = the browser render's Date; computed_at is the instant every age and state in the snapshot was measured against.",
+      "time": "now = the browser render's Date; computed_at is the instant the snapshot's counts and stored states were measured against; the rows' clock fields (open and waiting business time, minutes to breach, sla_state, past_target) are as of the read.",
       "comparison": null,
       "settings": [],
       "permissions": {
@@ -22488,7 +22480,7 @@
         "tenant: RLS",
         "the not-called open lead set; the page's market/person/state filters narrow the rows shown"
       ],
-      "time": "Business seconds in the deal's market's office hours (market's own schedule, else '*', minus holidays of the market or '*'); frozen at the snapshot's computed_at, so the value moves once a minute, not continuously.",
+      "time": "Business seconds in the deal's market's office hours (market's own schedule, else '*', minus holidays of the market or '*'); as of the read (now() of the request, derived from the stored created_at, market and the market's calendar), so the value is current at every read.",
       "comparison": null,
       "settings": [
         {
@@ -22689,7 +22681,7 @@
         "tenant: RLS",
         "the not-called open lead set"
       ],
-      "time": "Business seconds in the market's office hours against the target, at the snapshot's computed_at; strictly greater than the target means past.",
+      "time": "Business seconds in the market's office hours against the target, as of the read (the row's own state); strictly greater than the target means past. The list filter and the counts follow the state the refresh stored, up to one job run behind.",
       "comparison": null,
       "settings": [
         {
@@ -22897,7 +22889,7 @@
         "tenant: RLS",
         "the open counted ticket set"
       ],
-      "time": "Business seconds in the ticket's market's office hours since creation, at the snapshot's computed_at.",
+      "time": "Business seconds in the ticket's market's office hours since creation, as of the read.",
       "comparison": null,
       "settings": [],
       "permissions": {
@@ -23076,7 +23068,7 @@
         "tenant: RLS",
         "the open counted ticket set"
       ],
-      "time": "Business seconds against the SLA at the snapshot's computed_at; at-or-past boundaries (>=) for both at_risk and breached.",
+      "time": "Business seconds against the SLA as of the read (the row's own state); at-or-past boundaries (>=) for both at_risk and breached. The list filter and the counts follow the state the refresh stored, up to one job run behind.",
       "comparison": null,
       "settings": [
         {
@@ -23164,7 +23156,7 @@
         "tenant: RLS",
         "the open counted ticket set"
       ],
-      "time": "Business minutes of the ticket's market at the snapshot's computed_at.",
+      "time": "Business minutes of the ticket's market, as of the read.",
       "comparison": null,
       "settings": [
         {
