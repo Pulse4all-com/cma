@@ -38,6 +38,8 @@
   --color-p4a-neutral-surface: #f3f4f6;
   --color-p4a-border: #d9e2ec;
   --color-p4a-muted: #5b6472;
+  /* Assets → Fleet management's Not monitored (addition 0009t, D8: between Border and Muted, with Inkt text) */
+  --color-p4a-unmonitored: #c3cad3;
 
   /* type: Montserrat is the only typeface; loaded locally in layout.tsx */
   --font-sans: var(--font-montserrat), "Segoe UI", Arial, sans-serif;

@@ -15,7 +15,8 @@
 -- addition 0009j (Assets → Pledge lists), after 168_pledge_lists.sql; since addition 0009l (Customers → Active), after
 -- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
 -- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009r (the
--- customer list under a device band), after 184_active_device_bands.sql. Prod is the proof; dev's shared core is for
+-- customer list under a device band), after 184_active_device_bands.sql; since addition 0009t (Assets -> Fleet
+-- management), after 188_fleet_management.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -107,6 +108,10 @@ begin
   -- the customer list under a band of Devices per active customer (cma.active_rows' band) since addition 0009r
   if not exists (select 1 from cma.schema_migration where version = '0009r') then
     raise exception 'addition 0009r (184_active_device_bands.sql) has not run in this database';
+  end if;
+  -- Assets -> Fleet management's two reads since addition 0009t
+  if not exists (select 1 from cma.schema_migration where version = '0009t') then
+    raise exception 'addition 0009t (188_fleet_management.sql) has not run in this database';
   end if;
 end
 $$;
@@ -306,6 +311,12 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'installed base', 'serial search', $q$select cma.flash_rows('installed_base', jsonb_build_object('serial', coalesce((select d.serial from cma.device d where d.serial is not null order by d.id limit 1), 'none')), 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'document as of the month end', $q$select cma.flash_overview('installed_base', null, '{to}', null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'installed base as of month end', 'frozen list first page', $q$select cma.flash_rows('installed_base', '{}', null, false, 500, 0, '{to}', null, null)$q$, 'list', array['reports.view', 'performance.team']),
+-- Assets -> Fleet management (addition 0009t): the page's areas (its first paint: the tiles and the map) and the list of the
+-- devices that need attention, page 1 (the side panel, streamed after it). While the tenant's
+-- fleet_management.dummy_preview is off (prod's default) both answer set up false, a settings lookup; 189's E1 and E2 time
+-- the computations themselves whatever the setting
+('a', 'fleet management', 'areas', $q$select cma.fleet_areas(null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+('a', 'fleet management', 'devices that need attention page 1', $q$select cma.fleet_rows(null, null, null, null, true, 1)$q$, 'list', array['reports.view', 'performance.team']),
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)

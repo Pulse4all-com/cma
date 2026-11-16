@@ -25,6 +25,7 @@ import type {
   CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
   CourtesyCompleted, CourtesyCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
   CohortAge, LeadCohortRow, LeadCohortsReport,
+  FleetLocationSource, FleetPage, FleetReason, FleetRowsPage, FleetState,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, PledgeFile, PledgePage, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
   DataQualityRowsView, FlashCardReads, FlashDocumentView, FlashHeadlineView, FlashStoredCard, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
@@ -2775,6 +2776,40 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getFleetAreas(me, filter): Promise<FleetPage> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission (CMA06) and the filters (CMA04), and answers set_up false alone while the tenant's
+      // fleet_management.dummy_preview is off (addition 0009t)
+      const j = one((await q.query<{ j: FleetAreasDb }>(`select cma.fleet_areas($1, $2) as j`, [filter.market, filter.model])).rows, "fleet_areas").j;
+      if (!j.set_up) return { setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [] };
+      return {
+        setUp: true, filter, today: j.today ?? null, timeZone: j.time_zone ?? null, markets: j.filter_markets ?? [], models: j.filter_models ?? [],
+        areas: (j.areas ?? []).map((a) => ({
+          areaId: a.area_id, country: a.country, areaCode: a.area_code, label: a.label, lat: a.lat === null ? null : Number(a.lat),
+          lon: a.lon === null ? null : Number(a.lon), inField: Number(a.in_field), ready: Number(a.ready), needsAttention: Number(a.needs_attention),
+          noConnection: Number(a.no_connection), notMonitored: Number(a.not_monitored), pastDue: Number(a.past_due),
+        })),
+      };
+    });
+  },
+
+  async getFleetRows(me, query): Promise<FleetRowsPage> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the filters, the state and the page (addition 0009t); 50 a page
+      const j = one((await q.query<{ j: FleetRowsDb }>(`select cma.fleet_rows($1, $2, $3, $4::uuid, $5, $6) as j`,
+        [query.market, query.model, query.state, query.areaId, query.attentionOnly, query.page])).rows, "fleet_rows").j;
+      if (!j.set_up) return { setUp: false, page: query.page, pageSize: 50, total: 0, timeZone: null, rows: [] };
+      return {
+        setUp: true, page: j.page ?? query.page, pageSize: j.page_size ?? 50, total: Number(j.total ?? 0), timeZone: j.time_zone ?? null,
+        rows: (j.rows ?? []).map((r) => ({
+          deviceId: r.device_id, serial: r.serial, model: r.model, market: r.market, areaId: r.area_id, areaCode: r.area_code, areaLabel: r.area_label,
+          state: r.state, reason: r.reason, lastSelfTestOn: r.last_self_test_on, lastContactAt: r.last_contact_at, pastDueItems: Number(r.past_due_items),
+          locationSource: r.location_source,
+        })),
+      };
+    });
+  },
+
   async getMaintenance(me, filter): Promise<MaintenanceReport> {
     return withTenant(ctx(me), async (q) => {
       // the function checks the permission, the horizon (the tenant's current month or later, 1 to 24 months) and the filters first (addition 0008zi)
@@ -3664,3 +3699,27 @@ export const postgresData: CmaData = {
     });
   },
 };
+
+/** cma.fleet_areas's answer (addition 0009t) */
+interface FleetAreasDb {
+  set_up: boolean;
+  today?: string;
+  time_zone?: string;
+  filter_markets?: { code: string; name: string | null }[];
+  filter_models?: { key: string; name: string | null }[];
+  areas?: { area_id: string | null; country: string | null; area_code: string | null; label: string | null; lat: string | number | null;
+    lon: string | number | null; in_field: number; ready: number; needs_attention: number; no_connection: number; not_monitored: number;
+    past_due: number }[];
+}
+
+/** cma.fleet_rows's answer (addition 0009t) */
+interface FleetRowsDb {
+  set_up: boolean;
+  page?: number;
+  page_size?: number;
+  total?: number;
+  time_zone?: string;
+  rows?: { device_id: string; serial: string | null; model: string; market: string; area_id: string | null; area_code: string | null;
+    area_label: string | null; state: FleetState | null; reason: FleetReason | null; last_self_test_on: string | null;
+    last_contact_at: string | null; past_due_items: number; location_source: FleetLocationSource | null }[];
+}

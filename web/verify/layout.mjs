@@ -1179,8 +1179,10 @@ async function expectCampaigns() {
     const PLACEHOLDERS = [
       ["/reports/subscriptions", "/reports/flash?o=subscriptions"], ["/reports/payments", "/reports/flash?o=payments"],
       ["/reports/compliance", null], ["/team/quality-monitoring", null], ["/reports/purchase-orders", null],
-      ["/reports/fulfillment", null], ["/reports/storage", null], ["/reports/fleet-management", null],
+      ["/reports/fulfillment", null], ["/reports/storage", null],
     ];
+    // Fleet management left this list with addition 0009t (16 November 2026): with its tenant's preview on it is a page
+    // of its own (expectFleetManagement), the placeholder only where the setting is off
     // the supervisor holds performance.team but not quality.manage: Quality monitoring refuses them (14 November 2026)
     for (const subject of ["manager", "agent-one", "supervisor"]) {
       const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -3598,6 +3600,58 @@ async function expectFiltersPending() {
   console.log(`${problems.length === before ? "PASS" : "FAIL"}  a filter's choice shows its pending state within 100 ms, dimmed and showing the choice, busy until the answer, on ${passed} of ${rows.length} reports`);
 }
 
+/**
+ * Assets → Fleet management (addition 0009t, brief B37): at 1280 and 1440 px, in English (manager) and Dutch (manager-nl),
+ * the page with its tenant's preview on: its title, the Preview banner, seven tiles of which five carry the Dummy badge,
+ * Monitored the sum of three states and the four states the sum In the field, the map with every marker a button with
+ * an aria-label, the side panel's devices, no placeholder, and neither the page nor the main area scrolling sideways.
+ * --provoke puts a wide block in the main area, which must read as a sideways scroll
+ */
+async function expectFleetManagement() {
+  for (const [subject, heading] of [["manager", "Fleet management"], ["manager-nl", "Vlootbeheer"]]) {
+    for (const width of [1280, 1440]) {
+      const ctx = await b.newContext({ viewport: { width, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "/reports/fleet-management");
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      await p.waitForSelector('[data-testid="fleet-list"], [data-testid="fleet-list-empty"]', { timeout: 15000 }).catch(() => {});
+      const m = await p.evaluate((spoil) => {
+        const main = document.querySelector("main");
+        if (spoil && main) { const d = document.createElement("div"); d.style.width = "3000px"; d.style.height = "4px"; main.append(d); }
+        const value = (k) => Number((document.querySelector(`[data-testid="fleet-tile-${k}-value"]`)?.textContent ?? "").replace(/[^0-9]/g, ""));
+        const markers = [...document.querySelectorAll('[data-testid="fleet-area"], [data-testid="fleet-group"]')];
+        return {
+          heading: document.querySelector("h1")?.textContent?.trim() ?? "",
+          banner: Boolean(document.querySelector('[data-testid="fleet-preview-banner"]')),
+          placeholder: Boolean(document.querySelector('[data-testid="placeholder-banner"]')),
+          tiles: document.querySelectorAll('[data-testid^="fleet-tile-"][aria-pressed]').length,
+          dummies: [...document.querySelectorAll('[data-testid^="fleet-tile-"][aria-pressed]')].filter((t) => /Dummy/.test(t.textContent ?? "")).length,
+          inField: value("in_field"), monitored: value("monitored"), ready: value("ready"), attention: value("needs_attention"),
+          noConnection: value("no_connection"), notMonitored: value("not_monitored"),
+          markers: markers.length, markerButtons: markers.filter((e) => e.tagName === "BUTTON" && (e.getAttribute("aria-label") ?? "") !== "").length,
+          rows: document.querySelectorAll('[data-testid="fleet-row"]').length,
+          mainX: main ? main.scrollWidth - main.clientWidth : -1,
+          pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      }, provoke);
+      const where = `${subject} /reports/fleet-management at ${width}`;
+      if (m.heading !== heading) problems.push(`${where}: heading "${m.heading}", expected ${heading}`);
+      if (!m.banner) problems.push(`${where}: the Preview banner is missing`);
+      if (m.placeholder) problems.push(`${where}: the placeholder is shown where the preview is on`);
+      if (m.tiles !== 7 || m.dummies !== 5) problems.push(`${where}: ${m.tiles} tiles with ${m.dummies} Dummy badges, expected 7 and 5`);
+      if (m.monitored !== m.ready + m.attention + m.noConnection) problems.push(`${where}: Monitored ${m.monitored} is not Ready + Needs attention + No connection`);
+      if (m.inField !== m.ready + m.attention + m.noConnection + m.notMonitored) problems.push(`${where}: the four states do not add up to In the field ${m.inField}`);
+      if (m.markers === 0 || m.markerButtons !== m.markers) problems.push(`${where}: ${m.markerButtons} of ${m.markers} markers are buttons with a name`);
+      if (m.rows === 0) problems.push(`${where}: the side panel lists no device`);
+      if (m.pageX > 0) problems.push(`${where}: the page scrolls sideways by ${m.pageX}px`);
+      if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px`);
+      await p.screenshot({ path: `${outDir}/${subject}-fleet-management-${width}.png` });
+      await ctx.close();
+    }
+  }
+}
+
 // Welcome on open (addition 0008z): a browser with an identity and no browser session (a fresh sign-in, a new session) that
 // opens a deep link lands on Welcome; from then on a deep link opens as asked; the API is never redirected. The mock
 // identity travels as the cma-mock-subject cookie here, as a browser after ?as= or IAP's sign-in, not the verifiers' header.
@@ -3645,6 +3699,7 @@ await expectInstalledBaseModels();
 await expectAsOfTyping();
 await expectHistoryStartTyping();
 await expectTeamHoursDutch();
+await expectFleetManagement();
 await expectNoPlanB();
 await expectWelcomeOnOpen();
 await expectFiltersPending();

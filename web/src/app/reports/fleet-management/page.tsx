@@ -1,13 +1,13 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { FleetManagement } from "@/components/FleetManagement";
 import { resolve } from "../../access";
 
 /**
- * Fleet management, a placeholder page of the rail (Martin, 15 November 2026; decision D5 extended to whole pages, as the
- * pages of 13 November): its purpose, what will feed it and its definition status, never a figure or customer data
- * (components/PlaceholderPage)
+ * Assets → Fleet management (addition 0009t; Martin, 16 November 2026, brief B37): the devices In the field on a map by
+ * postcode area, the monitoring-state tiles and the devices that need attention, while the tenant's
+ * fleet_management.dummy_preview is on; the placeholder of 15 November 2026 otherwise (components/FleetManagement)
  */
-export default async function FleetManagementPage() {
+export default async function FleetManagementPage({ searchParams }: PageProps<"/reports/fleet-management">) {
   const r = await resolve();
   if (!r.ok) return r.page;
-  return <PlaceholderPage which="fleetManagement" me={r.me} copy={r.copy} />;
+  return <FleetManagement searchParams={await searchParams} me={r.me} copy={r.copy} />;
 }

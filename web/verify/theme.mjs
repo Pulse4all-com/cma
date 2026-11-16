@@ -57,6 +57,8 @@ const palette = new Set([
   "#ffffff", "#fffdf6", "#fdfbf1", "#eaf4fc", "#e3eefd", "#9ecff5", "#3b6fb3", "#265ba4", "#2e61a6",
   "#27ae6f", "#f4d9d0", "#0b133d", "#1c2127", "#666666", "#c98a1b", "#fbf1dc", "#b8433c", "#f8e4e1",
   "#e6f6ee", "#f3f4f6", "#d9e2ec", "#5b6472",
+  // Assets → Fleet management's Not monitored (addition 0009t, decision D8 of 16 November 2026)
+  "#c3cad3",
 ]);
 
 function rgbToHex(rgb) {
@@ -236,8 +238,11 @@ const pages = [
   { path: "/reports/purchase-orders", subject: "manager", noHint: true },
   { path: "/reports/fulfillment", subject: "manager", noHint: true },
   { path: "/reports/storage", subject: "reader", noHint: true },
-  // Fleet management (placeholder, 15 November 2026), last in Assets
+  // Fleet management, last in Assets: a placeholder since 15 November 2026, the map with the tenant's preview on since
+  // addition 0009t (the mock's Pulse4all Subscriptions), in English and Dutch: the country outlines, the markers, the
+  // states' colours (Not monitored #C3CAD3, D8)
   { path: "/reports/fleet-management", subject: "manager", noHint: true },
+  { path: "/reports/fleet-management", subject: "manager-nl", noHint: true },
   { path: "/configuration/sources", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },

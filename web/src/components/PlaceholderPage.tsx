@@ -19,7 +19,7 @@ import { holdsAny, navEntries, type NavItem } from "@/lib/nav";
  * Campaign monitoring's (CampaignParts: the banner, the dashed section) and Active's (StatusBadge, the definition's status).
  * The permission is the rail item's own (lib/nav), so the page and the rail can never disagree.
  */
-export type PlaceholderKey = "subscriptions" | "payments" | "compliance" | "qualityMonitoring" | "purchaseOrders" | "fulfillment" | "storage" | "fleetManagement";
+export type PlaceholderKey = "subscriptions" | "payments" | "compliance" | "qualityMonitoring" | "purchaseOrders" | "fulfillment" | "storage";
 
 const PAGES: Record<PlaceholderKey, { page: NavItem["page"]; flash?: "subscriptions" | "payments" }> = {
   subscriptions: { page: "subscriptions", flash: "subscriptions" },
@@ -29,7 +29,6 @@ const PAGES: Record<PlaceholderKey, { page: NavItem["page"]; flash?: "subscripti
   purchaseOrders: { page: "purchase-orders" },
   fulfillment: { page: "fulfillment" },
   storage: { page: "storage" },
-  fleetManagement: { page: "fleet-management" },
 };
 
 /** The rail's item of a page: its label and its permission */
@@ -56,7 +55,20 @@ export function PlaceholderPage({ which, me, copy }: { which: PlaceholderKey; me
   return (
     <Shell copy={copy} me={me} active={def.page}>
       <PageTitle>{item.label}</PageTitle>
-      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted" data-testid="placeholder-intro">{t[`intro_${which}`]}</p>
+      <PlaceholderBody intro={t[`intro_${which}`]} fedBy={t[`fedBy_${which}`]} flash={def.flash ?? null} me={me} copy={copy} />
+    </Shell>
+  );
+}
+
+/**
+ * A placeholder's content under its title: the purpose, the Muted banner, the badges and what will feed it. Also Assets →
+ * Fleet management's while its tenant's preview setting is off (addition 0009t, D6: "the page stays the placeholder")
+ */
+export function PlaceholderBody({ intro, fedBy, flash, me, copy }: { intro: string; fedBy: string; flash: "subscriptions" | "payments" | null; me: Principal; copy: Copy }) {
+  const t = copy.placeholders;
+  return (
+    <>
+      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted" data-testid="placeholder-intro">{intro}</p>
       <PlaceholderBanner testId="placeholder-banner">{t.banner}</PlaceholderBanner>
 
       <div className="mb-6 flex flex-wrap items-center gap-4" data-testid="placeholder-status">
@@ -69,17 +81,17 @@ export function PlaceholderPage({ which, me, copy }: { which: PlaceholderKey; me
 
       <div className="grid max-w-3xl grid-cols-1 gap-6">
         <DashedSection title={t.fedByTitle} testId="placeholder-fed-by">
-          <p>{t[`fedBy_${which}`]}</p>
-          {def.flash ? (
+          <p>{fedBy}</p>
+          {flash ? (
             <p className="mt-3">
-              <Link href={flashHref("/reports/flash", { o: def.flash }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline"
+              <Link href={flashHref("/reports/flash", { o: flash }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline"
                 data-testid="placeholder-flash">
-                {t[`link_${def.flash}`]}
+                {t[`link_${flash}`]}
               </Link>
             </p>
           ) : null}
         </DashedSection>
       </div>
-    </Shell>
+    </>
   );
 }

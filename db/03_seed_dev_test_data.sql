@@ -239,3 +239,21 @@ begin
 end
 $$;
 
+
+-- Assets → Fleet management's preview for Pulse4all Subscriptions in dev (after addition 0009t; Martin, 16 November 2026,
+-- brief B37, D6): the page shows the devices In the field on a map with dummy locations and monitoring states. Prod keeps
+-- the default, false, until Martin sets it in Studio. Only a value the tenant does not have yet is added, so a change in
+-- Studio or through the Configuration API survives a rerun. A database without 0009t yet says so; rerun this seed after
+-- 188_fleet_management.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if not exists (select 1 from cma.setting where key = 'fleet_management.dummy_preview') then
+    raise notice 'Fleet management''s setting does not exist yet (addition 0009t): rerun this seed after 188_fleet_management.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values (v_subs, 'fleet_management.dummy_preview', 'true')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
