@@ -8539,7 +8539,7 @@ const nl = {
     reason_self_test_failed: "Zelftest mislukt",
     reason_tracker_battery_low: "Batterij tracker laag",
     reason_items_past_due: "Items achterstallig",
-    badge_items_past_due: "Onderhoud over datum",
+    badge_items_past_due: "Items achterstallig",
     rowArea: "Serienummer {serial}, {state}: toon postcodegebied {code}",
     rowNoArea: "Serienummer {serial}, {state}: geen postcodegebied",
     listOf: "{shown} van {total} apparaten",
