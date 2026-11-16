@@ -1,28 +1,33 @@
 "use client";
 
 /**
- * Assets → Fleet management's map (addition 0009t; brief B37, D1 and D7): the devices In the field by postcode area as
- * markers on the country outlines of Natural Earth (lib/fleet-map-outlines, built once by tools/fleet/build-map.mjs: no
- * tiles, no request leaves the app, so it works behind IAP and the CSP). The tenant's markets are Background Blue with a
- * Light Blue edge, other land neutral grey with a Border edge. Areas close together at the view's scale form one marker
- * (greedy, 7.5 % of the view's width, lib/fleet-management clusterPoints; at the closest zoom a group's areas spread apart), sized by its count, with an amber badge for
- * the devices that need attention (Needs attention and No connection). Every marker is a button with an aria-label: a
- * group zooms in, an area selects it (the address's area, so the side panel lists its devices). Europe, + and − change the
- * view; the zoom animates (unless the person asks for reduced motion). Codes, place names and counts only.
+ * Assets → Fleet management's map (addition 0009t; brief B37, D1 and D7; brief B38, E1 and E2): the devices In the field by
+ * postcode area as markers on the country outlines of Natural Earth (lib/fleet-map-outlines, built once by
+ * tools/fleet/build-map.mjs: no tiles, no request leaves the app, so it works behind IAP and the CSP). The tenant's markets
+ * are Background Blue with a Light Blue edge, other land neutral grey with a Border edge. Areas whose markers would cover
+ * each other on screen form one marker (E1: lib/fleet-management groupOnScreen, recomputed on every zoom; at the closest
+ * zoom a group's areas spread apart), sized by its count, with an amber badge for the devices that need attention (Needs
+ * attention and No connection) outside the circle, top right, never over the count. Every marker is a button with an
+ * aria-label: a group zooms in, an area selects it (the address's area, so the side panel lists its devices). The start
+ * view fits the areas with devices In the field under the filters (E2: lib/fleet-management startBoxOf); All markets
+ * returns to it, + and − zoom; the zoom animates (unless the person asks for reduced motion). Codes, place names and
+ * counts only.
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import type { FleetArea } from "@/lib/data/types";
 import {
-  boxOfPoints, clusterPoints, FLEET_ADDRESS, FLEET_CLUSTER_SHARE, FLEET_MIN_VIEW_KM, fleetHref, fleetPointsOf, markerSizePx, spreadClusters, unionBox, viewBetween, viewOfBox, zoomView,
+  badgeOffsetPx, boxOfPoints, FLEET_ADDRESS, FLEET_MIN_VIEW_KM, fleetHref, fleetPointsOf, groupOnScreen, markerSizePx, spreadClusters, startBoxOf, unionBox,
+  viewBetween, viewOfBox, zoomView,
   type FleetTileKey, type FleetView,
 } from "@/lib/fleet-management";
 import { FLEET_MAP_COUNTRIES } from "@/lib/fleet-map-outlines";
 
 export interface FleetMapLabels {
   mapLabel: string;
-  europe: string;
+  /** The button back to the start view: the Market filter's own words (E2) */
+  allMarkets: string;
   zoomIn: string;
   zoomOut: string;
   clusterArea: string;
@@ -31,7 +36,7 @@ export interface FleetMapLabels {
 
 const HEIGHT_PX = 520;
 const ANIMATION_MS = 350;
-/** The view when neither a market nor an area gives one: Europe around the projection's centre */
+/** The view when neither an area nor a market gives one: Europe around the projection's centre */
 const EUROPE_BOX: [number, number, number, number] = [-1900, -1500, 1900, 1400];
 
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k: string) => String(values[k] ?? ""));
@@ -50,15 +55,16 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
   const boxRef = useRef<HTMLDivElement>(null);
   const [widthPx, setWidthPx] = useState(960);
   const aspect = HEIGHT_PX / widthPx;
-  const points = fleetPointsOf(areas, tile);
+  const points = useMemo(() => fleetPointsOf(areas, tile), [areas, tile]);
   const marketSet = new Set(markets);
-  // Europe: the tenant's markets' outlines, else the areas', else the continent
-  const homeBox = unionBox(markets.flatMap((m) => (FLEET_MAP_COUNTRIES[m] ? [FLEET_MAP_COUNTRIES[m].box] : [])))
-    ?? boxOfPoints(points) ?? EUROPE_BOX;
-  // the view: Europe (fitted to the map's shape whatever its width) until the person zooms; then its centre and width,
-  // its height following the map's shape, so a resize keeps both
+  // the start view (E2): the areas with devices In the field under the filters, padded and square; else the tenant's
+  // markets' outlines, else the continent
+  const homeBox = startBoxOf(areas)
+    ?? unionBox(markets.flatMap((m) => (FLEET_MAP_COUNTRIES[m] ? [FLEET_MAP_COUNTRIES[m].box] : []))) ?? EUROPE_BOX;
+  // the view: the start view (fitted to the map's shape whatever its width) until the person zooms; then its centre and
+  // width, its height following the map's shape, so a resize keeps both
   const [base, setBase] = useState<FleetView | null>(null);
-  const view: FleetView = base ? { ...base, h: base.w * aspect } : viewOfBox(homeBox, aspect);
+  const view: FleetView = base ? { ...base, h: base.w * aspect } : viewOfBox(homeBox, aspect, 0);
   const setView = (v: FleetView | null) => setBase(v);
   // an area's selection shows at once (its ring, aria-pressed) while the server answers: the 100 ms rule (CLAUDE.md,
   // Performance); the address decides again when the answer is there
@@ -66,6 +72,9 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
   const [pending, startTransition] = useTransition();
   const [shownArea, setShownArea] = useOptimistic(selectedAreaId);
   const frame = useRef<number | null>(null);
+  // while a zoom animates, the markers are grouped once at the coarser of its two scales (the wider view): markers apart
+  // at that scale stay apart as the view narrows, and the grouping is not run again on every frame
+  const [groupW, setGroupW] = useState<number | null>(null);
 
   // the map's width follows its card; the height stays, so the view keeps its centre and width
   useEffect(() => {
@@ -79,31 +88,36 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
   }, []);
   useEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
 
-  /** Animates to a view; home: back to Europe, fitted again from then on */
+  /** Animates to a view; home: back to the start view, fitted again from then on */
   const animateTo = (target: FleetView, home = false) => {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduced) { setView(home ? null : target); return; }
     const from = view;
     let start: number | null = null;
+    setGroupW(Math.max(from.w, target.w));
     const step = (now: number) => {
       if (start === null) start = now;
       const t = Math.min(1, (now - start) / ANIMATION_MS);
       setView(t >= 1 && home ? null : viewBetween(from, target, t));
+      if (t >= 1) setGroupW(null);
       frame.current = t < 1 ? requestAnimationFrame(step) : null;
     };
     frame.current = requestAnimationFrame(step);
   };
 
-  // at the closest zoom every area is a marker of its own: a group's areas (two of a city's, a few km apart) are spread
-  // around its centre, a marker's width apart, so none hides another
-  const grouped = clusterPoints(points, FLEET_CLUSTER_SHARE * view.w);
+  // the markers at the view's scale (E1): grouped where they would cover each other on screen, so they depend on the
+  // scale alone; at the closest zoom every area is a marker of its own: a group's areas (two of a city's, a few km apart)
+  // are spread around its centre, their boxes (badge included) apart, so none hides another
+  const pxPerKm = widthPx / view.w;
+  const groupPxPerKm = widthPx / Math.max(view.w, groupW ?? 0);
+  const grouped = useMemo(() => groupOnScreen(points, groupPxPerKm), [points, groupPxPerKm]);
   const closest = view.w <= FLEET_MIN_VIEW_KM * 1.01;
   const largest = Math.max(1, ...(closest ? points : grouped).map((c) => c.count));
-  const clusters = closest ? spreadClusters(grouped, (markerSizePx(largest, largest) + 8) * (view.w / widthPx)) : grouped;
+  const clusters = closest ? spreadClusters(grouped, pxPerKm, largest) : grouped;
   const left = view.cx - view.w / 2;
   const top = view.cy - view.h / 2;
-  const nf = new Intl.NumberFormat(locale);
+  const nf = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const shownCountries = Object.entries(FLEET_MAP_COUNTRIES).filter(([, c]) =>
     c.box[2] >= left && c.box[0] <= left + view.w && c.box[3] >= top && c.box[1] <= top + view.h);
 
@@ -143,9 +157,12 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
                 const target = viewOfBox(box, aspect, 0.35);
                 animateTo(target.w < view.w / 1.5 ? target : zoomView({ ...view, cx: c.x, cy: c.y }, 2));
               }}>
-              {nf.format(c.count)}
+              <span className="inline-block leading-none" data-testid="fleet-count">{nf.format(c.count)}</span>
               {c.attention > 0 ? (
-                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-p4a-warning px-1 text-caption font-semibold text-p4a-inkt" aria-hidden="true">
+                // outside the circle, top right: its centre on the circle's edge at 45° (E1), so it never covers the count
+                <span data-testid="fleet-badge" aria-hidden="true"
+                  className="absolute flex h-4 min-w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full bg-p4a-warning px-1 text-caption font-semibold leading-4 text-p4a-inkt"
+                  style={{ left: `calc(50% + ${badgeOffsetPx(size).toFixed(2)}px)`, top: `calc(50% - ${badgeOffsetPx(size).toFixed(2)}px)` }}>
                   {nf.format(c.attention)}
                 </span>
               ) : null}
@@ -153,9 +170,9 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
           );
         })}
         <div className="absolute left-3 top-3 flex gap-2">
-          <button type="button" data-testid="fleet-europe" onClick={() => animateTo(viewOfBox(homeBox, aspect), true)}
+          <button type="button" data-testid="fleet-all-markets" onClick={() => animateTo(viewOfBox(homeBox, aspect, 0), true)}
             className="h-8 rounded-button border border-p4a-deepblue bg-white px-3 text-small font-semibold text-p4a-deepblue focus:outline-none focus-visible:ring-2 focus-visible:ring-p4a-lightblue focus-visible:ring-offset-2">
-            {labels.europe}
+            {labels.allMarkets}
           </button>
           <button type="button" data-testid="fleet-zoom-in" aria-label={labels.zoomIn} title={labels.zoomIn} onClick={() => animateTo(zoomView(view, 2))}
             className="h-8 w-8 rounded-button border border-p4a-deepblue bg-white text-panel font-semibold leading-none text-p4a-deepblue focus:outline-none focus-visible:ring-2 focus-visible:ring-p4a-lightblue focus-visible:ring-offset-2">

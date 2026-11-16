@@ -190,48 +190,129 @@ export function fleetPointsOf(areas: readonly FleetArea[], tile: FleetTileKey | 
   return out;
 }
 
-/** The share of the view's side within which areas form one group (the brief: 7.5 %) */
-export const FLEET_CLUSTER_SHARE = 0.075;
+/** The gap in px two markers keep (E1: grouped when closer than the sum of their radii plus 4 px) */
+export const FLEET_MARKER_GAP_PX = 4;
+/** A marker's diameter in px: the smallest (its count and its badge apart, E1) and the largest */
+export const FLEET_MARKER_MIN_PX = 44;
+export const FLEET_MARKER_MAX_PX = 64;
+/** The attention badge's height in px (h-4) and the width it takes per character (12 px digits, px-1), at least 20 px */
+export const FLEET_BADGE_HEIGHT_PX = 16;
+const BADGE_CHAR_PX = 8;
+const BADGE_MIN_WIDTH_PX = 20;
+
+/** A marker's diameter in px by its count, against the largest on the map: 44 to 64 px */
+export function markerSizePx(count: number, largest: number): number {
+  return Math.round(FLEET_MARKER_MIN_PX + (FLEET_MARKER_MAX_PX - FLEET_MARKER_MIN_PX) * Math.sqrt(Math.min(1, Math.max(0, count) / Math.max(1, largest))));
+}
+
+/** The badge's offset from the marker's centre, right and up (E1: its centre on the circle's edge at 45°) */
+export function badgeOffsetPx(sizePx: number): number {
+  return (sizePx / 2) * Math.SQRT1_2;
+}
+
+/** The badge's width in px for its count (an estimate kept on the safe side: 8 px a character, a group separator each 3 digits) */
+export function badgeWidthPx(attention: number): number {
+  const digits = String(Math.max(0, Math.round(attention))).length;
+  const chars = digits + Math.floor((digits - 1) / 3);
+  return Math.max(BADGE_MIN_WIDTH_PX, 8 + BADGE_CHAR_PX * chars);
+}
 
 /**
- * Greedy clustering (the brief): the areas by count, largest first (then by id, so the result never depends on the
- * input's order); each area not yet taken starts a group and takes every area not yet taken within the radius of it.
- * A group sits at its members' centre weighted by their counts
+ * What a marker covers on screen around its centre, in px: its circle's box, and its badge (outside the circle, top right)
+ * where it has one. left, up, right, down: how far it reaches each way
  */
-export function clusterPoints(points: readonly FleetPoint[], radiusKm: number): FleetCluster[] {
-  const order = [...points].sort((a, b) => b.count - a.count || (a.areaId < b.areaId ? -1 : a.areaId > b.areaId ? 1 : 0));
-  const taken = new Set<string>();
-  const out: FleetCluster[] = [];
-  for (const seed of order) {
-    if (taken.has(seed.areaId)) continue;
-    const members: FleetPoint[] = [];
-    for (const p of order) {
-      if (taken.has(p.areaId)) continue;
-      if (Math.hypot(p.x - seed.x, p.y - seed.y) <= radiusKm) {
-        members.push(p);
-        taken.add(p.areaId);
+export function markerExtentPx(count: number, attention: number, largest: number): { left: number; up: number; right: number; down: number } {
+  const r = markerSizePx(count, largest) / 2;
+  if (attention <= 0) return { left: r, up: r, right: r, down: r };
+  const o = badgeOffsetPx(2 * r);
+  return { left: r, up: Math.max(r, o + FLEET_BADGE_HEIGHT_PX / 2), right: Math.max(r, o + badgeWidthPx(attention) / 2), down: r };
+}
+
+/** Whether two markers (centres in px) would cover each other, their gap included */
+function overlapPx(a: { x: number; y: number; e: ReturnType<typeof markerExtentPx> }, b: { x: number; y: number; e: ReturnType<typeof markerExtentPx> }): boolean {
+  const apartX = a.x <= b.x ? b.x - a.x >= a.e.right + b.e.left + FLEET_MARKER_GAP_PX : a.x - b.x >= b.e.right + a.e.left + FLEET_MARKER_GAP_PX;
+  if (apartX) return false;
+  return a.y <= b.y ? b.y - a.y < a.e.down + b.e.up + FLEET_MARKER_GAP_PX : a.y - b.y < b.e.down + a.e.up + FLEET_MARKER_GAP_PX;
+}
+
+function clusterOf(members: FleetPoint[]): FleetCluster {
+  const count = members.reduce((n, m) => n + m.count, 0);
+  const sorted = [...members].sort((a, b) => (a.areaId < b.areaId ? -1 : a.areaId > b.areaId ? 1 : 0));
+  return {
+    key: sorted.map((m) => m.areaId).join("+"),
+    x: members.reduce((n, m) => n + m.x * m.count, 0) / count,
+    y: members.reduce((n, m) => n + m.y * m.count, 0) / count,
+    count, attention: members.reduce((n, m) => n + m.attention, 0), members: sorted,
+  };
+}
+
+/**
+ * Groups the areas whose markers would cover each other on screen at the view's scale (E1, decided 16 November 2026):
+ * every area starts as a marker of its own; while two markers would overlap (their boxes, the badge included, closer than
+ * 4 px: so always when the distance between their centres is below the sum of their radii plus 4 px), the closest such
+ * pair becomes one marker at its members' centre weighted by their counts, and the sizes are taken again against the
+ * largest. A marker only shrinks as the largest grows, so the markers that stay apart stay apart. The result depends on
+ * the scale alone (px per km), never on the view's centre or the input's order: recomputed on every zoom
+ */
+export function groupOnScreen(points: readonly FleetPoint[], pxPerKm: number): FleetCluster[] {
+  let cs = [...points].sort((a, b) => (a.areaId < b.areaId ? -1 : a.areaId > b.areaId ? 1 : 0)).map((p) => clusterOf([p]));
+  for (;;) {
+    const largest = Math.max(1, ...cs.map((c) => c.count));
+    const placed = cs.map((c) => ({ x: c.x * pxPerKm, y: c.y * pxPerKm, e: markerExtentPx(c.count, c.attention, largest) }));
+    let best: [number, number] | null = null;
+    let bestD = Infinity;
+    for (let i = 0; i < cs.length; i += 1) {
+      for (let j = i + 1; j < cs.length; j += 1) {
+        const a = placed[i];
+        const b = placed[j];
+        if (!a || !b || !overlapPx(a, b)) continue;
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < bestD) { bestD = d; best = [i, j]; }
       }
     }
-    const count = members.reduce((n, m) => n + m.count, 0);
-    out.push({
-      key: members.map((m) => m.areaId).sort().join("+"),
-      x: members.reduce((n, m) => n + m.x * m.count, 0) / count,
-      y: members.reduce((n, m) => n + m.y * m.count, 0) / count,
-      count, attention: members.reduce((n, m) => n + m.attention, 0), members,
-    });
+    if (!best) return cs;
+    const [i, j] = best;
+    const merged = clusterOf([...(cs[i]?.members ?? []), ...(cs[j]?.members ?? [])]);
+    cs = cs.filter((_, k) => k !== i && k !== j).concat(merged);
   }
-  return out;
+}
+
+/** The start view's padding on each side (E2: 12 %) and its smallest side (300 km) */
+export const FLEET_START_PADDING = 0.12;
+export const FLEET_START_MIN_KM = 300;
+
+/**
+ * The start view's box (E2, decided 16 November 2026): the areas with devices In the field under the filters, their
+ * centres' bounding box with 12 % padding on each side, square, never smaller than 300 km; null when no area holds one
+ */
+export function startBoxOf(areas: readonly FleetArea[]): [number, number, number, number] | null {
+  const pts = areas.filter((a) => a.areaId !== null && a.lat !== null && a.lon !== null && a.inField > 0)
+    .map((a) => projectKm(a.lon as number, a.lat as number));
+  if (pts.length === 0) return null;
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const side = Math.max(FLEET_START_MIN_KM, Math.max(x1 - x0, y1 - y0) * (1 + 2 * FLEET_START_PADDING));
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  return [cx - side / 2, cy - side / 2, cx + side / 2, cy + side / 2];
 }
 
 /**
  * At the closest zoom a group cannot be split by zooming further (two areas of one city a few km apart): its areas are
- * shown each as a marker of its own, around the group's centre, apart by the given distance (the largest marker's
- * diameter in km), so every marker can be seen and clicked
+ * shown each as a marker of its own, around the group's centre. Neighbours on that ring are apart by the whole reach of
+ * the largest of them (its box, badge included) twice over, plus the gap, times √2: on screen the boxes of two neighbours
+ * at any angle stay apart, as groupOnScreen's (E1). largest: the count the sizes are taken against
  */
-export function spreadClusters(groups: readonly FleetCluster[], apartKm: number): FleetCluster[] {
+export function spreadClusters(groups: readonly FleetCluster[], pxPerKm: number, largest: number): FleetCluster[] {
   return groups.flatMap((g) => {
     if (g.members.length <= 1) return [g];
     const n = g.members.length;
+    const reach = Math.max(...g.members.map((m) => {
+      const e = markerExtentPx(m.count, m.attention, largest);
+      return Math.max(e.left, e.up, e.right, e.down);
+    }));
+    const apartKm = (Math.SQRT2 * (2 * reach + FLEET_MARKER_GAP_PX)) / pxPerKm;
     const r = apartKm / (2 * Math.sin(Math.PI / n));
     return [...g.members].sort((a, b) => (a.areaId < b.areaId ? -1 : 1)).map((m, i) => ({
       key: m.areaId, x: g.x + r * Math.cos((2 * Math.PI * i) / n - Math.PI / 2), y: g.y + r * Math.sin((2 * Math.PI * i) / n - Math.PI / 2),
@@ -288,9 +369,4 @@ export function boxOfPoints(points: readonly { x: number; y: number }[]): [numbe
 export function viewBetween(a: FleetView, b: FleetView, t: number): FleetView {
   const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
   return { cx: a.cx + (b.cx - a.cx) * e, cy: a.cy + (b.cy - a.cy) * e, w: a.w + (b.w - a.w) * e, h: a.h + (b.h - a.h) * e };
-}
-
-/** A marker's diameter in px by its count, against the largest on the map: 28 to 56 px */
-export function markerSizePx(count: number, largest: number): number {
-  return Math.round(28 + 28 * Math.sqrt(Math.max(0, count) / Math.max(1, largest)));
 }

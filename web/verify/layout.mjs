@@ -3605,7 +3605,14 @@ async function expectFiltersPending() {
  * the page with its tenant's preview on: its title, the Preview banner, seven tiles of which five carry the Dummy badge,
  * Monitored the sum of three states and the four states the sum In the field, the map with every marker a button with
  * an aria-label, the side panel's devices, no placeholder, and neither the page nor the main area scrolling sideways.
- * --provoke puts a wide block in the main area, which must read as a sideways scroll
+ * Since addition 0009v (brief B38), run with the local fixture's volume (verify/perf-volume-fixture.sql): at the start view,
+ * after one zoom in and at the closest zoom (the areas of a group spread apart), no two markers' boxes intersect, no
+ * badge's box intersects its count's text box, another marker's box or another badge (E1); at the start view every marker's centre is inside the map and the markers' counts add up to In the
+ * field less the devices without an area, so every cluster is shown (E2), and the button back to it reads All markets
+ * (Alle markten); no last contact reads None (Geen) (E4); each device of the default list leads with why it is there:
+ * the Items past due badge, or the badge of Needs attention or No connection (E5).
+ * --provoke puts a wide block in the main area, which must read as a sideways scroll, and moves the second marker onto
+ * the first, which must read as two markers covering each other
  */
 async function expectFleetManagement() {
   for (const [subject, heading] of [["manager", "Fleet management"], ["manager-nl", "Vlootbeheer"]]) {
@@ -3636,6 +3643,19 @@ async function expectFleetManagement() {
         };
       }, provoke);
       const where = `${subject} /reports/fleet-management at ${width}`;
+      const startMarkers = await p.evaluate(fleetMarkers, provoke);
+      problems.push(...fleetMarkerProblems(startMarkers, `${where}, start view`, true));
+      const homeLabel = await p.evaluate(() => document.querySelector('[data-testid="fleet-all-markets"]')?.textContent?.trim() ?? "");
+      if (homeLabel !== (subject === "manager" ? "All markets" : "Alle markten")) problems.push(`${where}: the start view's button reads "${homeLabel}"`);
+      const rowsWhy = await p.evaluate(() => [...document.querySelectorAll('[data-testid="fleet-row"]')].map((r) => ({
+        pastDue: Boolean(r.querySelector('[data-testid="fleet-row-past-due"]')),
+        state: r.querySelector('[data-testid="fleet-row-state"]')?.getAttribute("data-state") ?? null,
+        contact: r.querySelector('[data-testid="fleet-row-contact"]')?.textContent?.trim() ?? "",
+      })));
+      const notWhy = rowsWhy.filter((r) => r.pastDue === (r.state === "needs_attention" || r.state === "no_connection"));
+      if (notWhy.length > 0) problems.push(`${where}: ${notWhy.length} devices of the attention list do not lead with why they are there (E5)`);
+      const none = rowsWhy.filter((r) => /(^|: )(None|Geen)$/.test(r.contact));
+      if (none.length > 0) problems.push(`${where}: ${none.length} last contacts read None (E4)`);
       if (m.heading !== heading) problems.push(`${where}: heading "${m.heading}", expected ${heading}`);
       if (!m.banner) problems.push(`${where}: the Preview banner is missing`);
       if (m.placeholder) problems.push(`${where}: the placeholder is shown where the preview is on`);
@@ -3647,9 +3667,71 @@ async function expectFleetManagement() {
       if (m.pageX > 0) problems.push(`${where}: the page scrolls sideways by ${m.pageX}px`);
       if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px`);
       await p.screenshot({ path: `${outDir}/${subject}-fleet-management-${width}.png` });
+      await p.click('[data-testid="fleet-zoom-in"]');
+      await p.waitForTimeout(700);
+      problems.push(...fleetMarkerProblems(await p.evaluate(fleetMarkers, false), `${where}, zoomed in once`, false));
+      // a group followed in (its button zooms in on its areas) until none is left: at the closest zoom a group's areas
+      // spread apart, still none covering another
+      let followed = 0;
+      for (; followed < 10 && (await p.$('[data-testid="fleet-group"]')); followed += 1) {
+        await p.click('[data-testid="fleet-group"]');
+        await p.waitForTimeout(700);
+      }
+      const closest = await p.evaluate(fleetMarkers, false);
+      if (followed > 0 && closest.markers.length === 0) problems.push(`${where}: no marker in view after following a group in`);
+      problems.push(...fleetMarkerProblems(closest, `${where}, a group followed in ${followed} times`, false));
       await ctx.close();
     }
   }
+}
+
+/**
+ * The map's markers as the browser lays them out (runs in the page): each marker's box, its count's text box and its
+ * badge's box, the map's box, the counts, and the devices In the field and without an area the page states. spoil moves
+ * the second marker onto the first (--provoke)
+ */
+function fleetMarkers(spoil) {
+  const els = [...document.querySelectorAll('[data-testid="fleet-area"], [data-testid="fleet-group"]')];
+  if (spoil && els.length >= 2) { els[1].style.left = els[0].style.left; els[1].style.top = els[0].style.top; }
+  const box = (e) => { if (!e) return null; const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
+  const num = (e) => Number((e?.textContent ?? "").replace(/[^0-9]/g, "")) || 0;
+  return {
+    map: box(document.querySelector('[data-testid="fleet-map"] [role="group"]')),
+    markers: els.map((e) => ({ box: box(e), count: box(e.querySelector('[data-testid="fleet-count"]')), badge: box(e.querySelector('[data-testid="fleet-badge"]')),
+      n: num(e.querySelector('[data-testid="fleet-count"]')) })),
+    inField: num(document.querySelector('[data-testid="fleet-tile-in_field-value"]')),
+    withoutArea: num(document.querySelector('[data-testid="fleet-without-area"]')),
+  };
+}
+
+/** E1 and E2 on fleetMarkers' answer: boxes apart, badges off the counts and off the other markers, (start) every cluster shown inside the map */
+function fleetMarkerProblems(m, where, start) {
+  const out = [];
+  const meets = (a, b) => a && b && a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+  let covered = 0;
+  let badgeOnCount = 0;
+  let badgeOnOther = 0;
+  for (let i = 0; i < m.markers.length; i += 1) {
+    const a = m.markers[i];
+    if (meets(a.badge, a.count)) badgeOnCount += 1;
+    for (let j = 0; j < m.markers.length; j += 1) {
+      if (j === i) continue;
+      const b = m.markers[j];
+      if (j > i && meets(a.box, b.box)) covered += 1;
+      if (meets(a.badge, b.box) || (j > i && meets(a.badge, b.badge))) badgeOnOther += 1;
+    }
+  }
+  if (covered > 0) out.push(`${where}: ${covered} pairs of markers whose boxes intersect (E1)`);
+  if (badgeOnCount > 0) out.push(`${where}: ${badgeOnCount} badges over their marker's count (E1)`);
+  if (badgeOnOther > 0) out.push(`${where}: ${badgeOnOther} badges over another marker (E1)`);
+  if (start) {
+    const outside = m.markers.filter((x) => !m.map || !x.box || (x.box.l + x.box.r) / 2 < m.map.l || (x.box.l + x.box.r) / 2 > m.map.r
+      || (x.box.t + x.box.b) / 2 < m.map.t || (x.box.t + x.box.b) / 2 > m.map.b).length;
+    if (outside > 0) out.push(`${where}: ${outside} markers' centres outside the map (E2)`);
+    const shown = m.markers.reduce((n, x) => n + x.n, 0);
+    if (shown !== m.inField - m.withoutArea) out.push(`${where}: the markers hold ${shown} devices, In the field less those without an area is ${m.inField - m.withoutArea} (E2: every cluster shown)`);
+  }
+  return out;
 }
 
 // Welcome on open (addition 0008z): a browser with an identity and no browser session (a fresh sign-in, a new session) that
