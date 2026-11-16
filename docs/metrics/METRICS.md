@@ -10024,7 +10024,7 @@ agoText(computed_at, now): 'now' under 10 s, then seconds, minutes, hours, days 
 
 - tenant: RLS plus cma.current_tenant_id()
 
-**Time** now = the browser render's Date; computed_at is the instant every age and state in the snapshot was measured against.
+**Time** now = the browser render's Date; computed_at is the instant the snapshot's counts and stored states were measured against; the rows' clock fields (open and waiting business time, minutes to breach, sla_state, past_target) are as of the read.
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
@@ -10134,7 +10134,7 @@ floor(waiting_business_seconds / 60) formatted by fmtBusinessMinutes ('x min' un
 - tenant: RLS
 - the not-called open lead set; the page's market/person/state filters narrow the rows shown
 
-**Time** Business seconds in the deal's market's office hours (market's own schedule, else '*', minus holidays of the market or '*'); frozen at the snapshot's computed_at, so the value moves once a minute, not continuously.
+**Time** Business seconds in the deal's market's office hours (market's own schedule, else '*', minus holidays of the market or '*'); as of the read (now() of the request, derived from the stored created_at, market and the market's calendar), so the value is current at every read.
 
 **Settings**
 
@@ -10250,7 +10250,7 @@ Badge from open_lead_row.past_target: true → 'Past target' (error tone), false
 - tenant: RLS
 - the not-called open lead set
 
-**Time** Business seconds in the market's office hours against the target, at the snapshot's computed_at; strictly greater than the target means past.
+**Time** Business seconds in the market's office hours against the target, as of the read (the row's own state); strictly greater than the target means past. The list filter and the counts follow the state the refresh stored, up to one job run behind.
 
 **Settings**
 
@@ -10368,7 +10368,7 @@ floor(open_business_seconds/60) via fmtBusinessMinutes; open_business_seconds = 
 - tenant: RLS
 - the open counted ticket set
 
-**Time** Business seconds in the ticket's market's office hours since creation, at the snapshot's computed_at.
+**Time** Business seconds in the ticket's market's office hours since creation, as of the read.
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
@@ -10478,7 +10478,7 @@ sla_state: 'no_hours' when open_business_seconds is null; 'breached' when open_s
 - tenant: RLS
 - the open counted ticket set
 
-**Time** Business seconds against the SLA at the snapshot's computed_at; at-or-past boundaries (>=) for both at_risk and breached.
+**Time** Business seconds against the SLA as of the read (the row's own state); at-or-past boundaries (>=) for both at_risk and breached. The list filter and the counts follow the state the refresh stored, up to one job run behind.
 
 **Settings**
 
@@ -10536,7 +10536,7 @@ minutes_to_breach = sla_minutes - floor(open_business_seconds/60); null for no_h
 - tenant: RLS
 - the open counted ticket set
 
-**Time** Business minutes of the ticket's market at the snapshot's computed_at.
+**Time** Business minutes of the ticket's market, as of the read.
 
 **Settings**
 

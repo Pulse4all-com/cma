@@ -575,8 +575,8 @@
         },
         {
           "name": "follow_up_item",
-          "what": "Every open lead, ticket and task of the latest refresh: kind, order, market, owner as a person, state, and the row's fields as JSON (ids, codes and times; never a task's text)",
-          "how": "Written with the snapshot from cma.open_leads_of, open_tickets_of and open_tasks_of (since 0008s); since 0009o only the items that changed are deleted and inserted, the others stay, and nothing is written on a minute that found nothing changed; derived, no audit trigger"
+          "what": "Every open lead, ticket and task of the latest refresh: kind, order, market, owner as a person, state, and the row's stored fields as JSON (ids, codes and times; never a task's text); a lead's and a ticket's clock fields (business time waited or open, minutes to breach, response-time state) are not stored, the reads derive them",
+          "how": "Written with the snapshot from cma.open_leads_of, open_tickets_of and open_tasks_of (since 0008s); since 0009o only the items that changed are deleted and inserted, the others stay, and nothing is written on a minute that found nothing changed; since 0009u the clock fields are left out of the row, so the clock alone no longer writes an item every minute: it is written when its content, owner, market or state changes, when its place in the order moves, or for a lead's day counts at its market's midnight; derived, no audit trigger"
         },
         {
           "name": "follow_up_marker",

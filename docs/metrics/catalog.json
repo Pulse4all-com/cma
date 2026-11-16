@@ -22435,7 +22435,7 @@
       "filters": [
         "tenant: RLS plus cma.current_tenant_id()"
       ],
-      "time": "now = the browser render's Date; computed_at is the instant every age and state in the snapshot was measured against.",
+      "time": "now = the browser render's Date; computed_at is the instant the snapshot's counts and stored states were measured against; the rows' clock fields (open and waiting business time, minutes to breach, sla_state, past_target) are as of the read.",
       "comparison": null,
       "settings": [],
       "permissions": {
@@ -22643,7 +22643,7 @@
         "tenant: RLS",
         "the not-called open lead set; the page's market/person/state filters narrow the rows shown"
       ],
-      "time": "Business seconds in the deal's market's office hours (market's own schedule, else '*', minus holidays of the market or '*'); frozen at the snapshot's computed_at, so the value moves once a minute, not continuously.",
+      "time": "Business seconds in the deal's market's office hours (market's own schedule, else '*', minus holidays of the market or '*'); as of the read (now() of the request, derived from the stored created_at, market and the market's calendar), so the value is current at every read.",
       "comparison": null,
       "settings": [
         {
@@ -22846,7 +22846,7 @@
         "tenant: RLS",
         "the not-called open lead set"
       ],
-      "time": "Business seconds in the market's office hours against the target, at the snapshot's computed_at; strictly greater than the target means past.",
+      "time": "Business seconds in the market's office hours against the target, as of the read (the row's own state); strictly greater than the target means past. The list filter and the counts follow the state the refresh stored, up to one job run behind.",
       "comparison": null,
       "settings": [
         {
@@ -23056,7 +23056,7 @@
         "tenant: RLS",
         "the open counted ticket set"
       ],
-      "time": "Business seconds in the ticket's market's office hours since creation, at the snapshot's computed_at.",
+      "time": "Business seconds in the ticket's market's office hours since creation, as of the read.",
       "comparison": null,
       "settings": [],
       "permissions": {
@@ -23236,7 +23236,7 @@
         "tenant: RLS",
         "the open counted ticket set"
       ],
-      "time": "Business seconds against the SLA at the snapshot's computed_at; at-or-past boundaries (>=) for both at_risk and breached.",
+      "time": "Business seconds against the SLA as of the read (the row's own state); at-or-past boundaries (>=) for both at_risk and breached. The list filter and the counts follow the state the refresh stored, up to one job run behind.",
       "comparison": null,
       "settings": [
         {
@@ -23326,7 +23326,7 @@
         "tenant: RLS",
         "the open counted ticket set"
       ],
-      "time": "Business minutes of the ticket's market at the snapshot's computed_at.",
+      "time": "Business minutes of the ticket's market, as of the read.",
       "comparison": null,
       "settings": [
         {
