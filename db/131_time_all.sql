@@ -4,8 +4,8 @@
 -- 124_time_flash.sql generalised to the whole Workspace: times every database read the web makes for a page, a poll or
 -- a report, on the data the database holds, as the application (cma_app, row-level security on), per active tenant,
 -- acting as the tenant's first active person holding the read's permission (kind person, the oldest; a read without such
--- a person reads skip). Each read is the best of two runs, every row fetched; a page then gets one row that sums its
--- reads (the sum is a ceiling: the web runs a page's reads in parallel). No addition, no write: the reads run in a
+-- a person reads skip). Each read is the best of two runs, every row fetched, except a poll's (below); a page then gets
+-- one row that sums its reads (the sum is a ceiling: the web runs a page's reads in parallel). No addition, no write: the reads run in a
 -- read-only subtransaction that is rolled back (its rows kept in variables), so the script runs alike as one transaction
 -- (Cloud SQL Studio) and statement by statement (psql), in any database, at any time, as often as wanted. Run as your
 -- own IAM login after 128_sources_last_read.sql (0008zq) and, since addition 0008zv (the identity read names
@@ -55,6 +55,20 @@
 -- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
 -- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
+-- A poll's row (class poll; since 16 November 2026, Martin's brief on 131's poll timings) is the median of
+-- verify.poll_runs runs after verify.poll_warmup untimed ones (5 after 6), not the best of two: a poll runs every few
+-- seconds on a connection the pool keeps, so it pays neither a session's first calls (its plans built, its functions'
+-- statements planned with each call's values) nor a single fast run, and it does pay the generic plan a plpgsql
+-- function's statements turn to after five calls on a connection (CLAUDE.md, Performance). The best of a fresh session's
+-- first two calls measured the first and missed the last: in prod on 14 November it read team now 61.2 ms, inbound now
+-- 35.7 ms and the board's calls 31.0 ms, where tools/perf/live-poll-breakdown.sql read the same functions at medians of
+-- 4 to 9 ms after six calls on 16 November (first calls 10 to 20 ms); locally a fresh session's second call of
+-- cma.roster_today() took 9.7 ms against 2.4 ms from the third on. Most of that Saturday's gap was the instance itself
+-- (183's E3, warmed, read cma.inbound_now() at 20.1 ms then with 18 callers listed, against 4.0 ms on Monday with 20; prod is one
+-- vCPU shared with the minute jobs), which no method removes: a run at such a moment still reads FAIL, as it should.
+-- The row's detail also gives the first untimed run (what a new connection pays after a deploy) and the worst timed one
+-- (a minute job's contention), for information; the verdict is the median's. The rows before 16 November 2026 are the
+-- best of two: the series breaks there, a change of method, not of speed.
 -- Provoke: set verify.provoke below to true; every budget is then 0 ms, every timed read FAILs, and the verdict says
 -- PROVOKED, NOT A PASS.
 -- =============================================================================================
@@ -124,6 +138,8 @@ select set_config('verify.max_refresh_ms', '15000', false);          -- the refr
 select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
 select set_config('verify.max_takes_ms', '5000', false);             -- the refresh of Flash's current takes, every overview of the tenant's setting (0009p; to confirm from prod's first runs)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
+select set_config('verify.poll_warmup', '6', false);                 -- a poll's untimed runs first (the plans a pooled connection keeps)
+select set_config('verify.poll_runs', '5', false);                   -- then its timed runs; the row is their median
 
 drop table if exists pg_temp.time_0131;
 create temporary table time_0131 (ord integer, check_name text, result text, detail text, ms numeric);
@@ -154,6 +170,45 @@ begin
     return -1;
   end;
   return v_best;
+end
+$$;
+
+-- A poll's time (class poll): p_warmup untimed runs, then the median of p_runs timed runs, in milliseconds, every row
+-- fetched, as t0131_best_ms otherwise (-1 on an error, its SQLSTATE in t0131.error). The same session, role, tenant and
+-- person as every other read; only the runs differ, so the row times the plans a pooled connection runs the poll with
+create or replace function pg_temp.t0131_poll_ms(p_sql text, p_warmup integer, p_runs integer)
+returns numeric
+language plpgsql
+as $$
+declare
+  v_t0 timestamptz; a numeric[] := '{}'; r record; v_ms numeric;
+  v_warmup integer := greatest(0, coalesce(p_warmup, 0));
+  v_runs integer := greatest(1, coalesce(p_runs, 1));          -- at least one timed run, whatever the setting says
+begin
+  perform set_config('t0131.error', '', true);
+  perform set_config('t0131.error_message', '', true);
+  perform set_config('t0131.poll_first', '', true);
+  begin
+    for i in 1 .. v_warmup + v_runs loop
+      v_t0 := clock_timestamp();
+      for r in execute p_sql loop
+        null;
+      end loop;
+      v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+      if i = 1 then
+        perform set_config('t0131.poll_first', v_ms::text, true);
+      end if;
+      if i > v_warmup then
+        a := a || v_ms;
+      end if;
+    end loop;
+    perform set_config('t0131.poll_worst', (select max(x) from unnest(a) x)::text, true);
+  exception when others then
+    perform set_config('t0131.error', sqlstate, true);
+    perform set_config('t0131.error_message', left(sqlerrm, 80), true);
+    return -1;
+  end;
+  return (select percentile_disc(0.5) within group (order by x) from unnest(a) x);
 end
 $$;
 
@@ -570,7 +625,10 @@ begin
                                                                   else 'verify.max_overview_ms' end)::numeric end;
         perform set_config('role', 'cma_app', true);
         perform set_config('app.user_id', v_user::text, true);
-        v_ms := case when clock_timestamp() > v_stop then null else pg_temp.t0131_best_ms(v_sql, 2) end;
+        v_ms := case when clock_timestamp() > v_stop then null
+                     when rd.cls = 'poll' then pg_temp.t0131_poll_ms(v_sql, current_setting('verify.poll_warmup')::integer,
+                                                                    greatest(1, current_setting('verify.poll_runs')::integer))
+                     else pg_temp.t0131_best_ms(v_sql, 2) end;
         v_err := case when v_ms = -1 then current_setting('t0131.error') end;
         -- an error the read names as nothing to time (CMA02: no snapshot, or no frozen list, for the as-of date) is a skip
         -- with the database's own words; any other a FAIL, and under provoke every read FAILs
@@ -580,7 +638,12 @@ begin
         r_detail := r_detail || case when v_ms is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
                                      when v_skipped then rd.skip_why || ' (' || v_err || ': ' || current_setting('t0131.error_message') || '): nothing to time'
                                      when v_ms = -1 then 'error ' || v_err
-                                     else v_ms || ' ms (best of 2) against ' || v_max || ' ms' end;
+                                     else v_ms || ' ms (' || case when rd.cls = 'poll'
+                                                                 then 'median of ' || greatest(1, current_setting('verify.poll_runs')::integer)
+                                                                      || ' after ' || current_setting('verify.poll_warmup') || ' untimed; first '
+                                                                      || current_setting('t0131.poll_first') || ', worst '
+                                                                      || current_setting('t0131.poll_worst')
+                                                                 else 'best of 2' end || ') against ' || v_max || ' ms' end;
         r_ms := r_ms || case when v_ms >= 0 then v_ms end;
         if rd.in_set then
           v_sums[p] := v_sums[p] + coalesce(nullif(v_ms, -1), 0);
@@ -623,6 +686,7 @@ end
 $$;
 
 drop function if exists pg_temp.t0131_best_ms(text, integer);
+drop function if exists pg_temp.t0131_poll_ms(text, integer, integer);
 drop function if exists pg_temp.t0131_user(uuid, text[]);
 drop table if exists pg_temp.reads_0131;
 
