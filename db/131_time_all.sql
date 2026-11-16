@@ -16,7 +16,9 @@
 -- 172_active_customers.sql; since addition 0009m (the quiet run of its refresh), after 174_active_refresh_quiet.sql;
 -- since addition 0009p (the Flash landing's stored cards), after 180_flash_stored_cards.sql; since addition 0009r (the
 -- customer list under a device band), after 184_active_device_bands.sql; since addition 0009t (Assets -> Fleet
--- management), after 188_fleet_management.sql. Prod is the proof; dev's shared core is for
+-- management), after 188_fleet_management.sql; since addition 0009u (Welcome's Waiting for you reads
+-- cma.my_follow_up_counts(); the follow-up's report lists and /me/follow-up's rows, whose clock fields it derives at the
+-- read, are timed too), after 190_follow_up_clock_at_read.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -126,6 +128,10 @@ begin
   -- Assets -> Fleet management's two reads since addition 0009t
   if not exists (select 1 from cma.schema_migration where version = '0009t') then
     raise exception 'addition 0009t (188_fleet_management.sql) has not run in this database';
+  end if;
+  -- Welcome's Waiting for you reads cma.my_follow_up_counts() since addition 0009u
+  if not exists (select 1 from cma.schema_migration where version = '0009u') then
+    raise exception 'addition 0009u (190_follow_up_clock_at_read.sql) has not run in this database';
   end if;
 end
 $$;
@@ -281,7 +287,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
-('a', 'welcome agent', 'waiting for you', $q$select cma.my_follow_up()$q$, 'agent', array['leads.accept', 'workday.own']),
+-- Waiting for you reads the three counts since addition 0009u (cma.my_follow_up_counts); the rows are /me/follow-up's
+('a', 'welcome agent', 'waiting for you', $q$select * from cma.my_follow_up_counts()$q$, 'agent', array['leads.accept', 'workday.own']),
+('a', 'my follow-up', 'my rows', $q$select cma.my_follow_up()$q$, 'agent', array['leads.accept', 'workday.own']),
 ('a', 'welcome manager', 'team hours 31 days', $q$select t.* from cma.team_hours(date '{today}' - 31, date '{today}' - 1, null) t order by t.business_date, t.display_name, t.user_id$q$, 'agent', array['workday.team']),
 ('a', 'welcome manager', 'follow-up summary', $q$select * from cma.follow_up_summary()$q$, 'agent', array['monitoring.live', 'performance.team', 'workday.team']),
 ('a', 'welcome admin', 'roles', $q$select * from cma.roles()$q$, 'agent', array['users.manage_all']),
@@ -316,6 +324,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.callbacks_kept_connected() as callbacks_connected,
    array(select s.value from cma.tenant_settings() s where s.key = 'tasks.callback_window_minutes') as callback_window,
    (select coalesce(json_agg(o order by o.ordinality), '[]'::json) from cma.callbacks_kept_per_owner(date '{today}' - 55, '{today}') with ordinality o) as callback_owners$q$, 'overview', array['performance.team']),
+-- the follow-up's report lists, every row (GET /api/v1/reports/follow-up/leads and /tickets; since addition 0009u each
+-- row's clock fields are derived at the read, so they are timed here)
+('a', 'follow-up lists', 'open leads, every row', $q$select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url from cma.open_leads() r left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id$q$, 'overview', array['reports.view', 'performance.team', 'monitoring.live']),
+('a', 'follow-up lists', 'open tickets, every row', $q$select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'ticket', r.ticket_source_id) as record_url from cma.open_tickets() r left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id$q$, 'overview', array['reports.view', 'performance.team', 'monitoring.live']),
 -- Sources, a connection's page, System health
 ('a', 'sources', 'sources', $q$select * from cma.sources()$q$, 'sources', array['tenant.configure']),
 ('a', 'sources', 'form categories', $q$select * from cma.form_categories()$q$, 'agent', array['tenant.configure']),
@@ -668,7 +680,7 @@ begin
       perform set_config('role', 'cma_owner', true);
       for p in 1 .. cardinality(v_pages) loop
         v_set_max := case when v_provoke then 0
-                          when v_pages[p] in ('welcome agent', 'welcome manager', 'welcome admin', 'my hours', 'my schedule', 'messages', 'my account', 'live board',
+                          when v_pages[p] in ('welcome agent', 'welcome manager', 'welcome admin', 'my hours', 'my schedule', 'my follow-up', 'messages', 'my account', 'live board',
                                               'team people', 'team hours', 'roster week') then current_setting('verify.max_agent_set_ms')::numeric
                           else current_setting('verify.max_overview_ms')::numeric end;
         if v_pages[p] in ('polls', 'campaigns') then continue; end if;

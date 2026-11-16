@@ -10,6 +10,9 @@
 -- then 73 and 79 again (unchanged).
 -- Edited by 0009a (150) and 0009c (154): B2 and B11 leave the summary's courtesy keys out (courtesy_unreachable and
 -- courtesy_alert_attempts since 0009c), so since 0009c it runs after 154.
+-- Edited by 0009u (190): B3 compares a lead's and a ticket's stored row with the live row without its clock fields
+-- (waiting_business_seconds; open_business_seconds and minutes_to_breach), which are no longer stored, so since 0009u it
+-- runs after 190; B11 proves the derived rows equal the live ones.
 --   A  structure and privileges: the addition row after 0008r; the setting with its default; the
 --      permission on every scheduler role and no other; the two tables' columns, row-level security,
 --      grants (the application's only), indexes and no audit trigger; the functions the application's
@@ -312,18 +315,16 @@ begin
       format('summary equal %s; %s items', v_ok, (select count(*) from cma.follow_up_item where tenant_id = v_t1))];
 
     -- B3. the rows' fields equal to the live rows (both ways), and the figures per person equal to follow_up_by_owner_of
-    select (select count(*) from ((select (jsonb_populate_record(null::cma.open_lead_row, i.row || jsonb_build_object('tenant_id', i.tenant_id))).*
-                                   from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'lead'
-                                   except all select * from cma.open_leads_of(v_t1))
-                                  union all (select * from cma.open_leads_of(v_t1)
-                                   except all select (jsonb_populate_record(null::cma.open_lead_row, i.row || jsonb_build_object('tenant_id', i.tenant_id))).*
-                                   from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'lead')) d)
-         + (select count(*) from ((select (jsonb_populate_record(null::cma.open_ticket_row, i.row || jsonb_build_object('tenant_id', i.tenant_id))).*
-                                   from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'ticket'
-                                   except all select * from cma.open_tickets_of(v_t1))
-                                  union all (select * from cma.open_tickets_of(v_t1)
-                                   except all select (jsonb_populate_record(null::cma.open_ticket_row, i.row || jsonb_build_object('tenant_id', i.tenant_id))).*
-                                   from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'ticket')) d)
+    --     (edited by 0009u, 190: a lead's and a ticket's stored row lacks the clock fields, which the readers derive at the
+    --     read, so those two compare with the live row without them; B11 compares the derived rows with the live ones)
+    select (select count(*) from ((select i.row from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'lead'
+                                   except all select to_jsonb(o) - 'tenant_id' - 'waiting_business_seconds' from cma.open_leads_of(v_t1) o)
+                                  union all (select to_jsonb(o) - 'tenant_id' - 'waiting_business_seconds' from cma.open_leads_of(v_t1) o
+                                   except all select i.row from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'lead')) d)
+         + (select count(*) from ((select i.row from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'ticket'
+                                   except all select to_jsonb(o) - 'tenant_id' - 'open_business_seconds' - 'minutes_to_breach' from cma.open_tickets_of(v_t1) o)
+                                  union all (select to_jsonb(o) - 'tenant_id' - 'open_business_seconds' - 'minutes_to_breach' from cma.open_tickets_of(v_t1) o
+                                   except all select i.row from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'ticket')) d)
          + (select count(*) from ((select (jsonb_populate_record(null::cma.open_task_row, i.row || jsonb_build_object('tenant_id', i.tenant_id))).*
                                    from cma.follow_up_item i where i.tenant_id = v_t1 and i.kind = 'task'
                                    except all select * from cma.open_tasks_of(v_t1))

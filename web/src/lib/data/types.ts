@@ -3522,6 +3522,18 @@ export interface FollowUpOwner {
   tasksDueToday: number;
 }
 
+/**
+ * cma.my_follow_up_counts (addition 0009u): how many of the caller's own rows each list holds, without the rows: what
+ * Welcome's Waiting for you shows (the lengths of MyFollowUp's three lists)
+ */
+export interface MyFollowUpCounts {
+  leads: number;
+  tickets: number;
+  tasks: number;
+  /** When the snapshot was computed: at most about a minute ago */
+  computedAt: Instant;
+}
+
 /** cma.my_follow_up: the caller's own rows, with their record links, as the snapshot computed them */
 export interface MyFollowUp {
   leads: OpenLead[];
@@ -4381,6 +4393,8 @@ export interface CmaData {
   getFollowUpByOwner(me: Principal): Promise<FollowUpRowsAt<FollowUpOwner>>;
   /** The caller's own rows. Needs leads.accept or workday.own */
   getMyFollowUp(me: Principal): Promise<MyFollowUp>;
+  /** How many of the caller's own rows each list holds (Welcome's Waiting for you). Needs leads.accept or workday.own */
+  getMyFollowUpCounts(me: Principal): Promise<MyFollowUpCounts>;
 
   // System health (addition 0008r). Needs tenant.configure; the database checks again (CMA06)
   /** The jobs' runs per job and connection over the last 30 days (cma.system_health_runs) */
