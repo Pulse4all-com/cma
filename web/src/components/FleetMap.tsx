@@ -72,6 +72,9 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
   const [pending, startTransition] = useTransition();
   const [shownArea, setShownArea] = useOptimistic(selectedAreaId);
   const frame = useRef<number | null>(null);
+  // while a zoom animates, the markers are grouped once at the coarser of its two scales (the wider view): markers apart
+  // at that scale stay apart as the view narrows, and the grouping is not run again on every frame
+  const [groupW, setGroupW] = useState<number | null>(null);
 
   // the map's width follows its card; the height stays, so the view keeps its centre and width
   useEffect(() => {
@@ -92,10 +95,12 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
     if (reduced) { setView(home ? null : target); return; }
     const from = view;
     let start: number | null = null;
+    setGroupW(Math.max(from.w, target.w));
     const step = (now: number) => {
       if (start === null) start = now;
       const t = Math.min(1, (now - start) / ANIMATION_MS);
       setView(t >= 1 && home ? null : viewBetween(from, target, t));
+      if (t >= 1) setGroupW(null);
       frame.current = t < 1 ? requestAnimationFrame(step) : null;
     };
     frame.current = requestAnimationFrame(step);
@@ -103,15 +108,16 @@ export function FleetMap({ areas, tile, markets, selectedAreaId, query, labels, 
 
   // the markers at the view's scale (E1): grouped where they would cover each other on screen, so they depend on the
   // scale alone; at the closest zoom every area is a marker of its own: a group's areas (two of a city's, a few km apart)
-  // are spread around its centre, the largest marker's width apart, so none hides another
+  // are spread around its centre, their boxes (badge included) apart, so none hides another
   const pxPerKm = widthPx / view.w;
-  const grouped = useMemo(() => groupOnScreen(points, pxPerKm), [points, pxPerKm]);
+  const groupPxPerKm = widthPx / Math.max(view.w, groupW ?? 0);
+  const grouped = useMemo(() => groupOnScreen(points, groupPxPerKm), [points, groupPxPerKm]);
   const closest = view.w <= FLEET_MIN_VIEW_KM * 1.01;
   const largest = Math.max(1, ...(closest ? points : grouped).map((c) => c.count));
-  const clusters = closest ? spreadClusters(grouped, (markerSizePx(largest, largest) + 8) / pxPerKm) : grouped;
+  const clusters = closest ? spreadClusters(grouped, pxPerKm, largest) : grouped;
   const left = view.cx - view.w / 2;
   const top = view.cy - view.h / 2;
-  const nf = new Intl.NumberFormat(locale);
+  const nf = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const shownCountries = Object.entries(FLEET_MAP_COUNTRIES).filter(([, c]) =>
     c.box[2] >= left && c.box[0] <= left + view.w && c.box[3] >= top && c.box[1] <= top + view.h);
 

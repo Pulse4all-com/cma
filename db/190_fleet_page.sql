@@ -69,7 +69,8 @@ $$;
 --          (E3: the tile's figure stays Installed base's Devices past due, D2), monitored the three monitored states
 --   list   as cma.fleet_rows_of(…, attention_only, 1): attention_only when neither a state nor an area is chosen (the page's
 --          default list, lib/fleet-management fleetRowsQueryOf); sorted Needs attention, No connection, past due, then
---          the serial ("C", nulls last) and the device's id; 50 rows and the total before the page
+--          the serial ("C", nulls last) and the device's id; 50 rows (a top-N sort, as fleet_rows_of's limit) and the
+--          total before the page
 -- The tenant's date once, a value (offset 0 keeps it apart: passed on as a call, the inlined functions would read it per
 -- device and per due item; night N06), as cma.fleet_areas_of and cma.fleet_rows_of. Ids, codes, dates and counts: never a
 -- customer reference, name, email, phone or address
@@ -105,10 +106,7 @@ as $$
     where not d.is_in_field and d.past_due_items > 0
   ), r as materialized (
     -- the list's devices: the state and the area as cma.fleet_rows_of; the attention rule the page's default list's
-    select d.*, count(*) over () as total_rows,
-           row_number() over (order by case when d.state = 'needs_attention' then 0 when d.state = 'no_connection' then 1
-                                            when d.past_due_items > 0 then 2 else 3 end,
-                                       d.serial collate "C" nulls last, d.device_id) as o
+    select d.*
     from d
     where (p_area_id is null or d.area_id = p_area_id)
       and case p_state when 'in_field' then d.is_in_field
@@ -121,6 +119,14 @@ as $$
                        else true end
       and (p_state is not null or p_area_id is not null
            or d.state in ('needs_attention', 'no_connection') or d.past_due_items > 0)
+  ), f as (
+    -- the list's first page: a top-N sort of 50 (as cma.fleet_rows_of's order by … limit 50), never a sort of the whole set
+    select r.*, row_number() over () as o
+    from (select r.* from r
+          order by case when r.state = 'needs_attention' then 0 when r.state = 'no_connection' then 1
+                        when r.past_due_items > 0 then 2 else 3 end,
+                   r.serial collate "C" nulls last, r.device_id
+          limit 50) r
   ), t as (
     select coalesce(sum(a.in_field), 0)::bigint as in_field,
            coalesce(sum(a.past_due) filter (where a.kind <> 'not_in_field'), 0)::bigint as past_due_in_field,
@@ -143,15 +149,14 @@ as $$
     'past_due_not_in_field', (select t.past_due_not_in_field from t),
     'list', jsonb_build_object(
       'page', 1, 'page_size', 50,
-      'total', coalesce((select max(r.total_rows) from r), 0),
+      'total', (select count(*) from r),
       'rows', (select coalesce(jsonb_agg(jsonb_build_object(
-                 'device_id', r.device_id, 'serial', r.serial, 'model', r.model, 'market', r.market, 'area_id', r.area_id,
-                 'area_code', pa.area_code, 'area_label', pa.label, 'state', r.state, 'reason', r.reason,
-                 'last_self_test_on', r.last_self_test_on, 'last_contact_at', r.last_contact_at,
-                 'past_due_items', r.past_due_items, 'location_source', r.location_source) order by r.o), '[]'::jsonb)
-               from r
-               left join cma.postcode_area pa on pa.id = r.area_id
-               where r.o <= 50)))
+                 'device_id', f.device_id, 'serial', f.serial, 'model', f.model, 'market', f.market, 'area_id', f.area_id,
+                 'area_code', pa.area_code, 'area_label', pa.label, 'state', f.state, 'reason', f.reason,
+                 'last_self_test_on', f.last_self_test_on, 'last_contact_at', f.last_contact_at,
+                 'past_due_items', f.past_due_items, 'location_source', f.location_source) order by f.o), '[]'::jsonb)
+               from f
+               left join cma.postcode_area pa on pa.id = f.area_id)))
 $$;
 
 -- ---------------------------------------------------------------------------------------------

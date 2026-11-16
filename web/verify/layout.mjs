@@ -3605,9 +3605,9 @@ async function expectFiltersPending() {
  * the page with its tenant's preview on: its title, the Preview banner, seven tiles of which five carry the Dummy badge,
  * Monitored the sum of three states and the four states the sum In the field, the map with every marker a button with
  * an aria-label, the side panel's devices, no placeholder, and neither the page nor the main area scrolling sideways.
- * Since addition 0009u (brief B38), run with the local fixture's volume (verify/perf-volume-fixture.sql): at the start view
- * and again after one zoom in, no two markers' boxes intersect, no badge's box intersects its count's text box or another
- * marker's box (E1); at the start view every marker's centre is inside the map and the markers' counts add up to In the
+ * Since addition 0009u (brief B38), run with the local fixture's volume (verify/perf-volume-fixture.sql): at the start view,
+ * after one zoom in and at the closest zoom (the areas of a group spread apart), no two markers' boxes intersect, no
+ * badge's box intersects its count's text box, another marker's box or another badge (E1); at the start view every marker's centre is inside the map and the markers' counts add up to In the
  * field less the devices without an area, so every cluster is shown (E2), and the button back to it reads All markets
  * (Alle markten); no last contact reads None (Geen) (E4); each device of the default list leads with why it is there:
  * the Items past due badge, or the badge of Needs attention or No connection (E5).
@@ -3670,6 +3670,16 @@ async function expectFleetManagement() {
       await p.click('[data-testid="fleet-zoom-in"]');
       await p.waitForTimeout(700);
       problems.push(...fleetMarkerProblems(await p.evaluate(fleetMarkers, false), `${where}, zoomed in once`, false));
+      // a group followed in (its button zooms in on its areas) until none is left: at the closest zoom a group's areas
+      // spread apart, still none covering another
+      let followed = 0;
+      for (; followed < 10 && (await p.$('[data-testid="fleet-group"]')); followed += 1) {
+        await p.click('[data-testid="fleet-group"]');
+        await p.waitForTimeout(700);
+      }
+      const closest = await p.evaluate(fleetMarkers, false);
+      if (followed > 0 && closest.markers.length === 0) problems.push(`${where}: no marker in view after following a group in`);
+      problems.push(...fleetMarkerProblems(closest, `${where}, a group followed in ${followed} times`, false));
       await ctx.close();
     }
   }
@@ -3708,7 +3718,7 @@ function fleetMarkerProblems(m, where, start) {
       if (j === i) continue;
       const b = m.markers[j];
       if (j > i && meets(a.box, b.box)) covered += 1;
-      if (meets(a.badge, b.box)) badgeOnOther += 1;
+      if (meets(a.badge, b.box) || (j > i && meets(a.badge, b.badge))) badgeOnOther += 1;
     }
   }
   if (covered > 0) out.push(`${where}: ${covered} pairs of markers whose boxes intersect (E1)`);

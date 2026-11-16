@@ -30,8 +30,15 @@
 --   R2  (2) per tenant: as A2's split, for every market × model
 --   E1  (4) per tenant, as cma_app: cma.fleet_page_of, no filter, within verify.max_page_ms (150, the brief's budget), the
 --       best of three after six calls
+--   E2  (4) per tenant, as cma_app: the page's own read, cma.fleet_page() (the permission, the filters' choices and the
+--       time zone besides the computation), as the tenant's first active person holding reports.view or performance.team
+--       (131's choice), with the tenant's fleet_management.dummy_preview set true inside the rolled-back step, within
+--       verify.max_page_ms, the best of three after six calls; skip where no such person exists
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
--- that check alone compares with a deliberate difference.
+-- that check alone compares with a deliberate difference. A1 and R1 put theirs in the compared document itself (In the
+-- field one more, the list's first row left out), so their comparisons must name every answer as differing.
+-- Run time: three computations of the devices per market × model in R1 (189 makes two); in prod about 7k devices In the
+-- field. Should Studio time out, run the script with psql from the Terminal.
 -- Collation: every ordering that feeds a compared text says collate "C".
 -- =============================================================================================
 
@@ -126,8 +133,9 @@ $$;
 -- counts): the page's answer against 0009t's two reads with the page's default list, and (p_deep, or the filter none)
 -- every tile's list and an area's (the filter's first, or with p_deep false its largest); the split of Devices past due
 -- against Installed base's (cma.flash_rows_of, components_past_due: the list's total). Answers the filters, the answers
--- compared, those that differ and the filters whose split differs
-create or replace function pg_temp.v0009u_compare(p_tenant uuid, p_deep boolean)
+-- compared, those that differ and the filters whose split differs. p_provoke: the expected document carries a deliberate
+-- difference (In the field one more, its list's first row left out), so every answer compared must differ (133's pattern)
+create or replace function pg_temp.v0009u_compare(p_tenant uuid, p_deep boolean, p_provoke boolean)
 returns table (filters integer, compared integer, differing text, split_differing text)
 language plpgsql
 as $$
@@ -139,6 +147,7 @@ declare
   v_diff text := '';
   v_due  text := '';
   v_page jsonb;
+  v_exp  jsonb;
   v_ib   bigint;
   v_area uuid;
 begin
@@ -165,7 +174,12 @@ begin
     loop
       v_c := v_c + 1;
       v_page := cma.fleet_page_of(p_tenant, f.market, f.model, v.state, v.area);
-      if v_page is distinct from pg_temp.v0009u_expected(p_tenant, f.market, f.model, v.state, v.area) then
+      v_exp := pg_temp.v0009u_expected(p_tenant, f.market, f.model, v.state, v.area);
+      if p_provoke then
+        v_exp := jsonb_set(jsonb_set(v_exp, '{tiles,in_field}', to_jsonb((v_exp -> 'tiles' ->> 'in_field')::bigint + 1)),
+                           '{list,rows}', (v_exp -> 'list' -> 'rows') - 0);
+      end if;
+      if v_page is distinct from v_exp then
         v_diff := v_diff || format('%s/%s/%s; ', coalesce(f.market, 'all'), coalesce(f.model, 'all'),
                                    coalesce(v.state, case when v.area is not null then 'area' else 'attention' end));
       end if;
@@ -281,7 +295,7 @@ begin
     -- A1 and A2 (1, 2): every filter, every list, against 0009t's reads and Installed base. 189's filters: none, the four
     -- markets (GB, NL, LU, unknown), the two models, the five pairs that hold devices = 12
     select format('filters %s; differing %s', x.filters, x.differing), format('filters %s; past due split differing %s', x.filters, x.split_differing)
-    into v_a1, v_a2 from pg_temp.v0009u_compare(v_t, true) x;
+    into v_a1, v_a2 from pg_temp.v0009u_compare(v_t, true, pg_temp.v0009u_p('A1')) x;
     -- the figures by hand (189's A1: In the field 65; Devices past due 13: 12 in the field (10 on the map, 2 without an
     -- area: 30 and 60), 1 not in the field (42, in stock))
     j := cma.fleet_page_of(v_t, null, null, null, null);
@@ -364,7 +378,7 @@ do $$
 declare
   t record;
   v_any boolean := false;
-  v_err text; v_r record; v_e1 numeric; v_ms numeric; v_t0 timestamptz;
+  v_err text; v_r record; v_e1 numeric; v_e2 numeric; v_ms numeric; v_t0 timestamptz; v_person uuid;
   j jsonb;
 begin
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
@@ -372,11 +386,11 @@ begin
       continue;
     end if;
     v_any := true;
-    v_err := null; v_r := null; v_e1 := null;
+    v_err := null; v_r := null; v_e1 := null; v_e2 := null; v_person := null;
     begin
       perform set_config('app.tenant_id', t.id::text, true);
       perform set_config('role', 'cma_app', true);
-      select * into v_r from pg_temp.v0009u_compare(t.id, false);
+      select * into v_r from pg_temp.v0009u_compare(t.id, false, pg_temp.v0009u_p('R1'));
       -- E1: the best of three after six calls
       for i in 1 .. 9 loop
         v_t0 := clock_timestamp();
@@ -384,6 +398,29 @@ begin
         v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
         if i > 6 then v_e1 := least(coalesce(v_e1, v_ms), v_ms); end if;
       end loop;
+      -- E2: the page's own read, as a person who may read it, the preview on (rolled back with the step)
+      perform set_config('role', 'cma_owner', true);
+      select u.id into v_person from cma.app_user u
+      where u.tenant_id = t.id and u.status = 'active' and u.kind = 'person'
+        and exists (select 1 from cma.user_role ur where ur.tenant_id = u.tenant_id and ur.user_id = u.id)
+        and (cma.has_permission(u.id, 'reports.view') or cma.has_permission(u.id, 'performance.team'))
+      order by u.created_at, u.id
+      limit 1;
+      if v_person is not null then
+        insert into cma.tenant_setting (tenant_id, key, value) values (t.id, 'fleet_management.dummy_preview', 'true')
+        on conflict (tenant_id, key) do update set value = 'true';
+        perform set_config('app.user_id', v_person::text, true);
+        perform set_config('role', 'cma_app', true);
+        for i in 1 .. 9 loop
+          v_t0 := clock_timestamp();
+          j := cma.fleet_page();
+          v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+          if i > 6 then v_e2 := least(coalesce(v_e2, v_ms), v_ms); end if;
+        end loop;
+        if not coalesce((j ->> 'set_up')::boolean, false) then
+          raise exception 'cma.fleet_page answered set up false with the preview on';
+        end if;
+      end if;
       raise exception using errcode = 'CMAOK', message = 'rollback';
     exception
       when sqlstate 'CMAOK' then null;
@@ -391,8 +428,9 @@ begin
     end;
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', '', true);
+    perform set_config('app.user_id', '', true);
     if v_err is not null then
-      insert into pg_temp.verify_0009u values (100, 'R1 to E1 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
+      insert into pg_temp.verify_0009u values (100, 'R1 to E2 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
       continue;
     end if;
     perform pg_temp.v0009u_row(30, 'R1', t.slug || ': the page''s tiles, areas and lists equal 0009t''s two reads for every market × model',
@@ -404,15 +442,23 @@ begin
     insert into pg_temp.verify_0009u values (40, 'E1 ' || t.slug || ': cma.fleet_page_of, no filter, within its budget',
       case when v_e1 <= case when pg_temp.v0009u_p('E1') then 0 else current_setting('verify.max_page_ms')::numeric end then 'PASS' else 'FAIL' end,
       format('%s ms (best of 3, after six calls) against %s ms', v_e1, case when pg_temp.v0009u_p('E1') then '0' else current_setting('verify.max_page_ms') end));
+    if v_person is null then
+      insert into pg_temp.verify_0009u values (41, 'E2 ' || t.slug || ': cma.fleet_page(), the page''s own read, within its budget',
+        case when pg_temp.v0009u_p('E2') then 'FAIL' else 'skip' end, 'no active person holds reports.view or performance.team');
+    else
+      insert into pg_temp.verify_0009u values (41, 'E2 ' || t.slug || ': cma.fleet_page(), the page''s own read, within its budget',
+        case when v_e2 <= case when pg_temp.v0009u_p('E2') then 0 else current_setting('verify.max_page_ms')::numeric end then 'PASS' else 'FAIL' end,
+        format('%s ms (best of 3, after six calls) against %s ms', v_e2, case when pg_temp.v0009u_p('E2') then '0' else current_setting('verify.max_page_ms') end));
+    end if;
   end loop;
   if not v_any then
-    insert into pg_temp.verify_0009u values (30, 'R1 to E1 the page''s read per tenant',
+    insert into pg_temp.verify_0009u values (30, 'R1 to E2 the page''s read per tenant',
       case when current_setting('verify.provoke') <> 'false' then 'FAIL' else 'skip' end, 'no active tenant has its register set up');
   end if;
 end
 $$;
 
-drop function if exists pg_temp.v0009u_compare(uuid, boolean);
+drop function if exists pg_temp.v0009u_compare(uuid, boolean, boolean);
 drop function if exists pg_temp.v0009u_expected(uuid, text, text, text, uuid);
 drop function if exists pg_temp.v0009u_code(text);
 drop function if exists pg_temp.v0009u_row(integer, text, text, text, text);

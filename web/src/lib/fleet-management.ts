@@ -230,9 +230,9 @@ export function markerExtentPx(count: number, attention: number, largest: number
 
 /** Whether two markers (centres in px) would cover each other, their gap included */
 function overlapPx(a: { x: number; y: number; e: ReturnType<typeof markerExtentPx> }, b: { x: number; y: number; e: ReturnType<typeof markerExtentPx> }): boolean {
-  const [l, r] = a.x <= b.x ? [a, b] : [b, a];
-  const [u, d] = a.y <= b.y ? [a, b] : [b, a];
-  return r.x - l.x < l.e.right + r.e.left + FLEET_MARKER_GAP_PX && d.y - u.y < u.e.down + d.e.up + FLEET_MARKER_GAP_PX;
+  const apartX = a.x <= b.x ? b.x - a.x >= a.e.right + b.e.left + FLEET_MARKER_GAP_PX : a.x - b.x >= b.e.right + a.e.left + FLEET_MARKER_GAP_PX;
+  if (apartX) return false;
+  return a.y <= b.y ? b.y - a.y < a.e.down + b.e.up + FLEET_MARKER_GAP_PX : a.y - b.y < b.e.down + a.e.up + FLEET_MARKER_GAP_PX;
 }
 
 function clusterOf(members: FleetPoint[]): FleetCluster {
@@ -300,13 +300,19 @@ export function startBoxOf(areas: readonly FleetArea[]): [number, number, number
 
 /**
  * At the closest zoom a group cannot be split by zooming further (two areas of one city a few km apart): its areas are
- * shown each as a marker of its own, around the group's centre, apart by the given distance (the largest marker's
- * diameter in km), so every marker can be seen and clicked
+ * shown each as a marker of its own, around the group's centre. Neighbours on that ring are apart by the whole reach of
+ * the largest of them (its box, badge included) twice over, plus the gap, times √2: on screen the boxes of two neighbours
+ * at any angle stay apart, as groupOnScreen's (E1). largest: the count the sizes are taken against
  */
-export function spreadClusters(groups: readonly FleetCluster[], apartKm: number): FleetCluster[] {
+export function spreadClusters(groups: readonly FleetCluster[], pxPerKm: number, largest: number): FleetCluster[] {
   return groups.flatMap((g) => {
     if (g.members.length <= 1) return [g];
     const n = g.members.length;
+    const reach = Math.max(...g.members.map((m) => {
+      const e = markerExtentPx(m.count, m.attention, largest);
+      return Math.max(e.left, e.up, e.right, e.down);
+    }));
+    const apartKm = (Math.SQRT2 * (2 * reach + FLEET_MARKER_GAP_PX)) / pxPerKm;
     const r = apartKm / (2 * Math.sin(Math.PI / n));
     return [...g.members].sort((a, b) => (a.areaId < b.areaId ? -1 : 1)).map((m, i) => ({
       key: m.areaId, x: g.x + r * Math.cos((2 * Math.PI * i) / n - Math.PI / 2), y: g.y + r * Math.sin((2 * Math.PI * i) / n - Math.PI / 2),

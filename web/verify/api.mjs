@@ -1687,7 +1687,7 @@ async function fleetChecks() {
     if (!ok) pageDiffers.push(q.toString() || "none");
   }
   expect(`fleet: the page's one read equals the areas' and the list's routes for ${pageQueries.length} queries (E6)`,
-    PROVOKE ? [...pageDiffers, "provoked"] : pageDiffers, [], []);
+    pageDiffers, [], ["a deliberate difference"]);
   expect("fleet: the page's Devices past due: in the field + not in the field = the tile = Installed base's (E3)",
     [pageNone?.tiles?.past_due_in_field + pageNone?.tiles?.past_due_not_in_field === pageNone?.tiles?.past_due, pageNone?.tiles?.past_due === ibPastDue],
     [true, true], [true, false]);
