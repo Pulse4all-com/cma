@@ -387,8 +387,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- list of the devices that need attention, page 1, from one computation of the devices); the list's further pages read
 -- cma.fleet_rows after the first paint (a set of its own, page 2), and the API's areas cma.fleet_areas (addition 0009t; not
 -- a page's read since 0009v, so not timed here). While the tenant's fleet_management.dummy_preview is off both answer set
--- up false, a settings lookup; 191's E1 and E2 (the brief's 150 ms) and 189's E2 time the computations themselves whatever
--- the setting. The page's read holds a list's first page: class list (300 ms at three times prod's volume)
+-- up false, a settings lookup; 193's E1 and E2 (300 ms at prod's volume, E6 as amended 16 November 2026) and 189's E2
+-- time the computations themselves whatever the setting. The page's read holds a list's first page: class list (300 ms)
 ('a', 'fleet management', 'page', $q$select cma.fleet_page(null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'fleet management further page', 'devices that need attention page 2', $q$select cma.fleet_rows(null, null, null, null, true, 2)$q$, 'list', array['reports.view', 'performance.team']),
 -- Campaigns

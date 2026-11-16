@@ -31,8 +31,9 @@
 --   R1  (1) per tenant: as A1, for every market × model with the page's default list, and the unfiltered page with each
 --       tile's list and the largest area's
 --   R2  (2) per tenant: as A2's split, for every market × model
---   E1  (4) per tenant, as cma_app: cma.fleet_page_of, no filter, within verify.max_page_ms (150, the brief's budget), the
---       best of three after six calls
+--   E1  (4) per tenant, as cma_app: cma.fleet_page_of, no filter, within verify.max_page_ms (300: E6's budget as Martin
+--       amended it on 16 November 2026, equal to 0009t's reads; the brief's 150 was set against the attention list alone),
+--       the best of three after six calls
 --   E2  (4) per tenant, as cma_app: the page's own read, cma.fleet_page() (the permission, the filters' choices and the
 --       time zone besides the computation), as the tenant's first active person holding reports.view or performance.team
 --       (131's choice), with the tenant's fleet_management.dummy_preview set true inside the rolled-back step, within
@@ -54,7 +55,7 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' for every check, or one check's id such as 'A1'
-select set_config('verify.max_page_ms', '150', false);               -- the page's one read (the brief's budget, E6)
+select set_config('verify.max_page_ms', '300', false);               -- the page's one read (E6, amended 16 November 2026)
 
 drop table if exists pg_temp.verify_0009v;
 create temporary table verify_0009v (ord integer, check_name text, result text, detail text);
