@@ -1,0 +1,66 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ 300
+(1 row)
+
+psql:/tmp/provoke.sql:65: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                             check_name                                                                              |        result        |                                                                                                                                                                                                                                   detail                                                                                                                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition recorded after 0009r; the setting a boolean, default false                                                                                          | FAIL                 | found 0009r t, 0009t t; setting boolean false any | expected 0009r t, 0009t t; setting boolean false any [provoked: a deliberate difference]
+ S2 cma.postcode_area: reference data, read by the application, written by migrations, never the readers'                                                            | FAIL                 | found tenant_id f; row-level security f; app select t, insert f, update f, delete f; readers select f; codes not an area 0; countries AT,BE,DE,FR,GB,IE,NL,SE; sample rows 80; UK 0 | expected tenant_id f; row-level security f; app select t, insert f, update f, delete f; readers select f; codes not an area 0; countries AT,BE,DE,FR,GB,IE,NL,SE; sample rows 80; UK 0 [provoked: a deliberate difference]
+ S3 the functions: the owner's, the application's to execute, in the caller's rights, JIT off on the reads                                                           | FAIL                 | found ok | expected ok [provoked: a deliberate difference]
+ S4 no personal column in the reads or the table; nothing in cma_read reads the areas or the fleet functions                                                         | FAIL                 | found ok | expected ok [provoked: a deliberate difference]
+ A1 by hand: In the field and Devices past due equal Installed base's for every filter                                                                               | FAIL                 | found filters 12; In the field differing none; Devices past due differing none | expected filters 12; In the field differing none; Devices past due differing none [provoked: a deliberate difference]
+ A1 by hand: the figures counted by hand (the in-stock device past due in the row not in the field)                                                                  | FAIL                 | found In the field 65; past due 13; past due on the map 10; the row without an area: in the field 23, past due 2; the row not in the field: past due 1 | expected In the field 65; past due 13; past due on the map 10; the row without an area: in the field 23, past due 2; the row not in the field: past due 1 [provoked: a deliberate difference]
+ A2 by hand: one area of the device's market, the hash's pick; the state the hash's bucket; two reads the same                                                       | FAIL                 | found in the field with areas 42; without one area of their market 0; not the hash's pick 0; with an area they should not have 0; states not the hash's bucket 0; two reads the same t | expected in the field with areas 42; without one area of their market 0; not the hash's pick 0; with an area they should not have 0; states not the hash's bucket 0; two reads the same t [provoked: a deliberate difference]
+ A2 by hand: no area for LU or no market (they count in the row without one), no state out of the field, a reload keeps both                                         | FAIL                 | found LU or no market with an area 0; the row without an area holds them t; not in the field with a state 0; a reload keeps area and state t | expected LU or no market with an area 0; the row without an area holds them t; not in the field with a state 0; a reload keeps area and state t [provoked: a deliberate difference]
+ A3 by hand: the states add up to In the field in every row                                                                                                          | FAIL                 | found rows 20; whose states do not add up to In the field 0 | expected rows 20; whose states do not add up to In the field 0 [provoked: a deliberate difference]
+ A4 the analyst and the supervisor read, the agent is refused; the tenants apart                                                                                     | FAIL                 | found supervisor ok ok; analyst ok ok; agent CMA06 CMA06; under the other tenant: its devices of the first 0; its reader sees in the field 1 | expected supervisor ok ok; analyst ok ok; agent CMA06 CMA06; under the other tenant: its devices of the first 0; its reader sees in the field 1 [provoked: a deliberate difference]
+ A5 off: set up false and nothing more; on: the figures                                                                                                              | FAIL                 | found off: areas {"set_up": false}, rows {"set_up": false}; on: areas set up true, in the field 65; rows set up true with total 66 | expected off: areas {"set_up": false}, rows {"set_up": false}; on: areas set up true, in the field 65; rows set up true with total 66 [provoked: a deliberate difference]
+ A6 the refusals (CMA04)                                                                                                                                             | FAIL                 | found market gb CMA04, model M1 CMA04, state broken CMA04, page 0 CMA04, page null CMA04 | expected market gb CMA04, model M1 CMA04, state broken CMA04, page 0 CMA04, page null CMA04 [provoked: a deliberate difference]
+ A6 the list's pages, order, attention filter and state filters                                                                                                      | FAIL                 | found total 66 (in the field 65 and past due not in the field 1); the states add up to in the field t; monitored t; page 1 rows 50, page 2 rows 16; in order t; attention only the devices that need attention t | expected total 66 (in the field 65 and past due not in the field 1); the states add up to in the field t; monitored t; page 1 rows 50, page 2 rows 16; in order t; attention only the devices that need attention t [provoked: a deliberate difference]
+ A7 by hand: the row without an area holds devices In the field alone; in-field past due + not-in-field past due = Installed base's Devices past due                 | FAIL                 | found no_area: in field 23, past due 2, states 23; not_in_field: in field 0, states 0, past due 1; in-field past due + not-in-field past due = 12 + 1 = 13 | expected no_area: in field 23, past due 2, states 23; not_in_field: in field 0, states 0, past due 1; in-field past due + not-in-field past due = 12 + 1 = 13 [provoked: a deliberate difference]
+ A7 by hand: the same rule against the devices and Installed base                                                                                                    | FAIL                 | found no_area: in field 23, past due 2, states 23; not_in_field: in field 0, states 0, past due 1; in-field past due + not-in-field past due = 12 + 1 = 13 | expected no_area: in field 23, past due 2, states 23; not_in_field: in field 0, states 0, past due 1; in-field past due + not-in-field past due = 12 + 1 = 13 [provoked: a deliberate difference]
+ R1 pulse4all-subscriptions: In the field equals Installed base's for every filter                                                                                   | FAIL                 | found filters 30; differing none | expected filters 30; differing none [provoked: a deliberate difference]
+ R2 pulse4all-subscriptions: Devices past due equals Installed base's for every filter                                                                               | FAIL                 | found filters 30; differing none | expected filters 30; differing none [provoked: a deliberate difference]
+ R3 pulse4all-subscriptions: one area of the device's market, the hash's pick; the state the hash's bucket; two reads the same                                       | FAIL                 | found in the field with areas 6897; without one area of their market 0; not the hash's pick 0; with an area they should not have 0; states not the hash's bucket 0; two reads the same t | expected in the field with areas 6897; without one area of their market 0; not the hash's pick 0; with an area they should not have 0; states not the hash's bucket 0; two reads the same t [provoked: a deliberate difference]
+ R4 pulse4all-subscriptions: the states add up to In the field in every row                                                                                          | FAIL                 | found rows 83; whose states do not add up to In the field 0 | expected rows 83; whose states do not add up to In the field 0 [provoked: a deliberate difference]
+ R5 pulse4all-subscriptions: the row without an area holds devices In the field alone; in-field past due + not-in-field past due = Installed base's Devices past due | FAIL                 | found no_area: in field 0, past due 0, states 0; not_in_field: in field 0, states 0, past due 237; in-field past due + not-in-field past due = 208 + 237 = 445 | expected no_area: in field 0, past due 0, states 0; not_in_field: in field 0, states 0, past due 237; in-field past due + not-in-field past due = 208 + 237 = 445 [provoked: a deliberate difference]
+ E1 pulse4all-subscriptions: cma.fleet_areas_of, no filter, within its budget                                                                                        | FAIL                 | 598.0 ms (best of 3, after six calls) against 0 ms
+ E2 pulse4all-subscriptions: cma.fleet_rows_of, the devices that need attention, page 1, within its budget                                                           | FAIL                 | 160.6 ms (best of 3, after six calls) against 0 ms
+ verdict                                                                                                                                                             | PROVOKED, NOT A PASS | 189_verify_fleet_management: 0 PASS, 22 FAIL, 0 skip
+(23 rows)
+
+DROP TABLE
+RESET
