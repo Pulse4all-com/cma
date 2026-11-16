@@ -10,10 +10,11 @@
 -- verdict requires, so a block that an error ended reads FAIL. Run as your own IAM login after 190_follow_up_clock_at_read.sql, dev
 -- first, then prod.
 -- Expected verdict, in dev and in prod: "0009u verified | 191_verify_follow_up_clock_at_read: <n> ok, 0 FAIL, <k> skip"
--- (E3 skips a tenant without an active person who may read the report lists; a tenant without open items reads ok on
--- empty sets). Provoked (verify.provoke true at the top): the derived side is computed a minute later than the live one
+-- (E3 skips a tenant without an active person who may read the report lists, E5 one without a person who may read their
+-- own follow-up; a tenant without open items reads ok on empty sets). Provoked (verify.provoke true at the top): the derived side is computed a minute later than the live one
 -- (E2, E3, A1), the clock check reads the stored row as 0009o stored it (E4, A2: the three fields move every minute in
--- office hours), the real change is undone before the refresh (A3), and every other row reads FAIL; the verdict PROVOKED,
+-- office hours), Welcome's counts gain one task (E5, A1), the real change is undone before the refresh (A3), and every
+-- other row reads FAIL; the verdict PROVOKED,
 -- NOT A PASS.
 --
 -- A minute later in one transaction: Studio runs a script in one transaction, so now() cannot move. The clock is therefore
@@ -39,11 +40,12 @@
 --      computed_at, for every active person who may read them
 --   A  a throwaway tenant, a market open around the clock, leads and tickets in each state: A1 after a refresh the page
 --      (cma.follow_up_page), an agent's own follow-up (cma.my_follow_up) and its counts (cma.my_follow_up_counts),
---      cma.open_leads() and cma.open_tickets() return the live rows at the same instant; A2 a minute later nothing but the clock has moved: the items a refresh would
---      store are the same, so it writes 0 rows (0009o's shape: every lead and ticket with a market); a second refresh at the same
---      instant writes 0; A3 a real change is written: a ticket's owner (2 rows: deleted and inserted) and the last ticket
---      closed (1 row: deleted), and the stored owner and items follow; A4 the refreshes added no audit row for the
---      follow-up's tables
+--      cma.open_leads() and cma.open_tickets() return the live rows at the same instant; A2 a minute later nothing but
+--      the clock has moved: the items a refresh would store are the same, so it writes 0 rows (0009o's shape: every lead
+--      and ticket with a market); a second refresh at the same instant writes 0; A3 a real change is written: a ticket's
+--      owner (2 rows: deleted and inserted) and the last ticket closed (1 row: deleted), and the stored owner and items
+--      follow; A4 the refreshes added no audit row for the follow-up's tables; A5 Welcome's counts refuse a person
+--      without leads.accept or workday.own (CMA06) and a call without an acting user (CMA01)
 -- =============================================================================================
 
 do $$
@@ -353,13 +355,14 @@ begin
         perform set_config('app.user_id', pe.id::text, true);
         perform set_config('role', 'cma_app', true);
         r := cma.my_follow_up();
-        select * into c from cma.my_follow_up_counts();
+        -- provoked: one task more than the function counts, a difference the comparison itself must find
+        select x.leads, x.tickets, x.tasks + case when v_provoke then 1 else 0 end as tasks, x.computed_at into c from cma.my_follow_up_counts() x;
         perform set_config('role', 'cma_owner', true);
         v_people := v_people + 1;
         if (c.leads, c.tickets, c.tasks, c.computed_at)
            is distinct from (jsonb_array_length(r -> 'leads'), jsonb_array_length(r -> 'tickets'), jsonb_array_length(r -> 'tasks'), (r ->> 'computed_at')::timestamptz) then
-          v_bad := coalesce(v_bad || '; ', '') || format('person %s: %s/%s/%s against %s/%s/%s', v_people, c.leads, c.tickets, c.tasks,
-                   jsonb_array_length(r -> 'leads'), jsonb_array_length(r -> 'tickets'), jsonb_array_length(r -> 'tasks'));
+          v_bad := coalesce(v_bad || '; ', '') || format('person %s: %s/%s/%s at %s against %s/%s/%s at %s', v_people, c.leads, c.tickets, c.tasks, c.computed_at,
+                   jsonb_array_length(r -> 'leads'), jsonb_array_length(r -> 'tickets'), jsonb_array_length(r -> 'tasks'), r ->> 'computed_at');
         end if;
       end loop;
       raise exception using errcode = 'CMAOK';
@@ -370,13 +373,14 @@ begin
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.user_id', v_sched, true);
     insert into verify_0009u values (v_ord, 'E5 Welcome''s Waiting for you: the counts equal the lengths of each person''s own lists (' || t.slug || ')',
-      case when v_err is null and v_bad is null and not v_provoke then 'ok' else 'FAIL' end,
-      coalesce(v_err, v_bad, format('%s people who may read them, every count and computed_at equal (rolled back)', v_people)));
+      case when v_err is not null or v_bad is not null or v_provoke then 'FAIL' when v_people = 0 then 'skip' else 'ok' end,
+      coalesce(v_err, v_bad, case when v_people = 0 then 'no active person holds leads.accept or workday.own'
+                                  else format('%s people who may read them, every count and computed_at equal (rolled back)', v_people) end));
     v_ord := (v_ord / 100 + 1) * 100;
   end loop;
   perform set_config('role', 'cma_owner', true);
   -- the block's last row: without it (an error that ended the block) the verdict reads FAIL
-  insert into verify_0009u values (999, 'E ran to the end, every tenant', case when v_provoke then 'FAIL' else 'ok' end,
+  insert into verify_0009u values (899999, 'E ran to the end, every tenant', case when v_provoke then 'FAIL' else 'ok' end,
     format('%s tenants', (select count(*) from cma.tenant)));
 end
 $$;
@@ -392,6 +396,7 @@ declare
   v_t uuid; v_admin uuid; v_agent uuid; v_ing uuid; v_sched uuid; v_crm uuid;
   v_ok boolean; v_diff text; v_txt text; v_a jsonb; v_b jsonb; r jsonb; v_page jsonb; v_mine jsonb;
   v_n integer; v_m integer; v_audit integer;
+  v_none uuid; v_s1 text; v_s2 text;
   rows_ text[] := '{}';
 begin
   begin
@@ -472,8 +477,10 @@ begin
     perform set_config('app.user_id', v_agent::text, true);
     v_mine := cma.my_follow_up();
     -- Welcome's counts for the agent: the lengths of the agent's own lists
-    if (select (x.leads, x.tickets, x.tasks) is distinct from (jsonb_array_length(v_mine -> 'leads'), jsonb_array_length(v_mine -> 'tickets'),
-                                                              jsonb_array_length(v_mine -> 'tasks'))
+    -- provoked: one task more, as E5
+    if (select (x.leads, x.tickets, x.tasks + case when v_provoke then 1 else 0 end, x.computed_at)
+               is distinct from (jsonb_array_length(v_mine -> 'leads'), jsonb_array_length(v_mine -> 'tickets'),
+                                 jsonb_array_length(v_mine -> 'tasks'), (v_mine ->> 'computed_at')::timestamptz)
         from cma.my_follow_up_counts() x) then
       v_diff := coalesce(v_diff || '; ', '') || 'Welcome''s counts differ from the own lists';
     end if;
@@ -493,7 +500,7 @@ begin
                     jsonb_array_length(v_mine -> 'leads'), jsonb_array_length(v_mine -> 'tickets'));
     v_ok := v_diff is null and v_n = 4 and v_m = 5
             and (select string_agg(e ->> 'sla_state', ',' order by e ->> 'ticket_source_id' collate "C") from jsonb_array_elements(v_page -> 'tickets' -> 'rows') e) = 'ok,at_risk,breached,no_hours,ok';
-    rows_ := rows_ || array['401', 'A1 the page, an agent''s own follow-up and its counts, open_leads() and open_tickets() equal the live rows at the same instant',
+    rows_ := rows_ || array['900001', 'A1 the page, an agent''s own follow-up and its counts, open_leads() and open_tickets() equal the live rows at the same instant',
       case when v_ok and not v_provoke then 'ok' else 'FAIL' end, coalesce(v_diff, v_txt)];
 
     -- A2 a minute later, nothing else changed: the stored items the same, so a refresh writes 0 rows; 0009o's shape
@@ -508,7 +515,7 @@ begin
     perform set_config('app.user_id', v_sched::text, true);
     r := cma.refresh_follow_up_of(v_t, false);
     v_ok := v_n = 0 and v_txt::integer = 7 and (r ->> 'written')::integer = 0;
-    rows_ := rows_ || array['402', 'A2 a minute later with nothing else changed a refresh writes 0 rows (0009o''s stored row: every lead and ticket with a market)',
+    rows_ := rows_ || array['900002', 'A2 a minute later with nothing else changed a refresh writes 0 rows (0009o''s stored row: every lead and ticket with a market)',
       case when v_ok and not v_provoke then 'ok' else 'FAIL' end,
       format('%s leads and %s tickets: %s changed a minute later (0009o''s shape: %s); a second refresh now wrote %s', v_m, v_audit, v_n, v_txt, r ->> 'written')];
 
@@ -530,7 +537,7 @@ begin
             and (select i.owner_user_id from cma.follow_up_item i where i.tenant_id = v_t and i.kind = 'ticket' and i.row ->> 'ticket_source_id' = 'x2') is null
             and not exists (select 1 from cma.follow_up_item i where i.tenant_id = v_t and i.kind = 'ticket' and i.row ->> 'ticket_source_id' = 'x4')
             and (select count(*) from cma.follow_up_item i where i.tenant_id = v_t and i.kind = 'ticket') = 4;
-    rows_ := rows_ || array['403', 'A3 a real change is written: an owner (2 rows) and the last ticket closed (1 row), the rest unchanged',
+    rows_ := rows_ || array['900003', 'A3 a real change is written: an owner (2 rows) and the last ticket closed (1 row), the rest unchanged',
       case when v_ok and not v_provoke then 'ok' else 'FAIL' end,
       format('written %s (3 expected), unchanged %s; x2''s owner %s, x4 %s', r ->> 'written', r ->> 'unchanged',
              (select i.row ->> 'owner_ref' from cma.follow_up_item i where i.tenant_id = v_t and i.kind = 'ticket' and i.row ->> 'ticket_source_id' = 'x2'),
@@ -540,21 +547,44 @@ begin
     perform set_config('role', 'cma_owner', true);
     select count(*) into v_audit from cma.audit_log a
     where a.tenant_id = v_t and a.table_name in ('follow_up_item', 'follow_up_snapshot', 'follow_up_marker');
-    rows_ := rows_ || array['404', 'A4 three refreshes, no audit row for follow_up_item, follow_up_snapshot or follow_up_marker',
+    rows_ := rows_ || array['900004', 'A4 three refreshes, no audit row for follow_up_item, follow_up_snapshot or follow_up_marker',
       case when v_audit = 0 and not v_provoke then 'ok' else 'FAIL' end,
       format('%s audit rows for the follow-up''s tables; %s for the tenant''s records (the ingest''s writes)', v_audit,
              (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'crm_record'))];
+
+    -- A5 Welcome's counts refuse whoever may not read them, as cma.my_follow_up does (73's B14): a person of the tenant
+    -- holding neither leads.accept nor workday.own (CMA06), and a call without an acting user (CMA01). Provoked, the
+    -- expectation is that both are answered
+    insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-none@example.invalid', 'Verify none') returning id into v_none;
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_none::text, true);
+    v_s1 := 'ok';
+    begin
+      perform * from cma.my_follow_up_counts();
+    exception when others then v_s1 := sqlstate;
+    end;
+    perform set_config('app.user_id', '', true);
+    v_s2 := 'ok';
+    begin
+      perform * from cma.my_follow_up_counts();
+    exception when others then v_s2 := sqlstate;
+    end;
+    perform set_config('role', 'cma_owner', true);
+    rows_ := rows_ || array['900005', 'A5 Welcome''s counts refuse a person without leads.accept or workday.own (CMA06) and a call without an acting user (CMA01)',
+      case when (v_s1, v_s2) = (case when v_provoke then 'ok' else 'CMA06' end, case when v_provoke then 'ok' else 'CMA01' end) then 'ok' else 'FAIL' end,
+      format('without the permissions %s; without an acting user %s', v_s1, v_s2)];
 
     raise exception using errcode = 'CMAOK';
   exception
     when sqlstate 'CMAOK' then null;
     when others then
-      rows_ := rows_ || array['499', 'A block ended early', 'FAIL', 'error ' || sqlstate || ': ' || sqlerrm];
+      rows_ := rows_ || array['900099', 'A block ended early', 'FAIL', 'error ' || sqlstate || ': ' || sqlerrm];
   end;
   perform set_config('role', 'cma_owner', true);
   insert into verify_0009u (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
-  insert into verify_0009u values (498, 'A ran to the end', case when v_provoke or cardinality(rows_) / 4 <> 4 then 'FAIL' else 'ok' end,
+  insert into verify_0009u values (900098, 'A ran to the end',
+    case when v_provoke or cardinality(rows_) / 4 <> 5 or '900099' = any (rows_) then 'FAIL' else 'ok' end,
     format('%s A rows', cardinality(rows_) / 4));
 end
 $$;

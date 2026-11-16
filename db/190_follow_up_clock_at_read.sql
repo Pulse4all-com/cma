@@ -11,9 +11,11 @@
 -- its copy of 154's refresh stores the row as 0009u does, so E8 still compares like with like); then 131_time_all.sql part
 -- a. Prod the same, in or outside office hours, BEFORE the merge of this addition's PR: its web reads Welcome's Waiting
 -- for you from cma.my_follow_up_counts(), which this script adds (on a database without it Welcome's block would fail).
--- Every other read keeps its shape. Main's web (bab9720) and its refresh job run unchanged on a database with 190 (the
--- PR: main's verify:api against a copy before and after 190, the same results), so the database goes first: the job calls cma.refresh_follow_up() and reads the same answer keys;
--- the page, its API, an agent's own follow-up and the report lists read the same keys, now derived at the read.
+-- Every other read keeps its shape: main's web (bab9720) and its refresh job run unchanged on a database with 190, so
+-- the database goes first. The job calls cma.refresh_follow_up() and reads the same answer keys; the page, its API, an
+-- agent's own follow-up and the report lists read the same keys, now derived at the read. Checked locally for the PR
+-- (main's web built and run against local copies of the volume fixture before and after 190: verify:api 358 of 358 on
+-- both, every function's signature and result type the same); Martin's verify:api against dev after 190 confirms it.
 --
 -- Why (Martin, 16 November 2026; Decision log, 16 Nov 2026): tools/perf/follow-up-diff.sql in prod, Monday 16 November
 -- 11:06 UTC, office hours: of 4,723 items 1,017 changed every minute (912 tickets, 105 leads, no task), 2,034 rows written a
@@ -39,8 +41,8 @@
 --            seconds since created_at (the caller's cma.business_seconds_in at now(), on the market's calendar row): a
 --            ticket's open_business_seconds, minutes_to_breach and sla_state, a lead's waiting_business_seconds and
 --            past_target, as cma.open_tickets_of and cma.open_leads_of (178) compute them; a task's row unchanged. One
---            expression, inlined into its caller's query; sql, stable (jsonb_build_object is stable, and an immutable function
---            over a stable call is never inlined: 136)
+--            expression, inlined into its caller's query; sql, stable (jsonb_build_object is stable, and an immutable
+--            function over a stable call is never inlined: 136)
 --   cma.my_follow_up_counts()   the caller's own leads, tickets and tasks counted, and computed_at: Welcome's Waiting for
 --            you, which shows three counts, reads these instead of cma.my_follow_up's every row (65 to 78 ms against its
 --            50 ms at three times prod's volume with the rows derived; the same permissions, acting user and fallback).
@@ -54,7 +56,8 @@
 --            sla_state, a lead's past_target) derived at now(): the calendar, tickets.sla_warning_pct and
 --            speed_to_lead.target_minutes read once per list, never per row; the task list reads none of them (its path
 --            as before). Its callers cma.follow_up_page (Reports → Follow-up and its API) and cma.my_follow_up (an agent's
---            own follow-up, Welcome's Waiting for you) are not re-created
+--            own follow-up on /me/follow-up and its API; Welcome reads cma.my_follow_up_counts() since this addition) are
+--            not re-created
 --   cma.open_leads(), cma.open_tickets() (based on 80)   the same, every row (the report lists' API)
 -- Not changed: the item's state column, the list filters that read it, the snapshot's counts and figures per person
 -- (cma.follow_up_summary(): Welcome's Needs attention, "tickets at risk or over their response time" and "leads past the
@@ -80,10 +83,12 @@
 -- 190.1 ms (the stored row is smaller; budget 500, rows new in 131); Welcome's Waiting for you (cma.my_follow_up(), every
 -- row the agent owns: 136 leads, 400 tickets, 834 tasks) 47.4 → 64.6 and 77.7 ms against 50 ms with every row's fields
 -- derived; the block shows three counts, so it reads cma.my_follow_up_counts() instead: 3.4 ms (the agent page's set
--- 59.8 → 17.0 ms against 100). /me/follow-up keeps every row (131's 'my follow-up: my rows', 64.9 ms against 50: open). The seventh
+-- 59.8 → 17.0 ms against 100; its seventh call in a session 2.5 ms). /me/follow-up keeps every row: 131's 'my
+-- follow-up: my rows' 64.9 ms against 50, a miss this addition causes (47.4 before it), open for Martin. The seventh
 -- call of a session as the first (N06): my_follow_up 70 to 82 ms, the page's follow-up part 56 to 66, open_tickets()
--- 140 to 180, open_leads() 54 to 82. The derivation is inlined into each read (a wrapper with a subquery, run per row as a plan of its own, took the
--- tickets list to 44 s), each row's office seconds computed once (offset 0), the task list's path as before.
+-- 140 to 180, open_leads() 54 to 82. The derivation is inlined into each read (a wrapper with a subquery, run per row as
+-- a plan of its own, took the tickets list to 44 s), each row's office seconds computed once (offset 0), the task list's
+-- path as before.
 -- The refresh with only the clock moved (tools/perf/follow-up-diff.sql locally, 21 seconds in office hours): 9,764 rows as
 -- 178 stored the row, 2 now (one ticket's state turned).
 -- No index is added; no lock on a busy table (functions only).
@@ -425,7 +430,7 @@ end
 $$;
 
 insert into cma.schema_migration (version, description)
-values ('0009u', 'The follow-up''s clock fields derived at read, not stored (option B): cma.refresh_follow_up_of stores a lead''s row without waiting_business_seconds and a ticket''s without open_business_seconds and minutes_to_breach, so those fields no longer make a write every minute (a state that turns, a lead''s day counts at midnight and a place that moves still do); cma.follow_up_clock_row derives them, with a ticket''s sla_state and a lead''s past_target, from the stored created_at, market and sla_minutes, the market''s calendar and the instant; cma.follow_up_list_of (the page, its API, an agent''s own follow-up), cma.open_leads() and cma.open_tickets() return them at now(), the calendar and settings read once per list or call. The item''s state, the filters and the snapshot''s counts as before')
+values ('0009u', 'The follow-up''s clock fields derived at read, not stored (option B): cma.refresh_follow_up_of stores a lead''s row without waiting_business_seconds and a ticket''s without open_business_seconds and minutes_to_breach, so those fields no longer make a write every minute (a state that turns, a lead''s day counts at midnight and a place that moves still do); cma.follow_up_clock_row derives them, with a ticket''s sla_state and a lead''s past_target, from the stored created_at, market and sla_minutes, the market''s calendar and the instant; cma.follow_up_list_of (the page, its API, an agent''s own follow-up), cma.open_leads() and cma.open_tickets() return them at now(), the calendar and settings read once per list or call; cma.my_follow_up_counts() gives Welcome''s Waiting for you its three counts without reading the rows. The item''s state, the filters and the snapshot''s counts as before')
 on conflict (version) do nothing;
 
 commit;

@@ -680,7 +680,7 @@ begin
       perform set_config('role', 'cma_owner', true);
       for p in 1 .. cardinality(v_pages) loop
         v_set_max := case when v_provoke then 0
-                          when v_pages[p] in ('welcome agent', 'welcome manager', 'welcome admin', 'my hours', 'my schedule', 'messages', 'my account', 'live board',
+                          when v_pages[p] in ('welcome agent', 'welcome manager', 'welcome admin', 'my hours', 'my schedule', 'my follow-up', 'messages', 'my account', 'live board',
                                               'team people', 'team hours', 'roster week') then current_setting('verify.max_agent_set_ms')::numeric
                           else current_setting('verify.max_overview_ms')::numeric end;
         if v_pages[p] in ('polls', 'campaigns') then continue; end if;

@@ -584,7 +584,7 @@ badge n = mine.leads + mine.tickets + mine.tasks from cma.my_follow_up_counts() 
 
 **Refresh** follow-up snapshot once a minute; the Welcome page reads it on page load only
 
-**Computed in** `cma.my_follow_up_counts` (0009u); `cma.my_follow_up` (0008s); `cma.follow_up_list_of` (0008s); `cma.my_follow_up_of` (0008o); `default` in src/app/page.tsx
+**Computed in** `cma.my_follow_up_counts` (0009u); `default` in src/app/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -635,7 +635,7 @@ mine.leads, mine.tickets, mine.tasks from cma.my_follow_up_counts() (since 0009u
 
 **Refresh** follow-up snapshot once a minute; read on page load only
 
-**Computed in** `cma.my_follow_up_counts` (0009u); `cma.my_follow_up` (0008s); `default` in src/app/page.tsx
+**Computed in** `cma.my_follow_up_counts` (0009u); `default` in src/app/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

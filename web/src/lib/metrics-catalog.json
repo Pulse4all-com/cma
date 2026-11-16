@@ -948,18 +948,6 @@
           {
             "object": "cma.my_follow_up_counts",
             "migration": "0009u"
-          },
-          {
-            "object": "cma.my_follow_up",
-            "migration": "0008s"
-          },
-          {
-            "object": "cma.follow_up_list_of",
-            "migration": "0008s"
-          },
-          {
-            "object": "cma.my_follow_up_of",
-            "migration": "0008o"
           }
         ],
         "ts": [
@@ -1034,10 +1022,6 @@
           {
             "object": "cma.my_follow_up_counts",
             "migration": "0009u"
-          },
-          {
-            "object": "cma.my_follow_up",
-            "migration": "0008s"
           }
         ],
         "ts": [
