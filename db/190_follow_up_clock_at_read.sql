@@ -9,8 +9,11 @@
 -- (reruns): 73_verify_follow_up.sql (unchanged), 81_verify_follow_up_snapshot.sql (edited by this change: B3),
 -- 151_verify_courtesy.sql and 155_verify_courtesy_bases.sql (unchanged), 179_verify_job_reads.sql (edited by this change:
 -- its copy of 154's refresh stores the row as 0009u does, so E8 still compares like with like); then 131_time_all.sql part
--- a. Prod the same, in or outside office hours, BEFORE the merge of this addition's PR: its web reads Welcome's Waiting
--- for you from cma.my_follow_up_counts(), which this script adds (on a database without it Welcome's block would fail).
+-- a. Prod the same, BEFORE the merge of this addition's PR: its web reads Welcome's Waiting for you from
+-- cma.my_follow_up_counts(), which this script adds (on a database without it Welcome's block would fail). In prod, 179
+-- and a full 131 run outside office hours only: on prod's 1 vCPU they held the CPU for the minute jobs and the users
+-- (Martin, 16 November 2026: 191, then 179 for 15 minutes and more, then 131 part a, 16:03 to 16:50; the load
+-- dropped as soon as 131 ended).
 -- Every other read keeps its shape: main's web (bab9720) and its refresh job run unchanged on a database with 190, so
 -- the database goes first. The job calls cma.refresh_follow_up() and reads the same answer keys; the page, its API, an
 -- agent's own follow-up and the report lists read the same keys, now derived at the read. Checked locally for the PR
