@@ -499,7 +499,7 @@
         },
         {
           "name": "postcode_area",
-          "what": "Geography reference: postcode areas per country with place name, centre and weight; no tenant, no device and no address; the map of Assets → Fleet management places a device In the field in one of its market's areas (0009t)",
+          "what": "Geography reference: postcode areas per country (only for markets in a tenant's market catalog) with place name, centre and weight; no tenant, no device and no address; the map of Assets → Fleet management places a device In the field in one of its market's areas (0009t)",
           "how": "Filled once by migration 188; no sync; read by the application role, not exposed in cma_read"
         },
         {
