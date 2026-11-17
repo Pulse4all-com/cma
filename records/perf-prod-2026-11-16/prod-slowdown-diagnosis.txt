@@ -1,0 +1,694 @@
+Pager usage is off.
+Timing is on.
+DO
+Time: 25.948 ms
+BEGIN
+Time: 17.421 ms
+SET
+Time: 18.680 ms
+SET
+Time: 18.659 ms
+          started_at          |       tenant_slug       | nested_ms | audit_budget_s | audit_count_max | budget_s | memory_mb 
+------------------------------+-------------------------+-----------+----------------+-----------------+----------+-----------
+ 2026-11-17 05:50:28.95731+00 | pulse4all-subscriptions | 10        | 30             | 5000000         | 100      | 3840
+(1 row)
+
+Time: 21.093 ms
+
+==== 0. Instance ====
+ server_version | database_mb | hours_since_server_start | hours_since_stats_reset | pg_stat_statements | pg_buffercache 
+----------------+-------------+--------------------------+-------------------------+--------------------+----------------
+ 18.6           |       11258 |                    974.4 |                  1052.3 |                  0 |              0
+(1 row)
+
+Time: 29.683 ms
+                 name                  |  setting  | unit |  in_mb  |       source       
+---------------------------------------+-----------+------+---------+--------------------
+ autovacuum                            | on        |      |         | default
+ autovacuum_analyze_scale_factor       | 0.1       |      |         | default
+ autovacuum_analyze_threshold          | 50        |      |         | default
+ autovacuum_freeze_max_age             | 200000000 |      |         | default
+ autovacuum_max_workers                | 3         |      |         | default
+ autovacuum_naptime                    | 60        | s    |         | default
+ autovacuum_vacuum_cost_delay          | 2         | ms   |         | default
+ autovacuum_vacuum_cost_limit          | -1        |      |         | default
+ autovacuum_vacuum_insert_scale_factor | 0.2       |      |         | default
+ autovacuum_vacuum_insert_threshold    | 1000      |      |         | default
+ autovacuum_vacuum_scale_factor        | 0.2       |      |         | default
+ autovacuum_vacuum_threshold           | 50        |      |         | default
+ autovacuum_work_mem                   | -1        | kB   | 0 MB    | default
+ default_statistics_target             | 100       |      |         | default
+ effective_cache_size                  | 187734    | 8kB  | 1467 MB | configuration file
+ effective_io_concurrency              | 16        |      |         | default
+ hash_mem_multiplier                   | 2         |      |         | default
+ huge_pages                            | try       |      |         | default
+ idle_in_transaction_session_timeout   | 0         | ms   |         | default
+ jit                                   | on        |      |         | default
+ jit_above_cost                        | 100000    |      |         | default
+ jit_inline_above_cost                 | 500000    |      |         | default
+ jit_optimize_above_cost               | 500000    |      |         | default
+ maintenance_work_mem                  | 65536     | kB   | 64 MB   | default
+ max_connections                       | 100       |      |         | configuration file
+ max_parallel_workers_per_gather       | 2         |      |         | default
+ pg_stat_statements.max                | 5000      |      |         | default
+ pg_stat_statements.track              | top       |      |         | default
+ random_page_cost                      | 4         |      |         | default
+ seq_page_cost                         | 1         |      |         | default
+ shared_buffers                        | 156416    | 8kB  | 1222 MB | configuration file
+ track_io_timing                       | on        |      |         | configuration file
+ vacuum_cost_limit                     | 200       |      |         | default
+ work_mem                              | 4096      | kB   | 4 MB    | default
+(34 rows)
+
+Time: 22.006 ms
+-- sessions now, and what holds vacuum back (the oldest open transaction, the oldest xmin, replication slots)
+ application | backend_type | state | sessions | oldest_xact_s | oldest_xmin_age 
+-------------+--------------+-------+----------+---------------+-----------------
+ cma-web     |              |       |        1 |               |                
+ (none)      |              |       |       10 |               |                
+(2 rows)
+
+Time: 26.508 ms
+ replication_slots | oldest_slot_xmin_age | oldest_slot_catalog_xmin_age | prepared_xacts | database_xid_age 
+-------------------+----------------------+------------------------------+----------------+------------------
+                 0 |                      |                              |              0 |          8887137
+(1 row)
+
+Time: 19.729 ms
+ vacuuming_now | phase | heap_blks_total | heap_blks_scanned 
+---------------+-------+-----------------+-------------------
+(0 rows)
+
+Time: 20.593 ms
+
+==== 1. Cache ====
+-- 1a the database since the stats reset (read_ms_per_block: with track_io_timing on, about 0.01 ms is the cache of the operating system, 0.1 ms and more the disk)
+  blks_hit   | blks_read | hit_pct | read_ms_total | read_ms_per_block | temp_files | temp_mb | xact_commit | xact_rollback | deadlocks | conflicts 
+-------------+-----------+---------+---------------+-------------------+------------+---------+-------------+---------------+-----------+-----------
+ 13500058694 |  29215001 |   99.78 |         66744 |             0.002 |     417634 |   12889 |    12464774 |           794 |         5 |         0
+(1 row)
+
+Time: 18.936 ms
+-- 1b shared buffer traffic by kind of process (pg_stat_io; evictions close to reads: the pool is churning)
+    backend_type     |    object     |  context  |  reads  |    hits     | hit_pct | evictions | writes | extends | read_ms | read_ms_per_op 
+---------------------+---------------+-----------+---------+-------------+---------+-----------+--------+---------+---------+----------------
+ client backend      | relation      | bulkread  | 1503171 |     2109253 |   58.39 |    198250 |  39082 |         |   48324 |          0.032
+ autovacuum worker   | relation      | vacuum    | 1141802 |    83963903 |   98.66 |     53378 | 168246 |       0 |    6290 |          0.006
+ client backend      | relation      | normal    |  450411 | 14227397250 |  100.00 |   1749333 |    132 | 2267544 |   12161 |          0.027
+ background worker   | relation      | bulkread  |  101180 |      155455 |   60.57 |      1728 |      0 |         |       0 |          0.000
+ autovacuum worker   | relation      | normal    |    7250 |   115228643 |   99.99 |      7143 |      0 |     838 |      69 |          0.009
+ standalone backend  | relation      | normal    |     479 |       97635 |   99.51 |         0 |   1053 |     613 |       0 |          0.000
+ background worker   | relation      | normal    |      25 |       30128 |   99.92 |        17 |      0 |       0 |       0 |          0.000
+ standalone backend  | relation      | vacuum    |       8 |         950 |   99.16 |         0 |      0 |       0 |       0 |          0.000
+ startup             | wal           | normal    |       7 |             |         |           |      2 |         |       0 |          0.000
+ autovacuum launcher | relation      | normal    |       3 |       24089 |   99.99 |         0 |      0 |         |       0 |          0.000
+ standalone backend  | wal           | normal    |       3 |             |         |           |    759 |         |       0 |          0.000
+ client backend      | relation      | vacuum    |       0 |      193873 |  100.00 |         0 |      0 |       0 |       0 |               
+ client backend      | temp relation | normal    |       0 |       54450 |  100.00 |         0 |      0 |    1387 |       0 |               
+ standalone backend  | relation      | bulkwrite |       0 |           7 |  100.00 |         0 |      0 |       1 |       0 |               
+(14 rows)
+
+Time: 17.945 ms
+-- 1c the 20 tables with the most blocks read from outside shared_buffers (heap, its indexes, its toast)
+ schema |     table_name     | heap_blks_read | heap_hit_pct | idx_blks_read | idx_hit_pct | toast_blks_read | toast_hit_pct | total_mb 
+--------+--------------------+----------------+--------------+---------------+-------------+-----------------+---------------+----------
+ cma    | audit_log          |       25518689 |        66.49 |       1073947 |       98.54 |            5545 |         98.60 |   9988.0
+ cma    | ingest_event       |        1799889 |        94.69 |        665956 |       98.59 |               0 |               |    599.6
+ cma    | sync_run           |          14053 |        99.99 |         39299 |       99.76 |               0 |               |    243.9
+ cma    | active_customer    |            195 |       100.00 |         11910 |       99.98 |               0 |               |     27.6
+ cma    | device             |             16 |       100.00 |         11448 |       99.96 |               0 |               |     31.3
+ cma    | subscription_event |            734 |       100.00 |         10729 |       99.60 |               0 |               |    102.3
+ cma    | device_component   |             22 |       100.00 |          8857 |       99.67 |               0 |               |     13.1
+ cma    | crm_association    |             70 |       100.00 |          6146 |      100.00 |               0 |               |     22.8
+ cma    | email_message      |            438 |       100.00 |          3465 |       99.98 |               0 |               |     12.5
+ cma    | commerce_customer  |              5 |       100.00 |          3730 |       99.99 |               0 |               |      9.6
+ cma    | crm_task           |              1 |       100.00 |          3611 |       99.90 |               0 |               |     18.7
+ cma    | telephony_call     |              0 |       100.00 |          3375 |      100.00 |               0 |               |     16.6
+ cma    | crm_record_stage   |           1045 |        99.73 |          2191 |       99.46 |               0 |               |      7.9
+ cma    | flash_snapshot     |           1160 |        99.16 |          1209 |       99.42 |               0 |               |      7.1
+ cma    | email_thread_event |           1013 |        99.89 |          1277 |       99.91 |               0 |               |      4.7
+ cma    | commerce_order     |            173 |       100.00 |          2017 |       99.99 |               0 |               |     11.3
+ cma    | crm_call           |              7 |       100.00 |          1867 |      100.00 |               0 |               |     20.4
+ cma    | crm_record         |              1 |       100.00 |          1694 |      100.00 |               0 |               |     14.8
+ cma    | device_import_row  |             13 |       100.00 |          1515 |       99.75 |               0 |               |      2.9
+ cma    | telephony_call_tag |            402 |       100.00 |           823 |      100.00 |               0 |               |      5.1
+(20 rows)
+
+Time: 46.708 ms
+-- 1d the 20 indexes with the most blocks read from outside shared_buffers
+     table_name     |                        index_name                        | idx_blks_read | hit_pct | index_mb 
+--------------------+----------------------------------------------------------+---------------+---------+----------
+ audit_log          | audit_log_row_idx                                        |        626974 |   98.20 |   1074.0
+ audit_log          | audit_log_time_idx                                       |        310832 |   98.94 |    546.8
+ ingest_event       | ingest_event_tenant_id_id_key                            |        268716 |   96.47 |     89.4
+ audit_log          | audit_log_pkey                                           |        136141 |   98.59 |    239.8
+ ingest_event       | ingest_event_tenant_id_connection_id_event_key_key       |        130468 |   98.91 |     95.1
+ ingest_event       | ingest_event_pkey                                        |        115656 |   98.74 |     37.5
+ ingest_event       | ingest_event_recorded_idx                                |         97907 |   98.48 |     38.2
+ ingest_event       | ingest_event_object_idx                                  |         52472 |   99.30 |     27.6
+ sync_run           | sync_run_tenant_id_id_key                                |         14021 |   99.02 |     32.8
+ sync_run           | sync_run_tenant_started_idx                              |         10898 |   99.20 |     25.2
+ sync_run           | sync_run_started_idx                                     |          9390 |   99.91 |     34.2
+ crm_association    | crm_association_pkey                                     |          5574 |  100.00 |     10.8
+ subscription_event | subscription_event_subscription_idx                      |          5304 |   99.53 |     10.3
+ sync_run           | sync_run_pkey                                            |          4990 |   99.84 |     11.7
+ subscription_event | subscription_event_tenant_id_connection_id_source_id_key |          3411 |   99.47 |     12.7
+ device_component   | device_component_current_idx                             |          3159 |   99.69 |      3.8
+ active_customer    | active_customer_amount_idx                               |          2856 |   99.15 |      5.1
+ active_customer    | active_customer_clv_idx                                  |          2742 |   99.17 |      4.9
+ device             | device_present_source_c_idx                              |          2699 |   98.81 |      3.1
+ device_component   | device_component_tenant_id_id_key                        |          2538 |   99.06 |      3.2
+(20 rows)
+
+Time: 29.631 ms
+-- 1e what shared_buffers holds now, the 15 relations with the most buffers (only where pg_buffercache is installed)
+psql:tools/perf/prod-slowdown-diagnosis.sql:258: NOTICE:  pg_buffercache is not installed: what shared_buffers holds is not shown (sections 1c and 1d give the reads instead)
+DO
+Time: 24.030 ms
+
+==== 2. Sizes ====
+-- 2a the 25 largest relations (tables and materialised views; their toast and indexes counted with them)
+ schema |      relation       | kind | est_rows | heap_mb | toast_mb | indexes_mb | total_mb 
+--------+---------------------+------+----------+---------+----------+------------+----------
+ cma    | audit_log           | r    |  7682788 |  8067.8 |     56.9 |     1861.0 |   9988.0
+ cma    | ingest_event        | r    |   808563 |   311.4 |      0.0 |      288.2 |    599.6
+ cma    | sync_run            | r    |   341278 |   139.8 |      0.0 |      104.0 |    243.9
+ cma    | subscription_event  | r    |   102492 |    56.8 |      0.0 |       45.4 |    102.3
+ cma    | device              | r    |    13916 |    16.2 |      0.0 |       15.0 |     31.3
+ cma    | active_customer     | r    |     6844 |     1.6 |      0.0 |       25.9 |     27.6
+ cma    | crm_association     | r    |    72754 |     9.5 |      0.0 |       13.2 |     22.8
+ cma    | crm_call            | r    |    20372 |    13.4 |      0.0 |        6.9 |     20.4
+ cma    | crm_task            | r    |    21770 |    12.4 |      0.0 |        6.2 |     18.7
+ cma    | telephony_call      | r    |    16405 |     7.5 |      0.0 |        9.0 |     16.6
+ cma    | crm_record          | r    |    16206 |     8.5 |      0.0 |        6.2 |     14.8
+ cma    | follow_up_item      | r    |     4659 |     3.9 |      0.0 |        9.7 |     13.6
+ cma    | device_component    | r    |    18183 |     1.9 |      0.0 |       11.1 |     13.1
+ cma    | email_message       | r    |    16122 |     5.7 |      0.0 |        6.8 |     12.5
+ cma    | commerce_order      | r    |    11308 |     5.7 |      0.0 |        5.5 |     11.3
+ cma    | subscription        | r    |     7682 |     5.4 |      0.0 |        4.3 |      9.7
+ cma    | commerce_customer   | r    |    11811 |     2.9 |      0.0 |        6.6 |      9.6
+ cma    | call_link           | r    |    16321 |     2.2 |      0.0 |        5.7 |      7.9
+ cma    | crm_record_stage    | r    |    27310 |     3.4 |      0.0 |        4.5 |      7.9
+ cma    | crm_contact         | r    |    11357 |     4.6 |      0.0 |        2.7 |      7.3
+ cma    | flash_snapshot      | r    |    10285 |     3.0 |      0.0 |        4.1 |      7.1
+ cma    | active_base         | r    |     7463 |     3.2 |      0.0 |        2.4 |      5.6
+ cma    | telephony_call_tag  | r    |    11331 |     1.1 |      0.0 |        4.0 |      5.1
+ cma    | email_thread_event  | r    |     8347 |     1.5 |      0.0 |        3.1 |      4.7
+ cma    | commerce_order_line | r    |    11634 |     1.6 |      0.0 |        1.8 |      3.5
+(25 rows)
+
+Time: 65.453 ms
+-- 2b their sum, and the database, against shared_buffers and the memory of the instance (memory_mb)
+ top25_total_mb | top25_heap_mb | top25_indexes_mb | database_mb | shared_buffers_mb | top25_x_shared_buffers | database_x_shared_buffers | memory_mb | database_x_memory 
+----------------+---------------+------------------+-------------+-------------------+------------------------+---------------------------+-----------+-------------------
+          11205 |          8691 |             2453 |       11258 |              1222 |                   9.17 |                      9.21 |      3840 |              2.93
+(1 row)
+
+Time: 53.811 ms
+
+==== 3. Maintenance (tables of cma and cma_read with rows; the largest first) ====
+(ages in hours; vacuum due / analyze due: past the trigger point of autovacuum, per-table settings included; all_visible_pct: pages marked all-visible)
+        table_name        |  live   | dead  | dead_pct | mod_since_analyze | mod_pct | ins_since_vacuum | all_visible_pct | h_since_vacuum | h_since_analyze | vac_manual_auto | an_manual_auto |               flags               | total_mb 
+--------------------------+---------+-------+----------+-------------------+---------+------------------+-----------------+----------------+-----------------+-----------------+----------------+-----------------------------------+----------
+ audit_log                | 7741006 |     0 |      0.0 |            717570 |     9.3 |            58218 |            99.8 |            4.2 |            91.2 | 0/88            | 0/68           |                                   |   9988.0
+ ingest_event             |  811211 |  5952 |      0.7 |              7946 |     1.0 |             2848 |            99.0 |            3.3 |             3.3 | 0/73            | 0/177          |                                   |    599.6
+ sync_run                 |  353777 | 27585 |      7.2 |             24998 |     7.3 |            54110 |            67.8 |           67.2 |            15.4 | 0/24            | 0/133          |                                   |    243.9
+ subscription_event       |  104841 |   162 |      0.2 |              2349 |     2.3 |            17445 |            85.5 |          289.8 |           172.4 | 0/11            | 0/20           |                                   |    102.3
+ device                   |   13916 |  1049 |      7.0 |                 0 |     0.0 |              729 |           100.0 |           71.7 |            71.8 | 0/13            | 79/3           |                                   |     31.3
+ active_customer          |    6850 |  1232 |     15.2 |               588 |     8.6 |               93 |             3.3 |           71.7 |            28.4 | 0/15            | 20/4           |                                   |     27.6
+ crm_association          |   74456 |   278 |      0.4 |              1737 |     2.4 |            10941 |            26.5 |          188.0 |            14.2 | 0/12            | 0/24           | half not all-visible              |     22.8
+ crm_call                 |   20443 |   944 |      4.4 |               675 |     3.3 |             1539 |            62.4 |          161.1 |            15.0 | 0/9             | 0/54           |                                   |     20.4
+ crm_task                 |   21774 |  4339 |     16.6 |                 4 |     0.0 |             2236 |             1.7 |          267.3 |             3.3 | 0/6             | 0/23           | half not all-visible              |     18.7
+ telephony_call           |   16629 |  3207 |     16.2 |              1163 |     7.1 |             2449 |            63.3 |          267.3 |            18.4 | 0/10            | 0/44           |                                   |     16.6
+ crm_record               |   16270 |   633 |      3.7 |              1304 |     8.0 |              251 |            68.6 |           27.3 |            12.4 | 0/14            | 0/55           |                                   |     14.8
+ follow_up_item           |    4659 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            0.4 |             0.4 | 0/36960         | 0/37097        |                                   |     13.6
+ device_component         |   18183 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |           71.7 |            71.8 | 0/12            | 79/1           |                                   |     13.1
+ email_message            |   17205 |   347 |      2.0 |              1276 |     7.9 |             2435 |            29.1 |          134.2 |            16.1 | 0/7             | 0/25           |                                   |     12.5
+ commerce_order           |   11309 |  2228 |     16.5 |               155 |     1.4 |             3044 |            26.6 |          260.3 |             3.3 | 0/9             | 0/107          |                                   |     11.3
+ subscription             |    7682 |   867 |     10.1 |                 1 |     0.0 |              364 |            28.6 |          113.2 |             3.3 | 0/3             | 0/8            |                                   |      9.7
+ commerce_customer        |   11812 |  1478 |     11.1 |              1136 |     9.6 |              566 |             0.0 |          260.4 |             5.8 | 0/20            | 0/115          |                                   |      9.6
+ call_link                |   16565 |     0 |      0.0 |               244 |     1.5 |              613 |            95.0 |           90.9 |            19.0 | 0/5             | 0/10           |                                   |      7.9
+ crm_record_stage         |   27739 |   141 |      0.5 |              1400 |     5.1 |              429 |           100.0 |           27.3 |            99.3 | 0/5             | 0/12           |                                   |      7.9
+ crm_contact              |   11386 |   950 |      7.7 |                36 |     0.3 |              298 |             2.0 |           99.3 |             3.3 | 0/16            | 0/96           |                                   |      7.3
+ flash_snapshot           |   11091 |     0 |      0.0 |               806 |     7.8 |             2384 |            80.8 |           71.7 |            30.3 | 0/11            | 0/13           |                                   |      7.1
+ active_base              |    7469 |  1369 |     15.5 |               491 |     6.6 |              478 |            11.2 |           96.2 |            28.4 | 0/11            | 14/2           |                                   |      5.6
+ telephony_call_tag       |   12121 |     8 |      0.1 |              1183 |    10.4 |              798 |           100.0 |          113.0 |           157.0 | 0/6             | 0/13           |                                   |      5.1
+ email_thread_event       |    8940 |     0 |      0.0 |               593 |     7.1 |             1834 |            84.7 |          255.2 |           111.7 | 0/4             | 0/15           |                                   |      4.7
+ commerce_order_line      |   12243 |    54 |      0.4 |               609 |     5.2 |             1767 |            88.9 |          260.3 |            93.8 | 0/5             | 0/21           |                                   |      3.5
+ data_quality_finding     |    7635 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            0.6 |             0.6 | 0/2104          | 0/2059         |                                   |      3.1
+ active_spell             |    6898 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            3.2 |             3.2 | 0/128           | 20/95          |                                   |      3.0
+ active_month             |    8277 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            3.2 |             3.2 | 0/130           | 31/95          |                                   |      2.9
+ email_thread             |    3962 |   250 |      5.9 |                 0 |     0.0 |               35 |             5.0 |           15.6 |             0.2 | 0/6             | 0/72           |                                   |      2.4
+ crm_contact_ref          |    7589 |   101 |      1.3 |                12 |     0.2 |              103 |           100.0 |          326.0 |           326.0 | 0/10            | 0/9            |                                   |      2.1
+ time_event               |    4647 |   397 |      7.9 |               304 |     7.0 |             1190 |            62.2 |          856.8 |           284.0 | 0/5             | 0/3            |                                   |      2.1
+ workday                  |    1787 |   231 |     11.4 |               117 |     6.6 |               76 |            37.7 |          185.5 |           113.1 | 0/6             | 0/5            |                                   |      1.4
+ active_cohort            |    3060 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            3.2 |             3.2 | 0/129           | 30/95          |                                   |      1.3
+ form_submission          |    1481 |   184 |     11.1 |               150 |    11.3 |             1185 |             7.4 |          735.1 |           127.0 | 0/3             | 0/13           |                                   |      1.3
+ import_session           |    2787 |    76 |      2.7 |                63 |     2.3 |              510 |            83.1 |          856.8 |           289.3 | 0/1             | 0/2            |                                   |      1.3
+ review                   |     893 |   213 |     19.3 |                61 |     7.2 |              231 |            39.2 |          545.9 |           545.8 | 0/4             | 0/8            |                                   |      1.3
+ flash_current_take       |     569 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            0.0 |             0.0 | 0/1922          | 0/1791         |                                   |      0.8
+ import_day               |    1706 |    44 |      2.5 |               200 |    13.3 |              244 |           100.0 |          856.8 |           856.8 | 0/1             | 0/1            |                                   |      0.7
+ active_document          |      42 |    29 |     40.8 |                 8 |    19.0 |                0 |            30.0 |            4.6 |             3.2 | 0/38            | 14/47          |                                   |      0.5
+ role_permission          |     113 |     0 |      0.0 |                59 |    52.2 |                0 |           100.0 |            9.3 |          1052.0 | 0/129           | 0/1            |                                   |      0.4
+ sync_cursor              |     206 |   144 |     41.1 |                68 |    33.0 |                0 |            72.1 |            0.1 |             0.0 | 0/4553          | 0/26937        | vacuum due                        |      0.4
+ connection_form_field    |     544 |    21 |      3.7 |                 0 |     0.0 |                0 |             0.0 |            1.6 |             0.6 | 0/556           | 0/728          |                                   |      0.4
+ app_role                 |      15 |    36 |     70.6 |                31 |   206.7 |               36 |           100.0 |            9.7 |           497.4 | 0/64            | 0/1            |                                   |      0.3
+ message                  |     211 |    14 |      6.2 |                47 |    25.4 |               38 |           100.0 |          143.6 |           284.4 | 0/4             | 0/3            |                                   |      0.3
+ work_status              |      15 |    20 |     57.1 |                18 |   120.0 |               20 |           100.0 |            9.7 |                 | 0/55            | 0/0            | never analyzed                    |      0.2
+ absence_type             |      10 |    20 |     66.7 |                10 |   100.0 |               20 |           100.0 |            9.7 |                 | 0/53            | 0/0            | never analyzed                    |      0.2
+ flash_snapshot_run       |      30 |    31 |     50.8 |                30 |   136.4 |               39 |           100.0 |           81.0 |                 | 0/5             | 0/0            | never analyzed                    |      0.2
+ user_role                |      29 |    40 |     58.0 |                44 |   151.7 |               40 |           100.0 |            9.9 |                 | 0/45            | 0/0            | never analyzed                    |      0.2
+ app_user                 |      28 |    48 |     63.2 |                48 |   171.4 |               48 |           100.0 |            9.9 |           695.6 | 0/45            | 0/1            |                                   |      0.2
+ message_delivery         |     253 |    77 |     23.3 |                43 |    18.2 |               66 |             0.0 |          185.5 |           111.5 | 0/7             | 0/7            |                                   |      0.2
+ roster_entry             |      65 |     1 |      1.5 |                18 |    38.3 |               33 |             0.0 |           20.6 |            20.6 | 0/1             | 0/1            |                                   |      0.1
+ integration_connection   |      30 |    30 |     50.0 |                41 |   136.7 |               29 |            75.0 |           71.7 |           546.1 | 0/24            | 0/1            |                                   |      0.1
+ follow_up_snapshot       |       2 |    22 |     91.7 |                38 |  1900.0 |                1 |             0.0 |           14.4 |             0.3 | 0/20            | 0/1650         |                                   |      0.1
+ flash_watch_finding      |      31 |     4 |     11.4 |                 8 |    29.6 |                4 |           100.0 |           71.7 |            78.3 | 0/5             | 0/1            |                                   |      0.1
+ schema_migration         |      93 |    11 |     10.6 |                42 |    82.4 |               93 |             0.0 |                |           544.4 | 0/0             | 0/1            |                                   |      0.1
+ commerce_store           |      14 |    38 |     73.1 |                14 |   100.0 |               38 |           100.0 |           96.2 |                 | 0/8             | 0/0            | never analyzed                    |      0.1
+ skill_level              |       8 |    48 |     85.7 |                 8 |   100.0 |               48 |           100.0 |            9.9 |                 | 0/47            | 0/0            | never analyzed                    |      0.1
+ user_skill               |      74 |    58 |     43.9 |                23 |    42.6 |              113 |             0.0 |          896.3 |           816.5 | 0/1             | 0/1            |                                   |      0.1
+ connection_form          |      60 |    12 |     16.7 |                 0 |     0.0 |                0 |             0.0 |            1.6 |             0.6 | 0/633           | 0/792          |                                   |      0.1
+ app_user_external_id     |      56 |    43 |     43.4 |                 7 |    12.7 |               44 |           100.0 |           19.2 |           691.9 | 0/28            | 2/0            |                                   |      0.1
+ team_member              |      19 |     8 |     29.6 |                21 |   700.0 |               22 |           100.0 |          866.9 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ connection_pipeline      |      10 |    40 |     80.0 |                20 |   200.0 |                0 |             0.0 |            3.9 |             1.8 | 0/71            | 0/183          |                                   |      0.1
+ market                   |      14 |    46 |     76.7 |                 0 |     0.0 |               46 |            50.0 |           71.7 |           691.9 | 0/13            | 2/0            |                                   |      0.1
+ invitation               |       9 |    14 |     60.9 |                23 |         |                9 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ app_link                 |       4 |     0 |      0.0 |                 4 |   100.0 |                0 |           100.0 |           71.7 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ device_component_kind    |       2 |    33 |     94.3 |                 2 |   100.0 |               31 |           100.0 |          141.1 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ device_model             |       2 |    15 |     88.2 |                 2 |   100.0 |               15 |           100.0 |            9.9 |                 | 0/4             | 0/0            | never analyzed                    |      0.1
+ team                     |       5 |     1 |     16.7 |                 5 |   100.0 |                1 |           100.0 |          110.5 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ import_batch             |       7 |    40 |     85.1 |                14 |         |               44 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ maintenance_rule         |       4 |     9 |     69.2 |                 4 |   100.0 |                9 |           100.0 |           71.7 |                 | 0/2             | 0/0            | never analyzed                    |      0.1
+ skill                    |      12 |    34 |     73.9 |                12 |   109.1 |               35 |           100.0 |          887.6 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ connection_stage         |      57 |     0 |      0.0 |                 0 |     0.0 |                0 |           100.0 |            0.6 |             0.6 | 0/528           | 0/736          |                                   |      0.1
+ device_status            |       6 |    36 |     85.7 |                 6 |   100.0 |               28 |             0.0 |           18.6 |                 | 0/5             | 0/0            | never analyzed                    |      0.1
+ active_take              |       1 |    36 |     97.3 |                 2 |   200.0 |                0 |            75.0 |           71.1 |             0.2 | 0/8             | 0/21           |                                   |      0.1
+ connection_call_outcome  |      52 |    52 |     50.0 |                52 |   100.0 |                0 |           100.0 |           12.6 |            12.6 | 0/217           | 0/210          |                                   |      0.1
+ pledge_loan              |       7 |    39 |     84.8 |                 7 |         |               37 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ message_rule             |       2 |    26 |     92.9 |                 3 |         |               10 |                 |          865.5 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ telephony_number         |      60 |    56 |     48.3 |                56 |    93.3 |                0 |           100.0 |            1.3 |             1.3 | 0/423           | 0/774          |                                   |      0.1
+ telephony_tag            |      58 |    51 |     46.8 |                51 |    87.9 |                0 |           100.0 |            1.3 |             1.3 | 0/358           | 0/415          |                                   |      0.1
+ roster_week              |       3 |    32 |     91.4 |                 5 |         |               24 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ pledge_snapshot_row      |       0 |    36 |    100.0 |                 0 |         |               36 |                 |          110.5 |                 | 0/1             | 0/0            | never analyzed                    |      0.1
+ tenant                   |       2 |    26 |     92.9 |                 2 |   100.0 |               26 |             0.0 |           71.7 |                 | 0/17            | 0/0            | never analyzed                    |      0.1
+ postcode_area            |     107 |     0 |      0.0 |                 0 |     0.0 |              107 |             0.0 |                |            18.6 | 0/0             | 0/1            |                                   |      0.1
+ setting                  |      92 |     2 |      2.1 |                12 |    14.6 |               93 |             0.0 |                |           143.6 | 0/0             | 0/2            |                                   |      0.1
+ journey                  |       3 |     0 |      0.0 |                 3 |         |                3 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ connection_inbox_account |      34 |    49 |     59.0 |                 0 |     0.0 |               34 |             0.0 |                |             0.9 | 0/0             | 0/343          |                                   |      0.1
+ form_category            |       7 |     0 |      0.0 |                 7 |         |                7 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ market_alias             |      31 |    30 |     49.2 |                 0 |     0.0 |               30 |           100.0 |          285.0 |           691.9 | 0/4             | 2/0            |                                   |      0.1
+ business_hours           |       5 |    12 |     70.6 |                 5 |   100.0 |               12 |           100.0 |           14.5 |                 | 0/9             | 0/0            | never analyzed                    |      0.1
+ connection_field         |      18 |    36 |     66.7 |                 0 |     0.0 |               16 |             0.0 |          115.1 |             0.9 | 0/6             | 0/25           |                                   |      0.1
+ import_person_map        |      79 |    58 |     42.3 |                22 |    38.6 |              137 |             0.0 |                |           289.3 | 0/0             | 0/1            |                                   |      0.1
+ device_language_alias    |      12 |    30 |     71.4 |                12 |         |               42 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ pledge_model_value       |       2 |    24 |     92.3 |                 2 |         |               23 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ pledge_snapshot          |       0 |    12 |    100.0 |                 0 |         |               12 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ tenant_setting           |      58 |    31 |     34.8 |                 3 |     5.3 |               30 |           100.0 |           71.7 |           110.4 | 0/14            | 0/1            |                                   |      0.1
+ channel                  |       4 |     0 |      0.0 |                 4 |         |                4 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ organisation             |       4 |    31 |     88.6 |                 8 |         |               29 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ record_kind              |       1 |     1 |     50.0 |                 2 |         |                1 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ review_channel           |       7 |    43 |     86.0 |                22 |         |               35 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ roster_publication       |       2 |     9 |     81.8 |                 2 |         |               11 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.1
+ follow_up_marker         |       2 |    42 |     95.5 |                34 |  1700.0 |                0 |             0.0 |            0.3 |             0.3 | 0/223           | 0/222          |                                   |      0.1
+ data_quality_snapshot    |       2 |     4 |     66.7 |                45 |  2250.0 |                0 |           100.0 |            0.4 |             3.7 | 0/104           | 0/101          |                                   |      0.1
+ connection_record_kind   |       1 |     0 |      0.0 |                 1 |         |                1 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+ business_holiday         |       0 |    47 |    100.0 |                 0 |         |               47 |                 |          497.4 |                 | 0/2             | 0/0            | never analyzed                    |      0.0
+ connection_inbox_channel |      12 |    12 |     50.0 |                24 |   200.0 |               12 |             0.0 |                |             2.9 | 0/0             | 0/152          |                                   |      0.0
+ connection_task_type     |       3 |    32 |     91.4 |                 3 |         |               30 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+ permission               |      26 |     4 |     13.3 |                31 |         |               27 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+ connection_task_status   |       3 |    33 |     91.7 |                 4 |         |               30 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+ connection_reason        |      24 |     5 |     17.2 |                29 |         |               24 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+ connection_inbox         |       4 |    20 |     83.3 |                32 |   800.0 |                4 |             0.0 |                |             9.0 | 0/0             | 0/58           |                                   |      0.0
+ telephony_missed_reason  |      12 |     3 |     20.0 |                12 |         |               15 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+ coverage_target          |       0 |    23 |    100.0 |                 0 |         |               23 |                 |                |                 | 0/0             | 0/0            | never analyzed, reltuples unknown |      0.0
+(112 rows)
+
+Time: 56.387 ms
+
+==== 4. Access ====
+-- 4a the 20 tables read most by sequential scans
+ schema |      table_name      | seq_scan  | seq_tup_read | rows_per_seq_scan | n_live_tup | idx_scan  | idx_tup_fetch | min_since_seq_scan | heap_mb 
+--------+----------------------+-----------+--------------+-------------------+------------+-----------+---------------+--------------------+---------
+ cma    | setting              | 184589942 |   7911940131 |                43 |         92 |  20387010 |      20387015 |                  0 |     0.0
+ cma    | market_alias         | 208392011 |   6459922171 |                31 |         31 |      3334 |           295 |                  0 |     0.0
+ cma    | tenant_setting       | 204967186 |   5571470972 |                27 |         58 |      3556 |          2475 |                  0 |     0.0
+ cma    | app_user_external_id | 107540048 |   3838074170 |                36 |         56 |  21729676 |      20879966 |                  0 |     0.0
+ cma    | crm_record           |    265755 |   3322067076 |             12500 |      16270 | 115637262 |     139282841 |                  0 |     8.5
+ cma    | crm_contact          |    297188 |   2395445704 |              8060 |      11386 | 203024584 |     202051607 |                  0 |     4.6
+ cma    | business_hours       | 426962841 |   2133245752 |                 5 |          5 |      4423 |         10296 |                  0 |     0.0
+ cma    | market               | 423619849 |   1842038074 |                 4 |         14 |    461181 |        448263 |                  0 |     0.0
+ cma    | telephony_tag        |  27860922 |   1464577530 |                53 |         58 |     64558 |         64365 |                  0 |     0.0
+ cma    | device               |    118140 |   1008412759 |              8536 |      13916 |   9240191 |      32894635 |                  0 |    16.2
+ cma    | app_user             |  71244382 |    935088266 |                13 |         28 |   2131697 |       1973891 |                  0 |     0.0
+ cma    | role_permission      |   9515623 |    596727625 |                63 |        113 |    250260 |         25330 |                  0 |     0.0
+ cma    | crm_task             |     30694 |    521376720 |             16986 |      21774 |    274714 |     359043686 |                552 |    12.4
+ cma    | follow_up_item       |    127591 |    503604192 |              3947 |       4659 |    125085 |       1194548 |                  0 |     3.9
+ cma    | subscription_event   |      4820 |    477784133 |             99125 |     104841 |    416596 |       3178069 |                  0 |    56.8
+ cma    | active_month         |     57408 |    433806789 |              7557 |       8277 |     15904 |       6518369 |                  0 |     0.7
+ cma    | active_customer      |     80324 |    426113339 |              5305 |       6850 |  26935379 |     625451079 |                  0 |     1.6
+ cma    | active_base          |     62208 |    425479290 |              6840 |       7469 |    327298 |       9041617 |                  0 |     3.2
+ cma    | device_component     |     30752 |    396141177 |             12882 |      18183 |    578181 |        294854 |                  1 |     1.9
+ cma    | commerce_customer    |     23696 |    266786535 |             11259 |      11812 |  21712668 |      54712371 |                  0 |     2.9
+(20 rows)
+
+Time: 20.517 ms
+-- 4b indexes of 1 MB and more never scanned since the stats reset (unique ones serve a constraint all the same)
+ schema |     table_name     |                index_name                 | is_unique | is_primary | index_mb 
+--------+--------------------+-------------------------------------------+-----------+------------+----------
+ cma    | audit_log          | audit_log_pkey                            | t         | t          |    239.8
+ cma    | subscription_event | subscription_event_tenant_id_id_key       | t         | f          |      6.5
+ cma    | subscription_event | subscription_event_pkey                   | t         | t          |      3.2
+ cma    | follow_up_item     | follow_up_item_tenant_id_kind_item_id_key | t         | f          |      2.3
+(4 rows)
+
+Time: 110.407 ms
+
+==== 5. Statements (pg_stat_statements, this database) ====
+Time: 18.224 ms
+pg_stat_statements is not installed in this database: no statement statistics (Query insights in the Cloud console holds the same per query)
+
+==== 8. Plans of the five reads, as 131 calls them (run before 6 and 7, which read sync_run and audit_log) ====
+SET
+Time: 19.017 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:438: NOTICE:  tenant pulse4all-subscriptions (01a10651-16ac-758c-bc28-e0e2825eefe4); today 2026-11-17, previous month 2026-10-01 to 2026-10-31; track_io_timing on (this login may not set it: 42501)
+psql:tools/perf/prod-slowdown-diagnosis.sql:438: NOTICE:  data quality stored result, age in minutes: 35 (computed in 9556 ms)
+DO
+Time: 36.511 ms
+-- per read, each its own statement (a statement_timeout stops one read, not the section):
+-- 8a its first and second call: exec ms, planning ms, shared blocks hit and read, read %, temp blocks, io_read_ms (with track_io_timing on), the 4 tables it read most (rows)
+-- 8b its third call, the full plan: EXPLAIN (ANALYZE, BUFFERS, SETTINGS)
+-- 8c its fourth call under auto_explain: the statements inside it of nested_ms or longer, with their plans (only where this login may use auto_explain)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  ---- 1. data quality: data quality checks (as 01a10cb0-a5b5-7301-956a-a7c26eafcaa7): select * from cma.data_quality()
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 1 | exec 1255.1 ms | planning 0.0 ms | shared hit 102308 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: sync_run 195694 rows, device 174186 rows (18 seq scans), tenant_setting 141 rows (4 seq scans), setting 109 rows (2 seq scans)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 2 | exec 285.1 ms | planning 0.0 ms | shared hit 101545 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: sync_run 195694 rows, device 174186 rows (18 seq scans), tenant_setting 141 rows (4 seq scans), setting 109 rows (2 seq scans)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Function Scan on data_quality  (cost=0.25..10.25 rows=1000 width=68) (actual time=281.372..281.375 rows=35.00 loops=1)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Buffers: shared hit=101545
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Settings: effective_cache_size = '1501872kB', search_path = 'cma, public'
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Planning Time: 0.030 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Execution Time: 281.394 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8c auto_explain is not available to this login (42501 access to library "auto_explain" is not allowed): no nested plans; section 5 names the slow statements inside the functions where pg_stat_statements.track is all (here top)
+DO
+Time: 1869.967 ms (00:01.870)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  ---- 2. flash: landing (as 01a10cb0-a5b5-7301-956a-a7c26eafcaa7): select cma.flash_page(null, null, '2026-10-01', '2026-10-31')
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 1 | exec 282.8 ms | planning 0.0 ms | shared hit 68921 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: sync_run 195694 rows, device 19354 rows (2 seq scans), flash_snapshot 1454 rows, setting 262 rows (4 seq scans)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 2 | exec 265.3 ms | planning 0.0 ms | shared hit 68385 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: sync_run 195694 rows, device 19354 rows (2 seq scans), flash_snapshot 1454 rows, setting 262 rows (4 seq scans)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Result  (cost=0.00..0.26 rows=1 width=32) (actual time=325.920..325.920 rows=1.00 loops=1)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Buffers: shared hit=192901 dirtied=3
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Settings: effective_cache_size = '1501872kB', search_path = 'cma, public'
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Planning Time: 0.006 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Execution Time: 325.932 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8c auto_explain is not available to this login (42501 access to library "auto_explain" is not allowed): no nested plans; section 5 names the slow statements inside the functions where pg_stat_statements.track is all (here top)
+DO
+Time: 915.545 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  ---- 3. installed base: records first page live (as 01a10cb0-a5b5-7301-956a-a7c26eafcaa7): select cma.flash_rows('installed_base', '{}', 'serial', false, 500, 0, null, null, null)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 1 | exec 293.8 ms | planning 0.0 ms | shared hit 24606 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: device 58062 rows (6 seq scans), device_component 36726 rows (2 seq scans), subscription 8029 rows (1 seq scans), subscription_event 4835 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 2 | exec 247.8 ms | planning 0.0 ms | shared hit 24119 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: device 58062 rows (6 seq scans), device_component 36726 rows (2 seq scans), subscription 8029 rows (1 seq scans), subscription_event 4835 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Result  (cost=0.00..0.26 rows=1 width=32) (actual time=241.644..241.645 rows=1.00 loops=1)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Buffers: shared hit=24119
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Settings: effective_cache_size = '1501872kB', search_path = 'cma, public'
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Planning Time: 0.008 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Execution Time: 241.659 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8c auto_explain is not available to this login (42501 access to library "auto_explain" is not allowed): no nested plans; section 5 names the slow statements inside the functions where pg_stat_statements.track is all (here top)
+DO
+Time: 827.609 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  ---- 4. system health: system health runs (as 01a10cb0-a5b5-7301-956a-a7c26eafcaa7): select * from cma.system_health_runs()
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 1 | exec 518.6 ms | planning 0.0 ms | shared hit 54117 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: sync_run 1061425 rows (3 seq scans), role_permission 82 rows (1 seq scans), user_role 16 rows (1 seq scans), app_user 8 rows (1 seq scans)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 2 | exec 443.2 ms | planning 0.0 ms | shared hit 54083 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: sync_run 1061425 rows (3 seq scans), role_permission 82 rows (1 seq scans), user_role 16 rows (1 seq scans), app_user 8 rows (1 seq scans)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Function Scan on system_health_runs  (cost=0.25..10.25 rows=1000 width=216) (actual time=443.091..443.097 rows=94.00 loops=1)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Buffers: shared hit=54083
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Settings: effective_cache_size = '1501872kB', search_path = 'cma, public'
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Planning Time: 0.040 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Execution Time: 443.136 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8c auto_explain is not available to this login (42501 access to library "auto_explain" is not allowed): no nested plans; section 5 names the slow statements inside the functions where pg_stat_statements.track is all (here top)
+DO
+Time: 1446.173 ms (00:01.446)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  ---- 5. welcome manager: team hours 31 days (as 01a10cb0-a5b5-7301-956a-a7c26eafcaa7): select t.* from cma.team_hours(date '2026-11-17' - 31, date '2026-11-17' - 1, null) t order by t.business_date, t.display_name, t.user_id
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 1 | exec 39.9 ms | planning 0.0 ms | shared hit 5833 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: setting 19872 rows (216 seq scans), tenant_setting 6264 rows (216 seq scans), work_status 3225 rows (215 seq scans), time_event 2603 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8a call 2 | exec 27.3 ms | planning 0.0 ms | shared hit 5505 | shared read 0 | read 0.0 % | temp read 0 | temp written 0 | io_read_ms 0.0 | most read: setting 19872 rows (216 seq scans), tenant_setting 6264 rows (216 seq scans), work_status 3225 rows (215 seq scans), time_event 2603 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Sort  (cost=60.08..62.58 rows=1000 width=187) (actual time=28.435..28.445 rows=215.00 loops=1)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Sort Key: business_date, display_name, user_id
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Sort Method: quicksort  Memory: 50kB
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   Buffers: shared hit=5505
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b   ->  Function Scan on team_hours t  (cost=0.25..10.25 rows=1000 width=187) (actual time=28.357..28.370 rows=215.00 loops=1)
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b         Buffers: shared hit=5505
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Settings: effective_cache_size = '1501872kB', search_path = 'cma, public'
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Planning Time: 0.042 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8b Execution Time: 28.480 ms
+psql:tools/perf/prod-slowdown-diagnosis.sql:565: NOTICE:  8c auto_explain is not available to this login (42501 access to library "auto_explain" is not allowed): no nested plans; section 5 names the slow statements inside the functions where pg_stat_statements.track is all (here top)
+DO
+Time: 145.924 ms
+Time: 41.503 ms
+
+==== 6. Jobs (sync_run, every tenant, the last 10 days by UTC day; runs that finished) ====
+SET
+Time: 19.642 ms
+         tenant          |           job            |  day_utc   | runs | failed | mean_ms | p95_ms | max_ms | busy_min 
+-------------------------+--------------------------+------------+------+--------+---------+--------+--------+----------
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-08 |   24 |      0 |      75 |    146 |    175 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-09 |   24 |      0 |      85 |    167 |    275 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-10 |   24 |      0 |     101 |    264 |    381 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-11 |   24 |      0 |      76 |    123 |    168 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-12 |   24 |      0 |      74 |    111 |    244 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-13 |   24 |      0 |      85 |    213 |    233 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-14 |   24 |      0 |      63 |     84 |    128 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-15 |   24 |      0 |     104 |    216 |    639 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-16 |   24 |      0 |     108 |    206 |    651 |      0.0
+ pulse4all-invest        | close_forgotten_workdays | 2026-11-17 |    6 |      0 |      57 |     67 |     67 |      0.0
+ pulse4all-invest        | flash_snapshot           | 2026-11-08 |  581 |      0 |     122 |    230 |    814 |      1.2
+ pulse4all-invest        | flash_snapshot           | 2026-11-09 | 1440 |      0 |     133 |    257 |    942 |      3.2
+ pulse4all-invest        | flash_snapshot           | 2026-11-10 | 1440 |      0 |     130 |    248 |    685 |      3.1
+ pulse4all-invest        | flash_snapshot           | 2026-11-11 | 1440 |      0 |     148 |    277 |    905 |      3.5
+ pulse4all-invest        | flash_snapshot           | 2026-11-12 | 1440 |      0 |     191 |    524 |   2472 |      4.6
+ pulse4all-invest        | flash_snapshot           | 2026-11-13 | 1440 |      0 |     194 |    422 |   2974 |      4.7
+ pulse4all-invest        | flash_snapshot           | 2026-11-14 | 1440 |      0 |     203 |    392 |   1153 |      4.9
+ pulse4all-invest        | flash_snapshot           | 2026-11-15 | 1418 |      0 |     197 |    381 |   1260 |      4.6
+ pulse4all-invest        | flash_snapshot           | 2026-11-16 | 1440 |      0 |     271 |    701 |   3022 |      6.5
+ pulse4all-invest        | flash_snapshot           | 2026-11-17 |  351 |      0 |     265 |    590 |   1685 |      1.5
+ pulse4all-invest        | refresh_active_customers | 2026-11-13 | 1086 |      0 |      69 |    144 |    937 |      1.2
+ pulse4all-invest        | refresh_active_customers | 2026-11-14 | 1440 |      0 |      67 |    146 |    739 |      1.6
+ pulse4all-invest        | refresh_active_customers | 2026-11-15 | 1415 |      0 |      65 |    139 |    434 |      1.5
+ pulse4all-invest        | refresh_active_customers | 2026-11-16 | 1440 |      0 |      86 |    235 |   1233 |      2.1
+ pulse4all-invest        | refresh_active_customers | 2026-11-17 |  351 |      0 |      87 |    227 |    378 |      0.5
+ pulse4all-invest        | refresh_data_quality     | 2026-11-08 | 1440 |      0 |      92 |    342 |   1038 |      2.2
+ pulse4all-invest        | refresh_data_quality     | 2026-11-09 | 1440 |      0 |     107 |    424 |   1686 |      2.6
+ pulse4all-invest        | refresh_data_quality     | 2026-11-10 | 1440 |      0 |     102 |    391 |   1572 |      2.4
+ pulse4all-invest        | refresh_data_quality     | 2026-11-11 | 1440 |      0 |     104 |    425 |   1607 |      2.5
+ pulse4all-invest        | refresh_data_quality     | 2026-11-12 | 1440 |      0 |     131 |    516 |   2923 |      3.2
+ pulse4all-invest        | refresh_data_quality     | 2026-11-13 | 1440 |      0 |     139 |    533 |   5559 |      3.3
+ pulse4all-invest        | refresh_data_quality     | 2026-11-14 | 1440 |      0 |     120 |    515 |   1089 |      2.9
+ pulse4all-invest        | refresh_data_quality     | 2026-11-15 | 1418 |      0 |     116 |    488 |   2480 |      2.7
+ pulse4all-invest        | refresh_data_quality     | 2026-11-16 | 1440 |      0 |     154 |    624 |   5913 |      3.7
+ pulse4all-invest        | refresh_data_quality     | 2026-11-17 |  351 |      0 |     145 |    542 |   1540 |      0.8
+ pulse4all-invest        | refresh_follow_up        | 2026-11-08 | 1440 |      0 |     148 |    316 |   1160 |      3.6
+ pulse4all-invest        | refresh_follow_up        | 2026-11-09 | 1440 |      0 |     159 |    344 |    777 |      3.8
+ pulse4all-invest        | refresh_follow_up        | 2026-11-10 | 1439 |      0 |     160 |    336 |   1641 |      3.8
+ pulse4all-invest        | refresh_follow_up        | 2026-11-11 | 1440 |      0 |     179 |    393 |   2669 |      4.3
+ pulse4all-invest        | refresh_follow_up        | 2026-11-12 | 1439 |      0 |     218 |    761 |   3698 |      5.2
+ pulse4all-invest        | refresh_follow_up        | 2026-11-13 | 1440 |      0 |     110 |    270 |   2876 |      2.6
+ pulse4all-invest        | refresh_follow_up        | 2026-11-14 | 1440 |      0 |      75 |    151 |    663 |      1.8
+ pulse4all-invest        | refresh_follow_up        | 2026-11-15 | 1419 |      0 |      73 |    142 |   1103 |      1.7
+ pulse4all-invest        | refresh_follow_up        | 2026-11-16 | 1440 |      0 |      95 |    252 |   1730 |      2.3
+ pulse4all-invest        | refresh_follow_up        | 2026-11-17 |  351 |      0 |      87 |    231 |    442 |      0.5
+ pulse4all-subscriptions | assets_import            | 2026-11-11 |    1 |      0 |       0 |      0 |      0 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-08 |   24 |      0 |      43 |     66 |    186 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-09 |   24 |      0 |      54 |     74 |    268 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-10 |   24 |      0 |      44 |     80 |    126 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-11 |   24 |      0 |      51 |    132 |    209 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-12 |   24 |      0 |      49 |     74 |    276 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-13 |   24 |      0 |      40 |     55 |     93 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-14 |   24 |      0 |      36 |     53 |     63 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-15 |   24 |      0 |      39 |     63 |     90 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-16 |   24 |      0 |      50 |     81 |    215 |      0.0
+ pulse4all-subscriptions | close_forgotten_workdays | 2026-11-17 |    6 |      0 |      36 |     47 |     48 |      0.0
+ pulse4all-subscriptions | email_poll               | 2026-11-08 | 1440 |      0 |    1121 |   4992 |   7245 |     26.9
+ pulse4all-subscriptions | email_poll               | 2026-11-09 | 1439 |      0 |    1485 |   5276 |  14088 |     35.6
+ pulse4all-subscriptions | email_poll               | 2026-11-10 | 1440 |      2 |    1452 |   5279 |  23541 |     34.9
+ pulse4all-subscriptions | email_poll               | 2026-11-11 | 1440 |      0 |    1402 |   5433 |  12450 |     33.6
+ pulse4all-subscriptions | email_poll               | 2026-11-12 | 1440 |      0 |    1467 |   5296 |  12599 |     35.2
+ pulse4all-subscriptions | email_poll               | 2026-11-13 | 1440 |      0 |    1671 |   5354 |  18407 |     40.1
+ pulse4all-subscriptions | email_poll               | 2026-11-14 | 1439 |      0 |    2155 |  18269 |  27580 |     51.7
+ pulse4all-subscriptions | email_poll               | 2026-11-15 | 1414 |      0 |    2706 |  25631 |  50233 |     63.8
+ pulse4all-subscriptions | email_poll               | 2026-11-16 | 1439 |      0 |    3686 |  35564 |  57197 |     88.4
+ pulse4all-subscriptions | email_poll               | 2026-11-17 |  351 |      0 |    3712 |  47337 |  48568 |     21.7
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-08 |  581 |      0 |     263 |   1116 |   6671 |      2.5
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-09 | 1440 |      0 |     275 |   1320 |   5184 |      6.6
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-10 | 1440 |      0 |     275 |   1282 |  12538 |      6.6
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-11 | 1440 |      0 |     282 |   1236 |   7852 |      6.8
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-12 | 1440 |      0 |     352 |   1379 |   8708 |      8.5
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-13 | 1440 |      0 |     384 |   1515 |  20809 |      9.2
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-14 | 1440 |      0 |     351 |   2393 |   6595 |      8.4
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-15 | 1418 |      0 |     279 |   1960 |   5191 |      6.6
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-16 | 1440 |      0 |     379 |   2329 |  19844 |      9.1
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-17 |  351 |      0 |     325 |   2256 |   5746 |      1.9
+ pulse4all-subscriptions | forms_poll               | 2026-11-08 | 1440 |      0 |    8137 |   9233 |  16980 |    195.3
+ pulse4all-subscriptions | forms_poll               | 2026-11-09 | 1439 |      0 |    8474 |   9860 |  12919 |    203.2
+ pulse4all-subscriptions | forms_poll               | 2026-11-10 | 1440 |      0 |    8886 |  10353 |  13157 |    213.3
+ pulse4all-subscriptions | forms_poll               | 2026-11-11 | 1440 |      0 |    9156 |  10316 |  16102 |    219.7
+ pulse4all-subscriptions | forms_poll               | 2026-11-12 | 1439 |      0 |    9411 |  11352 |  22864 |    225.7
+ pulse4all-subscriptions | forms_poll               | 2026-11-13 | 1440 |      0 |    9102 |  10661 |  24423 |    218.5
+ pulse4all-subscriptions | forms_poll               | 2026-11-14 | 1439 |      1 |    8703 |   9344 |  21484 |    208.7
+ pulse4all-subscriptions | forms_poll               | 2026-11-15 | 1415 |      0 |    8793 |   9628 |  22822 |    207.4
+ pulse4all-subscriptions | forms_poll               | 2026-11-16 | 1440 |     28 |    9488 |  11906 |  29396 |    227.7
+ pulse4all-subscriptions | forms_poll               | 2026-11-17 |  351 |      0 |    8658 |   9340 |  10910 |     50.7
+ pulse4all-subscriptions | link_calls               | 2026-11-08 | 1440 |      0 |      51 |     84 |    471 |      1.2
+ pulse4all-subscriptions | link_calls               | 2026-11-09 | 1440 |      0 |      61 |    107 |    776 |      1.5
+ pulse4all-subscriptions | link_calls               | 2026-11-10 | 1439 |      0 |      59 |    109 |    525 |      1.4
+ pulse4all-subscriptions | link_calls               | 2026-11-11 | 1438 |      0 |      62 |    115 |   1111 |      1.5
+ pulse4all-subscriptions | link_calls               | 2026-11-12 | 1440 |      0 |      77 |    192 |    974 |      1.8
+ pulse4all-subscriptions | link_calls               | 2026-11-13 | 1440 |      0 |      68 |    129 |   2210 |      1.6
+ pulse4all-subscriptions | link_calls               | 2026-11-14 | 1439 |      0 |      47 |     76 |    207 |      1.1
+ pulse4all-subscriptions | link_calls               | 2026-11-15 | 1418 |      0 |      48 |     75 |    904 |      1.1
+ pulse4all-subscriptions | link_calls               | 2026-11-16 | 1440 |      0 |      68 |    134 |    970 |      1.6
+ pulse4all-subscriptions | link_calls               | 2026-11-17 |  351 |      0 |      51 |     88 |    139 |      0.3
+ pulse4all-subscriptions | reconcile                | 2026-11-08 |   50 |      3 |    2702 |  10088 |  20967 |      2.3
+ pulse4all-subscriptions | reconcile                | 2026-11-09 |   50 |      3 |    2649 |   9218 |  21003 |      2.2
+ pulse4all-subscriptions | reconcile                | 2026-11-10 |   50 |      3 |    5000 |  17678 |  62851 |      4.2
+ pulse4all-subscriptions | reconcile                | 2026-11-11 |   50 |      3 |    3766 |  12946 |  23823 |      3.1
+ pulse4all-subscriptions | reconcile                | 2026-11-12 |   50 |      3 |    3617 |  12604 |  22992 |      3.0
+ pulse4all-subscriptions | reconcile                | 2026-11-13 |   50 |      3 |    5900 |  21902 | 104428 |      4.9
+ pulse4all-subscriptions | reconcile                | 2026-11-14 |   50 |      3 |    3700 |  14534 |  25709 |      3.1
+ pulse4all-subscriptions | reconcile                | 2026-11-15 |   50 |      3 |    2703 |  11117 |  21053 |      2.3
+ pulse4all-subscriptions | reconcile                | 2026-11-16 |   50 |      3 |    3059 |  11940 |  21928 |      2.5
+ pulse4all-subscriptions | reconcile                | 2026-11-17 |   50 |      3 |    4621 |  18352 |  33309 |      3.9
+ pulse4all-subscriptions | refresh_active_customers | 2026-11-13 | 1086 |      0 |    1069 |   7254 |  50994 |     19.3
+ pulse4all-subscriptions | refresh_active_customers | 2026-11-14 | 1440 |      0 |     701 |   6047 |  15279 |     16.8
+ pulse4all-subscriptions | refresh_active_customers | 2026-11-15 | 1415 |      0 |     712 |   6114 |  17527 |     16.8
+ pulse4all-subscriptions | refresh_active_customers | 2026-11-16 | 1440 |      2 |    1398 |   7550 |  55247 |     33.6
+ pulse4all-subscriptions | refresh_active_customers | 2026-11-17 |  351 |      0 |     852 |   6731 |   9011 |      5.0
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-08 | 1440 |      0 |    1393 |   8086 |  15235 |     33.4
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-09 | 1440 |      0 |    1468 |   8497 |  20664 |     35.2
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-10 | 1440 |      0 |    1461 |   8504 |  27054 |     35.1
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-11 | 1440 |      0 |    2045 |  14861 |  34529 |     49.1
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-12 | 1440 |     25 |    3157 |  17486 |  55955 |     75.8
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-13 | 1440 |      0 |     199 |     80 |  25010 |      4.8
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-14 | 1440 |      0 |     126 |     67 |   7645 |      3.0
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-15 | 1418 |      0 |     134 |     65 |  12324 |      3.2
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-16 | 1440 |      0 |     174 |     91 |  35509 |      4.2
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-17 |  351 |      0 |     150 |     94 |   9592 |      0.9
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-08 | 1440 |      0 |    2660 |   3900 |   8629 |     63.8
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-09 | 1440 |      0 |    2988 |   4836 |  11576 |     71.7
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-10 | 1439 |      0 |    2940 |   4601 |  16114 |     70.5
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-11 | 1440 |      0 |    3322 |   5568 |  23647 |     79.7
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-12 | 1439 |      0 |    4411 |  10289 |  41706 |    105.8
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-13 | 1440 |      0 |    2634 |   4639 |  27063 |     63.2
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-14 | 1440 |      0 |    1230 |   3889 |   7115 |     29.5
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-15 | 1419 |      0 |    1240 |   4023 |  10450 |     29.3
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-16 | 1440 |      0 |    2757 |   6037 |  29520 |     66.2
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-17 |  351 |      0 |    1511 |   4262 |   7930 |      8.8
+ pulse4all-subscriptions | reviews_poll             | 2026-11-08 |   24 |      0 |    7308 |   7467 |   7783 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-09 |   24 |      0 |    7264 |   7354 |   7449 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-10 |   24 |      0 |    7259 |   7356 |   7391 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-11 |   24 |      0 |    7261 |   7358 |   7369 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-12 |   24 |      0 |    7280 |   7382 |   7717 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-13 |   24 |      0 |    7297 |   7475 |   7930 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-14 |   24 |      0 |    7268 |   7375 |   7481 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-15 |   24 |      0 |    7269 |   7358 |   7387 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-16 |   24 |      0 |    7306 |   7519 |   7992 |      2.9
+ pulse4all-subscriptions | reviews_poll             | 2026-11-17 |    6 |      0 |    7231 |   7271 |   7280 |      0.7
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-08 |   14 |      0 |     224 |    250 |    251 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-09 |   14 |      0 |     230 |    261 |    262 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-10 |   14 |      0 |     227 |    268 |    271 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-11 |   14 |      0 |     225 |    254 |    264 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-12 |   14 |      0 |     237 |    273 |    291 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-13 |   14 |      0 |     224 |    246 |    251 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-14 |   14 |      0 |     254 |    424 |    426 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-15 |   14 |      0 |     235 |    263 |    273 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-16 |   14 |      0 |     228 |    254 |    254 |      0.1
+ pulse4all-subscriptions | subscriptions_check      | 2026-11-17 |   14 |      0 |     236 |    275 |    284 |      0.1
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-08 | 3456 |      0 |     276 |    719 |   7647 |     15.9
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-09 | 3456 |      0 |     334 |    833 |  18405 |     19.2
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-10 | 3456 |      0 |     313 |    819 |   4244 |     18.0
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-11 | 3456 |      0 |     310 |    831 |   4846 |     17.9
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-12 | 3456 |      0 |     327 |    848 |   6715 |     18.8
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-13 | 3456 |      0 |     308 |    788 |   3475 |     17.7
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-14 | 3456 |      0 |     288 |    742 |  20439 |     16.6
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-15 | 3396 |      1 |     284 |    747 |  20101 |     16.1
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-16 | 3456 |     15 |     384 |    913 |  20321 |     22.1
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-17 |  852 |      0 |     296 |    785 |   3677 |      4.2
+(161 rows)
+
+Time: 834.956 ms
+-- 6b sync_run itself (every system health read scans its last 30 days)
+ est_rows | heap_mb | indexes_mb | runs_last_30_days 
+----------+---------+------------+-------------------
+   341278 |   139.8 |      104.0 |            333470
+(1 row)
+
+Time: 249.236 ms
+
+==== 7. audit_log ====
+ est_rows | heap_mb | toast_mb | indexes_mb | total_mb | bytes_per_row_with_indexes | pct_of_database 
+----------+---------+----------+------------+----------+----------------------------+-----------------
+  7682788 |  8067.8 |     56.9 |     1861.0 |   9988.0 |                       1363 |            88.7
+(1 row)
+
+Time: 24.953 ms
+-- 7a rows per UTC day, the last 14 days, per tenant: the estimate of the planner always; counted on audit_log_time_idx (tenant_id, changed_at) when the estimate is at most audit_count_max over the 14 days and audit_budget_s allows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  tenant | day (UTC) | estimated rows | counted rows | MB a day (counted, else estimated, x bytes per row)
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-04 | 2747 | 2984 | 3.9
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-05 | 3733 | 4789 | 6.2
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-06 | 3335 | 5860 | 7.6
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-07 | 2250 | 5858 | 7.6
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-08 | 2294 | 6974 | 9.1
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-09 | 2807 | 8690 | 11.3
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-10 | 3042 | 8688 | 11.3
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-11 | 3570 | 8693 | 11.3
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-12 | 3539 | 8695 | 11.3
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-13 | 1738 | 10862 | 14.1
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-14 | 1 | 11570 | 15.0
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-15 | 1 | 11390 | 14.8
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-16 | 1 | 11570 | 15.0
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | 2026-11-17 | 1 | 2820 | 3.7
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-04 | 186713 | 157342 | 204.6
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-05 | 253693 | 249049 | 323.8
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-06 | 226692 | 204588 | 266.0
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-07 | 152930 | 140245 | 182.3
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-08 | 155947 | 136106 | 176.9
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-09 | 190756 | 167569 | 217.8
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-10 | 206765 | 201543 | 262.0
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-11 | 242659 | 214993 | 279.5
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-12 | 240522 | 189620 | 246.5
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-13 | 118156 | 216999 | 282.1
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-14 | 1 | 159941 | 207.9
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-15 | 1 | 148626 | 193.2
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-16 | 1 | 200302 | 260.4
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | 2026-11-17 | 1 | 66912 | 87.0
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  -- 7b rows over the last 24 hours per tenant and table (counted when the estimate is at most audit_count_max / 14 and the budget allows)
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | sync_run | 11568 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | flash_snapshot | 1 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-invest | flash_snapshot_run | 1 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | sync_cursor | 70066 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | ingest_event | 54030 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | sync_run | 27294 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | connection_form_field | 12734 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | email_thread | 8396 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | crm_contact | 3907 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | crm_association | 3412 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | connection_form | 2790 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | commerce_customer | 2781 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | crm_task | 2402 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | crm_call | 1814 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | email_message | 1805 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | crm_record | 1791 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | commerce_order | 1636 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  pulse4all-subscriptions | connection_stage | 1539 rows
+psql:tools/perf/prod-slowdown-diagnosis.sql:660: NOTICE:  section 7: 7.4 s
+DO
+Time: 7418.547 ms (00:07.419)
+
+==== 9. Proof and run time ====
+ wrote_nothing | script_seconds 
+---------------+----------------
+ t             |           14.5
+(1 row)
+
+Time: 25.780 ms
+-- the tables this transaction wrote (none: it is read only; a row here would mean a write the read-only setting let through)
+ schema | table_name | inserted | updated | deleted 
+--------+------------+----------+---------+---------
+(0 rows)
+
+Time: 22.251 ms
+ROLLBACK
+Time: 15.511 ms
