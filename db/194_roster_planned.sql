@@ -4,7 +4,8 @@
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 192_fleet_page.sql
 -- (0009v). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 195_verify_roster_planned.sql there (normal, then provoked), then 25_verify_roster.sql and
--- 95_verify_attempts_for_sales.sql again (dev); then prod the same way before the merge of its pull request.
+-- 95_verify_attempts_for_sales.sql again (dev); then prod before the merge of its pull request: this script, 195 (normal,
+-- then provoked) and 25 (95 runs in dev only: it refuses any other database).
 --
 -- Why (Martin, 17 November 2026, brief B39; Decision log, 17 Nov 2026): Team → Roster listed every person whose time is
 -- kept (cma.time_is_kept: active and holding workday.own), so the Administrator-only people showed in the planner, since
