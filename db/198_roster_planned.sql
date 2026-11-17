@@ -1,11 +1,17 @@
 -- =============================================================================================
--- 194_roster_planned.sql: addition 0009w, the roster lists only people planned on the roster (brief B39)
+-- 198_roster_planned.sql: addition 0009y, the roster lists only people planned on the roster (brief B39, B39a)
 -- =============================================================================================
--- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 192_fleet_page.sql
--- (0009v). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
--- 195_verify_roster_planned.sql there (normal, then provoked), then 25_verify_roster.sql and
--- 95_verify_attempts_for_sales.sql again (dev); then prod before the merge of its pull request: this script, 195 (normal,
--- then provoked) and 25 (95 runs in dev only: it refuses any other database).
+-- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 196_sync_run_reads.sql
+-- (0009x; and so after 194_audit_bookkeeping.sql, 0009w). This script was written as 194, addition 0009w, while the
+-- "Prod's slowdown" work took 194 to 197 and the additions 0009w and 0009x first (brief B39a, 17 November 2026), so it is
+-- 198, its verify 199 and the addition 0009y; it refuses to run before 0009x is recorded. A run of the earlier
+-- 194_roster_planned.sql (dev, 17 November 2026) created the roster functions and the permission and recorded nothing (its
+-- insert of 0009w met the audit work's row: INSERT 0 0); this script creates them again as they are and records 0009y.
+-- Merge order: #293 merges after the two slowdown pull requests.
+-- Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
+-- 199_verify_roster_planned.sql there (normal, then provoked), then 25_verify_roster.sql and
+-- 95_verify_attempts_for_sales.sql again (dev); then prod, once 0009w and 0009x have run there, before the merge of its
+-- pull request: this script, 199 (normal, then provoked) and 25 (95 runs in dev only: it refuses any other database).
 --
 -- Why (Martin, 17 November 2026, brief B39; Decision log, 17 Nov 2026): Team → Roster listed every person whose time is
 -- kept (cma.time_is_kept: active and holding workday.own), so the Administrator-only people showed in the planner, since
@@ -72,8 +78,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009v') then
-    raise exception 'addition 0009v (192_fleet_page.sql) has not run in this database';
+  if not exists (select 1 from cma.schema_migration where version = '0009x') then
+    raise exception 'addition 0009x (196_sync_run_reads.sql) has not run in this database';
   end if;
 end
 $$;
@@ -153,7 +159,7 @@ as $$
   select cma.time_is_kept(p_user_id) and cma.has_permission(p_user_id, 'roster.planned')
 $$;
 
--- Whether a person belongs on a roster: on the roster (0009w; was: time is kept), and for a team roster the person is a
+-- Whether a person belongs on a roster: on the roster (0009y; was: time is kept), and for a team roster the person is a
 -- member at some point during the week (so a person who joins on Wednesday appears)
 -- based on: 23_roster.sql
 create or replace function cma.roster_in_scope(p_user_id uuid, p_team_id uuid, p_week_start date)
@@ -172,7 +178,7 @@ $$;
 -- 3. The planner's reads (D3)
 -- ---------------------------------------------------------------------------------------------
 
--- The current entries of the week (what the planner edits), one per person per date; since 0009w only of people on the
+-- The current entries of the week (what the planner edits), one per person per date; since 0009y only of people on the
 -- roster (D3). The entries of people who left the roster stay stored (D4)
 -- based on: 23_roster.sql
 create or replace function cma.roster_entries(p_week_start date, p_team_key text default null)
@@ -214,7 +220,7 @@ end
 $$;
 
 -- Coverage per date and work type: how many planned people hold the work type that day, who they
--- are, and the team's target for that weekday when one is set. Skills as held now. Since 0009w a shift of a person not
+-- are, and the team's target for that weekday when one is set. Skills as held now. Since 0009y a shift of a person not
 -- on the roster is neither counted nor named (D3)
 -- based on: 23_roster.sql
 create or replace function cma.roster_coverage(p_week_start date, p_team_key text default null)
@@ -261,7 +267,7 @@ $$;
 -- 4. The Live board's shift line (D5)
 -- ---------------------------------------------------------------------------------------------
 
--- Today's published entry per person on the roster (0009w; was: whose time is kept), in the person's zone, for the Live
+-- Today's published entry per person on the roster (0009y; was: whose time is kept), in the person's zone, for the Live
 -- board's shift line; monitoring.live. A person not on the roster has no row, so the board derives no adherence flag
 -- (no "Not planned") when that person clocks in
 -- based on: 23_roster.sql
@@ -322,7 +328,7 @@ to cma_app;
 -- 6. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009w', 'Roster: only people planned on the roster (brief B39): the permission roster.planned on the default ladder''s agent, supervisor and manager (cma.seed_default_roles; existing tenants'' system roles), cma.on_roster (time kept and roster.planned), cma.roster_in_scope on it (roster_people, roster_set_entry and roster_copy_week follow), cma.roster_entries and cma.roster_coverage leaving out people not on the roster, cma.roster_today one row per person on the roster. Stored entries unchanged; no table, view or column changed; nothing in cma_read')
+values ('0009y', 'Roster: only people planned on the roster (brief B39): the permission roster.planned on the default ladder''s agent, supervisor and manager (cma.seed_default_roles; existing tenants'' system roles), cma.on_roster (time kept and roster.planned), cma.roster_in_scope on it (roster_people, roster_set_entry and roster_copy_week follow), cma.roster_entries and cma.roster_coverage leaving out people not on the roster, cma.roster_today one row per person on the roster. Stored entries unchanged; no table, view or column changed; nothing in cma_read')
 on conflict (version) do nothing;
 
 commit;

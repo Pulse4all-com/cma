@@ -2220,12 +2220,12 @@ function rosterHeaderOf(w: MockRosterWeek): RosterWeekHeader {
   };
 }
 
-/** On the roster (addition 0009w): the rule of lib/roster onRoster over the permissions of the person's role */
+/** On the roster (addition 0009y): the rule of lib/roster onRoster over the permissions of the person's role */
 function onRosterMock(p: DirectoryPerson): boolean {
   return onRoster({ isActive: p.isActive, permissions: MOCK_ROLES.find((r) => r.key === p.roleKey)?.permissions ?? [] });
 }
 
-/** The people on a roster's grid: on the roster (0009w; the Test admin, admin alone, is not), and for a team roster its members */
+/** The people on a roster's grid: on the roster (0009y; the Test admin, admin alone, is not), and for a team roster its members */
 function rosterPeopleOf(teamKey: string | null): DirectoryPerson[] {
   return [...seedPeople().values()]
     .filter((p) => onRosterMock(p) && (!teamKey || p.teams.some((t) => t.key === teamKey)))
@@ -3060,7 +3060,7 @@ export const mockData: CmaData = {
         // roster; the supervisor does not; both watch the Live board
         // Both push messages to agents (messages.send, migration 0008). The manager holds quality.manage as in the default
         // ladder (db/94), which Team → Quality monitoring needs (14 November 2026); the supervisor does not. Both are
-        // planned on the roster (roster.planned, addition 0009w)
+        // planned on the roster (roster.planned, addition 0009y)
         permissions: role === "manager"
           ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
              "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send", "quality.manage", "roster.planned"]
@@ -3964,7 +3964,7 @@ export const mockData: CmaData = {
 
   async getRosterToday(me): Promise<TodayShift[]> {
     assertLive(me);
-    // One row per person on the roster (0009w): a person not on it has no row, so the board flags nothing for them
+    // One row per person on the roster (0009y): a person not on it has no row, so the board flags nothing for them
     return [...seedPeople().values()].filter(onRosterMock).map((p) => {
       const date = dateKeyInZone(new Date(), p.timeZone);
       const found = publishedCellFor(p.userId, date);

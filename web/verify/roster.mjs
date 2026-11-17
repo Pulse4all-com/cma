@@ -9,7 +9,7 @@
  * month end, planned minutes and headcount, the coverage states and grid, and the adherence flags
  * from a planned shift against the actual clock in a zone, around the autumn clock change too; since
  * 16 October 2026 (backlog CMA-061) the week's one-range label in both locales and the absence keywords
- * built from the tenant's types; since 17 November 2026 (brief B39, addition 0009w) who is on the roster: the planner's list
+ * built from the tenant's types; since 17 November 2026 (brief B39, addition 0009y) who is on the roster: the planner's list
  * and the Live board's flags hold only people with their time kept and roster.planned, roles combined.
  */
 import {
@@ -107,8 +107,8 @@ expect("the same in Dutch", [fmtDateRange("2026-10-12", "2026-10-18", "nl"), fmt
 expect("the absences a cell takes, by name, the key where it differs", absenceKeywordList(absences),
   "Day off (off), Leave, Sick, Public holiday (public_holiday), Other", "off, leave, sick, public_holiday, other");
 
-// ---- on the roster: the planner's list (17 November 2026, brief B39, addition 0009w) ------------------------------------
-// The default ladder as db/194 seeds it, abridged (the keys onRoster reads are complete); a person's permissions are
+// ---- on the roster: the planner's list (17 November 2026, brief B39, addition 0009y) ------------------------------------
+// The default ladder as db/198 seeds it, abridged (the keys onRoster reads are complete); a person's permissions are
 // those of all their roles together
 const LADDER = {
   agent: ["workday.own", "roster.view", "leads.accept", "performance.own", "roster.planned"],

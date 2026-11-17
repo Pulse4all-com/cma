@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 195_verify_roster_planned.sql: verifies addition 0009w, only people planned on the roster (roster.planned,
+-- 199_verify_roster_planned.sql: verifies addition 0009y, only people planned on the roster (roster.planned,
 -- cma.on_roster, the roster reads and writes, cma.roster_today)
 -- =============================================================================================
 -- Universal: no seed is assumed, so it runs in dev and in prod. Two kinds of checks:
@@ -9,11 +9,13 @@
 --     definitions (kept below) narrowed to the people on the roster, as the application (cma_app, row-level security
 --     on), in a step that is always rolled back; and the stored entries of people not on the roster (D4), for
 --     information.
--- Run as your own IAM login, after 194. Output: tenant slugs, counts, check names and dates only; no person's name.
--- 25_verify_roster.sql and 95_verify_attempts_for_sales.sql keep passing unchanged after 194; run both again.
+-- Run as your own IAM login, after 198. Written as 195 for addition 0009w; the "Prod's slowdown" work took 194 to 197 and
+-- 0009w and 0009x first (brief B39a), so it is 199 for addition 0009y, and S1 proves 0009y follows 0009x.
+-- Output: tenant slugs, counts, check names and dates only; no person's name.
+-- 25_verify_roster.sql and 95_verify_attempts_for_sales.sql keep passing unchanged after 198; run both again.
 --
 -- Checks (the brief's verify list)
---   S1  the addition 0009w is recorded once, after 0009v
+--   S1  the addition 0009y is recorded once, after 0009x
 --   S2  cma.on_roster and the four re-created functions: cma_owner's, the application's to execute (not public's, not the
 --       readers'), in the caller's rights, stable; the reads call cma.on_roster; cma.seed_default_roles names
 --       roster.planned for agent, supervisor and manager, and its admin array still ends as 0008z's
@@ -53,11 +55,11 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' for every check, or one check's id such as 'B3'
 
-drop table if exists pg_temp.verify_0009w;
-create temporary table verify_0009w (ord integer, check_name text, result text, detail text);
-grant select, insert on pg_temp.verify_0009w to cma_app;
+drop table if exists pg_temp.verify_0009y;
+create temporary table verify_0009y (ord integer, check_name text, result text, detail text);
+grant select, insert on pg_temp.verify_0009y to cma_app;
 
-create or replace function pg_temp.v0009w_p(p_id text)
+create or replace function pg_temp.v0009y_p(p_id text)
 returns boolean
 language sql stable
 as $$
@@ -65,14 +67,14 @@ as $$
 $$;
 
 -- One check's row: PASS when what was found equals what is expected; provoked, the expectation carries a deliberate difference
-create or replace function pg_temp.v0009w_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
+create or replace function pg_temp.v0009y_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
 returns void
 language plpgsql
 as $$
 declare
-  v_exp text := case when pg_temp.v0009w_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
+  v_exp text := case when pg_temp.v0009y_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
 begin
-  insert into pg_temp.verify_0009w values (p_ord, p_id || ' ' || p_name,
+  insert into pg_temp.verify_0009y values (p_ord, p_id || ' ' || p_name,
     case when p_found is not distinct from v_exp then 'PASS' else 'FAIL' end,
     case when p_found is not distinct from v_exp then left(coalesce(p_found, 'null'), 600)
          else left('found ' || coalesce(p_found, 'null') || ' | expected ' || coalesce(v_exp, 'null'), 2400) end);
@@ -82,7 +84,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 0005's definitions (23_roster.sql), kept to compare with: the scope on time kept alone
 -- ---------------------------------------------------------------------------------------------
-create or replace function pg_temp.v0009w_in_scope_0005(p_user_id uuid, p_team_id uuid, p_week_start date)
+create or replace function pg_temp.v0009y_in_scope_0005(p_user_id uuid, p_team_id uuid, p_week_start date)
 returns boolean
 language sql stable
 as $$
@@ -94,7 +96,7 @@ as $$
                        and (m.valid_to is null or m.valid_to > p_week_start::timestamp at time zone 'UTC' - interval '1 day')))
 $$;
 
-create or replace function pg_temp.v0009w_people_0005(p_week_start date, p_team_key text)
+create or replace function pg_temp.v0009y_people_0005(p_week_start date, p_team_key text)
 returns table (user_id uuid, display_name text, organisation_name text, timezone text, team_keys text[], work_type_keys text[])
 language plpgsql stable
 as $$
@@ -117,12 +119,12 @@ begin
     from cma.app_user u
     left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id
     where u.tenant_id = cma.current_tenant_id()
-      and pg_temp.v0009w_in_scope_0005(u.id, v_team, p_week_start)
+      and pg_temp.v0009y_in_scope_0005(u.id, v_team, p_week_start)
     order by u.display_name, u.id;
 end
 $$;
 
-create or replace function pg_temp.v0009w_entries_0005(p_week_start date, p_team_key text)
+create or replace function pg_temp.v0009y_entries_0005(p_week_start date, p_team_key text)
 returns table (entry_id uuid, user_id uuid, business_date date, kind text, start_time time, end_time time, absence_key text,
                absence_name text, note text, recorded_at timestamptz, recorded_by_name text)
 language plpgsql stable
@@ -148,7 +150,7 @@ begin
 end
 $$;
 
-create or replace function pg_temp.v0009w_today_0005()
+create or replace function pg_temp.v0009y_today_0005()
 returns table (user_id uuid, business_date date, is_published boolean, kind text, start_time time, end_time time, absence_name text)
 language plpgsql stable
 as $$
@@ -191,14 +193,14 @@ declare
   f     text;
 begin
   -- S1
-  perform pg_temp.v0009w_row(1, 'S1', 'the addition 0009w recorded once, after 0009v',
-    format('0009v %s; 0009w %s, after 0009v %s, the roster %s',
-           (select count(*) from cma.schema_migration where version = '0009v'),
-           (select count(*) from cma.schema_migration where version = '0009w'),
+  perform pg_temp.v0009y_row(1, 'S1', 'the addition 0009y recorded once, after 0009x',
+    format('0009x %s; 0009y %s, after 0009x %s, the roster %s',
+           (select count(*) from cma.schema_migration where version = '0009x'),
+           (select count(*) from cma.schema_migration where version = '0009y'),
            coalesce((select w.applied_at > v.applied_at from cma.schema_migration w, cma.schema_migration v
-                     where w.version = '0009w' and v.version = '0009v'), false),
-           coalesce((select m.description like 'Roster: only people planned on the roster%' from cma.schema_migration m where m.version = '0009w'), false)),
-    '0009v 1; 0009w 1, after 0009v t, the roster t');
+                     where w.version = '0009y' and v.version = '0009x'), false),
+           coalesce((select m.description like 'Roster: only people planned on the roster%' from cma.schema_migration m where m.version = '0009y'), false)),
+    '0009x 1; 0009y 1, after 0009x t, the roster t');
 
   -- S2
   foreach f in array array['cma.on_roster(uuid)', 'cma.roster_in_scope(uuid,uuid,date)', 'cma.roster_entries(date,text)',
@@ -230,24 +232,24 @@ begin
      or v_src !~ '''tenant.configure'', ''messages.withdraw''\]' then
     v_bad := v_bad || 'cma.seed_default_roles'' ladder; ';
   end if;
-  perform pg_temp.v0009w_row(2, 'S2', 'the functions: the owner''s, the application''s, the caller''s rights, stable, on cma.on_roster; the ladder''s source',
+  perform pg_temp.v0009y_row(2, 'S2', 'the functions: the owner''s, the application''s, the caller''s rights, stable, on cma.on_roster; the ladder''s source',
     coalesce(nullif(v_bad, ''), 'ok'), 'ok');
 
   -- S3
-  perform pg_temp.v0009w_row(3, 'S3', 'roster.planned in the catalog; on every system agent, supervisor and manager',
+  perform pg_temp.v0009y_row(3, 'S3', 'roster.planned in the catalog; on every system agent, supervisor and manager',
     format('catalog %s; system agent/supervisor/manager without it %s',
            (select count(*) from cma.permission where key = 'roster.planned'),
            (select count(*) from cma.app_role ar where ar.is_system and ar.key in ('agent', 'supervisor', 'manager')
               and not exists (select 1 from cma.role_permission rp where rp.tenant_id = ar.tenant_id and rp.role_id = ar.id
                               and rp.permission_key = 'roster.planned'))),
     'catalog 1; system agent/supervisor/manager without it 0');
-  -- For information: 194 grants admin and analytics nothing (B1 proves the ladder); a tenant may give it them later
-  insert into pg_temp.verify_0009w
+  -- For information: 198 grants admin and analytics nothing (B1 proves the ladder); a tenant may give it them later
+  insert into pg_temp.verify_0009y
   select 4, 'S3 ' || t.slug || ': system admin or analytics roles holding roster.planned (information)', 'info',
          (select count(*) from cma.app_role ar join cma.role_permission rp on rp.tenant_id = ar.tenant_id and rp.role_id = ar.id
           where ar.tenant_id = t.id and ar.is_system and ar.key in ('admin', 'analytics') and rp.permission_key = 'roster.planned')::text
   from cma.tenant t where t.status = 'active';
-  insert into pg_temp.verify_0009w
+  insert into pg_temp.verify_0009y
   select 4, 'S3 ' || t.slug || ': a tenant''s own roles holding roster.planned (information)', 'info',
          (select count(*) from cma.app_role ar join cma.role_permission rp on rp.tenant_id = ar.tenant_id and rp.role_id = ar.id
           where ar.tenant_id = t.id and not ar.is_system and rp.permission_key = 'roster.planned')::text
@@ -279,7 +281,7 @@ declare
   v_names jsonb;
 begin
   begin
-    v_t := cma.create_tenant('verify-0009w', 'Verify 0009w', 'UTC');
+    v_t := cma.create_tenant('verify-0009y', 'Verify 0009y', 'UTC');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'ag@example.invalid', 'ag') returning id into v_ag;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'sup@example.invalid', 'sup') returning id into v_sup;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'mgr@example.invalid', 'mgr') returning id into v_mgr;
@@ -402,25 +404,25 @@ begin
     when sqlstate 'CMAOK' then null;
     when others then v_err := sqlstate || ': ' || left(sqlerrm, 300);
       perform set_config('role', 'cma_owner', true);
-      insert into pg_temp.verify_0009w values (10, 'B the throwaway tenant''s checks ran to their end', 'FAIL', v_err);
+      insert into pg_temp.verify_0009y values (10, 'B the throwaway tenant''s checks ran to their end', 'FAIL', v_err);
   end;
   perform set_config('role', 'cma_owner', true);
   perform set_config('app.tenant_id', '', true);
   perform set_config('app.user_id', '', true);
 
-  perform pg_temp.v0009w_row(11, 'B1', 'a new tenant''s ladder: roster.planned on agent, supervisor and manager',
+  perform pg_temp.v0009y_row(11, 'B1', 'a new tenant''s ladder: roster.planned on agent, supervisor and manager',
     v_b1, 'admin=false, agent=true, analytics=false, manager=true, supervisor=true');
-  perform pg_temp.v0009w_row(12, 'B2', 'on the roster / time kept: roles combine; admin-only and a role without roster.planned keep the clock',
+  perform pg_temp.v0009y_row(12, 'B2', 'on the roster / time kept: roles combine; admin-only and a role without roster.planned keep the clock',
     v_b2, 'adm=false/true, ag=true/true, ana=false/false, both=true/true, mgr=true/true, own=false/true, sup=true/true');
-  perform pg_temp.v0009w_row(13, 'B3', 'the planner''s list: the people on the roster, a team''s members among them',
+  perform pg_temp.v0009y_row(13, 'B3', 'the planner''s list: the people on the roster, a team''s members among them',
     v_b3, 'ag, both, mgr, sup | alpha: ag, both');
-  perform pg_temp.v0009w_row(14, 'B4', 'roster_set_entry refuses people not on the roster (CMA04), plans the agent',
+  perform pg_temp.v0009y_row(14, 'B4', 'roster_set_entry refuses people not on the roster (CMA04), plans the agent',
     v_b4, 'adm CMA04; own CMA04; ana CMA04; ag planned');
-  perform pg_temp.v0009w_row(15, 'B5', 'a person who leaves the roster: entries stored, not shown, not counted, not copied',
+  perform pg_temp.v0009y_row(15, 'B5', 'a person who leaves the roster: entries stored, not shown, not counted, not copied',
     v_b5, 'before: entries 3, wt1 Monday 2 [ag,both]; stored 2; after: entries 1 [ag], wt1 Monday 1 [ag]; copied 1, both in the copy 0');
-  perform pg_temp.v0009w_row(16, 'B6', 'the Live board: admin-only clocked in is on the board without a shift row (no flag)',
+  perform pg_temp.v0009y_row(16, 'B6', 'the Live board: admin-only clocked in is on the board without a shift row (no flag)',
     v_b6, 'adm clocked in ok, on the board t with a day t; roster_today: ag shift true, mgr - true, sup - true');
-  perform pg_temp.v0009w_row(17, 'B7', 'the own schedule is unchanged (D6)', v_b7, 'both today: shift t');
+  perform pg_temp.v0009y_row(17, 'B7', 'the own schedule is unchanged (D6)', v_b7, 'both today: shift t');
 end
 $$;
 
@@ -437,9 +439,9 @@ declare
   v_cmp     integer;
   v_r1      text; v_r2 text; v_r3 text; v_d4 text;
   v_n1      bigint; v_n2 bigint; v_n3 bigint;   -- rows compared per check
-  v_o1      integer := case when pg_temp.v0009w_p('R1') then 1 else 0 end;   -- provoked: 0005's side loses a row
-  v_o2      integer := case when pg_temp.v0009w_p('R2') then 1 else 0 end;
-  v_o3      integer := case when pg_temp.v0009w_p('R3') then 1 else 0 end;
+  v_o1      integer := case when pg_temp.v0009y_p('R1') then 1 else 0 end;   -- provoked: 0005's side loses a row
+  v_o2      integer := case when pg_temp.v0009y_p('R2') then 1 else 0 end;
+  v_o3      integer := case when pg_temp.v0009y_p('R3') then 1 else 0 end;
   v_n       bigint;
   wk        date;
   tk        text;
@@ -469,8 +471,8 @@ begin
             v_n1 := v_n1 + v_n;
             if exists ((select * from cma.roster_people(wk, tk))
                        except all
-                       (select * from pg_temp.v0009w_people_0005(wk, tk) p where cma.has_permission(p.user_id, 'roster.planned') offset v_o1))
-               or exists ((select * from pg_temp.v0009w_people_0005(wk, tk) p where cma.has_permission(p.user_id, 'roster.planned') offset v_o1)
+                       (select * from pg_temp.v0009y_people_0005(wk, tk) p where cma.has_permission(p.user_id, 'roster.planned') offset v_o1))
+               or exists ((select * from pg_temp.v0009y_people_0005(wk, tk) p where cma.has_permission(p.user_id, 'roster.planned') offset v_o1)
                           except all
                           (select * from cma.roster_people(wk, tk))) then
               v_r1 := v_r1 || wk || '/' || coalesce(tk, 'tenant') || ' ';
@@ -480,8 +482,8 @@ begin
             v_n2 := v_n2 + v_n;
             if exists ((select * from cma.roster_entries(wk, tk))
                        except all
-                       (select * from pg_temp.v0009w_entries_0005(wk, tk) x where cma.on_roster(x.user_id) offset v_o2))
-               or exists ((select * from pg_temp.v0009w_entries_0005(wk, tk) x where cma.on_roster(x.user_id) offset v_o2)
+                       (select * from pg_temp.v0009y_entries_0005(wk, tk) x where cma.on_roster(x.user_id) offset v_o2))
+               or exists ((select * from pg_temp.v0009y_entries_0005(wk, tk) x where cma.on_roster(x.user_id) offset v_o2)
                           except all
                           (select * from cma.roster_entries(wk, tk))) then
               v_r2 := v_r2 || wk || '/' || coalesce(tk, 'tenant') || ' ';
@@ -493,8 +495,8 @@ begin
         perform set_config('app.user_id', v_live::text, true);
         select count(*) into v_n3 from cma.roster_today();
         v_r3 := case when exists ((select * from cma.roster_today())
-                                  except all (select * from pg_temp.v0009w_today_0005() x where cma.on_roster(x.user_id) offset v_o3))
-                       or exists ((select * from pg_temp.v0009w_today_0005() x where cma.on_roster(x.user_id) offset v_o3)
+                                  except all (select * from pg_temp.v0009y_today_0005() x where cma.on_roster(x.user_id) offset v_o3))
+                       or exists ((select * from pg_temp.v0009y_today_0005() x where cma.on_roster(x.user_id) offset v_o3)
                                   except all (select * from cma.roster_today()))
                      then 'differs' else 'equal' end;
       end if;
@@ -515,58 +517,58 @@ begin
     perform set_config('app.tenant_id', '', true);
     perform set_config('app.user_id', '', true);
     if v_err is not null then
-      insert into pg_temp.verify_0009w values (20, 'R1 to D4 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
+      insert into pg_temp.verify_0009y values (20, 'R1 to D4 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
       continue;
     end if;
     if v_planner is null then
-      insert into pg_temp.verify_0009w values (21, 'R1 and R2 ' || t.slug || ': the planner''s reads',
-        case when pg_temp.v0009w_p('R1') or pg_temp.v0009w_p('R2') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
+      insert into pg_temp.verify_0009y values (21, 'R1 and R2 ' || t.slug || ': the planner''s reads',
+        case when pg_temp.v0009y_p('R1') or pg_temp.v0009y_p('R2') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
     else
       -- PASS when nothing differs; provoked, 0005's side lost a row, so a difference must be found (a compare of no rows
       -- cannot find one and reads FAIL by the switch)
-      insert into pg_temp.verify_0009w values (21, 'R1 ' || t.slug || ': roster_people = 0005''s narrowed to roster.planned (this week and next, every roster)',
+      insert into pg_temp.verify_0009y values (21, 'R1 ' || t.slug || ': roster_people = 0005''s narrowed to roster.planned (this week and next, every roster)',
         case when btrim(v_r1) <> '' or (v_o1 = 1 and v_n1 = 0) then 'FAIL' else 'PASS' end,
         format('rosters compared %s, rows %s; differing %s', v_cmp, v_n1, coalesce(nullif(btrim(v_r1), ''), 'none')));
-      insert into pg_temp.verify_0009w values (22, 'R2 ' || t.slug || ': roster_entries = 0005''s narrowed to the people on the roster',
+      insert into pg_temp.verify_0009y values (22, 'R2 ' || t.slug || ': roster_entries = 0005''s narrowed to the people on the roster',
         case when btrim(v_r2) <> '' or (v_o2 = 1 and v_n2 = 0) then 'FAIL' else 'PASS' end,
         format('rosters compared %s, rows %s; differing %s', v_cmp, v_n2, coalesce(nullif(btrim(v_r2), ''), 'none')));
     end if;
     if v_live is null then
-      insert into pg_temp.verify_0009w values (23, 'R3 ' || t.slug || ': roster_today',
-        case when pg_temp.v0009w_p('R3') then 'FAIL' else 'skip' end, 'no active person holds monitoring.live');
+      insert into pg_temp.verify_0009y values (23, 'R3 ' || t.slug || ': roster_today',
+        case when pg_temp.v0009y_p('R3') then 'FAIL' else 'skip' end, 'no active person holds monitoring.live');
     else
-      insert into pg_temp.verify_0009w values (23, 'R3 ' || t.slug || ': roster_today = 0005''s narrowed to the people on the roster',
+      insert into pg_temp.verify_0009y values (23, 'R3 ' || t.slug || ': roster_today = 0005''s narrowed to the people on the roster',
         case when v_r3 <> 'equal' or (v_o3 = 1 and v_n3 = 0) then 'FAIL' else 'PASS' end,
         format('rows %s; %s', v_n3, v_r3));
     end if;
-    insert into pg_temp.verify_0009w values (24, 'D4 ' || t.slug || ': stored entries, this week and later, of people not on the roster (kept), and who leaves the roster (information)',
+    insert into pg_temp.verify_0009y values (24, 'D4 ' || t.slug || ': stored entries, this week and later, of people not on the roster (kept), and who leaves the roster (information)',
       'info', v_d4);
   end loop;
   if not v_any then
-    insert into pg_temp.verify_0009w values (20, 'R1 to D4 per tenant',
+    insert into pg_temp.verify_0009y values (20, 'R1 to D4 per tenant',
       case when current_setting('verify.provoke') <> 'false' then 'FAIL' else 'skip' end, 'no active tenant');
   end if;
 end
 $$;
 
-drop function if exists pg_temp.v0009w_today_0005();
-drop function if exists pg_temp.v0009w_entries_0005(date, text);
-drop function if exists pg_temp.v0009w_people_0005(date, text);
-drop function if exists pg_temp.v0009w_in_scope_0005(uuid, uuid, date);
-drop function if exists pg_temp.v0009w_row(integer, text, text, text, text);
-drop function if exists pg_temp.v0009w_p(text);
+drop function if exists pg_temp.v0009y_today_0005();
+drop function if exists pg_temp.v0009y_entries_0005(date, text);
+drop function if exists pg_temp.v0009y_people_0005(date, text);
+drop function if exists pg_temp.v0009y_in_scope_0005(uuid, uuid, date);
+drop function if exists pg_temp.v0009y_row(integer, text, text, text, text);
+drop function if exists pg_temp.v0009y_p(text);
 
 select check_name, result, detail
-from (select ord, check_name, result, detail from pg_temp.verify_0009w
+from (select ord, check_name, result, detail from pg_temp.verify_0009y
       union all
       select 1000000, 'verdict',
              case when current_setting('verify.provoke') <> 'false' then 'PROVOKED, NOT A PASS'
-                  when exists (select 1 from pg_temp.verify_0009w where result = 'FAIL') then 'FAIL'
-                  when not exists (select 1 from pg_temp.verify_0009w where result = 'PASS') then 'FAIL'
+                  when exists (select 1 from pg_temp.verify_0009y where result = 'FAIL') then 'FAIL'
+                  when not exists (select 1 from pg_temp.verify_0009y where result = 'PASS') then 'FAIL'
                   else 'PASS' end,
-             format('195_verify_roster_planned: %s PASS, %s FAIL, %s skip, %s info', (select count(*) from pg_temp.verify_0009w where result = 'PASS'),
-                    (select count(*) from pg_temp.verify_0009w where result = 'FAIL'), (select count(*) from pg_temp.verify_0009w where result = 'skip'),
-                    (select count(*) from pg_temp.verify_0009w where result = 'info'))) x
+             format('199_verify_roster_planned: %s PASS, %s FAIL, %s skip, %s info', (select count(*) from pg_temp.verify_0009y where result = 'PASS'),
+                    (select count(*) from pg_temp.verify_0009y where result = 'FAIL'), (select count(*) from pg_temp.verify_0009y where result = 'skip'),
+                    (select count(*) from pg_temp.verify_0009y where result = 'info'))) x
 order by ord, check_name collate "C";
-drop table if exists pg_temp.verify_0009w;
+drop table if exists pg_temp.verify_0009y;
 reset role;

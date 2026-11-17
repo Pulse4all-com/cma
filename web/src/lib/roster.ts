@@ -69,11 +69,11 @@ export interface EntryLike {
   absenceName: string | null;
 }
 
-/** The permission that plans a person on the roster (addition 0009w, Decision log 17 Nov 2026; docs/definitions.md, On the roster) */
+/** The permission that plans a person on the roster (addition 0009y, Decision log 17 Nov 2026; docs/definitions.md, On the roster) */
 export const ROSTER_PLANNED_PERMISSION = "roster.planned";
 
 /**
- * On the roster (cma.on_roster, addition 0009w): active, time kept (workday.own) and holding roster.planned, over the
+ * On the roster (cma.on_roster, addition 0009y): active, time kept (workday.own) and holding roster.planned, over the
  * permissions of all the person's roles together, so a person holding admin and agent is on the roster and admin alone
  * is not. The planner lists only these people and the Live board flags adherence only for them.
  */

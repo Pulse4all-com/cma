@@ -839,7 +839,7 @@ expect("an agent cannot read today's shifts", (await get(AGENT, "/api/v1/team/sh
 const shiftsToday = await get(SUPERVISOR, "/api/v1/team/shifts-today");
 expect("the supervisor reads today's shifts with one row per person on the roster",
   [shiftsToday.status, (shiftsToday.body?.data ?? []).some((x) => x.userId === meA.userId), (shiftsToday.body?.data ?? []).some((x) => x.userId === meN?.userId)], [200, true, false], [200, true, true]);
-// Since addition 0009w (brief B39, D5) the Administrator alone is not on the roster: time kept, but no row here, so the
+// Since addition 0009y (brief B39, D5) the Administrator alone is not on the roster: time kept, but no row here, so the
 // Live board flags nothing for them; the supervisor holds roster.planned and has one
 const meAdminShift = (await get(ADMIN, "/api/v1/me")).body?.data;
 expect("today's shifts leave out the Administrator-only person, keep the supervisor",
