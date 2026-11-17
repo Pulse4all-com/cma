@@ -53,7 +53,7 @@
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/sdk-trace-node": "^2.12.0",
     "jose": "^6.2.14",
-    "next": "16.4.3",
+    "next": "16.4.5",
     "pg": "^8.23.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
