@@ -7,7 +7,7 @@
 -- indexes below from the Terminal (dev, then prod), then this script in dev, 197_verify_sync_run_reads.sql there (normal,
 -- then provoked), the verifies below, then prod the same way before the merge of its pull request, outside office hours
 -- (the last section locks cma.sync_run against writes while it counts the existing runs: about a second at prod's volume;
--- a job that starts meanwhile waits for it).
+-- a job that starts meanwhile waits for it; on a rerun readers wait too, see section 5).
 -- Main's web and the ingest run unchanged on it: the two functions keep their names, arguments, columns and answers.
 --
 -- First, from the Terminal (never Studio: Studio wraps a script in a transaction, which a concurrent build refuses), on
@@ -47,7 +47,7 @@
 --                           or an update of its tenant, job, connection or start, or into or out of failed, moves its
 --                           count; a run that finishes succeeded writes nothing
 --   cma_read.sync_run_hour  the readers' view
---   three indexes on cma.sync_run (above, from the Terminal)
+--   three indexes on cma.sync_run (above, from the Terminal); sync_run's autovacuum at 2 % (vacuum and insert vacuum)
 -- What it re-creates (same signature, rights and answers)
 --   cma.flash_sources_of(uuid)       based on 148_installed_base_list.sql
 --   cma.system_health_runs()         based on 132_perf.sql; now says its rows (50)
@@ -91,10 +91,14 @@ begin
   if not exists (select 1 from cma.schema_migration where version = '0009w') then
     raise exception 'addition 0009w (194_audit_bookkeeping.sql) has not run in this database';
   end if;
+  -- valid, and as the header defines them (a mistyped Terminal statement is refused here)
   if (select count(*) from pg_index i join pg_class c on c.oid = i.indexrelid
       where c.relnamespace = 'cma'::regnamespace and i.indrelid = 'cma.sync_run'::regclass and i.indisvalid
-        and c.relname in ('sync_run_succeeded_idx', 'sync_run_job_started_idx', 'sync_run_job_finished_idx')) <> 3 then
-    raise exception 'the indexes sync_run_succeeded_idx, sync_run_job_started_idx and sync_run_job_finished_idx must exist and be valid first: create them concurrently from the Terminal (this script''s header)';
+        and pg_get_indexdef(c.oid) in (
+          'CREATE INDEX sync_run_succeeded_idx ON cma.sync_run USING btree (tenant_id, connection_id, finished_at DESC) WHERE (status = ''succeeded''::text)',
+          'CREATE INDEX sync_run_job_started_idx ON cma.sync_run USING btree (tenant_id, job, connection_id, started_at DESC, id DESC)',
+          'CREATE INDEX sync_run_job_finished_idx ON cma.sync_run USING btree (tenant_id, job, connection_id, status, finished_at DESC, id DESC) INCLUDE (started_at) WHERE (status = ANY (ARRAY[''succeeded''::text, ''failed''::text]))')) <> 3 then
+    raise exception 'the indexes sync_run_succeeded_idx, sync_run_job_started_idx and sync_run_job_finished_idx must exist, be valid and be defined as this script''s header says first: create them concurrently from the Terminal';
   end if;
 end
 $$;
@@ -110,7 +114,9 @@ create table if not exists cma.sync_run_hour (
   runs           integer not null default 0 check (runs >= 0),
   failed         integer not null default 0 check (failed >= 0 and failed <= runs),
   constraint sync_run_hour_key unique nulls not distinct (tenant_id, job, connection_id, hour)
-);
+) with (fillfactor = 50);
+-- a minute job's hour row is updated about 60 times an hour: free space on its page keeps those updates heap-only
+alter table cma.sync_run_hour set (fillfactor = 50);
 comment on table cma.sync_run_hour is 'The runs of cma.sync_run per tenant, job, connection (none for the scheduler''s jobs) and UTC hour of their start: runs (every status) and failed (0009x). Kept by the trigger sync_run_hour on cma.sync_run (cma.sync_run_hour_count); read by System health (cma.system_health_runs). Bookkeeping: not audited, read only for the application';
 select cma.setup_tenant_table('cma.sync_run_hour');
 drop trigger if exists audit on cma.sync_run_hour;
@@ -270,11 +276,13 @@ begin
       select p0.job, p0.connection_id, h.runs, h.failed
       from p0
       cross join lateral (
-        select coalesce(sum(x.runs), 0)::integer as runs, coalesce(sum(x.failed), 0)::integer as failed
-        from cma.sync_run_hour x
-        where x.tenant_id = v_tenant and x.job = p0.job
-          and (x.connection_id = p0.connection_id or (p0.connection_id is null and x.connection_id is null))
-          and x.hour > v_day) h
+        select coalesce(sum(z.runs), 0)::integer as runs, coalesce(sum(z.failed), 0)::integer as failed
+        from ((select x.runs, x.failed from cma.sync_run_hour x
+               where x.tenant_id = v_tenant and x.job = p0.job and x.connection_id = p0.connection_id and x.hour > v_day)
+              union all
+              (select x.runs, x.failed from cma.sync_run_hour x
+               where p0.connection_id is null and x.tenant_id = v_tenant and x.job = p0.job and x.connection_id is null
+                 and x.hour > v_day)) z) h
     )
     select p.job, p.connection_id, l.started_at, l.finished_at, l.status, l.error, l.counts,
            o.finished_at, b.finished_at, b.error, p.runs + e.runs, p.failed + e.failed
@@ -288,11 +296,14 @@ begin
        where p.connection_id is null and r.tenant_id = v_tenant and r.job = p.job and r.connection_id is null
        order by r.job, r.connection_id, r.started_at desc, r.id desc limit 1)) l
     cross join lateral (
-      select count(*)::integer as runs, (count(*) filter (where r.status = 'failed'))::integer as failed
-      from cma.sync_run r
-      where r.tenant_id = v_tenant and r.job = p.job
-        and (r.connection_id = p.connection_id or (p.connection_id is null and r.connection_id is null))
-        and r.started_at > v_day and r.started_at < v_edge + interval '1 hour') e
+      select count(*)::integer as runs, (count(*) filter (where z.status = 'failed'))::integer as failed
+      from ((select r.status from cma.sync_run r
+             where r.tenant_id = v_tenant and r.job = p.job and r.connection_id = p.connection_id
+               and r.started_at > v_day and r.started_at < v_edge + interval '1 hour')
+            union all
+            (select r.status from cma.sync_run r
+             where p.connection_id is null and r.tenant_id = v_tenant and r.job = p.job and r.connection_id is null
+               and r.started_at > v_day and r.started_at < v_edge + interval '1 hour')) z) e
     left join lateral (
       (select r.finished_at from cma.sync_run r
        where r.tenant_id = v_tenant and r.job = p.job and r.connection_id = p.connection_id and r.status = 'succeeded'
@@ -331,8 +342,15 @@ alter function cma.system_health_runs() set jit = off;
 -- ---------------------------------------------------------------------------------------------
 -- 5. The counts of every existing run, then the trigger. Last: the lock on cma.sync_run (SHARE ROW EXCLUSIVE, which
 --    CREATE TRIGGER takes too) holds every run's insert, finish and delete until the commit, so none is counted twice or
---    missed (CLAUDE.md, Performance; 132, section 10). A rerun counts again from scratch
+--    missed (CLAUDE.md, Performance; 132, section 10); a statement timeout of 120 s bounds it. A rerun counts again from
+--    scratch, and its DROP TRIGGER of the existing triggers takes ACCESS EXCLUSIVE: on a rerun readers of sync_run wait too
 -- ---------------------------------------------------------------------------------------------
+-- sync_run vacuumed after 2 % of its rows changed or were inserted, not the default 20 %: a run's finish now writes a new
+-- version into every index, and the recent pages the 24 hours' reads visit become all-visible within hours, not days.
+-- A storage parameter takes SHARE UPDATE EXCLUSIVE: no reader or writer waits
+alter table cma.sync_run set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_insert_scale_factor = 0.02);
+
+set local statement_timeout = '120s';
 lock table cma.sync_run in share row exclusive mode;
 delete from cma.sync_run_hour;
 insert into cma.sync_run_hour (tenant_id, job, connection_id, hour, runs, failed)

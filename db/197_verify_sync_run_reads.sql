@@ -13,10 +13,11 @@
 --
 -- Checks
 --   S1  the addition 0009x is recorded once, after 0009w
---   S2  cma.sync_run_hour: row-level security, the tenant policy, no audit trigger, the application reads only; the
+--   S2  cma.sync_run_hour: fillfactor 50, row-level security, the tenant policy, no audit trigger, the application reads only; the
 --       readers' view cma_read.sync_run_hour; cma.sync_run_hour_count() cma_owner's, owner's rights, search path pinned
 --       with pg_temp last, executable by no one but its owner; the readers read the view, not the table; the triggers sync_run_hour (after insert or delete) and
 --       sync_run_hour_change (after update, with its condition) on cma.sync_run, enabled; the three indexes valid
+--       and as 196's header defines them; sync_run's autovacuum scale factors 0.02
 --   S3  cma.flash_sources_of and cma.system_health_runs in the caller's rights, stable, the application's to execute
 --       (not public's); system_health_runs says 50 rows
 --   H1  cma.sync_run_hour holds exactly cma.sync_run grouped by tenant, job, connection and UTC hour (every tenant):
@@ -204,6 +205,11 @@ begin
      or has_table_privilege('cma_app', 'cma.sync_run_hour', 'update') or has_table_privilege('cma_app', 'cma.sync_run_hour', 'delete') then
     v_bad := v_bad || 'the application''s rights; ';
   end if;
+  if (select array_to_string(array(select o from unnest(c.reloptions) o order by o collate "C"), ',') from pg_class c where c.oid = 'cma.sync_run'::regclass)
+       is distinct from 'autovacuum_vacuum_insert_scale_factor=0.02,autovacuum_vacuum_scale_factor=0.02'
+     or (select array_to_string(c.reloptions, ',') from pg_class c where c.oid = 'cma.sync_run_hour'::regclass) is distinct from 'fillfactor=50' then
+    v_bad := v_bad || 'the storage parameters of sync_run or sync_run_hour; ';
+  end if;
   if to_regclass('cma_read.sync_run_hour') is null or not has_table_privilege('cma_readonly', 'cma_read.sync_run_hour', 'select')
      or has_table_privilege('cma_readonly', 'cma.sync_run_hour', 'select') then
     v_bad := v_bad || 'the readers'' view or rights; ';
@@ -223,8 +229,11 @@ begin
   if v_txt is distinct from 'sync_run_hour:insert+delete,sync_run_hour_change:update:when' then v_bad := v_bad || 'the triggers ' || coalesce(v_txt, 'none') || '; '; end if;
   if (select count(*) from pg_index i join pg_class c on c.oid = i.indexrelid
       where i.indrelid = 'cma.sync_run'::regclass and i.indisvalid
-        and c.relname in ('sync_run_succeeded_idx', 'sync_run_job_started_idx', 'sync_run_job_finished_idx')) <> 3 then
-    v_bad := v_bad || 'an index missing or invalid; ';
+        and pg_get_indexdef(c.oid) in (
+          'CREATE INDEX sync_run_succeeded_idx ON cma.sync_run USING btree (tenant_id, connection_id, finished_at DESC) WHERE (status = ''succeeded''::text)',
+          'CREATE INDEX sync_run_job_started_idx ON cma.sync_run USING btree (tenant_id, job, connection_id, started_at DESC, id DESC)',
+          'CREATE INDEX sync_run_job_finished_idx ON cma.sync_run USING btree (tenant_id, job, connection_id, status, finished_at DESC, id DESC) INCLUDE (started_at) WHERE (status = ANY (ARRAY[''succeeded''::text, ''failed''::text]))')) <> 3 then
+    v_bad := v_bad || 'an index missing, invalid or defined otherwise; ';
   end if;
   insert into pg_temp.verify_0009x values (2, 'S2 the hours, their trigger function, triggers and view; the three indexes valid',
     case when v_bad = '' and not pg_temp.v0009x_p('S2') then 'PASS' else 'FAIL' end, coalesce(nullif(v_bad, ''), 'as designed'));
@@ -303,7 +312,7 @@ begin
       case when v_new is not distinct from v_old then 'PASS' else 'FAIL' end,
       format('%s rows; runs/failed in 24 hours: %s', v_n, coalesce(v_sum, 'none')));
 
-    -- T1: seven calls, the best of the last three
+    -- T1: nine calls, the best of the last three (calls 7 to 9)
     v_best := null;
     for i in 1..9 loop
       v_t0 := clock_timestamp();
@@ -373,7 +382,10 @@ begin
       (v_t, v_d, 'reconcile', now() - interval '40 days', now() - interval '40 days' + interval '1 minute', 'succeeded', null),
       -- no connection: the scheduler's
       (v_t, null, 'refresh_follow_up', now() - interval '2 hours', now() - interval '2 hours' + interval '1 second', 'succeeded', null),
-      (v_t, null, 'refresh_follow_up', now() - interval '3 hours', now() - interval '3 hours' + interval '1 second', 'failed', 'verify');
+      (v_t, null, 'refresh_follow_up', now() - interval '3 hours', now() - interval '3 hours' + interval '1 second', 'failed', 'verify'),
+      -- two runs without a connection in the hour of the 24 hours' start, either side of it (one hour row, counted twice)
+      (v_t, null, 'refresh_data_quality', v_edge - interval '1 second', v_edge, 'succeeded', null),
+      (v_t, null, 'refresh_data_quality', v_edge + interval '1 second', v_edge + interval '2 seconds', 'failed', 'verify');
     -- the shop's newest succeeded finish older than its others' starts: last_read_at is the latest finish, not the latest start
     insert into cma.sync_run (tenant_id, connection_id, job, started_at, finished_at, status) values
       (v_t, v_d, 'subscriptions_poll', now() - interval '5 hours', now() - interval '1 hour', 'succeeded'),
