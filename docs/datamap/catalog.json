@@ -679,7 +679,12 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule; since 0008zj the asset register poll (job assets_poll) every 5 minutes, each connection when due, and its full snapshot in the nightly reconcile; since 0008zl the subscriptions poll (job subscriptions_poll) every 5 minutes, each connection when due, and a store's full read of its subscriptions in the nightly reconcile; not audited since 0009w"
+          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule; since 0008zj the asset register poll (job assets_poll) every 5 minutes, each connection when due, and its full snapshot in the nightly reconcile; since 0008zl the subscriptions poll (job subscriptions_poll) every 5 minutes, each connection when due, and a store's full read of its subscriptions in the nightly reconcile; not audited since 0009w; since 0009x also counted per tenant, job, connection and UTC hour in sync_run_hour by the triggers sync_run_hour and sync_run_hour_change; autovacuum at 2 %"
+        },
+        {
+          "name": "sync_run_hour",
+          "what": "Per tenant, job, connection (none for the scheduler's jobs) and UTC hour of a run's start: the runs started (every status) and how many failed. System health reads its 24-hour counts here (0009x)",
+          "how": "Kept by the triggers sync_run_hour and sync_run_hour_change on sync_run through cma.sync_run_hour_count() (a run started, deleted or changed moves its hour; a run that finishes succeeded writes nothing); filled once from every run by migration 196; not audited, read only for the application. cma_read.sync_run_hour reads it for the readers"
         },
         {
           "name": "sync_cursor",
