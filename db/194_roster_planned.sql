@@ -47,8 +47,12 @@
 --                                   roster.planned through the seeded roles, its analyst does not)
 --   95_verify_attempts_for_sales.sql reads seed_default_roles' source (the admin array ends 'tenant.configure',
 --                                   'messages.withdraw']); unchanged
+-- cma.seed_default_roles also reaches the verifies that create a tenant through cma.create_tenant; none of them asserts
+-- the permission arrays or counts of the agent, supervisor or manager role, so none is run again for it.
 -- 131_time_all.sql's rows 'shifts today', 'roster people', 'roster entries' and 'roster coverage' read the new
--- definitions; their budgets stay.
+-- definitions, at most one more indexed permission lookup per person or entry; their budgets are to be confirmed by
+-- running 131 part a after this script (dev, then prod), against prod's 0009u evening run (shifts today 8.0 ms, roster
+-- people 8.9, roster entries 2.4, roster coverage 4.1, the roster week's set 20.8).
 --
 -- SQLSTATEs as 0005's: CMA04 invalid (a person not on this roster), CMA06 not permitted.
 --

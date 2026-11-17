@@ -108,7 +108,8 @@ expect("the absences a cell takes, by name, the key where it differs", absenceKe
   "Day off (off), Leave, Sick, Public holiday (public_holiday), Other", "off, leave, sick, public_holiday, other");
 
 // ---- on the roster: the planner's list (17 November 2026, brief B39, addition 0009w) ------------------------------------
-// The default ladder as db/194 seeds it; a person's permissions are those of all their roles together
+// The default ladder as db/194 seeds it, abridged (the keys onRoster reads are complete); a person's permissions are
+// those of all their roles together
 const LADDER = {
   agent: ["workday.own", "roster.view", "leads.accept", "performance.own", "roster.planned"],
   supervisor: ["workday.own", "roster.view", "leads.accept", "performance.own", "workday.team", "performance.team", "monitoring.live", "messages.send", "roster.planned"],
