@@ -61,9 +61,9 @@ The web app reads and writes Postgres **in-process**: screens and route handlers
 | `POST /api/v1/team/invitations/{id}/renew` | a new link: `{ invitationId, token, expiresAt }`; the old link stops working, the caller becomes the inviter of the link; accepted or revoked 409, above the ceiling 403 | `renewInvitation` → `cma.renew_invitation()` |
 | `POST /api/v1/team/invitations/{id}/revoke` | revokes an open or expired invitation (again: no change), answers the list; accepted 409, above the ceiling 403 | `revokeInvitation` → `cma.revoke_invitation()` |
 | `GET /api/v1/team/memberships` | current team memberships of everyone, for the Live board's team filter | `listTeamMembersNow` → `cma.team_members_now()` |
-| `GET /api/v1/team/shifts-today` | today's published roster entry per person whose time is kept (migration 0005), for the board's shift line; `monitoring.live` | `getRosterToday` → `cma.roster_today()` |
+| `GET /api/v1/team/shifts-today` | today's published roster entry per person on the roster (time kept and `roster.planned`; migration 0005), for the board's shift line; `monitoring.live` | `getRosterToday` → `cma.roster_today()` |
 
-**Roster routes (night build, 8 October 2026, migration 0005)**, for people holding `roster.manage` except where stated; a week is named by its Monday:
+**Roster routes (night build, 8 October 2026, migration 0005)**, for people holding `roster.manage` except where stated; a week is named by its Monday. The planner lists, and `PUT .../cells` and the copy accept, only people on the roster (time kept and `roster.planned`); a person off it is refused with the scope error (CMA04):
 
 | Route | Does | Data |
 |---|---|---|

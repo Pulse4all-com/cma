@@ -2716,6 +2716,25 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Used by | `cma.is_clocked_in`; Live board; the `only clocked in` filter |
 | As built today | Matches the definition; the gap between sessions reads as clocked out |
 
+### On the roster
+
+| Field | Value |
+|---|---|
+| Term | On the roster (nl: Op het rooster); the permission `roster.planned` is "Planned on the roster" (nl: "Op het rooster gepland worden") |
+| Key | Permission `roster.planned`; SQL `cma.on_roster(user)`; copy key `allow.roster.planned`; TypeScript `onRoster` in `web/src/lib/roster.ts` |
+| Definition | A person is on the roster when their time is kept (`cma.time_is_kept`: active, holding `workday.own`) and they hold `roster.planned`. Roles combine, so a person holding admin and agent is on the roster |
+| Source | The CMA: `cma.user_permission` through `cma.has_permission` and `cma.time_is_kept` |
+| Counts / does not count | Counts agents, supervisors and managers in the default ladder (`cma.seed_default_roles`; migration 194 gave the permission to the system roles agent, supervisor and manager of existing tenants). Does not count a person whose role lacks `roster.planned` (admin and analytics in the default ladder) or a deactivated person. A tenant's own role changes stay as they are |
+| Unit and display | A person; no label of its own. Decides who the planner's grid lists (`cma.roster_people`), who `cma.roster_set_entry` accepts and `cma.roster_copy_week` copies, whose entries `cma.roster_entries` and `cma.roster_coverage` show and count, and who has a row in `cma.roster_today` |
+| Time rule | Now: a person's permissions and activity as they stand when read |
+| Scope | One person, one tenant |
+| Equivalent in the source system | None |
+| Not to use | A role key (agent, supervisor) for who is planned: surfaces follow permissions (Role and surface); "has a roster" or "rostered" for this meaning (a shift is the planned entry, Rostering) |
+| Status | Decided |
+| Decided | 17 November 2026 (Martin, D1 and D2); docs/decisions.md, 17 Nov 2026, "Roster: only people on the roster …" and "Definitions: On the roster …" (addition 0009w, this PR) |
+| Used by | `live.people.shift_today`, `roster.planner.planned_minutes_per_person`, `roster.planner.headcount_per_day`, `roster.planner.coverage`; Team → Roster (the planner), the Live board's shift line |
+| As built today | Matches the definition. A person who leaves the roster keeps stored entries (they are not shown, counted or copied); My schedule (`roster.view`) still shows a person's own published entries |
+
 ### Remove day
 
 | Field | Value |
@@ -2765,7 +2784,7 @@ Ticket, complaint, vulnerable case, owner, without owner, overdue, response time
 Email sent, mailbox, inbox, first reply.
 
 ### Time and people
-Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp).
+Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp); On the roster too (addition 0009w).
 
 ### Periods
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like. All (nl: Alles) is a period of Reviews alone (addition 0008zw, Martin): from the tenant's first counted review to today, grouped by month, with no previous period (the history-start case) and exempt from the 92-day cap every other report keeps; its end is the tenant's today at the latest, or the day after it for a reader whose zone is ahead.

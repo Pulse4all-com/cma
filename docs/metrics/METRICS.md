@@ -1185,7 +1185,7 @@ What the published roster plans for the person today: the shift as 09:00–17:30
 **Formula as computed**
 
 ```
-cma.roster_today(): per person whose time is kept, today's entry from cma.roster_published_entry (entries recorded on or before the week's latest publication and not ended before it; a draft week contributes nothing; the latest publication wins across overlapping rosters), with is_published = a published roster week covers today and, for a team roster, the person was a member at publication. Label: cellLabel (start–end sliced to hh:mm) or absence name; !isPublished -> 'Not published'; isPublished and kind null -> 'No shift'.
+cma.roster_today(): per person on the roster (time kept and roster.planned, cma.on_roster), today's entry from cma.roster_published_entry (entries recorded on or before the week's latest publication and not ended before it; a draft week contributes nothing; the latest publication wins across overlapping rosters), with is_published = a published roster week covers today and, for a team roster, the person was a member at publication. Label: cellLabel (start–end sliced to hh:mm) or absence name; !isPublished -> 'Not published'; isPublished and kind null -> 'No shift'.
 ```
 
 **Unit** text · **Grain** now, per_person · **Status** verified
@@ -1202,7 +1202,7 @@ cma.roster_today(): per person whose time is kept, today's entry from cma.roster
 
 - tenant: RLS plus cma.roster_today()'s tenant filter
 - published entries only, as of each week's latest publication (the planner's unpublished edits never show here)
-- people whose time is kept only
+- people on the roster only (time kept and roster.planned); a person off the roster who clocks in has no row here, so no flag
 - team-roster coverage counts membership at publication time
 - on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation, their team memberships and today's shifts (boardOfOrganisation in src/lib/live.ts); /live/board opens the first board (addition 0008zv)
 
@@ -3720,6 +3720,7 @@ plannedMinutesByUser(current entries): sum over entries with kind = 'shift' of s
 
 - tenant: RLS plus cma.roster_entries()'s tenant filter
 - current entries of the week and team scope on screen (team_id is not distinct from the chosen team; null = Everyone)
+- entries of people on the roster only (time kept and roster.planned)
 - shifts only; absences and cleared cells excluded
 
 **Time** the week is Monday-start; shift times are naive local times in the person's zone, so the minutes are wall-clock lengths (a DST day is NOT adjusted: 9-17 is always 480)
@@ -3768,6 +3769,7 @@ headcountByDate(current entries): count of entries with kind = 'shift' per busin
 
 - tenant: as the planner
 - current entries of the week and team scope on screen
+- entries of people on the roster only (time kept and roster.planned)
 - shifts only
 
 **Time** per business date of the Monday-start week
@@ -3801,7 +3803,7 @@ Per work type per day: how many planned people hold the work type, against the t
 **Formula as computed**
 
 ```
-cma.roster_coverage(week, team): per day of the week and ACTIVE work-type skill, count of current shift entries of the week whose person currently holds the skill (cma.user_skill valid now), the names, and coverage_target.min_count for (team, skill, isodow). State (TS coverageState): planned = 0 -> none; target set and planned < target -> short; planned = 1 -> single; else ok. Without a target, 2+ people are ok.
+cma.roster_coverage(week, team): per day of the week and ACTIVE work-type skill, count of current shift entries of the week whose person is on the roster (time kept and roster.planned) and currently holds the skill (cma.user_skill valid now), the names, and coverage_target.min_count for (team, skill, isodow). State (TS coverageState): planned = 0 -> none; target set and planned < target -> short; planned = 1 -> single; else ok. Without a target, 2+ people are ok.
 ```
 
 **Unit** count · **Grain** per_iso_week, per_day, per_skill · **Status** verified
@@ -3819,7 +3821,7 @@ cma.roster_coverage(week, team): per day of the week and ACTIVE work-type skill,
 
 - tenant: RLS plus cma.roster_coverage()'s tenant filter
 - active work_type skills only (dimension = 'work_type', status = 'active')
-- current shift entries of the week's scope; absences never cover
+- current shift entries of the week's scope, of people on the roster; absences never cover
 - the target only for the team on screen (a tenant-wide 'Everyone' roster has team null, so no targets join)
 
 **Time** weekday ISO 1–7 for the target; the grid's days are the Monday-start week
