@@ -69,6 +69,18 @@ export interface EntryLike {
   absenceName: string | null;
 }
 
+/** The permission that plans a person on the roster (addition 0009w, Decision log 17 Nov 2026; docs/definitions.md, On the roster) */
+export const ROSTER_PLANNED_PERMISSION = "roster.planned";
+
+/**
+ * On the roster (cma.on_roster, addition 0009w): active, time kept (workday.own) and holding roster.planned, over the
+ * permissions of all the person's roles together, so a person holding admin and agent is on the roster and admin alone
+ * is not. The planner lists only these people and the Live board flags adherence only for them.
+ */
+export function onRoster(person: { isActive: boolean; permissions: readonly string[] }): boolean {
+  return person.isActive && person.permissions.includes("workday.own") && person.permissions.includes(ROSTER_PLANNED_PERMISSION);
+}
+
 /** "09:00–17:30", or the absence's name, or "" for an empty cell */
 export function cellLabel(e: EntryLike | null): string {
   if (!e) return "";

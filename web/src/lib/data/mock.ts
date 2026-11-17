@@ -7,6 +7,7 @@ import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identi
 import { CmaDbError } from "@/lib/data/errors";
 import { instantsForLocal, REMOVE_REFUSAL } from "@/lib/corrections";
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
+import { onRoster } from "@/lib/roster";
 import type {
   LiveBoardData, DataQualityReport,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
@@ -1992,10 +1993,10 @@ const MOCK_SKILLS: SkillInfo[] = [
 ];
 /** The default ladder as rows, with the managing flag the database derives from the permissions */
 const MOCK_ROLES: Omit<RoleInfo, "assignable">[] = [
-  { key: "agent", name: "Agent", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "leads.accept", "performance.own"] },
+  { key: "agent", name: "Agent", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "leads.accept", "performance.own", "roster.planned"] },
   { key: "analytics", name: "Analytics", isSystem: true, isManaging: false, permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"] },
-  { key: "supervisor", name: "Supervisor", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "workday.team", "performance.team", "monitoring.live", "messages.send"] },
-  { key: "manager", name: "Call center manager", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "workday.export", "quality.manage"] },
+  { key: "supervisor", name: "Supervisor", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "workday.team", "performance.team", "monitoring.live", "messages.send", "roster.planned"] },
+  { key: "manager", name: "Call center manager", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "workday.export", "quality.manage", "roster.planned"] },
   { key: "admin", name: "Administrator", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "users.manage_all", "tenant.configure", "workday.export", "messages.withdraw", "quality.manage"] },
 ];
 
@@ -2091,7 +2092,7 @@ const MOCK_ABSENCES: AbsenceType[] = [
 const MOCK_PERMISSIONS = [
   "workday.own", "workday.team", "workday.export", "roster.view", "roster.manage", "skills.manage", "leads.accept", "leads.manage",
   "performance.own", "performance.team", "monitoring.live", "messages.send", "quality.manage", "reports.view",
-  "users.manage_agents", "users.manage_all", "tenant.configure", "messages.withdraw",
+  "users.manage_agents", "users.manage_all", "tenant.configure", "messages.withdraw", "roster.planned",
 ].map((key) => ({ key, description: key }));
 
 /** Same answer as the database for a caller without tenant.configure (migration 0005a) */
@@ -2219,10 +2220,15 @@ function rosterHeaderOf(w: MockRosterWeek): RosterWeekHeader {
   };
 }
 
-/** The people on a roster's grid: whose time is kept, and for a team roster its members */
+/** On the roster (addition 0009w): the rule of lib/roster onRoster over the permissions of the person's role */
+function onRosterMock(p: DirectoryPerson): boolean {
+  return onRoster({ isActive: p.isActive, permissions: MOCK_ROLES.find((r) => r.key === p.roleKey)?.permissions ?? [] });
+}
+
+/** The people on a roster's grid: on the roster (0009w; the Test admin, admin alone, is not), and for a team roster its members */
 function rosterPeopleOf(teamKey: string | null): DirectoryPerson[] {
   return [...seedPeople().values()]
-    .filter((p) => p.isActive && p.timeKept && (!teamKey || p.teams.some((t) => t.key === teamKey)))
+    .filter((p) => onRosterMock(p) && (!teamKey || p.teams.some((t) => t.key === teamKey)))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
@@ -3053,11 +3059,12 @@ export const mockData: CmaData = {
         // As the default ladder after 0004: the manager also exports, manages agents and skills and plans the
         // roster; the supervisor does not; both watch the Live board
         // Both push messages to agents (messages.send, migration 0008). The manager holds quality.manage as in the default
-        // ladder (db/94), which Team → Quality monitoring needs (14 November 2026); the supervisor does not
+        // ladder (db/94), which Team → Quality monitoring needs (14 November 2026); the supervisor does not. Both are
+        // planned on the roster (roster.planned, addition 0009w)
         permissions: role === "manager"
           ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
-             "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send", "quality.manage"]
-          : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"],
+             "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send", "quality.manage", "roster.planned"]
+          : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send", "roster.planned"],
       };
     }
     // The admin (0004): everything the manager has plus configuration and user management for everyone; since addition
@@ -3957,7 +3964,8 @@ export const mockData: CmaData = {
 
   async getRosterToday(me): Promise<TodayShift[]> {
     assertLive(me);
-    return [...seedPeople().values()].filter((p) => p.isActive && p.timeKept).map((p) => {
+    // One row per person on the roster (0009w): a person not on it has no row, so the board flags nothing for them
+    return [...seedPeople().values()].filter(onRosterMock).map((p) => {
       const date = dateKeyInZone(new Date(), p.timeZone);
       const found = publishedCellFor(p.userId, date);
       const e = found?.entry ?? null;

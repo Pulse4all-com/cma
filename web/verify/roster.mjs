@@ -9,10 +9,11 @@
  * month end, planned minutes and headcount, the coverage states and grid, and the adherence flags
  * from a planned shift against the actual clock in a zone, around the autumn clock change too; since
  * 16 October 2026 (backlog CMA-061) the week's one-range label in both locales and the absence keywords
- * built from the tenant's types.
+ * built from the tenant's types; since 17 November 2026 (brief B39, addition 0009w) who is on the roster: the planner's list
+ * and the Live board's flags hold only people with their time kept and roster.planned, roles combined.
  */
 import {
-  absenceKeywordList, adherence, cellLabel, coverageGrid, coverageState, headcountByDate, isoWeek, parseCell, plannedInstant, plannedMinutesByUser, shiftMinutes, weekDays,
+  absenceKeywordList, adherence, cellLabel, coverageGrid, coverageState, headcountByDate, isoWeek, onRoster, parseCell, plannedInstant, plannedMinutesByUser, shiftMinutes, weekDays,
 } from "../src/lib/roster.ts";
 import { fmtDateRange } from "../src/lib/time.ts";
 
@@ -105,6 +106,30 @@ expect("the same in Dutch", [fmtDateRange("2026-10-12", "2026-10-18", "nl"), fmt
   ["12\u201318 oktober 2026", `28 september${dash}4 oktober 2026`], ["12-18 oktober 2026", "28 september - 4 oktober 2026"]);
 expect("the absences a cell takes, by name, the key where it differs", absenceKeywordList(absences),
   "Day off (off), Leave, Sick, Public holiday (public_holiday), Other", "off, leave, sick, public_holiday, other");
+
+// ---- on the roster: the planner's list (17 November 2026, brief B39, addition 0009w) ------------------------------------
+// The default ladder as db/194 seeds it; a person's permissions are those of all their roles together
+const LADDER = {
+  agent: ["workday.own", "roster.view", "leads.accept", "performance.own", "roster.planned"],
+  supervisor: ["workday.own", "roster.view", "leads.accept", "performance.own", "workday.team", "performance.team", "monitoring.live", "messages.send", "roster.planned"],
+  manager: ["workday.own", "roster.view", "workday.team", "monitoring.live", "roster.manage", "users.manage_agents", "workday.export", "roster.planned"],
+  admin: ["workday.own", "roster.view", "workday.team", "monitoring.live", "roster.manage", "users.manage_all", "tenant.configure", "messages.withdraw"],
+  analytics: ["reports.view", "performance.team", "monitoring.live", "quality.manage"],
+  clock: ["workday.own"],
+};
+const person = (name, roles, isActive = true) => ({ name, isActive, permissions: [...new Set(roles.flatMap((r) => LADDER[r]))] });
+const people = [
+  person("agent", ["agent"]), person("supervisor", ["supervisor"]), person("manager", ["manager"]),
+  person("admin only", ["admin"]), person("analytics only", ["analytics"]), person("admin and agent", ["admin", "agent"]),
+  person("own role, clock only", ["clock"]), person("inactive agent", ["agent"], false),
+];
+expect("the planner lists agent, supervisor, manager and admin+agent, never admin or analytics alone",
+  people.filter(onRoster).map((p) => p.name), ["agent", "supervisor", "manager", "admin and agent"],
+  ["agent", "supervisor", "manager", "admin only", "admin and agent"]);
+expect("a tenant's role with the clock but without roster.planned keeps the clock, not the roster",
+  [people[6].permissions.includes("workday.own"), onRoster(people[6])], [true, false], [true, true]);
+expect("roster.planned without the clock is not enough", onRoster({ isActive: true, permissions: ["roster.planned"] }), false, true);
+expect("an inactive person is never on the roster", onRoster(people[7]), false, true);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
