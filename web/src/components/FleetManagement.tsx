@@ -9,23 +9,24 @@ import { Shell } from "@/components/Shell";
 import { Badge, Notice, PageTitle } from "@/components/primitives";
 import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
-import { data, dataIsMock, requestDbTrace, streamed, type FleetArea, type FleetRow, type FleetRowsPage, type FleetState } from "@/lib/data";
+import { data, dataIsMock, requestDbTrace, streamed, type FleetArea, type FleetPageTiles, type FleetRow, type FleetRowsPage, type FleetState } from "@/lib/data";
 import {
-  areaCountOf, FLEET_DUMMY_TILES, FLEET_PATH, FLEET_STATE_SWATCH, FLEET_TILES, fleetHref, fleetQueryOf, fleetRowsQueryOf, fleetStateOf, fleetTilesOf,
-  type FleetAddressState, type FleetTileKey,
+  areaCountOf, FLEET_DUMMY_TILES, FLEET_PATH, FLEET_STATE_SWATCH, FLEET_TILES, fleetHref, fleetQueryOf, fleetRowsQueryOf, fleetStateOf,
+  type FleetAddressState,
 } from "@/lib/fleet-management";
 import { holdsAny } from "@/lib/nav";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
 import { fmtDateTimeShort } from "@/lib/time";
 
 /**
- * Assets → Fleet management (addition 0009t; Martin, 16 November 2026, brief B37, D1 to D8). With the tenant's
- * fleet_management.dummy_preview on: the title, the Preview banner (the locations and states are dummy data, the devices
- * and their past-due items real), the Market (K) and Model (D) filters as Installed base's (market, f_model), seven tiles
- * (In the field and Devices past due as Installed base counts them; Monitored and the four monitoring states with a small
- * Dummy badge) that filter the map and the list (f_state), the map (components/FleetMap) and the side panel: the devices
- * that need attention by default, a selected area's counts and devices otherwise (area), 50 a page (page). Off: the
- * placeholder as before (D6). The areas are the first paint; the list's read starts with them and streams after it.
+ * Assets → Fleet management (addition 0009t; Martin, 16 November 2026, brief B37, D1 to D8; brief B38, E1 to E6). With the
+ * tenant's fleet_management.dummy_preview on: the title, the Preview banner (the locations and states are dummy data, the
+ * devices and their past-due items real), the Market (K) and Model (D) filters as Installed base's (market, f_model), seven
+ * tiles (In the field and Devices past due as Installed base counts them, the latter saying how many are not in the field,
+ * E3; Monitored and the four monitoring states with a small Dummy badge) that filter the map and the list (f_state), the
+ * map (components/FleetMap) and the side panel: the devices that need attention by default, a selected area's counts and
+ * devices otherwise (area), 50 a page (page). Off: the placeholder as before (D6). One read (E6, cma.fleet_page): the
+ * tiles, the areas and the list's first page; a further page of the list is read after the first paint (cma.fleet_rows).
  * Team figures only, for reports.view or performance.team; the database checks again on every read. Serials, ids, codes,
  * place names, dates and counts: never a customer reference, name, email, phone or address.
  */
@@ -48,10 +49,13 @@ export async function FleetManagement({ searchParams, me, copy }: {
   }
 
   const st = fleetStateOf(searchParams);
-  // the list's read, alongside the areas' (never before the first paint waits for it)
-  const rowsRead: Promise<{ page: FleetRowsPage | null; error: unknown }> = streamed(() => data().getFleetRows(me, fleetRowsQueryOf(st)))
-    .then((page) => ({ page, error: null }), (error: unknown) => ({ page: null, error }));
-  const doc = await data().getFleetAreas(me, { market: st.market, model: st.model });
+  // a further page of the list: its own read, alongside the page's (never before the first paint waits for it)
+  const laterRead = st.page > 1
+    ? streamed(() => data().getFleetRows(me, fleetRowsQueryOf(st))).then((page) => ({ page, error: null }), (error: unknown) => ({ page: null, error }))
+    : null;
+  // the page's one read (E6): the tiles, the areas and the list's first page from one computation of the devices
+  const doc = await data().getFleetPage(me, { market: st.market, model: st.model, state: st.tile, areaId: st.areaId });
+  const rowsRead: Promise<{ page: FleetRowsPage | null; error: unknown }> = laterRead ?? Promise.resolve({ page: doc.list, error: null });
 
   if (!doc.setUp) {
     return (
@@ -62,7 +66,7 @@ export async function FleetManagement({ searchParams, me, copy }: {
     );
   }
 
-  const tiles = fleetTilesOf(doc.areas, doc.pastDueNotInField);
+  const tiles = doc.tiles;
   // the devices In the field without an area under the tile; the devices past due outside the field (in stock, internal
   // use) are no device In the field: a note of their own (Martin, 16 November 2026, on #285)
   const noAreaRow = doc.areas.find((a) => a.areaId === null);
@@ -101,7 +105,7 @@ export async function FleetManagement({ searchParams, me, copy }: {
         <section className="min-w-0 rounded-card border border-p4a-border bg-white p-6" aria-labelledby="fleet-map-title" data-testid="fleet-map-card">
           <h2 id="fleet-map-title" className="mb-4 text-panel font-semibold text-p4a-heading">{t.mapTitle}</h2>
           <FleetMap areas={doc.areas} tile={st.tile} markets={markets.map((m) => m.code)} selectedAreaId={st.areaId} query={mapQuery} locale={locale}
-            labels={{ mapLabel: t.mapLabel, europe: t.europe, zoomIn: t.zoomIn, zoomOut: t.zoomOut, clusterArea: t.clusterArea, clusterGroup: t.clusterGroup }} />
+            labels={{ mapLabel: t.mapLabel, allMarkets: copy.flash.allMarkets, zoomIn: t.zoomIn, zoomOut: t.zoomOut, clusterArea: t.clusterArea, clusterGroup: t.clusterGroup }} />
           <p className="mt-3 text-caption text-p4a-grey">{t.mapNote}</p>
           {withoutArea > 0 ? (
             <p className="mt-1 text-small text-p4a-muted" data-testid="fleet-without-area">
@@ -130,7 +134,8 @@ export async function FleetManagement({ searchParams, me, copy }: {
             </p>
           ) : null}
           <Suspense fallback={<ListSkeleton label={t.loading} rows={8} />}>
-            <FleetList read={rowsRead} st={st} t={t} modelName={modelName} timeZone={doc.timeZone ?? me.timeZone} locale={locale} />
+            <FleetList read={rowsRead} st={st} t={t} modelName={modelName} timeZone={doc.timeZone ?? me.timeZone} locale={locale}
+              leadWithWhy={st.areaId === null && (st.tile === null || st.tile === "past_due")} />
           </Suspense>
         </section>
       </div>
@@ -140,8 +145,11 @@ export async function FleetManagement({ searchParams, me, copy }: {
   );
 }
 
-/** The seven tiles (the brief's order); a tile filters the map and the list, again to show every device in the field */
-function Tiles({ st, tiles, t, nf }: { st: FleetAddressState; tiles: Record<FleetTileKey, number>; t: Copy["fleet"]; nf: Intl.NumberFormat }) {
+/**
+ * The seven tiles (the brief's order); a tile filters the map and the list, again to show every device in the field.
+ * Devices past due says how many of them are not in the field (E3), the figure itself Installed base's (D2)
+ */
+function Tiles({ st, tiles, t, nf }: { st: FleetAddressState; tiles: FleetPageTiles; t: Copy["fleet"]; nf: Intl.NumberFormat }) {
   return (
     <div role="group" aria-label={t.tilesLabel} className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7" data-testid="fleet-tiles">
       {FLEET_TILES.map((k) => {
@@ -157,6 +165,11 @@ function Tiles({ st, tiles, t, nf }: { st: FleetAddressState; tiles: Record<Flee
               {label}
             </span>
             <span className="tabular mt-1 text-title font-bold text-p4a-heading" data-testid={`fleet-tile-${k}-value`}>{nf.format(tiles[k])}</span>
+            {k === "past_due" && tiles.past_due_not_in_field > 0 ? (
+              <span className="mt-1 text-caption text-p4a-muted" data-testid="fleet-tile-past_due-not-in-field">
+                {t.tile_past_due_not_in_field.replace("{n}", nf.format(tiles.past_due_not_in_field))}
+              </span>
+            ) : null}
             {FLEET_DUMMY_TILES.has(k) ? <span className="mt-1"><Badge tone="neutral">{t.dummyBadge}</Badge></span> : null}
           </FleetPushButton>
         );
@@ -189,21 +202,28 @@ function AreaCounts({ area, t, nf }: { area: FleetArea; t: Copy["fleet"]; nf: In
 /** A device's monitoring state as a badge: its colour (D8) next to its label, never the colour alone */
 function StateBadge({ state, t }: { state: FleetState | null; t: Copy["fleet"] }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-button bg-p4a-neutral-surface px-2 py-0.5 text-caption font-semibold text-p4a-body">
+    <span className="inline-flex items-center gap-1.5 rounded-button bg-p4a-neutral-surface px-2 py-0.5 text-caption font-semibold text-p4a-body"
+      data-testid="fleet-row-state" data-state={state ?? "none"}>
       {state ? <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${FLEET_STATE_SWATCH[state]}`} aria-hidden="true" /> : null}
       {state ? t[`state_${state}`] : t.state_none}
     </span>
   );
 }
 
-/** The list's page: 50 devices, a row selects its area; the count and the pager */
-async function FleetList({ read, st, t, modelName, timeZone, locale }: {
+/**
+ * The list's page: 50 devices, a row selects its area; the count and the pager. leadWithWhy (the devices that need
+ * attention, and Devices past due's list): a device listed only for its items past due shows that as its badge, its
+ * monitoring state as text (E5). The last contact: its date and time, "Not monitored" for a device not monitored, "—"
+ * where there is none (E4: never "None")
+ */
+async function FleetList({ read, st, t, modelName, timeZone, locale, leadWithWhy }: {
   read: Promise<{ page: FleetRowsPage | null; error: unknown }>;
   st: FleetAddressState;
   t: Copy["fleet"];
   modelName: (key: string) => string;
   timeZone: string;
   locale: Principal["locale"];
+  leadWithWhy: boolean;
 }) {
   const { page, error } = await read;
   if (!page) throw error;
@@ -224,18 +244,24 @@ async function FleetList({ read, st, t, modelName, timeZone, locale }: {
       <ul className="flex flex-col">
         {page.rows.map((r) => {
           const stateText = r.state ? t[`state_${r.state}`] : t.state_none;
+          // E5: listed only for its items past due (not for its monitoring state): that is its badge, the state its text
+          const forPastDue = leadWithWhy && r.pastDueItems > 0 && r.state !== "needs_attention" && r.state !== "no_connection";
+          // the meta line's text: the state for a device listed for its items past due (Not monitored stands in the last
+          // contact's place already), the reasons otherwise
+          const meta = forPastDue ? (r.state === "not_monitored" ? "" : stateText) : reasons(r);
           const body = (
             <>
               <span className="flex w-full flex-wrap items-baseline gap-x-2">
-                <span className="tabular font-semibold text-p4a-body">{r.serial ?? "–"}</span>
+                <span className="tabular font-semibold text-p4a-body">{r.serial ?? "—"}</span>
                 <span className="text-small text-p4a-muted">{modelName(r.model)}</span>
                 <span className="ml-auto text-caption text-p4a-grey">{r.areaCode ? `${r.market} ${r.areaCode}` : r.market}</span>
               </span>
               <span className="mt-1 flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-caption text-p4a-body">
-                <StateBadge state={r.state} t={t} />
-                {reasons(r) ? <span>{reasons(r)}</span> : null}
-                <span className="ml-auto text-p4a-grey">
-                  {t.col_contact}: {r.lastContactAt ? fmtDateTimeShort(r.lastContactAt, timeZone, locale) : t.noContact}
+                {forPastDue ? <span data-testid="fleet-row-past-due"><Badge tone="warning">{t.badge_items_past_due}</Badge></span> : <StateBadge state={r.state} t={t} />}
+                {meta ? <span>{meta}</span> : null}
+                <span className="ml-auto text-p4a-grey" data-testid="fleet-row-contact">
+                  {r.state === "not_monitored" ? t.state_not_monitored
+                    : `${t.col_contact}: ${r.lastContactAt ? fmtDateTimeShort(r.lastContactAt, timeZone, locale) : "—"}`}
                 </span>
               </span>
             </>

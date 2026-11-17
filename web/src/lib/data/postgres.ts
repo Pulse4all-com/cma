@@ -25,7 +25,7 @@ import type {
   CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
   CourtesyCompleted, CourtesyCounts, CourtesyOutcome, CourtesyReport, CourtesyState,
   CohortAge, LeadCohortRow, LeadCohortsReport,
-  FleetLocationSource, FleetPage, FleetReason, FleetRowsPage, FleetState,
+  FleetArea, FleetLocationSource, FleetPage, FleetPageDoc, FleetReason, FleetRow, FleetRowsPage, FleetState,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, PledgeFile, PledgePage, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
   DataQualityRowsView, FlashCardReads, FlashDocumentView, FlashHeadlineView, FlashStoredCard, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
@@ -2784,12 +2784,41 @@ export const postgresData: CmaData = {
       if (!j.set_up) return { setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [], pastDueNotInField: 0 };
       return {
         setUp: true, filter, today: j.today ?? null, timeZone: j.time_zone ?? null, markets: j.filter_markets ?? [], models: j.filter_models ?? [],
-        areas: (j.areas ?? []).map((a) => ({
-          areaId: a.area_id, country: a.country, areaCode: a.area_code, label: a.label, lat: a.lat === null ? null : Number(a.lat),
-          lon: a.lon === null ? null : Number(a.lon), inField: Number(a.in_field), ready: Number(a.ready), needsAttention: Number(a.needs_attention),
-          noConnection: Number(a.no_connection), notMonitored: Number(a.not_monitored), pastDue: Number(a.past_due),
-        })),
+        areas: (j.areas ?? []).map(toFleetArea),
         pastDueNotInField: Number(j.past_due_not_in_field ?? 0),
+      };
+    });
+  },
+
+  async getFleetPage(me, query): Promise<FleetPageDoc> {
+    return withTenant(ctx(me), async (q) => {
+      // one read for the page (addition 0009v, E6): the function checks the permission (CMA06), the filters and the state
+      // (CMA04), answers set_up false alone while fleet_management.dummy_preview is off, and else computes the devices once
+      // for the tiles, the areas and the list's first page
+      const j = one((await q.query<{ j: FleetPageDb }>(`select cma.fleet_page($1, $2, $3, $4::uuid) as j`,
+        [query.market, query.model, query.state, query.areaId])).rows, "fleet_page").j;
+      const filter = { market: query.market, model: query.model };
+      if (!j.set_up) {
+        return {
+          setUp: false, filter, today: null, timeZone: null, markets: [], models: [], areas: [], pastDueNotInField: 0,
+          tiles: { in_field: 0, past_due: 0, past_due_in_field: 0, past_due_not_in_field: 0, monitored: 0, ready: 0, needs_attention: 0, no_connection: 0, not_monitored: 0 },
+          list: { setUp: false, page: 1, pageSize: 50, total: 0, timeZone: null, rows: [] },
+        };
+      }
+      const t = j.tiles;
+      const timeZone = j.time_zone ?? null;
+      return {
+        setUp: true, filter, today: j.today ?? null, timeZone, markets: j.filter_markets ?? [], models: j.filter_models ?? [],
+        areas: (j.areas ?? []).map(toFleetArea), pastDueNotInField: Number(j.past_due_not_in_field ?? 0),
+        tiles: {
+          in_field: Number(t?.in_field ?? 0), past_due: Number(t?.past_due ?? 0), past_due_in_field: Number(t?.past_due_in_field ?? 0),
+          past_due_not_in_field: Number(t?.past_due_not_in_field ?? 0), monitored: Number(t?.monitored ?? 0), ready: Number(t?.ready ?? 0),
+          needs_attention: Number(t?.needs_attention ?? 0), no_connection: Number(t?.no_connection ?? 0), not_monitored: Number(t?.not_monitored ?? 0),
+        },
+        list: {
+          setUp: true, page: j.list?.page ?? 1, pageSize: j.list?.page_size ?? 50, total: Number(j.list?.total ?? 0), timeZone,
+          rows: (j.list?.rows ?? []).map(toFleetRow),
+        },
       };
     });
   },
@@ -2802,11 +2831,7 @@ export const postgresData: CmaData = {
       if (!j.set_up) return { setUp: false, page: query.page, pageSize: 50, total: 0, timeZone: null, rows: [] };
       return {
         setUp: true, page: j.page ?? query.page, pageSize: j.page_size ?? 50, total: Number(j.total ?? 0), timeZone: j.time_zone ?? null,
-        rows: (j.rows ?? []).map((r) => ({
-          deviceId: r.device_id, serial: r.serial, model: r.model, market: r.market, areaId: r.area_id, areaCode: r.area_code, areaLabel: r.area_label,
-          state: r.state, reason: r.reason, lastSelfTestOn: r.last_self_test_on, lastContactAt: r.last_contact_at, pastDueItems: Number(r.past_due_items),
-          locationSource: r.location_source,
-        })),
+        rows: (j.rows ?? []).map(toFleetRow),
       };
     });
   },
@@ -3710,6 +3735,36 @@ export const postgresData: CmaData = {
   },
 };
 
+/** An area's row in cma.fleet_areas's and cma.fleet_page's answers (additions 0009t, 0009v) */
+interface FleetAreaDb {
+  area_id: string | null; country: string | null; area_code: string | null; label: string | null; lat: string | number | null;
+  lon: string | number | null; in_field: number; ready: number; needs_attention: number; no_connection: number; not_monitored: number;
+  past_due: number;
+}
+
+/** A device's row in cma.fleet_rows's and cma.fleet_page's lists (additions 0009t, 0009v) */
+interface FleetRowDb {
+  device_id: string; serial: string | null; model: string; market: string; area_id: string | null; area_code: string | null;
+  area_label: string | null; state: FleetState | null; reason: FleetReason | null; last_self_test_on: string | null;
+  last_contact_at: string | null; past_due_items: number; location_source: FleetLocationSource | null;
+}
+
+function toFleetArea(a: FleetAreaDb): FleetArea {
+  return {
+    areaId: a.area_id, country: a.country, areaCode: a.area_code, label: a.label, lat: a.lat === null ? null : Number(a.lat),
+    lon: a.lon === null ? null : Number(a.lon), inField: Number(a.in_field), ready: Number(a.ready), needsAttention: Number(a.needs_attention),
+    noConnection: Number(a.no_connection), notMonitored: Number(a.not_monitored), pastDue: Number(a.past_due),
+  };
+}
+
+function toFleetRow(r: FleetRowDb): FleetRow {
+  return {
+    deviceId: r.device_id, serial: r.serial, model: r.model, market: r.market, areaId: r.area_id, areaCode: r.area_code, areaLabel: r.area_label,
+    state: r.state, reason: r.reason, lastSelfTestOn: r.last_self_test_on, lastContactAt: r.last_contact_at, pastDueItems: Number(r.past_due_items),
+    locationSource: r.location_source,
+  };
+}
+
 /** cma.fleet_areas's answer (addition 0009t) */
 interface FleetAreasDb {
   set_up: boolean;
@@ -3717,9 +3772,7 @@ interface FleetAreasDb {
   time_zone?: string;
   filter_markets?: { code: string; name: string | null }[];
   filter_models?: { key: string; name: string | null }[];
-  areas?: { area_id: string | null; country: string | null; area_code: string | null; label: string | null; lat: string | number | null;
-    lon: string | number | null; in_field: number; ready: number; needs_attention: number; no_connection: number; not_monitored: number;
-    past_due: number }[];
+  areas?: FleetAreaDb[];
   past_due_not_in_field?: number;
 }
 
@@ -3730,7 +3783,12 @@ interface FleetRowsDb {
   page_size?: number;
   total?: number;
   time_zone?: string;
-  rows?: { device_id: string; serial: string | null; model: string; market: string; area_id: string | null; area_code: string | null;
-    area_label: string | null; state: FleetState | null; reason: FleetReason | null; last_self_test_on: string | null;
-    last_contact_at: string | null; past_due_items: number; location_source: FleetLocationSource | null }[];
+  rows?: FleetRowDb[];
+}
+
+/** cma.fleet_page's answer (addition 0009v): cma.fleet_areas's document, the tiles and the list's first page */
+interface FleetPageDb extends FleetAreasDb {
+  tiles?: { in_field: number; past_due: number; past_due_in_field: number; past_due_not_in_field: number; monitored: number; ready: number;
+    needs_attention: number; no_connection: number; not_monitored: number };
+  list?: { page: number; page_size: number; total: number; rows: FleetRowDb[] };
 }

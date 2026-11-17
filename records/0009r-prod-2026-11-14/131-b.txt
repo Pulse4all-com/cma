@@ -1,0 +1,247 @@
+DO
+SET
+DO
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ b
+(1 row)
+
+ set_config 
+------------
+ 20
+(1 row)
+
+ set_config 
+------------
+ 50
+(1 row)
+
+ set_config 
+------------
+ 100
+(1 row)
+
+ set_config 
+------------
+ 300
+(1 row)
+
+ set_config 
+------------
+ 500
+(1 row)
+
+ set_config 
+------------
+ 150
+(1 row)
+
+ set_config 
+------------
+ 500
+(1 row)
+
+ set_config 
+------------
+ 400
+(1 row)
+
+ set_config 
+------------
+ 15000
+(1 row)
+
+ set_config 
+------------
+ 300
+(1 row)
+
+ set_config 
+------------
+ 5000
+(1 row)
+
+ set_config 
+------------
+ 240
+(1 row)
+
+psql:/tmp/131b.sql:123: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+psql:/tmp/131b.sql:172: NOTICE:  table "reads_0131" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+INSERT 0 126
+UPDATE 2
+UPDATE 6
+UPDATE 2
+UPDATE 1
+UPDATE 5
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+                                                    check_name                                                     | result |                                                                                                                            detail                                                                                                                            
+-------------------------------------------------------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ rolled back                                                                                                       | info   | the timed part is rolled back: 0 audit row(s) of its writes remain
+ pulse4all-invest periods                                                                                          | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-15 to 2026-11-14; today 2026-11-14; connection none
+ pulse4all-invest active customers refresh                                                                         | skip   | the sources are not set up: nothing to take
+ pulse4all-invest active customers inputs markers                                                                  | ok     | 2.0 ms (best of 3) against 300 ms
+ pulse4all-invest dashboard previous month: team status time                                                       | skip   | no active person holds performance.team: not timed
+ pulse4all-invest dashboard previous month: intake per day                                                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest dashboard previous month: crm records per day                                                    | skip   | no active person holds performance.team: not timed
+ pulse4all-invest dashboard previous month: speed to lead rows                                                     | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest dashboard previous month: callbacks kept                                                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest speed to lead previous month: summary by day                                                     | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls previous month: overview by day                                                            | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls previous month: overview by market                                                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls previous month: overview by line                                                           | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls previous month: history start                                                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls previous month: tag use                                                                    | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest calls per agent previous month: per person                                                       | skip   | no active person holds performance.team: not timed
+ pulse4all-invest calls per agent previous month: tags per person                                                  | skip   | no active person holds performance.team: not timed
+ pulse4all-invest inbound previous month: inbound service                                                          | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest intake previous month: intake per day                                                            | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email previous month: email report                                                               | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email previous month: email waiting                                                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email previous month: email not responding                                                       | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest email per agent previous month: email per person                                                 | skip   | no active person holds performance.team: not timed
+ pulse4all-invest first orders previous month: first orders                                                        | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest orders per person previous month: first orders per person                                        | skip   | no active person holds performance.team: not timed
+ pulse4all-invest attempts previous month: attempts per deal                                                       | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest attempts per agent previous month: attempts per person                                           | skip   | no active person holds performance.team: not timed
+ pulse4all-invest funnel previous month: deal funnel                                                               | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest funnel previous month: lost reasons                                                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest funnel previous month: deals per person                                                          | skip   | no active person holds performance.team: not timed
+ pulse4all-invest cancellations previous month: cancellations                                                      | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest reviews previous month: reviews                                                                  | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest lead cohorts previous month: lead cohorts                                                        | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest courtesy previous month: courtesy                                                                | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest forms previous month: forms report                                                               | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest forms previous month: forms whole period                                                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest forms previous month: forms answers                                                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest maintenance now: maintenance 12 months                                                           | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active top (stored document)                                                   | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active now (the present by the tenant's setting: live or from the take)        | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active now, the take's path (the present from the stored take)                 | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active rest (stored document)                                                  | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active list first page                                                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active top computed (two filters)                                              | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active rest, a later first month by quarter (stored document)                  | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active rest computed (two filters)                                             | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active list filtered, by age                                                   | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active list under a device band                                                | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active list under the last device band                                         | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest active customers: active file                                                                    | skip   | no active person holds reports.view or performance.team: not timed
+ pulse4all-invest pledge lists now: pledge page                                                                    | skip   | no active person holds pledges.view: not timed
+ pulse4all-invest pledge lists now: pledge check serials                                                           | skip   | no active person holds pledges.view: not timed
+ pulse4all-invest pledge lists now: pledge file today                                                              | skip   | no active person holds pledges.view: not timed
+ pulse4all-invest pledge lists now: pledge file stored                                                             | skip   | no active person holds pledges.view: not timed
+ pulse4all-invest dashboard previous month (set)                                                                   | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest speed to lead previous month (set)                                                               | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest calls previous month (set)                                                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest calls per agent previous month (set)                                                             | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest inbound previous month (set)                                                                     | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest intake previous month (set)                                                                      | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest email previous month (set)                                                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest email per agent previous month (set)                                                             | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest first orders previous month (set)                                                                | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest orders per person previous month (set)                                                           | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest attempts previous month (set)                                                                    | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest attempts per agent previous month (set)                                                          | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest funnel previous month (set)                                                                      | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest cancellations previous month (set)                                                               | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest reviews previous month (set)                                                                     | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest lead cohorts previous month (set)                                                                | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest courtesy previous month (set)                                                                    | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest forms previous month (set)                                                                       | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest maintenance now (set)                                                                            | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest active customers (set)                                                                           | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-invest pledge lists now (set)                                                                           | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions periods                                                                                   | info   | previous month 2026-10-01 to 2026-10-31; 92 days 2026-08-15 to 2026-11-14; today 2026-11-14; connection 01a12f17-4fcb-7406-b0ff-b335c54f828a
+ pulse4all-subscriptions active customers refresh                                                                  | ok     | 5742 ms (the history and the documents written again, once) against 15000 ms: {"rows": 6880, "base_rows": 0, "refreshed": true, "unchanged": false, "duration_ms": 5742, "history_rows": 6880, "customer_rows": 0, "document_rows": 0, "tables_analyzed": 0}
+ pulse4all-subscriptions active customers inputs markers                                                           | ok     | 144.0 ms (best of 3) against 300 ms
+ pulse4all-subscriptions dashboard previous month: team status time                                                | ok     | 85.7 ms (best of 2) against 500 ms
+ pulse4all-subscriptions dashboard previous month: intake per day                                                  | ok     | 389.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions dashboard previous month: crm records per day                                             | ok     | 38.1 ms (best of 2) against 500 ms
+ pulse4all-subscriptions dashboard previous month: speed to lead rows                                              | FAIL   | 446.9 ms (best of 2) against 300 ms
+ pulse4all-subscriptions dashboard previous month: callbacks kept                                                  | ok     | 5.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions speed to lead previous month: summary by day                                              | ok     | 373.8 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls previous month: overview by day                                                     | ok     | 326.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls previous month: overview by market                                                  | FAIL   | 503.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls previous month: overview by line                                                    | FAIL   | 533.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls previous month: history start                                                       | ok     | 27.8 ms (best of 2) against 50 ms
+ pulse4all-subscriptions calls previous month: tag use                                                             | ok     | 275.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls per agent previous month: per person                                                | ok     | 425.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions calls per agent previous month: tags per person                                           | ok     | 302.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions inbound previous month: inbound service                                                   | ok     | 13.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions intake previous month: intake per day                                                     | FAIL   | 790.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions email previous month: email report                                                        | FAIL   | 2259.0 ms (best of 2) against 500 ms
+ pulse4all-subscriptions email previous month: email waiting                                                       | ok     | 242.9 ms (best of 2) against 300 ms
+ pulse4all-subscriptions email previous month: email not responding                                                | FAIL   | 766.6 ms (best of 2) against 300 ms
+ pulse4all-subscriptions email per agent previous month: email per person                                          | FAIL   | 1685.0 ms (best of 2) against 500 ms
+ pulse4all-subscriptions first orders previous month: first orders                                                 | FAIL   | 1687.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions orders per person previous month: first orders per person                                 | FAIL   | error CMA06
+ pulse4all-subscriptions attempts previous month: attempts per deal                                                | FAIL   | 1081.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions attempts per agent previous month: attempts per person                                    | FAIL   | error CMA06
+ pulse4all-subscriptions funnel previous month: deal funnel                                                        | ok     | 337.5 ms (best of 2) against 500 ms
+ pulse4all-subscriptions funnel previous month: lost reasons                                                       | ok     | 449.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions funnel previous month: deals per person                                                   | FAIL   | error CMA06
+ pulse4all-subscriptions cancellations previous month: cancellations                                               | ok     | 56.1 ms (best of 2) against 500 ms
+ pulse4all-subscriptions reviews previous month: reviews                                                           | ok     | 13.7 ms (best of 2) against 500 ms
+ pulse4all-subscriptions lead cohorts previous month: lead cohorts                                                 | FAIL   | 1226.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions courtesy previous month: courtesy                                                         | ok     | 458.3 ms (best of 2) against 500 ms
+ pulse4all-subscriptions forms previous month: forms report                                                        | ok     | 276.4 ms (best of 2) against 500 ms
+ pulse4all-subscriptions forms previous month: forms whole period                                                  | ok     | 273.9 ms (best of 2) against 500 ms
+ pulse4all-subscriptions forms previous month: forms answers                                                       | ok     | 286.1 ms (best of 2) against 300 ms
+ pulse4all-subscriptions maintenance now: maintenance 12 months                                                    | ok     | 309.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions active customers: active top (stored document)                                            | ok     | 4.9 ms (best of 2) against 50 ms
+ pulse4all-subscriptions active customers: active now (the present by the tenant's setting: live or from the take) | ok     | 245.7 ms (best of 2) against 400 ms
+ pulse4all-subscriptions active customers: active now, the take's path (the present from the stored take)          | ok     | 215.2 ms (best of 2) against 400 ms
+ pulse4all-subscriptions active customers: active rest (stored document)                                           | ok     | 10.8 ms (best of 2) against 50 ms
+ pulse4all-subscriptions active customers: active list first page                                                  | ok     | 15.2 ms (best of 2) against 300 ms
+ pulse4all-subscriptions active customers: active top computed (two filters)                                       | ok     | 184.3 ms (best of 2) against 400 ms
+ pulse4all-subscriptions active customers: active rest, a later first month by quarter (stored document)           | ok     | 7.6 ms (best of 2) against 50 ms
+ pulse4all-subscriptions active customers: active rest computed (two filters)                                      | ok     | 25.3 ms (best of 2) against 500 ms
+ pulse4all-subscriptions active customers: active list filtered, by age                                            | ok     | 12.0 ms (best of 2) against 300 ms
+ pulse4all-subscriptions active customers: active list under a device band                                         | ok     | 22.3 ms (best of 2) against 300 ms
+ pulse4all-subscriptions active customers: active list under the last device band                                  | ok     | 15.9 ms (best of 2) against 300 ms
+ pulse4all-subscriptions active customers: active file                                                             | FAIL   | 964.2 ms (best of 2) against 500 ms
+ pulse4all-subscriptions pledge lists now: pledge page                                                             | ok     | 61.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions pledge lists now: pledge check serials                                                    | ok     | 45.5 ms (best of 2) against 300 ms
+ pulse4all-subscriptions pledge lists now: pledge file today                                                       | ok     | 64.6 ms (best of 2) against 500 ms
+ pulse4all-subscriptions pledge lists now: pledge file stored                                                      | skip   | no quarter file yet (CMA02: no quarter file of 2000-01-01): nothing to time
+ pulse4all-subscriptions dashboard previous month (set)                                                            | FAIL   | 965.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions speed to lead previous month (set)                                                        | ok     | 373.8 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions calls previous month (set)                                                                | FAIL   | 1667.3 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions calls per agent previous month (set)                                                      | FAIL   | 727.8 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions inbound previous month (set)                                                              | ok     | 13.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions intake previous month (set)                                                               | FAIL   | 790.5 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions email previous month (set)                                                                | FAIL   | 3268.5 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions email per agent previous month (set)                                                      | FAIL   | 1685.0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions first orders previous month (set)                                                         | FAIL   | 1687.2 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions orders per person previous month (set)                                                    | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions attempts previous month (set)                                                             | FAIL   | 1081.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions attempts per agent previous month (set)                                                   | ok     | 0 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions funnel previous month (set)                                                               | FAIL   | 786.7 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions cancellations previous month (set)                                                        | ok     | 56.1 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions reviews previous month (set)                                                              | ok     | 13.7 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions lead cohorts previous month (set)                                                         | FAIL   | 1226.6 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions courtesy previous month (set)                                                             | ok     | 458.3 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions forms previous month (set)                                                                | FAIL   | 836.4 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions maintenance now (set)                                                                     | ok     | 309.2 ms, the reads summed, against 500 ms
+ pulse4all-subscriptions active customers (set)                                                                    | FAIL   | 530.0 ms, the first paint's reads (the records stream after it, on their own row), against 500 ms
+ pulse4all-subscriptions pledge lists now (set)                                                                    | ok     | 107.1 ms, the first paint's reads (the records stream after it, on their own row), against 500 ms
+ verdict                                                                                                           | FAIL   | 131_time_all (part b): 68 ok, 26 FAIL, 52 skip; worst 5742 ms (pulse4all-subscriptions active customers refresh)
+(150 rows)
+
+DROP TABLE
+RESET

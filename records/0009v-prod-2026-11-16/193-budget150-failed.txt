@@ -1,0 +1,49 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 150
+(1 row)
+
+psql:db/193_verify_fleet_page.sql:59: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                          check_name                                                          | result |                                                                                  detail                                                                                  
+------------------------------------------------------------------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009v recorded once, after 0009u; 0009u's row #287's                                                         | PASS   | 0009t 1; 0009u 1, the follow-up's clock fields t, not the fleet page t; 0009v 1, after 0009u t, the fleet page t
+ S2 the functions: the owner's, the application's to execute, in the caller's rights, JIT off; nothing in cma_read reads them | PASS   | ok
+ A1 by hand: the page's tiles, areas and lists equal 0009t's two reads for every filter and list                              | PASS   | filters 12; differing none
+ A2 by hand: Devices past due in the field + not in the field = Devices past due = Installed base's, every filter             | PASS   | filters 12; past due split differing none
+ A2 by hand: the figures counted by hand                                                                                      | PASS   | In the field 65; Devices past due 13 = in the field 12 + not in the field 1; past_due_not_in_field 1; the default list the devices that need attention t
+ A3 off: set up false and nothing more; on: the figures, the zone and the filters' choices                                    | PASS   | off: {"set_up": false}; on: set up true, in the field 65, the list the devices that need attention t, time zone Europe/Amsterdam, markets GB,NL,LU,unknown, models m1,m2
+ A3 the analyst and the supervisor read, the agent is refused; the tenants apart                                              | PASS   | supervisor ok; analyst ok; agent CMA06; under the other tenant: the first's in the field 0, past due 0, listed 0; its reader sees in the field 1
+ A3 the refusals (CMA04); an area of no device lists none                                                                     | PASS   | market gb CMA04, model M1 CMA04, state broken CMA04, an area of no device 0
+ A3 no personal key in the areas or the rows                                                                                  | PASS   | area keys 0; row keys 0; an at sign f
+ R1 pulse4all-subscriptions: the page's tiles, areas and lists equal 0009t's two reads for every market × model               | PASS   | filters 30, answers 38; differing none
+ R2 pulse4all-subscriptions: Devices past due in the field + not in the field = Devices past due = Installed base's           | PASS   | filters 30; past due split differing none
+ E1 pulse4all-subscriptions: cma.fleet_page_of, no filter, within its budget                                                  | FAIL   | 209.4 ms (best of 3, after six calls) against 150 ms
+ E2 pulse4all-subscriptions: cma.fleet_page(), the page's own read, within its budget                                         | FAIL   | 227.9 ms (best of 3, after six calls) against 150 ms
+ verdict                                                                                                                      | FAIL   | 193_verify_fleet_page: 11 PASS, 2 FAIL, 0 skip
+(14 rows)
+
+DROP TABLE
+RESET
