@@ -51,7 +51,20 @@
 -- What it re-creates (same signature, rights and answers)
 --   cma.flash_sources_of(uuid)       based on 148_installed_base_list.sql
 --   cma.system_health_runs()         based on 132_perf.sql; now says its rows (50)
--- Verifies that read them, to run again (dev; prod where they run there): listed by the impact list in the pull request.
+-- Verifies to run again after this script (dev first, then prod where they run there):
+--   reading cma.system_health_runs directly: 79_verify_system_health.sql and 81_verify_follow_up_snapshot.sql (dev only),
+--     133_verify_perf.sql (E2 compares it with its own earlier definition)
+--   reading cma.flash_sources_of directly: 123, 137, 139, 147, 149 (A3 and D1 compare it with 0008zn's answer), 159, 181
+--   reading it through a caller: 169_verify_pledge_lists.sql (cma.pledge_snapshot_write); through cma.data_quality,
+--     cma.flash_page, flash_rows(_of), flash_compute_of and flash_document_of also 41, 69, 73, 75, 105, 113, 143, 161, 173,
+--     189 and 193, which the ones above cover (run them where a release runs them anyway)
+--   195_verify_audit_bookkeeping.sql (0009w: sync_run's triggers and audit rows)
+--   the time scripts: 131_time_all.sql part a (System health, Data quality, the Flash landing), prod outside office hours
+-- None is edited by this change: each comparison keeps the definition it compares with. web/verify/flash.mjs (pure) now
+-- expects cma.flash_sources_of's latest definition in this script.
+--
+-- Re-running cma.setup_tenant_table('cma.sync_run_hour') would give the application insert, update and delete on it again
+-- and put an audit trigger back: a later migration that calls it repeats this script's section 1 after it.
 --
 -- The writes it adds: one upsert of a small row per run started and none per run finished succeeded (one per run that
 -- fails); the three indexes take an entry per run, the two partial ones per finished run. A run's finish now changes an

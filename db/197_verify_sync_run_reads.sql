@@ -8,13 +8,14 @@
 -- counts and milliseconds only.
 -- The previous definitions are kept below as pg_temp functions, copied unchanged from 148_installed_base_list.sql
 -- (cma.flash_sources_of) and 132_perf.sql (cma.system_health_runs), and every answer is compared with theirs at the
--- same instant (one transaction: now() is the same for both).
+-- same instant and on the same rows: both in one statement, so one snapshot (the functions are stable), whatever the
+-- jobs write meanwhile.
 --
 -- Checks
 --   S1  the addition 0009x is recorded once, after 0009w
 --   S2  cma.sync_run_hour: row-level security, the tenant policy, no audit trigger, the application reads only; the
 --       readers' view cma_read.sync_run_hour; cma.sync_run_hour_count() cma_owner's, owner's rights, search path pinned
---       with pg_temp last, executable by no one but its owner; the triggers sync_run_hour (after insert or delete) and
+--       with pg_temp last, executable by no one but its owner; the readers read the view, not the table; the triggers sync_run_hour (after insert or delete) and
 --       sync_run_hour_change (after update, with its condition) on cma.sync_run, enabled; the three indexes valid
 --   S3  cma.flash_sources_of and cma.system_health_runs in the caller's rights, stable, the application's to execute
 --       (not public's); system_health_runs says 50 rows
@@ -24,11 +25,14 @@
 --   E2  per active tenant, as the application: cma.system_health_runs() equals 132's definition, row for row, in order
 --   B1  on a throwaway tenant, rolled back: runs at the edges (just before and after the 24 hours' start, in its hour, a
 --       run started 31 days ago and finished now, one without a connection, one running), finished into succeeded and
---       failed, one deleted; the hours equal the runs grouped, and both reads equal the previous definitions
+--       failed, one deleted, and two started and finished as the application (cma_app, the role the ingest and the
+--       scheduler write with); the hours equal the runs grouped, and both reads equal the previous definitions
 --   B2  the throwaway tenant and its rows are gone
---   T1  per active tenant, as the application: cma.flash_sources_of within verify.max_read_ms (10), the best of three
---       after six calls (a plpgsql statement turns to its generic plan after five)
---   T2  per active tenant, as the application: cma.system_health_runs() within verify.max_read_ms, likewise
+--   T1  per active tenant, as the application: cma.flash_sources_of within verify.max_sources_ms (50), the best of three
+--       after six calls (a plpgsql statement turns to its generic plan after five). Its sync_run part is one index probe
+--       per connection (0.2 ms locally at 3x); most of the rest is 148's kinds of the connections (cma.connection_held_kinds_of
+--       reads device per connection), unchanged here and part of the next brief (the device scans)
+--   T2  per active tenant, as the application: cma.system_health_runs() within verify.max_read_ms (10), likewise
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
 -- that check alone compares with a deliberate difference (the new answer with one more run, or a budget of 0).
 -- Collation: every ordering that feeds a compared text says collate "C".
@@ -43,7 +47,9 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' for every check, or one check's id such as 'E2'
-select set_config('verify.max_read_ms', '10', false);                -- the sync_run reads' budget (the brief: single-digit ms)
+select set_config('verify.max_read_ms', '10', false);                -- System health's read (the brief: the sync_run part in single-digit ms)
+select set_config('verify.max_sources_ms', '50', false);             -- flash_sources_of whole: its sync_run part is about 0.2 ms (36 index
+                                                                     -- probes at 3x); the rest is 148's kinds (connection_held_kinds_of)
 
 drop table if exists pg_temp.verify_0009x;
 create temporary table verify_0009x (ord integer, check_name text, result text, detail text);
@@ -198,7 +204,10 @@ begin
      or has_table_privilege('cma_app', 'cma.sync_run_hour', 'update') or has_table_privilege('cma_app', 'cma.sync_run_hour', 'delete') then
     v_bad := v_bad || 'the application''s rights; ';
   end if;
-  if to_regclass('cma_read.sync_run_hour') is null then v_bad := v_bad || 'no reader view; '; end if;
+  if to_regclass('cma_read.sync_run_hour') is null or not has_table_privilege('cma_readonly', 'cma_read.sync_run_hour', 'select')
+     or has_table_privilege('cma_readonly', 'cma.sync_run_hour', 'select') then
+    v_bad := v_bad || 'the readers'' view or rights; ';
+  end if;
   select array_to_string(p.proconfig, ',') into v_cfg from pg_proc p where p.oid = 'cma.sync_run_hour_count()'::regprocedure;
   if not (select p.prosecdef and pg_get_userbyid(p.proowner) = 'cma_owner' from pg_proc p where p.oid = 'cma.sync_run_hour_count()'::regprocedure)
      or coalesce(v_cfg, '') !~ '^search_path=.*pg_temp$'
@@ -273,18 +282,20 @@ begin
     perform set_config('app.user_id', v_user::text, true);
 
     -- E1
-    v_new := cma.flash_sources_of(t.id)::text;
-    v_old := pg_temp.v0009x_old_sources_of(t.id)::text;
+    -- both in one statement: one snapshot, so a run written meanwhile (prod's jobs write every minute) is seen by both or
+    -- neither (the functions are stable: they take the calling statement's snapshot)
+    select cma.flash_sources_of(t.id)::text, pg_temp.v0009x_old_sources_of(t.id)::text into v_new, v_old;
     if pg_temp.v0009x_p('E1') then v_new := v_new || ' '; end if;
     insert into pg_temp.verify_0009x values (v_ord + 1, 'E1 ' || t.slug || ': cma.flash_sources_of equals 148''s',
       case when v_new = v_old then 'PASS' else 'FAIL' end,
       (select string_agg(k || ' ' || coalesce(v_old::jsonb -> k ->> 'last_read_at', 'none'), '; ' order by k collate "C") from jsonb_object_keys(v_old::jsonb) k));
 
     -- E2
-    select count(*), string_agg(x::text, E'\n' order by x.n) into v_n, v_new
-    from (select row_number() over () as n, s.* from cma.system_health_runs() s) x;
-    select string_agg(x::text, E'\n' order by x.n) into v_old
-    from (select row_number() over () as n, s.* from pg_temp.v0009x_old_health_runs() s) x;
+    -- both in one statement, as E1
+    select (select count(*) from cma.system_health_runs()),
+           (select string_agg(x::text, E'\n' order by x.n) from (select row_number() over () as n, s.* from cma.system_health_runs() s) x),
+           (select string_agg(x::text, E'\n' order by x.n) from (select row_number() over () as n, s.* from pg_temp.v0009x_old_health_runs() s) x)
+      into v_n, v_new, v_old;
     if pg_temp.v0009x_p('E2') then v_new := coalesce(v_new, '') || E'\nprovoked'; end if;
     select string_agg(s.job || ' ' || s.runs_24h || '/' || s.failed_24h, ', ' order by s.job collate "C", s.connection_id) into v_sum
     from cma.system_health_runs() s;
@@ -301,8 +312,8 @@ begin
       if i > 6 then v_best := least(coalesce(v_best, v_ms), v_ms); end if;
     end loop;
     insert into pg_temp.verify_0009x values (v_ord + 3, 'T1 ' || t.slug || ': cma.flash_sources_of within its budget',
-      case when v_best <= case when pg_temp.v0009x_p('T1') then 0 else current_setting('verify.max_read_ms')::numeric end then 'PASS' else 'FAIL' end,
-      format('%s ms (best of 3, after six calls) against %s ms', v_best, case when pg_temp.v0009x_p('T1') then '0' else current_setting('verify.max_read_ms') end));
+      case when v_best <= case when pg_temp.v0009x_p('T1') then 0 else current_setting('verify.max_sources_ms')::numeric end then 'PASS' else 'FAIL' end,
+      format('%s ms (best of 3, after six calls) against %s ms', v_best, case when pg_temp.v0009x_p('T1') then '0' else current_setting('verify.max_sources_ms') end));
 
     -- T2
     v_best := null;
@@ -377,22 +388,30 @@ begin
       (v_t, v_c, 'email_poll', now() - interval '2 minutes', now(), 'failed') returning id into v_gone;
     delete from cma.sync_run where tenant_id = v_t and id = v_gone;
 
-    v_hours := pg_temp.v0009x_hours_diff(v_t);
     perform set_config('app.tenant_id', v_t::text, true);
     v_user := (select u.id from cma.app_user u where u.tenant_id = v_t and u.kind = 'person' order by u.created_at limit 1);
     if v_user is null then
-      -- create_tenant makes no person: the step makes one admin to read as (rolled back)
+      -- create_tenant makes no person: the step makes one admin to write and read as (rolled back)
       insert into cma.app_user (tenant_id, email, display_name, kind, status) values (v_t, 'verify.0009x@example.invalid', 'Verify 0009x', 'person', 'active')
       returning id into v_user;
       insert into cma.user_role (tenant_id, user_id, role_id)
       select v_t, v_user, r.id from cma.app_role r where r.tenant_id = v_t and r.key = 'admin';
     end if;
+    -- runs written as the application, the role the ingest and the scheduler write with: the trigger function's owner's
+    -- rights are what let their counts reach cma.sync_run_hour, which the application may not write
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_user::text, true);
-    v_new := cma.flash_sources_of(v_t)::text;
-    v_old := pg_temp.v0009x_old_sources_of(v_t)::text;
-    select string_agg(x::text, E'\n' order by x.n) into v_snew from (select row_number() over () as n, s.* from cma.system_health_runs() s) x;
-    select string_agg(x::text, E'\n' order by x.n) into v_sold from (select row_number() over () as n, s.* from pg_temp.v0009x_old_health_runs() s) x;
+    insert into cma.sync_run (connection_id, job, started_at) values (v_c, 'link_calls', now() - interval '40 seconds') returning id into v_run;
+    update cma.sync_run set status = 'failed', finished_at = now(), error = 'verify' where id = v_run;
+    insert into cma.sync_run (connection_id, job, started_at) values (v_c, 'link_calls', now() - interval '20 seconds') returning id into v_run;
+    update cma.sync_run set status = 'succeeded', finished_at = now() where id = v_run;
+    perform set_config('role', 'cma_owner', true);
+    v_hours := pg_temp.v0009x_hours_diff(v_t);
+    perform set_config('role', 'cma_app', true);
+    select cma.flash_sources_of(v_t)::text, pg_temp.v0009x_old_sources_of(v_t)::text,
+           (select string_agg(x::text, E'\n' order by x.n) from (select row_number() over () as n, s.* from cma.system_health_runs() s) x),
+           (select string_agg(x::text, E'\n' order by x.n) from (select row_number() over () as n, s.* from pg_temp.v0009x_old_health_runs() s) x)
+      into v_new, v_old, v_snew, v_sold;
     select string_agg(s.job || coalesce(' ' || case when s.connection_id = v_c then 'crm' when s.connection_id = v_d then 'shop' end, '') || ' ' || s.runs_24h || '/' || s.failed_24h
                       || ' ok ' || (s.last_succeeded_at is not null) || ' bad ' || (s.last_failed_at is not null),
                       ', ' order by s.job collate "C", s.connection_id)
