@@ -117,7 +117,7 @@ Part of the CMA documentation (README.md, Documentation map). Moved verbatim fro
 - Closed: Plan B for agents if the CMA is down (15 November 2026): no in-app Plan B; the fallback stays `docs/PLAN_B.md` in the repository (Decision log, 15 Nov 2026).
 - Office hours per country, used for speed-to-lead and SLA calculations.
 - Handling of GB vulnerability data in Postgres, in CMA alerts and on the desk's GB records (with Yordi).
-- Retention of staff data, the audit log and the customer-field mirror; employee monitoring rules in NL and Spain; quiet hours for notifications (with Yordi).
+- Retention of staff data, the audit log (backlog CMA-112, partly answered by addition 0009w, 17 November 2026: the bookkeeping tables `sync_cursor`, `sync_run` and `ingest_event` are no longer audited and the estimated growth falls from about 200,000 to 20,000 rows a day; the existing rows and the retention period are still open) and the customer-field mirror; employee monitoring rules in NL and Spain; quiet hours for notifications (with Yordi).
 - Cloud SQL's Knowledge Catalog integration (on by default on both instances, shares schema metadata only, not data): keep or switch off (with Yordi).
 - Which Aircall AI features (transcripts, sentiment, playbooks) are in the current Aircall plan.
 - Tool for the short satisfaction question after a call or ticket.

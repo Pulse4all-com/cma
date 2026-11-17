@@ -356,8 +356,8 @@ await asAdmin(t1, () => q("select cma.set_connection_status($1, 'inactive')", [c
 await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [conn2]));
 
 // ---- I. Nothing outside this run's tenants -----------------------------------------------------------------
-expect("I1 no row of another tenant written by this run (sync_run, email_*, crm_contact, sync_cursor, any audited table)",
-  await writesOutside(q, { tenants: [t1, t2], since: STARTED, logins: [process.env.CMA_DB_USER, ADMIN] }), [], ["sync_run:2"]);
+expect("I1 no row of another tenant written by this run (email_*, crm_contact, any audited table; sync_run and sync_cursor are not audited since 0009w)",
+  await writesOutside(q, { tenants: [t1, t2], since: STARTED, logins: [process.env.CMA_DB_USER, ADMIN] }), [], ["email_thread:2"]);
 
 // ---- J. The run's own tenants removed -------------------------------------------------------------------
 expect("J1 the run's two tenants removed with every row they held (no table holds their ids)",

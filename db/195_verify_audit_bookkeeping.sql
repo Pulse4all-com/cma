@@ -23,7 +23,7 @@
 --   T3  every other table whose trigger audit ran on insert, update and delete at 0009v (the 92 below) still has it so,
 --       enabled, without a condition
 --   B1  on a throwaway tenant, rolled back: a write, an update and a delete of each bookkeeping table make no audit row; a
---       configuration cache's insert and a real change make one each, an update of its refresh's times alone none; a
+--       configuration cache's insert, a real change and a delete make one each, an update of its refresh's times alone none; a
 --       business write (a market, a pipeline) one each
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
 -- that check alone compares with a deliberate difference.
@@ -193,7 +193,7 @@ declare
   v_ev   uuid;
   v_txt  text;
   v_res  text;
-  v_want text := 'sync_cursor 0, sync_run 0, ingest_event 0; connection_form 2, connection_form_field 2, connection_stage 2; market 1, connection_pipeline 1';
+  v_want text := 'sync_cursor 0, sync_run 0, ingest_event 0; connection_form 2, connection_form_field 3, connection_stage 2; market 1, connection_pipeline 1';
 begin
   begin
     v_t := cma.create_tenant('verify-0009w', 'Verify 0009w', 'Europe/Amsterdam');
@@ -217,6 +217,7 @@ begin
     values (v_t, v_c, 'f-1', 'interest', 'dropdown', array['a', 'b'], now());
     update cma.connection_form_field set refreshed_at = now() + interval '1 minute' where tenant_id = v_t and connection_id = v_c;
     update cma.connection_form_field set options = array['a', 'b', 'c'] where tenant_id = v_t and connection_id = v_c;
+    delete from cma.connection_form_field where tenant_id = v_t and connection_id = v_c;
     -- a business write: a market and a pipeline (a stage needs one)
     insert into cma.market (tenant_id, code, name, time_zone, language_code, currency, sort_order)
     values (v_t, 'NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR', 10);
