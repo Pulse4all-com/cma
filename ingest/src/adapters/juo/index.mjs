@@ -53,7 +53,7 @@ import { juoSettings, tenantIdOf } from "./client.mjs";
 import { clientFor, eventsQuery } from "./read.mjs";
 import {
   OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING, subscriptionItem, lineItems, productItems, eventItem, billingEventItem,
-  isBillingEvent, eventSubscriptionOf, customerIdOf, eventTypeOf,
+  isBillingEvent, eventSubscriptionOf, customerIdOf, eventTypeOf, TYPE_NAME,
 } from "./map.mjs";
 
 export const EVENTS_STREAM = "juo:events";
@@ -427,7 +427,7 @@ export async function dryRun({ connection, store, budget, object, fromMs, untilM
         bump(out.statuses, item.status);
         if (item.paymentInstrumentType) {
           out.instrumentKnown += 1;
-          const name = typeof s.paymentMethod?.instrument?.type === "string" && /^[A-Za-z][A-Za-z0-9 _-]{0,39}$/.test(s.paymentMethod.instrument.type)
+          const name = typeof s.paymentMethod?.instrument?.type === "string" && TYPE_NAME.test(s.paymentMethod.instrument.type)
             ? s.paymentMethod.instrument.type : "unnamed";
           bump(out.instrumentTypes, name);
         }

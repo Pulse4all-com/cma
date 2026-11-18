@@ -293,6 +293,11 @@ expect("H3 a card dispute reason kept as a code (fraudulent); a reason out of th
   [bOf(6, "chargeback:created").item.returnCode, bOf(6, "chargeback:created").item.instrumentType, bOf(7, "chargeback:created").item.returnCode,
     bOf(7, "chargeback:created").returnCodeDropped, bOf(7, "chargeback:created").item.instrumentType, bOf(7, "chargeback:created").instrumentUnknown],
   ["fraudulent", "card", undefined, true, "other", "Klarna"], [null, null, "No Mandate given", false, null, null]);
+const codeOf = (c) => { const m = map.billingEventItem({ ...billingEvents.find((e) => e.type === "chargeback:created"), data: { reasonCode: c } }); return m.item.returnCode ?? (m.returnCodeDropped ? "dropped" : null); };
+expect("H3b the return code's form: a scheme's four characters or a lower-case reason; an account number's shape, a mixed word or a sentence dropped; an instrument name with a space unnamed",
+  [codeOf("MD01"), codeOf("AM04"), codeOf("fraudulent"), codeOf("product_not_received"), codeOf("NL91ABNA0417164300"), codeOf("Fraudulent"), codeOf("md01x"),
+    map.instrumentInfoOf("Invented Person").unknown],
+  ["MD01", "AM04", "fraudulent", "product_not_received", "dropped", "dropped", "dropped", "unnamed"], []);
 expect("H4 refunds: amount, order, partial; the note never read; only a refund says partial",
   [bOf(8, "refund:completed").item.amount, bOf(8, "refund:completed").item.orderSourceId, bOf(8, "refund:completed").item.partial, bOf(8, "refund:failed").item.partial,
     JSON.stringify(bm).includes("Return received"), cb5.item.partial],
@@ -313,9 +318,12 @@ expect("I1 the allow-list: GET /subscriptions, /events, /products, /analytics/me
   [allowed("GET", "/subscriptions?limit=1"), allowed("GET", "/events"), allowed("GET", "/products"), allowed("GET", "/analytics/metrics"),
     allowed("POST", "/analytics/query"), allowed("DELETE", "/subscriptions/x"), allowed("POST", "/subscriptions"), allowed("PUT", "/subscriptions/x"),
     allowed("PATCH", "/subscriptions"), allowed("GET", "/customers"), allowed("GET", "/subscriptions/x"), allowed("POST", "/analytics/metrics"),
-    allowed("GET", "/analytics/query"), allowed("POST", "/subscriptions/x/cancel")],
+    allowed("GET", "/analytics/query"), allowed("POST", "/subscriptions/x/cancel"), allowed("GET", "/subscriptions/../customers"),
+    allowed("GET", "/subscriptions%2F..%2Fcustomers"), allowed("GET", "//subscriptions"), allowed("GET", "/Subscriptions"), allowed("get", "/subscriptions"),
+    allowed("GET", "/subscriptions#x"), allowed("GET", null), (() => { try { client.ALLOWED[0][0] = "DELETE"; } catch { /* frozen */ } return client.ALLOWED[0][0]; })()],
   ["allowed", "allowed", "allowed", "allowed", "allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed",
-    "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed"], []);
+    "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed",
+    "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "method_not_allowed", "GET"], []);
 
 // ---- D. The client against the fake Juo ---------------------------------------------------------------------------------
 const two = juoStore({ handle: "fixture-two", key: KEY2, nowMs: NOW, prefix: "t" });

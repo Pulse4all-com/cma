@@ -606,7 +606,7 @@ create table if not exists cma.billing_event (
   owner_source_id         text check (cma.subscription_id_ok(owner_source_id)),
   amount                  numeric(14,2) check (amount >= 0),
   currency                text check (currency ~ '^[A-Z]{3}$'),
-  return_code             text check (return_code ~ '^[A-Za-z0-9][A-Za-z0-9_]{1,39}$'),
+  return_code             text check (return_code ~ '^([A-Z0-9]{4}|[a-z][a-z_]{1,39})$'),
   instrument_type         text check (cma.payment_instrument_type_ok(instrument_type)),
   attempt                 integer check (attempt between 1 and 1000),
   error_code              text check (error_code ~ '^[A-Za-z][A-Za-z0-9_]{0,59}$'),
@@ -628,7 +628,7 @@ comment on column cma.billing_event.subscription_source_id is 'The subscription 
 comment on column cma.billing_event.order_source_id is 'The store''s order id (digits) the event is about: a chargeback''s or refund''s order';
 comment on column cma.billing_event.renewal_source_id is 'The source''s id of the renewal an invoice was placed for';
 comment on column cma.billing_event.owner_source_id is 'The source''s own id of the record the event belongs to (the chargeback, the refund, the invoice''s order), which pairs an invoice placed with its payment';
-comment on column cma.billing_event.return_code is 'The payment scheme''s return reason as a code (a SEPA return code such as MD01, a card dispute reason such as fraudulent); the message is never read';
+comment on column cma.billing_event.return_code is 'The payment scheme''s return reason as a code: four upper-case letters or digits (a SEPA return code such as MD01) or a lower-case word (a card dispute reason such as fraudulent), a form no account number fits; the message is never read';
 comment on column cma.billing_event.raw is 'The event''s mapped values under the source''s names only (checked keys, scalar values, never an @)';
 create index if not exists billing_event_order_idx on cma.billing_event (tenant_id, connection_id, order_source_id)
   where order_source_id is not null;

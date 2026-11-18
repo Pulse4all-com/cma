@@ -35,7 +35,8 @@
  *                 (customerId), orderSourceId (data.orderId: the store's order, digits), renewalSourceId (data.renewalId),
  *                 ownerSourceId (owner.id: the chargeback's, refund's or invoice's order's own id), amount and currency
  *                 (data.value or data.total), returnCode (a chargeback's data.reasonCode as a code: a SEPA return code
- *                 such as MD01, a card dispute reason such as fraudulent; reasonMessage never read), instrumentType
+ *                 such as MD01, a card dispute reason such as fraudulent: four upper-case letters or digits, or a
+ *                 lower-case word with _; reasonMessage never read), instrumentType
  *                 (data.instrumentType as one of INSTRUMENTS), attempt, errorCode, partial (a refund's), raw }
  *
  * The event types (Juo's GET event-types, read 18 November 2026; docs/ingest/README.md, section Juo):
@@ -151,11 +152,13 @@ const INTERVALS = ["day", "week", "month", "year"];
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
 const TYPE = /^[a-z][a-z0-9-]*(:[a-z0-9/-]+)?$/;
 const CODE = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
-const RETURN_CODE = /^[A-Za-z0-9][A-Za-z0-9_]{1,39}$/;
+/** A return code: a payment scheme's four-character code (SEPA's ISO 20022 MD01, AM04) or a card dispute reason in lower case
+ * (fraudulent, product_not_received); never anything that could hold an account number or a name */
+const RETURN_CODE = /^(?:[A-Z0-9]{4}|[a-z][a-z_]{1,39})$/;
 const NUMBER = /^#?[A-Za-z0-9-]{1,30}$/;
 const PRODUCT_STATUS = /^[a-z][a-z_]{0,19}$/;
 /** An instrument type's name as the logs and the dry run show it: Juo's own word for the type, never a value */
-const TYPE_NAME = /^[A-Za-z][A-Za-z0-9 _-]{0,39}$/;
+export const TYPE_NAME = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/;
 
 export const idOf = (v) => (typeof v === "string" && ID.test(v.trim()) ? v.trim() : null);
 

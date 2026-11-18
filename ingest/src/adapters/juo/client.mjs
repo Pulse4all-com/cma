@@ -111,7 +111,7 @@ export function holdMsOf(rateLimit, now = Date.now()) {
  */
 export const ALLOWED = Object.freeze([
   ["GET", "/subscriptions"], ["GET", "/events"], ["GET", "/products"], ["GET", "/analytics/metrics"], ["POST", "/analytics/query"],
-]);
+].map((pair) => Object.freeze(pair)));
 
 /** Throws SourceError method_not_allowed unless the method and the path (its query left out) are on the allow-list. */
 export function assertAllowed(method, path) {

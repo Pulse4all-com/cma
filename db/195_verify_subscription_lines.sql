@@ -469,19 +469,20 @@ begin
                         || 'order_placement_failed refund_completed refund_created refund_failed | MD01:sepa_direct_debit:sub-a fraudulent:card:-'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B8. the billing events refused: an unknown kind, a return code on a refund, a return code out of its form, an
-    --     instrument outside the seven, an order id that is no digits, partial on an invoice, an @ in raw, no time
+    -- B8. the billing events refused: an unknown kind, a return code on a refund, a return code out of its form (an
+    --     account number's shape among them), an instrument outside the seven, an order id that is no digits, partial on an invoice, an @ in raw, no time
     v_txt := concat_ws(' ',
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "dispute", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "refund_created", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "MD01"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "No Mandate"}]'')', v_sub1)),
+      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "NL91ABNA0417164300"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "instrumentType": "klarna"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "orderSourceId": "gid-1"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "invoice_paid", "occurredAt": "2026-11-11T10:00:00.000Z", "partial": true}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "raw": {"id": "x@example.invalid"}}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback"}]'')', v_sub1)));
     v_rows := v_rows || array['18', 'B8 the billing events refused: an unknown kind, a refund''s return code, a code out of form, an instrument outside the seven, a non-digit order, partial on an invoice, an @, no time',
-      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B9. the new event types and their columns stored; the refusals: a cause on another type, an interval on another
     --     type, a related subscription on another type, an order on a non-renewal, a type outside the twenty-two
