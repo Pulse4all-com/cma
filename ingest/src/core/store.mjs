@@ -525,7 +525,8 @@ export function storeFor(ctx, connectionId) {
     },
     async upsertSubscriptions(items, runId = null) {
       const out = [];
-      for (const part of chunks(items)) {
+      // in id order, so two runs on one connection (the poll and the reconcile) lock the rows in the same order
+      for (const part of chunks([...items].sort((a, b) => (a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0)))) {
         await withTenant(ctx, async (q) => {
           const r = await q.query(
             "select source_id, outcome, customer_matched, changes_observed from cma.ingest_upsert_subscriptions($1, $2::jsonb, $3::uuid)",
@@ -536,8 +537,10 @@ export function storeFor(ctx, connectionId) {
       return out;
     },
     async upsertSubscriptionLines(subscriptionIds, lines, runId = null) {
-      const bySub = new Map(subscriptionIds.map((id) => [id, []]));
-      for (const l of lines) bySub.get(l.subscriptionSourceId)?.push(l);
+      // in id order (subscriptions, then their lines), so two runs lock the rows in the same order
+      const byId = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+      const bySub = new Map([...subscriptionIds].sort(byId).map((id) => [id, []]));
+      for (const l of [...lines].sort((a, b) => byId(a.sourceId, b.sourceId))) bySub.get(l.subscriptionSourceId)?.push(l);
       const total = { inserted: 0, updated: 0, unchanged: 0, missing_now: 0, changes_observed: 0 };
       const parts = [];
       let ids = [];

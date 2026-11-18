@@ -68,10 +68,10 @@
 --                      cma_read.subscription_change (every column but raw); cma_read.subscription and
 --                      cma_read.subscription_event gain the new columns (at their end)
 --
--- Busy table (CLAUDE.md, Performance): cma.subscription_event's new columns and checks go last, directly before the
--- schema_migration insert, with its reader view; the ACCESS EXCLUSIVE lock they take is held until the commit. No index
--- is created on it: subscription_event_type_occurred_idx (122) already holds (tenant_id, event_type, occurred_at), and
--- Part C adds one when a read of its needs it. cma.billing_event is new and empty, so its indexes are made here.
+-- Busy table (CLAUDE.md, Performance): cma.subscription's and then cma.subscription_event's new columns and checks go
+-- last, directly before the schema_migration insert, each with its reader view; the ACCESS EXCLUSIVE lock they take is
+-- held until the commit. No index is created on subscription_event: subscription_event_type_occurred_idx (122) already
+-- holds (tenant_id, event_type, occurred_at), and Part C adds one when a read of its needs it. cma.billing_event is new and empty, so its indexes are made here.
 --
 -- Functions re-created and the verifies to run again afterwards (all edited by nothing here unless said):
 --   cma.check_tenant_setting()                       (base 184)  by name: 73, 101, 113, 121, 123, 137, 179; through its
@@ -501,34 +501,7 @@ revoke execute on function cma.catalog_text_ok(text), cma.payment_instrument_typ
 grant execute on function cma.catalog_text_ok(text), cma.payment_instrument_type_ok(text), cma.assert_running_run(uuid, uuid) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
--- 4. Subscriptions: the new columns, the seven instrument types, the wider raw
--- ---------------------------------------------------------------------------------------------
-alter table cma.subscription
-  add column if not exists source_number  text check (source_number ~ '^#?[A-Za-z0-9-]{1,30}$'),
-  add column if not exists min_cycles     integer check (min_cycles between 0 and 1000),
-  add column if not exists max_cycles     integer check (max_cycles between 0 and 1000),
-  add column if not exists discount_count integer check (discount_count between 0 and 1000),
-  add column if not exists line_count     integer check (line_count between 0 and 1000),
-  add column if not exists device_units   integer check (device_units >= 0);
-alter table cma.subscription drop constraint if exists subscription_payment_instrument_type_check;
-alter table cma.subscription add constraint subscription_payment_instrument_type_check
-  check (cma.payment_instrument_type_ok(payment_instrument_type));
-alter table cma.subscription drop constraint if exists subscription_raw_check;
-alter table cma.subscription add constraint subscription_raw_check
-  check (cma.subscription_raw_ok(raw, array['id', 'status', 'customer', 'currentCycle', 'nextBillingDate', 'billingInterval',
-                                            'billingIntervalCount', 'amountPerCycle', 'currencyCode', 'instrumentType', 'createdAt',
-                                            'updatedAt', 'canceledAt', 'pausedAt', 'serial', 'minCycles', 'maxCycles', 'discountCount',
-                                            'lineCount']));
-comment on column cma.subscription.payment_instrument_type is 'The type of the payment method''s instrument only: card, paypal, sepa_direct_debit, ideal, bancontact, invoice or other (null when unknown); nothing else of the payment method (0008zl; seven codes since 0009w)';
-comment on column cma.subscription.source_number is 'The subscription app''s own sequence number of the subscription (for example #2502), so staff can find it in the app; not a device serial (0009w)';
-comment on column cma.subscription.min_cycles is 'The minimum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009w)';
-comment on column cma.subscription.max_cycles is 'The maximum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009w)';
-comment on column cma.subscription.discount_count is 'How many discounts the subscription carries; never a discount''s code or value (0009w)';
-comment on column cma.subscription.line_count is 'How many of the subscription''s lines the source has not canceled (0009w)';
-comment on column cma.subscription.device_units is 'Devices paid for: the sum over its recurring lines not canceled of quantity × the variant mapping''s devices per unit; null until Part C of brief B39 fills it (0009w)';
-
--- ---------------------------------------------------------------------------------------------
--- 5. Lines, the catalog, billing events and observed changes
+-- 4. Lines, the catalog, billing events and observed changes
 -- ---------------------------------------------------------------------------------------------
 create table if not exists cma.subscription_line (
   id                       uuid primary key default uuidv7(),
@@ -668,7 +641,7 @@ revoke delete on cma.subscription_line, cma.subscription_product_variant from cm
 revoke update, delete on cma.billing_event, cma.subscription_change from cma_app;
 
 -- ---------------------------------------------------------------------------------------------
--- 6. The ingest's writes
+-- 5. The ingest's writes
 -- ---------------------------------------------------------------------------------------------
 -- Subscriptions of a connection, as 0008zl (118) with a run (the ingest of this change passes its run; a null run is none): [{sourceId, sourceNumber, customerSourceId, status,
 -- currentCycle, nextBillingAt, billingInterval, billingIntervalCount, amountPerCycle, currency, paymentInstrumentType,
@@ -1209,7 +1182,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 7. Grants: the application only
+-- 6. Grants: the application only
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -1231,18 +1204,8 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 8. Reporting views (cma.subscription_event's last, with its columns)
+-- 7. Reporting views of the new tables (cma.subscription's and cma.subscription_event's with their columns, last)
 -- ---------------------------------------------------------------------------------------------
--- As 0008zl (118), with the new columns at its end: ids, the status, cycle, billing, amount, the instrument's type, times,
--- the app's number, the cycle limits, the counts of discounts and lines, the device units
-create or replace view cma_read.subscription as
-  select id, tenant_id, connection_id, source_system, source_id, customer_source_id, status, current_cycle, next_billing_at,
-         billing_interval, billing_interval_count, amount_per_cycle, currency, payment_instrument_type, source_created_at, paused_at,
-         canceled_at, source_updated_at, source_deleted_at, first_seen_at, synced_at, source_number, min_cycles, max_cycles,
-         discount_count, line_count, device_units
-  from cma.subscription
-  where cma_read.reader_sees(tenant_id);
-
 -- Every column but raw
 create or replace view cma_read.subscription_line as
   select id, tenant_id, connection_id, source_system, source_id, subscription_source_id, product_source_id, variant_source_id, quantity,
@@ -1268,6 +1231,46 @@ create or replace view cma_read.subscription_change as
   select id, tenant_id, connection_id, subscription_source_id, field, old_value, new_value, observed_at, run_id
   from cma.subscription_change
   where cma_read.reader_sees(tenant_id);
+
+-- ---------------------------------------------------------------------------------------------
+-- 8. cma.subscription: the new columns, the seven instrument types, the wider raw, near the end
+-- ---------------------------------------------------------------------------------------------
+-- Its ACCESS EXCLUSIVE lock (the alters and the two checks, validated over its rows) is held until the commit, so it is
+-- taken here, after everything that does not need it: the page reads of cma.subscription wait the shortest time
+alter table cma.subscription
+  add column if not exists source_number  text check (source_number ~ '^#?[A-Za-z0-9-]{1,30}$'),
+  add column if not exists min_cycles     integer check (min_cycles between 0 and 1000),
+  add column if not exists max_cycles     integer check (max_cycles between 0 and 1000),
+  add column if not exists discount_count integer check (discount_count between 0 and 1000),
+  add column if not exists line_count     integer check (line_count between 0 and 1000),
+  add column if not exists device_units   integer check (device_units >= 0);
+alter table cma.subscription drop constraint if exists subscription_payment_instrument_type_check;
+alter table cma.subscription add constraint subscription_payment_instrument_type_check
+  check (cma.payment_instrument_type_ok(payment_instrument_type));
+alter table cma.subscription drop constraint if exists subscription_raw_check;
+alter table cma.subscription add constraint subscription_raw_check
+  check (cma.subscription_raw_ok(raw, array['id', 'status', 'customer', 'currentCycle', 'nextBillingDate', 'billingInterval',
+                                            'billingIntervalCount', 'amountPerCycle', 'currencyCode', 'instrumentType', 'createdAt',
+                                            'updatedAt', 'canceledAt', 'pausedAt', 'serial', 'minCycles', 'maxCycles', 'discountCount',
+                                            'lineCount']));
+comment on column cma.subscription.payment_instrument_type is 'The type of the payment method''s instrument only: card, paypal, sepa_direct_debit, ideal, bancontact, invoice or other (null when unknown); nothing else of the payment method (0008zl; seven codes since 0009w)';
+comment on column cma.subscription.source_number is 'The subscription app''s own sequence number of the subscription (for example #2502), so staff can find it in the app; not a device serial (0009w)';
+comment on column cma.subscription.min_cycles is 'The minimum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009w)';
+comment on column cma.subscription.max_cycles is 'The maximum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009w)';
+comment on column cma.subscription.discount_count is 'How many discounts the subscription carries; never a discount''s code or value (0009w)';
+comment on column cma.subscription.line_count is 'How many of the subscription''s lines the source has not canceled (0009w)';
+comment on column cma.subscription.device_units is 'Devices paid for: the sum over its recurring lines not canceled of quantity × the variant mapping''s devices per unit; null until Part C of brief B39 fills it (0009w)';
+
+-- As 0008zl (118), with the new columns at its end: ids, the status, cycle, billing, amount, the instrument's type, times,
+-- the app's number, the cycle limits, the counts of discounts and lines, the device units
+create or replace view cma_read.subscription as
+  select id, tenant_id, connection_id, source_system, source_id, customer_source_id, status, current_cycle, next_billing_at,
+         billing_interval, billing_interval_count, amount_per_cycle, currency, payment_instrument_type, source_created_at, paused_at,
+         canceled_at, source_updated_at, source_deleted_at, first_seen_at, synced_at, source_number, min_cycles, max_cycles,
+         discount_count, line_count, device_units
+  from cma.subscription
+  where cma_read.reader_sees(tenant_id);
+
 
 -- ---------------------------------------------------------------------------------------------
 -- 9. cma.subscription_event (a busy table): the new columns, types and checks, last
