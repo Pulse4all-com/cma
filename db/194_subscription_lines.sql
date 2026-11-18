@@ -74,11 +74,15 @@
 -- Part C adds one when a read of its needs it. cma.billing_event is new and empty, so its indexes are made here.
 --
 -- Functions re-created and the verifies to run again afterwards (all edited by nothing here unless said):
---   cma.check_tenant_setting()                       (base 184)  73, 101, 113, 121, 123, 137, 179, 185
+--   cma.check_tenant_setting()                       (base 184)  by name: 73, 101, 113, 121, 123, 137, 179; through its
+--                                                                trigger: 14, 27, 185
 --   cma.ingest_sync_run_finish(uuid,text,jsonb,text)  (base 118)  33, 69, 75, 79, 105, 107, 109, 115, 117, 119
 --   cma.ingest_upsert_subscriptions(uuid,jsonb)       (base 118, now a wrapper of the new three-argument function)  119
 --   cma.ingest_upsert_subscription_events(uuid,jsonb) (base 118)  119
--- 119 passes unchanged: its fixtures use the old instrument types and event types, which the new checks still take.
+-- 119 passes unchanged: its fixtures use the old instrument types and event types, which the new checks still take. No
+-- verify is edited by this change. The readers of cma.subscription and cma.subscription_event (Flash, Installed base,
+-- Active, the job reads, the payment state) name their columns, so the added columns change none of them; no read is
+-- added for a page, so 131_time_all.sql, round-trips.json and perf.json gain no row.
 --
 -- SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not permitted.
 --
