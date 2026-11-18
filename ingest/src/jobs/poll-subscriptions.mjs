@@ -44,8 +44,8 @@ async function pollSubscriptionsJob({ connectionId = null, adapters = ADAPTERS }
       }
       const budget = new JobBudget(adapter.rates);
       let detail = {};
-      const r = await withRun(store, { job: "subscriptions_poll", stream: "subscriptions", to: new Date() }, async (counts) => {
-        detail = (await adapter.pollSubscriptions({ connection: c, store, budget, now: Date.now(), counts })).detail ?? {};
+      const r = await withRun(store, { job: "subscriptions_poll", stream: "subscriptions", to: new Date() }, async (counts, runId) => {
+        detail = (await adapter.pollSubscriptions({ connection: c, store, budget, now: Date.now(), counts, runId })).detail ?? {};
         return undefined;
       });
       info("poll-subscriptions: connection", { connection: c.connectionId, ...r.counts, ...detail, ...budget.usage(), error: r.error ?? undefined });

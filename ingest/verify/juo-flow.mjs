@@ -31,7 +31,14 @@
  * own dry-run line and its own run, in id order; the store without a key skipped (key_not_set) and counted, never a usage
  * error; the store-less handle failed store_not_configured; one store answering 503 while the other completes, the job's
  * failed counting it; --connection with --adapter a usage error; the job process exiting 1 when a connection failed and 2
- * on the usage error.
+ * on the usage error. Since addition 0009w (brief B39 Part A, section I): the billing family's backfill (billing_event:
+ * chargebacks without a subscription, refunds, invoices; a return code out of its form dropped, an unknown instrument
+ * counted), the subscriptions' lines as a set (canceled lines and a one-time add-on stored; a removed line marked missing
+ * and back when it returns), the catalog (variants, a title with an @ and a SKU with a control character left out),
+ * the observed changes (one row per change with its run, none on the first load and none on a rerun), a chargeback
+ * linked to its renewal by the store's order, the event types of the subscription family, the history start
+ * (subscriptions.history_start_date: empty reads all history; set, an events backfill without --from starts there,
+ * before intake.start_date, and a --from before it is refused); G2 reads the new tables too.
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -166,8 +173,20 @@ const lastLog = (message) => logs.map((l) => JSON.parse(l)).filter((l) => l.mess
 const asksFor = (domain) => fake.state.requests.filter((r) => r.tenant === domain);
 const usageOf = async (fn) => { try { await fn(); return "ran"; } catch (e) { return e instanceof UsageError ? "usage" : e.message; } };
 const FROM = new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString().slice(0, 10);
-const keptEvents = one.events.filter((e) => ["subscription:renewed", "subscription:renew-failed", "subscription:cancelled", "subscription:paused",
-  "subscription:resumed", "subscription:reactivated"].includes(e.type) || (e.type === "subscription:updated" && e.data?.input?.status));
+// The fixture's events by family (verify/juo-fake.mjs): the subscription family's kept ones, its copies of billing
+// events (duplicates) and its other types; the billing family
+const BILLING = ["chargeback:created", "refund:created", "refund:completed", "refund:failed", "invoice:placed", "invoice:paid", "invoice:overdue",
+  "invoice:payment-failed", "order:placement-failed", "order:draft-created"];
+const subEvents = one.events.filter((e) => !BILLING.includes(e.type));
+const billingEvents = one.events.filter((e) => BILLING.includes(e.type));
+const duplicateEvents = subEvents.filter((e) => e.type === "subscription:chargeback-created");
+const otherEvents = subEvents.filter((e) => ["subscription:delivery-address-changed", "subscription:cancellation-flow/started"].includes(e.type)
+  || (e.type === "subscription:updated" && !e.data?.input?.status));
+const keptEvents = subEvents.filter((e) => !duplicateEvents.includes(e) && !otherEvents.includes(e));
+const heldCustomers = new Set(one.subscriptions.slice(0, 200).map((x) => x.customer));
+/** An object with its keys in byte order, so a comparison never depends on the order counts were met in */
+const sorted = (o) => Object.fromEntries(Object.entries(o ?? {}).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)));
+const eventCustomersUnmatched = new Set(subEvents.map((e) => e.customerId).filter((c) => !heldCustomers.has(c))).size;
 
 // ---- A. No route --------------------------------------------------------------------------------------------------------
 const post = async (p) => (await fetch(`${BASE}${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status;
@@ -180,13 +199,21 @@ expect("B1 the dry run of subscription: fetched, mapped, the statuses, the instr
   [b.fetched, b.mapped, b.unreadable, b.statuses, b.instrumentKnown, b.customersUnmatched, b.withoutCustomer],
   [230, 230, 0, { active: 224, failed: 1, paused: 1, canceled: 1, expired: 1, merged: 1, "never-subscribed": 1 }, 230, 30, 0], [0, 0, 1, {}, 0, 0, 1]);
 b = await runBackfill({ connectionId: juo1.id, object: "subscription_event", from: FROM, dryRun: true });
-expect("B2 the dry run of subscription_event from a date: the event types seen and kept, the free-text reason dropped, customers without a match",
-  [b.fetched, b.mapped, b.otherType, b.unreadable, b.eventTypes["subscription:renewed"], b.eventTypes["subscription:updated"],
+expect("B2 the dry run of subscription_event from a date: the subscription family's event types seen and kept, duplicates, the free-text reason dropped, customers without a match",
+  [b.fetched, b.mapped, b.otherType, b.duplicates, b.unreadable, b.eventTypes["subscription:renewed"], b.eventTypes["subscription:updated"],
     Object.fromEntries(Object.entries(b.kept ?? {}).sort(([x], [y]) => x.localeCompare(y))), b.reasonDropped,
-    b.customersUnmatched, Math.abs(Date.parse(b.from) - Date.parse(`${FROM}T00:00:00Z`)) <= 86_400_000],
-  [one.events.length, keptEvents.length, one.events.length - keptEvents.length, 0, 201, 2,
-    { canceled: 1, paused: 2, reactivated: 1, renew_failed: 3, renewed: 201, resumed: 1, status_changed: 1 }, 1, 9, true],
-  [0, 0, 0, 1, 0, 0, {}, 0, 0, false]);
+    b.customersUnmatched, Math.abs(Date.parse(b.from) - Date.parse(`${FROM}T00:00:00Z`)) <= 86_400_000, Boolean(b.firstEventAt)],
+  [subEvents.length, keptEvents.length, otherEvents.length, duplicateEvents.length, 0, 201, 2,
+    { billing_date_moved: 1, canceled: 1, created: 1, discount_changed: 2, interval_changed: 1, lines_changed: 2, merged_to: 1, migrated: 1, paused: 2,
+      payment_method_changed: 1, purchased: 1, reactivated: 1, renew_failed: 3, renewal_notice: 1, renewed: 201, resumed: 1, skipped: 1, status_changed: 1,
+      update_failed: 1 }, 1, eventCustomersUnmatched, true, true],
+  [0, 0, 0, 0, 1, 0, 0, {}, 0, 0, false, false]);
+b = await runBackfill({ connectionId: juo1.id, object: "billing_event", from: FROM, dryRun: true });
+expect("B2b the dry run of billing_event: the kinds, the return codes, one dropped, the instrument types (an unknown one by its name), those naming a subscription",
+  [b.fetched, b.mapped, b.unreadable, sorted(b.billingKinds), sorted(b.returnCodes), b.returnCodeDropped, sorted(b.instrumentTypes), b.instrumentUnknown, b.withSubscription],
+  [billingEvents.length, billingEvents.length, 0, sorted({ chargeback: 3, refund_created: 1, refund_completed: 1, refund_failed: 1, invoice_placed: 2, invoice_paid: 1,
+    invoice_payment_failed: 1, invoice_overdue: 1, order_placement_failed: 1, order_draft_created: 1 }), sorted({ MD06: 1, fraudulent: 1 }), 1,
+  sorted({ sepa_direct_debit: 1, card: 1, Klarna: 1 }), 1, 7], [0, 0, 1, {}, {}, 0, {}, 0, 0]);
 expect("B3 …and both wrote nothing: no run, no subscription, no event, no cursor",
   [(await runsOf(juo1.id)).length, await counted("subscription", juo1.id), await counted("subscription_event", juo1.id), await cursor(juo1.id, "juo:events")],
   [0, 0, 0, null], [1, 230, 1, {}]);
@@ -195,19 +222,22 @@ expect("B3 …and both wrote nothing: no run, no subscription, no event, no curs
 const t0 = Date.now();
 b = await runBackfill({ connectionId: juo1.id, object: "subscription_event", from: FROM });
 let run = (await runsOf(juo1.id, "backfill")).at(-1);
-expect("C1 the backfill of the events: stream subscription_event, the kept ones stored, the other types skipped, the free-text reason dropped and counted",
-  [b.failed, run.stream, run.status, run.counts.fetched, run.counts.events_new, run.counts.skipped, run.counts.reason_dropped, await counted("subscription_event", juo1.id)],
-  [0, "subscription_event", "succeeded", one.events.length, keptEvents.length, one.events.length - keptEvents.length, 1, keptEvents.length],
-  [1, null, "failed", 0, 0, 0, 0, 0]);
+expect("C1 the backfill of the events: stream subscription_event, the kept ones stored, the other types and the duplicate skipped, the free-text reason dropped and counted",
+  [b.failed, run.stream, run.status, run.counts.fetched, run.counts.events_new, run.counts.skipped, run.counts.duplicate_skipped, run.counts.reason_dropped,
+    await counted("subscription_event", juo1.id), await counted("billing_event", juo1.id)],
+  [0, "subscription_event", "succeeded", subEvents.length, keptEvents.length, otherEvents.length + duplicateEvents.length, duplicateEvents.length, 1,
+    keptEvents.length, 0],
+  [1, null, "failed", 0, 0, 0, 0, 0, 0, 1]);
 expect("C2 …its cursor done; the poll's cursor at the backfill's start",
   [(await cursor(juo1.id, "backfill:subscription_event"))?.done, (await cursor(juo1.id, "juo:events"))?.at >= t0],
   [true, true], [false, false]);
 b = await runBackfill({ connectionId: juo1.id, object: "subscription" });
 run = (await runsOf(juo1.id, "backfill")).at(-1);
-expect("C3 the backfill of the subscriptions: stream subscription, 230 inserted, 30 customers without a match among the store's, nothing missing",
+expect("C3 the backfill of the subscriptions: stream subscription, 230 inserted, 30 customers without a match among the store's, nothing missing; their lines (canceled ones and add-ons included) inserted, no change observed on a first load",
   [b.failed, run.stream, run.status, run.counts.fetched, run.counts.inserted, run.counts.upserted, run.counts.customers_unmatched, run.counts.missing_now,
-    Number.isInteger(run.counts.slice_max_ms)],
-  [0, "subscription", "succeeded", 230, 230, 230, 30, 0, true], [1, null, "failed", 0, 0, 0, 0, 1, false]);
+    Number.isInteger(run.counts.slice_max_ms), run.counts.lines_new, run.counts.lines_missing, run.counts.changes_observed, run.counts.instrument_unknown,
+    await counted("subscription_line", juo1.id), await counted("subscription_change", juo1.id)],
+  [0, "subscription", "succeeded", 230, 230, 230, 30, 0, true, 464, 0, 0, 0, 464, 0], [1, null, "failed", 0, 0, 0, 0, 1, false, 0, 1, 1, 1, 0, 1]);
 let st = await states(T1);
 expect("C4 the payment state of each case: in_retry, paid after a renewal of the failed cycle, failed, paused, canceled (canceled and expired); merged and never-subscribed left out",
   [st["s-0201"], st["s-0202"], st["s-0203"], st["s-0204"], st["s-0205"], st["s-0206"], st["s-0207"], st["s-0208"], st["s-0001"], st["s-0209"], st["s-0210"],
@@ -320,6 +350,117 @@ expect("F4 429 paced: the request held for its Retry-After (3 s × the pace fact
     lastLog("juo rate limited")?.retried],
   [0, "succeeded", true, true, true, true], [1, "failed", false, false, false, false]);
 
+// ---- I. Addition 0009w: billing events, lines, the catalog, observed changes, the history start ------------------------------------
+b = await runBackfill({ connectionId: juo1.id, object: "billing_event", from: FROM });
+run = (await runsOf(juo1.id, "backfill")).at(-1);
+expect("I1 the billing family's backfill: stream billing_event, every billing event stored (append-only), a return code out of its form dropped, an unknown instrument counted; its cursor done",
+  [b.failed, run.stream, run.status, run.counts.fetched, run.counts.billing_events_new, run.counts.events_new, run.counts.return_code_dropped,
+    run.counts.instrument_unknown, await counted("billing_event", juo1.id), (await cursor(juo1.id, "backfill:billing_event"))?.done],
+  [0, "billing_event", "succeeded", billingEvents.length, billingEvents.length, 0, 1, 1, billingEvents.length, true],
+  [1, null, "failed", 0, 0, 1, 0, 0, 0, false]);
+const cb = (await q(`select b.kind, b.subscription_source_id, b.order_source_id, b.return_code, b.instrument_type, b.amount::text as amount, b.currency,
+    e.subscription_source_id as renewal_subscription
+  from cma.billing_event b
+  left join cma.subscription_event e on e.tenant_id = b.tenant_id and e.connection_id = b.connection_id and e.event_type = 'renewed'
+                                    and e.order_source_id = b.order_source_id
+  where b.connection_id = $1 and b.kind = 'chargeback' and b.return_code = 'MD06'`, [juo1.id]))[0];
+expect("I2 a chargeback without a subscription linked to its renewal by the store's order (subscription_event.order_source_id); code, instrument, amount",
+  [cb?.subscription_source_id, cb?.renewal_subscription, cb?.return_code, cb?.instrument_type, cb?.amount, cb?.currency],
+  [null, one.subscriptions[4].id, "MD06", "sepa_direct_debit", "24.95", "GBP"], ["x", null, null, null, null, null]);
+const inv = await q(`select kind, subscription_source_id, renewal_source_id is not null as renewal, owner_source_id, attempt, error_code
+  from cma.billing_event where connection_id = $1 and kind like 'invoice%' order by occurred_at, kind`, [juo1.id]);
+expect("I3 invoice renewals: placed and paid pair by their order (owner), the subscription named, a failed payment's attempt and code",
+  [inv.length, inv.filter((x) => x.subscription_source_id === one.subscriptions[8].id).map((x) => x.kind).sort(),
+    new Set(inv.filter((x) => x.subscription_source_id === one.subscriptions[8].id).map((x) => x.owner_source_id)).size,
+    inv.find((x) => x.kind === "invoice_payment_failed")?.attempt, inv.find((x) => x.kind === "invoice_payment_failed")?.error_code,
+    inv.filter((x) => x.kind === "invoice_placed").every((x) => x.renewal)],
+  [5, ["invoice_paid", "invoice_placed"], 1, 2, "INSUFFICIENT_FUNDS", true], [0, [], 2, null, null, false]);
+const s50 = await q(`select l.source_id, l.quantity, l.amount_per_cycle::text as amount, l.recurring_cycle_limit, l.canceled_at is not null as canceled,
+    l.variant_source_id, l.source_deleted_at is null as present
+  from cma.subscription_line l where l.connection_id = $1 and l.subscription_source_id = $2 order by l.source_id collate "C"`, [juo1.id, one.subscriptions[49].id]);
+const row50 = (await q("select source_number, line_count, discount_count, min_cycles, amount_per_cycle::text as amount from cma.subscription where connection_id = $1 and source_id = $2",
+  [juo1.id, one.subscriptions[49].id]))[0];
+const row213 = (await q("select min_cycles, discount_count from cma.subscription where connection_id = $1 and source_id = $2", [juo1.id, one.subscriptions[212].id]))[0];
+const row214 = (await q("select discount_count from cma.subscription where connection_id = $1 and source_id = $2", [juo1.id, one.subscriptions[213].id]))[0];
+expect("I4 the lines as stored: a recurring line, a canceled one, a one-time add-on; the subscription's number, current lines, discounts and cycle bound",
+  [s50.map((l) => [l.source_id, l.quantity, l.amount, l.recurring_cycle_limit, l.canceled, l.variant_source_id, l.present]), row50, row213, row214],
+  [[["item-0050", 1, "24.95", null, false, "41000000001", true], ["item-0050-b", 1, "5.00", null, true, "41000000002", true],
+    ["item-0050-c", 1, "49.00", 1, false, "41000000003", true]],
+  { source_number: "#1050", line_count: 2, discount_count: 0, min_cycles: null, amount: "73.95" }, { min_cycles: 12, discount_count: 0 }, { discount_count: 1 }],
+  [[], {}, {}, {}]);
+b = await runBackfill({ connectionId: juo1.id, object: "subscription_product" });
+run = (await runsOf(juo1.id, "backfill")).at(-1);
+const v2 = (await q("select product_title, variant_title, sku, product_status from cma.subscription_product_variant where connection_id = $1 and variant_source_id = '41000000002'",
+  [juo1.id]))[0];
+expect("I5 the catalog: stream subscription_product, 153 variants inserted in one set; a title with an @ and a SKU with a control character left out and counted; the status in lower case",
+  [b.failed, run.stream, run.status, run.counts.fetched, run.counts.variants_new, run.counts.catalog_text_dropped, await counted("subscription_product_variant", juo1.id), v2],
+  [0, "subscription_product", "succeeded", 153, 153, 2, 153, { product_title: "Accessory (catalog fixture)", variant_title: null, sku: null, product_status: "active" }],
+  [1, null, "failed", 0, 0, 0, 0, {}]);
+// The observed changes: three subscriptions change at Juo, the reconcile reads them
+const later = new Date(Date.now() + 1000).toISOString();
+const s3 = one.subscriptions[2];
+const s4 = one.subscriptions[3];
+const s5 = one.subscriptions[4];
+const s5b = s5.items.find((it) => it.id.endsWith("-b"));
+s3.items[0] = { ...s3.items[0], totalPrice: 34.95 };
+s4.items[0] = { ...s4.items[0], quantity: 2 };
+s5.items = s5.items.filter((it) => it !== s5b);
+for (const x of [s3, s4, s5]) x.updatedAt = later;
+total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
+run = (await runsOf(juo1.id, "reconcile")).at(-1);
+const runRow = (await q("select id from cma.sync_run where connection_id = $1 and job = 'reconcile' order by started_at desc limit 1", [juo1.id]))[0];
+const changes = await q(`select subscription_source_id, field, old_value, new_value, run_id from cma.subscription_change where connection_id = $1
+  order by subscription_source_id collate "C", field collate "C"`, [juo1.id]);
+expect("I6 observed changes: an amount, a recurring quantity, and a removed line (line count, amount, recurring quantity), one row each with the reconcile's run; the line marked missing",
+  [total.failed, run.counts.changes_observed, run.counts.lines_missing, changes.map((c) => [c.subscription_source_id.slice(0, 6), c.field, c.old_value, c.new_value]),
+    changes.every((c) => c.run_id === runRow.id),
+    (await q("select source_deleted_at is not null as missing from cma.subscription_line where connection_id = $1 and source_id = $2", [juo1.id, s5b.id]))[0]?.missing],
+  [0, 5, 1, [["s-0003", "amount_per_cycle", "29.95", "39.95"], ["s-0004", "recurring_quantity", "1", "2"], ["s-0005", "amount_per_cycle", "29.95", "24.95"],
+    ["s-0005", "line_count", "2", "1"], ["s-0005", "recurring_quantity", "2", "1"]], true, true],
+  [1, 0, 0, [], false, false]);
+total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
+run = (await runsOf(juo1.id, "reconcile")).at(-1);
+expect("I7 a rerun observes nothing: no change, no line missing, every subscription unchanged",
+  [total.failed, run.counts.changes_observed, run.counts.lines_missing, run.counts.lines_new, run.counts.unchanged, await counted("subscription_change", juo1.id)],
+  [0, 0, 0, 0, 230, 5], [1, 1, 1, 1, 0, 0]);
+s5.items.push(s5b);
+s5.updatedAt = new Date(Date.now() + 2000).toISOString();
+total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
+run = (await runsOf(juo1.id, "reconcile")).at(-1);
+expect("I8 the removed line back when it returns: present again, its three changes observed back",
+  [total.failed, run.counts.changes_observed,
+    (await q("select source_deleted_at is null as present from cma.subscription_line where connection_id = $1 and source_id = $2", [juo1.id, s5b.id]))[0]?.present,
+    await counted("subscription_change", juo1.id)],
+  [0, 3, true, 8], [1, 0, false, 5]);
+// The history start: empty reads all history; set, it is the start without --from and a --from before it is refused
+const errOf = async (fn) => { try { const r = await fn(); return r?.error ?? (r?.failed ? "failed" : "ok"); } catch (e) { return e.code ?? e.message; } };
+fake.state.requests.length = 0;
+b = await runBackfill({ connectionId: juo1.id, object: "subscription_event" });
+run = (await runsOf(juo1.id, "backfill")).at(-1);
+const allAsk = fake.state.requests.find((r) => r.path === "/admin/v1/events");
+expect("I9 subscriptions.history_start_date empty: the events backfill without --from reads all of the app's history (from 1 January 2000), no start on the run, nothing stored twice",
+  [b.failed, run.status, run.counts.fetched, run.counts.events_new, /occurredAt:>='2000-01-01T00:00:00.000Z'/.test(allAsk?.params?.query ?? ""),
+    (await q("select from_at from cma.sync_run where connection_id = $1 and job = 'backfill' order by started_at desc limit 1", [juo1.id]))[0].from_at],
+  [0, "succeeded", one.events.filter((e) => !BILLING.includes(e.type)).length, 0, true, null], [1, "failed", 0, 1, false, "x"]);
+await asAdmin(T1, () => q("select cma.set_tenant_setting('subscriptions.history_start_date', ' 2020-01-01 ')"));
+const intake = (await asAdmin(T1, () => q("select cma.setting_of($1, 'intake.start_date') as v", [T1.t])))[0].v;
+fake.state.requests.length = 0;
+b = await runBackfill({ connectionId: juo1.id, object: "billing_event" });
+run = (await runsOf(juo1.id, "backfill")).at(-1);
+const setAsk = fake.state.requests.find((r) => r.path === "/admin/v1/events");
+expect("I10 subscriptions.history_start_date set (2020-01-01, before intake.start_date): the backfill without --from starts there (the tenant's midnight), before intake.start_date",
+  [b.failed, run.status, (await q("select from_at from cma.sync_run where connection_id = $1 and job = 'backfill' order by started_at desc limit 1", [juo1.id]))[0].from_at?.toISOString(),
+    /occurredAt:>='2020-01-01T00:00:00.000Z'/.test(setAsk?.params?.query ?? ""), "2020-01-01" < intake, run.counts.billing_events_new],
+  [0, "succeeded", "2020-01-01T00:00:00.000Z", true, true, 0], [1, "failed", null, false, false, 1]);
+const before = await errOf(() => runBackfill({ connectionId: juo1.id, object: "subscription_event", from: "2019-06-01" }));
+run = (await runsOf(juo1.id, "backfill")).at(-1);
+const dryBefore = await errOf(() => runBackfill({ connectionId: juo1.id, object: "billing_event", from: "2019-06-01", dryRun: true }));
+const after = await errOf(() => runBackfill({ connectionId: juo1.id, object: "subscription_event", from: "2020-02-01" }));
+expect("I11 a --from before the history start refused (from_before_history_start: the run fails, the dry run too); one after it, still before intake.start_date, runs",
+  [before, run.status, run.error, dryBefore, after], ["from_before_history_start", "failed", "from_before_history_start", "from_before_history_start", "ok"],
+  ["ok", "succeeded", null, "ok", "failed"]);
+await asAdmin(T1, () => q("select cma.set_tenant_setting('subscriptions.history_start_date', '')"));
+
 // ---- G. Tenant two; nothing personal; nothing elsewhere -----------------------------------------------------------------------
 b = await runBackfill({ connectionId: juo2.id, object: "subscription" });
 expect("G1 tenant two's store loads into tenant two only; tenant one's subscriptions as they were",
@@ -329,12 +470,18 @@ expect("G1 tenant two's store loads into tenant two only; tenant one's subscript
   [0, 230, 230, 230, 0], [1, 0, 0, 0, 1]);
 // (the card's digits are looked for by their field and brand: four digits alone can occur in any uuid)
 const PERSONAL = ["Invented", "example.invalid", "Fixture Street", "Testtown", "FX1 1XX", "+44 20", "lastDigits", "visa", "****", "asked for a call", "Too expensive",
-  "insufficient funds", "card declined", "consumerName", "deliveryAddress", "billingAddress", "Service plan", "FIXTURE10"];
+  "insufficient funds", "card declined", "consumerName", "deliveryAddress", "billingAddress", "Service plan", "FIXTURE10", "Ten off", "Return received", "disputed",
+  "No stock", "Variant missing", "wants to leave", "Accessory for", "Accessory (fixture)", "Installation (fixture)", "_ordered_by", "customAttributes"];
 const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma.subscription x where tenant_id = any($1::uuid[])
   union all select row_to_json(x)::text from cma.subscription_event x where tenant_id = any($1::uuid[])
+  union all select row_to_json(x)::text from cma.subscription_line x where tenant_id = any($1::uuid[])
+  union all select row_to_json(x)::text from cma.subscription_product_variant x where tenant_id = any($1::uuid[])
+  union all select row_to_json(x)::text from cma.billing_event x where tenant_id = any($1::uuid[])
+  union all select row_to_json(x)::text from cma.subscription_change x where tenant_id = any($1::uuid[])
   union all select row_to_json(x)::text from cma.sync_run x where tenant_id = any($1::uuid[])
   union all select row_to_json(x)::text from cma.sync_cursor x where tenant_id = any($1::uuid[])
-  union all select row_to_json(x)::text from cma.audit_log x where tenant_id = any($1::uuid[]) and table_name in ('subscription', 'subscription_event', 'sync_run', 'sync_cursor')`,
+  union all select row_to_json(x)::text from cma.audit_log x where tenant_id = any($1::uuid[]) and table_name in ('subscription', 'subscription_event', 'sync_run', 'sync_cursor',
+    'subscription_line', 'subscription_product_variant', 'billing_event', 'subscription_change')`,
   [[T1.t, T2.t]]));
 expect("G2 no name, address, email, phone, payment detail, message or free-text reason in any row of the run's tenants (audit log included)",
   PERSONAL.filter((p) => dbText.includes(p)), [], PERSONAL);
@@ -351,14 +498,15 @@ const mine = new Set([juo1.id, juo2.id, nostore.id, keyless.id]);
 const ownResults = (r) => r.results.filter((x) => mine.has(x.connection));
 const byId = (ids) => [...ids].sort();
 logs.length = 0;
+const runsBefore = [(await runsOf(juo1.id, "backfill")).length, (await runsOf(juo2.id, "backfill")).length];
 let walk = await runAdapterBackfill({ adapter: "juo", objects: "subscription", dryRun: true });
 let own = ownResults(walk);
 const dryLines = logs.map((l) => JSON.parse(l)).filter((l) => l.message === "backfill dry run" && mine.has(l.connection));
 expect("H1 the dry run with --adapter juo: one `backfill dry run` line per store with its counts, in id order, nothing written",
   [dryLines.map((l) => l.connection), dryLines.map((l) => [l.object, l.fetched, l.mapped]), own.map((x) => x.connection),
     (await runsOf(juo1.id, "backfill")).length, (await runsOf(juo2.id, "backfill")).length],
-  [byId([juo1.id, juo2.id]), [["subscription", 230, 230], ["subscription", 230, 230]], byId(mine), 2, 1],
-  [[], [], [], 3, 2]);
+  [byId([juo1.id, juo2.id]), [["subscription", 230, 230], ["subscription", 230, 230]], byId(mine), ...runsBefore],
+  [[], [], [], runsBefore[0] + 1, runsBefore[1] + 1]);
 expect("H2 the store without a key is skipped (key_not_set, one log line) and counted, never a usage error; the store-less handle fails store_not_configured",
   [own.find((x) => x.connection === keyless.id), own.find((x) => x.connection === nostore.id)?.error, own.find((x) => x.connection === nostore.id)?.failed,
     logs.filter((l) => JSON.parse(l).message === "backfill: connection skipped" && JSON.parse(l).connection === keyless.id && JSON.parse(l).code === "key_not_set").length,

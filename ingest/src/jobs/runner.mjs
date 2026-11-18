@@ -68,15 +68,16 @@ export const emptyCounts = () => ({ fetched: 0, upserted: 0, stale: 0, skipped: 
 export const PAUSE_CODE = "daily_floor";
 
 /**
- * One sync_run row around fn(counts): started, then finished once as succeeded, or failed with the
- * code of what fn threw (the counts so far are kept), or as a pause (PAUSE_CODE). Answers
+ * One sync_run row around fn(counts, runId): started, then finished once as succeeded, or failed with
+ * the code of what fn threw (the counts so far are kept), or as a pause (PAUSE_CODE). runId is the
+ * row's id (the Juo adapter names it on its observed changes, addition 0009w). Answers
  * { ok, counts, error, paused }.
  */
 export async function withRun(store, { job, stream = null, from = null, to = null }, fn) {
   const counts = emptyCounts();
   const runId = await store.runStart(job, stream, from, to);
   try {
-    const r = await fn(counts);
+    const r = await fn(counts, runId);
     const err = r?.error ?? null;
     if (err === PAUSE_CODE) {
       await store.runFinish(runId, "succeeded", counts, err);
