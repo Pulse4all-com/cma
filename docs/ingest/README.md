@@ -471,7 +471,7 @@ The database refuses an asset register's `table_id` that is no id, any `view_id`
 
 ## Juo
 
-The Juo adapter (addition 0008zl, brief B20, `db/118_subscriptions.sql`; `docs/architecture/data-model/0008.md`, Data model: subscriptions), `ingest/src/adapters/juo/` (`client.mjs`, `read.mjs`, `map.mjs`, `index.mjs`), reads a store's subscriptions and the events of its subscriptions from Juo's Admin API into `cma.subscription` and `cma.subscription_event`, from which `cma.subscription_payment_state_of` derives each subscription's payment state. The prod sequence is `docs/ingest/PROD_RUNBOOK.md` phase 15 (the GB pilot); this section is what each step relies on. Read only: nothing is written to Juo, and no staff JWT is used. Juo owns the subscriptions and their events; the CMA mirrors them, and HubSpot's own Juo events stay as they are.
+The Juo adapter (addition 0008zl, brief B20, `db/118_subscriptions.sql`; `docs/architecture/data-model/0008.md`, Data model: subscriptions), `ingest/src/adapters/juo/` (`client.mjs`, `read.mjs`, `map.mjs`, `index.mjs`), reads a store's subscriptions, their lines, its product catalog, the events of its subscriptions and Juo's billing events from Juo's Admin API into `cma.subscription`, `cma.subscription_line`, `cma.subscription_product_variant`, `cma.subscription_event` and `cma.billing_event` (addition 0009w, brief B39 Part A, `db/194_subscription_lines.sql`), and records the changes it observes in `cma.subscription_change`; `cma.subscription_payment_state_of` derives each subscription's payment state. The prod sequence is `docs/ingest/PROD_RUNBOOK.md` phase 15 (the GB pilot) and phase 17 (lines, catalog, billing events and the deep backfill); this section is what each step relies on. Read only: nothing is written to Juo, and no staff JWT is used. The client holds an allow-list (below). Juo owns the subscriptions and their events; the CMA mirrors them, and HubSpot's own Juo events stay as they are.
 
 **No route.** Juo has no webhook topic for a failed renewal (`subscription:renew-failed`), so the adapter polls (Decision log, 28 October 2026): kind `poll`, and the server answers `404` on `/juo/<connection key>`, as for an unknown adapter.
 
@@ -481,11 +481,15 @@ The Juo adapter (addition 0008zl, brief B20, `db/118_subscriptions.sql`; `docs/a
 
 | Read | Request | Used by |
 |---|---|---|
-| every subscription | `GET /subscriptions?limit=100&expand=paymentMethod` | the reconcile, `--object subscription` |
-| subscriptions by id | `GET /subscriptions?limit=100&expand=paymentMethod&query=(id:'<id>' OR …)`, 25 ids a query | the poll, for the subscriptions its events touched |
-| events of a window | `GET /events?limit=100&sort=occurredAt:asc,id:asc&query=category:subscription AND occurredAt:>'<ISO>'[ AND occurredAt:<'<ISO>']` | the poll (after its cursor less five minutes), `--object subscription_event` (from `--from`, `>=`) |
+| every subscription, with its lines | `GET /subscriptions?limit=100&expand=paymentMethod&includeCanceledItems=true` | the reconcile, `--object subscription` |
+| subscriptions by id | `GET /subscriptions?limit=100&expand=paymentMethod&includeCanceledItems=true&query=(id:'<id>' OR …)`, 25 ids a query | the poll, for the subscriptions its events touched |
+| subscription events of a window | `GET /events?limit=100&sort=occurredAt:asc,id:asc&query=(category:subscription OR type:'renewal:notification-sent') AND occurredAt:>'<ISO>'[ AND occurredAt:<'<ISO>']` | the poll (after its cursor less five minutes), `--object subscription_event` (from `--from`, `>=`) |
+| billing events of a window | the same with `(type:'chargeback:created' OR type:'refund:created' OR type:'refund:completed' OR type:'refund:failed' OR type:'invoice:placed' OR type:'invoice:paid' OR type:'invoice:overdue' OR type:'invoice:payment-failed' OR type:'order:placement-failed' OR type:'order:draft-created')` in place of the category | the poll, `--object billing_event` |
+| the catalog | `GET /products?limit=100`, every page | the reconcile (after the subscriptions), `--object subscription_product` |
 
-The payment method is expanded for its instrument's type only. Juo's rate limit is not documented and no rate-limit header was seen on a GET (Open decisions). The paths, `expand=paymentMethod` and the query forms follow Juo's connector as read on 28 October 2026 (juo.dev was out of this session's reach); PROD_RUNBOOK 15.6's dry run confirms them on the live store: an answer other than 200 fails the run with `http_<status>`, and a subscription without its instrument's type counts as such (`instrumentKnown`).
+The events come in two families, each its own query with its own backfill cursor (`backfill:subscription_event`, `backfill:billing_event`): a grouped OR over both families was not assumed (the brief's single query is proved by the dry run only, PROD_RUNBOOK 17.5; docs/open-decisions.md). Every subscription is read with its lines, canceled ones included (`includeCanceledItems=true`). The payment method is expanded for its instrument's type only.
+
+**The allow-list** (`client.mjs`, `ALLOWED`, deep-frozen): the client sends `GET /subscriptions`, `GET /events`, `GET /products`, `GET /analytics/metrics` and `POST /analytics/query` (a read with a body; the adapter may POST to `/analytics/query` only, Decision log, 18 November 2026, and nothing calls it before Part B of brief B39). Any other method or path, the query left out of the comparison, throws `method_not_allowed` before the key is read and before any request; `verify/juo-mapping.mjs` proves it (checks I1 and I2: the five allowed pairs, and a `DELETE /subscriptions/x`, a `POST /subscriptions`, a `PUT`, a `GET /customers`, a `GET /subscriptions/x` and other bypass shapes refused, with no request reaching the fake). Juo's rate limit is not documented and no rate-limit header was seen on a GET (Open decisions). The paths, `expand=paymentMethod` and the query forms follow Juo's connector as read on 28 October 2026 (juo.dev was out of this session's reach); PROD_RUNBOOK 15.6's dry run confirms them on the live store: an answer other than 200 fails the run with `http_<status>`, and a subscription without its instrument's type counts as such (`instrumentKnown`).
 
 **The event types** (Juo's `GET` event types, read on 28 October 2026). The CMA stores the events below, each in its own word (`subscription_event.event_type`), so no vendor's type word drives a figure; Juo's type stays in `raw.type`.
 
@@ -499,7 +503,34 @@ The payment method is expanded for its instrument's type only. Juo's rate limit 
 | `subscription:reactivated` | `reactivated` | `previousStatus` → `status_from`, `status_to` active |
 | `subscription:updated` whose data names a status | `status_changed` | `data.status` → `status_from`, `data.input.status` → `status_to` (Juo's own move to failed arrives so: ACTIVE → FAILED by the system); an update without a status, or with the same one, is no event of the CMA |
 
-Every other event of a subscription (`subscription:created`, `:skipped`, `:discount-*`, `:line-*`, `:delivery-address-changed`, `:payment-method-changed`, `:next-billing-date-changed`, `:merged-to`, …) is read, its subscription is read again by the poll, and it is not stored (counted `skipped`). Statuses arrive in lower case on a subscription and in upper case in an event; the adapter writes the seven in lower case (`cancelled` as `canceled`, `NEVER_SUBSCRIBED` as `never-subscribed`). The reasons kept (`map.mjs` `REASON_CODES`): `billing-attempt-failed`. The actor: `staff`, `customer`, `system`, `bulk` (Juo's `bulk-action`), `api`; a staff actor's id only, never a name.
+Since 0009w the table also holds (15 more types, 22 in all):
+
+| Juo's type | `event_type` | What it carries into the row |
+|---|---|---|
+| `subscription:purchased`, `:created` | `purchased`, `created` | the time |
+| `subscription:migrated` | `migrated` | `currentCycle` → `cycle_index`, `nextBillingDate` → `billing_to_at` |
+| `subscription:skipped` | `skipped` | skipped date → `billing_from_at`, next billing date → `billing_to_at` |
+| `subscription:next-billing-date-changed` | `billing_date_moved` | from, to, cause (`requested`, `skipped`, `resumed`, `reactivated`, `reconciled`) |
+| `subscription:frequency-changed` | `interval_changed` | interval and count, from and to |
+| `subscription:lines-changed`, `:line-added`, `:line-removed`, `:line-updated` | `lines_changed` | `lines_added`, `lines_removed`, `lines_updated` (counts, never ids); `operation_source_id` pairs the events of one change |
+| `subscription:payment-method-changed` | `payment_method_changed` | the time (no method id) |
+| `subscription:discount-added`, `-removed`, `-updated`, `-code-applied`, `-free-shipping-applied` | `discount_changed` | cause `added`, `removed`, `updated`, `code_applied`, `free_shipping` (never a code or value) |
+| `subscription:merged-to`, `-from`, `split-to`, `-from` | `merged_to`, `merged_from`, `split_to`, `split_from` | `related_subscription_source_id` |
+| `subscription:update-failed` | `update_failed` | `errorCode`, never a message |
+| `renewal:notification-sent` | `renewal_notice` | its type and subscription only |
+
+`renewed` also keeps the store's order (`order_source_id`). The billing family goes to `cma.billing_event` (`kind`):
+
+| Juo's type | `kind` | Extra |
+|---|---|---|
+| `chargeback:created` | `chargeback` | `reasonCode` → `return_code` (a scheme's four upper-case letters or digits, or a card dispute reason of the fixed list; else dropped, `return_code_dropped`), instrument type, order |
+| `refund:created`, `:completed`, `:failed` | `refund_created`, `refund_completed`, `refund_failed` | amount, currency, order, `partial` |
+| `invoice:placed`, `:paid`, `:overdue`, `:payment-failed` | `invoice_placed`, `invoice_paid`, `invoice_overdue`, `invoice_payment_failed` | total, currency, `renewalId` |
+| `order:placement-failed`, `order:draft-created` | `order_placement_failed`, `order_draft_created` | order |
+
+`subscription:chargeback-created` and `subscription:refund-created`, `-completed`, `-failed` are the same events as the billing family's: skipped, counted `duplicate_skipped`. Instrument types map to `card`, `paypal`, `sepa_direct_debit` (`SepaDirectDebit`), `ideal`, `bancontact`, `invoice`; any other is `other`, counted `instrument_unknown` with Juo's type name in the log.
+
+Every other event of a subscription (the cancellation flow, `:delivery-address-changed`, …) is read, its subscription is read again by the poll, and it is not stored (counted `skipped`). Customer, login and mail events are not read (Yordi). Statuses arrive in lower case on a subscription and in upper case in an event; the adapter writes the seven in lower case (`cancelled` as `canceled`, `NEVER_SUBSCRIBED` as `never-subscribed`). The reasons kept (`map.mjs` `REASON_CODES`): `billing-attempt-failed`. The actor: `staff`, `customer`, `system`, `bulk` (Juo's `bulk-action`), `api`; a staff actor's id only, never a name.
 
 **The whitelist** (`map.mjs`): only the fields named here are read, so a subscription's delivery address, its customer's name, email and phone, the payment method's holder, account, card digits and billing address, custom attributes, items' titles, an event's actor name, an error message, a free-text reason and an update's input never reach a row, `raw`, a log or the database. A subscription: its id, the customer's id at the store (digits; from a gid too), the status, `currentCycle`, `nextBillingDate`, `billingPolicy.interval` (`day`, `week`, `month`, `year`) and `intervalCount`, the amount per cycle (the sum of the `totalPrice` of the items Juo has not canceled), `currencyCode`, the instrument's type (`card` when the type names a card, `paypal`, else `other`; none without the expanded payment method), `createdAt`, `pausedAt`, `canceledAt`, `updatedAt`. `raw` holds those values under Juo's names. The database checks `raw` again: its keys from a fixed list, scalar values, never an @ (`cma.subscription_raw_ok`).
 

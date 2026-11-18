@@ -314,7 +314,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Field | Value |
 |---|---|
 | Term | Line (nl: Lijn) |
-| Key | `line`; API `line`, `lineKey` |
+| Key | `line`; API `line`, `lineKey` (not `subscription_line`, `line_count` or `lines_*`: those are Subscription line) |
 | Definition | The Aircall number of the call; for a routed call the last number (Aircall). |
 | Source | Aircall, the call's `number` and the number catalog |
 | Counts / does not count | One line per call; a line that does not count keeps its calls out (R3) |
@@ -322,7 +322,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Time rule | Not applicable |
 | Scope | Per telephony connection |
 | Equivalent in the source system | Aircall's number (line) filter in Analytics |
-| Not to use | None yet |
+| Not to use | "Line" for a line of a subscription: that is Subscription line (Subscription terms), a variant, a quantity and an amount; where both could be meant, say Line (Aircall) or Subscription line |
 | Status | Decided (R2); Pending: verify the last number of a routed call |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
 | Used by | The line grouping and filter of `calls.*` and `inbound.*`, `live.missed.*`; Reports → Calls, Inbound; Live board; Configuration → Sources, Lines |
@@ -947,14 +947,14 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 
 ## Subscription terms
 
-Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth).
+Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth). The mirror also holds each subscription's lines (Subscription line), the store's catalog (Product variant), the billing events (Billing event, with Chargeback, Return code, Refund and Invoice renewal), more event types (Subscription event types) and the CMA's own Observed subscription changes, proposed with addition 0009w (18 November 2026, brief B39 Part A) for Kira to confirm.
 
 ### Subscription
 
 | Field | Value |
 |---|---|
 | Term | Subscription (no Dutch label for the term in `copy.ts`; the connection kind says "Abonnementen") |
-| Key | `subscription`; SQL `cma.subscription`, `cma_read.subscription`; columns `source_id`, `customer_source_id`, `status`, `current_cycle`, `next_billing_at`, `billing_interval`, `billing_interval_count`, `amount_per_cycle`, `currency`, `payment_instrument_type`; the fields `status`, `amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count` and `next_billing_at` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
+| Key | `subscription`; SQL `cma.subscription`, `cma_read.subscription`; columns `source_id`, `customer_source_id`, `status`, `current_cycle`, `next_billing_at`, `billing_interval`, `billing_interval_count`, `amount_per_cycle`, `currency`, `payment_instrument_type`, `source_number`, `min_cycles`, `max_cycles`, `discount_count`, `line_count`, `device_units`; the fields `status`, `amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count` and `next_billing_at` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
 | Definition | One subscription of a store's subscription app (Juo), one row per subscription and connection: its store customer's id, status, cycle, next billing time, billing interval, amount per cycle and currency, the type of its payment instrument and its times. A subscription the latest full read no longer returns stays stored and is marked missing (`source_deleted_at`). |
 | Source | The subscription app; for Pulse4all Subscriptions Juo's Admin API (`GET /subscriptions`, the payment method expanded for its instrument's type only), read by `ingest-poll-subscriptions` (the subscriptions the store's events touched, every `subscriptions_poll_interval_minutes`, default 5) and by the nightly full read in `ingest-reconcile` (also `ingest-backfill --object subscription`), written by `cma.ingest_upsert_subscriptions`. The store customer's id joins `cma.commerce_customer.source_id` of the store whose handle is the connection's account id up to its first dot. Only whitelisted fields are read: a name, email, phone, address, payment detail or custom attribute never reaches a row |
 | Counts / does not count | Counts one row per subscription and connection that the latest full read still returns (`source_deleted_at` empty). A subscription missing from the latest full read stays stored and is not counted. The amount per cycle is the sum of the total prices of the items Juo has not canceled, as Juo states them, in the subscription's currency. A subscription whose customer the store's customers do not hold is still counted (the run's `customers_unmatched`) |
@@ -964,9 +964,9 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Equivalent in the source system | A subscription of Juo's Admin API (`GET /subscriptions`; Juo's admin shows the counts per status). Juo's help article: not checked (juo.dev was out of reach when built) |
 | Not to use | "Subscription" for a webhook subscription (Shopify's `webhookSubscriptions`, Aircall's webhook): say webhook, as System health's label "Shop webhooks check" does (Gaps D33, I7); Pulse4all Subscriptions is a business line's name, not this term |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
-| Used by | `flash.subscriptions.*` (the Subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
-| As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` `card`, `paypal` or `other`, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Matches the definition |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 18 November 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `flash.subscriptions.*` (the Subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the data map's tables `subscription_line`, `subscription_product_variant`, `billing_event` and `subscription_change` (`docs/datamap/catalog.json`); the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
+| As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` one of the seven codes of Payment instrument, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Since `194` (addition 0009w, B39a): `source_number` (Juo's own sequence number such as #2502, so staff can find the subscription in Juo's admin; not a device serial), `min_cycles` and `max_cycles` (the billing policy's, else the highest of its lines'; null when Juo states none), `discount_count` (how many discounts, never a code or a value), `line_count` (its lines Juo has not canceled) and `device_units` (null until Part C of brief B39 fills it from the variant mapping); the subscription is always read with its lines, canceled ones included (`includeCanceledItems`), stored as Subscription line; `cma.ingest_upsert_subscriptions` has a run-taking form that writes the Observed subscription changes, and the two-argument form stays as its wrapper. Matches the definition |
 
 ### Subscription status
 
@@ -1024,7 +1024,216 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Status | Proposed (for Kira to confirm) |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 5 Nov 2026, "Definitions: Device-holding status, Holding subscription, …" (addition 0008zt, #233) |
 | Used by | `cma.subscription_event` (`event_type` `renew_failed`), `cma_read.subscription_event`, `cma.subscription_payment_state_of` (In retry with `retry_cycle`, `retry_since` and `last_attempt`); `flash.payments.failed_renewals`; Reports → Flash (Payments) and its files |
-| As built today | `cma.subscription_event` (`118`): `event_type` `renew_failed` with `cycle_index`, `attempt`, `error_code` (a code of letters, digits and `_`) and `reason_code` (a lower case code, at most 60), written by `cma.ingest_upsert_subscription_events` (an event already held is left as it is, and the application never updates or deletes one); the adapter reads no error message and counts a reason outside its fixed list as `reason_dropped`. Matches the definition |
+| As built today | `cma.subscription_event` (`118`): `event_type` `renew_failed` with `cycle_index`, `attempt`, `error_code` (a code of letters, digits and `_`) and `reason_code` (a lower case code, at most 60), written by `cma.ingest_upsert_subscription_events` (an event already held is left as it is, and the application never updates or deletes one); the adapter reads no error message and counts a reason outside its fixed list as `reason_dropped`. Since `194` (addition 0009w) `cma.subscription_event` holds 22 types (the seven of 0008zl and the fifteen of Subscription event types) and the adapter reads two event families, each with its own query and backfill cursor: the subscription family (`category:subscription` and `renewal:notification-sent`) and the billing family, stored in `cma.billing_event` (Billing event). `renew_failed` and its payment-state rule are unchanged. Matches the definition |
+
+### Subscription line
+
+| Field | Value |
+|---|---|
+| Term | Subscription line (nl: Abonnementsregel) |
+| Key | `subscription_line`; SQL `cma.subscription_line`, `cma_read.subscription_line`; columns `source_id`, `subscription_source_id`, `product_source_id`, `variant_source_id`, `quantity`, `amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count`, `min_cycles`, `max_cycles`, `recurring_cycle_limit`, `canceled_at`, `first_seen_at`, `synced_at`, `source_deleted_at`; `line_count` of `cma.subscription`; `recurring_quantity` (a field of Observed subscription change); the run counts `lines_new` and `lines_missing`; Juo's field (adapter only) `recurringCycleLimit` |
+| Definition | One line of a subscription: a product variant, a quantity and the line's amount per cycle, billed every cycle (recurring) or, with `recurring_cycle_limit` 1, once (a one-time add-on). A line Juo has canceled stays stored with its `canceled_at`. |
+| Source | Juo's subscription `items[]` (`GET /subscriptions` with `includeCanceledItems=true`): the item's id, product and variant ids, quantity, `totalPrice` (the line's amount per cycle, as Juo states it), the billing policy's interval, count, `minCycles` and `maxCycles`, `recurringCycleLimit` and `canceledAt`; the currency is the subscription's. Read with every subscription (the poll for the subscriptions its events touched, the nightly reconcile for all, `ingest-backfill --object subscription`) and written as a set per subscription by `cma.ingest_upsert_subscription_lines`. A line's title, subtitle and custom attributes are never read |
+| Counts / does not count | One row per line, subscription and connection, canceled lines included; `line_count` of a subscription counts the lines Juo has not canceled. A line the subscription's latest read no longer holds stays stored and gets `source_deleted_at` (it comes back clearing it); the application never deletes a line. A subscription whose read is stale (older than the stored one) keeps its lines as they were |
+| Unit and display | A count of lines; an amount in the subscription's currency (two decimals), never added across currencies; shown by the Juo subscription id and the variant's ids, never a customer's name or email |
+| Time rule | `canceled_at` as Juo states it; `first_seen_at` and `synced_at` are the CMA's own read times |
+| Scope | As Subscription |
+| Equivalent in the source system | An item of a Juo subscription (Admin API `items[]`). Juo's help article: not checked |
+| Not to use | "Line" alone for it: Line (key `line`) is the Aircall number of a call (Call terms); say Subscription line wherever both could be meant, and never "item" or "product" for a line in a label (Juo's `items[]` stays in the adapter). The recurring part is Juo's `recurringCycleLimit` null; "add-on" means a line with `recurring_cycle_limit` 1 only |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.subscription_line`, `cma_read.subscription_line`, `cma.ingest_upsert_subscription_lines`; `cma.subscription.line_count`; the data map's table `subscription_line`; no page yet: Parts C to F of brief B39 build the device units and the mix from it |
+| As built today | `cma.subscription_line` (`194`): unique per tenant, connection and `source_id`; checks on every column and `raw` (fixed keys, no @); `cma.ingest_upsert_subscription_lines(connection, subscription ids, items, run)` takes the given subscriptions' lines as a set (new inserted, changed updated, absent marked missing, at most 500 subscriptions a call); the application cannot delete a line. A change of a subscription's line count or of the sum of its recurring lines' quantities is written as an Observed subscription change. Matches the definition |
+
+### Product variant
+
+| Field | Value |
+|---|---|
+| Term | Product variant (nl: Productvariant) |
+| Key | `subscription_product_variant`; SQL `cma.subscription_product_variant`, `cma_read.subscription_product_variant`; columns `product_source_id`, `variant_source_id`, `product_title`, `variant_title`, `sku`, `product_status`, `source_deleted_at`; the run count `variants_new` |
+| Definition | One variant of a product of the store's catalog as the subscription app holds it: the product's and the variant's ids and titles, the SKU and the product's status. |
+| Source | Juo's `GET /products`, every page, each product with its variants, read by the nightly reconcile (after the subscriptions) and `ingest-backfill --object subscription_product`, written as a full set per read by `cma.ingest_upsert_subscription_products` |
+| Counts / does not count | One row per variant and connection. A variant the latest full catalog read no longer holds stays stored with `source_deleted_at`; a read that returns no variant fails `empty_snapshot` instead of marking every variant missing. A line's variant may be absent from the catalog (the dry run counts `variantsNotInCatalog`) |
+| Unit and display | A count of variants; the ids, titles and SKU as the store wrote them. Catalog text rule: a title or SKU is the merchant's own catalog text, never a customer's, stored when it is 1 to 100 characters and holds no @ and no control character; otherwise it is left out (the row keeps its ids) and the run counts `catalog_text_dropped` |
+| Time rule | `first_seen_at` and `synced_at` are the CMA's own read times |
+| Scope | As Subscription |
+| Equivalent in the source system | A variant of Juo's product catalog (`GET /products`) |
+| Not to use | "Model" for it: Model (filter) is a device model of the tenant's model catalog, and the variant to model mapping is tenant configuration built in Part C of brief B39; "product" alone for a variant; "SKU" for a device serial or a subscription's number |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.subscription_product_variant`, `cma_read.subscription_product_variant`, `cma.ingest_upsert_subscription_products`, `cma.catalog_text_ok`; the data map's table `subscription_product_variant`; no page yet (Part C's variant mapping reads it) |
+| As built today | `cma.subscription_product_variant` (`194`): unique per tenant, connection and `variant_source_id`; `cma.catalog_text_ok` checks each title and SKU (length 1 to 100, no @, no control character; null passes); the adapter leaves a failing text out and counts it before the database sees it; the application cannot delete a row. Matches the definition |
+
+### Billing event
+
+| Field | Value |
+|---|---|
+| Term | Billing event (nl: Betaalgebeurtenis) |
+| Key | `billing_event`; SQL `cma.billing_event`, `cma_read.billing_event`; columns `kind`, `occurred_at`, `subscription_source_id`, `customer_source_id`, `order_source_id`, `renewal_source_id`, `owner_source_id`, `amount`, `currency`, `return_code`, `instrument_type`, `attempt`, `error_code`, `partial`; the run count `billing_events_new`; kinds `chargeback`, `refund_created`, `refund_completed`, `refund_failed`, `invoice_placed`, `invoice_paid`, `invoice_overdue`, `invoice_payment_failed`, `order_placement_failed`, `order_draft_created` |
+| Definition | One event of the subscription app about a payment or an order it could not place: a chargeback, a refund (created, completed, failed), an invoice renewal (placed, paid, overdue, payment failed) or an order that failed to place or was created as a draft. It carries ids, codes, an amount in its currency and a time, never a message, a note or a payment detail. |
+| Source | Juo's events `chargeback:created`, `refund:created`, `refund:completed`, `refund:failed`, `invoice:placed`, `invoice:paid`, `invoice:overdue`, `invoice:payment-failed`, `order:placement-failed` and `order:draft-created`, read as the billing family (its own query and backfill cursor) by the poll and `ingest-backfill --object billing_event`, written by `cma.ingest_upsert_billing_events`. The event's id, time, subscription (when Juo names it), customer id, order id (digits), renewal id, owner id, amount or total, currency, reason code, instrument type, attempt, error code and a refund's `partial` are read; a `reasonMessage`, an `errorMessage` and a refund's note never |
+| Counts / does not count | One row per event and connection, append-only (an event held already is left as it is). The subscription's own copies of a chargeback or refund (`subscription:chargeback-created`, `subscription:refund-*`) are the same event: they are skipped and counted `duplicate_skipped`. `subscription_source_id` may be empty (Juo's chargeback rows carry the customer and the store's order, not always the subscription): a chargeback joins a renewal by the order (`order_source_id` of `cma.subscription_event`) |
+| Unit and display | A count of events per kind; an amount per currency, never added across currencies; a code shows as the code. No page yet |
+| Time rule | `occurred_at`, the instant Juo reports; the poll reads again from five minutes before its cursor, so the overlap stores nothing twice |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's event types of the same names (`GET /events`); the brief's probes of 18 November 2026 saw them in the GB store |
+| Not to use | "Payment status", "failed payment" and "dunning" (NetSuite's words, README, Source of truth); "payment" or "transaction" for a billing event (NetSuite's payments and the store's financial status are other facts) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.billing_event`, `cma_read.billing_event`, `cma.ingest_upsert_billing_events`; the data map's table `billing_event`; no page yet (Parts C to F of brief B39: payment state, renewal outcomes, Customers → Payments) |
+| As built today | `cma.billing_event` (`194`): unique per tenant, connection and `source_id`; checks on `kind` (the ten), the order (digits), the return code (Return code), the instrument (Payment instrument), `partial` only on a refund and `raw` (fixed keys, no @); indexes on the order, on the kind and time and on the subscription; the application can neither update nor delete a row. 195's Z1 reads every row for an email pattern. Matches the definition |
+
+### Chargeback
+
+| Field | Value |
+|---|---|
+| Term | Chargeback (nl: Terugboeking) |
+| Key | `chargeback` (`cma.billing_event.kind`); `amount`, `currency`, `order_source_id`, `return_code`, `instrument_type` |
+| Definition | A payment the customer's bank reversed after the subscription app took it, in Juo's word (convention 2): the amount, its currency, the store's order and the Return code. A renewal that Juo reports as renewed can be charged back later. |
+| Source | Juo's event `chargeback:created` (typed payload: amount, currency, order id, reason code, instrument type), kept as kind `chargeback`; `subscription:chargeback-created` describes the same chargeback and is counted `duplicate_skipped` |
+| Counts / does not count | One row per chargeback event. It does not change a subscription's status or payment state (Payment state has no Charged back state yet: Part C of brief B39 adds it). The reason message is never read |
+| Unit and display | A count and an amount per currency; the Return code as a code |
+| Time rule | `occurred_at`, the instant Juo reports |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's `chargeback:created` event |
+| Not to use | "Failed payment" and "dunning" (README, Source of truth); "dispute" for a SEPA reversal; "refund" (Refund is the merchant's own return of money) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.billing_event` (kind `chargeback`), `cma_read.billing_event`; no page yet |
+| As built today | Stored as a Billing event of kind `chargeback`; the only kind that may carry a return code (a check); the dry run's `billingKinds` and `returnCodes` show them per store. Matches the definition |
+
+### Return code
+
+| Field | Value |
+|---|---|
+| Term | Return code (nl: Retourcode) |
+| Key | `return_code` of `cma.billing_event`; the run count `return_code_dropped`; Juo's field (adapter only) `data.reasonCode` |
+| Definition | The payment scheme's reason a chargeback gives, kept as a code: either four upper-case letters or digits, such as MD01 (a SEPA return reason), or a card dispute reason from the adapter's fixed list, such as `fraudulent`. The reason's message is never read. |
+| Source | A chargeback event's `data.reasonCode`. The fixed list (`map.mjs` `CARD_DISPUTE_REASONS`): bank_cannot_process, check_returned, credit_not_processed, customer_initiated, debit_not_authorized, duplicate, fraudulent, general, incorrect_account_details, insufficient_funds, noncompliant, product_not_received, product_unacceptable, subscription_canceled, unrecognized |
+| Counts / does not count | Only on a chargeback (a check). A code outside both forms, or a word outside the fixed list, is dropped and counted `return_code_dropped` (the value never logged); the dry run's `returnCodes` shows the codes seen, so a new reason is added to the list by a change. Neither form can hold an account number or a name |
+| Unit and display | The code as the code; its standard meaning shows in a hint from a tenant catalog only when Part E of brief B39 builds it |
+| Time rule | As its chargeback |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's chargeback `reasonCode` (a SEPA reason code such as AM04, MD01 and MD06 was seen, GB, 18 November 2026; a card dispute reason such as `fraudulent` in GB's probe the same day) |
+| Not to use | "Reason" or "reason code" for it: `reason_code` of `cma.subscription_event` is Juo's fixed reason of a failed renewal or cancellation, and `error_code` is a failed renewal's error; "reason message" (never read) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "Build choices to confirm: the return code form" (addition 0009w, B39a, this PR) |
+| Used by | `cma.billing_event.return_code`, `cma_read.billing_event`; no page yet |
+| As built today | The database check is `^([A-Z0-9]{4}|[a-z][a-z_]{1,39})$` on a chargeback; the adapter admits `^[A-Z0-9]{4}$` or a word of the fixed list. The form is wider than the brief's "upper case, 2 to 10 characters", to take card dispute reasons (decision row). Matches the definition |
+
+### Refund
+
+| Field | Value |
+|---|---|
+| Term | Refund (nl: Terugbetaling) |
+| Key | `refund_created`, `refund_completed`, `refund_failed` (`cma.billing_event.kind`); `amount`, `currency`, `order_source_id`, `partial` |
+| Definition | The return of money for a store order that the subscription app starts (created), completes or fails, in Juo's words: its amount, currency, order and whether it is partial. |
+| Source | Juo's events `refund:created`, `refund:completed` and `refund:failed`; `subscription:refund-created`, `-completed` and `-failed` are the same refunds and are counted `duplicate_skipped`. A refund's note is never read |
+| Counts / does not count | One row per event, so a refund that is created and then completed is two rows of its kinds; `partial` is set on refund kinds only (a check) |
+| Unit and display | A count per kind and an amount per currency, never added across currencies |
+| Time rule | `occurred_at`, the instant Juo reports |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's `refund:*` events |
+| Not to use | "Chargeback" for a refund (the bank reverses a chargeback); the store's order "refunded" financial status is Financial status, Shopify's own fact |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.billing_event` (the three refund kinds), `cma_read.billing_event`; no page yet |
+| As built today | Stored as Billing events of the three refund kinds. Matches the definition |
+
+### Invoice renewal
+
+| Field | Value |
+|---|---|
+| Term | Invoice renewal (nl: Factuurverlenging) |
+| Key | `invoice_placed`, `invoice_paid`, `invoice_overdue`, `invoice_payment_failed` (`cma.billing_event.kind`); `renewal_source_id`, `owner_source_id`, `amount`, `currency` |
+| Definition | A renewal that the subscription app bills by invoice, in Juo's words: the invoice is placed for a renewal, then paid, overdue or its payment failed. It is the subscription app's invoice renewal, not NetSuite's invoice. |
+| Source | Juo's events `invoice:placed`, `invoice:paid`, `invoice:overdue` and `invoice:payment-failed` (total, currency, `renewalId`; GB has them), read as billing events |
+| Counts / does not count | One row per event. NetSuite keeps its own invoices, payment status, days to pay and dunning stages (Decision log, 1 November 2026; README, Source of truth); a billing event never stands in for them. `invoice_payment_failed` is Juo's word, kept under convention 2, and is never labelled "failed payment". Orders the app could not place or created as a draft (`order_placement_failed`, `order_draft_created`) are billing events but not invoice renewals |
+| Unit and display | A count per kind and an amount per currency; no page yet (Awaiting payment, Part C of brief B39, is built from it) |
+| Time rule | `occurred_at`, the instant Juo reports |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's `invoice:*` events; not a NetSuite invoice |
+| Not to use | "Invoice" alone (NetSuite's invoice); "failed payment", "payment status" and "dunning" (README, Source of truth) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.billing_event` (the four invoice kinds), `cma_read.billing_event`; no page yet; Payment state's Awaiting payment (Pending) is built from it in Part C |
+| As built today | Stored as Billing events of the four kinds; nothing derives a state from them yet. Matches the definition |
+
+### Payment instrument
+
+| Field | Value |
+|---|---|
+| Term | Payment instrument (nl: Betaalmiddel) |
+| Key | `payment_instrument_type` of `cma.subscription` and `instrument_type` of `cma.billing_event`; values `card`, `paypal`, `sepa_direct_debit`, `ideal`, `bancontact`, `invoice`, `other`; the run count `instrument_unknown` |
+| Definition | The type of the instrument a subscription pays with or a billing event names, one of seven codes of the CMA. Only the type is read, never a holder, digits, account or billing address. |
+| Source | Juo's payment method, expanded for its instrument's type only (`paymentMethod.instrument.type` on a subscription, `data.instrumentType` on a billing event): a type that names a card is `card`, `paypal`, `sepa_direct_debit` (Juo's `SepaDirectDebit`), `ideal`, `bancontact` and `invoice` map to their codes, and any other type is `other` |
+| Counts / does not count | One code per subscription (empty when Juo did not expand the payment method). A type the mapping does not know is stored as `other` and counted `instrument_unknown`, with Juo's type name (a name, never a value) in the log and the dry run's `instrumentTypes` |
+| Unit and display | The code; no label rewords it |
+| Time rule | As of the subscription's latest read; a billing event's is as of the event |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's instrument types (`SepaDirectDebit` and the others as the dry run lists them) |
+| Not to use | "Payment method" for the code (Juo's payment method also holds a holder and digits, which the CMA never reads) |
+| Status | Proposed (for Kira to confirm); widened from three codes (`card`, `paypal`, `other`) to seven |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: Payment instrument widened to seven codes, and Line told apart from Subscription line" (addition 0009w, B39a, this PR) |
+| Used by | `cma.subscription.payment_instrument_type`, `cma.billing_event.instrument_type`, `cma.payment_instrument_type_ok`, `cma_read.subscription`, `cma_read.billing_event` |
+| As built today | One check function (`cma.payment_instrument_type_ok`) holds the seven codes for both columns; the adapter maps Juo's types (`instrumentInfoOf`, `map.mjs`). Matches the definition |
+
+### Subscription event types
+
+| Field | Value |
+|---|---|
+| Term | Skip (nl: Overgeslagen), Billing date move (nl: Datumverschuiving), Interval change (nl: Intervalwijziging), Line change (nl: Regelwijziging), Migration (nl: Migratie), Merge and split (nl: Samenvoeging en splitsing); also the types Purchase, Creation, Payment method change, Discount change, Renewal notice and Update failure, named by their keys |
+| Key | `event_type` of `cma.subscription_event`: `skipped`, `billing_date_moved`, `interval_changed`, `lines_changed`, `migrated`, `merged_to`, `merged_from`, `split_to`, `split_from`, `purchased`, `created`, `payment_method_changed`, `discount_changed`, `renewal_notice`, `update_failed`; columns `cause_code`, `billing_from_at`, `billing_to_at`, `interval_from`, `interval_count_from`, `interval_to`, `interval_count_to`, `lines_added`, `lines_removed`, `lines_updated`, `related_subscription_source_id`, `operation_source_id`, `order_source_id` |
+| Definition | The fifteen event types besides the seven of 0008zl (renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed): a skipped renewal (the skipped date and the next billing date), a move of the billing date (from, to, cause), a change of billing interval (from and to), a change of lines (how many added, removed, updated), a migration into the subscription app (its current cycle and next billing date), a merge or split with the other subscription's id, a purchase or creation, a change of payment method or discount (never the method, code or value), a renewal notice and an update that failed (an error code). |
+| Source | Juo's events `subscription:skipped`, `:next-billing-date-changed` (cause requested, skipped, resumed, reactivated or reconciled), `:frequency-changed`, `:lines-changed`, `:line-added`, `:line-removed`, `:line-updated`, `:migrated` (`currentCycle` to `cycle_index`, `nextBillingDate` to `billing_to_at`), `:merged-to`, `:merged-from`, `:split-to`, `:split-from`, `:purchased`, `:created`, `:payment-method-changed`, `:discount-added`, `:-removed`, `:-updated`, `:-code-applied`, `:-free-shipping-applied` (cause added, removed, updated, code_applied, free_shipping), `:update-failed` and `renewal:notification-sent` (its type and subscription only); a renewal's order (`data.orderId`) is `order_source_id`. Customer, login and mail events are not read (Yordi) |
+| Counts / does not count | One row per event, append-only; `lines-changed`, `line-added`, `-removed` and `-updated` are all `lines_changed` and the operation id pairs them. The cancellation flow's events and delivery-address changes are read, their subscription is read again by the poll, and they are not stored. A cause, interval, line count, related subscription or order is allowed on its own type only (checks) |
+| Unit and display | A count per type; a code shows as the code. No page yet |
+| Time rule | `occurred_at`, the instant Juo reports; the dates of a skip or move are Juo's instants |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's event types of the same names (`events-types`: 90 types, brief B39 of 18 November 2026) |
+| Not to use | "Pause" for a skip (Juo's paused is the status event); "frequency" for Interval change; "failed" for `update_failed` (a failed update of a subscription is not a Failed renewal) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and the rows on the types read (addition 0009w, B39a, this PR) |
+| Used by | `cma.subscription_event`, `cma_read.subscription_event`, `cma.ingest_upsert_subscription_events`; the data map's table `subscription_event`; no page yet (Parts B to D of brief B39) |
+| As built today | `cma.subscription_event` (`194`) holds 22 types; the columns are checked against their types (a cause only on `billing_date_moved` or `discount_changed`, an interval only on `interval_changed`, line counts only on `lines_changed`, a related subscription only on merges and splits, an order only on `renewed`); `created` is an extra type beside the brief's list (decision row). Matches the definition |
+
+### Observed subscription change
+
+| Field | Value |
+|---|---|
+| Term | Observed subscription change (nl: Waargenomen wijziging) |
+| Key | `subscription_change`; SQL `cma.subscription_change`, `cma_read.subscription_change`; columns `subscription_source_id`, `field`, `old_value`, `new_value`, `observed_at`, `run_id`; fields `status`, `amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count`, `line_count`, `recurring_quantity`; the run count `changes_observed` |
+| Definition | The CMA's own observation that a known subscription's value differs from the one it stored: one row with the field, the old and the new value, the time observed and the run. History starts with the first read of addition 0009w; Juo's events do not carry the amounts. |
+| Source | The CMA's own reads: `cma.ingest_upsert_subscriptions` (status, amount, currency, interval, interval count, line count) and `cma.ingest_upsert_subscription_lines` (`recurring_quantity`, the sum of the quantities of the recurring lines not canceled) |
+| Counts / does not count | One row per changed field per read, append-only. A value stored as null is a start, never a change, so the first read after the migration writes none and a rerun writes none. A recurring quantity is not observed for a subscription whose lines were all missing before the read. `new_value` is null when Juo no longer states one |
+| Unit and display | A count of changes per field; the values as text (at most 40 characters, no @) |
+| Time rule | `observed_at`, when the CMA read it, not when Juo changed it |
+| Scope | As Subscription |
+| Equivalent in the source system | None: the CMA's own record; Juo's own events (Subscription event types) say when and why |
+| Not to use | "Change" for a Juo event (Line change and the other event types are Juo's); "history" of a value before 0009w's first read (none exists) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "Build choices to confirm: a stored null is a start, not a change" (addition 0009w, B39a, this PR) |
+| Used by | `cma.subscription_change`, `cma_read.subscription_change`; the data map's table `subscription_change`; no page yet (Part C's recurring amount movements read it) |
+| As built today | `cma.subscription_change` (`194`): `run_id` is a soft reference (checked as a running run of the connection when written, no foreign key, because `sync_run` is a busy table); the application cannot update or delete a row. Matches the definition |
+
+### Subscription history start
+
+| Field | Value |
+|---|---|
+| Term | Subscription history start (nl: Abonnementshistorie vanaf) |
+| Key | `subscriptions.history_start_date` (tenant setting) |
+| Definition | The date from which the events backfill of the subscription app reads its history when it is given no start: empty means all of the app's history; set, it is that date, even when it lies before `intake.start_date`. |
+| Source | The tenant's settings (`cma.tenant_setting`); read by `ingest-backfill --object subscription_event` and `--object billing_event` through the adapter |
+| Counts / does not count | A date as YYYY-MM-DD or empty (trimmed; anything else is refused, CMA04). A `--from` before a date that is set is refused (`from_before_history_start`); with it empty any `--from` is allowed. It never changes the poll, which reads the last 24 hours without a cursor |
+| Unit and display | A date; the default is empty (Pulse4all Subscriptions has no seed row) |
+| Time rule | 00:00 in the tenant's zone, as the other start dates |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | `intake.start_date` for it (the intake's start governs the other sources' backfills); "start date" alone |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "The events backfill without --from starts at subscriptions.history_start_date" and "Definitions: the subscription app read whole" (addition 0009w, B39a, this PR) |
+| Used by | `cma.check_tenant_setting()`, the Juo adapter's `backfillFrom` (`ingest/src/adapters/juo/index.mjs`) |
+| As built today | The setting is in the catalog (`194`: text, default empty) and checked by `cma.check_tenant_setting()` (made again, based on `184`); the adapter reads it as `reviews.history_start_date` is read for reviews. Matches the definition |
 
 ## Cohort terms
 
