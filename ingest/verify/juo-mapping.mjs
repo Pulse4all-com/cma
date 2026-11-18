@@ -294,10 +294,14 @@ expect("H3 a card dispute reason kept as a code (fraudulent); a reason out of th
     bOf(7, "chargeback:created").returnCodeDropped, bOf(7, "chargeback:created").item.instrumentType, bOf(7, "chargeback:created").instrumentUnknown],
   ["fraudulent", "card", undefined, true, "other", "Klarna"], [null, null, "No Mandate given", false, null, null]);
 const codeOf = (c) => { const m = map.billingEventItem({ ...billingEvents.find((e) => e.type === "chargeback:created"), data: { reasonCode: c } }); return m.item.returnCode ?? (m.returnCodeDropped ? "dropped" : null); };
-expect("H3b the return code's form: a scheme's four characters or a lower-case reason; an account number's shape, a mixed word or a sentence dropped; an instrument name with a space unnamed",
+expect("H3b the return code: a scheme's four characters, or a card dispute reason of the fixed list; an account number's shape, another word or a sentence dropped; an instrument name with a space unnamed",
   [codeOf("MD01"), codeOf("AM04"), codeOf("fraudulent"), codeOf("product_not_received"), codeOf("NL91ABNA0417164300"), codeOf("Fraudulent"), codeOf("md01x"),
-    map.instrumentInfoOf("Invented Person").unknown],
-  ["MD01", "AM04", "fraudulent", "product_not_received", "dropped", "dropped", "dropped", "unnamed"], []);
+    codeOf("invented_person"), map.instrumentInfoOf("Invented Person").unknown],
+  ["MD01", "AM04", "fraudulent", "product_not_received", "dropped", "dropped", "dropped", "dropped", "unnamed"], []);
+expect("F5 catalog text: a line or paragraph separator and a format character dropped as the database's check would; a cut never splits a character",
+  [map.catalogTextOf("a\u2028b").dropped, map.catalogTextOf("a\u200bb").dropped, Array.from(map.catalogTextOf("é".repeat(99) + "😀😀").value).length,
+    map.catalogTextOf("é".repeat(99) + "😀😀").value.endsWith("😀")],
+  [true, true, 100, true], [false, false, 101, false]);
 expect("H4 refunds: amount, order, partial; the note never read; only a refund says partial",
   [bOf(8, "refund:completed").item.amount, bOf(8, "refund:completed").item.orderSourceId, bOf(8, "refund:completed").item.partial, bOf(8, "refund:failed").item.partial,
     JSON.stringify(bm).includes("Return received"), cb5.item.partial],

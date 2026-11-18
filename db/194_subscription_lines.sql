@@ -54,7 +54,8 @@
 --                      interval_count_to, lines_added, lines_removed, lines_updated, related_subscription_source_id,
 --                      operation_source_id (the app's id of the operation that wrote it, which pairs the events of one
 --                      change) and order_source_id (a renewal's store order, until now in raw only: what a chargeback's
---                      order joins); cma.ingest_upsert_subscription_events made again with them
+--                      order joins; the renewals held already get theirs from raw once, in section 9);
+--                      cma.ingest_upsert_subscription_events made again with them
 --   observed changes   cma.subscription_change, append-only: the CMA's own observation when a read finds a known
 --                      subscription's status, amount_per_cycle, currency, billing_interval, billing_interval_count or
 --                      line_count (cma.ingest_upsert_subscriptions) or the sum of its recurring lines' quantities
@@ -659,6 +660,7 @@ revoke update, delete on cma.billing_event, cma.subscription_change from cma_app
 -- function below, which stays for the ingest of main and 119)
 create or replace function cma.ingest_upsert_subscriptions(p_connection_id uuid, p_items jsonb, p_run_id uuid)
 returns table (source_id text, outcome text, customer_matched boolean, changes_observed integer)
+rows 500
 language plpgsql
 as $$
 #variable_conflict use_column
@@ -810,6 +812,7 @@ $$;
 -- based on: 118_subscriptions.sql
 create or replace function cma.ingest_upsert_subscriptions(p_connection_id uuid, p_items jsonb)
 returns table (source_id text, outcome text, customer_matched boolean)
+rows 500
 language sql
 as $$
   select u.source_id, u.outcome, u.customer_matched from cma.ingest_upsert_subscriptions(p_connection_id, p_items, null::uuid) u
@@ -1052,6 +1055,7 @@ $$;
 -- ingest does not read
 create or replace function cma.ingest_upsert_billing_events(p_connection_id uuid, p_items jsonb)
 returns table (source_id text, outcome text)
+rows 500
 language plpgsql
 as $$
 #variable_conflict use_column
@@ -1114,6 +1118,7 @@ $$;
 -- based on: 118_subscriptions.sql
 create or replace function cma.ingest_upsert_subscription_events(p_connection_id uuid, p_items jsonb)
 returns table (source_id text, outcome text)
+rows 500
 language plpgsql
 as $$
 #variable_conflict use_column
@@ -1341,6 +1346,12 @@ comment on column cma.subscription_event.lines_added is 'How many lines a line c
 comment on column cma.subscription_event.related_subscription_source_id is 'The other subscription of a merge or split (0009w)';
 comment on column cma.subscription_event.order_source_id is 'The store''s order id (digits) of a renewal: the order the renewal placed, which a chargeback or refund names (cma.billing_event.order_source_id) (0009w)';
 comment on column cma.subscription_event.operation_source_id is 'The source''s id of the operation that wrote the event: the events of one change share it (a line change written both as lines-changed and as line-added) (0009w)';
+
+-- The renewals stored before this addition hold their store order in raw only (118's raw key orderId): it is copied into
+-- order_source_id once, as the owner (the application never updates an event), so a chargeback's order joins every
+-- renewal, older ones too. Rerun: none left to fill
+update cma.subscription_event e set order_source_id = e.raw ->> 'orderId'
+where e.event_type = 'renewed' and e.order_source_id is null and (e.raw ->> 'orderId') ~ '^\d{1,30}$';
 
 -- As 0008zl (118), with the new columns at its end: every column but raw
 create or replace view cma_read.subscription_event as

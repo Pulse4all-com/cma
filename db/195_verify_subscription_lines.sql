@@ -14,7 +14,8 @@
 --      update on billing events and observed changes; the unique keys; the new columns of cma.subscription and
 --      cma.subscription_event; the checks of the instrument types (seven) and event types (twenty-two); every function
 --      the application's only and in the caller's rights; the reader views without raw and with the new columns; the
---      setting subscriptions.history_start_date in the catalog; the pure helpers (catalog text, instrument type)
+--      setting subscriptions.history_start_date in the catalog; the pure helpers (catalog text, instrument type); every
+--      renewal's store order in order_source_id (the renewals held before 194 filled from raw)
 --   B  behaviour, on two throwaway tenants, each with its Ingest user, a commerce store and a subscriptions connection
 --      whose account id names that handle: the subscriptions' new fields and observed changes with the run (none on a
 --      first load, none for a value stored as null, none on a rerun; the two-argument call the same answers without a
@@ -24,7 +25,8 @@
 --      an empty set); the billing events (every kind, append-only, the refusals); the new event types and columns (a
 --      renewal's order joining a chargeback's); the setting (trimmed, a date or empty, refused otherwise); the run counts;
 --      row-level security across the two tenants' Ingest users; the application's update and delete refused; audit rows
---      written; no column of the new tables holding an email pattern
+--      written; no column of the new tables holding an email pattern; 194's two-argument call against 118's own function
+--      (a copy kept in this script) on the same items, outcome for outcome and row for row over 118's columns
 --   Z  every row of the four new tables of the database: no column holding an email pattern
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
@@ -77,7 +79,7 @@ as $$
            'raw', jsonb_strip_nulls(jsonb_build_object('id', v.id, 'serial', v.num, 'status', upper(v.status), 'instrumentType', v.instrument,
                                                        'minCycles', v.min_cycles, 'discountCount', v.discounts,
                                                        'updatedAt', case when p_variant = 'changed' then '2026-11-17' else '2026-11-10' end))))
-         order by v.id)
+         order by v.id collate "C")
   from (values
     ('sub-a', '#2502', 'active', 'sepa_direct_debit', 12, 1, 2),
     ('sub-b', '#2503', 'active', 'ideal', null, 0, null),
@@ -96,7 +98,7 @@ as $$
            'quantity', case when p_variant = 'removed' and v.id = 'l-b1' then 3 else v.qty end, 'amountPerCycle', v.amount, 'currency', 'GBP',
            'billingInterval', 'month', 'billingIntervalCount', 1, 'recurringCycleLimit', v.cycle_limit, 'canceledAt', v.canceled,
            'raw', jsonb_strip_nulls(jsonb_build_object('id', v.id, 'subscriptionId', v.sub, 'variant', v.variant, 'quantity', v.qty))))
-         order by v.id), '[]'::jsonb)
+         order by v.id collate "C"), '[]'::jsonb)
   from (values
     ('l-a1', 'sub-a', '71000000001', '41000000001', 1, 24.95, null, null),
     ('l-a2', 'sub-a', '71000000002', '41000000002', 2, 5, null, '2026-11-01T10:00:00.000Z'),
@@ -115,7 +117,7 @@ as $$
            'sourceId', v.id, 'kind', v.kind, 'occurredAt', v.at, 'subscriptionSourceId', v.sub, 'customerSourceId', '9001',
            'orderSourceId', v.ord, 'renewalSourceId', v.renewal, 'ownerSourceId', v.owner, 'amount', 24.95, 'currency', 'GBP',
            'returnCode', v.code, 'instrumentType', v.instrument, 'attempt', v.attempt, 'errorCode', v.err, 'partial', v.partial,
-           'raw', jsonb_strip_nulls(jsonb_build_object('id', v.id, 'orderId', v.ord, 'reasonCode', v.code, 'amount', 24.95)))) order by v.id)
+           'raw', jsonb_strip_nulls(jsonb_build_object('id', v.id, 'orderId', v.ord, 'reasonCode', v.code, 'amount', 24.95)))) order by v.id collate "C")
   from (values
     ('be-01', 'chargeback', '2026-11-11T13:06:00.000Z', null, '6100000001', null, 'cb-1', 'MD01', 'sepa_direct_debit', null, null, null::boolean),
     ('be-02', 'chargeback', '2026-11-12T13:06:00.000Z', null, '6100000002', null, 'cb-2', 'fraudulent', 'card', null, null, null),
@@ -137,7 +139,7 @@ returns jsonb
 language sql
 as $$
   select jsonb_agg(jsonb_strip_nulls(v.item || jsonb_build_object('sourceId', v.id, 'subscriptionSourceId', 'sub-a', 'occurredAt', v.at,
-                                                                  'actorType', 'system', 'raw', jsonb_build_object('id', v.id))) order by v.id)
+                                                                  'actorType', 'system', 'raw', jsonb_build_object('id', v.id))) order by v.id collate "C")
   from (values
     ('ne-01', '2026-10-01T09:00:00.000Z', '{"eventType": "renewed", "cycleIndex": 2, "orderSourceId": "6100000001"}'::jsonb),
     ('ne-02', '2025-05-13T09:00:00.000Z', '{"eventType": "migrated", "cycleIndex": 3, "billingToAt": "2025-06-01T00:00:00.000Z"}'),
@@ -156,6 +158,128 @@ as $$
     ('ne-15', '2026-11-10T09:00:00.000Z', '{"eventType": "split_from", "relatedSubscriptionSourceId": "sub-c"}')
   ) as v(id, at, item)
 $$;
+
+-- 118's cma.ingest_upsert_subscriptions as it was (118_subscriptions.sql, copied whole, only its name changed): block B
+-- compares the two-argument call of 194 with it, outcome for outcome and row for row over 118's columns
+create or replace function pg_temp.v0009w_upsert_118(p_connection_id uuid, p_items jsonb)
+returns table (source_id text, outcome text, customer_matched boolean)
+language plpgsql
+as $$
+#variable_conflict use_column
+declare
+  v_tenant   uuid := cma.current_tenant_id();
+  v_target   record;
+  i          jsonb;
+  v_id       text;
+  v_customer text;
+  v_status   text;
+  v_cycle    integer;
+  v_next     timestamptz;
+  v_interval text;
+  v_count    integer;
+  v_amount   numeric;
+  v_currency text;
+  v_instr    text;
+  v_created  timestamptz;
+  v_paused   timestamptz;
+  v_canceled timestamptz;
+  v_upd      timestamptz;
+  v_raw      jsonb;
+  v_old      cma.subscription;
+begin
+  select * into v_target from cma.subscriptions_ingest_target(p_connection_id);
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) > 500
+     or exists (select 1 from jsonb_array_elements(p_items) x where jsonb_typeof(x) <> 'object') then
+    raise exception 'items must be an array of at most 500 subscriptions' using errcode = 'CMA04';
+  end if;
+  if (select count(*) <> count(distinct x ->> 'sourceId') from jsonb_array_elements(p_items) x) then
+    raise exception 'a subscription appears twice among the items' using errcode = 'CMA04';
+  end if;
+  for i in select x from jsonb_array_elements(p_items) x loop
+    v_id := i ->> 'sourceId';
+    if not coalesce(cma.subscription_id_ok(v_id), false) then
+      raise exception 'a subscription needs an id (a letter or a digit, then letters, digits, _ . : -, at most 100)' using errcode = 'CMA04';
+    end if;
+    v_customer := nullif(i ->> 'customerSourceId', '');
+    v_status := i ->> 'status';
+    v_interval := i ->> 'billingInterval';
+    v_currency := i ->> 'currency';
+    v_instr := i ->> 'paymentInstrumentType';
+    if (v_customer is not null and not cma.subscription_id_ok(v_customer))
+       or coalesce(v_status, '') not in ('active', 'paused', 'canceled', 'expired', 'failed', 'merged', 'never-subscribed')
+       or (v_interval is not null and v_interval not in ('day', 'week', 'month', 'year'))
+       or (v_currency is not null and v_currency !~ '^[A-Z]{3}$')
+       or (v_instr is not null and v_instr not in ('card', 'paypal', 'other'))
+       or (i ? 'amountPerCycle' and jsonb_typeof(i -> 'amountPerCycle') not in ('number', 'null'))
+       or (i ? 'raw' and jsonb_typeof(i -> 'raw') <> 'object') then
+      raise exception 'subscription %: a customer id, a status of the seven, an interval of day, week, month or year, a currency code, an instrument of card, paypal or other, a number for the amount and an object for raw', v_id
+        using errcode = 'CMA04';
+    end if;
+    v_cycle := cma.subscription_json_int(i -> 'currentCycle', 'currentCycle');
+    v_count := cma.subscription_json_int(i -> 'billingIntervalCount', 'billingIntervalCount');
+    v_amount := round((i ->> 'amountPerCycle')::numeric, 2);
+    v_next := cma.json_time(i -> 'nextBillingAt', 'nextBillingAt');
+    v_created := cma.json_time(i -> 'sourceCreatedAt', 'sourceCreatedAt');
+    v_paused := cma.json_time(i -> 'pausedAt', 'pausedAt');
+    v_canceled := cma.json_time(i -> 'canceledAt', 'canceledAt');
+    v_upd := cma.json_time(i -> 'sourceUpdatedAt', 'sourceUpdatedAt');
+    v_raw := coalesce(i -> 'raw', '{}'::jsonb);
+
+    v_old := null;
+    select * into v_old from cma.subscription s
+    where s.tenant_id = v_tenant and s.connection_id = p_connection_id and s.source_id = v_id
+    for update;
+    if v_old.id is not null and v_upd is not null and v_old.source_updated_at is not null and v_upd < v_old.source_updated_at then
+      source_id := v_id; outcome := 'stale';
+      customer_matched := case when v_old.customer_source_id is not null then exists (
+        select 1 from cma.commerce_customer cu
+        where cu.tenant_id = v_tenant and cu.connection_id = v_target.store_connection_id and cu.source_id = v_old.customer_source_id) end;
+      return next;
+      continue;
+    end if;
+
+    -- when the current pause began: the source's time, else the latest pause event, else the stored time
+    v_paused := case when v_status = 'paused' then coalesce(
+                  v_paused,
+                  (select max(e.occurred_at) from cma.subscription_event e
+                   where e.tenant_id = v_tenant and e.connection_id = p_connection_id and e.subscription_source_id = v_id
+                     and e.status_to = 'paused'),
+                  case when v_old.status = 'paused' then v_old.paused_at end) end;
+
+    if v_old.id is null then
+      insert into cma.subscription (tenant_id, connection_id, source_system, source_id, customer_source_id, status, current_cycle,
+                                    next_billing_at, billing_interval, billing_interval_count, amount_per_cycle, currency,
+                                    payment_instrument_type, source_created_at, paused_at, canceled_at, source_updated_at, raw)
+      values (v_tenant, p_connection_id, v_target.adapter, v_id, v_customer, v_status, v_cycle, v_next, v_interval, v_count, v_amount,
+              v_currency, v_instr, v_created, v_paused, v_canceled, v_upd, v_raw);
+      outcome := 'inserted';
+    elsif (v_old.customer_source_id, v_old.status, v_old.current_cycle, v_old.next_billing_at, v_old.billing_interval,
+           v_old.billing_interval_count, v_old.amount_per_cycle, v_old.currency, v_old.payment_instrument_type, v_old.source_created_at,
+           v_old.paused_at, v_old.canceled_at, v_old.source_updated_at, v_old.raw, v_old.source_deleted_at)
+          is distinct from
+          (v_customer, v_status, v_cycle, v_next, v_interval, v_count, v_amount, v_currency, v_instr, v_created, v_paused, v_canceled,
+           v_upd, v_raw, null::timestamptz) then
+      update cma.subscription s
+         set customer_source_id = v_customer, status = v_status, current_cycle = v_cycle, next_billing_at = v_next,
+             billing_interval = v_interval, billing_interval_count = v_count, amount_per_cycle = v_amount, currency = v_currency,
+             payment_instrument_type = v_instr, source_created_at = v_created, paused_at = v_paused, canceled_at = v_canceled,
+             source_updated_at = v_upd, raw = v_raw, source_deleted_at = null, synced_at = now()
+       where s.tenant_id = v_tenant and s.id = v_old.id;
+      outcome := 'updated';
+    else
+      outcome := 'unchanged';
+    end if;
+    source_id := v_id;
+    customer_matched := case when v_customer is not null then exists (
+      select 1 from cma.commerce_customer cu
+      where cu.tenant_id = v_tenant and cu.connection_id = v_target.store_connection_id and cu.source_id = v_customer) end;
+    return next;
+  end loop;
+exception when check_violation or not_null_violation or invalid_text_representation or numeric_value_out_of_range then
+  raise exception 'invalid subscription: %', sqlerrm using errcode = 'CMA04';
+end
+$$;
+
 
 -- A. Structure and privileges
 do $$
@@ -292,6 +416,13 @@ begin
                      cma.payment_instrument_type_ok('sepa_direct_debit'), cma.payment_instrument_type_ok('SepaDirectDebit'));
   insert into verify_0009w values (8, 'A8 catalog text and instrument types by form',
     case when v_bad = 't t f f f f f null t f' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
+
+  -- A9. every renewal of the database whose raw holds its store order has it as order_source_id (194 filled the ones
+  --     stored before it); counts only
+  v_bad := (select count(*) filter (where e.order_source_id is null) || ' of ' || count(*) from cma.subscription_event e
+            where e.event_type = 'renewed' and (e.raw ->> 'orderId') ~ '^\d{1,30}$');
+  insert into verify_0009w values (9, 'A9 every renewal with its store order in raw has it as order_source_id (the older ones filled once)',
+    case when v_bad like '0 of %' and not v_provoke then 'PASS' else 'FAIL' end, v_bad || ' renewals without it');
 end
 $$;
 
@@ -304,8 +435,9 @@ declare
   v_rows    text[] := '{}';
   v_t1 uuid; v_t2 uuid;
   v_admin1 uuid; v_ing1 uuid; v_ing2 uuid;
-  v_shop1 uuid; v_shop2 uuid; v_sub1 uuid; v_sub2 uuid;
-  v_run uuid; v_run2 uuid; v_done uuid;
+  v_shop1 uuid; v_shop2 uuid; v_sub1 uuid; v_sub2 uuid; v_cmp_new uuid; v_cmp_old uuid;
+  v_run uuid; v_run2 uuid; v_done uuid; v_other uuid;
+  v_step text; v_new text; v_old text; v_items jsonb;
   v_txt text;
   j jsonb;
 begin
@@ -327,6 +459,11 @@ begin
     values (v_t1, 'verifyshop', 'Verify shop one', 'verify-store-1.shop.example', 'commerce', 'verify-shop-signing-1') returning id into v_shop1;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
     values (v_t1, 'verifysubs', 'Verify subscriptions one', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-1') returning id into v_sub1;
+    -- two more subscriptions connections of the same store: one for 194's two-argument call, one for 118's function
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
+    values (v_t1, 'verifysubsn', 'Verify subscriptions, 194', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-4') returning id into v_cmp_new;
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
+    values (v_t1, 'verifysubso', 'Verify subscriptions, 118', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-5') returning id into v_cmp_old;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, signing_secret_name)
     values (v_t2, 'verifyshop', 'Verify shop two', 'verify-store-2.shop.example', 'commerce', 'verify-shop-signing-2') returning id into v_shop2;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
@@ -384,13 +521,16 @@ begin
     perform set_config('app.user_id', v_ing1::text, true);
     v_done := cma.ingest_sync_run_start(v_sub1, 'backfill', 'subscription', null, null);
     perform cma.ingest_sync_run_finish(v_done, 'succeeded', '{"fetched": 1}');
+    v_other := cma.ingest_sync_run_start(v_cmp_new, 'reconcile', 'subscription', null, null);
     v_txt := concat_ws(' ',
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), v_run2)),
+      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), v_other)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), v_done)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), gen_random_uuid())),
       pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[]''::jsonb, %L)', v_sub1, v_done)));
-    v_rows := v_rows || array['13', 'B3 a run that is no running run of the connection refused (another tenant''s, a finished one, an unknown id)',
-      case when v_txt = 'CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    perform cma.ingest_sync_run_finish(v_other, 'succeeded', '{"fetched": 0}');
+    v_rows := v_rows || array['13', 'B3 a run that is no running run of the connection refused (another tenant''s, another connection''s of the same tenant, a finished one, an unknown id)',
+      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B4. the lines as a set: inserted with no change (nothing held before); a rerun unchanged; a line the read no longer
     --     holds missing, another's quantity changed, each subscription's recurring quantity observed; back when it returns
@@ -454,11 +594,11 @@ begin
     -- B7. the billing events: every kind inserted, a rerun unchanged; a chargeback without a subscription joins its
     --     renewal by the store's order
     perform cma.ingest_upsert_subscription_events(v_sub1, pg_temp.v0009w_events());
-    v_txt := (select string_agg(x.outcome || ':' || x.n, ' ' order by x.outcome) from (select b.outcome, count(*) as n
+    v_txt := (select string_agg(x.outcome || ':' || x.n, ' ' order by x.outcome collate "C") from (select b.outcome, count(*) as n
               from cma.ingest_upsert_billing_events(v_sub1, pg_temp.v0009w_billing()) b group by 1) x);
-    v_txt := v_txt || ' ' || (select string_agg(x.outcome || ':' || x.n, ' ' order by x.outcome) from (select b.outcome, count(*) as n
+    v_txt := v_txt || ' ' || (select string_agg(x.outcome || ':' || x.n, ' ' order by x.outcome collate "C") from (select b.outcome, count(*) as n
                               from cma.ingest_upsert_billing_events(v_sub1, pg_temp.v0009w_billing()) b group by 1) x);
-    v_txt := v_txt || ' | ' || (select string_agg(distinct b.kind, ' ' order by b.kind) from cma.billing_event b where b.connection_id = v_sub1)
+    v_txt := v_txt || ' | ' || (select string_agg(distinct b.kind collate "C", ' ' order by b.kind collate "C") from cma.billing_event b where b.connection_id = v_sub1)
              || ' | ' || (select string_agg(b.return_code || ':' || b.instrument_type || ':' || coalesce(e.subscription_source_id, '-'), ' ' order by b.source_id collate "C")
                           from cma.billing_event b
                           left join cma.subscription_event e on e.tenant_id = b.tenant_id and e.connection_id = b.connection_id and e.event_type = 'renewed'
@@ -574,6 +714,41 @@ begin
     v_rows := v_rows || array['25', 'B15 no column of the four tables holding an email pattern after the fixtures',
       case when v_txt = '0 0 0 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
+    -- B16. 194's two-argument call against 118's own function (a copy, pg_temp.v0009w_upsert_118) on the same items, step
+    --      by step on two connections of the same store: the outcomes and the customers matched alike at every step (an
+    --      insert, a rerun, a change, a stale read, a change back), and the rows alike over 118's columns. The items carry
+    --      118's instrument types (card, paypal, other), which both take. The changes observed on 194's side: sub-a's four,
+    --      then sub-a's four back and sub-b's line count no longer stated (nine)
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_ing1::text, true);
+    v_txt := '';
+    foreach v_step in array array['base', 'base', 'changed', 'stale', 'back'] loop
+      v_items := (select jsonb_agg(x || jsonb_build_object('paymentInstrumentType', case x ->> 'paymentInstrumentType' when 'sepa_direct_debit' then 'paypal'
+                                                                                       when 'ideal' then 'other' else x ->> 'paymentInstrumentType' end)
+                                    || case v_step when 'stale' then '{"sourceUpdatedAt": "2026-11-01T09:00:00.000Z", "currentCycle": 99}'::jsonb
+                                                   when 'back' then '{"sourceUpdatedAt": "2026-11-18T09:00:00.000Z"}'::jsonb else '{}'::jsonb end
+                                  order by x ->> 'sourceId' collate "C")
+                  from jsonb_array_elements(pg_temp.v0009w_subs(case when v_step = 'changed' then 'changed' else 'base' end)) x);
+      v_new := (select string_agg(u.source_id || ':' || u.outcome || ':' || coalesce(u.customer_matched::text, '-'), ' ' order by u.source_id collate "C")
+                from cma.ingest_upsert_subscriptions(v_cmp_new, v_items) u);
+      v_old := (select string_agg(u.source_id || ':' || u.outcome || ':' || coalesce(u.customer_matched::text, '-'), ' ' order by u.source_id collate "C")
+                from pg_temp.v0009w_upsert_118(v_cmp_old, v_items) u);
+      v_txt := v_txt || case when v_new is not distinct from v_old then '=' else '≠' || v_step || ':' || coalesce(v_new, '-') || '/' || coalesce(v_old, '-') end;
+    end loop;
+    v_new := (select string_agg(concat_ws('|', s.source_id, s.customer_source_id, s.status, s.current_cycle, s.next_billing_at, s.billing_interval,
+                                          s.billing_interval_count, s.amount_per_cycle, s.currency, s.payment_instrument_type, s.source_created_at,
+                                          s.paused_at, s.canceled_at, s.source_updated_at, s.raw, s.source_deleted_at), ' ' order by s.source_id collate "C")
+              from cma.subscription s where s.connection_id = v_cmp_new);
+    v_old := (select string_agg(concat_ws('|', s.source_id, s.customer_source_id, s.status, s.current_cycle, s.next_billing_at, s.billing_interval,
+                                          s.billing_interval_count, s.amount_per_cycle, s.currency, s.payment_instrument_type, s.source_created_at,
+                                          s.paused_at, s.canceled_at, s.source_updated_at, s.raw, s.source_deleted_at), ' ' order by s.source_id collate "C")
+              from cma.subscription s where s.connection_id = v_cmp_old);
+    v_txt := v_txt || ' ' || (v_new is not distinct from v_old and v_new is not null)::text
+             || ' ' || (select count(*) from cma.subscription_change c where c.connection_id = v_cmp_new);
+    v_rows := v_rows || array['26', 'B16 194''s two-argument call gives 118''s answers: outcomes and customers matched at every step, the rows alike over 118''s columns',
+      case when v_txt = '===== true 9' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -620,6 +795,7 @@ drop function if exists pg_temp.v0009w_subs(text);
 drop function if exists pg_temp.v0009w_lines(text);
 drop function if exists pg_temp.v0009w_billing();
 drop function if exists pg_temp.v0009w_events();
+drop function if exists pg_temp.v0009w_upsert_118(uuid, jsonb);
 
 -- Verdict: one row per check, then the verdict
 select check_name, result, detail
@@ -628,7 +804,7 @@ from (select ord, check_name, result, detail from verify_0009w
       select 99, 'verdict',
              case when not current_setting('verify.dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009w where result = 'PASS') = 24
+                  when (select count(*) from verify_0009w where result = 'PASS') = 26
                        and not exists (select 1 from verify_0009w where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('195_verify_subscription_lines: %s PASS, %s FAIL', (select count(*) from verify_0009w where result = 'PASS'),

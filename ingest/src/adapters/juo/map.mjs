@@ -35,8 +35,8 @@
  *                 (customerId), orderSourceId (data.orderId: the store's order, digits), renewalSourceId (data.renewalId),
  *                 ownerSourceId (owner.id: the chargeback's, refund's or invoice's order's own id), amount and currency
  *                 (data.value or data.total), returnCode (a chargeback's data.reasonCode as a code: a SEPA return code
- *                 such as MD01, a card dispute reason such as fraudulent: four upper-case letters or digits, or a
- *                 lower-case word with _; reasonMessage never read), instrumentType
+ *                 such as MD01: four upper-case letters or digits; a card dispute reason such as fraudulent from
+ *                 CARD_DISPUTE_REASONS only; reasonMessage never read), instrumentType
  *                 (data.instrumentType as one of INSTRUMENTS), attempt, errorCode, partial (a refund's), raw }
  *
  * The event types (Juo's GET event-types, read 18 November 2026; docs/ingest/README.md, section Juo):
@@ -152,9 +152,14 @@ const INTERVALS = ["day", "week", "month", "year"];
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/;
 const TYPE = /^[a-z][a-z0-9-]*(:[a-z0-9/-]+)?$/;
 const CODE = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
-/** A return code: a payment scheme's four-character code (SEPA's ISO 20022 MD01, AM04) or a card dispute reason in lower case
- * (fraudulent, product_not_received); never anything that could hold an account number or a name */
-const RETURN_CODE = /^(?:[A-Z0-9]{4}|[a-z][a-z_]{1,39})$/;
+/** A return code: a payment scheme's four-character code (SEPA's ISO 20022 MD01, AM04); never anything that could hold an
+ * account number or a name. A card dispute reason enters only from CARD_DISPUTE_REASONS */
+const RETURN_CODE = /^[A-Z0-9]{4}$/;
+/** The card schemes' dispute reasons a chargeback may carry, as the payment providers write them (a fixed list, as
+ * REASON_CODES): any other word is dropped and counted return_code_dropped, so the dry run shows a new one */
+export const CARD_DISPUTE_REASONS = ["bank_cannot_process", "check_returned", "credit_not_processed", "customer_initiated", "debit_not_authorized",
+  "duplicate", "fraudulent", "general", "incorrect_account_details", "insufficient_funds", "noncompliant", "product_not_received",
+  "product_unacceptable", "subscription_canceled", "unrecognized"];
 const NUMBER = /^#?[A-Za-z0-9-]{1,30}$/;
 const PRODUCT_STATUS = /^[a-z][a-z_]{0,19}$/;
 /** An instrument type's name as the logs and the dry run show it: Juo's own word for the type, never a value */
@@ -333,9 +338,10 @@ export function lineItems(s) {
 export function catalogTextOf(v) {
   if (typeof v !== "string" || !v.trim()) return { value: null, dropped: false };
   const s = v.trim();
-  // eslint-disable-next-line no-control-regex
-  if (s.includes("@") || /[\u0000-\u001f\u007f-\u009f]/.test(s)) return { value: null, dropped: true };
-  return { value: s.slice(0, 100), dropped: false };
+  // every control, format and line or paragraph separator character: at least what the database's [[:cntrl:]] refuses
+  if (s.includes("@") || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(s)) return { value: null, dropped: true };
+  // cut by characters (code points), as the database counts them, never inside a surrogate pair
+  return { value: Array.from(s).slice(0, 100).join(""), dropped: false };
 }
 
 /**
@@ -424,7 +430,8 @@ export function eventItem(e) {
     errorCode, reasonCode, statusFrom, statusTo,
     billingFromAt: t === "billing_date_moved" ? timeOf(data.from) : t === "skipped" ? timeOf(data.skippedDate) : null,
     billingToAt: t === "billing_date_moved" ? timeOf(data.to) : t === "skipped" || t === "migrated" ? timeOf(data.nextBillingDate) : null,
-    causeCode: t === "billing_date_moved" ? (BILLING_CAUSES.includes(data.cause) ? data.cause : null) : known.cause ?? null,
+    causeCode: t === "billing_date_moved" ? (typeof data.cause === "string" && BILLING_CAUSES.includes(data.cause.trim().toLowerCase())
+      ? data.cause.trim().toLowerCase() : null) : known.cause ?? null,
     intervalFrom: t === "interval_changed" ? intervalOf(from.interval) : null,
     intervalCountFrom: t === "interval_changed" ? wholeOf(from.intervalCount, 1, 1000) : null,
     intervalTo: t === "interval_changed" ? intervalOf(to.interval) : null,
@@ -460,7 +467,7 @@ export function billingEventItem(e) {
   const data = e?.data && typeof e.data === "object" ? e.data : {};
   const money = data.value && typeof data.value === "object" ? data.value : data.total && typeof data.total === "object" ? data.total : {};
   const codeHeld = kind === "chargeback" && typeof data.reasonCode === "string" ? data.reasonCode.trim() : null;
-  const returnCode = codeHeld && RETURN_CODE.test(codeHeld) ? codeHeld : null;
+  const returnCode = codeHeld && (RETURN_CODE.test(codeHeld) || CARD_DISPUTE_REASONS.includes(codeHeld)) ? codeHeld : null;
   const instrument = instrumentInfoOf(data.instrumentType);
   const item = {
     sourceId, kind, occurredAt,
