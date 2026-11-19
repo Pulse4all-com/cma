@@ -870,12 +870,16 @@ begin
       and r.name not in ('follow_up_item', 'follow_up_snapshot', 'follow_up_marker')
   )
   select string_agg(t.name, ', ' order by t.name) filter (where not (t.name = any (cma.follow_up_input_tables()))),
-         string_agg(t.name, ', ' order by t.name) filter (where not exists (select 1 from pg_trigger g where g.tgrelid = ('cma.' || t.name)::regclass and g.tgname = 'audit'
-                                                                           and g.tgenabled <> 'D'))
+         -- since addition 0009w (194) a table's audit may be two triggers (audit on insert and delete, audit_change on a
+         -- real update): every one of insert, update and delete must reach cma.audit_row() through an enabled trigger
+         string_agg(t.name, ', ' order by t.name) filter (where (select bit_or(g.tgtype::integer) & 28 from pg_trigger g
+                                                                   where g.tgrelid = ('cma.' || t.name)::regclass and not g.tgisinternal
+                                                                     and g.tgfoid = 'cma.audit_row()'::regprocedure and g.tgenabled <> 'D')
+                                                                  is distinct from 28)
     into v_missing, v_unaudited
   from tabs t;
   v_ok := v_missing is null and v_unaudited is null;
-  insert into verify_0009o values (6, 'S6 the follow-up''s input tables: each table its functions read is listed and its audit trigger enabled',
+  insert into verify_0009o values (6, 'S6 the follow-up''s input tables: each table its functions read is listed and audited on insert, update and delete',
     case when v_ok and not v_provoke then 'ok' else 'FAIL' end,
     coalesce('not listed: ' || v_missing, '') || coalesce(' not audited: ' || v_unaudited, '') || case when v_ok then cardinality(cma.follow_up_input_tables()) || ' tables listed' else '' end);
 end

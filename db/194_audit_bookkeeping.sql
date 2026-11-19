@@ -5,22 +5,27 @@
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 192_fleet_page.sql (0009v).
 -- Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 195_verify_audit_bookkeeping.sql there (normal, then provoked), the verifies below, then prod the same way before the
--- merge of its pull request, outside office hours (the ANALYZE of audit_log reads up to 30,000 of its pages, and the last
--- section takes an ACCESS EXCLUSIVE lock on sync_run, sync_cursor and ingest_event for the rest of the transaction).
+-- merge of its pull request, outside office hours (the ANALYZE of audit_log reads up to 30,000 of its pages, and sections 3
+-- and 4 take an ACCESS EXCLUSIVE lock on connection_form, connection_form_field, connection_stage, sync_cursor, ingest_event
+-- and sync_run for the rest of the transaction: a reader of those tables, the follow-up job among them, waits for the
+-- commit, at most the 5 s lock timeout per table).
 -- No function is re-created and no table, view or column changes; main's web and the ingest run unchanged on it.
 -- Verifies this change edits, to run again (dev; prod where they already run there):
 --   31_verify_ingest_crm_records.sql   its structure check no longer asks an audit trigger on ingest_event once 0009w is
 --                                      recorded
 --   33_verify_intake_core.sql          the same for sync_cursor and sync_run
 --   77_verify_audit_hardening.sql      B5: an ingest event's audit images carry no payload, and since 0009w there are none
--- Verifies that read the triggers kept and run unchanged: 75_verify_forms_reporting.sql (connection_form_field keeps a
--- trigger named audit), 179_verify_job_reads.sql (S6: connection_stage, an input of the follow-up, keeps its trigger audit,
--- enabled). Run both again in dev.
+--   179_verify_job_reads.sql           S6: every input table of the follow-up is audited on insert, update and delete by
+--                                      enabled triggers running cma.audit_row() (connection_stage's update by audit_change),
+--                                      no longer only by a trigger named audit
+-- A verify that reads the triggers kept and runs unchanged: 75_verify_forms_reporting.sql (connection_form_field keeps a
+-- trigger named audit). Run it again in dev. Local fixture edited: web/verify/perf-volume-fixture.sql no longer disables
+-- and enables the audit trigger of ingest_event and sync_run, which have none.
 --
 -- Why (Martin, 17 November 2026; Decision log, 17 Nov 2026; evidence records/perf-prod-2026-11-16/prod-slowdown-diagnosis.txt,
 -- #289): audit_log is 10 GB, 89 % of the database, and grows by about 200,000 rows (260 MB) a day. Most of them record the
 -- system's own work, not a change anyone would look up: sync_cursor 70,000 a day, ingest_event 54,000, sync_run 27,000
--- (and 11,500 for Pulse4all Invest), connection_form_field 12,700, connection_form 2,800, connection_stage 1,500. The
+-- (and 11,500 for the second tenant), connection_form_field 12,700, connection_form 2,800, connection_stage 1,500. The
 -- planner's estimate for every day of audit_log since 14 November is 1 row: its last analyze was 91 hours old, 9.3 % of
 -- the rows modified, under autovacuum's 10 % trigger, which on a table of 7.7 million rows waits for 770,000. And the
 -- statements behind the full scans cannot be named: pg_stat_statements is loaded (pg_stat_statements.track = top) but the
@@ -35,7 +40,8 @@
 --                              login may not, the script says so in a NOTICE and goes on; the pull request's Studio step
 --                              as postgres does it instead (as 00_roles.sql, the one other step that needs postgres)
 --   2. audit_log's statistics  autovacuum_analyze_scale_factor 0 and autovacuum_analyze_threshold 40,000: autoanalyze after
---                              about 40,000 changed rows, whatever the table's size (about once a day after section 4);
+--                              about 40,000 changed rows, whatever the table's size (about every two days at the
+--                              estimated 20,000 audit rows a day after section 4);
 --                              autovacuum_vacuum_insert_scale_factor 0 and autovacuum_vacuum_insert_threshold 40,000:
 --                              insert vacuum at the same pace, so the visibility map stays current. One ANALYZE now
 --   3. configuration caches    connection_form, connection_form_field and connection_stage hold what a person sets
@@ -47,13 +53,18 @@
 --                              audit_change (after update, when the row without those times differs). A column added
 --                              later is audited by default (the times are named, not the rest)
 --   4. bookkeeping             no audit trigger on sync_cursor, sync_run and ingest_event: rows of the system's own work
---                              (where a stream stands, each job's run, each event received and its processing) that
---                              no person writes and that are kept in the tables themselves; as data_quality_snapshot,
+--                              (where a stream stands, each job's run, each event received and its processing), kept
+--                              in the tables themselves. The ingest (ingest.write) and the scheduler write them; the one
+--                              person's path is a device file load (cma.load_device_snapshot, tenant.configure, 114),
+--                              whose sync_run row keeps the person in started_by and cannot be changed once finished
+--                              (cma.check_sync_run, 32), and whose devices stay audited. The application may delete
+--                              none of the three (32, 30). As data_quality_snapshot,
 --                              flash_current_take and follow_up_item before them. Existing audit rows stay (their
 --                              retention is CMA-112)
 --
--- Re-running cma.setup_tenant_table() on one of section 3's tables would make audit fire on every update again, next to
--- audit_change: a later migration that calls it there drops the trigger audit and creates it again as section 3 does.
+-- Re-running cma.setup_tenant_table() on one of these six tables puts its old trigger audit back (insert, update and
+-- delete): next to audit_change on section 3's, every update audited twice; on section 4's, the bookkeeping audited again.
+-- A later migration that calls it there repeats this script's section 3 or 4 for that table.
 --
 -- SQLSTATEs: none new.
 --
