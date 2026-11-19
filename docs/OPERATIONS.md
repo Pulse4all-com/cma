@@ -575,8 +575,8 @@ log-based distribution metric on it; until that metric exists the backend latenc
    ```bash
    cd ~/cma/web && npm audit --omit=dev 2>&1 | tail -3; cd ~/cma/ingest && npm audit --omit=dev 2>&1 | tail -3
    ```
-   Expected: `found 0 vulnerabilities` for what ships; the known high advisories live under
-   `eslint-config-next` (a devDependency; README Open decisions) and show only without `--omit=dev`. Never
+   Expected: `6 moderate severity vulnerabilities` in each, the `@google-cloud/cloud-sql-connector` chain of
+   glob and minimatch (README Open decisions); any other advisory, or a high one, is new. Never
    `npm audit fix --force`. Since #158 Dependabot opens one grouped minor-and-patch pull request
    per project per month (the first, #164 for `web/`, on 18 October 2026); a major stays by hand.
    The docker entries propose a bump of the Dockerfiles' pinned `node:22.x.y-alpine`; a Node.js security
