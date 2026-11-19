@@ -73,11 +73,12 @@ function PaidToday({ rows }: { rows: BoardRow[] }) {
 // The Team panel's columns: one per group tile, sharing the width, and Paid today last, as wide as its figure (a tenant
 // without paid pauses has five tiles, so six columns; with a Paid pause tile seven). At 1280 px a seventh equal column
 // is 104 px inside, narrower than a team's total ("12h 05m" is 116 px, "160h 00m" 133 px), so the figure's column takes
-// its own width and never wraps. Whole class names, so the style sheet holds every one
+// its own width and never wraps; at least 9.5rem, which holds up to "99h 59m", so the tiles do not reflow when the
+// hydrated figure or the day's total gains a digit. Whole class names, so the style sheet holds every one
 const TEAM_COLUMNS: Record<number, string> = {
-  2: "grid-cols-[repeat(2,minmax(0,1fr))_auto]", 3: "grid-cols-[repeat(3,minmax(0,1fr))_auto]",
-  4: "grid-cols-[repeat(4,minmax(0,1fr))_auto]", 5: "grid-cols-[repeat(5,minmax(0,1fr))_auto]",
-  6: "grid-cols-[repeat(6,minmax(0,1fr))_auto]",
+  2: "grid-cols-[repeat(2,minmax(0,1fr))_minmax(9.5rem,auto)]", 3: "grid-cols-[repeat(3,minmax(0,1fr))_minmax(9.5rem,auto)]",
+  4: "grid-cols-[repeat(4,minmax(0,1fr))_minmax(9.5rem,auto)]", 5: "grid-cols-[repeat(5,minmax(0,1fr))_minmax(9.5rem,auto)]",
+  6: "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]",
 };
 
 const isGroup = (g: LiveGroup): g is Group => g !== "clockedOut" && g !== "notClockedIn";
@@ -131,7 +132,7 @@ export function LiveBoard({
           </p>
         </div>
         {/* A group of toggle buttons: the name needs a role to be allowed on a div (the IT audit of 17 October 2026) */}
-        <div className={`grid ${TEAM_COLUMNS[tiles.length] ?? "grid-cols-[repeat(6,minmax(0,1fr))_auto]"} divide-x divide-p4a-border`} role="group" aria-label={t.group} data-testid="team-tiles">
+        <div className={`grid ${TEAM_COLUMNS[tiles.length] ?? "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]"} divide-x divide-p4a-border`} role="group" aria-label={t.group} data-testid="team-tiles">
           {tiles.map((tile) => (
             <div key={tile.group} className="flex min-w-0 px-2 first:pl-0 last:pr-0">
               <button

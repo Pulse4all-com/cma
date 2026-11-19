@@ -693,8 +693,9 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           can_clock_in_again: r.can_clock_in_again,
         })
       : null;
-  // The paid inputs (addition 0009z), the board's alone; an ended day has nothing running, as for the worked time
-  const day: Workday | null = own
+  // The paid inputs (addition 0009z), the board's alone; an ended day has nothing running, as for the worked time.
+  // Before 200 has run the columns are absent and the clock carries none (the figure reads 0, never NaN)
+  const day: Workday | null = own && r.paid_closed_seconds != null
     ? {
         ...own,
         clock: {
@@ -703,7 +704,7 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           paidRunningSince: own.status !== "ended" && r.paid_running_since ? r.paid_running_since.toISOString() : null,
         },
       }
-    : null;
+    : own;
   const status =
     day && day.status === "working" && r.status_key && r.status_name
       ? {
