@@ -2,7 +2,7 @@ import { RosterPlanner } from "@/components/RosterPlanner";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
-import { absenceKeywordList } from "@/lib/roster";
+import { absenceKeywordList, plannerNeedsTeams, plannerTeam, rosterTeamArg } from "@/lib/roster";
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "../../access";
 import { pickCopy } from "@/lib/copy";
@@ -38,14 +38,17 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
   const today = dateKeyInZone(new Date(), me.timeZone);
   const thisWeek = startOfWeek(today);
   const weekStart = isDateKey(sp.week) ? startOfWeek(sp.week) : thisWeek;
-  const teams = await data().listTeams(me);
-  // The team from the query, else the tenant's first team, else everyone (a tenant without teams)
-  const teamParam = typeof sp.team === "string" ? sp.team : null;
-  const team = teamParam === "all" ? null : teams.some((x) => x.key === teamParam) ? teamParam : teams[0]?.key ?? null;
+  // One team per page view (brief B41): the team the query names, else Everyone (D1); every read and every control
+  // below takes this one key (D2), and the planner writes it into the address when the query lacked it. Everyone
+  // needs no team list to resolve, so on Everyone (the rail's default) every read starts at once
+  const teamsRead = data().listTeams(me);
+  const team = plannerTeam(sp.team, plannerNeedsTeams(sp.team) ? await teamsRead : []);
+  const read = rosterTeamArg(team);
 
-  const [week, allWeeks, absences] = await Promise.all([
-    data().getRosterWeek(me, weekStart, team),
-    data().listRosterWeeks(me, team, { from: addDays(weekStart, -7 * WEEKS_AROUND), to: addDays(weekStart, 7 * WEEKS_AROUND + 6) }),
+  const [teams, week, allWeeks, absences] = await Promise.all([
+    teamsRead,
+    data().getRosterWeek(me, weekStart, read),
+    data().listRosterWeeks(me, read, { from: addDays(weekStart, -7 * WEEKS_AROUND), to: addDays(weekStart, 7 * WEEKS_AROUND + 6) }),
     data().listAbsenceTypes(me),
   ]);
   // The list is a calendar (one row per week in the range, written or not); the browser shows the written ones
@@ -58,7 +61,9 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
         {t.intro} <span data-testid="absence-keywords">{t.absenceKeywords.replace("{list}", absenceKeywordList(absences.filter((a) => a.isActive)))}</span>
       </p>
 
+      {/* Keyed by the week and the team: another week or team is a new grid, never the previous one's cells under new props */}
       <RosterPlanner
+        key={`${weekStart}:${team}`}
         week={week}
         weeks={weeks}
         teams={teams}

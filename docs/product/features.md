@@ -20,7 +20,7 @@ Part of the CMA documentation (README.md, Documentation map). Moved verbatim fro
 ### 2. Rostering (manager)
 *First version built in the night build of 8 October 2026 (migration 0005, the planner, the print view, My schedule, the shift line and sentence); see API, Roster planner. Still open: coverage targets on a configuration screen, shift templates, swaps and requests, forecasting.*
 - Arno publishes rosters per team and market.
-- Planner: agents by seven days, one structured shift per cell (start and end, or an absence type such as Off or Sick), quick typing (`9-17:30` normalises to `09:00–17:30`), Copy previous week, a dirty-state guard; agents see only their own row and their shift on My day and on the Live board (taken from the demo).
+- Planner: agents by seven days, one structured shift per cell (start and end, or an absence type such as Off or Sick), quick typing (`9-17:30` normalises to `09:00–17:30`), Copy previous week, one team per page view (Everyone, the whole tenant, by default; the address carries `?team=`), a dirty-state guard; agents see only their own row and their shift on My day and on the Live board (taken from the demo).
 - Roster shows **skill coverage** per team per day: for example France on Tuesday, is sales covered, courtesy calls, outstanding payments, exchanges?
 - One agent can hold many skills. An omniskilled agent covers multiple slots alone.
 - Coverage shows not only *covered* but *how deeply covered*, so single-person dependencies are visible.

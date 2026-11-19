@@ -2633,7 +2633,8 @@ async function expectFrame() {
     });
     if (m.kbd !== (provoke ? 1 : 0) || m.hint || m.pressed !== "true" || m.state !== "hidden") problems.push(`hints: hidden by cookie gives ${JSON.stringify(m)}, expected no keycap, no shortcuts line, the toggle pressed`);
     await p.keyboard.press("n");
-    await p.waitForURL("**/roster/planner?**").catch(() => undefined);
+    // the bare address already gains ?team=all on load (brief B41): wait for N's week, not for any query
+    await p.waitForURL((u) => u.searchParams.has("week")).catch(() => undefined);
     await settle(p);
     if (!new URL(p.url()).searchParams.get("week")) problems.push("hints: N no longer moves to the next week while the keycaps are hidden");
     await p.waitForLoadState("networkidle");
@@ -2656,6 +2657,64 @@ async function expectFrame() {
     if (!/\d{4}$/.test(bar.label) || (bar.label.match(/\d{4}/g) ?? []).length > 2 || bar.label.includes("Mon")) problems.push(`roster: the week label is "${bar.label}", expected one range in the locale ending in the year`);
     if (!bar.keywords.includes("Day off (off)") || !bar.keywords.includes("Public holiday (public_holiday)") || bar.placeholder !== "9-17:30 or off") problems.push(`roster: keywords "${bar.keywords}", placeholder "${bar.placeholder}"`);
     await p.screenshot({ path: `${outDir}/manager-roster-1280.png` });
+    await ctx.close();
+  }
+
+  // 3b. The planner's one team per page view (19 November 2026, brief B41): the rail's bare /roster/planner opens on
+  // Everyone and the address says so; a team chosen in the select moves the select, the address, the status and the
+  // grid together, and a reload shows the same; every name the coverage counts on a day has a shift in the grid that day
+  {
+    const ctx = await withCookies("manager", {});
+    const p = await ctx.newPage();
+    const plannerOf = () => p.evaluate(() => {
+      const grid = document.querySelector('[data-testid="roster-grid"]');
+      const shifts = new Map();
+      for (const tr of grid ? grid.querySelectorAll("tr") : []) {
+        const name = tr.querySelector("td .font-semibold")?.textContent?.trim() ?? "";
+        [...tr.querySelectorAll("td")].slice(1, 8).forEach((td, i) => {
+          const text = td.querySelector("input")?.value ?? td.textContent ?? "";
+          if (/\d{2}:\d{2}\u2013\d{2}:\d{2}/.test(text)) shifts.set(`${name}|${i}`, true);
+        });
+      }
+      const counted = [];
+      for (const tr of document.querySelectorAll('[data-testid="roster-coverage"] tbody tr')) {
+        [...tr.querySelectorAll("td")].slice(1).forEach((td, i) => {
+          for (const n of (td.getAttribute("title") ?? "").split(", ").filter(Boolean)) counted.push(`${n}|${i}`);
+        });
+      }
+      return {
+        select: document.querySelector('[data-testid="planner-filters"] select[name="team"]')?.value ?? null,
+        status: document.querySelector('[data-testid="roster-status"]')?.getAttribute("data-status") ?? null,
+        header: document.querySelector('[data-testid="roster-status"]')?.getAttribute("data-team") ?? null,
+        address: new URL(location.href).searchParams.get("team"),
+        print: new URL(document.querySelector('main a[data-shortcut="x"]')?.href ?? location.href).searchParams.get("team"),
+        weekLinks: [...document.querySelectorAll('main nav a[data-shortcut="p"], main nav a[data-shortcut="n"]')].map((a) => new URL(a.href).searchParams.get("team")),
+        uncounted: counted.filter((k) => !shifts.has(k)),
+      };
+    });
+    const expectOne = (tag, m, team, status) => {
+      const all = [m.select, m.header, m.address, m.print, ...m.weekLinks];
+      if (all.some((x) => x !== team) || m.status !== status || m.uncounted.length > 0) {
+        problems.push(`planner team: ${tag} gives ${JSON.stringify(m)}, expected the select, the header, the address, print and the week links on ${team}, ${status}, every counted name with a shift in the grid`);
+      }
+    };
+    await p.goto(BASE + "/roster/planner");
+    await settle(p);
+    await p.waitForURL((u) => u.searchParams.has("team"), { timeout: 5000 }).catch(() => undefined);
+    // the mock seeds this week published for Team NL and nothing for Everyone (seedRosters)
+    expectOne("the bare address", await plannerOf(), provoke ? "en" : "all", "draft");
+    await p.locator('[data-testid="planner-filters"] select[name="team"]').selectOption("nl");
+    await p.waitForURL((u) => u.searchParams.get("team") === "nl").catch(() => undefined);
+    await p.waitForFunction(() => document.querySelector('[data-testid="planner-filters"]')?.getAttribute("aria-busy") !== "true").catch(() => undefined);
+    await settle(p);
+    expectOne("Team NL chosen", await plannerOf(), "nl", "published");
+    await p.reload();
+    await settle(p);
+    expectOne("Team NL reloaded", await plannerOf(), "nl", "published");
+    await p.goto(BASE + "/roster/planner?team=ghost");
+    await settle(p);
+    await p.waitForURL((u) => u.searchParams.get("team") !== "ghost", { timeout: 5000 }).catch(() => undefined);
+    expectOne("an unknown team", await plannerOf(), "all", "draft");
     await ctx.close();
   }
 
