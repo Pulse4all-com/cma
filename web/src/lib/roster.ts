@@ -35,6 +35,11 @@ export function plannerTeam(param: unknown, teams: readonly { key: string }[]): 
   return teams.some((t) => t.key === param) ? param : EVERYONE;
 }
 
+/** Whether resolving the ?team= value needs the tenant's teams: only a value that names a team does (Everyone needs none) */
+export function plannerNeedsTeams(param: unknown): boolean {
+  return typeof param === "string" && param !== EVERYONE;
+}
+
 /** The planner's key as the data layer and the API take it: null for Everyone, else the team's key */
 export function rosterTeamArg(team: string): string | null {
   return team === EVERYONE ? null : team;

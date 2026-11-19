@@ -2685,6 +2685,7 @@ async function expectFrame() {
       return {
         select: document.querySelector('[data-testid="planner-filters"] select[name="team"]')?.value ?? null,
         status: document.querySelector('[data-testid="roster-status"]')?.getAttribute("data-status") ?? null,
+        header: document.querySelector('[data-testid="roster-status"]')?.getAttribute("data-team") ?? null,
         address: new URL(location.href).searchParams.get("team"),
         print: new URL(document.querySelector('main a[data-shortcut="x"]')?.href ?? location.href).searchParams.get("team"),
         weekLinks: [...document.querySelectorAll('main nav a[data-shortcut="p"], main nav a[data-shortcut="n"]')].map((a) => new URL(a.href).searchParams.get("team")),
@@ -2692,9 +2693,9 @@ async function expectFrame() {
       };
     });
     const expectOne = (tag, m, team, status) => {
-      const all = [m.select, m.address, m.print, ...m.weekLinks];
+      const all = [m.select, m.header, m.address, m.print, ...m.weekLinks];
       if (all.some((x) => x !== team) || m.status !== status || m.uncounted.length > 0) {
-        problems.push(`planner team: ${tag} gives ${JSON.stringify(m)}, expected the select, the address, print and the week links on ${team}, ${status}, every counted name with a shift in the grid`);
+        problems.push(`planner team: ${tag} gives ${JSON.stringify(m)}, expected the select, the header, the address, print and the week links on ${team}, ${status}, every counted name with a shift in the grid`);
       }
     };
     await p.goto(BASE + "/roster/planner");

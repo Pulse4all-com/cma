@@ -26,7 +26,7 @@ import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, RosterEntry, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
 import {
-  absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, rosterTeamArg, weekDays,
+  absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
   type Cell, type CellProblem, type CoverageState,
 } from "@/lib/roster";
 import { addDays, fmtDate, fmtMinutes, fmtDateTime } from "@/lib/time";
@@ -197,7 +197,7 @@ export function RosterPlanner({
   const coverageText = (c: { state: CoverageState; plannedPeople: number; target: number | null }) =>
     c.state === "none" ? t.coverageNone : c.state === "single" ? t.coverageSingle
     : c.state === "short" ? t.coverageShort.replace("{n}", String(c.plannedPeople)).replace("{target}", String(c.target)) : `${t.coverageOk} · ${c.plannedPeople}`;
-  const printHref = `/roster/planner/print?week=${weekStart}&team=${team}`;
+  const printHref = `/roster/planner/print?week=${weekStart}&team=${encodeURIComponent(team)}`;
   const th = "h-10 whitespace-nowrap px-2 text-left font-semibold";
 
   return (
@@ -211,7 +211,7 @@ export function RosterPlanner({
               name="team"
               value={shownTeam}
               data-shortcut="t"
-              onChange={(e) => choose(e.target.value, `/roster/planner?week=${weekStart}&team=${e.target.value}`)}
+              onChange={(e) => choose(e.target.value, `/roster/planner?week=${weekStart}&team=${encodeURIComponent(e.target.value)}`)}
               className="h-10 min-w-48 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
               {teams.map((x) => (
@@ -225,7 +225,7 @@ export function RosterPlanner({
             <select
               value=""
               data-menu=""
-              onChange={(e) => { if (e.target.value) choose(shownTeam, `/roster/planner?week=${e.target.value}&team=${shownTeam}`); }}
+              onChange={(e) => { if (e.target.value) choose(shownTeam, `/roster/planner?week=${encodeURIComponent(e.target.value)}&team=${encodeURIComponent(shownTeam)}`); }}
               className="h-10 min-w-56 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
               <option value="">{weeks.length === 0 ? t.noWeeks : `${weeks.length} ${t.weeks.toLowerCase()}`}</option>
@@ -240,7 +240,7 @@ export function RosterPlanner({
       </WeekBar>
 
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 text-small" data-testid="roster-status" data-status={header.status}>
+        <div className="flex items-center gap-3 text-small" data-testid="roster-status" data-status={header.status} data-team={plannerTeamOfHeader(header)}>
           <Badge tone={header.status === "published" ? "success" : "neutral"}>{header.status === "published" ? t.published : t.draft}</Badge>
           {header.status === "published" ? (
             <span className="text-p4a-muted">

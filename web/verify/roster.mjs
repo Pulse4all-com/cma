@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import {
   absenceKeywordList, adherence, cellLabel, coverageGrid, coverageState, EVERYONE, headcountByDate, isoWeek, onRoster, parseCell, plannedInstant, plannedMinutesByUser,
-  plannerSearch, plannerTeam, plannerTeamOfHeader, rosterTeamArg, shiftMinutes, weekDays,
+  plannerNeedsTeams, plannerSearch, plannerTeam, plannerTeamOfHeader, rosterTeamArg, shiftMinutes, weekDays,
 } from "../src/lib/roster.ts";
 import { fmtDateRange } from "../src/lib/time.ts";
 
@@ -145,13 +145,16 @@ expect("(a) no ?team= opens Everyone, not the tenant's first team", [plannerTeam
 expect("(b) a key that names no current team opens Everyone", [plannerTeam("ghost", TEAMS), plannerTeam("", TEAMS), plannerTeam("en", [])], [EVERYONE, EVERYONE, EVERYONE],
   ["ghost", "", "en"]);
 expect("Everyone and a current team are kept as asked", [plannerTeam("all", TEAMS), plannerTeam("nl", TEAMS)], ["all", "nl"], ["en", "en"]);
+expect("only a value that names a team needs the team list; Everyone resolves without it",
+  [undefined, "all", "nl", "ghost"].map(plannerNeedsTeams), [false, false, true, true], [true, true, true, true]);
+expect("without the team list a missing value and Everyone still resolve to Everyone", [plannerTeam(undefined, []), plannerTeam("all", [])], [EVERYONE, EVERYONE], ["en", "en"]);
 // (c) What each part of the page is given for one query: the select shows the resolved key, getRosterWeek and
-// listRosterWeeks read rosterTeamArg of it, and the week that comes back names the same team in its header
+// listRosterWeeks read rosterTeamArg of it, and the header the database answers for that read (a roster's team_id,
+// null for the whole tenant) reads back as the same key; the browser's header is verify:layout's block 3b
 const view = (param) => {
-  const team = plannerTeam(param, TEAMS);
+  const team = plannerTeam(param, plannerNeedsTeams(param) ? TEAMS : []);
   const read = rosterTeamArg(team);
-  const header = { teamKey: read };
-  return { select: team, week: read, weeks: read, header: plannerTeamOfHeader(header), print: plannerTeam(team, TEAMS), address: new URLSearchParams(plannerSearch("", team)).get("team") };
+  return { select: team, week: read, weeks: read, header: plannerTeamOfHeader({ teamKey: read }), print: plannerTeam(team, TEAMS), address: new URLSearchParams(plannerSearch("", team)).get("team") };
 };
 const agree = (v) => v.select === v.header && v.select === v.print && v.select === v.address && v.week === v.weeks && v.week === rosterTeamArg(v.select);
 expect("(c) Everyone: the select, the header, both reads, print and the address on one key", view("all"),
@@ -173,15 +176,18 @@ const page = src("../src/app/roster/planner/page.tsx");
 const planner = src("../src/components/RosterPlanner.tsx");
 const print = src("../src/app/roster/planner/print/page.tsx");
 expect("(c) the page: one resolved key for both reads and the planner, no first team",
-  [/const team = plannerTeam\(sp\.team, teams\);/.test(page), /const read = rosterTeamArg\(team\);/.test(page), /getRosterWeek\(me, weekStart, read\)/.test(page),
+  [/const team = plannerTeam\(sp\.team, plannerNeedsTeams\(sp\.team\) \? await teamsRead : \[\]\);/.test(page), /const read = rosterTeamArg\(team\);/.test(page), /getRosterWeek\(me, weekStart, read\)/.test(page),
     /listRosterWeeks\(me, read, /.test(page), /key=\{`\$\{weekStart\}:\$\{team\}`\}/.test(page), /\bteam=\{team\}/.test(page), !/teams\[0\]/.test(page)],
   [true, true, true, true, true, true, true], [false, false, false, false, false, false, false]);
 expect("(c) the planner: select, week links, print, copy, publish, cells and the address on the page's key",
   [/usePendingChoice\(team\)/.test(planner), /value=\{shownTeam\}/.test(planner), /const keep = \{ team \};/.test(planner), /const teamArg = rosterTeamArg\(team\);/.test(planner),
-    (planner.match(/\{ team: teamArg[ ,]/g) ?? []).length, /print\?week=\$\{weekStart\}&team=\$\{team\}/.test(planner),
-    /window\.history\.replaceState\(null, "", plannerSearch\(window\.location\.search, team\)\)/.test(planner), /if \(answer !== week\) \{/.test(planner)],
-  [true, true, true, true, 3, true, true, true], [false, false, false, false, 0, false, false, false]);
-expect("(c) the print view resolves the team as the planner does", /getRosterWeek\(me, weekStart, rosterTeamArg\(plannerTeam\(sp\.team, teams\)\)\)/.test(print), true, false);
+    (planner.match(/\{ team: teamArg[ ,]/g) ?? []).length, /print\?week=\$\{weekStart\}&team=\$\{encodeURIComponent\(team\)\}/.test(planner),
+    /window\.history\.replaceState\(null, "", plannerSearch\(window\.location\.search, team\)\)/.test(planner), /if \(answer !== week\) \{/.test(planner),
+    /data-team=\{plannerTeamOfHeader\(header\)\}/.test(planner)],
+  [true, true, true, true, 3, true, true, true, true], [false, false, false, false, 0, false, false, false, false]);
+expect("(c) the print view resolves the team as the planner does, the team list only for a named team",
+  [/getRosterWeek\(me, weekStart, rosterTeamArg\(plannerTeam\(sp\.team, teams\)\)\)/.test(print), /const teams = plannerNeedsTeams\(sp\.team\) \? await data\(\)\.listTeams\(me\) : \[\];/.test(print)],
+  [true, true], [false, false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
