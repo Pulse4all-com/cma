@@ -489,11 +489,11 @@ const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma
 expect("G2 no name, address, email, phone, payment detail, message or free-text reason in any row of the run's tenants (audit log included)",
   PERSONAL.filter((p) => dbText.includes(p)), [], PERSONAL);
 const logText = logs.join("\n");
-expect("G2b Juo's renewal notice never read (19 Nov 2026): no request of this run asked for it or its category, no event row holds it, no log line names its type",
-  [fake.state.queriesSeen.length > 0 && fake.state.queriesSeen.some((x) => /notification/.test(x)),
+expect("G2b Juo's renewal notice never read (19 Nov 2026): the fake saw this run's queries, and none asked for it or its category; no event row holds it, no log line names its type",
+  [fake.state.queriesSeen.length > 0, fake.state.queriesSeen.some((x) => /notification/.test(x)),
     (await q("select count(*)::int as n from cma.subscription_event where tenant_id = any($1::uuid[]) and (source_id = $2 or event_type = 'renewal_notice')",
       [[T1.t, T2.t], notice.id]))[0].n, logText.includes("renewal:notification-sent")],
-  [false, 0, false], [true, 1, true]);
+  [true, false, 0, false], [false, true, 1, true]);
 expect("G3 the logs hold no key and no value: connection ids, counts, codes and Juo's type names",
   [...PERSONAL, KEY1, KEY2, one.subscriptions[0].customer, "7100000"].filter((v) => logText.includes(v)), [], ["x"]);
 expect("G4 every request carried its store's id and a key, in headers; none for the store-less handle",
