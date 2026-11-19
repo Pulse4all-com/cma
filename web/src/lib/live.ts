@@ -1,6 +1,6 @@
 /**
  * The Live board's logic from the team now (addition 0003e, cma.team_now): the group of each
- * person, the tiles, the rows in their order, the filters, and the two figures that tick on the
+ * person, the tiles, the rows in their order, the filters, and the figures that tick on the
  * screen. Pure and without runtime imports, so verify/live.mjs tests it without a browser or a
  * database.
  *
@@ -154,6 +154,27 @@ export function secondsSince(since: Instant, nowMs: number): number {
 export function workedSeconds(clock: WorkdayClock, nowMs: number, dayEndsAt: Instant | null = null): number {
   const until = dayEndsAt === null ? nowMs : Math.min(nowMs, Date.parse(dayEndsAt));
   return clock.closedSeconds + (clock.runningSince ? secondsSince(clock.runningSince, until) : 0);
+}
+
+/**
+ * Paid seconds at `nowMs` (addition 0009z, the Live board's Paid today): the closed paid stretches plus the running one
+ * while the current status is paid, stopped at the day's end (the workday window) as the database's count is, so the
+ * board never shows more than Team hours will. The time between two sessions is no stretch, so it is not paid; an
+ * ended day has nothing running. A clock without the paid inputs (the own-day read never carries them) counts 0.
+ */
+export function paidSeconds(clock: WorkdayClock, nowMs: number, dayEndsAt: Instant | null = null): number {
+  const until = dayEndsAt === null ? nowMs : Math.min(nowMs, Date.parse(dayEndsAt));
+  return (clock.paidClosedSeconds ?? 0) + (clock.paidRunningSince ? secondsSince(clock.paidRunningSince, until) : 0);
+}
+
+/**
+ * Paid today of the rows shown (docs/definitions.md, Paid today): each person's paid seconds floored to whole minutes
+ * first (the 7 October 2026 rule, as Team hours' Paid column), then summed, so the figure equals the sum of today's
+ * Paid column on Team hours for the same people. A row without a day (not clocked in, a removed day) counts 0. Each
+ * row's today is its own business date in its own zone, as the board's.
+ */
+export function paidTodayMinutes(rows: { clock: WorkdayClock | null; dayEndsAt: Instant | null }[], nowMs: number): number {
+  return rows.reduce((n, r) => n + (r.clock ? Math.floor(paidSeconds(r.clock, nowMs, r.dayEndsAt) / 60) : 0), 0);
 }
 
 /**

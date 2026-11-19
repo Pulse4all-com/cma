@@ -2,7 +2,7 @@
 
 /**
  * The Live board's tiles, filters and rows. The rows come from the server (one read per page);
- * the two figures that change by the second, since and worked so far, tick here from the row's
+ * the figures that change by the second, since, worked so far and paid today, tick here from the row's
  * instants, as the clock on My day does, so nothing is polled for the tick. The page re-reads
  * itself every 10 seconds while the tab is visible (LiveRefresh, since addition 0008i one poll for
  * the whole page) and once more when the tab comes back.
@@ -14,9 +14,10 @@
  * a hover row).
  *
  * The Live board's UX pass (10 November 2026): the groups are one panel of six as the call panels (the title, the people
- * shown, then a column per group, each a toggle that filters the table); the Employer column and filter show only when
+ * shown, then a column per group, each a toggle that filters the table, and since addition 0009z a last column with Paid
+ * today of the people shown, a figure that ticks and filters nothing); the Employer column and filter show only when
  * the board's people have more than one employer (a contact center's board, addition 0008zv, has one), so every column
- * fits at 1280 px; the two figures that tick by the second are cells of their own on one shared clock, so the second
+ * fits at 1280 px; the figures that tick by the second are cells of their own on one shared clock, so the second
  * re-renders those cells, not the board.
  */
 import { useState, useSyncExternalStore } from "react";
@@ -24,8 +25,10 @@ import type { Copy, Locale } from "@/lib/copy";
 import type { BoardRow } from "@/lib/live-board";
 import type { Group } from "@/lib/dashboard";
 import type { Adherence } from "@/lib/roster";
-import { type EmployerOption, type LiveGroup, type TeamOption, type Tile, fmtSeconds, secondsSince, workedSeconds } from "@/lib/live";
+import { type EmployerOption, type LiveGroup, type TeamOption, type Tile, fmtSeconds, paidTodayMinutes, secondsSince, workedSeconds } from "@/lib/live";
+import { fmtMinutes } from "@/lib/time";
 import { groupLabels, Swatch } from "./DashboardCharts";
+import { HeaderHint } from "./HeaderHint";
 import { Badge, Keycap } from "./primitives";
 
 export type { BoardRow } from "@/lib/live-board";
@@ -58,6 +61,26 @@ function Worked({ clock: c }: { clock: BoardRow["clock"] }) {
   const now = useNow();
   return <>{c ? fmtSeconds(now === null ? c.closedSeconds : workedSeconds(c, now)) : ""}</>;
 }
+// Paid today of the rows shown (addition 0009z): each person floored to whole minutes, then summed, stopping at each
+// day's end; before the client clock starts the closed part alone shows, as for the worked figure
+function PaidToday({ rows }: { rows: BoardRow[] }) {
+  const now = useNow();
+  const minutes = now === null
+    ? rows.reduce((n, r) => n + Math.floor((r.clock?.paidClosedSeconds ?? 0) / 60), 0)
+    : paidTodayMinutes(rows, now);
+  return <>{fmtMinutes(minutes)}</>;
+}
+
+// The Team panel's columns: one per group tile, sharing the width, and Paid today last, as wide as its figure (a tenant
+// without paid pauses has five tiles, so six columns; with a Paid pause tile seven). At 1280 px a seventh equal column
+// is 104 px inside, narrower than a team's total ("12h 05m" is 116 px, "160h 00m" 133 px), so the figure's column takes
+// its own width and never wraps; at least 9.5rem, which holds up to "99h 59m", so the tiles do not reflow when the
+// hydrated figure or the day's total gains a digit. Whole class names, so the style sheet holds every one
+const TEAM_COLUMNS: Record<number, string> = {
+  2: "grid-cols-[repeat(2,minmax(0,1fr))_minmax(9.5rem,auto)]", 3: "grid-cols-[repeat(3,minmax(0,1fr))_minmax(9.5rem,auto)]",
+  4: "grid-cols-[repeat(4,minmax(0,1fr))_minmax(9.5rem,auto)]", 5: "grid-cols-[repeat(5,minmax(0,1fr))_minmax(9.5rem,auto)]",
+  6: "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]",
+};
 
 const isGroup = (g: LiveGroup): g is Group => g !== "clockedOut" && g !== "notClockedIn";
 
@@ -74,7 +97,7 @@ export function LiveBoard({
   employers: EmployerOption[];
   teams: TeamOption[];
   /** The board's words and the groups' (a slice, never the whole copy object: it rides in the page's payload) */
-  copy: Pick<Copy, "live" | "dashboard">;
+  copy: Pick<Copy, "live" | "dashboard"> & { hints: Pick<Copy["hints"], "about"> };
   /** The labels' language, so a long word breaks where the language breaks it */
   locale: Locale;
 }) {
@@ -110,7 +133,7 @@ export function LiveBoard({
           </p>
         </div>
         {/* A group of toggle buttons: the name needs a role to be allowed on a div (the IT audit of 17 October 2026) */}
-        <div className="grid grid-cols-6 divide-x divide-p4a-border" role="group" aria-label={t.group} data-testid="team-tiles">
+        <div className={`grid ${TEAM_COLUMNS[tiles.length] ?? "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]"} divide-x divide-p4a-border`} role="group" aria-label={t.group} data-testid="team-tiles">
           {tiles.map((tile) => (
             <div key={tile.group} className="flex min-w-0 px-2 first:pl-0 last:pr-0">
               <button
@@ -131,6 +154,17 @@ export function LiveBoard({
               </button>
             </div>
           ))}
+          {/* Paid today: a figure, not a toggle; it follows the group, employer and team filters (the people shown) */}
+          {/* its definition behind the info mark, as every figure of the board's panels, so a keyboard reaches it too */}
+          <div className="flex px-2 last:pr-0" data-testid="team-paid-today">
+            <div className="flex w-full flex-col px-2 py-1">
+              <p lang={locale} className="flex items-start whitespace-nowrap text-small text-p4a-muted" data-hint-anchor="">
+                <span>{t.paidToday}</span>
+                <HeaderHint label={copy.hints.about.replace("{label}", t.paidToday)} text={t.paidTodayHint} />
+              </p>
+              <p className="tabular mt-auto whitespace-nowrap pt-1 text-title font-bold text-p4a-heading"><PaidToday rows={shown} /></p>
+            </div>
+          </div>
         </div>
       </section>
 
