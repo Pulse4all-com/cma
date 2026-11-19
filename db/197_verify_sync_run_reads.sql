@@ -35,9 +35,10 @@
 --       reads device per connection), unchanged here and part of the next brief (the device scans)
 --   T2  per active tenant, as the application: cma.system_health_runs() within verify.max_overview_ms (500), likewise:
 --       the budget 131_time_all.sql holds the same read to (System health, system health runs, class overview). Set to
---       10 ms after the local measure (3.9 ms at 3x); prod measured 19.3 and 62.2 ms within one hour on one vCPU shared
---       with the minute jobs (records/0009x-prod-2026-11-19, 19 November 2026; Decision log, 19 Nov 2026), so a
---       single-digit budget failed the verify on load, not on the read
+--       10 ms after the local measure (3.9 ms at 3x); prod measured 19.3 ms, then 62.2 ms after an analyze of sync_run
+--       and sync_run_hour, on one vCPU shared with the minute jobs (records/0009x-prod-2026-11-19, 197.txt and
+--       197-after-analyze.txt, 19 November 2026; Decision log, 19 Nov 2026), so a single-digit budget failed the verify
+--       on load, not on the read
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
 -- that check alone compares with a deliberate difference (the new answer with one more run, or a budget of 0).
 -- Collation: every ordering that feeds a compared text says collate "C".
