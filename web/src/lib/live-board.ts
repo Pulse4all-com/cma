@@ -24,6 +24,8 @@ export interface BoardRow {
   statusSince: string | null;
   /** The clock's inputs; null without a day. An ended day has nothing running */
   clock: WorkdayClock | null;
+  /** The day's end (the workday window), where the paid figure stops ticking; null without a day */
+  dayEndsAt: string | null;
   inLabel: string | null;
   outLabel: string | null;
   /** Short zone name when the person's zone differs from the viewer's */
@@ -71,6 +73,7 @@ export function boardRowsOf(data: LiveBoardData, viewer: LiveViewer): { rows: Li
     statusSince: person.day?.statusSince ?? null,
     // The clock's inputs; an ended day has nothing running, so its figure stands still
     clock: person.day?.clock ?? null,
+    dayEndsAt: person.day?.dayEndsAt ?? null,
     // Times in the person's own zone, as Team hours shows them, with the zone's short name when
     // its clock differs from the viewer's (Madrid and Amsterdam share one, London does not)
     inLabel: person.day ? fmtTime(person.day.startedAt, person.timeZone, viewer.locale) : null,

@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-647 figures. Statuses: verified 453 · discrepancy 18 · ambiguous 35 · prerequisite_missing 148 · cadence_unconfirmed 74.
+648 figures. Statuses: verified 454 · discrepancy 18 · ambiguous 35 · prerequisite_missing 148 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -933,6 +933,69 @@ select count(*) from cma.app_user u where u.tenant_id = :tenant_id and cma.time_
 **Notes**
 
 Empty state of the whole board: 'Nobody's time is kept yet' (copy live.noPeople) when the people list is empty, never a 0-row table.
+
+#### `live.paid_today_minutes`
+
+**Paid today** on /live/board · Paid today (Betaald vandaag)
+
+The paid time today of the people the table shows (the group, team and employer filters apply): per person the seconds in stretches whose status is paid, over all of today's sessions, up to the workday window's end, floored to whole minutes, then summed. The same as the sum of today's Paid column on Team hours for the same people. Clocked out counts the ended day; Not clocked in and a removed day count 0. Each person's today is their own business date in their own time zone, as the board's.
+
+**Formula as computed**
+
+```
+paidTodayMinutes(rows shown, now) = sum over the rows of floor(paidSeconds(clock, now, dayEndsAt) / 60); a row without a day counts 0. paidSeconds = paidClosedSeconds + (paidRunningSince ? secondsSince(paidRunningSince, min(now, dayEndsAt)) : 0). paidClosedSeconds = sum of interval seconds where the interval's status is_paid and (not open or capped); paidRunningSince = start of the open, uncapped stretch while its status is_paid (cma.team_now, 0009z). Shown as Xh YYm (fmtMinutes).
+```
+
+**Unit** minutes · **Grain** now · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | workday_id, kind, status_id, occurred_at, supersedes_event_id | CMA | the Workspace's own write paths (clock in, status, clock out, Remove day and the other corrections) and the hourly sweep that closes forgotten days (cma.close_forgotten_workdays), read via cma.time_interval (0008zs) | event-driven; the server inputs re-read every 10 s, the figure ticks client-side every second |
+| `cma.work_status` | is_paid | CMA | tenant configuration (0005a); the flags of a status with time behind it are frozen | on configuration change |
+
+**Filters**
+
+- tenant: as the board
+- people whose time is kept only
+- the rows the table shows: the group, team and employer filters apply (unlike the tiles, which count every row)
+- is_paid stretches only (paid breaks included, unpaid pauses and the time between two sessions excluded)
+- an open stretch counted to the workday window's end, on the server and on the client (dayEndsAt)
+- on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation (boardOfOrganisation in src/lib/live.ts)
+
+**Time** today = the business date in each person's own zone; the server inputs count to least(now(), cma.business_day_end) in the day's own zone; the figure ticks on the browser's clock and stops at each day's end
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `workday.window_end` | 24:00 | 22:00 |
+
+**Who may see it** `monitoring.live`
+
+**Refresh** server inputs every 10 s; the figure ticks client-side every second; before the client clock starts the closed part alone is shown
+
+**Computed in** `cma.team_now` (0009z); `cma.time_interval` (0008zs); `paidTodayMinutes` in src/lib/live.ts; `paidSeconds` in src/lib/live.ts; `fmtMinutes` in src/lib/time.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
+kept as (select u.id as user_id, coalesce(u.timezone, o.timezone, t.timezone) as tz from cma.app_user u join cma.tenant t on t.id = u.tenant_id left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)),
+eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
+iv as (select w.user_id, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id join kept k on k.user_id = w.user_id and w.business_date = (now() at time zone k.tz)::date),
+per_person as (select iv.user_id, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where ws.is_paid), 0) / 60)::bigint as m from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.user_id)
+select coalesce(sum(m), 0) as paid_today_minutes from per_person
+```
+
+**Fixture check** Not run here: this session has no database. db/201_verify_live_paid_today.sql proves the board's paid inputs on fixed test days (a paid break, a split shift, clocked out, capped at the window end, a removed day) and per tenant against cma.team_hours for today at one instant (R2); Martin runs it and this query in Studio and compares the value with the board with no filter set.
+
+**Documented in** definitions.md, Paid and Paid today (Time terms); api.md, Live board (increment b); api.md, GET /api/v1/team/now; features.md §9, Live
+
+**Notes**
+
+Same meaning as team_hours.paid_minutes for today: the sum over people of floor(paid seconds / 60) (decision 7 Oct 2026), not floor of the summed seconds. The figure follows the filters while the tiles count every row (the panel's {n} of {total} people line says how many are shown). A person on a status set inactive since counts by its stored flags. Team hours lists a day of a person whose time is no longer kept, the board does not. The verify_sql reproduces the database's count at the query's instant for all people on the board; the on-screen figure adds the client tick since the read and stops at each day's end. Only the board's read carries the paid inputs: GET /api/v1/me/day and My day do not (whether a pause is paid is not shown to agents).
 
 #### `live.people.shown_of_total`
 

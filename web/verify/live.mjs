@@ -38,7 +38,7 @@ import {
   INBOUND_TILES, LIVE_FOLLOW_UP_KEYS, LIVE_GROUPS, LIVE_HINT_KEYS, LIVE_POLL_TIMEOUT_MS, LIVE_STALE_AFTER_FAILURES, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting,
   employersOf, filterRows, fmtSeconds, hoursDue, inboundHours, inboundTalkToday, inboundTileValue, isStale, LIVE_HOURS_MS, liveBoardWords, liveGroupOf, liveRows,
   missedCallbacks, niceCeiling,
-  outboundTileValue, outboundToday, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
+  outboundTileValue, outboundToday, paidSeconds, paidTodayMinutes, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
 import { callRecords, callRules, callsFigures, fmtRate1, fmtTalk, personalDataIn } from "../src/lib/reports.ts";
 import { readFileSync } from "node:fs";
@@ -180,6 +180,28 @@ expect("the gap is not worked: the first session plus the running stretch",
 expect("worked stops at the day's end", workedSeconds({ closedSeconds: 600, runningSince: T1 }, nowMs, "2026-10-07T08:45:00.000Z"), 1500, 2430);
 expect("a stretch begun after the day's end counts nothing",
   workedSeconds({ closedSeconds: 54000, runningSince: "2026-10-07T09:00:00.000Z" }, nowMs, "2026-10-07T08:00:00.000Z"), 54000, 54030);
+// Paid today (addition 0009z): the paid inputs count as the worked ones do, with is_paid for is_working
+expect("paid adds the running paid stretch to the closed ones (a paid break running)",
+  paidSeconds({ closedSeconds: 3600, runningSince: null, paidClosedSeconds: 3600, paidRunningSince: T1 }, nowMs), 3600 + 1830, 3600);
+expect("paid stands still in an unpaid pause, and after the end",
+  paidSeconds({ closedSeconds: 3600, runningSince: null, paidClosedSeconds: 3600, paidRunningSince: null }, nowMs), 3600, 5430);
+expect("paid stops at the day's end (capped)",
+  paidSeconds({ closedSeconds: 0, runningSince: null, paidClosedSeconds: 600, paidRunningSince: T1 }, nowMs, "2026-10-07T08:45:00.000Z"), 1500, 2430);
+expect("a clock without the paid inputs (the own day's) counts no paid time",
+  paidSeconds({ closedSeconds: 600, runningSince: T1 }, nowMs), 0, 2430);
+// Each person floored to whole minutes first, then summed (Team hours' rule): 59 s + 59 s is no minute, 1 h 0 m 59 s is 60
+const paidRows = [
+  { clock: { closedSeconds: 0, runningSince: null, paidClosedSeconds: 59, paidRunningSince: null }, dayEndsAt: null },
+  { clock: { closedSeconds: 0, runningSince: null, paidClosedSeconds: 59, paidRunningSince: null }, dayEndsAt: null },
+  { clock: { closedSeconds: 0, runningSince: null, paidClosedSeconds: 3600, paidRunningSince: "2026-10-07T09:00:00.000Z" }, dayEndsAt: null },
+  { clock: null, dayEndsAt: null },
+];
+expect("paid today floors each person to whole minutes, then sums; no day counts 0", paidTodayMinutes(paidRows, nowMs), 60, 61);
+expect("paid today of the rows shown follows the filter", paidTodayMinutes(paidRows.slice(2), nowMs), 60, 0);
+// 3,590 s closed and a paid stretch from 09:00:00: 3,620 s at 09:00:30 (60 minutes), 3,595 s with the day ending at 09:00:05 (59)
+const nearEnd = { clock: { closedSeconds: 0, runningSince: null, paidClosedSeconds: 3590, paidRunningSince: "2026-10-07T09:00:00.000Z" } };
+expect("paid today stops each person at their own day's end",
+  [paidTodayMinutes([{ ...nearEnd, dayEndsAt: "2026-10-07T09:00:05.000Z" }], nowMs), paidTodayMinutes([{ ...nearEnd, dayEndsAt: null }], nowMs)], [59, 60], [60, 60]);
 expect("a refused clock-in gives the window start, nothing else does",
   ["the workday starts at 07:00", "the workday starts at 25:00", "invalid", null].map(workdayStartsAt),
   ["07:00", null, null, null], ["07:00", "25:00", null, null]);

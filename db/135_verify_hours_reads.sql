@@ -16,6 +16,8 @@
 -- provoked (verify.provoke true at the top): every E row reads FAIL (the previous definition's first row is dropped
 -- before the comparison, or the row says the set was empty), every S row reads FAIL, and the verdict PROVOKED, NOT A
 -- PASS.
+-- Edited by addition 0009z (200_live_paid_today.sql, 19 November 2026): E6 compares the twenty columns 19's team_now
+-- defined by name, since team_now answers paid_closed_seconds and paid_running_since last; nothing else changed.
 --   S  the addition row after 0008zr; time_interval_all's columns unchanged; workday_summary_all's and the face's
 --      columns as before, the face with sessions last; team_hours's columns with sessions last, executable by cma_app
 --      only; cma.workday_stretches_of and cma.workday_summary_of present with the caller's rights for the application;
@@ -352,7 +354,8 @@ begin
       insert into verify_0008zs values (215, 'E6 ' || t.slug || ' team_now', 'skip', 'no active person holds monitoring.live: not compared');
     else
       perform set_config('app.user_id', v_user::text, true);
-      v_diff := pg_temp.v0008zs_diff('select * from cma.team_now()', 'select * from pg_temp.old_team_now()', true);
+      -- Edited by addition 0009z (200): team_now answers two paid columns last; the twenty columns 19 defined are compared
+      v_diff := pg_temp.v0008zs_diff('select user_id, display_name, organisation_key, organisation_name, timezone, business_date, workday_id, day_status, started_at, ended_at, status_key, status_name, status_active, is_working, is_productive, is_paid, is_billable, status_since, closed_seconds, running_since from cma.team_now()', 'select * from pg_temp.old_team_now()', true);
       execute 'select count(*) from cma.team_now()' into v_n;
       insert into verify_0008zs values (215, 'E6 ' || t.slug || ' team_now: the same people, days and stretches in the same order', case when v_diff is null then 'ok' else 'FAIL' end, coalesce(v_diff, v_n || ' people'));
     end if;
