@@ -2,7 +2,7 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import { PrintButton } from "@/components/PrintButton";
 import { data } from "@/lib/data";
-import { cellLabel, headcountByDate, isoWeek, plannedMinutesByUser, weekDays } from "@/lib/roster";
+import { cellLabel, headcountByDate, isoWeek, plannedMinutesByUser, plannerTeam, rosterTeamArg, weekDays } from "@/lib/roster";
 import { addDays, dateKeyInZone, fmtDate, fmtMinutes, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "../../../access";
 
@@ -23,7 +23,6 @@ export default async function RosterPrintPage({ searchParams }: PageProps<"/rost
   const sp = await searchParams;
   const today = dateKeyInZone(new Date(), me.timeZone);
   const weekStart = isDateKey(sp.week) ? startOfWeek(sp.week) : startOfWeek(today);
-  const teamParam = typeof sp.team === "string" && sp.team !== "all" ? sp.team : null;
 
   if (!me.permissions.includes("roster.manage")) {
     return (
@@ -34,7 +33,9 @@ export default async function RosterPrintPage({ searchParams }: PageProps<"/rost
     );
   }
 
-  const week = await data().getRosterWeek(me, weekStart, teamParam);
+  // The planner's team as the planner resolves it (brief B41): the query's current team, else Everyone
+  const teams = await data().listTeams(me);
+  const week = await data().getRosterWeek(me, weekStart, rosterTeamArg(plannerTeam(sp.team, teams)));
   const days = weekDays(weekStart);
   const byKey = new Map(week.entries.map((e) => [`${e.userId}:${e.date}`, e]));
   const planned = plannedMinutesByUser(week.entries);
