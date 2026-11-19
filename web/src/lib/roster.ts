@@ -22,6 +22,44 @@ export type Cell =
 
 export type CellProblem = "format" | "order" | "absence";
 
+/** The planner's key for Everyone, the whole tenant's roster (the API and the database say null) */
+export const EVERYONE = "all";
+
+/**
+ * The planner's one team per page view (brief B41, D1 and D2): the ?team= value when it names a current team or is
+ * "all", else Everyone. A missing, repeated or unknown value opens Everyone, never a team chosen for the person.
+ * The select, the header, the grid, the coverage, the saved weeks, print, copy and the shortcuts all use this key
+ */
+export function plannerTeam(param: unknown, teams: readonly { key: string }[]): string {
+  if (typeof param !== "string" || param === EVERYONE) return EVERYONE;
+  return teams.some((t) => t.key === param) ? param : EVERYONE;
+}
+
+/** Whether resolving the ?team= value needs the tenant's teams: only a value that names a team does (Everyone needs none) */
+export function plannerNeedsTeams(param: unknown): boolean {
+  return typeof param === "string" && param !== EVERYONE;
+}
+
+/** The planner's key as the data layer and the API take it: null for Everyone, else the team's key */
+export function rosterTeamArg(team: string): string | null {
+  return team === EVERYONE ? null : team;
+}
+
+/** The planner's key of a week's header (a header's teamKey is null for the whole tenant) */
+export function plannerTeamOfHeader(header: { teamKey: string | null }): string {
+  return header.teamKey ?? EVERYONE;
+}
+
+/**
+ * The planner's query with the team always in it (D2): the address the page replaces a load's address with when its
+ * ?team= is missing or not the resolved key, so a reload shows the same team. Other parameters are kept as they are
+ */
+export function plannerSearch(search: string, team: string): string {
+  const sp = new URLSearchParams(search);
+  sp.set("team", team);
+  return `?${sp.toString()}`;
+}
+
 /** hh:mm from the many ways people type a time: 9, 9:30, 9.30, 930, 0930, 9h, 9h30, 17u15, 24 */
 function parseTime(raw: string): string | null {
   const s = raw.trim().toLowerCase().replace(/\s+/g, "");
@@ -67,6 +105,18 @@ export interface EntryLike {
   start: string | null;
   end: string | null;
   absenceName: string | null;
+}
+
+/** The permission that plans a person on the roster (addition 0009y, Decision log 17 Nov 2026; docs/definitions.md, On the roster) */
+export const ROSTER_PLANNED_PERMISSION = "roster.planned";
+
+/**
+ * On the roster (cma.on_roster, addition 0009y): active, time kept (workday.own) and holding roster.planned, over the
+ * permissions of all the person's roles together, so a person holding admin and agent is on the roster and admin alone
+ * is not. The planner lists only these people and the Live board flags adherence only for them.
+ */
+export function onRoster(person: { isActive: boolean; permissions: readonly string[] }): boolean {
+  return person.isActive && person.permissions.includes("workday.own") && person.permissions.includes(ROSTER_PLANNED_PERMISSION);
 }
 
 /** "09:00–17:30", or the absence's name, or "" for an empty cell */

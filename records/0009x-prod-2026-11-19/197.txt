@@ -1,0 +1,52 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 10
+(1 row)
+
+ set_config 
+------------
+ 50
+(1 row)
+
+psql:db/197_verify_sync_run_reads.sql:55: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                              check_name                                              | result |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+------------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009x is recorded once, after 0009w                                                  | PASS   | 0009x 1 time(s), after 0009w true
+ S2 the hours, their trigger function, triggers and view; the three indexes valid                     | PASS   | as designed
+ S3 the two reads: caller's rights, stable, the application's; 50 rows said                           | PASS   | as designed
+ H1 cma.sync_run_hour equals cma.sync_run grouped by tenant, job, connection and UTC hour             | PASS   | 13570 hours, 392579 runs
+ E pulse4all-invest                                                                                   | skip   | no active person holds tenant.configure: nothing compared
+ E1 pulse4all-subscriptions: cma.flash_sources_of equals 148's                                        | PASS   | assets 2026-11-11T07:36:23.062483+00:00; commerce 2026-11-19T02:32:53.38317+00:00; crm 2026-11-19T05:51:22.81276+00:00; reviews 2026-11-19T05:07:20.029502+00:00; subscriptions 2026-11-19T05:50:15.606832+00:00
+ E2 pulse4all-subscriptions: cma.system_health_runs() equals 132's, row for row, in order             | PASS   | 94 rows; runs/failed in 24 hours: assets_import 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, backfill 0/0, close_forgotten_workdays 24/0, email_poll 1426/0, flash_snapshot 1440/0, forms_poll 1439/0, link_calls 1439/0, reconcile 8/0, reconcile 1/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 2/0, reconcile 1/0, reconcile 1/0, reconcile 1/0, reconcile 1/0, reconcile 1/0, reconcile 1/0, reconcile 1/1, reconcile 1/1, reconcile 1/0, reconcile 1/0, reconcile 1/1, reconcile 1/0, reconcile 1/0, refresh_active_customers 1439/0, refresh_data_quality 1440/0, refresh_follow_up 1440/0, reviews_poll 24/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_check 1/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0, subscriptions_poll 288/0
+ T1 pulse4all-subscriptions: cma.flash_sources_of within its budget                                   | PASS   | 19.3 ms (best of 3, after six calls) against 50 ms
+ T2 pulse4all-subscriptions: cma.system_health_runs() within its budget                               | FAIL   | 19.3 ms (best of 3, after six calls) against 10 ms
+ B1 the edges: the hours, the sources and the health runs equal the runs and the previous definitions | PASS   | email_poll crm 3/1 ok true bad true, forms_poll crm 4/2 ok true bad true, link_calls crm 2/1 ok true bad true, reconcile crm 0/0 ok true bad true, refresh_data_quality 1/1 ok true bad true, refresh_follow_up 2/1 ok true bad true, subscriptions_poll shop 2/0 ok true bad false
+ B2 the throwaway tenant and its rows are gone                                                        | PASS   | 0 tenant(s) verify-0009x
+ verdict                                                                                              | FAIL   | 197_verify_sync_run_reads: 9 PASS, 1 FAIL, 1 skip
+(12 rows)
+
+DROP TABLE
+RESET

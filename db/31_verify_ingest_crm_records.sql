@@ -34,7 +34,8 @@ begin
     raise exception 'FAIL A1: migration 0006 not recorded';
   end if;
 
-  -- A2. eight tenant tables, each with row-level security, the tenant policy and the audit trigger
+  -- A2. eight tenant tables, each with row-level security, the tenant policy and the audit trigger (ingest_event's since
+  --     addition 0009w none: bookkeeping is not audited, 194_audit_bookkeeping.sql)
   foreach v_t in array array['integration_connection', 'connection_field', 'connection_pipeline', 'connection_stage',
                              'ingest_event', 'crm_record', 'crm_contact', 'crm_contact_ref'] loop
     if to_regclass('cma.' || v_t) is null then
@@ -42,7 +43,8 @@ begin
     end if;
     if not (select relrowsecurity from pg_class where oid = to_regclass('cma.' || v_t))
        or not exists (select 1 from pg_policy where polrelid = to_regclass('cma.' || v_t) and polname = 'tenant_app')
-       or not exists (select 1 from pg_trigger where tgrelid = to_regclass('cma.' || v_t) and tgname = 'audit')
+       or (not exists (select 1 from pg_trigger where tgrelid = to_regclass('cma.' || v_t) and tgname = 'audit')
+           and not (v_t = 'ingest_event' and exists (select 1 from cma.schema_migration where version = '0009w')))
        or (v_provoke and v_t = 'crm_record') then
       raise exception 'FAIL A2: cma.% lacks row-level security, its tenant policy or its audit trigger', v_t;
     end if;

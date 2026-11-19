@@ -1,0 +1,42 @@
+DO
+BEGIN
+SET
+SET
+DO
+CREATE TABLE
+ALTER TABLE
+COMMENT
+psql:db/196_sync_run_reads.sql:121: NOTICE:  policy "tenant_app" for relation "sync_run_hour" does not exist, skipping
+psql:db/196_sync_run_reads.sql:121: NOTICE:  policy "tenant_readonly" for relation "sync_run_hour" does not exist, skipping
+psql:db/196_sync_run_reads.sql:121: NOTICE:  trigger "audit" for relation "sync_run_hour" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+DROP TRIGGER
+REVOKE
+CREATE VIEW
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+REVOKE
+GRANT
+GRANT
+ALTER FUNCTION
+ALTER TABLE
+SET
+LOCK TABLE
+DELETE 0
+INSERT 0 13570
+psql:db/196_sync_run_reads.sql:361: NOTICE:  trigger "sync_run_hour" for relation "cma.sync_run" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/196_sync_run_reads.sql:364: NOTICE:  trigger "sync_run_hour_change" for relation "cma.sync_run" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+INSERT 0 1
+COMMIT
+RESET

@@ -14,12 +14,21 @@
  * Keyboard: Tab across cells, Enter saves and moves down, Up and Down move between people, Esc
  * reverts the cell, P, W and N move between weeks (links), T picks the team, U publishes,
  * C copies the previous week, X opens the print view.
+ *
+ * One team per page view (brief B41, D2): the page resolves the team once and keys this component by the week and
+ * the team, so the select, the header, the grid, People on shift, Planned, the coverage, the saved weeks, print, copy,
+ * publish and the shortcuts all show and write that one team; another team or week is a new grid that appears whole
+ * when the page's answer is there (a transition: until then the previous week stays, the filter row busy). A refresh
+ * of the same week (after Publish or Copy previous week) brings the cells and the header from the database again.
  */
-import { useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, RosterEntry, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
-import { absenceKeywordList, cellLabel, coverageGrid, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, weekDays, type Cell, type CellProblem, type CoverageState } from "@/lib/roster";
+import {
+  absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
+  type Cell, type CellProblem, type CoverageState,
+} from "@/lib/roster";
 import { addDays, fmtDate, fmtMinutes, fmtDateTime } from "@/lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Keycap, LinkButton, Notice } from "./primitives";
@@ -47,8 +56,8 @@ export function RosterPlanner({
   week: RosterWeek;
   weeks: RosterWeekSummary[];
   teams: TeamInfo[];
-  /** The team on screen, null for everyone */
-  team: string | null;
+  /** The team on screen as the page resolved it: a team's key or "all" for Everyone (lib/roster, plannerTeam) */
+  team: string;
   absences: AbsenceType[];
   /** Today in the viewer's zone, for the header; each cell's own past follows the person's zone */
   today: string;
@@ -60,15 +69,33 @@ export function RosterPlanner({
   const t = copy.roster;
   const router = useRouter();
   // the team and the week navigate as a transition: the row says it is busy and the team select shows the choice at once
-  const [choosing, shownTeam, choose] = usePendingChoice(team ?? "all");
+  const [choosing, shownTeam, choose] = usePendingChoice(team);
   const [pending, startTransition] = useTransition();
+  // The writes take the team as the API does: null for Everyone
+  const teamArg = rosterTeamArg(team);
   const weekStart = week.header.weekStart;
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
-  const keep = { team: team ?? "all" };
-  const [entries, setEntries] = useState<Map<string, RosterEntry>>(() => new Map(week.entries.map((e) => [`${e.userId}:${e.date}`, e])));
+  const keep = { team };
+  const entryMap = (w: RosterWeek) => new Map(w.entries.map((e) => [`${e.userId}:${e.date}`, e]));
+  const [entries, setEntries] = useState<Map<string, RosterEntry>>(() => entryMap(week));
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
   const [states, setStates] = useState<Map<string, CellState>>(new Map());
   const [header, setHeader] = useState(week.header);
+  // A refresh of this week and team (Publish, Copy previous week) brings a new answer: the cells and the header follow it
+  const [answer, setAnswer] = useState(week);
+  if (answer !== week) {
+    setAnswer(week);
+    setEntries(entryMap(week));
+    setHeader(week.header);
+  }
+
+  // The address always carries the team on screen (D2): a load without ?team= (the rail) or with one that named no
+  // current team gets the resolved key, without a new request, so a reload shows the same team
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("team") !== team) {
+      window.history.replaceState(null, "", plannerSearch(window.location.search, team));
+    }
+  }, [team]);
   const [confirm, setConfirm] = useState<"publish" | "copy" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const grid = useRef<HTMLTableSectionElement>(null);
@@ -101,7 +128,7 @@ export function RosterPlanner({
     startTransition(async () => {
       const body = cell.kind === "shift" ? { kind: "shift", start: cell.start, end: cell.end, note: current?.note ?? null }
         : cell.kind === "absence" ? { kind: "absence", absenceKey: cell.key, note: current?.note ?? null } : { kind: "clear" };
-      const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team, userId, date, cell: body });
+      const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
         const m = err?.error?.message ?? "";
@@ -139,7 +166,7 @@ export function RosterPlanner({
     setConfirm(null);
     setNotice(null);
     startTransition(async () => {
-      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/publish`, { team });
+      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/publish`, { team: teamArg });
       if (!res.ok) { setNotice(t.publishFailed); return; }
       setHeader(((await res.json()) as { data: typeof header }).data);
       router.refresh();
@@ -150,7 +177,7 @@ export function RosterPlanner({
     setConfirm(null);
     setNotice(null);
     startTransition(async () => {
-      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/copy`, { team, from: addDays(weekStart, -7) });
+      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/copy`, { team: teamArg, from: addDays(weekStart, -7) });
       if (!res.ok) { setNotice(t.copyFailed); return; }
       const { copied } = ((await res.json()) as { data: { copied: number } }).data;
       setNotice(t.copied.replace("{n}", String(copied)));
@@ -170,7 +197,7 @@ export function RosterPlanner({
   const coverageText = (c: { state: CoverageState; plannedPeople: number; target: number | null }) =>
     c.state === "none" ? t.coverageNone : c.state === "single" ? t.coverageSingle
     : c.state === "short" ? t.coverageShort.replace("{n}", String(c.plannedPeople)).replace("{target}", String(c.target)) : `${t.coverageOk} · ${c.plannedPeople}`;
-  const printHref = `/roster/planner/print?week=${weekStart}&team=${team ?? "all"}`;
+  const printHref = `/roster/planner/print?week=${weekStart}&team=${encodeURIComponent(team)}`;
   const th = "h-10 whitespace-nowrap px-2 text-left font-semibold";
 
   return (
@@ -184,13 +211,13 @@ export function RosterPlanner({
               name="team"
               value={shownTeam}
               data-shortcut="t"
-              onChange={(e) => choose(e.target.value, `/roster/planner?week=${weekStart}&team=${e.target.value}`)}
+              onChange={(e) => choose(e.target.value, `/roster/planner?week=${weekStart}&team=${encodeURIComponent(e.target.value)}`)}
               className="h-10 min-w-48 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
               {teams.map((x) => (
                 <option key={x.key} value={x.key}>{x.name}</option>
               ))}
-              <option value="all">{t.wholeTenant}</option>
+              <option value={EVERYONE}>{t.wholeTenant}</option>
             </select>
           </label>
           <label className="flex flex-col gap-2 text-small font-semibold">
@@ -198,7 +225,7 @@ export function RosterPlanner({
             <select
               value=""
               data-menu=""
-              onChange={(e) => { if (e.target.value) choose(shownTeam, `/roster/planner?week=${e.target.value}&team=${shownTeam}`); }}
+              onChange={(e) => { if (e.target.value) choose(shownTeam, `/roster/planner?week=${encodeURIComponent(e.target.value)}&team=${encodeURIComponent(shownTeam)}`); }}
               className="h-10 min-w-56 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
               <option value="">{weeks.length === 0 ? t.noWeeks : `${weeks.length} ${t.weeks.toLowerCase()}`}</option>
@@ -213,7 +240,7 @@ export function RosterPlanner({
       </WeekBar>
 
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 text-small">
+        <div className="flex items-center gap-3 text-small" data-testid="roster-status" data-status={header.status} data-team={plannerTeamOfHeader(header)}>
           <Badge tone={header.status === "published" ? "success" : "neutral"}>{header.status === "published" ? t.published : t.draft}</Badge>
           {header.status === "published" ? (
             <span className="text-p4a-muted">
@@ -255,7 +282,7 @@ export function RosterPlanner({
                 <th className={`${th} text-right`}>{t.planned}</th>
               </tr>
             </thead>
-            <tbody ref={grid}>
+            <tbody ref={grid} data-testid="roster-grid">
               {week.people.map((p) => {
                 const personToday = todayOf(p.timeZone);
                 return (
@@ -315,7 +342,7 @@ export function RosterPlanner({
         </div>
       )}
 
-      <section className="rounded-card border border-p4a-border bg-white p-6">
+      <section className="rounded-card border border-p4a-border bg-white p-6" data-testid="roster-coverage">
         <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.coverage}</h2>
         <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.coverageIntro}</p>
         {coverage.length === 0 ? (

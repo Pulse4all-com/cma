@@ -1,0 +1,54 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:58: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                  check_name                                                                  |        result        |                                                                                                                                                    detail                                                                                                                                                    
+----------------------------------------------------------------------------------------------------------------------------------------------+----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009y recorded once, after 0009x                                                                                             | FAIL                 | found 0009x 1; 0009y 1, after 0009x t, the roster t | expected 0009x 1; 0009y 1, after 0009x t, the roster t [provoked: a deliberate difference]
+ S2 the functions: the owner's, the application's, the caller's rights, stable, on cma.on_roster; the ladder's source                         | FAIL                 | found ok | expected ok [provoked: a deliberate difference]
+ S3 roster.planned in the catalog; on every system agent, supervisor and manager                                                              | FAIL                 | found catalog 1; system agent/supervisor/manager without it 0 | expected catalog 1; system agent/supervisor/manager without it 0 [provoked: a deliberate difference]
+ S3 pulse4all-invest: a tenant's own roles holding roster.planned (information)                                                               | info                 | 0
+ S3 pulse4all-invest: system admin or analytics roles holding roster.planned (information)                                                    | info                 | 0
+ S3 pulse4all-subscriptions: a tenant's own roles holding roster.planned (information)                                                        | info                 | 0
+ S3 pulse4all-subscriptions: system admin or analytics roles holding roster.planned (information)                                             | info                 | 0
+ B1 a new tenant's ladder: roster.planned on agent, supervisor and manager                                                                    | FAIL                 | found admin=false, agent=true, analytics=false, manager=true, supervisor=true | expected admin=false, agent=true, analytics=false, manager=true, supervisor=true [provoked: a deliberate difference]
+ B2 on the roster / time kept: roles combine; admin-only and a role without roster.planned keep the clock                                     | FAIL                 | found adm=false/true, ag=true/true, ana=false/false, both=true/true, mgr=true/true, own=false/true, sup=true/true | expected adm=false/true, ag=true/true, ana=false/false, both=true/true, mgr=true/true, own=false/true, sup=true/true [provoked: a deliberate difference]
+ B3 the planner's list: the people on the roster, a team's members among them                                                                 | FAIL                 | found ag, both, mgr, sup | alpha: ag, both | expected ag, both, mgr, sup | alpha: ag, both [provoked: a deliberate difference]
+ B4 roster_set_entry refuses people not on the roster (CMA04), plans the agent                                                                | FAIL                 | found adm CMA04; own CMA04; ana CMA04; ag planned | expected adm CMA04; own CMA04; ana CMA04; ag planned [provoked: a deliberate difference]
+ B5 a person who leaves the roster: entries stored, not shown, not counted, not copied                                                        | FAIL                 | found before: entries 3, wt1 Monday 2 [ag,both]; stored 2; after: entries 1 [ag], wt1 Monday 1 [ag]; copied 1, both in the copy 0 | expected before: entries 3, wt1 Monday 2 [ag,both]; stored 2; after: entries 1 [ag], wt1 Monday 1 [ag]; copied 1, both in the copy 0 [provoked: a deliberate difference]
+ B6 the Live board: admin-only clocked in is on the board without a shift row (no flag)                                                       | FAIL                 | found adm clocked in ok, on the board t with a day t; roster_today: ag shift true, mgr - true, sup - true | expected adm clocked in ok, on the board t with a day t; roster_today: ag shift true, mgr - true, sup - true [provoked: a deliberate difference]
+ B7 the own schedule is unchanged (D6)                                                                                                        | FAIL                 | found both today: shift t | expected both today: shift t [provoked: a deliberate difference]
+ R1 and R2 pulse4all-invest: the planner's reads                                                                                              | FAIL                 | no active person holds roster.manage
+ R1 pulse4all-subscriptions: roster_people = 0005's narrowed to roster.planned (this week and next, every roster)                             | FAIL                 | rosters compared 12, rows 57; differing 2026-11-16/tenant 2026-11-16/en 2026-11-16/nl 2026-11-16/de 2026-11-16/fr 2026-11-16/nordics 2026-11-23/tenant 2026-11-23/en 2026-11-23/nl 2026-11-23/de 2026-11-23/fr 2026-11-23/nordics
+ R2 pulse4all-subscriptions: roster_entries = 0005's narrowed to the people on the roster                                                     | FAIL                 | rosters compared 12, rows 72; differing 2026-11-16/tenant 2026-11-16/en
+ R3 pulse4all-invest: roster_today                                                                                                            | FAIL                 | no active person holds monitoring.live
+ R3 pulse4all-subscriptions: roster_today = 0005's narrowed to the people on the roster                                                       | FAIL                 | rows 13; differs
+ D4 pulse4all-invest: stored entries, this week and later, of people not on the roster (kept), and who leaves the roster (information)        | info                 | 0 entries of 0 people; time kept but not on the roster: 0 people
+ D4 pulse4all-subscriptions: stored entries, this week and later, of people not on the roster (kept), and who leaves the roster (information) | info                 | 5 entries of 3 people; time kept but not on the roster: 7 people
+ verdict                                                                                                                                      | PROVOKED, NOT A PASS | 199_verify_roster_planned: 0 PASS, 15 FAIL, 0 skip, 6 info
+(22 rows)
+
+DROP TABLE
+RESET
