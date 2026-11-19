@@ -28,6 +28,7 @@ import type { Adherence } from "@/lib/roster";
 import { type EmployerOption, type LiveGroup, type TeamOption, type Tile, fmtSeconds, paidTodayMinutes, secondsSince, workedSeconds } from "@/lib/live";
 import { fmtMinutes } from "@/lib/time";
 import { groupLabels, Swatch } from "./DashboardCharts";
+import { HeaderHint } from "./HeaderHint";
 import { Badge, Keycap } from "./primitives";
 
 export type { BoardRow } from "@/lib/live-board";
@@ -96,7 +97,7 @@ export function LiveBoard({
   employers: EmployerOption[];
   teams: TeamOption[];
   /** The board's words and the groups' (a slice, never the whole copy object: it rides in the page's payload) */
-  copy: Pick<Copy, "live" | "dashboard">;
+  copy: Pick<Copy, "live" | "dashboard"> & { hints: Pick<Copy["hints"], "about"> };
   /** The labels' language, so a long word breaks where the language breaks it */
   locale: Locale;
 }) {
@@ -154,9 +155,13 @@ export function LiveBoard({
             </div>
           ))}
           {/* Paid today: a figure, not a toggle; it follows the group, employer and team filters (the people shown) */}
-          <div className="flex px-2 last:pr-0" data-testid="team-paid-today" title={t.paidTodayHint}>
+          {/* its definition behind the info mark, as every figure of the board's panels, so a keyboard reaches it too */}
+          <div className="flex px-2 last:pr-0" data-testid="team-paid-today">
             <div className="flex w-full flex-col px-2 py-1">
-              <p lang={locale} className="whitespace-nowrap text-small text-p4a-muted">{t.paidToday}</p>
+              <p lang={locale} className="flex items-start whitespace-nowrap text-small text-p4a-muted" data-hint-anchor="">
+                <span>{t.paidToday}</span>
+                <HeaderHint label={copy.hints.about.replace("{label}", t.paidToday)} text={t.paidTodayHint} />
+              </p>
               <p className="tabular mt-auto whitespace-nowrap pt-1 text-title font-bold text-p4a-heading"><PaidToday rows={shown} /></p>
             </div>
           </div>

@@ -2441,7 +2441,7 @@ const en = {
     clockedInAt: "Clocked in",
     workedSoFar: "Worked so far",
     paidToday: "Paid today",
-    paidTodayHint: "Paid time today of the people shown: time in paid statuses, paid breaks included, in all of today's sessions up to the end of the workday. Each person counts in whole minutes, as the Paid column on Team hours.",
+    paidTodayHint: "Paid time today of the people shown: time in paid statuses, paid pauses included, in all of today's sessions up to the end of the workday. Each person counts in whole minutes, as the Paid column on Team hours.",
     inactive: "Inactive",
     peopleShown: "{n} of {total} people",
     empty: "Nobody matches this filter",

@@ -960,7 +960,7 @@ paidTodayMinutes(rows shown, now) = sum over the rows of floor(paidSeconds(clock
 - tenant: as the board
 - people whose time is kept only
 - the rows the table shows: the group, team and employer filters apply (unlike the tiles, which count every row)
-- is_paid stretches only (paid breaks included, unpaid pauses and the time between two sessions excluded)
+- is_paid stretches only (paid pauses included, unpaid pauses and the time between two sessions excluded)
 - an open stretch counted to the workday window's end, on the server and on the client (dayEndsAt)
 - on a contact center's board (/live/<organisation key>, GET /api/v1/live/board?organisation=<key>) only the people of that organisation (boardOfOrganisation in src/lib/live.ts)
 
