@@ -659,7 +659,8 @@ function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
 // ---- Team now (addition 0003e): cma.team_now
 // One row per person whose time is kept, with today's day in the person's zone. The day part is
 // mapped with toWorkday, the same mapping as the own-day read, so a person's own row equals
-// GET /api/v1/me/day field for field. monitoring.live is checked inside the function (CMA06).
+// GET /api/v1/me/day field for field, but for the clock's paid inputs (addition 0009z), which the
+// board's day alone carries. monitoring.live is checked inside the function (CMA06).
 
 type TeamNowDbRow = {
   user_id: string; display_name: string; organisation_key: string | null; organisation_name: string; timezone: string;
@@ -667,12 +668,13 @@ type TeamNowDbRow = {
   started_at: Date | null; ended_at: Date | null;
   status_key: string | null; status_name: string | null; status_active: boolean | null;
   is_working: boolean | null; is_productive: boolean | null; is_paid: boolean | null; is_billable: boolean | null;
-  status_since: Date | null; closed_seconds: number; running_since: Date | null; day_ends_at: Date;
+  status_since: Date | null; closed_seconds: number; running_since: Date | null;
+  paid_closed_seconds: number; paid_running_since: Date | null; day_ends_at: Date;
   sessions: number; session_started_at: Date | null; clock_in_again: boolean; can_clock_in_again: boolean;
 };
 
 function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
-  const day: Workday | null =
+  const own: Workday | null =
     r.workday_id && r.day_status && r.started_at && r.session_started_at
       ? toWorkday({
           business_date: r.business_date,
@@ -691,6 +693,18 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           can_clock_in_again: r.can_clock_in_again,
         })
       : null;
+  // The paid inputs (addition 0009z), the board's alone; an ended day has nothing running, as for the worked time.
+  // Before 200 has run the columns are absent and the clock carries none (the figure reads 0, never NaN)
+  const day: Workday | null = own && r.paid_closed_seconds != null
+    ? {
+        ...own,
+        clock: {
+          ...own.clock,
+          paidClosedSeconds: Number(r.paid_closed_seconds),
+          paidRunningSince: own.status !== "ended" && r.paid_running_since ? r.paid_running_since.toISOString() : null,
+        },
+      }
+    : own;
   const status =
     day && day.status === "working" && r.status_key && r.status_name
       ? {

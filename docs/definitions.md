@@ -901,7 +901,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Time rule | None |
 | Scope | Pledge lists only |
 | Equivalent in the source system | The file's column Receipts |
-| Not to use | "Payment", "paid" (they mean what NetSuite owns) |
+| Not to use | "Payment", "paid" (they mean what NetSuite owns; Paid, paid time of a person, is another term under Time terms) |
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Values per model, as in the file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
 | Used by | Assets → Pledge lists |
@@ -1001,7 +1001,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
 | Scope | As Subscription |
 | Equivalent in the source system | None: the CMA's own derivation from Juo's status and its renewal events |
-| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "paid" for a payment in NetSuite, since Paid here is Juo's renewal state |
+| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "paid" for a payment in NetSuite, since Paid here is Juo's renewal state; Paid (time), a person's time in paid statuses under Time terms, is another term and never a payment state |
 | Status | Proposed (for Kira to confirm); Awaiting payment is Pending: whether a renewal by draft order is a payment state of its own, per store (docs/open-decisions.md), and nothing is built as if settled |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
 | Used by | `cma.subscription_payment_state_of` (both forms), `cma_read.subscription_payment_state`; the installed base's records (`cma.flash_rows_of`, the page's subscriptions only); the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
@@ -2376,7 +2376,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Live board (nl: Live-bord) |
 | Key | `/live/<organisation key>`; `GET /api/v1/live/board`; `live.*` catalog keys; the page key `/live/board` in the metric catalog |
-| Definition | The screen of one contact-center organisation's people right now: their status groups, clock times and shifts, with the day's inbound calls (Inbound today: Inbound, Answered, Unanswered, Service level, Talk time, Average to answer), the day's outbound calls (Outbound today: Attempts, Connected, Connected rate, Conversations, Talk time, Average talk time), the missed callers, the Follow-up now strip and the chart Inbound today by hour. Inbound today, Outbound today, Follow-up now and each team group are one panel of six figures in one row; the order of the parts is Inbound, Outbound, Follow-up, Team, the chart, Missed last. The title row says when the board read last (Updated). It is per contact-center organisation. |
+| Definition | The screen of one contact-center organisation's people right now: their status groups, clock times and shifts, with the day's inbound calls (Inbound today: Inbound, Answered, Unanswered, Service level, Talk time, Average to answer), the day's outbound calls (Outbound today: Attempts, Connected, Connected rate, Conversations, Talk time, Average talk time), the missed callers, the Follow-up now strip and the chart Inbound today by hour. Inbound today, Outbound today and Follow-up now are each one panel of six figures in one row; the Team panel is one row too, a figure per group tile (six or seven columns, as many as the groups shown) and Paid today after them; the order of the parts is Inbound, Outbound, Follow-up, Team, the chart, Missed last. The title row says when the board read last (Updated). It is per contact-center organisation. |
 | Source | `cma.team_now()`, `cma.team_members_now()`, `cma.roster_today()`, `cma.inbound_now()`, `cma.outbound_now()` (`164`, over `cma.outbound_today_of`, `166`; read in the same statement as the inbound part), `cma.follow_up_summary()`, in one transaction; for the chart, `GET /api/v1/reports/inbound?group=hour` (`cma.inbound_service`, the figures of Reports → Inbound) |
 | Counts / does not count | The people, their team memberships and today's shifts are those of the organisation's users. The status flags, the inbound and outbound tiles, the missed callers and the Follow-up now strip cover the whole tenant: a line is not tied to an organisation yet, and every counted line is answered by the one flagged organisation today, so the caption on the call parts names it as answering all counted lines; it holds only while one organisation answers them all. The Follow-up now strip has its own caption, saying it covers the whole business line |
 | Unit and display | One board per flagged organisation, labelled with its name; breadcrumbs Welcome › Live › the organisation's name; without `?organisation` the API answers the whole tenant |
@@ -2385,9 +2385,9 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None; the call figures follow Aircall's definitions (Inbound call, Missed inbound call) |
 | Not to use | "Team board" (a team is a group of people inside an organisation, a different term) |
 | Status | Decided |
-| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zv, #235) |
-| Used by | `live.*` (`live.outbound.*` for Outbound today, `live.inbound.talk` for Inbound today's Talk time); the Live group; `GET /api/v1/live/board`; `live.inbound.hours` for the chart (copy key `live.hoursTitle`); the title row's Updated (`live.updatedAt`) |
-| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption (copy key `live.callsAllLines`; Inbound today, Outbound today, Inbound today by hour and Missed, not called back) is "All counted {organisation} lines" (nl: "Alle meetellende lijnen van {organisation}"). The Follow-up now strip's caption is "The whole business line, not only {organisation}'s." (nl: "De hele businesslijn, niet alleen die van {organisation}."; copy key `live.followUpWholeBusinessLine`). The mapping of lines to an organisation is an Open decision |
+| Decided | 5 November 2026 (Martin); docs/decisions.md, 5 Nov 2026, "Live is per contact-center organisation" (addition 0008zv, #235); 19 November 2026, "Definitions: Paid (nl: Betaald) and Paid today on the Live board" (addition 0009z) |
+| Used by | `live.*` (`live.outbound.*` for Outbound today, `live.inbound.talk` for Inbound today's Talk time, `live.paid_today_minutes` for the Team panel's Paid today, copy keys `live.paidToday` and `live.paidTodayHint`); the Live group; `GET /api/v1/live/board`; `live.inbound.hours` for the chart (copy key `live.hoursTitle`); the title row's Updated (`live.updatedAt`) |
+| As built today | `boardOfOrganisation` in `web/src/lib/live.ts` filters the one read; the call parts' caption (copy key `live.callsAllLines`; Inbound today, Outbound today, Inbound today by hour and Missed, not called back) is "All counted {organisation} lines" (nl: "Alle meetellende lijnen van {organisation}"). The Follow-up now strip's caption is "The whole business line, not only {organisation}'s." (nl: "De hele businesslijn, niet alleen die van {organisation}."; copy key `live.followUpWholeBusinessLine`). The mapping of lines to an organisation is an Open decision. The Team panel (`data-testid` `team-tiles`) has a column per group tile and, after them, Paid today (Paid today): the grid is `repeat(N, minmax(0, 1fr))` for the tiles and `minmax(9.5rem, auto)` for Paid today, which has its own width, and its hint sits behind the info mark |
 
 ### Team (rail group)
 
@@ -2657,7 +2657,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 
 ## Time terms
 
-Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Hours worked, status, working status and the other time words stay under Domains still to define.
+Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Paid and Paid today (addition 0009z) are defined below; hours worked, status, working status and the other time words stay under Domains still to define.
 
 ### Workday
 
@@ -2754,6 +2754,44 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Used by | Team hours (the Correct dialog); API `POST /api/v1/team/days/{userId}/{date}/remove`; `cma.remove_workday` |
 | As built today | `162` (`cma.remove_workday`, invoker rights; `cma.open_workday` remade so Clock in starts a removed day again, also a withdrawn import's day) and `163` (21 checks), and the web (Correct dialog, copy in English and Dutch). The two 409 texts are the database's own, kept in `REMOVE_REFUSAL` (`web/src/lib/corrections.ts`) |
 
+### Paid
+
+| Field | Value |
+|---|---|
+| Term | Paid (nl: Betaald), the time of a person |
+| Key | SQL `cma.team_hours` `paid_minutes` and `paid_seconds`; `cma.team_now` `paid_closed_seconds` and `paid_running_since`; TypeScript `paidSeconds` in `web/src/lib/live.ts`; the Paid column of Team hours |
+| Definition | Per person and business day, the seconds in stretches whose status has the flag `is_paid`, summed over all of the day's sessions and capped at the workday window's end. The time between two sessions is not paid. |
+| Source | The CMA: the day's stretches (`cma.time_interval`) joined to the statuses' `is_paid` flag (`cma.work_status`) |
+| Counts / does not count | Counts every status flagged paid, paid pauses included, in every session of the day. Does not count the time between sessions or the time after the window's end. A removed day counts 0 (Remove day). Worked is another figure: it counts the statuses flagged `is_working` alone |
+| Unit and display | Whole minutes in the Paid column of Team hours (each person floored, the 7 October 2026 rule) |
+| Time rule | The person's zone; the business date |
+| Scope | One person, one business date, one tenant; Team hours for `performance.team` or `workday.team` as before |
+| Equivalent in the source system | None |
+| Not to use | "Hours worked" or "worked" for it (Worked counts `is_working` only). Payment state's Paid (Juo's renewal state of a subscription) and Receipts' "paid" are other terms: a status's `is_paid` flag has nothing to do with a payment |
+| Status | Decided |
+| Decided | 19 November 2026 (Martin); docs/decisions.md, 19 Nov 2026, "Definitions: Paid (nl: Betaald) and Paid today on the Live board" (addition 0009z) |
+| Used by | `cma.team_hours` (`paid_minutes`), the Paid column of Team hours, `cma.team_now` (`paid_closed_seconds`, `paid_running_since`), Paid today |
+| As built today | Team hours' `paid_minutes` is the definition. `cma.team_now` answers the same time as stable inputs (`200`, addition 0009z): the seconds of the closed or capped stretches that are paid and the start of the open, uncapped stretch when its status is paid; `201` proves that at one instant they equal `cma.team_hours`' paid seconds for the person's day |
+
+### Paid today
+
+| Field | Value |
+|---|---|
+| Term | Paid today (nl: Betaald vandaag), on the Live board's Team panel |
+| Key | `live.paid_today_minutes` (metric); copy keys `live.paidToday` and `live.paidTodayHint`; `paidTodayMinutes` in `web/src/lib/live.ts`; API `day.clock.paidClosedSeconds` and `day.clock.paidRunningSince` of `GET /api/v1/team/now` and `GET /api/v1/live/board` |
+| Definition | The sum, over the rows the table currently shows (the group, team and employer filters apply), of each person's Paid today, each person floored to whole minutes first (the 7 October 2026 rule), so the figure matches Team hours for today. A person Clocked out counts the ended day; a person Not clocked in counts 0; a removed day counts 0. Each person's today is their own business date in their own time zone, as the board. |
+| Source | `cma.team_now()` (`paid_closed_seconds`, `paid_running_since`), computed in `web/src/lib/live.ts` from the clock's inputs and the person's `dayEndsAt` |
+| Counts / does not count | Counts the shown rows only, not the tenant: a filter changes the figure. Not a toggle. Stops growing at each person's day's end (`dayEndsAt`); Worked is unchanged and ticks as before |
+| Unit and display | Hours and minutes ("12h 05m") as the last column of the Team panel, after the group tiles, with a hint behind the info mark; ticks each second on the client between two polls |
+| Time rule | Each person's own business date in their own zone; ticks between reads, re-read every 10 seconds |
+| Scope | The people the Live board shows; needs `monitoring.live`. In the default ladder every holder of `monitoring.live` also holds `performance.team`, which shows paid time on the Dashboard; a custom role with `monitoring.live` alone newly sees each person's paid total per row in `GET /api/v1/team/now` and `GET /api/v1/live/board` |
+| Equivalent in the source system | None |
+| Not to use | "Hours worked" or "worked" for this figure (Worked counts `is_working` only); Payment state's Paid (another term) |
+| Status | Decided |
+| Decided | 19 November 2026 (Martin); docs/decisions.md, 19 Nov 2026, "Definitions: Paid (nl: Betaald) and Paid today on the Live board" and the three build choices of addition 0009z (this PR) |
+| Used by | `live.paid_today_minutes`; copy keys `live.paidToday`, `live.paidTodayHint`; the Live board's Team panel; `GET /api/v1/team/now` and `GET /api/v1/live/board` (`day.clock.paidClosedSeconds`, `day.clock.paidRunningSince`, for `monitoring.live` only) |
+| As built today | `200` (`cma.team_now` dropped and created from `134` with `paid_closed_seconds` and `paid_running_since` last) and `201` (addition 0009z); `paidSeconds` and `paidTodayMinutes` in `web/src/lib/live.ts`. `WorkdayClock`'s `paidClosedSeconds` and `paidRunningSince` are optional and only the Live board's read fills them: `GET /api/v1/me/day`, My day and the own-day read never carry them, because whether a pause is paid is not shown to agents. Matches the definition |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.
@@ -2784,7 +2822,7 @@ Ticket, complaint, vulnerable case, owner, without owner, overdue, response time
 Email sent, mailbox, inbox, first reply.
 
 ### Time and people
-Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp); On the roster too (addition 0009y).
+Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp); On the roster too (addition 0009y), and Paid and Paid today (addition 0009z; paid time, not Payment state's Paid).
 
 ### Periods
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like. All (nl: Alles) is a period of Reviews alone (addition 0008zw, Martin): from the tenant's first counted review to today, grouped by month, with no previous period (the history-start case) and exempt from the 92-day cap every other report keeps; its end is the tenant's today at the latest, or the day after it for a reader whose zone is ahead.

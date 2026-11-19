@@ -103,6 +103,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "live.tiles.group_count",
     "live.tiles.clocked_out",
     "live.tiles.not_clocked_in",
+    "live.paid_today_minutes",
     "live.people.shown_of_total",
     "live.people.since",
     "live.people.clocked_in_at",

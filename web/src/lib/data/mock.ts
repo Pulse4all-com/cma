@@ -3471,6 +3471,10 @@ export const mockData: CmaData = {
       const closed = parts
         .filter((x) => x !== running && MOCK_STATUSES.find((m) => m.key === x.e.statusKey)?.isWorking)
         .reduce((n, x) => n + x.seconds, 0);
+      // The same in paid statuses (addition 0009z): the board's paid inputs
+      const paidClosed = parts
+        .filter((x) => x !== running && MOCK_PAID.has(x.e.statusKey ?? ""))
+        .reduce((n, x) => n + x.seconds, 0);
       const starts = live.filter((e) => e.kind === "start");
       const day: Workday = {
         date,
@@ -3480,7 +3484,10 @@ export const mockData: CmaData = {
         statusKey: end ? null : last.statusKey,
         statusName: end ? null : current?.name ?? last.statusKey,
         statusSince: end ? null : running?.e.at ?? null,
-        clock: { closedSeconds: closed, runningSince: running && current?.isWorking ? running.e.at : null },
+        clock: {
+          closedSeconds: closed, runningSince: running && current?.isWorking ? running.e.at : null,
+          paidClosedSeconds: paidClosed, paidRunningSince: running && current && MOCK_PAID.has(current.key) ? running.e.at : null,
+        },
         dayEndsAt: new Date(dayEnd).toISOString(),
         sessions: starts.length,
         sessionStartedAt: starts[starts.length - 1]!.at,

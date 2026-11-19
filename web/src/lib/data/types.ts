@@ -29,6 +29,14 @@ export interface WorkdayClock {
   closedSeconds: number;
   /** Start of the current stretch while the current status is a working one; null while paused or ended */
   runningSince: Instant | null;
+  /**
+   * Seconds already paid in closed stretches whose status is paid (addition 0009z, cma.team_now). Only the Live
+   * board's read fills it: the own-day read leaves both paid fields out, since whether a pause is paid is not shown
+   * to agents
+   */
+  paidClosedSeconds?: number;
+  /** Start of the current stretch while the current status is a paid one; null while unpaid or ended. The Live board's read only */
+  paidRunningSince?: Instant | null;
 }
 
 export interface Workday {
@@ -296,9 +304,10 @@ export interface Export<Row> {
 /**
  * The team now (addition 0003e, cma.team_now), for people holding monitoring.live: one person per
  * row whose time is kept, with today's day in the person's zone as the own-day read shapes it, so
- * a person's own row equals GET /api/v1/me/day field for field. Stable inputs only (closed seconds,
- * running since, status since): the screen ticks on its own and two reads of an unchanged team
- * are equal. The database checks the permission on every call (CMA06). Staff data, never
+ * a person's own row equals GET /api/v1/me/day field for field, but for the clock's two paid inputs
+ * (addition 0009z), which only the board's read carries. Stable inputs only (closed seconds,
+ * running since, status since, paid closed seconds, paid running since): the screen ticks on its
+ * own and two reads of an unchanged team are equal. The database checks the permission on every call (CMA06). Staff data, never
  * customer data.
  */
 export interface TeamNowStatus {
