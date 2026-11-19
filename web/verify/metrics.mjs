@@ -15,7 +15,8 @@
  *   - every verify_sql that uses a function or view reading the session (app.tenant_id, or the acting user through
  *     app.user_id: cma.current_tenant_id, cma.time_is_kept, cma.user_timezone, cma.has_permission, the faces
  *     cma.time_interval and cma.workday_summary, …, found in db/*.sql's latest definitions, through what they call)
- *     sets them itself with set_config('app.tenant_id', …) and, where the acting user is read, set_config('app.user_id', …):
+ *     sets them itself for its own transaction, set_config('app.tenant_id', …, true) and, where the acting user is read,
+ *     set_config('app.user_id', …, true) (a session-wide false would stay on Martin's Studio session after the query):
  *     without them such a query answers 0 or nothing, without a warning (19 November 2026, live.paid_today_minutes in prod)
  *   - every settings key an entry names is in the settings catalog (the cma.setting inserts in
  *     db/*.sql)
@@ -170,11 +171,11 @@ for (const e of catalog.entries) {
   const userVia = used.filter((n) => readsSession(n, "user"));
   if (tenantVia.length === 0 && userVia.length === 0) continue;
   sessionChecked++;
-  if (tenantVia.length > 0 && !/set_config\(\s*'app\.tenant_id'/i.test(sql)) {
-    problems.push(`verify_sql: ${e.key} uses ${tenantVia.map((n) => "cma." + n.slice(2)).join(", ")}, which read app.tenant_id, without setting it (set_config('app.tenant_id', …)); it answers 0 or nothing without it`);
+  if (tenantVia.length > 0 && !/set_config\(\s*'app\.tenant_id'[^;]*?,\s*true\s*\)/i.test(sql)) {
+    problems.push(`verify_sql: ${e.key} uses ${tenantVia.map((n) => "cma." + n.slice(2)).join(", ")}, which read app.tenant_id, without setting it for its own transaction (set_config('app.tenant_id', …, true)); it answers 0 or nothing without it`);
   }
-  if (userVia.length > 0 && !/set_config\(\s*'app\.user_id'/i.test(sql)) {
-    problems.push(`verify_sql: ${e.key} uses ${userVia.map((n) => "cma." + n.slice(2)).join(", ")}, which read the acting user (app.user_id), without setting it (set_config('app.user_id', …))`);
+  if (userVia.length > 0 && !/set_config\(\s*'app\.user_id'[^;]*?,\s*true\s*\)/i.test(sql)) {
+    problems.push(`verify_sql: ${e.key} uses ${userVia.map((n) => "cma." + n.slice(2)).join(", ")}, which read the acting user (app.user_id), without setting it for its own transaction (set_config('app.user_id', …, true))`);
   }
 }
 say(`verify_sql and the session: ${latest.size} cma functions and views read, ${sessionChecked} queries use one that reads the session`);

@@ -36313,7 +36313,7 @@ orders = count(the courtesy orders, every one since courtesy.start_date, whose c
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
--- sets app.tenant_id and app.user_id itself, for its own statement (ctx, materialized, runs before the page's reads): cma.courtesy_page reads both,
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own; ctx, materialized, runs before the page's reads): cma.courtesy_page reads both,
 -- :user_id a person of the tenant holding reports.view or performance.team. The courtesy orders completed in the period by completion date
 -- (completed_date: its day in the order's market zone), placed on any date (0009d), with the outcomes; beside them the page's tile and Per market's total row
 with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
@@ -36825,7 +36825,7 @@ completed_in_period(market) = count(the courtesy orders of that market whose com
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
--- sets app.tenant_id and app.user_id itself, for its own statement (ctx, materialized, runs before the page's read): cma.courtesy_page reads both,
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own; ctx, materialized, runs before the page's read): cma.courtesy_page reads both,
 -- :user_id a person of the tenant holding reports.view or performance.team. Per market the courtesy orders completed in the period, each in its own
 -- market (0009d), the total row and the tile; the total and the tile are equal
 with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
