@@ -81,8 +81,8 @@ select set_config('app.user_id', :'user_id', true) as acting_user;
 set local role cma_app;
 
 \echo
-\echo ==== 1. The poll's statements as the web runs them ====
-\echo -- 1a team now, with the day's sessions
+\echo ==== 1. The statements of the poll as the web runs them ====
+\echo -- 1a team now, with the sessions of the day
 explain (analyze, buffers) select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at,
   coalesce(se.sessions, 0)::int as sessions, se.session_started_at,
   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)) as clock_in_again,
@@ -93,7 +93,7 @@ explain (analyze, buffers) select n.*, cma.business_day_end(n.business_date, n.t
 explain (analyze, buffers) select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key;
 \echo -- 1c the team members
 explain (analyze, buffers) select * from cma.team_members_now();
-\echo -- 1d today's roster
+\echo -- 1d the roster of today
 explain (analyze, buffers) select * from cma.roster_today();
 \echo -- 1e the settings
 explain (analyze, buffers) select * from cma.tenant_settings();
@@ -127,7 +127,7 @@ explain (analyze, buffers)
 explain (analyze, buffers)
   select cma.anonymous_missed_calls_of(:'tenant_id', now() - make_interval(days => greatest(0, cma.setting_of(:'tenant_id', 'telephony.callback_lookback_days')::integer)));
 \if :has_0009k
-\echo -- 3c today's figures (170)
+\echo -- 3c the figures of today (170)
 explain (analyze, buffers) select * from cma.inbound_today_live_of(:'tenant_id');
 \else
 \echo -- 3c needs 170 (addition 0009k): skipped
@@ -136,7 +136,7 @@ explain (analyze, buffers) select * from cma.inbound_today_live_of(:'tenant_id')
 explain (analyze, buffers) select cma.outbound_now();
 
 \echo
-\echo ==== 4. Seven more calls each on this connection: the first and seventh of them, the best (ms), and the poll's sum ====
+\echo ==== 4. Seven more calls each on this connection: the first and seventh of them, the best (ms), and the sum of the poll ====
 do $$
 declare
   v_sql text[] := array[
