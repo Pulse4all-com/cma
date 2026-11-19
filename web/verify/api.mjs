@@ -787,7 +787,7 @@ expect("the supervisor reads the memberships for the board's team filter",
 
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
-// ---- the roster (migration 0005), 20 checks ----------------------------------------------------
+// ---- the roster (migration 0005), 21 checks ----------------------------------------------------
 // The manager plans (roster.manage), the agent reads their own published schedule (roster.view),
 // the supervisor reads today's shifts for the board (monitoring.live). Two weeks ahead, on the
 // agent's own team, so the fixture's weeks stay as they are; every cell written is cleared again.
@@ -837,8 +837,14 @@ expect("the own schedule has one row per day and is bounded to 92 days",
 expect("the analyst holds no roster", (await get(ANALYST, `/api/v1/me/roster?from=${today}&to=${today}`)).status, 403, 200);
 expect("an agent cannot read today's shifts", (await get(AGENT, "/api/v1/team/shifts-today")).status, 403, 200);
 const shiftsToday = await get(SUPERVISOR, "/api/v1/team/shifts-today");
-expect("the supervisor reads today's shifts with one row per person whose time is kept",
+expect("the supervisor reads today's shifts with one row per person on the roster",
   [shiftsToday.status, (shiftsToday.body?.data ?? []).some((x) => x.userId === meA.userId), (shiftsToday.body?.data ?? []).some((x) => x.userId === meN?.userId)], [200, true, false], [200, true, true]);
+// Since addition 0009y (brief B39, D5) the Administrator alone is not on the roster: time kept, but no row here, so the
+// Live board flags nothing for them; the supervisor holds roster.planned and has one
+const meAdminShift = (await get(ADMIN, "/api/v1/me")).body?.data;
+expect("today's shifts leave out the Administrator-only person, keep the supervisor",
+  [(shiftsToday.body?.data ?? []).some((x) => x.userId === meAdminShift?.userId), (shiftsToday.body?.data ?? []).some((x) => x.userId === meS.userId)],
+  [false, true], [true, true]);
 // Leave the two weeks empty for the next run (dev data; not a check)
 await json(MANAGER, "PUT", cellsPath, { ...shiftCell, cell: { kind: "clear" } });
 await json(MANAGER, "PUT", `/api/v1/roster/weeks/${wk2}/cells`, { ...shiftCell, date: wk2, cell: { kind: "clear" } });

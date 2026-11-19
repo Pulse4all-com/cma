@@ -1,0 +1,54 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/199_verify_roster_planned.sql:58: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                  check_name                                                                  | result |                                                           detail                                                            
+----------------------------------------------------------------------------------------------------------------------------------------------+--------+-----------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009y recorded once, after 0009x                                                                                             | PASS   | 0009x 1; 0009y 1, after 0009x t, the roster t
+ S2 the functions: the owner's, the application's, the caller's rights, stable, on cma.on_roster; the ladder's source                         | PASS   | ok
+ S3 roster.planned in the catalog; on every system agent, supervisor and manager                                                              | PASS   | catalog 1; system agent/supervisor/manager without it 0
+ S3 pulse4all-invest: a tenant's own roles holding roster.planned (information)                                                               | info   | 0
+ S3 pulse4all-invest: system admin or analytics roles holding roster.planned (information)                                                    | info   | 0
+ S3 pulse4all-subscriptions: a tenant's own roles holding roster.planned (information)                                                        | info   | 0
+ S3 pulse4all-subscriptions: system admin or analytics roles holding roster.planned (information)                                             | info   | 0
+ B1 a new tenant's ladder: roster.planned on agent, supervisor and manager                                                                    | PASS   | admin=false, agent=true, analytics=false, manager=true, supervisor=true
+ B2 on the roster / time kept: roles combine; admin-only and a role without roster.planned keep the clock                                     | PASS   | adm=false/true, ag=true/true, ana=false/false, both=true/true, mgr=true/true, own=false/true, sup=true/true
+ B3 the planner's list: the people on the roster, a team's members among them                                                                 | PASS   | ag, both, mgr, sup | alpha: ag, both
+ B4 roster_set_entry refuses people not on the roster (CMA04), plans the agent                                                                | PASS   | adm CMA04; own CMA04; ana CMA04; ag planned
+ B5 a person who leaves the roster: entries stored, not shown, not counted, not copied                                                        | PASS   | before: entries 3, wt1 Monday 2 [ag,both]; stored 2; after: entries 1 [ag], wt1 Monday 1 [ag]; copied 1, both in the copy 0
+ B6 the Live board: admin-only clocked in is on the board without a shift row (no flag)                                                       | PASS   | adm clocked in ok, on the board t with a day t; roster_today: ag shift true, mgr - true, sup - true
+ B7 the own schedule is unchanged (D6)                                                                                                        | PASS   | both today: shift t
+ R1 and R2 pulse4all-invest: the planner's reads                                                                                              | skip   | no active person holds roster.manage
+ R1 pulse4all-subscriptions: roster_people = 0005's narrowed to roster.planned (this week and next, every roster)                             | PASS   | rosters compared 12, rows 57; differing none
+ R2 pulse4all-subscriptions: roster_entries = 0005's narrowed to the people on the roster                                                     | PASS   | rosters compared 12, rows 72; differing none
+ R3 pulse4all-invest: roster_today                                                                                                            | skip   | no active person holds monitoring.live
+ R3 pulse4all-subscriptions: roster_today = 0005's narrowed to the people on the roster                                                       | PASS   | rows 13; equal
+ D4 pulse4all-invest: stored entries, this week and later, of people not on the roster (kept), and who leaves the roster (information)        | info   | 0 entries of 0 people; time kept but not on the roster: 0 people
+ D4 pulse4all-subscriptions: stored entries, this week and later, of people not on the roster (kept), and who leaves the roster (information) | info   | 5 entries of 3 people; time kept but not on the roster: 7 people
+ verdict                                                                                                                                      | PASS   | 199_verify_roster_planned: 13 PASS, 0 FAIL, 2 skip, 6 info
+(22 rows)
+
+DROP TABLE
+RESET
