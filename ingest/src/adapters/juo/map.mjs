@@ -1,7 +1,7 @@
 /**
  * Juo subscriptions, lines, products and events → the canonical items of cma.ingest_upsert_subscriptions,
  * cma.ingest_upsert_subscription_lines, cma.ingest_upsert_subscription_products, cma.ingest_upsert_subscription_events and
- * cma.ingest_upsert_billing_events (additions 0008zl, 0009w). A whitelist: only the fields named here are read, so a
+ * cma.ingest_upsert_billing_events (additions 0008zl, 0009z). A whitelist: only the fields named here are read, so a
  * subscription's delivery address, its customer's name, email and phone, its payment method's details (holder, account,
  * card digits, billing address), its and its lines' custom attributes, a line's title, a discount's code, an event's
  * actor name, an error message, a chargeback's reason message, a refund's note, a free-text reason, an update's input and

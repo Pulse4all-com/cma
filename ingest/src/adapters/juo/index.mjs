@@ -1,5 +1,5 @@
 /**
- * The Juo adapter for a store's subscriptions (addition 0008zl, brief B20; addition 0009w, brief B39 Part A) as the jobs
+ * The Juo adapter for a store's subscriptions (addition 0008zl, brief B20; addition 0009z, brief B39 Part A) as the jobs
  * see it. Polling only and read only: Juo has no webhook topic for a failed renewal, so the server answers 404 on
  * /juo/<key> (kind poll), and nothing is ever written to Juo (the client's allow-list, client.mjs). One connection per
  * store: its account id the store's own domain (<handle>.myshopify.com, Juo's X-Tenant-ID), its token secret name the
@@ -65,7 +65,7 @@ export const OVERLAP_MS = 5 * 60_000;
 export const FIRST_POLL_MS = 24 * 60 * 60_000;
 /** All of the app's history: an events backfill without a start reads from here (Juo's stores began in 2025) */
 export const HISTORY_FLOOR_MS = Date.UTC(2000, 0, 1);
-/** The tenant setting that names an events backfill's start (addition 0009w) */
+/** The tenant setting that names an events backfill's start (addition 0009z) */
 export const HISTORY_SETTING = "subscriptions.history_start_date";
 /** The final step's slices: at most this many subscription ids a call (the database takes 5,000) */
 export const SLICE_SIZE = 1000;

@@ -1,10 +1,10 @@
 /**
- * Verifier: the Juo adapter's mapping and client (addition 0008zl, brief B20; addition 0009w, brief B39 Part A), without
+ * Verifier: the Juo adapter's mapping and client (addition 0008zl, brief B20; addition 0009z, brief B39 Part A), without
  * a database: the whitelist of map.mjs on the fixture's payloads (verify/juo-fake.mjs), which carry invented personal
  * data on purpose (names, addresses, emails, phone numbers, card digits, an account, a free-text cancellation reason, an
  * error message, custom attributes with an email, a discount's code, a chargeback's reason message, a refund's note, a
  * catalog title with a name and an @), the event types, the settings, the store's id, the holds after a 429, the queries;
- * since 0009w the lines (E), the catalog (F), the new event types (G), the billing events with their instrument types and
+ * since 0009z the lines (E), the catalog (F), the new event types (G), the billing events with their instrument types and
  * return codes (H) and the client's allow-list of method and path (I: a write refused with no request sent); then the
  * client against the fake Juo on localhost: paging, the key in a header only, 401 for another store's id (key_rejected),
  * a 429 paced and sent again, a third 429 failing rate_limited, a missing secret, a store id out of its form. Everything
@@ -44,7 +44,7 @@ const sub = (n) => one.subscriptions[n - 1];
 const eventsOf = (n) => one.events.filter((e) => e.subscriptionId === sub(n).id);
 
 // The keys cma.subscription, cma.subscription_event, cma.subscription_line and cma.billing_event take in raw (db/118's and
-// db/194's checks)
+// db/200's checks)
 const SUB_RAW = ["id", "status", "customer", "currentCycle", "nextBillingDate", "billingInterval", "billingIntervalCount", "amountPerCycle",
   "currencyCode", "instrumentType", "createdAt", "updatedAt", "canceledAt", "pausedAt", "serial", "minCycles", "maxCycles", "discountCount", "lineCount"];
 const EVENT_RAW = ["id", "type", "occurredAt", "subscriptionId", "customerId", "actorType", "actorId", "cycleIndex", "attempt", "errorCode",
@@ -115,7 +115,7 @@ expect("A8 the amount per cycle: the current items' total prices only (an item J
 const subEvents = one.events.filter((e) => e.category === "subscription");
 const notice = one.events.find((e) => e.type === "renewal:notification-sent");
 const mapped = subEvents.map((e) => [e.type, map.eventItem(e)]);
-expect("B1 the event types of the subscription family: the seven and since 0009w fifteen more kept; the copies of billing events duplicates; the rest skipped",
+expect("B1 the event types of the subscription family: the seven and since 0009z fifteen more kept; the copies of billing events duplicates; the rest skipped",
   [...new Set(mapped.map(([t, m]) => `${t}→${m?.skip ? `skip:${m.skip}` : m?.item?.eventType}`))].sort(),
   ["subscription:cancellation-flow/started→skip:type", "subscription:cancelled→canceled",
     "subscription:chargeback-created→skip:duplicate", "subscription:created→created", "subscription:delivery-address-changed→skip:type",

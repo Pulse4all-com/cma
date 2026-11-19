@@ -1,22 +1,22 @@
 -- =============================================================================================
--- 195_verify_subscription_lines.sql: verifies addition 0009w, the subscription app read whole (brief B39 Part A)
+-- 201_verify_subscription_lines.sql: verifies addition 0009z, the subscription app read whole (brief B39 Part A)
 -- =============================================================================================
 -- Dev and local databases only, as 119: block Z reads every row of the four new tables of every tenant for an email
 -- pattern after the flow verifier's fixtures (ingest/verify/juo-flow.mjs runs in dev and local databases only). It
 -- refuses a database without the dev seed (no active agent.two@example.com): every check reads FAIL and the verdict
 -- REFUSED. Block A only reads; block B works on two throwaway tenants inside a subtransaction that is always rolled back,
 -- so nothing stays. Every check writes one row, PASS or FAIL, and the last row is the verdict, because Cloud SQL Studio
--- shows no notices. Run as your own IAM login after 194_subscription_lines.sql, in dev; then 119_verify_subscriptions.sql
--- and the verifies 194's header names. Adapters, handles, ids, codes, titles and secret names are invented data values,
+-- shows no notices. Run as your own IAM login after 200_subscription_lines.sql, in dev; then 119_verify_subscriptions.sql
+-- and the verifies 200's header names. Adapters, handles, ids, codes, titles and secret names are invented data values,
 -- and no row carries a name, an address, an email or a phone number of a customer.
---   A  structure and privileges: the addition row after 0009v; the four new tables tenant-aware (row-level security, the
+--   A  structure and privileges: the addition row after 0009y; the four new tables tenant-aware (row-level security, the
 --      tenant policy, the audit trigger, the tenant's foreign key), the application without delete on any, without
 --      update on billing events and observed changes; the unique keys; the new columns of cma.subscription and
 --      cma.subscription_event; the checks of the instrument types (seven) and event types (twenty-one; Juo's renewal notice
 --      not among them); every function
 --      the application's only and in the caller's rights; the reader views without raw and with the new columns; the
 --      setting subscriptions.history_start_date in the catalog; the pure helpers (catalog text, instrument type); every
---      renewal's store order in order_source_id (the renewals held before 194 filled from raw)
+--      renewal's store order in order_source_id (the renewals held before 200 filled from raw)
 --   B  behaviour, on two throwaway tenants, each with its Ingest user, a commerce store and a subscriptions connection
 --      whose account id names that handle: the subscriptions' new fields and observed changes with the run (none on a
 --      first load, none for a value stored as null, none on a rerun; the two-argument call the same answers without a
@@ -26,7 +26,7 @@
 --      an empty set); the billing events (every kind, append-only, the refusals); the new event types and columns (a
 --      renewal's order joining a chargeback's); the setting (trimmed, a date or empty, refused otherwise); the run counts;
 --      row-level security across the two tenants' Ingest users; the application's update and delete refused; audit rows
---      written; no column of the new tables holding an email pattern; 194's two-argument call against 118's own function
+--      written; no column of the new tables holding an email pattern; 200's two-argument call against 118's own function
 --      (a copy kept in this script) on the same items, outcome for outcome and row for row over 118's columns
 --   Z  every row of the four new tables of the database: no column holding an email pattern
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
@@ -46,11 +46,11 @@ select set_config('verify.dev', (select exists (select 1 from cma.app_user u whe
 -- an email address in any column of a row (its JSON text): something@something.something
 select set_config('verify.email_pattern', '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', false);
 
-drop table if exists pg_temp.verify_0009w;
-create temp table verify_0009w (ord int, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0009z;
+create temp table verify_0009z (ord int, check_name text, result text, detail text);
 
 -- The error a statement raises as its SQLSTATE, or 'ok'
-create or replace function pg_temp.v0009w_code(p_sql text)
+create or replace function pg_temp.v0009z_code(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -64,7 +64,7 @@ $$;
 
 -- The scenario's subscriptions as the adapter maps them (map.mjs subscriptionItem). p_variant: base, or changed (sub-a
 -- paused, its amount, interval and line count changed; sub-b's line count stated for the first time)
-create or replace function pg_temp.v0009w_subs(p_variant text)
+create or replace function pg_temp.v0009z_subs(p_variant text)
 returns jsonb
 language sql
 as $$
@@ -90,7 +90,7 @@ $$;
 
 -- The scenario's lines (map.mjs lineItems). p_variant: base (sub-a: a recurring line, a canceled one, a one-time add-on;
 -- sub-b: one recurring line), removed (sub-a's recurring line gone, sub-b's quantity 3)
-create or replace function pg_temp.v0009w_lines(p_variant text)
+create or replace function pg_temp.v0009z_lines(p_variant text)
 returns jsonb
 language sql
 as $$
@@ -110,7 +110,7 @@ as $$
 $$;
 
 -- The scenario's billing events (map.mjs billingEventItem): one of each kind
-create or replace function pg_temp.v0009w_billing()
+create or replace function pg_temp.v0009z_billing()
 returns jsonb
 language sql
 as $$
@@ -135,7 +135,7 @@ as $$
 $$;
 
 -- The scenario's events of the new types (map.mjs eventItem), and a renewal with its order
-create or replace function pg_temp.v0009w_events()
+create or replace function pg_temp.v0009z_events()
 returns jsonb
 language sql
 as $$
@@ -160,8 +160,8 @@ as $$
 $$;
 
 -- 118's cma.ingest_upsert_subscriptions as it was (118_subscriptions.sql, copied whole, only its name changed): block B
--- compares the two-argument call of 194 with it, outcome for outcome and row for row over 118's columns
-create or replace function pg_temp.v0009w_upsert_118(p_connection_id uuid, p_items jsonb)
+-- compares the two-argument call of 200 with it, outcome for outcome and row for row over 118's columns
+create or replace function pg_temp.v0009z_upsert_118(p_connection_id uuid, p_items jsonb)
 returns table (source_id text, outcome text, customer_matched boolean)
 language plpgsql
 as $$
@@ -289,10 +289,10 @@ declare
   v_fn      text;
   v_t       text;
 begin
-  -- A1. the addition is recorded, after 0009v
-  insert into verify_0009w values (1, 'A1 addition 0009w recorded, after 0009v',
-    case when exists (select 1 from cma.schema_migration where version = '0009w')
-              and exists (select 1 from cma.schema_migration where version = '0009v') and not v_provoke then 'PASS' else 'FAIL' end,
+  -- A1. the addition is recorded, after 0009y
+  insert into verify_0009z values (1, 'A1 addition 0009z recorded, after 0009y',
+    case when exists (select 1 from cma.schema_migration where version = '0009z')
+              and exists (select 1 from cma.schema_migration where version = '0009y') and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
   -- A2. the four tables tenant-aware: row-level security on, the tenant policy, the audit trigger, a foreign key to the
@@ -314,7 +314,7 @@ begin
       v_bad := v_bad || v_t || '; ';
     end if;
   end loop;
-  insert into verify_0009w values (2, 'A2 the four tables tenant-aware (RLS, policy, audit, tenant key); no delete by the application, no update of a billing event or an observed change',
+  insert into verify_0009z values (2, 'A2 the four tables tenant-aware (RLS, policy, audit, tenant key); no delete by the application, no update of a billing event or an observed change',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A3. the unique keys: (tenant_id, id) on all four; the source's key per connection on lines and billing events, the
@@ -329,7 +329,7 @@ begin
       v_bad := v_bad || v_t || '; ';
     end if;
   end loop;
-  insert into verify_0009w values (3, 'A3 the unique keys of the four tables',
+  insert into verify_0009z values (3, 'A3 the unique keys of the four tables',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A4. the new columns of cma.subscription and cma.subscription_event; the seven instrument types and twenty-one event
@@ -357,7 +357,7 @@ begin
            and conname = 'subscription_event_event_type_check') like '%renewal_notice%' then
     v_bad := v_bad || ' event types';
   end if;
-  insert into verify_0009w values (4, 'A4 the new columns of subscription and subscription_event; seven instrument types; twenty-one event types, no renewal notice',
+  insert into verify_0009z values (4, 'A4 the new columns of subscription and subscription_event; seven instrument types; twenty-one event types, no renewal notice',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A5. every function the application's only and in the caller's rights
@@ -375,7 +375,7 @@ begin
       v_bad := v_bad || v_fn || '; ';
     end if;
   end loop;
-  insert into verify_0009w values (5, 'A5 every function the application''s only and invoker (the two-argument upsert of subscriptions kept)',
+  insert into verify_0009z values (5, 'A5 every function the application''s only and invoker (the two-argument upsert of subscriptions kept)',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A6. the reader views: the four new ones without raw, readable by readers; the new columns at the end of subscription
@@ -401,13 +401,13 @@ begin
      is distinct from 'billing_from_at billing_to_at cause_code interval_from interval_count_from interval_to interval_count_to lines_added lines_removed lines_updated related_subscription_source_id operation_source_id order_source_id' then
     v_bad := v_bad || 'event columns; ';
   end if;
-  insert into verify_0009w values (6, 'A6 the reader views (no raw), readable by readers; the new columns at the end of subscription and subscription_event',
+  insert into verify_0009z values (6, 'A6 the reader views (no raw), readable by readers; the new columns at the end of subscription and subscription_event',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A7. the setting in the catalog: text, empty by default
   v_bad := (select s.key || ':' || s.value_type || ':' || coalesce(nullif(s.default_value, ''), 'empty') from cma.setting s
             where s.key = 'subscriptions.history_start_date');
-  insert into verify_0009w values (7, 'A7 the setting subscriptions.history_start_date: text, empty by default',
+  insert into verify_0009z values (7, 'A7 the setting subscriptions.history_start_date: text, empty by default',
     case when v_bad = 'subscriptions.history_start_date:text:empty' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_bad, 'missing'));
 
   -- A8. the pure helpers: catalog text 1 to 100 characters without an @ or a control character (null for null); the
@@ -416,14 +416,14 @@ begin
                      cma.catalog_text_ok(''), cma.catalog_text_ok('a@b'), cma.catalog_text_ok('tab' || chr(9) || 'x'),
                      cma.catalog_text_ok('bell' || chr(7)), coalesce(cma.catalog_text_ok(null)::text, 'null'),
                      cma.payment_instrument_type_ok('sepa_direct_debit'), cma.payment_instrument_type_ok('SepaDirectDebit'));
-  insert into verify_0009w values (8, 'A8 catalog text and instrument types by form',
+  insert into verify_0009z values (8, 'A8 catalog text and instrument types by form',
     case when v_bad = 't t f f f f f null t f' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
-  -- A9. every renewal of the database whose raw holds its store order has it as order_source_id (194 filled the ones
+  -- A9. every renewal of the database whose raw holds its store order has it as order_source_id (200 filled the ones
   --     stored before it); counts only
   v_bad := (select count(*) filter (where e.order_source_id is null) || ' of ' || count(*) from cma.subscription_event e
             where e.event_type = 'renewed' and (e.raw ->> 'orderId') ~ '^\d{1,30}$');
-  insert into verify_0009w values (9, 'A9 every renewal with its store order in raw has it as order_source_id (the older ones filled once)',
+  insert into verify_0009z values (9, 'A9 every renewal with its store order in raw has it as order_source_id (the older ones filled once)',
     case when v_bad like '0 of %' and not v_provoke then 'PASS' else 'FAIL' end, v_bad || ' renewals without it');
 end
 $$;
@@ -444,14 +444,14 @@ declare
   j jsonb;
 begin
   if not v_dev then
-    insert into verify_0009w values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
+    insert into verify_0009z values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
       'REFUSED: no dev seed, so this is no dev or local database; nothing ran');
     return;
   end if;
   begin
     -- tenants (each with its Ingest user), an admin and connections (as the owner); each tenant's store with a customer
-    v_t1 := cma.create_tenant('verify-0009w-one', 'Verify 0009w one', 'Europe/London');
-    v_t2 := cma.create_tenant('verify-0009w-two', 'Verify 0009w two', 'Europe/London');
+    v_t1 := cma.create_tenant('verify-0009z-one', 'Verify 0009z one', 'Europe/London');
+    v_t2 := cma.create_tenant('verify-0009z-two', 'Verify 0009z two', 'Europe/London');
     select x.user_id into v_ing1 from cma.app_user_external_id x where x.tenant_id = v_t1 and x.system = 'ingest' and x.external_id = 'ingest';
     select x.user_id into v_ing2 from cma.app_user_external_id x where x.tenant_id = v_t2 and x.system = 'ingest' and x.external_id = 'ingest';
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-admin1@example.invalid', 'admin1') returning id into v_admin1;
@@ -461,9 +461,9 @@ begin
     values (v_t1, 'verifyshop', 'Verify shop one', 'verify-store-1.shop.example', 'commerce', 'verify-shop-signing-1') returning id into v_shop1;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
     values (v_t1, 'verifysubs', 'Verify subscriptions one', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-1') returning id into v_sub1;
-    -- two more subscriptions connections of the same store: one for 194's two-argument call, one for 118's function
+    -- two more subscriptions connections of the same store: one for 200's two-argument call, one for 118's function
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
-    values (v_t1, 'verifysubsn', 'Verify subscriptions, 194', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-4') returning id into v_cmp_new;
+    values (v_t1, 'verifysubsn', 'Verify subscriptions, 200', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-4') returning id into v_cmp_new;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
     values (v_t1, 'verifysubso', 'Verify subscriptions, 118', 'verify-store-1.shop.example', 'subscriptions', 'verify-subs-key-5') returning id into v_cmp_old;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, signing_secret_name)
@@ -483,14 +483,14 @@ begin
     -- B1. the subscriptions' new fields with a run: inserted; the number, cycle bounds, discounts, lines, instrument
     --     stored; device units null; no change observed on a first load; a rerun unchanged and observing nothing
     v_txt := (select string_agg(s.source_id || ':' || s.outcome || ':' || s.changes_observed, ' ' order by s.source_id collate "C")
-              from cma.ingest_upsert_subscriptions(v_sub1, pg_temp.v0009w_subs('base'), v_run) s);
+              from cma.ingest_upsert_subscriptions(v_sub1, pg_temp.v0009z_subs('base'), v_run) s);
     -- (each read its own statement: a statement does not see what a function called in it wrote)
     v_txt := v_txt || ' | ' || (select string_agg(concat_ws(':', s.source_id, s.source_number, s.payment_instrument_type, coalesce(s.min_cycles::text, '-'),
                                                        coalesce(s.max_cycles::text, '-'), s.discount_count, coalesce(s.line_count::text, '-'),
                                                        coalesce(s.device_units::text, '-')), ' ' order by s.source_id collate "C")
                           from cma.subscription s where s.connection_id = v_sub1);
     v_txt := v_txt || ' | ' || (select string_agg(s.outcome || ':' || s.changes_observed, ' ' order by s.source_id collate "C")
-                                from cma.ingest_upsert_subscriptions(v_sub1, pg_temp.v0009w_subs('base'), v_run) s);
+                                from cma.ingest_upsert_subscriptions(v_sub1, pg_temp.v0009z_subs('base'), v_run) s);
     v_txt := v_txt || ' | ' || (select count(*) from cma.subscription_change c where c.connection_id = v_sub1);
     v_rows := v_rows || array['11', 'B1 the subscriptions'' new fields with a run: inserted, stored, device units null, no change on a first load or a rerun',
       case when v_txt = 'sub-a:inserted:0 sub-b:inserted:0 sub-c:inserted:0 | sub-a:#2502:sepa_direct_debit:12:-:1:2:- '
@@ -501,13 +501,13 @@ begin
     --     count stated for the first time (a start, no row); then the two-argument call puts them back: the same
     --     outcomes, five changes without a run (sub-a's four, and sub-b's line count no longer stated: 1 to none)
     v_txt := (select string_agg(s.source_id || ':' || s.outcome || ':' || s.changes_observed, ' ' order by s.source_id collate "C")
-              from cma.ingest_upsert_subscriptions(v_sub1, pg_temp.v0009w_subs('changed'), v_run) s);
+              from cma.ingest_upsert_subscriptions(v_sub1, pg_temp.v0009z_subs('changed'), v_run) s);
     v_txt := v_txt || ' | ' || (select string_agg(c.subscription_source_id || ':' || c.field || ':' || c.old_value || '>' || coalesce(c.new_value, '-')
                                             || ':' || (c.run_id = v_run)::text, ' ' order by c.subscription_source_id collate "C", c.field collate "C")
                           from cma.subscription_change c where c.connection_id = v_sub1);
     v_txt := v_txt || ' | ' || (select string_agg(s.source_id || ':' || s.outcome, ' ' order by s.source_id collate "C")
                                 from cma.ingest_upsert_subscriptions(v_sub1,
-                                  (select jsonb_agg(x || '{"sourceUpdatedAt": "2026-11-18T09:00:00.000Z"}'::jsonb) from jsonb_array_elements(pg_temp.v0009w_subs('base')) x)) s);
+                                  (select jsonb_agg(x || '{"sourceUpdatedAt": "2026-11-18T09:00:00.000Z"}'::jsonb) from jsonb_array_elements(pg_temp.v0009z_subs('base')) x)) s);
     v_txt := v_txt || ' ' || (select count(*) from cma.subscription_change c where c.connection_id = v_sub1 and c.run_id is null);
     v_rows := v_rows || array['12', 'B2 observed changes: one row per field with the run; a value stored as null a start; the two-argument call the same without a run',
       case when v_txt = 'sub-a:updated:4 sub-b:updated:0 sub-c:updated:0 | sub-a:amount_per_cycle:29.95>39.95:true '
@@ -525,28 +525,28 @@ begin
     perform cma.ingest_sync_run_finish(v_done, 'succeeded', '{"fetched": 1}');
     v_other := cma.ingest_sync_run_start(v_cmp_new, 'reconcile', 'subscription', null, null);
     v_txt := concat_ws(' ',
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), v_run2)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), v_other)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), v_done)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009w_subs('base'), gen_random_uuid())),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[]''::jsonb, %L)', v_sub1, v_done)));
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009z_subs('base'), v_run2)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009z_subs('base'), v_other)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009z_subs('base'), v_done)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscriptions(%L, %L::jsonb, %L)', v_sub1, pg_temp.v0009z_subs('base'), gen_random_uuid())),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[]''::jsonb, %L)', v_sub1, v_done)));
     perform cma.ingest_sync_run_finish(v_other, 'succeeded', '{"fetched": 0}');
     v_rows := v_rows || array['13', 'B3 a run that is no running run of the connection refused (another tenant''s, another connection''s of the same tenant, a finished one, an unknown id)',
       case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B4. the lines as a set: inserted with no change (nothing held before); a rerun unchanged; a line the read no longer
     --     holds missing, another's quantity changed, each subscription's recurring quantity observed; back when it returns
-    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009w_lines('base'), v_run);
+    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009z_lines('base'), v_run);
     v_txt := j::text;
-    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009w_lines('base'), v_run);
+    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009z_lines('base'), v_run);
     v_txt := v_txt || ' | ' || j::text;
-    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009w_lines('removed'), v_run);
+    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009z_lines('removed'), v_run);
     v_txt := v_txt || ' | ' || j::text;
     v_txt := v_txt || ' ' || (select string_agg(c.subscription_source_id || ':' || c.old_value || '>' || c.new_value, ' '
                                                                      order by c.subscription_source_id collate "C")
                                                    from cma.subscription_change c where c.connection_id = v_sub1 and c.field = 'recurring_quantity')
              || ' ' || (select l.source_deleted_at is not null from cma.subscription_line l where l.connection_id = v_sub1 and l.source_id = 'l-a1');
-    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009w_lines('base'), v_run);
+    j := cma.ingest_upsert_subscription_lines(v_sub1, array['sub-a', 'sub-b'], pg_temp.v0009z_lines('base'), v_run);
     v_txt := v_txt || ' | ' || j::text;
     v_txt := v_txt || ' ' || (select count(*) from cma.subscription_line l where l.connection_id = v_sub1 and l.source_deleted_at is null)
              || ' ' || (select count(*) from cma.subscription_change c where c.connection_id = v_sub1 and c.field = 'recurring_quantity');
@@ -560,11 +560,11 @@ begin
     -- B5. the lines refused: a line of a subscription not named, 501 subscriptions, a line twice, a negative quantity, an
     --     @ in raw
     v_txt := concat_ws(' ',
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], %L::jsonb, null)', v_sub1, pg_temp.v0009w_lines('base'))),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, (select array_agg(''s-'' || g) from generate_series(1, 501) g), ''[]''::jsonb, null)', v_sub1)),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[{"sourceId": "l-x", "subscriptionSourceId": "sub-a"}, {"sourceId": "l-x", "subscriptionSourceId": "sub-a"}]''::jsonb, null)', v_sub1)),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[{"sourceId": "l-x", "subscriptionSourceId": "sub-a", "quantity": -1}]''::jsonb, null)', v_sub1)),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[{"sourceId": "l-x", "subscriptionSourceId": "sub-a", "raw": {"id": "x@example.invalid"}}]''::jsonb, null)', v_sub1)));
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], %L::jsonb, null)', v_sub1, pg_temp.v0009z_lines('base'))),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, (select array_agg(''s-'' || g) from generate_series(1, 501) g), ''[]''::jsonb, null)', v_sub1)),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[{"sourceId": "l-x", "subscriptionSourceId": "sub-a"}, {"sourceId": "l-x", "subscriptionSourceId": "sub-a"}]''::jsonb, null)', v_sub1)),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[{"sourceId": "l-x", "subscriptionSourceId": "sub-a", "quantity": -1}]''::jsonb, null)', v_sub1)),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[{"sourceId": "l-x", "subscriptionSourceId": "sub-a", "raw": {"id": "x@example.invalid"}}]''::jsonb, null)', v_sub1)));
     v_rows := v_rows || array['15', 'B5 the lines refused: a subscription not named, 501 subscriptions, a line twice, a negative quantity, an @ in raw',
       case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -581,13 +581,13 @@ begin
                                                                      order by v.variant_source_id collate "C")
                                                    from cma.subscription_product_variant v where v.connection_id = v_sub1);
     v_txt := v_txt || ' | ' || concat_ws(' ',
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_products(%L, ''[{"productSourceId": "1", "variantSourceId": "2", "variantTitle": "Call x@example.invalid"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_products(%L, %L::jsonb)', v_sub1,
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_products(%L, ''[{"productSourceId": "1", "variantSourceId": "2", "variantTitle": "Call x@example.invalid"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_products(%L, %L::jsonb)', v_sub1,
         jsonb_build_array(jsonb_build_object('productSourceId', '1', 'variantSourceId', '2', 'sku', 'A' || chr(7) || 'B')))),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_products(%L, %L::jsonb)', v_sub1,
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_products(%L, %L::jsonb)', v_sub1,
         jsonb_build_array(jsonb_build_object('productSourceId', '1', 'variantSourceId', '2', 'productTitle', repeat('x', 101))))),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_products(%L, ''[]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_products(%L, ''[{"productSourceId": "1", "variantSourceId": "2"}, {"productSourceId": "1", "variantSourceId": "2"}]'')', v_sub1)));
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_products(%L, ''[]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_products(%L, ''[{"productSourceId": "1", "variantSourceId": "2"}, {"productSourceId": "1", "variantSourceId": "2"}]'')', v_sub1)));
     v_rows := v_rows || array['16', 'B6 the catalog: inserted, a smaller set marks the rest missing; an @, a control character, 101 characters, an empty set, a variant twice refused',
       case when v_txt = '{"updated": 0, "inserted": 3, "unchanged": 0, "missing_now": 0} | {"updated": 1, "inserted": 0, "unchanged": 1, "missing_now": 1} '
                         || '41000000001:PLAN-A-M:true 41000000002:-:true 41000000003:INSTALL-1:false | CMA04 CMA04 CMA04 CMA04 CMA04'
@@ -595,11 +595,11 @@ begin
 
     -- B7. the billing events: every kind inserted, a rerun unchanged; a chargeback without a subscription joins its
     --     renewal by the store's order
-    perform cma.ingest_upsert_subscription_events(v_sub1, pg_temp.v0009w_events());
+    perform cma.ingest_upsert_subscription_events(v_sub1, pg_temp.v0009z_events());
     v_txt := (select string_agg(x.outcome || ':' || x.n, ' ' order by x.outcome collate "C") from (select b.outcome, count(*) as n
-              from cma.ingest_upsert_billing_events(v_sub1, pg_temp.v0009w_billing()) b group by 1) x);
+              from cma.ingest_upsert_billing_events(v_sub1, pg_temp.v0009z_billing()) b group by 1) x);
     v_txt := v_txt || ' ' || (select string_agg(x.outcome || ':' || x.n, ' ' order by x.outcome collate "C") from (select b.outcome, count(*) as n
-                              from cma.ingest_upsert_billing_events(v_sub1, pg_temp.v0009w_billing()) b group by 1) x);
+                              from cma.ingest_upsert_billing_events(v_sub1, pg_temp.v0009z_billing()) b group by 1) x);
     v_txt := v_txt || ' | ' || (select string_agg(distinct b.kind collate "C", ' ' order by b.kind collate "C") from cma.billing_event b where b.connection_id = v_sub1)
              || ' | ' || (select string_agg(b.return_code || ':' || b.instrument_type || ':' || coalesce(e.subscription_source_id, '-'), ' ' order by b.source_id collate "C")
                           from cma.billing_event b
@@ -614,15 +614,15 @@ begin
     -- B8. the billing events refused: an unknown kind, a return code on a refund, a return code out of its form (an
     --     account number's shape among them), an instrument outside the seven, an order id that is no digits, partial on an invoice, an @ in raw, no time
     v_txt := concat_ws(' ',
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "dispute", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "refund_created", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "MD01"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "No Mandate"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "NL91ABNA0417164300"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "instrumentType": "klarna"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "orderSourceId": "gid-1"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "invoice_paid", "occurredAt": "2026-11-11T10:00:00.000Z", "partial": true}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "raw": {"id": "x@example.invalid"}}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback"}]'')', v_sub1)));
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "dispute", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "refund_created", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "MD01"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "No Mandate"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "returnCode": "NL91ABNA0417164300"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "instrumentType": "klarna"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "orderSourceId": "gid-1"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "invoice_paid", "occurredAt": "2026-11-11T10:00:00.000Z", "partial": true}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback", "occurredAt": "2026-11-11T10:00:00.000Z", "raw": {"id": "x@example.invalid"}}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_billing_events(%L, ''[{"sourceId": "bx", "kind": "chargeback"}]'')', v_sub1)));
     v_rows := v_rows || array['18', 'B8 the billing events refused: an unknown kind, a refund''s return code, a code out of form, an instrument outside the seven, a non-digit order, partial on an invoice, an @, no time',
       case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -635,13 +635,13 @@ begin
                                                                e.error_code), ' ' order by e.source_id collate "C")
               from cma.subscription_event e where e.connection_id = v_sub1 and e.source_id like 'ne-%')
              || ' | ' || concat_ws(' ',
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "skipped", "occurredAt": "2026-11-11T10:00:00.000Z", "causeCode": "requested"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "renewed", "occurredAt": "2026-11-11T10:00:00.000Z", "intervalTo": "year"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "paused", "occurredAt": "2026-11-11T10:00:00.000Z", "relatedSubscriptionSourceId": "sub-b"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "purchased", "occurredAt": "2026-11-11T10:00:00.000Z", "orderSourceId": "6100000009"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "customer_logged_in", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "renewal_notice", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
-      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "billing_date_moved", "occurredAt": "2026-11-11T10:00:00.000Z", "causeCode": "code_applied"}]'')', v_sub1)));
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "skipped", "occurredAt": "2026-11-11T10:00:00.000Z", "causeCode": "requested"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "renewed", "occurredAt": "2026-11-11T10:00:00.000Z", "intervalTo": "year"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "paused", "occurredAt": "2026-11-11T10:00:00.000Z", "relatedSubscriptionSourceId": "sub-b"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "purchased", "occurredAt": "2026-11-11T10:00:00.000Z", "orderSourceId": "6100000009"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "customer_logged_in", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "renewal_notice", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
+      pg_temp.v0009z_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "billing_date_moved", "occurredAt": "2026-11-11T10:00:00.000Z", "causeCode": "code_applied"}]'')', v_sub1)));
     v_rows := v_rows || array['19', 'B9 the new event types and their columns stored; a cause, an interval, a related subscription or an order on another type refused, a type outside the list refused',
       case when v_txt = 'renewed:2,6100000001 migrated:3,06-01 billing_date_moved:11-05,11-20,requested,op-1 skipped:11-20,12-20 '
                         || 'interval_changed:month,1,year,1 lines_changed:2,1,0,op-2 lines_changed:1,op-2 discount_changed:code_applied '
@@ -655,18 +655,18 @@ begin
     v_txt := cma.setting_of(v_t1, 'subscriptions.history_start_date');
     perform cma.set_tenant_setting('subscriptions.history_start_date', '');
     v_txt := v_txt || ' ' || coalesce(nullif(cma.setting_of(v_t1, 'subscriptions.history_start_date'), ''), 'empty') || ' ' || concat_ws(' ',
-      pg_temp.v0009w_code('select cma.set_tenant_setting(''subscriptions.history_start_date'', ''2025-13-01'')'),
-      pg_temp.v0009w_code('select cma.set_tenant_setting(''subscriptions.history_start_date'', ''01-05-2025'')'),
-      pg_temp.v0009w_code('select cma.set_tenant_setting(''subscriptions.history_start_date'', ''all'')'));
+      pg_temp.v0009z_code('select cma.set_tenant_setting(''subscriptions.history_start_date'', ''2025-13-01'')'),
+      pg_temp.v0009z_code('select cma.set_tenant_setting(''subscriptions.history_start_date'', ''01-05-2025'')'),
+      pg_temp.v0009z_code('select cma.set_tenant_setting(''subscriptions.history_start_date'', ''all'')'));
     perform set_config('app.user_id', v_ing1::text, true);
     v_rows := v_rows || array['20', 'B10 the setting: trimmed, a date or empty; another form refused',
       case when v_txt = '2025-05-01 empty CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B11. the run's new counts accepted; an unknown count refused
     v_txt := concat_ws(' ',
-      pg_temp.v0009w_code(format('select cma.ingest_sync_run_finish(%L, ''succeeded'', ''{"lines_new": 4, "lines_missing": 1, "variants_new": 3, "billing_events_new": 11, "changes_observed": 8, "instrument_unknown": 0, "duplicate_skipped": 1, "return_code_dropped": 0, "catalog_text_dropped": 2}'')', v_run)));
+      pg_temp.v0009z_code(format('select cma.ingest_sync_run_finish(%L, ''succeeded'', ''{"lines_new": 4, "lines_missing": 1, "variants_new": 3, "billing_events_new": 11, "changes_observed": 8, "instrument_unknown": 0, "duplicate_skipped": 1, "return_code_dropped": 0, "catalog_text_dropped": 2}'')', v_run)));
     v_txt := concat_ws(' ', v_txt, (select r.status || ':' || (r.counts ->> 'billing_events_new') from cma.sync_run r where r.id = v_run),
-      pg_temp.v0009w_code(format('select cma.ingest_sync_run_finish(%L, ''succeeded'', ''{"lines_deleted": 1}'')',
+      pg_temp.v0009z_code(format('select cma.ingest_sync_run_finish(%L, ''succeeded'', ''{"lines_deleted": 1}'')',
                                  cma.ingest_sync_run_start(v_sub1, 'reconcile', 'subscription_product', null, null))));
     v_rows := v_rows || array['21', 'B11 the run''s new counts accepted; an unknown count refused',
       case when v_txt = 'ok succeeded:11 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -677,9 +677,9 @@ begin
     perform set_config('app.user_id', v_ing2::text, true);
     v_txt := concat_ws(' ', (select count(*) from cma.subscription_line), (select count(*) from cma.subscription_product_variant),
                        (select count(*) from cma.billing_event), (select count(*) from cma.subscription_change),
-                       pg_temp.v0009w_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[]''::jsonb, null)', v_sub1)));
-    perform cma.ingest_upsert_subscriptions(v_sub2, pg_temp.v0009w_subs('base'), v_run2);
-    j := cma.ingest_upsert_subscription_lines(v_sub2, array['sub-a', 'sub-b'], pg_temp.v0009w_lines('base'), v_run2);
+                       pg_temp.v0009z_code(format('select cma.ingest_upsert_subscription_lines(%L, array[''sub-a''], ''[]''::jsonb, null)', v_sub1)));
+    perform cma.ingest_upsert_subscriptions(v_sub2, pg_temp.v0009z_subs('base'), v_run2);
+    j := cma.ingest_upsert_subscription_lines(v_sub2, array['sub-a', 'sub-b'], pg_temp.v0009z_lines('base'), v_run2);
     v_txt := v_txt || ' ' || (j ->> 'inserted') || ' ' || (select count(*) from cma.subscription_line);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_ing1::text, true);
@@ -689,12 +689,12 @@ begin
 
     -- B13. the application's update and delete refused where the design says so
     v_txt := concat_ws(' ',
-      pg_temp.v0009w_code(format('update cma.billing_event set amount = 1 where connection_id = %L', v_sub1)),
-      pg_temp.v0009w_code(format('delete from cma.billing_event where connection_id = %L', v_sub1)),
-      pg_temp.v0009w_code(format('update cma.subscription_change set new_value = ''x'' where connection_id = %L', v_sub1)),
-      pg_temp.v0009w_code(format('delete from cma.subscription_change where connection_id = %L', v_sub1)),
-      pg_temp.v0009w_code(format('delete from cma.subscription_line where connection_id = %L', v_sub1)),
-      pg_temp.v0009w_code(format('delete from cma.subscription_product_variant where connection_id = %L', v_sub1)));
+      pg_temp.v0009z_code(format('update cma.billing_event set amount = 1 where connection_id = %L', v_sub1)),
+      pg_temp.v0009z_code(format('delete from cma.billing_event where connection_id = %L', v_sub1)),
+      pg_temp.v0009z_code(format('update cma.subscription_change set new_value = ''x'' where connection_id = %L', v_sub1)),
+      pg_temp.v0009z_code(format('delete from cma.subscription_change where connection_id = %L', v_sub1)),
+      pg_temp.v0009z_code(format('delete from cma.subscription_line where connection_id = %L', v_sub1)),
+      pg_temp.v0009z_code(format('delete from cma.subscription_product_variant where connection_id = %L', v_sub1)));
     v_rows := v_rows || array['23', 'B13 the application cannot change or delete a billing event or an observed change, nor delete a line or a variant',
       case when v_txt = '42501 42501 42501 42501 42501 42501' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -717,10 +717,10 @@ begin
     v_rows := v_rows || array['25', 'B15 no column of the four tables holding an email pattern after the fixtures',
       case when v_txt = '0 0 0 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B16. 194's two-argument call against 118's own function (a copy, pg_temp.v0009w_upsert_118) on the same items, step
+    -- B16. 200's two-argument call against 118's own function (a copy, pg_temp.v0009z_upsert_118) on the same items, step
     --      by step on two connections of the same store: the outcomes and the customers matched alike at every step (an
     --      insert, a rerun, a change, a stale read, a change back), and the rows alike over 118's columns. The items carry
-    --      118's instrument types (card, paypal, other), which both take. The changes observed on 194's side: sub-a's four,
+    --      118's instrument types (card, paypal, other), which both take. The changes observed on 200's side: sub-a's four,
     --      then sub-a's four back and sub-b's line count no longer stated (nine)
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
@@ -732,11 +732,11 @@ begin
                                     || case v_step when 'stale' then '{"sourceUpdatedAt": "2026-11-01T09:00:00.000Z", "currentCycle": 99}'::jsonb
                                                    when 'back' then '{"sourceUpdatedAt": "2026-11-18T09:00:00.000Z"}'::jsonb else '{}'::jsonb end
                                   order by x ->> 'sourceId' collate "C")
-                  from jsonb_array_elements(pg_temp.v0009w_subs(case when v_step = 'changed' then 'changed' else 'base' end)) x);
+                  from jsonb_array_elements(pg_temp.v0009z_subs(case when v_step = 'changed' then 'changed' else 'base' end)) x);
       v_new := (select string_agg(u.source_id || ':' || u.outcome || ':' || coalesce(u.customer_matched::text, '-'), ' ' order by u.source_id collate "C")
                 from cma.ingest_upsert_subscriptions(v_cmp_new, v_items) u);
       v_old := (select string_agg(u.source_id || ':' || u.outcome || ':' || coalesce(u.customer_matched::text, '-'), ' ' order by u.source_id collate "C")
-                from pg_temp.v0009w_upsert_118(v_cmp_old, v_items) u);
+                from pg_temp.v0009z_upsert_118(v_cmp_old, v_items) u);
       v_txt := v_txt || case when v_new is not distinct from v_old then '=' else '≠' || v_step || ':' || coalesce(v_new, '-') || '/' || coalesce(v_old, '-') end;
     end loop;
     v_new := (select string_agg(concat_ws('|', s.source_id, s.customer_source_id, s.status, s.current_cycle, s.next_billing_at, s.billing_interval,
@@ -749,7 +749,7 @@ begin
               from cma.subscription s where s.connection_id = v_cmp_old);
     v_txt := v_txt || ' ' || (v_new is not distinct from v_old and v_new is not null)::text
              || ' ' || (select count(*) from cma.subscription_change c where c.connection_id = v_cmp_new);
-    v_rows := v_rows || array['26', 'B16 194''s two-argument call gives 118''s answers: outcomes and customers matched at every step, the rows alike over 118''s columns',
+    v_rows := v_rows || array['26', 'B16 200''s two-argument call gives 118''s answers: outcomes and customers matched at every step, the rows alike over 118''s columns',
       case when v_txt = '===== true 9' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
@@ -758,11 +758,11 @@ begin
     when others then
       v_rows := v_rows || array['59', 'B the block ran to the end', 'FAIL', sqlstate || ': ' || sqlerrm];
   end;
-  insert into verify_0009w (ord, check_name, result, detail)
+  insert into verify_0009z (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0009w values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0009z values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
@@ -777,7 +777,7 @@ declare
   v_txt     text;
 begin
   if not v_dev then
-    insert into verify_0009w values (61, 'Z1 a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
+    insert into verify_0009z values (61, 'Z1 a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
       'REFUSED: no dev seed, so this is no dev or local database; nothing read');
     return;
   end if;
@@ -787,30 +787,30 @@ begin
            || (select count(*) from cma.billing_event x where to_jsonb(x)::text ~ v_email) || ' of ' || (select count(*) from cma.billing_event)
            || ' billing events, ' || (select count(*) from cma.subscription_change x where to_jsonb(x)::text ~ v_email) || ' of '
            || (select count(*) from cma.subscription_change) || ' changes';
-  insert into verify_0009w values (61, 'Z1 every row of the four new tables of the database: no column holding an email pattern',
+  insert into verify_0009z values (61, 'Z1 every row of the four new tables of the database: no column holding an email pattern',
     case when v_txt like '0 of % lines, 0 of % variants, 0 of % billing events, 0 of % changes' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
 end
 $$;
 
 -- The helpers are dropped first, so the verdict is the last thing the script prints
-drop function if exists pg_temp.v0009w_code(text);
-drop function if exists pg_temp.v0009w_subs(text);
-drop function if exists pg_temp.v0009w_lines(text);
-drop function if exists pg_temp.v0009w_billing();
-drop function if exists pg_temp.v0009w_events();
-drop function if exists pg_temp.v0009w_upsert_118(uuid, jsonb);
+drop function if exists pg_temp.v0009z_code(text);
+drop function if exists pg_temp.v0009z_subs(text);
+drop function if exists pg_temp.v0009z_lines(text);
+drop function if exists pg_temp.v0009z_billing();
+drop function if exists pg_temp.v0009z_events();
+drop function if exists pg_temp.v0009z_upsert_118(uuid, jsonb);
 
 -- Verdict: one row per check, then the verdict
 select check_name, result, detail
-from (select ord, check_name, result, detail from verify_0009w
+from (select ord, check_name, result, detail from verify_0009z
       union all
       select 99, 'verdict',
              case when not current_setting('verify.dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009w where result = 'PASS') = 26
-                       and not exists (select 1 from verify_0009w where result <> 'PASS') then 'PASS'
+                  when (select count(*) from verify_0009z where result = 'PASS') = 26
+                       and not exists (select 1 from verify_0009z where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
-             format('195_verify_subscription_lines: %s PASS, %s FAIL', (select count(*) from verify_0009w where result = 'PASS'),
-                                                                     (select count(*) from verify_0009w where result <> 'PASS'))) x
+             format('201_verify_subscription_lines: %s PASS, %s FAIL', (select count(*) from verify_0009z where result = 'PASS'),
+                                                                     (select count(*) from verify_0009z where result <> 'PASS'))) x
 order by ord;
 reset role;

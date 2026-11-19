@@ -70,7 +70,7 @@ export const PAUSE_CODE = "daily_floor";
 /**
  * One sync_run row around fn(counts, runId): started, then finished once as succeeded, or failed with
  * the code of what fn threw (the counts so far are kept), or as a pause (PAUSE_CODE). runId is the
- * row's id (the Juo adapter names it on its observed changes, addition 0009w). Answers
+ * row's id (the Juo adapter names it on its observed changes, addition 0009z). Answers
  * { ok, counts, error, paused }.
  */
 export async function withRun(store, { job, stream = null, from = null, to = null }, fn) {

@@ -1,6 +1,6 @@
 /**
  * Juo's Admin API for one subscriptions connection (addition 0008zl, brief B20). Read only: nothing is ever written to
- * Juo. Since addition 0009w (brief B39 Part A) every request passes an allow-list of method and path before anything is
+ * Juo. Since addition 0009z (brief B39 Part A) every request passes an allow-list of method and path before anything is
  * sent (before the key is read): GET /subscriptions, GET /events, GET /products, GET /analytics/metrics and POST
  * /analytics/query (a read with a body: Juo's own figures, Part B). Any other method or path throws method_not_allowed
  * and no request leaves the process (verify/juo-mapping.mjs proves it).

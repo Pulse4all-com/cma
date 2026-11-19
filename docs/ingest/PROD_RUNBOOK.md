@@ -2946,7 +2946,7 @@ Expected: `Execution [ingest-backfill-…] has successfully completed.`; 16.5's 
 
 **Records:** the outputs of 16.1 to 16.8 into `records/0008zn-dev-<date>/` and `records/0008zn-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
 
-# Phase 17. Juo as a full source, Part A (addition 0009w, brief B39a)
+# Phase 17. Juo as a full source, Part A (addition 0009z, brief B39a)
 
 One step at a time; each says where it runs and what to expect.
 
@@ -2963,9 +2963,9 @@ Expected: the PR's last commit.
 
 **Terminal**
 ```bash
-run_migration dev 194_subscription_lines.sql 195_verify_subscription_lines.sql 0009w-dev-$(date +%F) 119_verify_subscriptions.sql 14_verify_tenant_settings.sql 27_verify_configuration.sql 33_verify_intake_core.sql 53_verify_sources_configuration.sql 69_verify_email_activity.sql 73_verify_follow_up.sql 75_verify_forms_reporting.sql 79_verify_system_health.sql 101_verify_definitions_calls.sql 105_verify_reviews.sql 107_verify_review_reference_guard.sql 109_verify_legacy_call_outcome.sql 113_verify_assets.sql 115_verify_asset_sync.sql 121_verify_lead_cohorts.sql 123_verify_flash.sql 137_verify_flash_insights.sql 179_verify_job_reads.sql 185_verify_active_device_bands.sql
+run_migration dev 200_subscription_lines.sql 201_verify_subscription_lines.sql 0009z-dev-$(date +%F) 119_verify_subscriptions.sql 14_verify_tenant_settings.sql 27_verify_configuration.sql 33_verify_intake_core.sql 53_verify_sources_configuration.sql 69_verify_email_activity.sql 73_verify_follow_up.sql 75_verify_forms_reporting.sql 79_verify_system_health.sql 101_verify_definitions_calls.sql 105_verify_reviews.sql 107_verify_review_reference_guard.sql 109_verify_legacy_call_outcome.sql 113_verify_assets.sql 115_verify_asset_sync.sql 121_verify_lead_cohorts.sql 123_verify_flash.sql 137_verify_flash_insights.sql 179_verify_job_reads.sql 185_verify_active_device_bands.sql
 ```
-Expected: 194 ends with `COMMIT` and `RESET`; 195's last row `verdict | PASS | 195_verify_subscription_lines: 26 PASS, 0 FAIL`; provoked `PROVOKED, NOT A PASS | 195_verify_subscription_lines: 0 PASS, 26 FAIL`; each rerun as it passed before (119 `23 PASS`, the others their usual counts); `records clean`. 117 (heavy, 21 checks) is also named: run it on its own when dev is quiet.
+Expected: 200 ends with `COMMIT` and `RESET`; 201's last row `verdict | PASS | 201_verify_subscription_lines: 26 PASS, 0 FAIL`; provoked `PROVOKED, NOT A PASS | 201_verify_subscription_lines: 0 PASS, 26 FAIL`; each rerun as it passed before (119 `23 PASS`, the others their usual counts); `records clean`. 117 (heavy, 21 checks) is also named: run it on its own when dev is quiet.
 
 **Terminal**
 ```bash
@@ -2974,7 +2974,7 @@ psql "$PGCONN" -f db/117_verify_asset_sync_load.sql | tail -3
 Expected: `21 ok, 0 FAIL`.
 
 ## 17.3 Terminal: the data map on the branch
-No concurrent index step in this addition: `subscription_event` keeps 122's `subscription_event_type_occurred_idx`; `billing_event` is new and its indexes are in 194. Refresh `docs/datamap/schema.json` from dev as for earlier additions (and rebuild the page with `node tools/datamap/build.mjs`), then:
+No concurrent index step in this addition: `subscription_event` keeps 122's `subscription_event_type_occurred_idx`; `billing_event` is new and its indexes are in 200. Refresh `docs/datamap/schema.json` from dev as for earlier additions (and rebuild the page with `node tools/datamap/build.mjs`), then:
 
 **Terminal**
 ```bash
@@ -2983,13 +2983,13 @@ cd web && npm run verify:datamap
 Expected: `datamap: PASS (… tables, … views, all described; index.html current)`. Until the refresh it fails on this branch (the four new tables are not in `schema.json`): expected.
 
 ## 17.4 Terminal: the migration in prod, then the merge
-Pause `ingest-poll-subscriptions` first (as 15.10 (d)): 194's tail holds ACCESS EXCLUSIVE on `cma.subscription` and `cma.subscription_event` until the commit (a few thousand events before the backfill, so seconds).
+Pause `ingest-poll-subscriptions` first (as 15.10 (d)): 200's tail holds ACCESS EXCLUSIVE on `cma.subscription` and `cma.subscription_event` until the commit (a few thousand events before the backfill, so seconds).
 
 **Terminal**
 ```bash
-run_migration prod 194_subscription_lines.sql 195_verify_subscription_lines.sql 0009w-prod-$(date +%F) 119_verify_subscriptions.sql
+run_migration prod 200_subscription_lines.sql 201_verify_subscription_lines.sql 0009z-prod-$(date +%F) 119_verify_subscriptions.sql
 ```
-Expected: 194 `COMMIT`; 195 refuses prod (no dev seed): `verdict | REFUSED`, expected in prod as 119 does. Then the prod-safe verifies as after 118 (105, 115) pass as before. Resume the poll.
+Expected: 200 `COMMIT`; 201 refuses prod (no dev seed): `verdict | REFUSED`, expected in prod as 119 does. Then the prod-safe verifies as after 118 (105, 115) pass as before. Resume the poll.
 
 Then merge the PR; the ingest image builds from `main` (`ingest/` changed; `web/` changed only in the mock, which deploys too).
 

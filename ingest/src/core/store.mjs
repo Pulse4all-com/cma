@@ -76,16 +76,16 @@
  *   subscriptionStore()         cma.ingest_subscription_store: the store whose handle the connection's account id names,
  *                               { handle, storeConnectionId }, or null (the adapter fails the run store_not_configured)
  *   upsertSubscriptions(items, runId)   cma.ingest_upsert_subscriptions in parts of at most 500, with the run (its
- *                               observed changes name it; addition 0009w): per subscription { sourceId, outcome,
+ *                               observed changes name it; addition 0009z): per subscription { sourceId, outcome,
  *                               customerMatched, changesObserved }
  *   upsertSubscriptionLines(subscriptionIds, lines, runId)   cma.ingest_upsert_subscription_lines: the lines of these
  *                               subscriptions as a set, in parts of at most 500 subscriptions and 5,000 lines (a
  *                               subscription's lines never split over two parts); { inserted, updated, unchanged,
- *                               missing_now, changes_observed } summed (addition 0009w)
+ *                               missing_now, changes_observed } summed (addition 0009z)
  *   upsertSubscriptionProducts(variants)   cma.ingest_upsert_subscription_products: the catalog's full set in one call;
- *                               { inserted, updated, unchanged, missing_now } (addition 0009w)
+ *                               { inserted, updated, unchanged, missing_now } (addition 0009z)
  *   upsertSubscriptionEvents(items)   cma.ingest_upsert_subscription_events in parts of at most 500: { outcome: count }
- *   upsertBillingEvents(items)  cma.ingest_upsert_billing_events in parts of at most 500: { outcome: count } (addition 0009w)
+ *   upsertBillingEvents(items)  cma.ingest_upsert_billing_events in parts of at most 500: { outcome: count } (addition 0009z)
  *   markSubscriptionsMissing(sourceIds, from, before)   cma.ingest_mark_subscriptions_missing: one slice of a full read's
  *                               final step; { missing_now, missing_ms }
  *   storeCustomersHeld(storeConnectionId, ids)   which of these customer ids the store's customers hold (the dry run)
