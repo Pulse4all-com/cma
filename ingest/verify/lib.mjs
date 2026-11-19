@@ -19,7 +19,9 @@ export function expect(name, actual, expected, provoked) {
 /**
  * The flow verifiers' guard (B17b.1): what this run wrote to tenants other than its own, as
  * "table:changes" per table, [] when nothing. Every tenant table is audited (cma.setup_tenant_table),
- * so cma.audit_log holds every insert, update and delete; counted are the changes to other tenants'
+ * so cma.audit_log holds every insert, update and delete, but for the bookkeeping (sync_cursor, sync_run
+ * and ingest_event since addition 0009w) and the derived tables, whose writes this guard does not see,
+ * and a configuration cache's update of its refresh's times alone; counted are the changes to other tenants'
  * rows since the run's start (`since`, the database's clock as text) by the run's own logins (the
  * job's and the admin's), which leaves out what the scheduled jobs write to the same database
  * meanwhile (dev). `q` queries as the owner.
