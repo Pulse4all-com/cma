@@ -437,6 +437,9 @@ begin
                     else pg_temp.v0009z_paid(n.paid_closed_seconds, n.paid_running_since, n.business_date, n.timezone) end
         from cma.team_now() n;
         perform set_config('app.user_id', v_team::text, true);
+        if not exists (select 1 from pg_temp.v0009z_board) then
+          v_r2 := 'nobody on the board';
+        else
         select count(*), count(*) filter (where b.paid <> coalesce(h.paid_seconds, 0))
                + case when pg_temp.v0009z_p('R2') then 1 else 0 end
         into v_n, v_off
@@ -451,6 +454,7 @@ begin
            left join cma.team_hours((select min(x.business_date) from pg_temp.v0009z_board x),
                                     (select max(x.business_date) from pg_temp.v0009z_board x)) h
                   on h.user_id = b.user_id and h.business_date = b.business_date));
+        end if;
         delete from pg_temp.v0009z_board;
       end if;
       raise exception using errcode = 'CMAOK', message = 'rollback';
@@ -466,9 +470,10 @@ begin
     end if;
     insert into pg_temp.verify_0009z values (20, 'R1 ' || t.slug || ': the first twenty columns equal 134''s definition, row for row, in order',
       case when v_r1 like 'equal, %' then 'PASS' else 'FAIL' end, v_r1);
-    if v_team is null then
+    if v_team is null or v_r2 = 'nobody on the board' then
       insert into pg_temp.verify_0009z values (21, 'R2 ' || t.slug || ': the board''s paid against Team hours',
-        case when pg_temp.v0009z_p('R2') then 'FAIL' else 'skip' end, 'no active person holds workday.team: not compared');
+        case when pg_temp.v0009z_p('R2') then 'FAIL' else 'skip' end,
+        case when v_team is null then 'no active person holds workday.team: not compared' else 'nobody on the board: not compared' end);
     else
       insert into pg_temp.verify_0009z values (21, 'R2 ' || t.slug || ': at one instant the board''s paid seconds equal Team hours'' per person today, and the whole minutes summed',
         case when v_r2 like '%, paid differs for 0; minutes equal' then 'PASS' else 'FAIL' end, v_r2);
