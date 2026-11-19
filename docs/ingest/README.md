@@ -483,7 +483,7 @@ The Juo adapter (addition 0008zl, brief B20, `db/118_subscriptions.sql`; `docs/a
 |---|---|---|
 | every subscription, with its lines | `GET /subscriptions?limit=100&expand=paymentMethod&includeCanceledItems=true` | the reconcile, `--object subscription` |
 | subscriptions by id | `GET /subscriptions?limit=100&expand=paymentMethod&includeCanceledItems=true&query=(id:'<id>' OR …)`, 25 ids a query | the poll, for the subscriptions its events touched |
-| subscription events of a window | `GET /events?limit=100&sort=occurredAt:asc,id:asc&query=(category:subscription OR type:'renewal:notification-sent') AND occurredAt:>'<ISO>'[ AND occurredAt:<'<ISO>']` | the poll (after its cursor less five minutes), `--object subscription_event` (from `--from`, `>=`) |
+| subscription events of a window | `GET /events?limit=100&sort=occurredAt:asc,id:asc&query=category:subscription AND occurredAt:>'<ISO>'[ AND occurredAt:<'<ISO>']` | the poll (after its cursor less five minutes), `--object subscription_event` (from `--from`, `>=`) |
 | billing events of a window | the same with `(type:'chargeback:created' OR type:'refund:created' OR type:'refund:completed' OR type:'refund:failed' OR type:'invoice:placed' OR type:'invoice:paid' OR type:'invoice:overdue' OR type:'invoice:payment-failed' OR type:'order:placement-failed' OR type:'order:draft-created')` in place of the category | the poll, `--object billing_event` |
 | the catalog | `GET /products?limit=100`, every page | the reconcile (after the subscriptions), `--object subscription_product` |
 
@@ -503,7 +503,7 @@ The events come in two families, each its own query with its own backfill cursor
 | `subscription:reactivated` | `reactivated` | `previousStatus` → `status_from`, `status_to` active |
 | `subscription:updated` whose data names a status | `status_changed` | `data.status` → `status_from`, `data.input.status` → `status_to` (Juo's own move to failed arrives so: ACTIVE → FAILED by the system); an update without a status, or with the same one, is no event of the CMA |
 
-Since 0009w the table also holds (15 more types, 22 in all):
+Since 0009w the table also holds (14 more types, 21 in all):
 
 | Juo's type | `event_type` | What it carries into the row |
 |---|---|---|
@@ -517,9 +517,8 @@ Since 0009w the table also holds (15 more types, 22 in all):
 | `subscription:discount-added`, `-removed`, `-updated`, `-code-applied`, `-free-shipping-applied` | `discount_changed` | cause `added`, `removed`, `updated`, `code_applied`, `free_shipping` (never a code or value) |
 | `subscription:merged-to`, `-from`, `split-to`, `-from` | `merged_to`, `merged_from`, `split_to`, `split_from` | `related_subscription_source_id` |
 | `subscription:update-failed` | `update_failed` | `errorCode`, never a message |
-| `renewal:notification-sent` | `renewal_notice` | its type and subscription only |
 
-`renewed` also keeps the store's order (`order_source_id`). The billing family goes to `cma.billing_event` (`kind`):
+`renewal:notification-sent` (category notification) is not read: no query asks for it, so neither the event nor its payload, which names a recipient, reaches the CMA (Decision log, 19 Nov 2026). `renewed` also keeps the store's order (`order_source_id`). The billing family goes to `cma.billing_event` (`kind`):
 
 | Juo's type | `kind` | Extra |
 |---|---|---|

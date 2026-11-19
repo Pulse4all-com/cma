@@ -7,8 +7,8 @@
  * (cma.ingest_subscription_store; without one every read fails store_not_configured before a request).
  *
  * The events come in two families (read.mjs), each its own query: subscription (the events of the store's
- * subscriptions, renewal notices included) and billing (chargebacks, refunds, invoice renewals, orders the app could not
- * place). A subscription is always read with its lines (canceled ones included), stored as a set per subscription.
+ * subscriptions; Juo's renewal notices are never requested) and billing (chargebacks, refunds, invoice renewals, orders
+ * the app could not place). A subscription is always read with its lines (canceled ones included), stored as a set per subscription.
  *
  *   pollDue, pollSubscriptions   the job ingest-poll-subscriptions (every 5 minutes): when due on
  *                         subscriptions_poll_interval_minutes (default 5; cursor juo:cadence), the events of both families

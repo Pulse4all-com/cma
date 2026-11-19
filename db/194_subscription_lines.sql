@@ -49,7 +49,8 @@
 --                      cma.ingest_upsert_billing_events(connection, items): new ones inserted, held ones left as they are
 --   event types        cma.subscription_event takes purchased, created, migrated, skipped, billing_date_moved,
 --                      interval_changed, lines_changed, payment_method_changed, discount_changed, merged_to, merged_from,
---                      split_to, split_from, renewal_notice and update_failed besides the seven, and the columns
+--                      split_to, split_from and update_failed besides the seven (Juo's renewal notice is not read:
+--                      Decision log, 19 Nov 2026), and the columns
 --                      billing_from_at, billing_to_at, cause_code, interval_from, interval_count_from, interval_to,
 --                      interval_count_to, lines_added, lines_removed, lines_updated, related_subscription_source_id,
 --                      operation_source_id (the app's id of the operation that wrote it, which pairs the events of one
@@ -1153,11 +1154,11 @@ begin
     if coalesce(v_type, '') not in ('renewed', 'renew_failed', 'canceled', 'paused', 'resumed', 'reactivated', 'status_changed',
                                     'purchased', 'created', 'migrated', 'skipped', 'billing_date_moved', 'interval_changed',
                                     'lines_changed', 'payment_method_changed', 'discount_changed', 'merged_to', 'merged_from',
-                                    'split_to', 'split_from', 'renewal_notice', 'update_failed')
+                                    'split_to', 'split_from', 'update_failed')
        or (v_actor is not null and v_actor not in ('staff', 'customer', 'system', 'bulk', 'api'))
        or (v_actid is not null and v_actor is distinct from 'staff')
        or (i ? 'raw' and jsonb_typeof(i -> 'raw') <> 'object') then
-      raise exception 'event %: a type of the twenty-two, an actor type of staff, customer, system, bulk or api, an actor id for staff only and an object for raw', v_id
+      raise exception 'event %: a type of the twenty-one, an actor type of staff, customer, system, bulk or api, an actor id for staff only and an object for raw', v_id
         using errcode = 'CMA04';
     end if;
     insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type,
@@ -1308,7 +1309,7 @@ alter table cma.subscription_event
   add constraint subscription_event_event_type_check
     check (event_type in ('renewed', 'renew_failed', 'canceled', 'paused', 'resumed', 'reactivated', 'status_changed', 'purchased', 'created',
                           'migrated', 'skipped', 'billing_date_moved', 'interval_changed', 'lines_changed', 'payment_method_changed',
-                          'discount_changed', 'merged_to', 'merged_from', 'split_to', 'split_from', 'renewal_notice', 'update_failed')),
+                          'discount_changed', 'merged_to', 'merged_from', 'split_to', 'split_from', 'update_failed')),
   add constraint subscription_event_raw_check
     check (cma.subscription_raw_ok(raw, array['id', 'type', 'occurredAt', 'subscriptionId', 'customerId', 'actorType', 'actorId',
                                               'cycleIndex', 'attempt', 'errorCode', 'reason', 'previousStatus', 'status', 'orderId',
@@ -1337,7 +1338,7 @@ alter table cma.subscription_event
     check (operation_source_id is null or cma.subscription_id_ok(operation_source_id)),
   add constraint subscription_event_order_check
     check (order_source_id is null or (order_source_id ~ '^\d{1,30}$' and event_type = 'renewed'));
-comment on table cma.subscription_event is 'A subscription app''s events of its subscriptions per connection, in the CMA''s words (0008zl''s seven: renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; since 0009w purchased, created, migrated, skipped, billing_date_moved, interval_changed, lines_changed, payment_method_changed, discount_changed, merged_to, merged_from, split_to, split_from, renewal_notice, update_failed). Codes, counts and times only; a staff actor''s id, never a name; no free-text message or reason. Append-only. Owned by the subscription app (0008zl, 0009w)';
+comment on table cma.subscription_event is 'A subscription app''s events of its subscriptions per connection, in the CMA''s words (0008zl''s seven: renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; since 0009w purchased, created, migrated, skipped, billing_date_moved, interval_changed, lines_changed, payment_method_changed, discount_changed, merged_to, merged_from, split_to, split_from, update_failed). Codes, counts and times only; a staff actor''s id, never a name; no free-text message or reason. Append-only. Owned by the subscription app (0008zl, 0009w)';
 comment on column cma.subscription_event.cycle_index is 'The billing cycle the event is about, as the source counts them (a renewal''s or a failed renewal''s; a migration''s current cycle at the move into the app)';
 comment on column cma.subscription_event.billing_from_at is 'A billing-date move''s previous date, a skip''s skipped date (0009w)';
 comment on column cma.subscription_event.billing_to_at is 'A billing-date move''s new date, a skip''s next billing date, a migration''s next billing date (0009w)';
@@ -1366,7 +1367,7 @@ create or replace view cma_read.subscription_event as
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009w', 'The subscription app read whole (brief B39 Part A): the setting subscriptions.history_start_date (the events backfill''s start without --from, before intake.start_date allowed; empty all history); cma.subscription gains source_number, min_cycles, max_cycles, discount_count, line_count, device_units and seven instrument types; cma.subscription_line (lines as a set per subscription, canceled ones included, missing marked), cma.subscription_product_variant (the catalog per variant, titles and SKU as merchant text), cma.billing_event (chargebacks, refunds, invoice renewals, order placement; append-only) and cma.subscription_change (observed changes of status, amount, currency, interval, line count and recurring quantity; a stored null is a start; append-only); cma.subscription_event takes fifteen more types and the columns of billing-date moves, interval and line changes, merges, the operation and a renewal''s order; cma.ingest_upsert_subscriptions with a run (the two-argument function a wrapper of it), cma.ingest_upsert_subscription_lines, cma.ingest_upsert_subscription_products, cma.ingest_upsert_billing_events; the run counts lines_new, lines_missing, variants_new, billing_events_new, changes_observed, instrument_unknown, duplicate_skipped, return_code_dropped, catalog_text_dropped; cma_read.subscription_line, subscription_product_variant, billing_event, subscription_change, and the new columns of cma_read.subscription and subscription_event')
+values ('0009w', 'The subscription app read whole (brief B39 Part A): the setting subscriptions.history_start_date (the events backfill''s start without --from, before intake.start_date allowed; empty all history); cma.subscription gains source_number, min_cycles, max_cycles, discount_count, line_count, device_units and seven instrument types; cma.subscription_line (lines as a set per subscription, canceled ones included, missing marked), cma.subscription_product_variant (the catalog per variant, titles and SKU as merchant text), cma.billing_event (chargebacks, refunds, invoice renewals, order placement; append-only) and cma.subscription_change (observed changes of status, amount, currency, interval, line count and recurring quantity; a stored null is a start; append-only); cma.subscription_event takes fourteen more types and the columns of billing-date moves, interval and line changes, merges, the operation and a renewal''s order; cma.ingest_upsert_subscriptions with a run (the two-argument function a wrapper of it), cma.ingest_upsert_subscription_lines, cma.ingest_upsert_subscription_products, cma.ingest_upsert_billing_events; the run counts lines_new, lines_missing, variants_new, billing_events_new, changes_observed, instrument_unknown, duplicate_skipped, return_code_dropped, catalog_text_dropped; cma_read.subscription_line, subscription_product_variant, billing_event, subscription_change, and the new columns of cma_read.subscription and subscription_event')
 on conflict (version) do nothing;
 
 commit;

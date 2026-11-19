@@ -69,12 +69,13 @@
  *   subscription:merged-to, -from, split-to, -from merged_to, merged_from, split_to, split_from  the other subscription's
  *                                                                id when the payload names one
  *   subscription:update-failed                    update_failed  data.errorCode (never a message)
- *   renewal:notification-sent                     renewal_notice
  *   subscription:chargeback-created, subscription:refund-created, -completed, -failed: the same chargeback or refund as
  *                                                 the billing family's chargeback:created and refund:*, so skipped and
  *                                                 counted duplicate_skipped
  * Every other event of the subscription family (the cancellation flow, a delivery address change) is read (its
- * subscription is read again by the poll) and not stored (counted skipped).
+ * subscription is read again by the poll) and not stored (counted skipped). Juo's renewal notice (renewal:notification-sent,
+ * category notification) is never requested, so neither it nor its payload reaches the adapter: its payload names a
+ * recipient, and mail activity reaches the CMA through the shared Gmail source, not through Juo (Decision log, 19 Nov 2026).
  *
  * The billing types (BILLING_KINDS): chargeback:created chargeback, refund:created refund_created, refund:completed
  * refund_completed, refund:failed refund_failed, invoice:placed invoice_placed, invoice:paid invoice_paid, invoice:overdue
@@ -127,7 +128,6 @@ export const EVENT_TYPES = {
   "subscription:split-to": { type: "split_to", to: null },
   "subscription:split-from": { type: "split_from", to: null },
   "subscription:update-failed": { type: "update_failed", to: null },
-  "renewal:notification-sent": { type: "renewal_notice", to: null },
 };
 /** The subscription family's copies of a billing event: skipped, counted duplicate_skipped */
 export const DUPLICATE_TYPES = ["subscription:chargeback-created", "subscription:refund-created", "subscription:refund-completed",

@@ -10,9 +10,10 @@
  *   events          GET /events?limit=100&sort=occurredAt:asc,id:asc&query=<family> AND occurredAt:>'<ISO>'
  *                   [AND occurredAt:<'<ISO>'][&after=<endCursor>]: one family's events in a window, oldest first (a
  *                   timestamp carries its offset, Z). Two families, each its own query and backfill cursor (addition
- *                   0009w): subscription, (category:subscription OR type:'renewal:notification-sent'), the events of the
- *                   store's subscriptions; billing, (type:'chargeback:created' OR type:'refund:created' OR …), the ten
- *                   billing types of BILLING_TYPES, whose category is billing or order
+ *                   0009w): subscription, category:subscription, the events of the store's subscriptions (Juo's renewal
+ *                   notice, category notification, is never requested: Decision log, 19 Nov 2026); billing,
+ *                   (type:'chargeback:created' OR type:'refund:created' OR …), the ten billing types of BILLING_TYPES,
+ *                   whose category is billing or order
  *   products        GET /products?limit=100[&after=<endCursor>] (addition 0009w): the store's catalog, each product with
  *                   its variants (id, title, SKU); map.mjs reads ids, titles, SKU and status only
  *
@@ -37,7 +38,7 @@ export const BILLING_TYPES = ["chargeback:created", "refund:created", "refund:co
   "invoice:overdue", "invoice:payment-failed", "order:placement-failed", "order:draft-created"];
 /** The two families of events, each its own query (and backfill cursor) */
 export const FAMILIES = {
-  subscription: "(category:subscription OR type:'renewal:notification-sent')",
+  subscription: "category:subscription",
   billing: `(${BILLING_TYPES.map((t) => `type:'${t}'`).join(" OR ")})`,
 };
 

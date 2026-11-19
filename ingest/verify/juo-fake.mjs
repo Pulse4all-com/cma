@@ -22,7 +22,8 @@
  * as the GB key does for the NL store). Switches on state: fail429 (the next n calls answer 429 with Retry-After:
  * retryAfter seconds, as text), failAfter (after n more pages, every call answers 503 until cleared), failTenant (one
  * store's domain: every call for that store answers 503 while the others answer as before). state.requests
- * records { path, params, tenant, authorized, at } per call (never the key).
+ * records { path, params, tenant, authorized, at } per call (never the key); state.queriesSeen every query a call carried,
+ * never cleared (the flow proves no call ever asked for Juo's renewal notice).
  */
 import http from "node:http";
 
@@ -139,6 +140,7 @@ export function juoStore({ handle, key, nowMs = Date.now(), prefix = "s" }) {
   event(217, "subscription:payment-method-changed", 60 * 24 * 4, { from: "pm-0217-old", to: "pm-0217-new" });
   event(218, "subscription:merged-to", 60 * 24 * 4, { targetSubscriptionId: sub(219) });
   event(219, "subscription:update-failed", 60 * 24 * 3, { errorCode: "INVALID_VARIANT", errorMessage: "Variant missing for Invented Person 0219" });
+  // a renewal notice (category notification): never requested by the adapter, so its recipient never reaches it (19 Nov 2026)
   event(220, "renewal:notification-sent", 60 * 24 * 2, { channel: "email", to: `person-${pad(220)}@example.invalid` });
   event(221, "subscription:purchased", 60 * 24 * 25, { orderId: "6100000221" });
   event(222, "subscription:created", 60 * 24 * 25, {});
@@ -187,7 +189,7 @@ const QUOTED = "'([^']+)'";
 /** The two families' queries exactly as Juo's documentation spells them (written here, not taken from the adapter) */
 export const BILLING_FIXTURE_TYPES = ["chargeback:created", "refund:created", "refund:completed", "refund:failed", "invoice:placed", "invoice:paid",
   "invoice:overdue", "invoice:payment-failed", "order:placement-failed", "order:draft-created"];
-export const SUBSCRIPTION_FAMILY = "(category:subscription OR type:'renewal:notification-sent')";
+export const SUBSCRIPTION_FAMILY = "category:subscription";
 export const BILLING_FAMILY = `(${BILLING_FIXTURE_TYPES.map((t) => `type:'${t}'`).join(" OR ")})`;
 const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const IDS = new RegExp(`^\\((id:${QUOTED})( OR id:${QUOTED})*\\)$`);
@@ -195,7 +197,7 @@ const EVENTS = new RegExp(`^(${escape(SUBSCRIPTION_FAMILY)}|${escape(BILLING_FAM
 
 /** Starts the fake for some stores (juoStore); answers { url, state, close }. */
 export async function startFakeJuo({ stores }) {
-  const state = { requests: [], fail429: 0, retryAfter: "1", failAfter: null, failTenant: null, pagesAnswered: 0, stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
+  const state = { requests: [], queriesSeen: [], fail429: 0, retryAfter: "1", failAfter: null, failTenant: null, pagesAnswered: 0, stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
   const json = (res, status, body, headers = {}) => {
     res.writeHead(status, { "content-type": "application/json", ...headers });
     res.end(JSON.stringify(body));
@@ -216,6 +218,7 @@ export async function startFakeJuo({ stores }) {
     const authorized = Boolean(store) && req.headers["x-juo-admin-api-key"] === store.key;
     state.requests.push({ path: url.pathname, params: Object.fromEntries(url.searchParams), tenant, authorized, at: Date.now(),
       keyInUrl: Object.values(state.stores).some((s) => req.url.includes(s.key)) });
+    if (url.searchParams.has("query")) state.queriesSeen.push(url.searchParams.get("query"));
     req.resume();
     if (req.method !== "GET") return json(res, 405, { error: "method_not_allowed" });
     if (!authorized) return json(res, 401, { error: "unauthorized", message: "The API key is not valid for this tenant" });
@@ -249,7 +252,7 @@ export async function startFakeJuo({ stores }) {
       const m = EVENTS.exec(params.get("query") ?? "");
       if (!m || params.get("sort") !== "occurredAt:asc,id:asc") return json(res, 400, { error: "invalid_query" });
       const inFamily = m[1] === BILLING_FAMILY ? (e) => BILLING_FIXTURE_TYPES.includes(e.type)
-        : (e) => e.category === "subscription" || e.type === "renewal:notification-sent";
+        : (e) => e.category === "subscription";
       const from = Date.parse(m[3]);
       const until = m[5] ? Date.parse(m[5]) : Infinity;
       const list = store.events.filter((e) => inFamily(e) && (m[2] === ">=" ? Date.parse(e.occurredAt) >= from : Date.parse(e.occurredAt) > from)

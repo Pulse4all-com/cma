@@ -12,7 +12,8 @@
 --   A  structure and privileges: the addition row after 0009v; the four new tables tenant-aware (row-level security, the
 --      tenant policy, the audit trigger, the tenant's foreign key), the application without delete on any, without
 --      update on billing events and observed changes; the unique keys; the new columns of cma.subscription and
---      cma.subscription_event; the checks of the instrument types (seven) and event types (twenty-two); every function
+--      cma.subscription_event; the checks of the instrument types (seven) and event types (twenty-one; Juo's renewal notice
+--      not among them); every function
 --      the application's only and in the caller's rights; the reader views without raw and with the new columns; the
 --      setting subscriptions.history_start_date in the catalog; the pure helpers (catalog text, instrument type); every
 --      renewal's store order in order_source_id (the renewals held before 194 filled from raw)
@@ -151,7 +152,6 @@ as $$
     ('ne-08', '2026-11-05T09:00:00.000Z', '{"eventType": "discount_changed", "causeCode": "code_applied"}'),
     ('ne-09', '2026-11-06T09:00:00.000Z', '{"eventType": "merged_to", "relatedSubscriptionSourceId": "sub-b"}'),
     ('ne-10', '2026-11-07T09:00:00.000Z', '{"eventType": "update_failed", "errorCode": "INVALID_VARIANT"}'),
-    ('ne-11', '2026-11-08T09:00:00.000Z', '{"eventType": "renewal_notice"}'),
     ('ne-12', '2026-11-09T09:00:00.000Z', '{"eventType": "payment_method_changed"}'),
     ('ne-13', '2025-05-01T09:00:00.000Z', '{"eventType": "purchased"}'),
     ('ne-14', '2025-05-01T09:00:00.000Z', '{"eventType": "created"}'),
@@ -332,7 +332,7 @@ begin
   insert into verify_0009w values (3, 'A3 the unique keys of the four tables',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
-  -- A4. the new columns of cma.subscription and cma.subscription_event; the seven instrument types and twenty-two event
+  -- A4. the new columns of cma.subscription and cma.subscription_event; the seven instrument types and twenty-one event
   --     types in their checks
   select string_agg(c, ' ' order by c collate "C") into v_bad
   from (select x as c from unnest(array['source_number', 'min_cycles', 'max_cycles', 'discount_count', 'line_count', 'device_units']) x
@@ -350,12 +350,14 @@ begin
   if (select count(*) from unnest(array['renewed', 'renew_failed', 'canceled', 'paused', 'resumed', 'reactivated', 'status_changed', 'purchased',
                                        'created', 'migrated', 'skipped', 'billing_date_moved', 'interval_changed', 'lines_changed',
                                        'payment_method_changed', 'discount_changed', 'merged_to', 'merged_from', 'split_to', 'split_from',
-                                       'renewal_notice', 'update_failed']) x
+                                       'update_failed']) x
       where (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'cma.subscription_event'::regclass
-               and conname = 'subscription_event_event_type_check') like '%''' || x || '''%') <> 22 then
+               and conname = 'subscription_event_event_type_check') like '%''' || x || '''%') <> 21
+     or (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'cma.subscription_event'::regclass
+           and conname = 'subscription_event_event_type_check') like '%renewal_notice%' then
     v_bad := v_bad || ' event types';
   end if;
-  insert into verify_0009w values (4, 'A4 the new columns of subscription and subscription_event; seven instrument types; twenty-two event types',
+  insert into verify_0009w values (4, 'A4 the new columns of subscription and subscription_event; seven instrument types; twenty-one event types, no renewal notice',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A5. every function the application's only and in the caller's rights
@@ -625,7 +627,7 @@ begin
       case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B9. the new event types and their columns stored; the refusals: a cause on another type, an interval on another
-    --     type, a related subscription on another type, an order on a non-renewal, a type outside the twenty-two
+    --     type, a related subscription on another type, an order on a non-renewal, a type outside the twenty-one (a renewal notice among them)
     v_txt := (select string_agg(e.event_type || ':' || concat_ws(',', e.cycle_index, to_char(e.billing_from_at at time zone 'UTC', 'MM-DD'),
                                                                to_char(e.billing_to_at at time zone 'UTC', 'MM-DD'), e.cause_code, e.interval_from,
                                                                e.interval_count_from, e.interval_to, e.interval_count_to, e.lines_added, e.lines_removed,
@@ -638,12 +640,13 @@ begin
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "paused", "occurredAt": "2026-11-11T10:00:00.000Z", "relatedSubscriptionSourceId": "sub-b"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "purchased", "occurredAt": "2026-11-11T10:00:00.000Z", "orderSourceId": "6100000009"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "customer_logged_in", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
+      pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "renewal_notice", "occurredAt": "2026-11-11T10:00:00.000Z"}]'')', v_sub1)),
       pg_temp.v0009w_code(format('select * from cma.ingest_upsert_subscription_events(%L, ''[{"sourceId": "nx", "subscriptionSourceId": "sub-a", "eventType": "billing_date_moved", "occurredAt": "2026-11-11T10:00:00.000Z", "causeCode": "code_applied"}]'')', v_sub1)));
     v_rows := v_rows || array['19', 'B9 the new event types and their columns stored; a cause, an interval, a related subscription or an order on another type refused, a type outside the list refused',
       case when v_txt = 'renewed:2,6100000001 migrated:3,06-01 billing_date_moved:11-05,11-20,requested,op-1 skipped:11-20,12-20 '
                         || 'interval_changed:month,1,year,1 lines_changed:2,1,0,op-2 lines_changed:1,op-2 discount_changed:code_applied '
-                        || 'merged_to:sub-b update_failed:INVALID_VARIANT renewal_notice: payment_method_changed: purchased: created: split_from:sub-c'
-                        || ' | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04'
+                        || 'merged_to:sub-b update_failed:INVALID_VARIANT payment_method_changed: purchased: created: split_from:sub-c'
+                        || ' | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B10. the setting as the tenant's admin: trimmed, a date or empty; anything else refused

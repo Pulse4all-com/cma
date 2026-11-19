@@ -110,11 +110,14 @@ expect("A8 the amount per cycle: the current items' total prices only (an item J
   [29.95, 24.95, undefined], [24.95, 29.95, 0]);
 
 // ---- B. The events --------------------------------------------------------------------------------------------------
-const subEvents = one.events.filter((e) => !map.isBillingEvent(e));
+// the subscription family as Juo answers its query (category subscription): the renewal notice (category notification) is
+// not among them
+const subEvents = one.events.filter((e) => e.category === "subscription");
+const notice = one.events.find((e) => e.type === "renewal:notification-sent");
 const mapped = subEvents.map((e) => [e.type, map.eventItem(e)]);
 expect("B1 the event types of the subscription family: the seven and since 0009w fifteen more kept; the copies of billing events duplicates; the rest skipped",
   [...new Set(mapped.map(([t, m]) => `${t}→${m?.skip ? `skip:${m.skip}` : m?.item?.eventType}`))].sort(),
-  ["renewal:notification-sent→renewal_notice", "subscription:cancellation-flow/started→skip:type", "subscription:cancelled→canceled",
+  ["subscription:cancellation-flow/started→skip:type", "subscription:cancelled→canceled",
     "subscription:chargeback-created→skip:duplicate", "subscription:created→created", "subscription:delivery-address-changed→skip:type",
     "subscription:discount-added→discount_changed", "subscription:discount-code-applied→discount_changed", "subscription:frequency-changed→interval_changed",
     "subscription:line-added→lines_changed", "subscription:lines-changed→lines_changed", "subscription:merged-to→merged_to",
@@ -266,13 +269,16 @@ expect("G3 a line change: the counts of lines added, removed, updated (ids not k
     ev(216, "subscription:lines-changed").operationSourceId === ev(216, "subscription:line-added").operationSourceId,
     JSON.stringify(ev(216, "subscription:lines-changed")).includes("item-x1"), ev(216, "subscription:lines-changed").actorSourceId],
   [[2, 1, 0], [1, undefined], true, false, "81100000002"], [[0, 0, 0], [0, 1], false, true, null]);
-expect("G4 a merge names the other subscription; a payment method change, a renewal notice, a purchase and a creation kept; an update failure keeps its code, never its message",
+expect("G4 a merge names the other subscription; a payment method change, a purchase and a creation kept; an update failure keeps its code, never its message",
   [ev(218, "subscription:merged-to").relatedSubscriptionSourceId, ev(217, "subscription:payment-method-changed").eventType,
-    JSON.stringify(ev(217, "subscription:payment-method-changed")).includes("pm-0217"), ev(220, "renewal:notification-sent").eventType,
-    ev(221, "subscription:purchased").eventType, ev(222, "subscription:created").eventType, ev(219, "subscription:update-failed").errorCode,
+    JSON.stringify(ev(217, "subscription:payment-method-changed")).includes("pm-0217"), ev(221, "subscription:purchased").eventType, ev(222, "subscription:created").eventType, ev(219, "subscription:update-failed").errorCode,
     JSON.stringify(ev(219, "subscription:update-failed")).includes("Variant missing")],
-  [sub(219).id, "payment_method_changed", false, "renewal_notice", "purchased", "created", "INVALID_VARIANT", false],
-  [null, null, true, null, null, null, null, true]);
+  [sub(219).id, "payment_method_changed", false, "purchased", "created", "INVALID_VARIANT", false],
+  [null, null, true, null, null, null, true]);
+expect("G6 Juo's renewal notice is not read (19 Nov 2026): no type mapping, neither family's query asks for it or its category, and handed to the mapping anyway it is skipped with nothing kept",
+  [Object.hasOwn(map.EVENT_TYPES, "renewal:notification-sent"), Object.values(read.FAMILIES).some((q) => /notification/.test(q)), map.eventItem(notice)?.skip,
+    map.billingEventItem(notice)?.skip, map.isBillingEvent(notice)],
+  [false, false, "type", "type", false], [true, true, undefined, undefined, true]);
 expect("G5 a renewal keeps its store order as orderSourceId (what a chargeback's order joins); no other type does",
   [map.eventItem(eventsOf(1)[0]).item.orderSourceId, map.eventItem(eventsOf(201)[0]).item.orderSourceId, ev(221, "subscription:purchased").orderSourceId],
   ["610000001", undefined, undefined], [undefined, "x", "6100000221"]);
@@ -357,10 +363,10 @@ expect("D2 subscriptions read again by id, 25 a query: 30 ids in two batches", b
 const evPages = await collect(read.clientFor(conn(), settings, new JobBudget({})).events(read.eventsQuery(NOW - 60 * 24 * 60_000 * 30)));
 const evList = evPages.flat();
 const blList = (await collect(read.clientFor(conn(), settings, new JobBudget({})).events(read.eventsQuery(NOW - 60 * 24 * 60_000 * 30, null, { family: "billing" })))).flat();
-expect("D3 each family's events of a window, oldest first, in pages: the subscription family and the billing family, together every event",
+expect("D3 each family's events of a window, oldest first, in pages: the subscription family and the billing family, together every event but the renewal notice, which neither returns",
   [evList.length, evList.every((e, i) => i === 0 || Date.parse(evList[i - 1].occurredAt) <= Date.parse(e.occurredAt)), blList.length, evList.length + blList.length,
-    blList.every(map.isBillingEvent)],
-  [subEvents.length, true, billingEvents.length, one.events.length, true], [0, false, 0, 0, false]);
+    blList.every(map.isBillingEvent), [...evList, ...blList].some((e) => e.type === "renewal:notification-sent")],
+  [subEvents.length, true, billingEvents.length, one.events.length - 1, true, false], [0, false, 0, 0, false, true]);
 const prodPages = await collect(read.clientFor(conn(), settings, new JobBudget({})).products());
 expect("D3b the catalog in pages: 153 products in two pages", prodPages.map((x) => x.length), [100, 53], [153]);
 fake.state.requests.length = 0;

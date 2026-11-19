@@ -177,7 +177,10 @@ const FROM = new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString().slice(0,
 // events (duplicates) and its other types; the billing family
 const BILLING = ["chargeback:created", "refund:created", "refund:completed", "refund:failed", "invoice:placed", "invoice:paid", "invoice:overdue",
   "invoice:payment-failed", "order:placement-failed", "order:draft-created"];
-const subEvents = one.events.filter((e) => !BILLING.includes(e.type));
+// the subscription family as Juo answers its query (category subscription): the renewal notice (category notification) is
+// never requested (19 Nov 2026)
+const subEvents = one.events.filter((e) => e.category === "subscription");
+const notice = one.events.find((e) => e.type === "renewal:notification-sent");
 const billingEvents = one.events.filter((e) => BILLING.includes(e.type));
 const duplicateEvents = subEvents.filter((e) => e.type === "subscription:chargeback-created");
 const otherEvents = subEvents.filter((e) => ["subscription:delivery-address-changed", "subscription:cancellation-flow/started"].includes(e.type)
@@ -205,7 +208,7 @@ expect("B2 the dry run of subscription_event from a date: the subscription famil
     b.customersUnmatched, Math.abs(Date.parse(b.from) - Date.parse(`${FROM}T00:00:00Z`)) <= 86_400_000, Boolean(b.firstEventAt)],
   [subEvents.length, keptEvents.length, otherEvents.length, duplicateEvents.length, 0, 201, 2,
     { billing_date_moved: 1, canceled: 1, created: 1, discount_changed: 2, interval_changed: 1, lines_changed: 2, merged_to: 1, migrated: 1, paused: 2,
-      payment_method_changed: 1, purchased: 1, reactivated: 1, renew_failed: 3, renewal_notice: 1, renewed: 201, resumed: 1, skipped: 1, status_changed: 1,
+      payment_method_changed: 1, purchased: 1, reactivated: 1, renew_failed: 3, renewed: 201, resumed: 1, skipped: 1, status_changed: 1,
       update_failed: 1 }, 1, eventCustomersUnmatched, true, true],
   [0, 0, 0, 0, 1, 0, 0, {}, 0, 0, false, false]);
 b = await runBackfill({ connectionId: juo1.id, object: "billing_event", from: FROM, dryRun: true });
@@ -441,7 +444,7 @@ const allAsk = fake.state.requests.find((r) => r.path === "/admin/v1/events");
 expect("I9 subscriptions.history_start_date empty: the events backfill without --from reads all of the app's history (from 1 January 2000), no start on the run, nothing stored twice",
   [b.failed, run.status, run.counts.fetched, run.counts.events_new, /occurredAt:>='2000-01-01T00:00:00.000Z'/.test(allAsk?.params?.query ?? ""),
     (await q("select from_at from cma.sync_run where connection_id = $1 and job = 'backfill' order by started_at desc limit 1", [juo1.id]))[0].from_at],
-  [0, "succeeded", one.events.filter((e) => !BILLING.includes(e.type)).length, 0, true, null], [1, "failed", 0, 1, false, "x"]);
+  [0, "succeeded", one.events.filter((e) => e.category === "subscription").length, 0, true, null], [1, "failed", 0, 1, false, "x"]);
 await asAdmin(T1, () => q("select cma.set_tenant_setting('subscriptions.history_start_date', ' 2020-01-01 ')"));
 const intake = (await asAdmin(T1, () => q("select cma.setting_of($1, 'intake.start_date') as v", [T1.t])))[0].v;
 fake.state.requests.length = 0;
@@ -486,6 +489,11 @@ const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma
 expect("G2 no name, address, email, phone, payment detail, message or free-text reason in any row of the run's tenants (audit log included)",
   PERSONAL.filter((p) => dbText.includes(p)), [], PERSONAL);
 const logText = logs.join("\n");
+expect("G2b Juo's renewal notice never read (19 Nov 2026): no request of this run asked for it or its category, no event row holds it, no log line names its type",
+  [fake.state.queriesSeen.length > 0 && fake.state.queriesSeen.some((x) => /notification/.test(x)),
+    (await q("select count(*)::int as n from cma.subscription_event where tenant_id = any($1::uuid[]) and (source_id = $2 or event_type = 'renewal_notice')",
+      [[T1.t, T2.t], notice.id]))[0].n, logText.includes("renewal:notification-sent")],
+  [false, 0, false], [true, 1, true]);
 expect("G3 the logs hold no key and no value: connection ids, counts, codes and Juo's type names",
   [...PERSONAL, KEY1, KEY2, one.subscriptions[0].customer, "7100000"].filter((v) => logText.includes(v)), [], ["x"]);
 expect("G4 every request carried its store's id and a key, in headers; none for the store-less handle",
