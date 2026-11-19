@@ -3043,3 +3043,7 @@ order by 1;
 reset role;
 ```
 Expected: one row per store; lines about one to three per subscription; `first_event` matching the dry run's `firstEventAt` (May 2025 for GB and NL); `changes` 0 right after the first load.
+
+**File:** `db/131_time_all.sql`: copy all of it. **Studio (cma-prod-pg):** paste and Run, as your own login, after 17.6's backfill (read only, as always).
+
+Expected: every row within its budget as before, in particular the rows that read `cma.subscription_event` (Flash's landing and churn headline, Installed base, part b's Active customers). This checks the decision of no new index on `subscription_event` (Decision log, 18 Nov 2026, confirmed 19 Nov 2026): a row over its budget reopens it, and the index goes in by a concurrent Terminal step in a later PR.

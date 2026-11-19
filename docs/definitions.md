@@ -1117,7 +1117,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Equivalent in the source system | Juo's chargeback `reasonCode` (a SEPA reason code such as AM04, MD01 and MD06 was seen, GB, 18 November 2026; a card dispute reason such as `fraudulent` in GB's probe the same day) |
 | Not to use | "Reason" or "reason code" for it: `reason_code` of `cma.subscription_event` is Juo's fixed reason of a failed renewal or cancellation, and `error_code` is a failed renewal's error; "reason message" (never read) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "Build choices to confirm: the return code form" (addition 0009w, B39a, this PR) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "The return code form" (confirmed 19 Nov 2026) (addition 0009w, B39a, #294) |
 | Used by | `cma.billing_event.return_code`, `cma_read.billing_event`; no page yet |
 | As built today | The database check is `^([A-Z0-9]{4}|[a-z][a-z_]{1,39})$` on a chargeback; the adapter admits `^[A-Z0-9]{4}$` or a word of the fixed list. The form is wider than the brief's "upper case, 2 to 10 characters", to take card dispute reasons (decision row). Matches the definition |
 
@@ -1212,7 +1212,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Equivalent in the source system | None: the CMA's own record; Juo's own events (Subscription event types) say when and why |
 | Not to use | "Change" for a Juo event (Line change and the other event types are Juo's); "history" of a value before 0009w's first read (none exists) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "Build choices to confirm: a stored null is a start, not a change" (addition 0009w, B39a, this PR) |
+| Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "A value stored as null is a start, never a change" (confirmed 19 Nov 2026) (addition 0009w, B39a, #294) |
 | Used by | `cma.subscription_change`, `cma_read.subscription_change`; the data map's table `subscription_change`; no page yet (Part C's recurring amount movements read it) |
 | As built today | `cma.subscription_change` (`194`): `run_id` is a soft reference (checked as a running run of the connection when written, no foreign key, because `sync_run` is a busy table); the application cannot update or delete a row. Matches the definition |
 
