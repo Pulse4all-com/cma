@@ -983,7 +983,7 @@ paidTodayMinutes(rows shown, now) = sum over the rows of floor(paidSeconds(clock
 ```sql
 -- independent of the session: the tenant is :tenant_id, every person's today their own business date in their own zone (the person's, else the
 -- organisation's, else the tenant's), time kept as cma.time_is_kept says it (active, holding workday.own) but for :tenant_id. :organisation_key is the
--- board's key (e.g. 'newco', as /live/<key>) or null for the whole tenant. Returns the figure with no filter set and the people with a day today
+-- board's key (as in /live/<key>) or null for the whole tenant. Returns the figure with no filter set and the people with a day today
 with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
 kept as (select u.id as user_id, coalesce(u.timezone, o.timezone, t.timezone) as tz from cma.app_user u join cma.tenant t on t.id = u.tenant_id left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id
          where u.tenant_id = :tenant_id and u.status = 'active'

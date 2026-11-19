@@ -149,6 +149,8 @@ for (const f of readdirSync(dbDir).filter((x) => x.endsWith(".sql") && !x.includ
     latest.set(`${m[1].toLowerCase() === "function" ? "f" : "v"}:${m[2].toLowerCase()}`, body);
   }
 }
+// Limits, none of which db/ or the catalog meets today: only cma objects are followed (not cma_read), an overloaded name is its
+// last definition in run order, a body not dollar-quoted reads as empty, and a set_config anywhere in the query counts
 const READS_TENANT = /current_setting\(\s*'app\.tenant_id'/i;
 const READS_USER = /current_setting\(\s*'app\.user_id'/i;
 /** The cma objects a text names: a call is a function (f:), a name without a call a view or table (v:; a table is never in latest) */
