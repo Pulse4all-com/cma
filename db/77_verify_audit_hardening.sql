@@ -249,7 +249,8 @@ begin
       case when v_calls = 0 and not v_provoke then 'PASS' else 'FAIL' end, format('%s calls left on line-2', v_calls)];
 
     -- B5. an ingest event's audit images carry no payload, while the event row keeps it: one event recorded,
-    --     claimed and finished as the service does it (the connection made by the admin, the event by the Ingest user)
+    --     claimed and finished as the service does it (the connection made by the admin, the event by the Ingest user).
+    --     Since addition 0009w ingest_event has no audit trigger (194_audit_bookkeeping.sql): no audit row at all
     perform set_config('app.user_id', v_admin::text, true);
     select c.connection_id into v_crm from cma.upsert_connection('verifycrm', 'Verify CRM', 'portal-1', null, null) c;
     perform set_config('app.user_id', v_ing1::text, true);
@@ -265,7 +266,9 @@ begin
       into v_txt
     from cma.audit_log a where a.tenant_id = v_t1 and a.table_name = 'ingest_event' and a.row_id = v_event::text;
     v_rows := v_rows || array['15', 'B5 an ingest event''s audit images carry no payload; the event row keeps it',
-      case when v_txt = '3 audit rows, 0 with raw, event raw kept t' and v_n = 1 and not v_provoke then 'PASS' else 'FAIL' end, v_txt || format(' (%s finished)', v_n)];
+      case when v_txt = case when exists (select 1 from pg_trigger g where g.tgrelid = 'cma.ingest_event'::regclass and g.tgname = 'audit')
+                             then '3 audit rows, 0 with raw, event raw kept t' else '0 audit rows, 0 with raw, event raw kept t' end
+                and v_n = 1 and not v_provoke then 'PASS' else 'FAIL' end, v_txt || format(' (%s finished)', v_n)];
 
     -- B6. telephony_raw drops a string holding an @, keeps the rest
     j := cma.telephony_raw('{"status": "answered", "login": "someone@example.invalid", "cost": 1.5, "tags_count": 2, "mention": "ask x@y"}'::jsonb);

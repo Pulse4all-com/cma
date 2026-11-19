@@ -923,7 +923,8 @@ expect("the database's list (148): the installed base's devices filtered and pag
     /update pg_temp\.reads_0131 set skip_state = 'CMA02', skip_why = 'no snapshot for that date'\s*where page = 'installed base as of month end';/.test(time131)
       && /update pg_temp\.reads_0131 set in_set = false\s*where page in \('installed base', 'installed base as of month end'\) and cls = 'list';/.test(time131)
       && /v_skipped := not v_provoke and v_err is not null and v_err = rd\.skip_state;/.test(time131)],
-  [["160_installed_base_now.sql", "160_installed_base_now.sql", "148_installed_base_list.sql"], true, true, true, true, true],
+  // cma.flash_sources_of: 148's set-up, its last read per connection since 0009x (196)
+  [["160_installed_base_now.sql", "160_installed_base_now.sql", "196_sync_run_reads.sql"], true, true, true, true, true],
   [[], false, false, false, false, false]);
 
 // ---- Since addition 0009f: Assets → Installed base as the "now" view ----------------------------------------------------

@@ -155,8 +155,7 @@ begin
 
   -- ---- the rows, written as the owner, the audit triggers off for the load ---------------------------------
   perform set_config('lock_timeout', '10s', true);
-  alter table cma.ingest_event disable trigger audit;
-  alter table cma.sync_run disable trigger audit;
+  -- ingest_event and sync_run: no audit trigger since addition 0009w (db/194), nothing to disable
   alter table cma.subscription disable trigger audit;
   alter table cma.subscription_event disable trigger audit;
   alter table cma.device disable trigger audit;
@@ -377,8 +376,6 @@ begin
   where m.tenant_id = v_subs and m.title like 'Perf message %' and u.tenant_id = v_subs and u.kind = 'person' and u.email like '%@example.com';
   analyze cma.message, cma.message_delivery;
 
-  alter table cma.ingest_event enable trigger audit;
-  alter table cma.sync_run enable trigger audit;
   alter table cma.subscription enable trigger audit;
   alter table cma.subscription_event enable trigger audit;
   alter table cma.device enable trigger audit;
