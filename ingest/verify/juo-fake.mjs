@@ -1,8 +1,8 @@
 /**
- * A fake Juo Admin API on localhost, for verify/juo-mapping.mjs and verify/juo-flow.mjs (additions 0008zl, 0009z).
+ * A fake Juo Admin API on localhost, for verify/juo-mapping.mjs and verify/juo-flow.mjs (additions 0008zl, 0009za).
  * Everything is invented: stores, keys, subscriptions, customer ids, names (Invented Person …), addresses and emails
  * (example.invalid), payment details, messages, notes and reasons. The personal fields are there on purpose: the
- * adapter's whitelist must keep every one of them out of a row and a log (since 0009z also a line's custom attribute with
+ * adapter's whitelist must keep every one of them out of a row and a log (since 0009za also a line's custom attribute with
  * an email, a subscription's custom attribute with an email, a discount's code, a chargeback's reasonMessage, a refund's
  * note, an invoice's and an update's errorMessage, and a catalog variant title holding a name and an @).
  *
@@ -124,7 +124,7 @@ export function juoStore({ handle, key, nowMs = Date.now(), prefix = "s" }) {
   event(210, "subscription:reactivated", 60 * 24 * 2, { previousStatus: "CANCELLED" });
   event(211, "subscription:discount-added", 60 * 24, { code: "FIXTURE10" });
   event(212, "subscription:delivery-address-changed", 60 * 24, { changedFields: ["address.address1"] });
-  // the types of addition 0009z
+  // the types of addition 0009za
   event(213, "subscription:migrated", 60 * 24 * 20, { id: sub(213), status: "ACTIVE", source: "Shopify", currentCycle: 3, nextBillingDate: ago(-60 * 24 * 9),
     currencyCode: "GBP", billingPolicy: { interval: "MONTH", intervalCount: 1, minCycles: null, maxCycles: null }, customer: { id: cust(213) },
     customerPaymentMethod: { id: "pm-0213" } });

@@ -1,15 +1,15 @@
 -- =============================================================================================
--- 200_subscription_lines.sql: addition 0009z, the subscription app read whole: lines, the product catalog, billing events,
+-- 202_subscription_lines.sql: addition 0009za, the subscription app read whole: lines, the product catalog, billing events,
 -- more event types, observed changes and a history start (brief B39, Part A)
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: tables and functions say subscription app, line, product variant,
 -- billing event and chargeback; the adapter maps the source's words (docs/ingest/README.md, section Juo). Runs unchanged
--- in every database, after 198_roster_planned.sql (0009y). This script was written as 194, addition 0009w; #291 took 194,
--- 195 and 0009w and #292 and #293 took 196 to 199 (0009x, 0009y) first, so it is 200, its verify 201 and the addition 0009z
--- (the brief: take the next free pair), and it refuses to run before 0009y is recorded. None of those three re-creates a
--- function this script re-creates, so the bases below stand. Rerunnable, forward-only, in one transaction with a lock
--- timeout.
--- Run as your own IAM login: dev first, then 201_verify_subscription_lines.sql there (normal, then provoked), then the
+-- in every database, after 200_live_paid_today.sql (0009z). This script was written as 194, addition 0009w; #291 took
+-- 194, 195 and 0009w, #292 and #293 took 196 to 199 (0009x, 0009y) and #297 took 200, 201 and 0009z first, so it is 202,
+-- its verify 203 and the addition 0009za (the brief: take the next free pair), and it refuses to run before 0009z is
+-- recorded. None of those four re-creates a function this script re-creates (#297 rebuilds cma.team_now), so the bases
+-- below stand. Rerunnable, forward-only, in one transaction with a lock timeout.
+-- Run as your own IAM login: dev first, then 203_verify_subscription_lines.sql there (normal, then provoked), then the
 -- verifies named below, then prod before the merge (the ingest of this change calls the new functions and the new
 -- signature of cma.ingest_upsert_subscriptions; the ingest of main runs unchanged on it: its two-argument call of
 -- cma.ingest_upsert_subscriptions reaches the new function through the two-argument one, made again as a wrapper).
@@ -108,8 +108,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009y') then
-    raise exception 'addition 0009y (198_roster_planned.sql) has not run in this database';
+  if not exists (select 1 from cma.schema_migration where version = '0009z') then
+    raise exception 'addition 0009z (200_live_paid_today.sql) has not run in this database';
   end if;
 end
 $$;
@@ -538,7 +538,7 @@ create table if not exists cma.subscription_line (
   unique (tenant_id, connection_id, source_id),
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id)
 );
-comment on table cma.subscription_line is 'A subscription app''s lines of its subscriptions per connection, canceled lines included: product and variant ids, quantity, amount per cycle, billing interval, cycle limits, canceled time. No title, custom attribute or customer data. Owned by the subscription app (0009z)';
+comment on table cma.subscription_line is 'A subscription app''s lines of its subscriptions per connection, canceled lines included: product and variant ids, quantity, amount per cycle, billing interval, cycle limits, canceled time. No title, custom attribute or customer data. Owned by the subscription app (0009za)';
 comment on column cma.subscription_line.amount_per_cycle is 'The line''s total price per billing cycle as the source states it, in currency (the subscription''s)';
 comment on column cma.subscription_line.recurring_cycle_limit is 'How many cycles the line is billed: null for every cycle (recurring), 1 for a one-time add-on';
 comment on column cma.subscription_line.source_deleted_at is 'When the subscription''s latest read no longer held the line; null while it does';
@@ -565,7 +565,7 @@ create table if not exists cma.subscription_product_variant (
   unique (tenant_id, connection_id, variant_source_id),
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id)
 );
-comment on table cma.subscription_product_variant is 'The store''s product catalog as the subscription app holds it, one row per variant and connection: product and variant ids, titles, SKU and the product''s status. Merchant catalog text only (cma.catalog_text_ok), never customer data. Owned by the subscription app (0009z)';
+comment on table cma.subscription_product_variant is 'The store''s product catalog as the subscription app holds it, one row per variant and connection: product and variant ids, titles, SKU and the product''s status. Merchant catalog text only (cma.catalog_text_ok), never customer data. Owned by the subscription app (0009za)';
 comment on column cma.subscription_product_variant.source_deleted_at is 'When the latest full read of the catalog no longer held the variant; null while it does';
 
 create table if not exists cma.billing_event (
@@ -601,7 +601,7 @@ create table if not exists cma.billing_event (
   check (partial is null or kind like 'refund\_%'),
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id)
 );
-comment on table cma.billing_event is 'A subscription app''s billing events per connection: chargebacks, refunds, invoice renewals and orders the app could not place. Ids, codes, amounts and times only; never a message, a note or payment details. Append-only. Owned by the subscription app (0009z)';
+comment on table cma.billing_event is 'A subscription app''s billing events per connection: chargebacks, refunds, invoice renewals and orders the app could not place. Ids, codes, amounts and times only; never a message, a note or payment details. Append-only. Owned by the subscription app (0009za)';
 comment on column cma.billing_event.kind is 'The billing event in the CMA''s words; the adapter maps the source''s types (docs/ingest/README.md, the adapter''s section)';
 comment on column cma.billing_event.subscription_source_id is 'The subscription when the source names it (an invoice''s); a chargeback or refund carries the customer and the store''s order, not always the subscription';
 comment on column cma.billing_event.order_source_id is 'The store''s order id (digits) the event is about: a chargeback''s or refund''s order';
@@ -629,7 +629,7 @@ create table if not exists cma.subscription_change (
   unique (tenant_id, id),
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id)
 );
-comment on table cma.subscription_change is 'The CMA''s own observation of a subscription''s change: a read found the field''s value different from the one stored (status, amount_per_cycle, currency, billing_interval, billing_interval_count, line_count, recurring_quantity). History from addition 0009z''s first read on; a value stored as null is a start, never a change. Append-only (0009z)';
+comment on table cma.subscription_change is 'The CMA''s own observation of a subscription''s change: a read found the field''s value different from the one stored (status, amount_per_cycle, currency, billing_interval, billing_interval_count, line_count, recurring_quantity). History from addition 0009za''s first read on; a value stored as null is a start, never a change. Append-only (0009za)';
 comment on column cma.subscription_change.new_value is 'The value the read found, as text; null when the source no longer states one';
 comment on column cma.subscription_change.run_id is 'The sync run whose read observed the change (cma.sync_run.id, checked running when written; no foreign key, so sync_run, a busy table, takes no lock from this table); null for a call that named none';
 create index if not exists subscription_change_subscription_idx
@@ -1263,13 +1263,13 @@ alter table cma.subscription add constraint subscription_raw_check
                                             'billingIntervalCount', 'amountPerCycle', 'currencyCode', 'instrumentType', 'createdAt',
                                             'updatedAt', 'canceledAt', 'pausedAt', 'serial', 'minCycles', 'maxCycles', 'discountCount',
                                             'lineCount']));
-comment on column cma.subscription.payment_instrument_type is 'The type of the payment method''s instrument only: card, paypal, sepa_direct_debit, ideal, bancontact, invoice or other (null when unknown); nothing else of the payment method (0008zl; seven codes since 0009z)';
-comment on column cma.subscription.source_number is 'The subscription app''s own sequence number of the subscription (for example #2502), so staff can find it in the app; not a device serial (0009z)';
-comment on column cma.subscription.min_cycles is 'The minimum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009z)';
-comment on column cma.subscription.max_cycles is 'The maximum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009z)';
-comment on column cma.subscription.discount_count is 'How many discounts the subscription carries; never a discount''s code or value (0009z)';
-comment on column cma.subscription.line_count is 'How many of the subscription''s lines the source has not canceled (0009z)';
-comment on column cma.subscription.device_units is 'Devices paid for: the sum over its recurring lines not canceled of quantity × the variant mapping''s devices per unit; null until Part C of brief B39 fills it (0009z)';
+comment on column cma.subscription.payment_instrument_type is 'The type of the payment method''s instrument only: card, paypal, sepa_direct_debit, ideal, bancontact, invoice or other (null when unknown); nothing else of the payment method (0008zl; seven codes since 0009za)';
+comment on column cma.subscription.source_number is 'The subscription app''s own sequence number of the subscription (for example #2502), so staff can find it in the app; not a device serial (0009za)';
+comment on column cma.subscription.min_cycles is 'The minimum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009za)';
+comment on column cma.subscription.max_cycles is 'The maximum number of billing cycles of the subscription''s billing policy as the source states it (else its lines'' highest); null when the source holds none (0009za)';
+comment on column cma.subscription.discount_count is 'How many discounts the subscription carries; never a discount''s code or value (0009za)';
+comment on column cma.subscription.line_count is 'How many of the subscription''s lines the source has not canceled (0009za)';
+comment on column cma.subscription.device_units is 'Devices paid for: the sum over its recurring lines not canceled of quantity × the variant mapping''s devices per unit; null until Part C of brief B39 fills it (0009za)';
 
 -- As 0008zl (118), with the new columns at its end: ids, the status, cycle, billing, amount, the instrument's type, times,
 -- the app's number, the cycle limits, the counts of discounts and lines, the device units
@@ -1342,15 +1342,15 @@ alter table cma.subscription_event
     check (operation_source_id is null or cma.subscription_id_ok(operation_source_id)),
   add constraint subscription_event_order_check
     check (order_source_id is null or (order_source_id ~ '^\d{1,30}$' and event_type = 'renewed'));
-comment on table cma.subscription_event is 'A subscription app''s events of its subscriptions per connection, in the CMA''s words (0008zl''s seven: renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; since 0009z purchased, created, migrated, skipped, billing_date_moved, interval_changed, lines_changed, payment_method_changed, discount_changed, merged_to, merged_from, split_to, split_from, update_failed). Codes, counts and times only; a staff actor''s id, never a name; no free-text message or reason. Append-only. Owned by the subscription app (0008zl, 0009z)';
+comment on table cma.subscription_event is 'A subscription app''s events of its subscriptions per connection, in the CMA''s words (0008zl''s seven: renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; since 0009za purchased, created, migrated, skipped, billing_date_moved, interval_changed, lines_changed, payment_method_changed, discount_changed, merged_to, merged_from, split_to, split_from, update_failed). Codes, counts and times only; a staff actor''s id, never a name; no free-text message or reason. Append-only. Owned by the subscription app (0008zl, 0009za)';
 comment on column cma.subscription_event.cycle_index is 'The billing cycle the event is about, as the source counts them (a renewal''s or a failed renewal''s; a migration''s current cycle at the move into the app)';
-comment on column cma.subscription_event.billing_from_at is 'A billing-date move''s previous date, a skip''s skipped date (0009z)';
-comment on column cma.subscription_event.billing_to_at is 'A billing-date move''s new date, a skip''s next billing date, a migration''s next billing date (0009z)';
-comment on column cma.subscription_event.cause_code is 'Why a billing date moved (requested, skipped, resumed, reactivated, reconciled) or how a discount changed (added, removed, updated, code_applied, free_shipping); a code, never a discount''s code or value (0009z)';
-comment on column cma.subscription_event.lines_added is 'How many lines a line change added (lines_removed, lines_updated alike); counts, never the lines'' content (0009z)';
-comment on column cma.subscription_event.related_subscription_source_id is 'The other subscription of a merge or split (0009z)';
-comment on column cma.subscription_event.order_source_id is 'The store''s order id (digits) of a renewal: the order the renewal placed, which a chargeback or refund names (cma.billing_event.order_source_id) (0009z)';
-comment on column cma.subscription_event.operation_source_id is 'The source''s id of the operation that wrote the event: the events of one change share it (a line change written both as lines-changed and as line-added) (0009z)';
+comment on column cma.subscription_event.billing_from_at is 'A billing-date move''s previous date, a skip''s skipped date (0009za)';
+comment on column cma.subscription_event.billing_to_at is 'A billing-date move''s new date, a skip''s next billing date, a migration''s next billing date (0009za)';
+comment on column cma.subscription_event.cause_code is 'Why a billing date moved (requested, skipped, resumed, reactivated, reconciled) or how a discount changed (added, removed, updated, code_applied, free_shipping); a code, never a discount''s code or value (0009za)';
+comment on column cma.subscription_event.lines_added is 'How many lines a line change added (lines_removed, lines_updated alike); counts, never the lines'' content (0009za)';
+comment on column cma.subscription_event.related_subscription_source_id is 'The other subscription of a merge or split (0009za)';
+comment on column cma.subscription_event.order_source_id is 'The store''s order id (digits) of a renewal: the order the renewal placed, which a chargeback or refund names (cma.billing_event.order_source_id) (0009za)';
+comment on column cma.subscription_event.operation_source_id is 'The source''s id of the operation that wrote the event: the events of one change share it (a line change written both as lines-changed and as line-added) (0009za)';
 
 -- The renewals stored before this addition hold their store order in raw only (118's raw key orderId): it is copied into
 -- order_source_id once, as the owner (the application never updates an event), so a chargeback's order joins every
@@ -1371,7 +1371,7 @@ create or replace view cma_read.subscription_event as
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009z', 'The subscription app read whole (brief B39 Part A): the setting subscriptions.history_start_date (the events backfill''s start without --from, before intake.start_date allowed; empty all history); cma.subscription gains source_number, min_cycles, max_cycles, discount_count, line_count, device_units and seven instrument types; cma.subscription_line (lines as a set per subscription, canceled ones included, missing marked), cma.subscription_product_variant (the catalog per variant, titles and SKU as merchant text), cma.billing_event (chargebacks, refunds, invoice renewals, order placement; append-only) and cma.subscription_change (observed changes of status, amount, currency, interval, line count and recurring quantity; a stored null is a start; append-only); cma.subscription_event takes fourteen more types and the columns of billing-date moves, interval and line changes, merges, the operation and a renewal''s order; cma.ingest_upsert_subscriptions with a run (the two-argument function a wrapper of it), cma.ingest_upsert_subscription_lines, cma.ingest_upsert_subscription_products, cma.ingest_upsert_billing_events; the run counts lines_new, lines_missing, variants_new, billing_events_new, changes_observed, instrument_unknown, duplicate_skipped, return_code_dropped, catalog_text_dropped; cma_read.subscription_line, subscription_product_variant, billing_event, subscription_change, and the new columns of cma_read.subscription and subscription_event')
+values ('0009za', 'The subscription app read whole (brief B39 Part A): the setting subscriptions.history_start_date (the events backfill''s start without --from, before intake.start_date allowed; empty all history); cma.subscription gains source_number, min_cycles, max_cycles, discount_count, line_count, device_units and seven instrument types; cma.subscription_line (lines as a set per subscription, canceled ones included, missing marked), cma.subscription_product_variant (the catalog per variant, titles and SKU as merchant text), cma.billing_event (chargebacks, refunds, invoice renewals, order placement; append-only) and cma.subscription_change (observed changes of status, amount, currency, interval, line count and recurring quantity; a stored null is a start; append-only); cma.subscription_event takes fourteen more types and the columns of billing-date moves, interval and line changes, merges, the operation and a renewal''s order; cma.ingest_upsert_subscriptions with a run (the two-argument function a wrapper of it), cma.ingest_upsert_subscription_lines, cma.ingest_upsert_subscription_products, cma.ingest_upsert_billing_events; the run counts lines_new, lines_missing, variants_new, billing_events_new, changes_observed, instrument_unknown, duplicate_skipped, return_code_dropped, catalog_text_dropped; cma_read.subscription_line, subscription_product_variant, billing_event, subscription_change, and the new columns of cma_read.subscription and subscription_event')
 on conflict (version) do nothing;
 
 commit;

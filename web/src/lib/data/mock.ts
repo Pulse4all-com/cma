@@ -1508,7 +1508,7 @@ const MOCK_SETTINGS: TenantSetting[] = [
   // reviews (addition 0008ze): the negative threshold and the backfill's history start at their defaults
   { key: "reviews.negative_max_rating", value: "2", isDefault: true },
   { key: "reviews.history_start_date", value: "", isDefault: true },
-  // the subscription app's events backfill (addition 0009z): its history start at the default, empty (all of the app's history)
+  // the subscription app's events backfill (addition 0009za): its history start at the default, empty (all of the app's history)
   { key: "subscriptions.history_start_date", value: "", isDefault: true },
   // first orders (addition 0008u): the attribution settings at their catalog defaults
   { key: "attribution.window_days", value: "90", isDefault: true },
@@ -2138,7 +2138,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "courtesy.start_date": "", "courtesy.order_kinds": "first,repeat", "courtesy.due_days": "10", "courtesy.alert_attempts": "3", "courtesy.ages_days": "10,14,21,30",
   // the reviews settings' catalog defaults (104), so emptying the history start resets it as the database does (CMA-099)
   "reviews.negative_max_rating": "2", "reviews.history_start_date": "",
-  // the subscription app's history start (200): empty, all of the app's history
+  // the subscription app's history start (202): empty, all of the app's history
   "subscriptions.history_start_date": "",
 };
 

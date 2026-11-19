@@ -4,17 +4,17 @@
  *
  *   subscriptions   GET /subscriptions?limit=100&expand=paymentMethod&includeCanceledItems=true[&query=<query>]
  *                   [&after=<endCursor>]: every subscription of the store (canceled ones included) with all its lines
- *                   (canceled lines included, since addition 0009z), or those a query names (id:'<id>' OR …, at most
+ *                   (canceled lines included, since addition 0009za), or those a query names (id:'<id>' OR …, at most
  *                   ID_BATCH ids a query). The payment method is expanded only for its instrument's type: map.mjs reads
  *                   nothing else of it
  *   events          GET /events?limit=100&sort=occurredAt:asc,id:asc&query=<family> AND occurredAt:>'<ISO>'
  *                   [AND occurredAt:<'<ISO>'][&after=<endCursor>]: one family's events in a window, oldest first (a
  *                   timestamp carries its offset, Z). Two families, each its own query and backfill cursor (addition
- *                   0009z): subscription, category:subscription, the events of the store's subscriptions (Juo's renewal
+ *                   0009za): subscription, category:subscription, the events of the store's subscriptions (Juo's renewal
  *                   notice, category notification, is never requested: Decision log, 19 Nov 2026); billing,
  *                   (type:'chargeback:created' OR type:'refund:created' OR …), the ten billing types of BILLING_TYPES,
  *                   whose category is billing or order
- *   products        GET /products?limit=100[&after=<endCursor>] (addition 0009z): the store's catalog, each product with
+ *   products        GET /products?limit=100[&after=<endCursor>] (addition 0009za): the store's catalog, each product with
  *                   its variants (id, title, SKU); map.mjs reads ids, titles, SKU and status only
  *
  * Each page is { data, hasNextPage, endCursor }; the read follows endCursor until a page says there is no next one. A
@@ -33,7 +33,7 @@ const QUOTABLE = /^[A-Za-z0-9_.:-]{1,100}$/;
 /** A timestamp for the query language: ISO 8601 with its offset, in quotes. */
 export const at = (ms) => `'${new Date(ms).toISOString()}'`;
 
-/** The billing family's types: chargebacks, refunds, invoice renewals and orders the app could not place (addition 0009z). */
+/** The billing family's types: chargebacks, refunds, invoice renewals and orders the app could not place (addition 0009za). */
 export const BILLING_TYPES = ["chargeback:created", "refund:created", "refund:completed", "refund:failed", "invoice:placed", "invoice:paid",
   "invoice:overdue", "invoice:payment-failed", "order:placement-failed", "order:draft-created"];
 /** The two families of events, each its own query (and backfill cursor) */

@@ -31,7 +31,7 @@
  * own dry-run line and its own run, in id order; the store without a key skipped (key_not_set) and counted, never a usage
  * error; the store-less handle failed store_not_configured; one store answering 503 while the other completes, the job's
  * failed counting it; --connection with --adapter a usage error; the job process exiting 1 when a connection failed and 2
- * on the usage error. Since addition 0009z (brief B39 Part A, section I): the billing family's backfill (billing_event:
+ * on the usage error. Since addition 0009za (brief B39 Part A, section I): the billing family's backfill (billing_event:
  * chargebacks without a subscription, refunds, invoices; a return code out of its form dropped, an unknown instrument
  * counted), the subscriptions' lines as a set (canceled lines and a one-time add-on stored; a removed line marked missing
  * and back when it returns), the catalog (variants, a title with an @ and a SKU with a control character left out),
@@ -353,7 +353,7 @@ expect("F4 429 paced: the request held for its Retry-After (3 s × the pace fact
     lastLog("juo rate limited")?.retried],
   [0, "succeeded", true, true, true, true], [1, "failed", false, false, false, false]);
 
-// ---- I. Addition 0009z: billing events, lines, the catalog, observed changes, the history start ------------------------------------
+// ---- I. Addition 0009za: billing events, lines, the catalog, observed changes, the history start ------------------------------------
 b = await runBackfill({ connectionId: juo1.id, object: "billing_event", from: FROM });
 run = (await runsOf(juo1.id, "backfill")).at(-1);
 expect("I1 the billing family's backfill: stream billing_event, every billing event stored (append-only), a return code out of its form dropped, an unknown instrument counted; its cursor done",
