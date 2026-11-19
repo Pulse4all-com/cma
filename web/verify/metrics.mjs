@@ -12,6 +12,11 @@
  *     entry, and every catalog entry on a page surface (welcome, live, dashboard, report, agent)
  *     is registered under its page, so a figure without a catalog entry fails the build
  *   - every computed_in.sql object is created somewhere in db/*.sql
+ *   - every verify_sql that uses a function or view reading the session (app.tenant_id, or the acting user through
+ *     app.user_id: cma.current_tenant_id, cma.time_is_kept, cma.user_timezone, cma.has_permission, the faces
+ *     cma.time_interval and cma.workday_summary, …, found in db/*.sql's latest definitions, through what they call)
+ *     sets them itself with set_config('app.tenant_id', …) and, where the acting user is read, set_config('app.user_id', …):
+ *     without them such a query answers 0 or nothing, without a warning (19 November 2026, live.paid_today_minutes in prod)
  *   - every settings key an entry names is in the settings catalog (the cma.setting inserts in
  *     db/*.sql)
  *   - docs/metrics/METRICS.md and src/lib/metrics-catalog.json equal the generator's output
@@ -38,7 +43,8 @@ const catalog = JSON.parse(rawCatalog);
 if (PROVOKE) {
   // Break every check at once: a malformed entry, a duplicated key, an unknown sql object and
   // setting, an orphan registry key, a stale document and an open gate
-  const broken = { ...catalog.entries[0], key: catalog.entries[0].key, surface: "nowhere", computed_in: { sql: [{ object: "cma.no_such_function", migration: "0001" }], ts: [] }, settings: [{ key: "no.such_setting", default: "", pulse4all: "" }] };
+  const broken = { ...catalog.entries[0], key: catalog.entries[0].key, surface: "nowhere", computed_in: { sql: [{ object: "cma.no_such_function", migration: "0001" }], ts: [] }, settings: [{ key: "no.such_setting", default: "", pulse4all: "" }],
+    verify_sql: "select count(*) from cma.app_user u where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)" };
   catalog.entries = [...catalog.entries, broken];
 }
 
@@ -119,6 +125,59 @@ const sqlRefs = catalog.entries.flatMap((e) => e.computed_in.sql.map((s) => s.ob
 const unknownSql = [...new Set(sqlRefs.filter((o) => !defined.has(o.toLowerCase())))];
 for (const o of unknownSql) problems.push(`sql: ${o} is not created in any db/*.sql`);
 say(`sql objects: ${new Set(sqlRefs).size} referenced, ${unknownSql.length} unknown`);
+
+// ---------------------------------------------------------------------------------------------
+// 3b. A verify_sql that reads the session sets it itself
+// ---------------------------------------------------------------------------------------------
+// The latest definition of each cma function and view in run order (db/*.sql, verify scripts left out: they define
+// pg_temp objects), comments taken out; a function's body is its dollar-quoted text, a view's runs to its semicolon
+const noComments = (sql) => sql.replace(/--[^\n]*/g, "");
+const runOrder = (a, b) => a.localeCompare(b, "en", { numeric: true });
+const latest = new Map();
+for (const f of readdirSync(dbDir).filter((x) => x.endsWith(".sql") && !x.includes("verify")).sort(runOrder)) {
+  const text = noComments(readFileSync(join(dbDir, f), "utf8"));
+  for (const m of text.matchAll(/create\s+(?:or\s+replace\s+)?(function|view)\s+cma\.([a-z0-9_]+)\b/gi)) {
+    const rest = text.slice(m.index + m[0].length);
+    let body;
+    if (m[1].toLowerCase() === "function") {
+      const q = rest.match(/\bas\s+(\$[a-z_]*\$)([\s\S]*?)\1/i);
+      body = q ? q[2] : "";
+    } else {
+      body = rest.slice(0, rest.indexOf(";") < 0 ? undefined : rest.indexOf(";"));
+    }
+    latest.set(`${m[1].toLowerCase() === "function" ? "f" : "v"}:${m[2].toLowerCase()}`, body);
+  }
+}
+const READS_TENANT = /current_setting\(\s*'app\.tenant_id'/i;
+const READS_USER = /current_setting\(\s*'app\.user_id'/i;
+/** The cma objects a text names: a call is a function (f:), a name without a call a view or table (v:; a table is never in latest) */
+const named = (text) => [...new Set([...text.matchAll(/cma\.([a-z0-9_]+)(\s*\()?/gi)].map((r) => `${r[2] ? "f" : "v"}:${r[1].toLowerCase()}`))];
+/** Whether an object reads the tenant (or the acting user) from the session, itself or through the cma objects it names */
+function readsSession(name, which, seen = new Set()) {
+  if (seen.has(name) || !latest.has(name)) return false;
+  seen.add(name);
+  const body = latest.get(name);
+  if ((which === "tenant" ? READS_TENANT : READS_USER).test(body)) return true;
+  for (const n of named(body)) if (readsSession(n, which, seen)) return true;
+  return false;
+}
+let sessionChecked = 0;
+for (const e of catalog.entries) {
+  if (!e.verify_sql) continue;
+  const sql = noComments(e.verify_sql);
+  const used = named(sql);
+  const tenantVia = used.filter((n) => readsSession(n, "tenant"));
+  const userVia = used.filter((n) => readsSession(n, "user"));
+  if (tenantVia.length === 0 && userVia.length === 0) continue;
+  sessionChecked++;
+  if (tenantVia.length > 0 && !/set_config\(\s*'app\.tenant_id'/i.test(sql)) {
+    problems.push(`verify_sql: ${e.key} uses ${tenantVia.map((n) => "cma." + n.slice(2)).join(", ")}, which read app.tenant_id, without setting it (set_config('app.tenant_id', …)); it answers 0 or nothing without it`);
+  }
+  if (userVia.length > 0 && !/set_config\(\s*'app\.user_id'/i.test(sql)) {
+    problems.push(`verify_sql: ${e.key} uses ${userVia.map((n) => "cma." + n.slice(2)).join(", ")}, which read the acting user (app.user_id), without setting it (set_config('app.user_id', …))`);
+  }
+}
+say(`verify_sql and the session: ${latest.size} cma functions and views read, ${sessionChecked} queries use one that reads the session`);
 
 // ---------------------------------------------------------------------------------------------
 // 4. Every settings key exists in the settings catalog (the cma.setting inserts)
