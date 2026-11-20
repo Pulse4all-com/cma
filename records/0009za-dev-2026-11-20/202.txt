@@ -1,0 +1,123 @@
+DO
+BEGIN
+SET
+SET
+DO
+INSERT 0 1
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+psql:db/202_subscription_lines.sql:639: NOTICE:  policy "tenant_app" for relation "subscription_line" does not exist, skipping
+psql:db/202_subscription_lines.sql:639: NOTICE:  policy "tenant_readonly" for relation "subscription_line" does not exist, skipping
+psql:db/202_subscription_lines.sql:639: NOTICE:  trigger "audit" for relation "subscription_line" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/202_subscription_lines.sql:640: NOTICE:  policy "tenant_app" for relation "subscription_product_variant" does not exist, skipping
+psql:db/202_subscription_lines.sql:640: NOTICE:  policy "tenant_readonly" for relation "subscription_product_variant" does not exist, skipping
+psql:db/202_subscription_lines.sql:640: NOTICE:  trigger "audit" for relation "subscription_product_variant" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/202_subscription_lines.sql:641: NOTICE:  policy "tenant_app" for relation "billing_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:641: NOTICE:  policy "tenant_readonly" for relation "billing_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:641: NOTICE:  trigger "audit" for relation "billing_event" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/202_subscription_lines.sql:642: NOTICE:  policy "tenant_app" for relation "subscription_change" does not exist, skipping
+psql:db/202_subscription_lines.sql:642: NOTICE:  policy "tenant_readonly" for relation "subscription_change" does not exist, skipping
+psql:db/202_subscription_lines.sql:642: NOTICE:  trigger "audit" for relation "subscription_change" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE VIEW
+ALTER TABLE
+psql:db/202_subscription_lines.sql:1311: NOTICE:  constraint "subscription_event_cause_code_check" of relation "subscription_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:1311: NOTICE:  constraint "subscription_event_interval_check" of relation "subscription_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:1311: NOTICE:  constraint "subscription_event_lines_check" of relation "subscription_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:1311: NOTICE:  constraint "subscription_event_related_check" of relation "subscription_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:1311: NOTICE:  constraint "subscription_event_operation_check" of relation "subscription_event" does not exist, skipping
+psql:db/202_subscription_lines.sql:1311: NOTICE:  constraint "subscription_event_order_check" of relation "subscription_event" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+UPDATE 0
+CREATE VIEW
+INSERT 0 1
+COMMIT
+RESET
