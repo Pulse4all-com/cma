@@ -661,3 +661,20 @@ begin
   on conflict (tenant_id, key) do nothing;
 end
 $$;
+
+-- The subscription facts (after addition 0009ze; Martin, 20 November 2026, brief B39c C.1): Pulse4all's propositions for
+-- the variant mapping, for Kira to confirm. A rerun keeps a value set since (on conflict do nothing). A database without
+-- the setting yet says so; rerun this seed after 210_subscription_facts.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'subscriptions.propositions') then
+    raise notice 'The subscription facts do not exist yet (addition 0009ze): rerun this seed after 210_subscription_facts.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'subscriptions.propositions', 'hs1,frx,buurt_aed,outdoor')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
