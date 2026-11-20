@@ -11,10 +11,13 @@
 -- notices. Run as your own IAM login after 204_subscription_audit.sql, in dev; then 203_verify_subscription_lines.sql and
 -- 119_verify_subscriptions.sql (204's header). Adapters, handles, ids, codes, titles and secret names are invented data
 -- values, and no row carries a name, an address, an email or a phone number of a customer (the one phone number's shape
--- and the one @ are the defects the audit must find, in a catalog title and SKU, rolled back).
+-- and the one @ are the defects the audit must find, in a catalog title and SKU, rolled back; the number is in Ofcom's
+-- range reserved for drama, 07700 900xxx).
 --   A  structure and privileges: the addition row after 0009za; the eight instrument codes (bacs_direct_debit among them,
---      a code outside them refused); the audit and its helper the owner's, in the caller's rights, executable by no
---      application, reader or public; the audit's columns
+--      a code outside them refused); the audit and its two helpers the owner's, in the caller's rights, stable or
+--      immutable, executable by no application, reader, BigQuery login or public, the audit with jit off; the audit's
+--      columns; the privacy test on both sides (an @, a control character, GB, DE and NL phone shapes; ids, times,
+--      amounts, SKUs and titles)
 --   B  behaviour, on two throwaway tenants: the first with two stores (GB clean; NL with one defect per check), the
 --      second with a store of its own defects. The clean store: every check's verdict (status_mix explain, every other
 --      ok) and the value of each check whose value does not depend on today. The store with defects (an active
@@ -24,7 +27,8 @@
 --      buckets, a subscription's instrument other, an @ in a variant title and a phone number's shape in a SKU, an
 --      observed change that changed nothing): each check reports its defect with the verdict designed; each defect
 --      removed, every check as the clean store's. The second tenant's rows never counted in the first's audit, and its
---      own audit reports them. A second store of a market labelled with its handle; a switched-off connection left out.
+--      own audit reports them. A second store of a market labelled with its handle; a switched-off connection left out of
+--      the stores, its rows read by privacy as other connections.
 --      An unknown tenant CMA02. The application refused execution (42501). bacs_direct_debit taken by both tables'
 --      checks, klarna refused (23514)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
@@ -159,21 +163,40 @@ begin
   insert into verify_0009zb values (2, 'A2 eight instrument codes, bacs_direct_debit among them; klarna, bacs and an empty code refused',
     case when v_txt = 'bacs_direct_debit bancontact card ideal invoice other paypal sepa_direct_debit | null null' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
 
-  -- A3. the audit and its helper: the owner's, in the caller's rights, executable by the owner only
-  v_txt := (select string_agg(p.proname || ':' || pg_get_userbyid(p.proowner) || ':' || p.prosecdef
+  -- A3. the audit and its two helpers: the owner's, in the caller's rights, stable or immutable (so they cannot write),
+  --     executable by the owner only (not the application, readers, the BigQuery login or public); the audit with jit off
+  v_txt := (select string_agg(p.proname || ':' || pg_get_userbyid(p.proowner) || ':' || p.prosecdef || ':' || p.provolatile::text
                               || ':' || has_function_privilege('cma_app', p.oid, 'execute')
                               || ':' || has_function_privilege('cma_readonly', p.oid, 'execute')
-                              || ':' || has_function_privilege('public', p.oid, 'execute'), ' ' order by p.proname collate "C")
+                              || ':' || has_function_privilege('bq_reader', p.oid, 'execute')
+                              || ':' || has_function_privilege('public', p.oid, 'execute')
+                              || ':' || coalesce(array_to_string(p.proconfig, ','), '-'), ' ' order by p.proname collate "C")
             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname = 'cma' and p.proname in ('subscription_audit_of', 'subscription_audit_stores_of'));
-  insert into verify_0009zb values (3, 'A3 the audit and its helper the owner''s, security invoker, no execute for the application, readers or public',
-    case when v_txt = 'subscription_audit_of:cma_owner:false:false:false:false subscription_audit_stores_of:cma_owner:false:false:false:false'
+            where n.nspname = 'cma' and p.proname in ('subscription_audit_of', 'subscription_audit_stores_of', 'subscription_audit_suspect'));
+  insert into verify_0009zb values (3, 'A3 the audit and its helpers the owner''s, security invoker, stable or immutable, no execute for the application, readers, the BigQuery login or public; the audit with jit off',
+    case when v_txt = 'subscription_audit_of:cma_owner:false:s:false:false:false:false:jit=off subscription_audit_stores_of:cma_owner:false:s:false:false:false:false:- subscription_audit_suspect:cma_owner:false:i:false:false:false:false:-'
               and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'missing'));
 
   -- A4. the audit's columns, in order
   v_txt := pg_get_function_result('cma.subscription_audit_of(uuid)'::regprocedure);
   insert into verify_0009zb values (4, 'A4 the audit answers check_key, store, value, expected, verdict',
     case when v_txt = 'TABLE(check_key text, store text, value text, expected text, verdict text)' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
+
+  -- A5. the privacy check's test of a row's JSON text: an @ (ASCII or full width), a control character (as JSON escapes it,
+  --     or DEL raw) and phone numbers' shapes (GB, DE and NL forms; Ofcom's drama range and invented numbers) suspect; an
+  --     id, a uuid, a timestamp, an offset, an amount, a SKU, an app number and a catalog title not
+  v_txt := (select string_agg(case when cma.subscription_audit_suspect(x) then 'y' else 'n' end, '' order by o)
+            from unnest(array[
+              '{"x": "a@example.invalid"}', '{"x": "a' || U&'\FF20' || 'b"}', '{"x": "a\nb"}', '{"x": "a\u0001b"}', '{"x": "a' || chr(127) || 'b"}',
+              '{"x": "07700 900123"}', '{"x": "+44 7700 900123"}', '{"x": "07700900123"}', '{"x": "+49 151 23456789"}',
+              '{"x": "+31 6 12345678"}', '{"x": "06-12345678"}', '{"x": "tel:+31612345678"}', '{"x": "0031612345678"}',
+              '{"id": "0193a5b2-1234-5678-9012-123456789012", "y": "01234567-8901-2345-6789-012345678901"}',
+              '{"at": "2025-04-30T10:11:12.123+00:00", "z": "+00:00", "t": "10:05:30"}',
+              '{"order": "6123456789012", "amount": 29.95, "price": 0.00, "cycle": 0}',
+              '{"sku": "P4A-AED-001", "n": "#2502", "title": "Pulse AED 2 pack", "v": "gid://shopify/ProductVariant/41000000001"}'])
+                 with ordinality as u(x, o));
+  insert into verify_0009zb values (5, 'A5 the privacy test: @, full-width @, control characters and thirteen phone shapes suspect; ids, uuids, times, amounts, SKUs and titles not',
+    case when v_txt = 'yyyyyyyyyyyyynnnn' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none'));
 end
 $$;
 
@@ -238,13 +261,13 @@ begin
                        pg_temp.v0009zb_value(v_t1, 'GB', 'changes'));
     v_exp := 'active 3, canceled 1, paused 1; missing 0 | 0 | 1: 2, 2: 1, 3: 0, 4 to 5: 0, 6+: 0 | 0'
              || ' | no discount 0 of 3; with a discount 1 of 1; discounts not stated 0 of 0'
-             || ' | no variant 0; not in the catalog 0; removed from the catalog 0'
+             || ' | no variant 0; not in the catalog 0; missing from the catalog 0'
              || ' | events 0 (subscriptions 0); lines 0; billing events 0 | broken 0 (none); no status event 3'
              || ' | chargeback 1, invoice_placed 1, refund_created 1'
-             || ' | chargebacks: subscription 0, order 1, unlinked 0; refunds: subscription 1, order 0, unlinked 0'
-             || ' | renewed 1, retry failed 0, failed 0, canceled 0, expired 0, nothing 0, under 30 days 0'
+             || ' | chargebacks: subscription 0, order 1, unlinked 0; refund events: subscription 1, order 0, unlinked 0'
+             || ' | renewed 1, failed renewal 0, moved to failed 0, canceled 0, expired 0, nothing 0, under 30 days 0'
              || ' | migrated 1; below -35: 0, -35 to -1: 0, 0 to 35: 1, above 35: 0; no store order 0; no cycle, date or interval 0'
-             || ' | subscriptions: bacs_direct_debit 1, card 2, paypal 1, sepa_direct_debit 1; billing events: card 1; instrument_unknown of the latest read: no read'
+             || ' | subscriptions: bacs_direct_debit 1, card 2, paypal 1, sepa_direct_debit 1; billing events: card 1; instrument_unknown of the latest run: no run'
              || ' | subscription 0, subscription_event 0, subscription_line 0, subscription_product_variant 0, billing_event 0, subscription_change 0; catalog text over 100 characters 0'
              || ' | amount_per_cycle 1; without a change 0';
     v_rows := v_rows || array['12', 'B2 the clean store''s values: statuses, lines, amounts, variants, orphans, the status chain, billing kinds and links, after the chargeback, migration buckets, instruments (bacs_direct_debit), privacy, changes',
@@ -253,9 +276,9 @@ begin
     -- B3. events_by_month of the clean store: its months from month 0 to the current one, each with events, no hole, no
     --     month without a renewal
     v_txt := pg_temp.v0009zb_value(v_t1, 'GB', 'events_by_month');
-    v_rows := v_rows || array['13', 'B3 events by month from the store''s first month to the current one: seven months, no hole, no month without a renewal',
+    v_rows := v_rows || array['13', 'B3 events by month from the store''s first month to the current one (to date): seven months, no hole, no month without a renewal; the events per type',
       case when v_txt like 'from ' || to_char(date_trunc('month', now() at time zone 'Europe/London') - interval '6 months', 'YYYY-MM') || ': %'
-                and v_txt like '%; no event: none; no renewal: none'
+                and v_txt like '% (to date); no event: none; no renewal: none; by type: canceled 1, migrated 1, paused 1, purchased 4, renewed 6'
                 and array_length(regexp_split_to_array(split_part(split_part(v_txt, ': ', 2), ';', 1), ', '), 1) = 7
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -284,10 +307,11 @@ begin
            (v_t1, v_shop_nl, 'verifyshop', '900008', 'c8', (v_m0 - interval '2 months' + interval '60 days' + interval '12 hours') at time zone 'Europe/Amsterdam');
     -- (s8's order, month 0 less two months plus 60 days, lies just before its created date, month 0 + 5 days, so it counts)
     update cma.subscription set payment_instrument_type = 'other' where tenant_id = v_t1 and connection_id = v_sub_nl and source_id = 's2'; -- instruments
+    perform set_config('lock_timeout', '5s', true);   -- never queue the ingest's catalog read behind this verify
     alter table cma.subscription_product_variant drop constraint subscription_product_variant_variant_title_check;
     update cma.subscription_product_variant set variant_title = 'Verify device for someone@example.invalid'
     where tenant_id = v_t1 and connection_id = v_sub_nl and variant_source_id = 'v1';                                                    -- privacy (an @)
-    update cma.subscription_product_variant set sku = 'VZB 0612345678'
+    update cma.subscription_product_variant set sku = 'VZB 07700 900123'
     where tenant_id = v_t1 and connection_id = v_sub_nl and variant_source_id = 'v2';                                                    -- privacy (a phone's shape)
     insert into cma.subscription_change (tenant_id, connection_id, subscription_source_id, field, old_value, new_value, observed_at)
     values (v_t1, v_sub_nl, 's1', 'status', 'active', 'active', now() - interval '30 minutes');                                          -- changes
@@ -309,10 +333,10 @@ begin
                        pg_temp.v0009zb_value(v_t1, 'NL', 'billing_link'), pg_temp.v0009zb_value(v_t1, 'NL', 'migration_cycles'),
                        split_part(pg_temp.v0009zb_value(v_t1, 'NL', 'instruments'), '; ', 1), pg_temp.v0009zb_value(v_t1, 'NL', 'privacy'),
                        pg_temp.v0009zb_value(v_t1, 'NL', 'changes'));
-    v_exp := '1 | 1 | no discount 1 of 3; with a discount 1 of 1; discounts not stated 0 of 0 | no variant 0; not in the catalog 1; removed from the catalog 0'
+    v_exp := '1 | 1 | no discount 1 of 3; with a discount 1 of 1; discounts not stated 0 of 0 | no variant 0; not in the catalog 1; missing from the catalog 0'
              || ' | no event: ' || to_char(v_m0 + interval '5 months', 'YYYY-MM')
              || ' | events 1 (subscriptions 1); lines 0; billing events 0 | broken 1 (active>paused 1); no status event 6'
-             || ' | chargebacks: subscription 0, order 1, unlinked 1; refunds: subscription 1, order 0, unlinked 0'
+             || ' | chargebacks: subscription 0, order 1, unlinked 1; refund events: subscription 1, order 0, unlinked 0'
              || ' | migrated 3; below -35: 1, -35 to -1: 0, 0 to 35: 1, above 35: 1; no store order 0; no cycle, date or interval 0'
              || ' | subscriptions: bacs_direct_debit 1, card 2, none 3, other 1, paypal 1'
              || ' | subscription 0, subscription_event 0, subscription_line 0, subscription_product_variant 2, billing_event 0, subscription_change 0; catalog text over 100 characters 0'
@@ -351,11 +375,13 @@ begin
     values (v_t1, 'verifysubs', 'Verify subscriptions GB two', 'verify-zb-gb2.shop.example', 'subscriptions', 'verify-zb-key-4') returning id into v_sub_gb2;
     insert into cma.commerce_store (tenant_id, connection_id, handle, name, market, currency, time_zone)
     values (v_t1, v_shop_gb2, 'verify-zb-gb2', 'Verify store GB two', 'GB', 'GBP', 'Europe/London');
-    v_txt := (select string_agg(distinct a.store collate "C", ',' order by a.store collate "C") from cma.subscription_audit_of(v_t1) a);
+    v_txt := (select string_agg(a.store, ',' order by a.store collate "C") from cma.subscription_audit_of(v_t1) a where a.check_key = 'status_mix');
     update cma.integration_connection set status = 'inactive' where tenant_id = v_t1 and id = v_sub_gb2;
-    v_txt := v_txt || ' | ' || (select string_agg(distinct a.store collate "C", ',' order by a.store collate "C") from cma.subscription_audit_of(v_t1) a);
-    v_rows := v_rows || array['18', 'B8 two stores of a market labelled market and handle; a switched-off connection left out (a placeholder store)',
-      case when v_txt = 'GB verify-zb-gb,GB verify-zb-gb2,NL | GB,NL' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
+    v_txt := v_txt || ' | ' || (select string_agg(a.store, ',' order by a.store collate "C") from cma.subscription_audit_of(v_t1) a where a.check_key = 'status_mix')
+             || ' | ' || (select string_agg(a.store || ': ' || left(a.value, 14) || ' ' || a.verdict, ',' order by a.store collate "C")
+                          from cma.subscription_audit_of(v_t1) a where a.check_key = 'privacy' and a.store = 'other connections');
+    v_rows := v_rows || array['18', 'B8 two stores of a market labelled market and handle; a switched-off connection left out (a placeholder store), its rows still read by privacy as other connections',
+      case when v_txt = 'GB verify-zb-gb,GB verify-zb-gb2,NL | GB,NL | other connections: connections 1: ok' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
     -- B9. an unknown tenant CMA02; the application refused execution
     v_txt := pg_temp.v0009zb_code(format('select * from cma.subscription_audit_of(%L)', '00000000-0000-0000-0000-000000000000'));
@@ -404,7 +430,7 @@ from (select ord, check_name, result, detail from verify_0009zb
       select 99, 'verdict',
              case when not current_setting('verify.dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009zb where result = 'PASS') = 14
+                  when (select count(*) from verify_0009zb where result = 'PASS') = 15
                        and not exists (select 1 from verify_0009zb where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('205_verify_subscription_audit: %s PASS, %s FAIL', (select count(*) from verify_0009zb where result = 'PASS'),

@@ -35,12 +35,18 @@
 --                      billing_link, after_chargeback, migration_cycles, instruments, privacy, changes (the brief's
 --                      table A2.1; each check's comment below says what it counts). Read only, in the caller's rights,
 --                      executable by cma_owner only: run by hand in Studio, called by no page and no job. The owner
---                      is not held by row-level security, so every read names the tenant.
---                      cma.subscription_audit_stores_of(p_tenant), its helper (the same rights): the stores it reads
+--                      is not held by row-level security, so every read names the tenant. jit off (an owner's read of the
+--                      whole mirror, run once: compiling sixteen statements costs more than it saves).
+--                      Its helpers, with the same rights: cma.subscription_audit_stores_of(p_tenant), the stores it reads
+--                      (a switched-off connection and one without a store left out; the privacy check reads them as one
+--                      row 'other connections'), and cma.subscription_audit_suspect(text), whether a row's JSON text
+--                      holds an @, a control character or a phone number's shape (205 proves it on both sides)
 --
 -- Not built here (the brief): no minimum term (the app holds none: minCyclesSet and maxCyclesSet 0 in every store on 20
 -- November 2026). The audit's windows (30 days after a chargeback; 35 days around a migrated subscription's first order)
--- are the brief's definitions of those two checks, not tenant thresholds: no figure the CMA shows depends on them.
+-- are the brief's definitions of those two checks, not tenant thresholds: no figure the CMA shows depends on them
+-- (Decision log, 20 Nov 2026). events_by_month gives the events per month and per type over the history, not per type and
+-- month (a table of 21 types by up to 20 months per store; Part B's figures compare month by month with the app).
 --
 -- statement_timeout: the audit reads every row of the mirror once per check (about 300,000 rows in prod on 20 November
 -- 2026). A function's own setting cannot lengthen the timer of the statement that calls it (checked on PostgreSQL 16), so
@@ -101,8 +107,10 @@ comment on column cma.billing_event.instrument_type is 'The type of the payment 
 -- ---------------------------------------------------------------------------------------------
 -- The stores the audit reads: the tenant's active subscriptions connections with their commerce store (0008zn's
 -- cma.flash_subscription_stores_of), labelled by the store's market, or by market and handle when a market has more than
--- one; unknown for a store without a market. A switched-off connection (a placeholder store) is left out, as every job
--- leaves it out
+-- one (and by the connection's first eight characters when two connections name one store); unknown for a store without
+-- a market. A switched-off connection (a placeholder store) is left out, as every job leaves it out; so is a
+-- subscriptions connection without a commerce store (the ingest refuses it: store_not_configured). The privacy check
+-- still reads both, as one row 'other connections'
 create or replace function cma.subscription_audit_stores_of(p_tenant uuid)
 returns table (connection_id uuid, store_connection_id uuid, store text, time_zone text)
 language sql stable
@@ -117,10 +125,35 @@ as $$
     left join cma.commerce_store cs on cs.tenant_id = p_tenant and cs.connection_id = f.store_connection_id
     where c.status = 'active'
   )
-  select s.connection_id, s.store_connection_id,
-         case when count(*) over (partition by s.market) > 1 then s.market || ' ' || s.handle else s.market end,
-         s.time_zone
-  from s
+  , l as (
+    select s.*, case when count(*) over (partition by s.market) > 1 then s.market || ' ' || s.handle else s.market end as label
+    from s
+  )
+  select l.connection_id, l.store_connection_id,
+         case when count(*) over (partition by l.label) > 1 then l.label || ' ' || left(l.connection_id::text, 8) else l.label end,
+         l.time_zone
+  from l
+$$;
+
+-- Whether a text (a row's JSON text) holds what the mirror must never hold: an @ (an ASCII or a full-width one), a
+-- control character (as JSON escapes it, \n or \u0001; DEL, C1 controls and the line and paragraph separators raw), or a
+-- phone number's shape: a token of its own starting with + or 0, then 7 to 16 digits, single spaces, dots, slashes or
+-- hyphens between them (+44 7700 900123, 07700 900123, 06-12345678, 0031612345678, tel:+31612345678). An id, a uuid, a
+-- date, a time, an amount or a SKU does not take it. A literal backslash before n, r, t, b or f reads as a control
+-- character: a false alarm on the safe side. Names and addresses are not detected (codes only are stored; the brief's
+-- rule 2)
+-- (plpgsql, so it is never inlined: its caller builds a row's JSON text once, where an inlined SQL function would build it
+-- once per test)
+create or replace function cma.subscription_audit_suspect(p_text text)
+returns boolean
+language plpgsql immutable
+as $$
+begin
+  return strpos(p_text, '@') > 0 or strpos(p_text, U&'\FF20') > 0
+         or p_text ~ '\\(u00[01][0-9a-fA-F]|[nrtbf])'
+         or p_text ~ '[[:cntrl:]\u0080-\u009f\u2028\u2029]'
+         or p_text ~ '(^|[^0-9A-Za-z_./-])(\+|0)[0-9]([ ./-]?[0-9]){6,15}($|[^0-9A-Za-z_./-]|[ ./-][^0-9A-Za-z_])';
+end
 $$;
 
 -- One row per check and store (see the header); counts, codes and months only
@@ -128,15 +161,11 @@ create or replace function cma.subscription_audit_of(p_tenant uuid)
 returns table (check_key text, store text, value text, expected text, verdict text)
 language plpgsql stable
 rows 200
+set jit = off
 as $$
 #variable_conflict use_column
 declare
   v_holding text[] := cma.flash_list_of(cma.setting_of(p_tenant, 'flash.device_holding_statuses'));
-  -- a phone number's shape inside a row's JSON text, as a token of its own: +, 00 or a national 0 and digits, or digit
-  -- groups split by single spaces; an id, a date, a time or an amount does not take it
-  v_phone   text := '(^|[^0-9A-Za-z_.:+-])(\+[1-9][0-9]{7,14}|00[1-9][0-9]{7,13}|0[1-9][0-9]{8}|\+?[0-9]{2,4} [0-9]{2,4} [0-9]{2,4}( [0-9]{2,4})?)($|[^0-9A-Za-z_.:-])';
-  -- a control character inside a row's JSON text, which escapes it
-  v_cntrl   text := '\\(u00[01][0-9a-fA-F]|u007[fF]|[nrtbf])';
 begin
   if not exists (select 1 from cma.tenant t where t.id = p_tenant) then
     raise exception 'Tenant % not found', p_tenant using errcode = 'CMA02';
@@ -206,7 +235,7 @@ begin
          format('no discount %s of %s; with a discount %s of %s; discounts not stated %s of %s',
                 count(*) filter (where x.discount_count = 0 and x.differs), count(*) filter (where x.discount_count = 0),
                 count(*) filter (where x.discount_count > 0 and x.differs), count(*) filter (where x.discount_count > 0),
-                count(*) filter (where x.discount_count is null and x.differs), count(*) filter (where x.discount_count is null)),
+                count(*) filter (where x.discount_count is null and x.differs), count(*) filter (where x.discount_count is null and x.differs is not null)),
          '0 where no discount'::text,
          case when count(*) filter (where x.discount_count = 0 and x.differs) = 0 then 'ok' else 'fail' end
   from cma.subscription_audit_stores_of(p_tenant) st
@@ -221,10 +250,10 @@ begin
   order by st.store collate "C";
 
   -- variant_missing: lines not canceled of present subscriptions without a variant, with a variant the catalog does not
-  -- hold, or with one the catalog's latest read no longer held (removed)
+  -- hold, or with one the catalog's latest read no longer held (missing from the catalog)
   return query
   select 'variant_missing'::text, st.store,
-         format('no variant %s; not in the catalog %s; removed from the catalog %s', x.none_, x.absent, x.removed),
+         format('no variant %s; not in the catalog %s; missing from the catalog %s', x.none_, x.absent, x.removed),
          '0'::text,
          case when x.none_ + x.absent > 0 then 'fail' when x.removed > 0 then 'explain' else 'ok' end
   from cma.subscription_audit_stores_of(p_tenant) st
@@ -240,9 +269,11 @@ begin
       and l.canceled_at is null and l.source_deleted_at is null) x
   order by st.store collate "C";
 
-  -- events_by_month: events per month in the store's time zone from the month of its first event to the current one;
-  -- a month without an event while the store had a subscription (created before the month ended and not canceled before
-  -- it began) is a hole (fail); a month after the first renewal's without a renewal while it had one is explain
+  -- events_by_month: events per month in the store's time zone from the month of its first event to the current one (to
+  -- date), and per type over the whole history. A complete month without an event while the store held a subscription
+  -- (created before the month ended and not ended before it began: ended is canceled_at, else for a subscription no longer
+  -- active or paused its latest event into its status, else its last update at the source) is a hole (fail); a complete
+  -- month after the first renewal's without a renewal while it held one is explain. The current month is never a hole
   return query
   with ev as (
     select st.store, date_trunc('month', e.occurred_at at time zone st.time_zone) as m, count(*) as n,
@@ -250,14 +281,32 @@ begin
     from cma.subscription_audit_stores_of(p_tenant) st
     join cma.subscription_event e on e.tenant_id = p_tenant and e.connection_id = st.connection_id
     group by st.store, 2
+  ), ty as (
+    select st.store, string_agg(x.event_type || ' ' || x.n, ', ' order by x.event_type collate "C") as types
+    from cma.subscription_audit_stores_of(p_tenant) st
+    cross join lateral (select e.event_type, count(*) as n from cma.subscription_event e
+                        where e.tenant_id = p_tenant and e.connection_id = st.connection_id group by e.event_type) x
+    group by st.store
+  ), su as materialized (
+    select s.connection_id, s.source_created_at,
+           case when s.status in ('active', 'paused') then null
+                else coalesce(s.canceled_at,
+                              (select max(e.occurred_at) from cma.subscription_event e
+                               where e.tenant_id = p_tenant and e.connection_id = s.connection_id
+                                 and e.subscription_source_id = s.source_id and e.status_to = s.status),
+                              s.source_updated_at) end as ended_at
+    from cma.subscription s
+    where s.tenant_id = p_tenant
+      and s.connection_id = any (select st.connection_id from cma.subscription_audit_stores_of(p_tenant) st)
   ), mo as (
     select st.store, st.connection_id, st.time_zone, g.m,
+           g.m = date_trunc('month', now() at time zone st.time_zone) as current_month,
            coalesce(ev.n, 0) as n, coalesce(ev.r, 0) as r,
            g.m > (select min(e2.m) from ev e2 where e2.store = st.store and e2.r > 0) as after_first_renewal,
-           exists (select 1 from cma.subscription s
-                   where s.tenant_id = p_tenant and s.connection_id = st.connection_id
-                     and s.source_created_at < (g.m + interval '1 month') at time zone st.time_zone
-                     and (s.canceled_at is null or s.canceled_at >= g.m at time zone st.time_zone)) as held
+           exists (select 1 from su
+                   where su.connection_id = st.connection_id
+                     and su.source_created_at < (g.m + interval '1 month') at time zone st.time_zone
+                     and (su.ended_at is null or su.ended_at >= g.m at time zone st.time_zone)) as held
     from cma.subscription_audit_stores_of(p_tenant) st
     cross join lateral generate_series((select min(e1.m) from ev e1 where e1.store = st.store),
                                        date_trunc('month', now() at time zone st.time_zone), interval '1 month') as g(m)
@@ -265,10 +314,12 @@ begin
   ), agg as (
     select st.store,
            coalesce('from ' || to_char(min(mo.m), 'YYYY-MM') || ': '
-                    || string_agg(to_char(mo.m, 'YYYY-MM') || ' ' || mo.n, ', ' order by mo.m), 'no event') as months,
-           coalesce(string_agg(to_char(mo.m, 'YYYY-MM'), ', ' order by mo.m) filter (where mo.n = 0 and mo.held), 'none') as holes,
+                    || string_agg(to_char(mo.m, 'YYYY-MM') || ' ' || mo.n || case when mo.current_month then ' (to date)' else '' end,
+                                  ', ' order by mo.m), 'no event') as months,
            coalesce(string_agg(to_char(mo.m, 'YYYY-MM'), ', ' order by mo.m)
-                      filter (where mo.n > 0 and mo.r = 0 and mo.held and mo.after_first_renewal), 'none') as gaps,
+                      filter (where mo.n = 0 and mo.held and not mo.current_month), 'none') as holes,
+           coalesce(string_agg(to_char(mo.m, 'YYYY-MM'), ', ' order by mo.m)
+                      filter (where mo.n > 0 and mo.r = 0 and mo.held and mo.after_first_renewal and not mo.current_month), 'none') as gaps,
            count(mo.m) = 0 and exists (select 1 from cma.subscription s where s.tenant_id = p_tenant and s.connection_id = st.connection_id
                                          and s.source_deleted_at is null) as none_with_subscriptions
     from cma.subscription_audit_stores_of(p_tenant) st
@@ -276,8 +327,9 @@ begin
     group by st.store, st.connection_id
   )
   select 'events_by_month'::text, agg.store,
-         agg.months || '; no event: ' || agg.holes || '; no renewal: ' || agg.gaps,
-         'no month without an event while the store had subscriptions'::text,
+         agg.months || '; no event: ' || agg.holes || '; no renewal: ' || agg.gaps
+         || '; by type: ' || coalesce((select ty.types from ty where ty.store = agg.store), 'none'),
+         'no complete month without an event while the store held subscriptions'::text,
          case when agg.holes <> 'none' or agg.none_with_subscriptions then 'fail' when agg.gaps <> 'none' then 'explain' else 'ok' end
   from agg
   order by agg.store collate "C";
@@ -347,16 +399,16 @@ begin
   order by st.store collate "C";
 
   -- billing_link and after_chargeback: chargebacks and refunds linked to a subscription by its id, else through a
-  -- renewal's store order (the renewal's order_source_id), else unlinked; after a linked chargeback, the first of a
-  -- renewal, a failed renewal (retry failed), a move to failed, canceled or expired within 30 days, else nothing (or
-  -- under 30 days while the 30 days have not passed)
+  -- renewal's store order (the renewal's order_source_id), else unlinked, counted per event (a refund's created,
+  -- completed and failed events each count); after a linked chargeback, the first of a renewal, a failed renewal, a move
+  -- to failed, to canceled or to expired within 30 days, else nothing (or under 30 days while the 30 days have not passed)
   return query
   with ro as materialized (
     select distinct on (e.connection_id, e.order_source_id) e.connection_id, e.order_source_id, e.subscription_source_id
     from cma.subscription_event e
     where e.tenant_id = p_tenant and e.event_type = 'renewed' and e.order_source_id is not null
       and e.connection_id = any (select st.connection_id from cma.subscription_audit_stores_of(p_tenant) st)
-    order by e.connection_id, e.order_source_id, e.occurred_at desc
+    order by e.connection_id, e.order_source_id, e.occurred_at desc, e.source_id collate "C" desc
   ), b as (
     select b.connection_id, case when b.kind = 'chargeback' then 'chargebacks' else 'refunds' end as family, b.kind, b.occurred_at,
            case when b.subscription_source_id is not null then 'subscription' when ro.subscription_source_id is not null then 'order'
@@ -371,9 +423,9 @@ begin
            coalesce(f.what, case when b.occurred_at > now() - interval '30 days' then 'under 30 days' else 'nothing' end) as what
     from b
     left join lateral (
-      select case when e.event_type = 'renewed' then 'renewed' when e.status_to = 'failed' then 'failed'
+      select case when e.event_type = 'renewed' then 'renewed' when e.status_to = 'failed' then 'moved to failed'
                   when e.status_to = 'canceled' then 'canceled' when e.status_to = 'expired' then 'expired'
-                  else 'retry failed' end as what
+                  else 'failed renewal' end as what
       from cma.subscription_event e
       where e.tenant_id = p_tenant and e.connection_id = b.connection_id and e.subscription_source_id = b.subscription_source_id
         and e.occurred_at > b.occurred_at and e.occurred_at <= b.occurred_at + interval '30 days'
@@ -385,7 +437,7 @@ begin
   select k.check_key, k.store, k.value, k.expected, k.verdict
   from (
     select 'billing_link'::text as check_key, 1 as ord, st.store,
-           format('chargebacks: subscription %s, order %s, unlinked %s; refunds: subscription %s, order %s, unlinked %s',
+           format('chargebacks: subscription %s, order %s, unlinked %s; refund events: subscription %s, order %s, unlinked %s',
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'subscription'),
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'order'),
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'unlinked'),
@@ -399,9 +451,9 @@ begin
     group by st.store
     union all
     select 'after_chargeback', 2, st.store,
-           format('renewed %s, retry failed %s, failed %s, canceled %s, expired %s, nothing %s, under 30 days %s',
-                  count(*) filter (where a.what = 'renewed'), count(*) filter (where a.what = 'retry failed'),
-                  count(*) filter (where a.what = 'failed'), count(*) filter (where a.what = 'canceled'),
+           format('renewed %s, failed renewal %s, moved to failed %s, canceled %s, expired %s, nothing %s, under 30 days %s',
+                  count(*) filter (where a.what = 'renewed'), count(*) filter (where a.what = 'failed renewal'),
+                  count(*) filter (where a.what = 'moved to failed'), count(*) filter (where a.what = 'canceled'),
                   count(*) filter (where a.what = 'expired'), count(*) filter (where a.what = 'nothing'),
                   count(*) filter (where a.what = 'under 30 days')),
            'shape only', 'ok'
@@ -460,8 +512,8 @@ begin
   order by c.store collate "C";
 
   -- instruments: present subscriptions per payment instrument type (none when not stated), billing events per instrument
-  -- type, and the latest succeeded read's count of instrument types the mapping did not know (instrument_unknown; the
-  -- names are in the dry run's instrumentTypes). A subscription stored as other fails; a billing event as other is
+  -- type, and the latest succeeded run's count of instrument types the mapping did not know (instrument_unknown, which
+  -- every run of the connection writes, a poll's too; the names are in the dry run's instrumentTypes). A subscription stored as other fails; a billing event as other is
   -- explain, as one stored before 0009zb keeps other
   return query
   select 'instruments'::text, st.store,
@@ -473,11 +525,11 @@ begin
                                               from (select b.instrument_type as t, count(*) as n from cma.billing_event b
                                                     where b.tenant_id = p_tenant and b.connection_id = st.connection_id
                                                       and b.instrument_type is not null group by 1) x), 'none')
-         || '; instrument_unknown of the latest read: '
+         || '; instrument_unknown of the latest run: '
          || coalesce((select r.counts ->> 'instrument_unknown' from cma.sync_run r
                       where r.tenant_id = p_tenant and r.connection_id = st.connection_id and r.status = 'succeeded'
                         and r.counts ? 'instrument_unknown'
-                      order by r.finished_at desc limit 1), 'no read'),
+                      order by r.finished_at desc limit 1), 'no run'),
          'other 0'::text,
          case when exists (select 1 from cma.subscription s where s.tenant_id = p_tenant and s.connection_id = st.connection_id
                              and s.source_deleted_at is null and s.payment_instrument_type = 'other') then 'fail'
@@ -488,35 +540,50 @@ begin
   order by st.store collate "C";
 
   -- privacy: rows of the four tables of 0009za and the two it widened whose JSON text (every column, raw included) holds an
-  -- @, a control character or a phone number's shape; catalog texts over 100 characters
+  -- @, a control character or a phone number's shape (cma.subscription_audit_suspect, once per row); catalog texts over
+  -- 100 characters. Besides the stores, one row 'other connections' (shown when there are any) reads the tenant's other
+  -- subscriptions connections, a switched-off one or one without a store, so no row of the mirror goes unread
   return query
-  with p as (
-    select st.store, st.connection_id,
-           (select count(*) from cma.subscription x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (strpos(to_jsonb(x)::text, '@') > 0 or to_jsonb(x)::text ~ v_cntrl or to_jsonb(x)::text ~ v_phone)) as subscription,
-           (select count(*) from cma.subscription_event x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (strpos(to_jsonb(x)::text, '@') > 0 or to_jsonb(x)::text ~ v_cntrl or to_jsonb(x)::text ~ v_phone)) as subscription_event,
-           (select count(*) from cma.subscription_line x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (strpos(to_jsonb(x)::text, '@') > 0 or to_jsonb(x)::text ~ v_cntrl or to_jsonb(x)::text ~ v_phone)) as subscription_line,
-           (select count(*) from cma.subscription_product_variant x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (strpos(to_jsonb(x)::text, '@') > 0 or to_jsonb(x)::text ~ v_cntrl or to_jsonb(x)::text ~ v_phone)) as subscription_product_variant,
-           (select count(*) from cma.billing_event x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (strpos(to_jsonb(x)::text, '@') > 0 or to_jsonb(x)::text ~ v_cntrl or to_jsonb(x)::text ~ v_phone)) as billing_event,
-           (select count(*) from cma.subscription_change x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (strpos(to_jsonb(x)::text, '@') > 0 or to_jsonb(x)::text ~ v_cntrl or to_jsonb(x)::text ~ v_phone)) as subscription_change,
-           (select count(*) from cma.subscription_product_variant x where x.tenant_id = p_tenant and x.connection_id = st.connection_id
-              and (length(x.product_title) > 100 or length(x.variant_title) > 100 or length(x.sku) > 100)) as long_text
+  with g as (
+    select st.store, 1 as ord, array[st.connection_id] as conns
     from cma.subscription_audit_stores_of(p_tenant) st
+    union all
+    select 'other connections', 2, o.conns
+    from (select array_agg(c.id) as conns
+          from cma.integration_connection c
+          where c.tenant_id = p_tenant
+            and c.id <> all (array(select st.connection_id from cma.subscription_audit_stores_of(p_tenant) st))
+            and (c.kind = 'subscriptions'
+                 or exists (select 1 from cma.subscription s where s.tenant_id = p_tenant and s.connection_id = c.id))) o
+    where o.conns is not null
+  ), p as (
+    select g.store, g.ord, cardinality(g.conns) as n_conns,
+           (select count(*) from cma.subscription x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and cma.subscription_audit_suspect(to_jsonb(x)::text)) as subscription,
+           (select count(*) from cma.subscription_event x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and cma.subscription_audit_suspect(to_jsonb(x)::text)) as subscription_event,
+           (select count(*) from cma.subscription_line x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and cma.subscription_audit_suspect(to_jsonb(x)::text)) as subscription_line,
+           (select count(*) from cma.subscription_product_variant x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and cma.subscription_audit_suspect(to_jsonb(x)::text)) as subscription_product_variant,
+           (select count(*) from cma.billing_event x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and cma.subscription_audit_suspect(to_jsonb(x)::text)) as billing_event,
+           (select count(*) from cma.subscription_change x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and cma.subscription_audit_suspect(to_jsonb(x)::text)) as subscription_change,
+           (select count(*) from cma.subscription_product_variant x where x.tenant_id = p_tenant and x.connection_id = any (g.conns)
+              and (length(x.product_title) > 100 or length(x.variant_title) > 100 or length(x.sku) > 100)) as long_text
+    from g
   )
   select 'privacy'::text, p.store,
-         format('subscription %s, subscription_event %s, subscription_line %s, subscription_product_variant %s, billing_event %s, subscription_change %s; catalog text over 100 characters %s',
-                p.subscription, p.subscription_event, p.subscription_line, p.subscription_product_variant, p.billing_event,
-                p.subscription_change, p.long_text),
+         case when p.ord = 2 then 'connections ' || p.n_conns || ': ' else '' end
+         || format('subscription %s, subscription_event %s, subscription_line %s, subscription_product_variant %s, billing_event %s, subscription_change %s; catalog text over 100 characters %s',
+                   p.subscription, p.subscription_event, p.subscription_line, p.subscription_product_variant, p.billing_event,
+                   p.subscription_change, p.long_text),
          '0'::text,
          case when p.subscription + p.subscription_event + p.subscription_line + p.subscription_product_variant + p.billing_event
                    + p.subscription_change + p.long_text = 0 then 'ok' else 'fail' end
   from p
-  order by p.store collate "C";
+  order by p.ord, p.store collate "C";
 
   -- changes: observed changes per field since the first load; those that changed nothing (the value found equal to the
   -- one stored, or the same change as the subscription's previous one of that field: a rerun that wrote it again)
@@ -543,8 +610,10 @@ $$;
 
 -- Owner only: no grant to the application or a reader (an owner-only function is executed by cma_owner, its owner)
 alter function cma.subscription_audit_stores_of(uuid) owner to cma_owner;
+alter function cma.subscription_audit_suspect(text) owner to cma_owner;
 alter function cma.subscription_audit_of(uuid) owner to cma_owner;
-revoke execute on function cma.subscription_audit_stores_of(uuid), cma.subscription_audit_of(uuid) from public;
+revoke execute on function cma.subscription_audit_stores_of(uuid), cma.subscription_audit_suspect(text), cma.subscription_audit_of(uuid)
+  from public;
 comment on function cma.subscription_audit_of(uuid) is 'The subscription audit (0009zb): one row per check and store of the tenant''s active subscriptions connections, with value, expected and verdict (ok, explain, fail); counts, codes and months only. Read only, owner only, run by hand (set statement_timeout to 120 s first); called by no page and no job';
 
 -- ---------------------------------------------------------------------------------------------

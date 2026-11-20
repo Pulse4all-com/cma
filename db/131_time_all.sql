@@ -615,10 +615,12 @@ begin
         r_ms := r_ms || v_ms;
       end if;
       -- the subscription audit (addition 0009zb), part audit only: as the owner (it is executable by cma_owner only), once,
-      -- for information; its rows' verdicts counted, never listed (Martin reads the audit itself in Studio)
+      -- for information; its rows' verdicts counted, never listed (Martin reads the audit itself in Studio). Not started
+      -- after verify.time_budget_s; a statement timeout inside it reads FAIL (the session's statement_timeout bounds the
+      -- whole run, every tenant's audit together); provoked, the row FAILs as every timed row does
       if v_part = 'audit' then
         v_ms := null; v_cur := null;
-        if to_regprocedure('cma.subscription_audit_of(uuid)') is not null then
+        if to_regprocedure('cma.subscription_audit_of(uuid)') is not null and clock_timestamp() < v_stop then
           begin
             v_mark0 := clock_timestamp();
             select jsonb_build_object('rows', count(*), 'ok', count(*) filter (where a.verdict = 'ok'),
@@ -626,13 +628,15 @@ begin
             into v_cur from cma.subscription_audit_of(t.id) a;
             v_ms := round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1);
           exception
+            when query_canceled then v_cur := jsonb_build_object('error', '57014 (statement_timeout)');
             when others then v_cur := jsonb_build_object('error', sqlstate);
           end;
         end if;
         r_name := r_name || (t.slug || ' subscription audit');
         r_result := r_result || case when to_regprocedure('cma.subscription_audit_of(uuid)') is null then 'skip'
-                                     when v_cur ? 'error' then 'FAIL' else 'info' end;
+                                     when v_provoke or v_cur is null or v_cur ? 'error' then 'FAIL' else 'info' end;
         r_detail := r_detail || case when to_regprocedure('cma.subscription_audit_of(uuid)') is null then 'addition 0009zb has not run: nothing to time'
+                                     when v_cur is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
                                      else coalesce(v_ms || ' ms, once, no budget: ', '') || v_cur::text end;
         r_ms := r_ms || v_ms;
       end if;
