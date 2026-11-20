@@ -1534,7 +1534,7 @@ const en = {
     mh_col_store_customer: "The customer's id in the store.",
     mh_col_store: "The store the customer belongs to.",
     mh_col_acquired: "The level of evidence Sales, First orders found for the customer's first order, as its code.",
-    mh_col_payment_state: "The worst payment state among the customer's subscriptions: failed, then in retry, then paused, then paid.",
+    mh_col_payment_state: "The worst payment state among the customer's subscriptions: failed, then charged back, then in retry, then awaiting payment, then paused, then paid.",
     mh_col_contact: "Opens the customer's contact in the customer records.",
   },
   courtesy: {
@@ -5850,7 +5850,7 @@ const nl = {
     mh_col_store_customer: "Het id van de klant in de webwinkel.",
     mh_col_store: "De webwinkel waar de klant bij hoort.",
     mh_col_acquired: "Het bewijsniveau dat Sales, Eerste bestellingen vond voor de eerste bestelling van de klant, als code.",
-    mh_col_payment_state: "De slechtste betaalstand van de abonnementen van de klant: mislukt, dan in herkansing, dan gepauzeerd, dan betaald.",
+    mh_col_payment_state: "De slechtste betaalstand van de abonnementen van de klant: mislukt, dan teruggeboekt, dan in herkansing, dan wacht op betaling, dan gepauzeerd, dan betaald.",
     mh_col_contact: "Opent het contact van de klant in de klantgegevens.",
   },
   courtesy: {

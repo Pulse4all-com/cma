@@ -168,7 +168,7 @@ declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_dev     boolean := current_setting('verify.dev')::boolean;
   v_rows    text[] := '{}';
-  v_t uuid; v_adm uuid; v_sch uuid; v_ing uuid; v_other uuid;
+  v_t uuid; v_adm uuid; v_agent uuid; v_sch uuid; v_ing uuid; v_other uuid; v_oing uuid;
   v_shop_a uuid; v_sub_a uuid; v_shop_b uuid; v_sub_b uuid; v_assets uuid;
   v_m0 timestamp := date_trunc('month', now() at time zone 'Europe/London') - interval '6 months';
   v_mon date := (date_trunc('month', now() at time zone 'Europe/London') - interval '6 months')::date;
@@ -186,6 +186,8 @@ begin
     select u.id into v_sch from cma.app_user u where u.tenant_id = v_t and u.kind = 'system' and u.email = 'scheduler@system.invalid';
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify.ze.admin@example.invalid', 'Verify admin') returning id into v_adm;
     insert into cma.user_role (tenant_id, user_id, role_id) select v_t, v_adm, r.id from cma.app_role r where r.tenant_id = v_t and r.key = 'admin';
+    insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify.ze.agent@example.invalid', 'Verify agent') returning id into v_agent;
+    insert into cma.user_role (tenant_id, user_id, role_id) select v_t, v_agent, r.id from cma.app_role r where r.tenant_id = v_t and r.key = 'agent';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, signing_secret_name)
     values (v_t, 'verifyshop', 'Verify shop A', 'verify-ze-a.shop.example', 'commerce', 'verify-ze-shop-1') returning id into v_shop_a;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
@@ -316,15 +318,18 @@ begin
       || ' ' || pg_temp.v0009ze_code(format('select cma.set_subscription_variant_mapping(%L, ''vacc'', ''accessory'', null, null, ''p2'')', v_sub_a))
       || ' ' || pg_temp.v0009ze_code(format('select cma.set_subscription_variant_mapping(%L, ''vunm'', ''service'')', v_sub_a))
       || ' ' || pg_temp.v0009ze_code(format('select cma.set_subscription_variant_mapping(%L, ''vunm'', null)', v_sub_a));
-    perform set_config('app.user_id', v_ing::text, true);
-    v_txt := v_txt || ' | ' || pg_temp.v0009ze_code(format('select cma.set_subscription_variant_mapping(%L, ''vunm'', ''service'')', v_sub_a));
+    perform set_config('app.user_id', v_agent::text, true);
+    v_txt := v_txt || ' | ' || pg_temp.v0009ze_code(format('select cma.set_subscription_variant_mapping(%L, ''vunm'', ''service'')', v_sub_a))
+             || ' ' || pg_temp.v0009ze_code(format('select cma.subscription_variants(%L)', v_sub_a));
+    perform set_config('app.user_id', v_adm::text, true);
+    v_txt := v_txt || ' ' || pg_temp.v0009ze_code(format('select cma.subscription_variants(%L)', v_shop_a));
     perform set_config('role', 'cma_owner', true);
     v_txt := v_txt || ' | ' || (select string_agg(m.variant_source_id || ':' || m.line_kind || ':' || coalesce(m.model_key, '-') || ':' || m.devices_per_unit
                                                   || ':' || coalesce(m.proposition, '-') || ':' || (m.updated_by = v_adm), ' ' order by m.variant_source_id collate "C")
                                 from cma.subscription_variant_mapping m where m.tenant_id = v_t);
-    v_rows := v_rows || array['12', 'B2 the mapping refuses an unknown variant (CMA02), a device without a model or with an unknown one, units on an accessory, an unknown proposition and kind (CMA04), and a user without tenant.configure; a null kind removes',
-      case when v_txt like 'CMA02 CMA04 CMA04 CMA04 CMA04 CMA04 ok ok ok ok | CMA0_ | vacc:accessory:-:0:p2:true vdev:device:vzm:1:p1:true'
-                and v_txt not like '% | ok | %' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['12', 'B2 the mapping refuses an unknown variant (CMA02), a device without a model or with an unknown one, units on an accessory, an unknown proposition and kind (CMA04); an agent may neither set nor list (CMA06); a connection that is not a subscriptions connection is not found (CMA02); a null kind removes',
+      case when v_txt = 'CMA02 CMA04 CMA04 CMA04 CMA04 CMA04 ok ok ok ok | CMA06 CMA06 CMA02 | vacc:accessory:-:0:p2:true vdev:device:vzm:1:p1:true'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- the facts, refreshed as the scheduler
     perform set_config('role', 'cma_app', true);
@@ -448,11 +453,20 @@ begin
     perform set_config('app.user_id', v_ing::text, true);
     v_txt := (select cma.ingest_fill_purchase_orders(v_sub_a, '[{"sourceId": "pa1", "orderSourceId": "9001"}, {"sourceId": "pa3", "orderSourceId": "7777"}, {"sourceId": "ra1-1", "orderSourceId": "7778"}]'::jsonb))::text
              || ' ' || pg_temp.v0009ze_code(format($q$select cma.ingest_fill_purchase_orders(%L, '[{"sourceId": "pa1", "orderSourceId": "x1"}]'::jsonb)$q$, v_sub_a));
+    -- another tenant's ingest cannot fill this tenant's purchases: the connection is not its own (CMA02), nothing changes
     perform set_config('role', 'cma_owner', true);
+    update cma.subscription_event set raw = raw - 'orderId' where tenant_id = v_t and source_id = 'pa1';
+    select x.user_id into v_oing from cma.app_user_external_id x where x.tenant_id = v_other and x.system = 'ingest' and x.external_id = 'ingest';
+    perform set_config('app.tenant_id', v_other::text, true);
+    perform set_config('app.user_id', v_oing::text, true);
+    perform set_config('role', 'cma_app', true);
+    v_txt := v_txt || ' ' || pg_temp.v0009ze_code(format($q$select cma.ingest_fill_purchase_orders(%L, '[{"sourceId": "pa1", "orderSourceId": "9001"}]'::jsonb)$q$, v_sub_a));
+    perform set_config('role', 'cma_owner', true);
+    perform set_config('app.tenant_id', v_t::text, true);
     v_txt := v_txt || ' | ' || (select string_agg(e.source_id || ':' || coalesce(e.raw ->> 'orderId', '-'), ' ' order by e.source_id collate "C")
                                 from cma.subscription_event e where e.tenant_id = v_t and e.source_id in ('pa1', 'pa3', 'ra1-1'));
-    v_rows := v_rows || array['24', 'B14 the one-time fill: a purchase without an order gains it, one with an order and a renewal are left; bad items refused (CMA04)',
-      case when v_txt = '1 CMA04 | pa1:9001 pa3:9003 ra1-1:-' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['24', 'B14 the one-time fill: a purchase without an order gains it, one with an order and a renewal are left; bad items refused (CMA04); another tenant''s ingest fills nothing of it (CMA02)',
+      case when v_txt = '1 CMA04 CMA02 | pa1:- pa3:9003 ra1-1:-' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception

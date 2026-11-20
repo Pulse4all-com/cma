@@ -555,6 +555,10 @@ rows 200
 as $$
 begin
   perform cma.assert_permission('tenant.configure');
+  if p_connection_id is not null and not exists (select 1 from cma.integration_connection c
+                                                 where c.tenant_id = cma.current_tenant_id() and c.id = p_connection_id and c.kind = 'subscriptions') then
+    raise exception 'No subscriptions connection % in this tenant', p_connection_id using errcode = 'CMA02';
+  end if;
   return query select * from cma.subscription_variants_of(cma.current_tenant_id(), p_connection_id);
 end
 $$;

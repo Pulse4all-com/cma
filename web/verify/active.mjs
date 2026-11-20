@@ -279,7 +279,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
   const dynamic = [
     ...ACTIVE_CHANNELS.flatMap((c) => [`channel_${c}`, `channelShort_${c}`]), ...ACTIVE_SLOTS.flatMap((s) => [`slot_${s.key}`, `mh_slot_${s.key}`, ...s.fedBy.map((f) => `feed_${f}`)]),
     ...Object.keys(ACTIVE_MEASURE_METRIC).map((m) => `m_${m}`), ...["no_contact", "before_history", "no_first_order", "order_not_matched", "no_order_deal"].map((r) => `reason_${r}`),
-    ...["paid", "in_retry", "failed", "paused"].map((p) => `pay_${p}`), ...["monthly", "yearly", "other", "unknown"].map((b) => `billing_${b}`), "grouping_month", "grouping_quarter",
+    ...["paid", "in_retry", "charged_back", "awaiting_payment", "failed", "paused"].map((p) => `pay_${p}`), ...["monthly", "yearly", "other", "unknown"].map((b) => `billing_${b}`), "grouping_month", "grouping_quarter",
   ];
   const wanted = [...used, ...dynamic];
   const missing = (lang) => wanted.filter((k) => typeof activeCopy[lang][k] !== "string" || activeCopy[lang][k] === "");
