@@ -45,7 +45,8 @@ export const FIXTURE_EVENT_TYPES = [
  * renewal (in retry), s-0202 active, its failed cycle renewed later (paid), s-0203 failed (moved there by an update),
  * s-0204 paused (by staff), s-0205 canceled (by its customer, with a free-text reason), s-0206 expired, s-0207 merged,
  * s-0208 never-subscribed, s-0209 resumed, s-0210 reactivated; s-0211 to s-0230 active. Customers c-…: every subscription's
- * id 7100000<n>; the flow's store holds the first 200 of them.
+ * id 7100000<n>; the flow's store holds the first 200 of them. Each line is shaped as Juo's SubscriptionItem: variant and
+ * product as id strings (Juo expands neither unless asked), canceledAt null or a date-time.
  */
 export function juoStore({ handle, key, nowMs = Date.now(), prefix = "s" }) {
   const ago = (minutes) => new Date(nowMs - minutes * 60_000).toISOString();

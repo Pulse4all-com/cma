@@ -369,6 +369,29 @@ expect("D3 each family's events of a window, oldest first, in pages: the subscri
   [subEvents.length, true, billingEvents.length, one.events.length - 1, true, false], [0, false, 0, 0, false, true]);
 const prodPages = await collect(read.clientFor(conn(), settings, new JobBudget({})).products());
 expect("D3b the catalog in pages: 153 products in two pages", prodPages.map((x) => x.length), [100, 53], [153]);
+// The catalog's dry run (#299's finding 1: variantsOnActiveLines 0 in every store): the lines of active subscriptions that
+// Juo has not canceled, per variant. The fixture's lines are shaped as Juo's SubscriptionItem: variant and product as id
+// strings (not expanded), canceledAt null or a date-time. Active: s-0001 to s-0230 but s-0203 to s-0208 (224); line a on
+// each (224), line b canceled on every even one (112 left), line c on s-0050, 0100, 0150, 0200 (4).
+const dryStore = { config: async () => ({ settings }), subscriptionStore: async () => ({ storeConnectionId: "store-fixture-one" }),
+  storeCustomersHeld: async () => new Set() };
+const productDry = () => juo.dryRun({ connection: conn(), store: dryStore, budget: new JobBudget({}), object: "subscription_product" });
+const pd = await productDry();
+expect("D3c the catalog's dry run counts the variants on active lines (3) and their lines, the top with SKU and titles from the catalog, none outside it",
+  [pd.products, pd.variants, pd.variantsOnActiveLines, pd.variantsNotInCatalog, pd.top],
+  [153, 153, 3, 0, [
+    { variant: "41000000001", lines: 224, sku: "PLAN-A-M", product: "Plan A (catalog fixture)", title: "Monthly" },
+    { variant: "41000000002", lines: 112, sku: null, product: "Accessory (catalog fixture)", title: null },
+    { variant: "41000000003", lines: 4, sku: "INSTALL-1", product: "Installation (catalog fixture)", title: "One-time" }]],
+  [153, 153, 0, 0, []]);
+const catalogKept = one.products;
+one.products = catalogKept.filter((x) => x.id !== "71000000003");
+const pdOut = await productDry();
+one.products = catalogKept;
+expect("D3d a variant on active lines that the catalog no longer holds is counted in variantsNotInCatalog, its SKU and titles null",
+  [pdOut.variants, pdOut.variantsOnActiveLines, pdOut.variantsNotInCatalog, pdOut.top.at(-1)],
+  [152, 3, 1, { variant: "41000000003", lines: 4, sku: null, product: null, title: null }],
+  [152, 0, 0, undefined]);
 fake.state.requests.length = 0;
 expect("D4 401 wrong tenant: the store's key with another store's id → key_rejected, one request",
   [await codeOfRun(() => collect(read.clientFor(conn(two.domain), settings, new JobBudget({})).subscriptions())), fake.state.requests.length],

@@ -947,7 +947,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 
 ## Subscription terms
 
-Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth). The mirror also holds each subscription's lines (Subscription line), the store's catalog (Product variant), the billing events (Billing event, with Chargeback, Return code, Refund and Invoice renewal), more event types (Subscription event types) and the CMA's own Observed subscription changes, proposed with addition 0009za (18 November 2026, brief B39 Part A) for Kira to confirm.
+Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth). The mirror also holds each subscription's lines (Subscription line), the store's catalog (Product variant), the billing events (Billing event, with Chargeback, Return code, Refund and Invoice renewal), more event types (Subscription event types) and the CMA's own Observed subscription changes, proposed with addition 0009za (18 November 2026, brief B39 Part A) for Kira to confirm. Placeholder store, a store's connection kept switched off until the store sells, is Decided (20 November 2026, Martin).
 
 ### Subscription
 
@@ -1234,6 +1234,25 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "The events backfill without --from starts at subscriptions.history_start_date" and "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
 | Used by | `cma.check_tenant_setting()`, the Juo adapter's `backfillFrom` (`ingest/src/adapters/juo/index.mjs`) |
 | As built today | The setting is in the catalog (`202`: text, default empty) and checked by `cma.check_tenant_setting()` (made again, based on `184`); the adapter reads it as `reviews.history_start_date` is read for reviews. Matches the definition |
+
+### Placeholder store
+
+| Field | Value |
+|---|---|
+| Term | Placeholder store (no Dutch label: not in the UI) |
+| Key | None of its own: a `cma.integration_connection` of the subscription app with `status` `inactive` |
+| Definition | A store's subscription-app connection kept switched off on Configuration → Sources (status inactive) until the store sells; the ingest reads none of its data. It goes live by Switch on and a backfill for that one connection (`docs/ingest/PROD_RUNBOOK.md` 15.10 (i)). |
+| Source | Configuration → Sources (Switch off, Switch on); `cma.integration_connection.status` |
+| Counts / does not count | Every job serves active connections only (`--adapter`, `--connection`, the poll, the nightly reconcile), so a placeholder store is never read and never fails a run; `empty_snapshot` stays the rule for every connection, with no exception for an empty store. A connection switched off for another reason is not a placeholder store |
+| Unit and display | Not shown as such: Sources shows the connection as switched off |
+| Time rule | None |
+| Scope | Per connection; today the Juo connections of ES, FI and IT of Pulse4all Subscriptions |
+| Equivalent in the source system | None: the store exists in Shopify and Juo; it is the CMA's connection that is off |
+| Not to use | "inactive store", "dummy"; "placeholder" alone (a placeholder is a page or card that shows no figure yet) |
+| Status | Decided |
+| Decided | 20 November 2026; docs/decisions.md, 20 Nov 2026, "Placeholder stores are switched off and the safety rule stays" and "Definitions: Placeholder store" (Martin; brief B39a-F, #300) |
+| Used by | docs/decisions.md, `docs/ingest/README.md` (Juo, Placeholder stores), `docs/ingest/PROD_RUNBOOK.md` 15.10 (i) and 17.6, docs/open-decisions.md; no page, API field, setting or SQL name |
+| As built today | `servedConnections` (`ingest/src/core/connection.mjs`) filters `status = 'active'` for every job, and `--connection` refuses an inactive connection. Matches the definition |
 
 ## Cohort terms
 

@@ -450,11 +450,11 @@ export async function dryRun({ connection, store, budget, object, fromMs, untilM
     for await (const page of api.subscriptions()) {
       for (const s of page) {
         if (subscriptionItem(s)?.status !== "active") continue;
-        for (const l of lineItems(s).lines) if (!l.canceledAt && l.variantSourceId) bump(active, l.variantSourceId);
+        for (const l of lineItems(s).lines) if (!l.canceledAt && l.variantSourceId) active.set(l.variantSourceId, (active.get(l.variantSourceId) ?? 0) + 1);
       }
     }
-    const counted = Object.fromEntries(active);
-    const top = Object.entries(counted).sort(([a, x], [b, y]) => y - x || (a < b ? -1 : 1)).slice(0, 20)
+    // a Map counts with set and get (bump writes properties, which a Map's size and entries never see: #299's finding 1)
+    const top = [...active].sort(([a, x], [b, y]) => y - x || (a < b ? -1 : 1)).slice(0, 20)
       .map(([variant, lines]) => ({ variant, lines, sku: c.variants.get(variant)?.sku ?? null, product: c.variants.get(variant)?.productTitle ?? null,
         title: c.variants.get(variant)?.variantTitle ?? null }));
     return { products: c.products, variants: c.variants.size, unreadable: c.unreadable, textDropped: c.textDropped,

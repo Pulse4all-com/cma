@@ -2362,6 +2362,54 @@ Expected: twelve rows `succeeded`, one per connection, each with the events sinc
 
 Expected: as written. Day one as 15.9: about 288 `subscriptions_poll` `succeeded` rows per connection, 12 × 288 in all, and one `reconcile` per connection after 03:30; a `failed` with `rate_limited` now and then needs no action; several a day: report them. **Records:** the outputs of (a) to (h) into `records/0008zq-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
 
+**(i) A placeholder store goes live (Decision log, 20 Nov 2026).** The Juo connections of ES, FI and IT are placeholders for a later rollout: switched off on Configuration → Sources (status inactive) since 20 November 2026, holding no subscription. Every job serves active connections only (`--adapter juo`, the poll, the nightly reconcile), so they are not read and nothing fails for them; `--connection` refuses an inactive one (`no active connection with that id`). `empty_snapshot` stays the rule for every connection: switch a store on only once Juo holds its first subscription there, or its backfill and every nightly reconcile fail `empty_snapshot`. One store at a time, from the Switch on to the end of both backfills before the nightly reconcile at 03:30, as (d) says; ES's handle in the blocks below, `pulse4all-fi` or `pulse4all-ita` for the others.
+
+**Studio (cma-prod-pg)** (read only; the connection's id)
+```sql
+set role cma_owner;
+select c.id, c.name, c.status from cma.integration_connection c
+where c.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions') and c.adapter = 'juo'
+  and c.external_account_id = 'pulse4all-esp.myshopify.com';
+reset role;
+```
+Expected: one row, `Juo ES`, `inactive`. Its `id` is `<juo conn>` below.
+
+Pause `ingest-poll-subscriptions` with (d)'s block (expected `PAUSED`).
+
+**Browser:** Workspace → Configuration → Sources → **Juo ES** → **Switch on**. Expected: its status active.
+
+**Terminal** (the events and the billing events from the store's first event: `--again`, because 17.6 read this store's history once already with the same start)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<juo conn>;--object;subscription_event,billing_event;--again'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+**Terminal** (the subscriptions with their lines, then the catalog)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<juo conn>;--object;subscription,subscription_product'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` A failed execution with `empty_snapshot` means Juo holds no subscription there yet: Switch off the connection again on Sources and report it.
+
+Resume the poll with (h)'s first block (expected `ENABLED	*/5 * * * *	Europe/Amsterdam`).
+
+**Studio (cma-prod-pg)** (read only; 17.7's counts for that store, counts and codes only)
+```sql
+set role cma_owner;
+select c.external_account_id as store,
+       (select count(*) from cma.subscription s where s.tenant_id = c.tenant_id and s.connection_id = c.id and s.source_deleted_at is null) as subscriptions,
+       (select count(*) from cma.subscription_line l where l.tenant_id = c.tenant_id and l.connection_id = c.id) as lines,
+       (select count(*) from cma.subscription_product_variant v where v.tenant_id = c.tenant_id and v.connection_id = c.id and v.source_deleted_at is null) as variants,
+       (select count(*) from cma.billing_event b where b.tenant_id = c.tenant_id and b.connection_id = c.id) as billing_events,
+       (select count(*) from cma.subscription_event e where e.tenant_id = c.tenant_id and e.connection_id = c.id) as events,
+       (select min(e.occurred_at)::date from cma.subscription_event e where e.tenant_id = c.tenant_id and e.connection_id = c.id) as first_event,
+       (select count(*) from cma.subscription_change x where x.tenant_id = c.tenant_id and x.connection_id = c.id) as changes
+from cma.integration_connection c
+where c.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions') and c.adapter = 'juo' and c.status = 'active'
+  and c.external_account_id = 'pulse4all-esp.myshopify.com';
+reset role;
+```
+Expected: one row; `subscriptions` as Juo's admin counts for the store, `lines` about one to three per subscription, `variants` above 0, `first_event` the store's first event, `changes` 0 right after the first load. The next night's `ingest-reconcile` reads the store too (System health, Sources: its row with a reconcile of 03:30). **Records:** the outputs into `records/<addition>-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only).
+
 ## 15.11 Store customers from each store's start (addition 0008zq)
 
 Flash's Active customers and the Juo customer match need every store customer, not only those changed since 1 October 2026 (9.8's window): the GB store held 5,840 customers and matched every subscription (15.5, 0 unmatched), the NL store held 1,874 on 14 October 2026 and its subscriptions would mostly join nothing. One execution reads every store's customers from the store's start (Night default N5: `--from 2000-01-01`, before any store's first sale; a new start walks the customers anew, `created_at` ascending, paced by each shop's own cost bucket; the CH store is included and harmless, it has no customers). Orders stay as they are: Shopify's `read_orders` covers the last 60 days and `read_all_orders` is not granted (Open decisions, Shopify backfill window). Each customer not linked to a contact yet costs one HubSpot search at one per 400 ms (about seven minutes per thousand), within the CRM connection's daily floor: a paused run (`daily_floor`) is continued by the same command the next day, from its cursor. Unattended; 1 to 4 hours for the fourteen stores.
@@ -3029,7 +3077,7 @@ gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-w
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;billing_event;--dry-run'
 ```
-The log lines arrive about a minute after the execution ends: wait that minute before reading them. Expected: 12 `backfill dry run` lines per command, one per active Juo connection; `unreadable` 0. Report into the chat per store: `lines`, `linesPerSubscription`, `minCyclesSet`, `maxCyclesSet`, `instrumentTypes` (subscription); `variants`, `top`, `variantsNotInCatalog` (subscription_product); `eventTypes`, `kept`, `duplicates`, `firstEventAt` (subscription_event; `eventTypes` never holds `renewal:notification-sent`, which no query asks for (Decision log, 19 Nov 2026); all history, since `subscriptions.history_start_date` is empty); `billingKinds`, `returnCodes`, `instrumentTypes`, `withSubscription`, `firstEventAt` (billing_event). The `--dry-run` takes one object (the runner refuses a list). The dry run also settles whether Juo accepts a grouped OR in a query (docs/open-decisions.md).
+The log lines arrive about a minute after the execution ends: wait that minute before reading them. Expected: one `backfill dry run` line per command and active Juo connection (nine with ES, FI and IT switched off, Decision log, 20 Nov 2026); `unreadable` 0. Report into the chat per store: `lines`, `linesPerSubscription`, `minCyclesSet`, `maxCyclesSet`, `instrumentTypes` (subscription); `variants`, `top`, `variantsNotInCatalog` (subscription_product); `eventTypes`, `kept`, `duplicates`, `firstEventAt` (subscription_event; `eventTypes` never holds `renewal:notification-sent`, which no query asks for (Decision log, 19 Nov 2026); all history, since `subscriptions.history_start_date` is empty); `billingKinds`, `returnCodes`, `instrumentTypes`, `withSubscription`, `firstEventAt` (billing_event). The `--dry-run` takes one object (the runner refuses a list). The dry run also settles whether Juo accepts a grouped OR in a query (docs/open-decisions.md).
 
 ## 17.6 Terminal: the backfills from each store's first event
 Pause `ingest-poll-subscriptions` as 15.10 (d), then:
@@ -3042,7 +3090,7 @@ gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-w
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;subscription,subscription_product'
 ```
-Then resume the poll. Expected: one succeeded run per store and object; the poll's next run small. Until the stores without subscriptions are settled (docs/open-decisions.md, Juo stores without subscriptions), the second execution ends with exit 1, `failed` 3: ES, FI and IT fail `subscription` with `empty_snapshot` (Juo returns no subscription there) while their catalogs and every other store load. Read the result from the `backfill finished` line (its `results` per connection and object), not from the exit code; any other failure: report it.
+Then resume the poll. Expected: one succeeded run per store and object, both executions exit 0; the poll's next run small. `--adapter juo` serves the active Juo connections only: the placeholder stores ES, FI and IT are switched off since 20 November 2026 (Decision log, 20 Nov 2026), so they are not read and the nightly `ingest-reconcile` skips them too. Read the result from the `backfill finished` line (its `results` per connection and object); any failure now, `empty_snapshot` included: report it. A placeholder goes live with 15.10 (i).
 Note: the events backfill now reads all of Juo's history (May 2025 for GB and NL): Flash's live figures for past dates gain events from before 29 October 2026, and Customers → Active's take recomputes once (its inputs key reads the events' `synced_at`); stored Flash snapshots stay as they were.
 
 ## 17.7 Studio (cma-prod-pg): the counts per store and table (counts and codes only)
