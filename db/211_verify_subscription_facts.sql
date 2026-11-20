@@ -554,12 +554,19 @@ begin
     perform set_config('role', 'cma_owner', true);
     v_txt := v_txt || ' | ' || coalesce(v_j2 ->> 'unchanged', 'none') || ' '
              || (select to_char(x.rate_start_month, 'YYYY-MM') || ':' || x.stragglers from cma.subscription_store_start x where x.tenant_id = v_t and x.market = 'BE');
+    -- with a share of 96 % no month of BE holds it (20 of 21 is 95.2 %): its busiest month (1) is the migration's last,
+    -- so it starts at month 2 as with the default, and month 4 is still reported as a straggler
+    update cma.tenant_setting set value = '96' where tenant_id = v_t and key = 'subscriptions.migration_bulk_min_pct';
+    perform set_config('role', 'cma_app', true);
+    perform cma.subscription_facts_refresh_of(v_t, false, now() + interval '32 minutes');
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || ' ' || (select to_char(x.rate_start_month, 'YYYY-MM') || ':' || x.stragglers from cma.subscription_store_start x where x.tenant_id = v_t and x.market = 'BE');
     delete from cma.tenant_setting where tenant_id = v_t and key = 'subscriptions.migration_bulk_min_pct';
     perform set_config('role', 'cma_app', true);
     perform cma.subscription_facts_refresh_of(v_t, true, now());
     perform set_config('role', 'cma_owner', true);
-    v_rows := v_rows || array['26', 'B8b the rates start the month after the store''s last month of migrated events (a straggler reported, not moving it), else at the first complete month after its first event; a month counts from then; a tenant share of 3 % makes BE''s straggler a migration month (the digest moves with the setting)',
-      case when v_txt = format('BE:%1$s:{"%1$s": 20, "%4$s": 1}:%1$s:{"%4$s": 1}:1:%2$s DE:%1$s:{"%1$s": 1}:%1$s:{}:0:%2$s FR:%1$s:{}:-:{}:0:%2$s IE:%5$s:{"%5$s": 1}:%5$s:{}:0:%1$s NL:%1$s:{"%2$s": 5}:%2$s:{}:0:%3$s | %3$s | false %6$s:0',
+    v_rows := v_rows || array['26', 'B8b the rates start the month after the store''s last month of migrated events (a straggler reported, not moving it), else at the first complete month after its first event; a month counts from then; a tenant share of 3 % makes BE''s straggler a migration month (the digest moves with the setting); at 96 % no month holds it and the busiest month counts',
+      case when v_txt = format('BE:%1$s:{"%1$s": 20, "%4$s": 1}:%1$s:{"%4$s": 1}:1:%2$s DE:%1$s:{"%1$s": 1}:%1$s:{}:0:%2$s FR:%1$s:{}:-:{}:0:%2$s IE:%5$s:{"%5$s": 1}:%5$s:{}:0:%1$s NL:%1$s:{"%2$s": 5}:%2$s:{}:0:%3$s | %3$s | false %6$s:0 %2$s:1',
                                to_char(v_m0 + interval '1 month', 'YYYY-MM'), to_char(v_m0 + interval '2 months', 'YYYY-MM'),
                                to_char(v_m0 + interval '3 months', 'YYYY-MM'), to_char(v_m0 + interval '4 months', 'YYYY-MM'), to_char(v_m0, 'YYYY-MM'),
                                to_char(v_m0 + interval '5 months', 'YYYY-MM'))
