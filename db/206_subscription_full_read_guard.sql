@@ -9,9 +9,9 @@
 -- then the verifies named below; then prod before the merge (the ingest of this change writes the two new run counts,
 -- which cma.ingest_sync_run_finish refuses before this script: run it in each database before that ingest deploys).
 --
--- Why (Martin, 20 November 2026, the audit of 0009zb in prod; Decision log, 21 Nov 2026): GB held 128 active
--- subscriptions marked missing and 121 subscriptions with events the CMA never held, NL 10; Juo returned the sampled ones
--- by id, active. The subscriptions full read sent no sort, so Juo paged on createdAt alone and its cursor, holding
+-- Why (Martin, 20 November 2026, the audit of 0009zb in prod; Decision log, 20 Nov 2026): the largest store held 128
+-- active subscriptions marked missing and 121 subscriptions with events the CMA never held, another 10; the app returned
+-- the sampled ones by id, active. The subscriptions full read sent no sort, so Juo paged on createdAt alone and its cursor, holding
 -- createdAt alone, skipped the rest of a tie at a page boundary (migrated subscriptions share one createdAt); the final
 -- step then marked them missing. The ingest of this change sorts on createdAt and id and, before marking, reads the
 -- subscriptions the list left out again by id (missing_confirmed, missing_reappeared). The audit's other findings change
@@ -23,12 +23,14 @@
 --                      return by id: upserted, never marked) among the counts
 --   the audit          cma.subscription_audit_of(p_tenant) made again (still read only, owner only, jit off):
 --                      events_by_month counts a month as held only while a subscription that renews was held: one paused
---                      since before the month began (its paused_at, else its latest event into paused) is not, so a
---                      store whose subscriptions are all paused or ended has no hole (IE in prod);
---                      billing_link links a chargeback or refund on a first order: through a purchase's store order
---                      (raw orderId, which the ingest of this change keeps; purchases stored before keep none) or a store
---                      order of kind first whose customer holds a subscription of the store (the one created nearest the
---                      order), and reports another store order of such a customer apart (other store order);
+--                      since before the month began (its paused_at, else its latest event into paused, else its last
+--                      update at the source) is not, so a
+--                      store whose subscriptions are all paused or ended has no hole;
+--                      billing_link links a chargeback or refund on a purchase's store order (purchase order: its raw
+--                      orderId, which the ingest of this change keeps; purchases stored before keep none), else on a
+--                      store order of kind first (first order, as definitions' Order kind means it) or of another kind
+--                      (other store order) whose customer holds a subscription of the store (the one created nearest the
+--                      order); test and deleted store orders never link;
 --                      after_chargeback follows those links too; status_chain's expected text names what an
 --                      active>paused or paused>active pair is (a pause that began or ended on its date without a paused
 --                      or resumed event)
@@ -232,7 +234,8 @@ begin
   -- date), and per type over the whole history. A complete month without an event while the store held a subscription
   -- that renews (created before the month ended, not ended before it began, and not paused since before it began: ended
   -- is canceled_at, else for a subscription no longer active or paused its latest event into its status, else its last
-  -- update at the source; paused since its paused_at, else its latest event into paused) is a hole (fail); a complete
+  -- update at the source; paused since its paused_at, else its latest event into paused, else its last update at the
+  -- source) is a hole (fail); a complete
   -- month after the first renewal's without a renewal while it held one is explain. The current month is never a hole. A
   -- store whose subscriptions are all paused or ended (no renewal due) therefore has no hole (0009zc)
   return query
@@ -367,9 +370,9 @@ begin
 
   -- billing_link and after_chargeback: chargebacks and refunds linked to a subscription by its id, else through a
   -- renewal's store order (the renewal's order_source_id: renewal order), else through a purchase's store order (its
-  -- raw orderId, kept since 0009zc) or a store order of kind first whose customer holds a subscription of the store
-  -- (first order: the subscription created nearest the order), else through another store order of such a customer
-  -- (other store order), else unlinked, counted per event (a refund's created, completed and failed events each count); after a linked chargeback, the first of a renewal, a failed renewal, a move
+  -- raw orderId, kept since 0009zc: purchase order), else through a store order (not a test, not deleted) whose
+  -- customer holds a subscription of the store, the one created nearest the order: of kind first (first order, as
+  -- definitions' Order kind means it) or another kind (other store order), else unlinked, counted per event (a refund's created, completed and failed events each count); after a linked chargeback, the first of a renewal, a failed renewal, a move
   -- to failed, to canceled or to expired within 30 days, else nothing (or under 30 days while the 30 days have not passed)
   return query
   with ro as materialized (
@@ -397,6 +400,7 @@ begin
       from cma.commerce_order o
       join cma.subscription s on s.tenant_id = p_tenant and s.connection_id = b.connection_id and s.customer_source_id = o.customer_source_id
       where o.tenant_id = p_tenant and o.connection_id = st.store_connection_id and o.source_id = b.order_source_id
+        and o.is_test is not true and o.source_deleted_at is null
         and b.subscription_source_id is null and ro.subscription_source_id is null and po.subscription_source_id is null
       order by abs(extract(epoch from coalesce(s.source_created_at, o.source_created_at) - o.source_created_at)), s.source_id collate "C"
       limit 1) co on true
@@ -404,7 +408,8 @@ begin
   ), b as (
     select b0.connection_id, b0.family, b0.kind, b0.occurred_at,
            case when b0.own is not null then 'subscription' when b0.by_renewal is not null then 'order'
-                when b0.by_purchase is not null or (b0.by_store_order is not null and b0.order_kind = 'first') then 'first order'
+                when b0.by_purchase is not null then 'purchase order'
+                when b0.by_store_order is not null and b0.order_kind = 'first' then 'first order'
                 when b0.by_store_order is not null then 'other store order'
                 else 'unlinked' end as link,
            coalesce(b0.own, b0.by_renewal, b0.by_purchase, b0.by_store_order) as subscription_source_id
@@ -428,14 +433,16 @@ begin
   select k.check_key, k.store, k.value, k.expected, k.verdict
   from (
     select 'billing_link'::text as check_key, 1 as ord, st.store,
-           format('chargebacks: subscription %s, renewal order %s, first order %s, other store order %s, unlinked %s; refund events: subscription %s, renewal order %s, first order %s, other store order %s, unlinked %s',
+           format('chargebacks: subscription %s, renewal order %s, purchase order %s, first order %s, other store order %s, unlinked %s; refund events: subscription %s, renewal order %s, purchase order %s, first order %s, other store order %s, unlinked %s',
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'subscription'),
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'order'),
+                  count(*) filter (where b.family = 'chargebacks' and b.link = 'purchase order'),
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'first order'),
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'other store order'),
                   count(*) filter (where b.family = 'chargebacks' and b.link = 'unlinked'),
                   count(*) filter (where b.family = 'refunds' and b.link = 'subscription'),
                   count(*) filter (where b.family = 'refunds' and b.link = 'order'),
+                  count(*) filter (where b.family = 'refunds' and b.link = 'purchase order'),
                   count(*) filter (where b.family = 'refunds' and b.link = 'first order'),
                   count(*) filter (where b.family = 'refunds' and b.link = 'other store order'),
                   count(*) filter (where b.family = 'refunds' and b.link = 'unlinked')) as value,
@@ -611,7 +618,7 @@ comment on function cma.subscription_audit_of(uuid) is 'The subscription audit (
 -- 3. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zc', 'The subscriptions full read''s guard and the audit''s findings (brief B39 continued, Part B39a2): cma.ingest_sync_run_finish takes missing_confirmed and missing_reappeared (the ingest reads the subscriptions a full read''s list left out again by id before it marks any missing, and sorts the list on createdAt and id); cma.subscription_audit_of made again: events_by_month holds a month only while a subscription that renews was held (none paused since before it), billing_link links chargebacks and refunds on first orders (a purchase''s raw orderId, or a store order of kind first) and reports other store orders apart, after_chargeback follows them, status_chain names a pause without an event')
+values ('0009zc', 'The subscriptions full read''s guard and the audit''s findings (brief B39 continued, Part B39a2): cma.ingest_sync_run_finish takes missing_confirmed and missing_reappeared (the ingest reads the subscriptions a full read''s list left out again by id before it marks any missing, and sorts the list on createdAt and id); cma.subscription_audit_of made again: events_by_month holds a month only while a subscription that renews was held (none paused since before it), billing_link links chargebacks and refunds on a purchase''s store order (raw orderId), on a store order of kind first and on other store orders of a customer with a subscription, each apart, after_chargeback follows them, status_chain names a pause without an event')
 on conflict (version) do nothing;
 
 commit;

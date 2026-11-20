@@ -8,7 +8,7 @@
  *                   ID_BATCH ids a query). The payment method is expanded only for its instrument's type: map.mjs reads
  *                   nothing else of it. The sort names a unique last key (id, since addition 0009zc): Juo's default
  *                   sort is createdAt alone and its endCursor then holds createdAt alone, so a page boundary inside a tie
- *                   (migrated subscriptions share one createdAt) skipped the rest of the tie (Decision log, 21 Nov 2026)
+ *                   (migrated subscriptions share one createdAt) skipped the rest of the tie (Decision log, 20 Nov 2026)
  *   events          GET /events?limit=100&sort=occurredAt:asc,id:asc&query=<family> AND occurredAt:>'<ISO>'
  *                   [AND occurredAt:<'<ISO>'][&after=<endCursor>]: one family's events in a window, oldest first (a
  *                   timestamp carries its offset, Z). Two families, each its own query and backfill cursor (addition

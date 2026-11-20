@@ -45,7 +45,9 @@
  * id the store's customers do not hold), reason_dropped (a reason left out), return_code_dropped (a chargeback's reason
  * out of the code form), instrument_unknown (an instrument type the mapping does not know, stored as other),
  * catalog_text_dropped (a title or SKU with an @ or a control character), missing_now and slice_max_ms (a full read's
- * final step), missing_confirmed and missing_reappeared (the guard before it, since 0009zc). The log line adds the details (events read, kept, skipped, by Juo's type when it is a type name, else
+ * final step), missing_confirmed and missing_reappeared (the guard before it, since 0009zc; missing_reappeared also
+counts a subscription the poll stored while the list was read, after the list had passed its place: read again by id,
+never missing). The log line adds the details (events read, kept, skipped, by Juo's type when it is a type name, else
  * "unknown"; subscriptions and lines read; the instrument types known and the names of those not known) and the
  * requests per endpoint. It names fields, types and codes, never a value, a key or an id of a customer.
  */

@@ -12,11 +12,13 @@
 -- address, an email or a phone number.
 --   A  the addition row after 0009zb; the audit still the owner's only, in the caller's rights, stable, jit off; the run
 --      finish the application's
---   B  on a throwaway tenant with three stores: a run finishes with missing_confirmed and missing_reappeared (stored) and
+--   B  on a throwaway tenant with two stores: a run finishes with missing_confirmed and missing_reappeared (stored) and
 --      refuses an unknown count (CMA04); a store whose subscriptions are all paused or ended has no hole in its months,
---      and the same store with one subscription that renews has one (fail); billing_link links a chargeback through a
---      purchase's store order (raw orderId) and through a store order of kind first, reports another store order of a
---      customer with a subscription apart and leaves one with no such order unlinked; after_chargeback follows those links;
+--      and the same store with one subscription that renews has one (fail), the pause read from the latest event into
+--      paused where paused_at is not stated; billing_link links a chargeback through a purchase's store order (raw
+--      orderId: purchase order), through a store order of kind first (first order) and through another store order of a
+--      customer with a subscription (other store order), never through a test order, leaves one with no such order
+--      unlinked, and lets the subscription's own id win over a purchase's order; after_chargeback follows those links;
 --      status_chain's expected text names the pause without an event
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
@@ -127,13 +129,14 @@ begin
     v_rows := v_rows || array['11', 'B1 a run finishes with missing_confirmed and missing_reappeared, stored; an unknown count refused (CMA04), its run left running',
       case when v_txt = 'ok CMA04 | succeeded 1 6 | running' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
-    -- B2. store P: one subscription paused since month 1, one canceled in month 1; events in months 0 and 1 only. No
+    -- B2. store P: one subscription paused since month 1 (paused_at not stated: its paused event says when), one canceled
+    --     in month 1; events in months 0 and 1 only. No
     --     subscription renews from month 2 on, so its months without an event are no hole (ok); with one active
     --     subscription created in month 0 they are (fail)
     insert into cma.subscription (tenant_id, connection_id, source_system, source_id, customer_source_id, status, billing_interval,
                                   billing_interval_count, currency, source_created_at, paused_at, canceled_at)
     values (v_t, v_sub_p, 'verifysubs', 'p1', 'c1', 'paused', 'month', 1, 'EUR', (v_m0 + interval '1 day') at time zone 'Europe/London',
-            (v_m0 + interval '1 month 2 days') at time zone 'Europe/London', null),
+            null, null),
            (v_t, v_sub_p, 'verifysubs', 'p2', 'c2', 'canceled', 'month', 1, 'EUR', (v_m0 + interval '2 days') at time zone 'Europe/London',
             null, (v_m0 + interval '1 month 3 days') at time zone 'Europe/London');
     insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at,
@@ -149,13 +152,14 @@ begin
     values (v_t, v_sub_p, 'verifysubs', 'p3', 'c3', 'active', 'month', 1, 'EUR', (v_m0 + interval '3 days') at time zone 'Europe/London');
     v_txt := v_txt || ' | ' || split_part(pg_temp.v0009zc_row(v_t, 'IE', 'events_by_month'), ' | ', 2)
              || ' ' || (split_part(pg_temp.v0009zc_row(v_t, 'IE', 'events_by_month'), '; ', 2) like 'no event: ' || to_char(v_m0 + interval '2 months', 'YYYY-MM') || '%')::text;
-    v_rows := v_rows || array['12', 'B2 a store whose subscriptions are all paused or ended has no hole in its months (ok); one active subscription makes them holes (fail)',
+    v_rows := v_rows || array['12', 'B2 a store whose subscriptions are all paused (the pause from its event where paused_at is not stated) or ended has no hole in its months (ok); one active subscription makes them holes (fail)',
       case when v_txt = 'no event: none ok | fail true' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
     -- B3. store F: s1 purchased with its store order 500001 in raw (a chargeback on it: first order, through the purchase);
     --     s2's customer's store order 500002 of kind first (first order, through the store order); s3's customer's store
-    --     order 500003 of kind repeat (other store order); 500009 no order of the store (unlinked). s1 renews within 30
-    --     days of its chargeback
+    --     order 500003 of kind repeat (other store order); 500004 a test order (never links: unlinked); 500009 no order of
+    --     the store (unlinked); a chargeback naming f2 on 500001 (subscription: its own id wins). s1 renews within 30 days
+    --     of its chargeback
     insert into cma.subscription (tenant_id, connection_id, source_system, source_id, customer_source_id, status, billing_interval,
                                   billing_interval_count, currency, source_created_at)
     values (v_t, v_sub_f, 'verifysubs', 'f1', 'd1', 'active', 'month', 1, 'EUR', (v_m0 + interval '1 day') at time zone 'Europe/London'),
@@ -166,23 +170,29 @@ begin
     values (v_t, v_sub_f, 'verifysubs', 'fe1', 'f1', 'purchased', (v_m0 + interval '1 day') at time zone 'Europe/London', null, null,
             '{"id": "fe1", "type": "subscription:purchased", "orderId": "500001"}'::jsonb),
            (v_t, v_sub_f, 'verifysubs', 'fe2', 'f1', 'renewed', (v_m0 + interval '1 month 1 day') at time zone 'Europe/London', 2, '500011', '{}'::jsonb);
-    insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, customer_source_id, source_created_at, order_kind)
-    values (v_t, v_shop_f, 'verifyshop', '500002', 'd2', (v_m0 + interval '2 days') at time zone 'Europe/London', 'first'),
-           (v_t, v_shop_f, 'verifyshop', '500003', 'd3', (v_m0 + interval '20 days') at time zone 'Europe/London', 'repeat');
+    insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, customer_source_id, source_created_at, order_kind, is_test)
+    values (v_t, v_shop_f, 'verifyshop', '500002', 'd2', (v_m0 + interval '2 days') at time zone 'Europe/London', 'first', false),
+           (v_t, v_shop_f, 'verifyshop', '500003', 'd3', (v_m0 + interval '20 days') at time zone 'Europe/London', 'repeat', false),
+           (v_t, v_shop_f, 'verifyshop', '500004', 'd3', (v_m0 + interval '21 days') at time zone 'Europe/London', 'first', true);
     insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, order_source_id, amount, currency)
     values (v_t, v_sub_f, 'verifysubs', 'fb1', 'chargeback', (v_m0 + interval '10 days') at time zone 'Europe/London', '500001', 30.00, 'EUR'),
            (v_t, v_sub_f, 'verifysubs', 'fb2', 'chargeback', (v_m0 + interval '10 days') at time zone 'Europe/London', '500002', 30.00, 'EUR'),
            (v_t, v_sub_f, 'verifysubs', 'fb3', 'chargeback', (v_m0 + interval '25 days') at time zone 'Europe/London', '500003', 30.00, 'EUR'),
-           (v_t, v_sub_f, 'verifysubs', 'fb4', 'chargeback', (v_m0 + interval '25 days') at time zone 'Europe/London', '500009', 30.00, 'EUR');
+           (v_t, v_sub_f, 'verifysubs', 'fb4', 'chargeback', (v_m0 + interval '25 days') at time zone 'Europe/London', '500009', 30.00, 'EUR'),
+           (v_t, v_sub_f, 'verifysubs', 'fb5', 'chargeback', (v_m0 + interval '25 days') at time zone 'Europe/London', '500004', 30.00, 'EUR');
+    -- the subscription's own id wins over a purchase's order: f2's chargeback on f1's purchase order counts as subscription
+    insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, subscription_source_id, order_source_id, amount, currency)
+    values (v_t, v_sub_f, 'verifysubs', 'fb6', 'chargeback', (v_m0 + interval '26 days') at time zone 'Europe/London', 'f2', '500001', 30.00, 'EUR');
     v_txt := pg_temp.v0009zc_row(v_t, 'DE', 'billing_link');
-    v_rows := v_rows || array['13', 'B3 billing_link: a chargeback on a purchase''s store order and one on a store order of kind first are first order; another store order of a customer with a subscription apart; one without such an order unlinked (explain)',
-      case when v_txt = 'chargebacks: subscription 0, renewal order 0, first order 2, other store order 1, unlinked 1; refund events: subscription 0, renewal order 0, first order 0, other store order 0, unlinked 0 | explain'
+    v_rows := v_rows || array['13', 'B3 billing_link: a purchase''s store order (purchase order), a store order of kind first (first order), another store order of a customer with a subscription (other store order); a test order and an unknown one unlinked (explain); the own id wins',
+      case when v_txt = 'chargebacks: subscription 1, renewal order 0, purchase order 1, first order 1, other store order 1, unlinked 2; refund events: subscription 0, renewal order 0, purchase order 0, first order 0, other store order 0, unlinked 0 | explain'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
-    -- B4. after_chargeback follows those links: f1 renewed within 30 days; f2 and f3 nothing (the unlinked one not counted)
+    -- B4. after_chargeback follows those links: f1 renewed within 30 days; f2 (two chargebacks) and f3 nothing (the
+    --     unlinked ones not counted)
     v_txt := pg_temp.v0009zc_row(v_t, 'DE', 'after_chargeback');
-    v_rows := v_rows || array['14', 'B4 after_chargeback follows the first-order and store-order links: renewed 1, nothing 2',
-      case when v_txt = 'renewed 1, failed renewal 0, moved to failed 0, canceled 0, expired 0, nothing 2, under 30 days 0 | ok' and not v_provoke
+    v_rows := v_rows || array['14', 'B4 after_chargeback follows the purchase-order, first-order and store-order links: renewed 1, nothing 3',
+      case when v_txt = 'renewed 1, failed renewal 0, moved to failed 0, canceled 0, expired 0, nothing 3, under 30 days 0 | ok' and not v_provoke
            then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
     -- B5. status_chain's expected text names what a pair is and the pause without an event
