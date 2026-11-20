@@ -270,12 +270,13 @@ async function fullRead({ connection, store, budget, counts, runId = null }) {
   }
   // the guard: a subscription the list left out is marked missing only when Juo does not return it by id either
   const unread = [...(await store.presentSubscriptionIds())].filter((id) => !ids.has(id)).sort();
-  const listed = ids.size;
   for await (const page of api.subscriptionsById(unread)) {
     for (const id of await ingestSubscriptions({ store, page, counts, detail, runId })) ids.add(id);
   }
-  counts.missing_reappeared += ids.size - listed;
-  counts.missing_confirmed += unread.length - (ids.size - listed);
+  // counted from the ids asked for, whatever else an answer held
+  const reappeared = unread.filter((id) => ids.has(id)).length;
+  counts.missing_reappeared += reappeared;
+  counts.missing_confirmed += unread.length - reappeared;
   const slices = slicesOf([...ids], SLICE_SIZE);
   counts.slice_max_ms = 0;
   for (const slice of slices) {
