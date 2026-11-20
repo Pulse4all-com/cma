@@ -1,0 +1,52 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+                   set_config                   
+------------------------------------------------
+ [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+(1 row)
+
+psql:db/203_verify_subscription_lines.sql:49: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                     check_name                                                                     | result  |                                 detail                                  
+----------------------------------------------------------------------------------------------------------------------------------------------------+---------+-------------------------------------------------------------------------
+ A1 addition 0009za recorded, after 0009z                                                                                                           | PASS    | 
+ A2 the four tables tenant-aware (RLS, policy, audit, tenant key); no delete by the application, no update of a billing event or an observed change | PASS    | 
+ A3 the unique keys of the four tables                                                                                                              | PASS    | 
+ A4 the new columns of subscription and subscription_event; seven instrument types; twenty-one event types, no renewal notice                       | PASS    | 
+ A5 every function the application's only and invoker (the two-argument upsert of subscriptions kept)                                               | PASS    | 
+ A6 the reader views (no raw), readable by readers; the new columns at the end of subscription and subscription_event                               | PASS    | 
+ A7 the setting subscriptions.history_start_date: text, empty by default                                                                            | PASS    | subscriptions.history_start_date:text:empty
+ A8 catalog text and instrument types by form                                                                                                       | PASS    | t t f f f f f null t f
+ A9 every renewal with its store order in raw has it as order_source_id (the older ones filled once)                                                | PASS    | 0 of 58878 renewals without it
+ B a dev or local database (the dev seed's agent.two@example.com active)                                                                            | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing ran
+ Z1 a dev or local database (the dev seed's agent.two@example.com active)                                                                           | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing read
+ verdict                                                                                                                                            | REFUSED | 203_verify_subscription_lines: 9 PASS, 2 FAIL
+(12 rows)
+
+RESET
