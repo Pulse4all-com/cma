@@ -21,3 +21,48 @@ no key, no secret, no personal data, no subscription or customer id. A store is 
 | 5 | `status_chain` | DE 4 and NL 1 `active>paused` | `explain`. A pair reads the latest status event's status, then the subscription's: `active>paused` is a subscription the app now holds paused whose latest status event moved it to active, i.e. a pause that began on its date without a paused event (a pause that ended on its date without a resumed event would read `paused>active`). 0009zc's expected text says so |
 
 The other checks' values per store are in `audit.txt` once Martin adds it.
+
+## The migration and its verifies (18.4)
+
+Run by Martin on cma-prod-pg with `run_migration` from the Terminal; the output files in this folder are his run (commit
+`ef38bc68`). This section and the two after it were added by Claude Code on 20 November 2026 at Martin's request, from his
+report and those files; the values are his.
+
+| Step | File | Result |
+|---|---|---|
+| `204_subscription_audit.sql` | `204.txt` | `INSERT 0 1`: addition 0009zb recorded; `COMMIT` |
+| `205_verify_subscription_audit.sql` | `205.txt` | `REFUSED`: 5 PASS, 1 FAIL. A1 to A5 PASS; block B FAIL because prod has no dev seed, as expected |
+| `205_verify_subscription_audit.sql`, provoked | `205-provoked.txt` | `REFUSED`: 0 PASS, 6 FAIL |
+| `203_verify_subscription_lines.sql` again | `203-rerun.txt` | `REFUSED`: 9 PASS, 2 FAIL (B and Z1, no dev seed), as on 20 November (`records/0009za-prod-2026-11-20`) |
+| `119_verify_subscriptions.sql` again | `119-rerun.txt` | `REFUSED`: 7 PASS, 2 FAIL (B and Z1, no dev seed), as on 20 November |
+
+## The audit's output (18.5)
+
+The audit's raw output holds commercial volumes (subscriptions per status, chargebacks per market) and the repository is
+public, so it is not committed: Martin keeps it outside the repository, in `~/cma-audit` (Decision log, 20 Nov 2026). This
+supersedes the first paragraph's and the last line's "once Martin adds it" above: `audit.txt` is not added to this folder.
+This record gives each check's verdict and its cause ("finding" where Martin's report gives a finding without the verdict word); a comparison with Juo's own count is given as equal or "n apart".
+
+## The first audit's verdicts, every check
+
+| Check | Verdict | Cause |
+|---|---|---|
+| `status_mix` | finding | GB 194 and NL 12 active subscriptions below Juo's own active count. The full read paged on `createdAt` alone and skipped the rows of a tie (finding 1 above); fixed by 0009zc |
+| `no_lines` | ok | |
+| `lines_histogram` | not in Martin's report | |
+| `line_currency` | ok | |
+| `amount_vs_lines` | ok | |
+| `variant_missing` | ok | |
+| `events_by_month` | fail for IE, DK explained | IE: all its subscriptions paused or ended, so no renewal is due (finding 2a); DK's July: no subscription held then (finding 2b) |
+| `orphan_events` | finding | GB: events of 121 subscriptions the CMA did not hold. Three sampled GB subscriptions "missing" in the CMA were returned active by Juo by id: the same skipped ties (finding 1); fixed by 0009zc |
+| `status_chain` | explain | finding 5 above |
+| `billing_kinds` | finding | Invoice events in GB, DE and NL only |
+| `billing_link` | finding | finding 3 above |
+| `after_chargeback` | finding | Juo moves most charged-back subscriptions to failed: NL 201 of 304 linked chargebacks, DE 69 of 112, also AT, BE, and FR (11 of 12). Some stay active with nothing after: NL 46, DE 14, GB 9 |
+| `migration_cycles` | finding | No migrated subscription has a store order: the CMA holds store orders from 1 October 2026 only, after the migration to Juo |
+| `instruments` | finding | GB's `other` is BACS (`bacs_direct_debit` since 0009zb, applied at the next full read); NL's `other` is finding 4 above |
+| `privacy` | ok | All six tables, and the three switched-off connections |
+| `changes` | ok | |
+
+The fixes are proved in prod by the full read and the second audit after 0009zc's deploy:
+`records/0009zc-prod-2026-11-20`.
