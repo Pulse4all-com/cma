@@ -675,11 +675,12 @@ as $$
       select e.raw ->> 'orderId' as purchase_order from cma.subscription_event e
       where e.tenant_id = p_tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
         and e.event_type = 'purchased' and (e.raw ->> 'orderId') ~ '^\d{1,30}$'
-      order by e.occurred_at, e.source_id collate "C" limit 1) p
-      on r.source_id is null
-     and not exists (select 1 from cma.subscription_event z
-                     where z.tenant_id = p_tenant_id and z.connection_id = s.connection_id and z.subscription_source_id = s.source_id
-                       and z.event_type = 'renewed')
+        -- only for a subscription without any renewal (conditions on the outer row: a one-time filter, no scan otherwise)
+        and r.source_id is null
+        and not exists (select 1 from cma.subscription_event z
+                        where z.tenant_id = p_tenant_id and z.connection_id = s.connection_id and z.subscription_source_id = s.source_id
+                          and z.event_type = 'renewed')
+      order by e.occurred_at, e.source_id collate "C" limit 1) p on true
     where s.status in ('active', 'failed')
   ),
   last_order as (
@@ -821,11 +822,12 @@ as $$
       select e.raw ->> 'orderId' as purchase_order from cma.subscription_event e
       where e.tenant_id = p_tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
         and e.event_type = 'purchased' and (e.raw ->> 'orderId') ~ '^\d{1,30}$'
-      order by e.occurred_at, e.source_id collate "C" limit 1) p
-      on r.source_id is null
-     and not exists (select 1 from cma.subscription_event z
-                     where z.tenant_id = p_tenant_id and z.connection_id = s.connection_id and z.subscription_source_id = s.source_id
-                       and z.event_type = 'renewed')
+        -- only for a subscription without any renewal (conditions on the outer row: a one-time filter, no scan otherwise)
+        and r.source_id is null
+        and not exists (select 1 from cma.subscription_event z
+                        where z.tenant_id = p_tenant_id and z.connection_id = s.connection_id and z.subscription_source_id = s.source_id
+                          and z.event_type = 'renewed')
+      order by e.occurred_at, e.source_id collate "C" limit 1) p on true
     where s.status in ('active', 'failed')
   ),
   last_order as (
@@ -1891,10 +1893,14 @@ begin
                               'duration_ms', (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer);
   end if;
 
-  -- 1. device units on the mirror (C.1), only where they read differently
+  -- 1. device units (C.1): computed once, written to the mirror where they read differently (step 3 reads them from here)
+  create temporary table if not exists subscription_facts_units (subscription_id uuid primary key, device_units integer, propositions text[],
+                                                                  models text[]) on commit drop;
+  delete from subscription_facts_units;
+  insert into subscription_facts_units select * from cma.subscription_device_units_of(p_tenant_id);
   update cma.subscription x
   set device_units = u.device_units
-  from cma.subscription_device_units_of(p_tenant_id) u
+  from subscription_facts_units u
   where x.tenant_id = p_tenant_id and x.id = u.subscription_id and x.device_units is distinct from u.device_units;
   get diagnostics n_units = row_count;
 
@@ -1916,7 +1922,7 @@ begin
   ), ps as materialized (
     select * from cma.subscription_payment_state_of(p_tenant_id)
   ), du as materialized (
-    select * from cma.subscription_device_units_of(p_tenant_id)
+    select * from subscription_facts_units
   ), mig as materialized (
     select distinct e.connection_id, e.subscription_source_id
     from cma.subscription_event e
@@ -1984,6 +1990,13 @@ begin
   ), x as materialized (
     select s.id, s.connection_id, s.source_id, s.amount_per_cycle, s.currency, s.billing_interval, s.billing_interval_count
     from cma.subscription s where s.tenant_id = p_tenant_id and s.source_deleted_at is null
+  ), lc as materialized (
+    -- each subscription's latest observed change of its amount, interval or currency: before it the amount is taken back
+    -- through the changes (cma.subscription_amount_at), after it (or without one) it is the stored one
+    select c.connection_id, c.subscription_source_id, max(c.observed_at) as last_at
+    from cma.subscription_change c
+    where c.tenant_id = p_tenant_id and c.field in ('amount_per_cycle', 'billing_interval', 'billing_interval_count', 'currency')
+    group by 1, 2
   ), af as materialized (
     -- amounts are known from each connection's first load on (rule 12): the later of the observed changes' start (0009za)
     -- and the first time the CMA held a subscription of the connection
@@ -2055,11 +2068,16 @@ begin
     union all
     select m.connection_id, m.month, m.kind, m.subscription_id, m.boundary from moved m
   ), valued as (
-    select c.connection_id, c.month, c.kind, c.subscription_id, am.currency, am.monthly_amount
+    select c.connection_id, c.month, c.kind, c.subscription_id,
+           case when l.last_at > c.boundary then am.currency else x.currency end as currency,
+           case when l.last_at > c.boundary then am.monthly_amount
+                else x.amount_per_cycle * cma.active_month_factor_of(x.billing_interval, x.billing_interval_count) end as monthly_amount
     from counted c
     join x on x.id = c.subscription_id
-    cross join lateral cma.subscription_amount_at(p_tenant_id, c.connection_id, x.source_id, c.boundary,
-                                                  x.amount_per_cycle, x.currency, x.billing_interval, x.billing_interval_count) am
+    left join lc l on l.connection_id = x.connection_id and l.subscription_source_id = x.source_id
+    left join lateral (select y.* from cma.subscription_amount_at(p_tenant_id, c.connection_id, x.source_id, c.boundary,
+                                                                  x.amount_per_cycle, x.currency, x.billing_interval, x.billing_interval_count) y
+                       where l.last_at > c.boundary) am on true
     join af on af.connection_id = c.connection_id
     where v_amounts is not null and c.boundary >= af.amounts_from
     union all
