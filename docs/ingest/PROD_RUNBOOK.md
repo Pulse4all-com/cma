@@ -3245,13 +3245,58 @@ Expected: the audit's row with verdict `INFO`, no budget.
 
 One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`).
 
+## 20.0 Studio (cma-prod-pg): the stores' migration months and when their rates start
+Before anything else, and before 210 runs (it reads `cma.subscription_event` only). One Run in one tab of Cloud SQL Studio on
+`cma-prod-pg`, as your own IAM login. Counts and months only: keep the output outside the repository (as the audit's,
+~/cma-audit) and paste the table into the PR's conversation; the PR's description is then updated with it.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+with t as (
+  select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'
+), st as (
+  select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s
+), fe as (
+  select e.connection_id, date_trunc('month', min(e.occurred_at) at time zone (select timezone from t))::date as first_month
+  from cma.subscription_event e where e.tenant_id = (select id from t) group by 1
+), mm as (
+  select e.connection_id, date_trunc('month', e.occurred_at at time zone (select timezone from t))::date as month, count(*) as n
+  from cma.subscription_event e where e.tenant_id = (select id from t) and e.event_type = 'migrated' group by 1, 2
+), mt as (
+  select m.connection_id, m.month, m.n, round(100.0 * m.n / sum(m.n) over (partition by m.connection_id), 1) as share_pct
+  from mm m
+), lb as (
+  select connection_id,
+         coalesce(max(month) filter (where share_pct >= 5), (array_agg(month order by n desc, month desc))[1]) as last_month
+  from mt group by 1
+)
+select coalesce(st.market, 'unknown') as store, to_char(fe.first_month, 'YYYY-MM') as first_event_month,
+       coalesce(to_char(mt.month, 'YYYY-MM'), '-') as migrated_month, mt.n as migrated_events, mt.share_pct,
+       case when mt.month is null then '-' when mt.share_pct >= 5 then 'migration' when mt.month > lb.last_month then 'straggler' else 'before the bulk' end as kind,
+       to_char((coalesce(lb.last_month, fe.first_month) + interval '1 month')::date, 'YYYY-MM') as rate_start_month
+from fe
+left join st on st.connection_id = fe.connection_id
+left join mt on mt.connection_id = fe.connection_id
+left join lb on lb.connection_id = fe.connection_id
+order by coalesce(st.market, 'unknown') collate "C", fe.connection_id, mt.month nulls first;
+reset role;
+```
+
+Expected: one row per store and month with migrated events (and one row with `-` for a store without any), its count,
+its share of the store's migrated total, and per store the same `rate_start_month` (the rule of 210 with the default 5 %):
+GB `2025-06` (April's 2 events `before the bulk`, May the migration, August's 1 a `straggler`); BE `2025-07` (September's 1 a
+`straggler`); DE, FR and SE `2025-07`; NL `2025-07`, or `2025-06` if June's share is under 5 % (then June reads
+`straggler`); AT `2026-06`; DK and IE `2026-07`. A store whose start month differs from this list, or a straggler with a
+large share, is a point for the conversation before 20.3.
+
 ## 20.1 Terminal: the branch, the migrations and their verifies in dev
 **Terminal**
 ```bash
 gh pr checkout <PR> && git log --oneline -1
 run_migration dev 210_subscription_facts.sql 211_verify_subscription_facts.sql 0009ze-dev-$(date +%F) 119_verify_subscriptions.sql 149_verify_installed_base_list.sql 161_verify_installed_base_now.sql 173_verify_active_customers.sql 175_verify_active_refresh_quiet.sql 177_verify_active_attribution_present.sql 185_verify_active_device_bands.sql 123_verify_flash.sql 137_verify_flash_insights.sql 139_verify_flash_totals.sql 143_verify_reviews_all_order_kinds.sql 147_verify_installed_base_models.sql 159_verify_flash_current_take.sql 181_verify_flash_stored_cards.sql 189_verify_fleet_management.sql 193_verify_fleet_page.sql 179_verify_job_reads.sql
 ```
-Expected: 210 ends with `COMMIT` and `RESET`; 211's last row `PASS | 211_verify_subscription_facts: 22 PASS, 0 FAIL` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 22 FAIL`; every other verify as before (`123`, `137`, `139`, `147`, `173` and `185` are edited by this change); `records clean`. The data-quality, settings and perf verifies 210's header names (`41`, `69`, `73`, `75`, `101`, `105`, `113`, `117`, `121`, `133`, `14`, `27`) are rerun the same way, in as many commands as you like.
+Expected: 210 ends with `COMMIT` and `RESET`; 211's last row `PASS | 211_verify_subscription_facts: 23 PASS, 0 FAIL` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 23 FAIL`; every other verify as before (`123`, `137`, `139`, `147`, `173` and `185` are edited by this change); `records clean`. The data-quality, settings and perf verifies 210's header names (`41`, `69`, `73`, `75`, `101`, `105`, `113`, `117`, `121`, `133`, `14`, `27`) are rerun the same way, in as many commands as you like.
 
 ## 20.2 Terminal: the data map on the branch
 Refresh `docs/datamap/schema.json` from dev after the migration ran there, then rebuild the page, as 17.3:

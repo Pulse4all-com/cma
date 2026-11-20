@@ -1235,6 +1235,25 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Used by | `cma.check_tenant_setting()`, the Juo adapter's `backfillFrom` (`ingest/src/adapters/juo/index.mjs`) |
 | As built today | The setting is in the catalog (`202`: text, default empty) and checked by `cma.check_tenant_setting()` (made again, based on `184`); the adapter reads it as `reviews.history_start_date` is read for reviews. Matches the definition |
 
+### Migration share
+
+| Field | Value |
+|---|---|
+| Term | Migration share (nl: Migratie-aandeel); a month below it after the migration is a Straggler (nl: Nakomer) |
+| Key | `subscriptions.migration_bulk_min_pct` (tenant setting, whole percent 1 to 100, default 5); `cma.subscription_rate_start_of`, `cma.subscription_store_start` and `cma_read.subscription_store_start` (`migration_months`, `last_migration_month`, `straggler_months`, `stragglers`, `rate_start_month`) |
+| Definition | The share of a store's migrated events (the subscription app's `migrated` events) a calendar month must hold to count toward the store's migration. The store's Churn rate and Failed rate start the month after the last month that holds it; a later month below it is a Straggler, reported and never moving the start; where no month holds it, the busiest month counts as the migration's last; a store without migrated events starts at the first complete month after its first event |
+| Source | The tenant's settings (`cma.tenant_setting`) and the app's `migrated` events (`cma.subscription_event`) |
+| Counts / does not count | Counts the store's migrated events per month in the tenant's zone, each month's share of the store's total; never a date in code |
+| Unit and display | A whole percent; the start month as a month; no page yet (Customers → Subscriptions, Part D) |
+| Time rule | Months in the tenant's zone; computed again by the subscription facts' refresh, whose digest holds the setting |
+| Scope | Per tenant; applied per store (subscriptions connection) |
+| Equivalent in the source system | None |
+| Not to use | "Cut-off" or "go-live date" for the start month (it is derived, never set) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 20 November 2026 (Proposed; Martin, the rule; the share as a tenant setting); docs/decisions.md, 20 Nov 2026, "The Churn rate and the Failed rate of a store start …" and "Definitions: Migration share and Straggler …" (addition 0009ze, PR #303) |
+| Used by | `cma.check_tenant_setting()`, `cma.subscription_rate_start_of`, `cma.subscription_facts_inputs_key_of`, `cma.subscription_store_start`, `cma_read.subscription_store_start`, `cma.subscription_month_take` (`complete`), `cma_read.subscription_churn_month`; Churn rate, Failed rate |
+| As built today | `210` (addition 0009ze): the setting in the catalog (integer, default 5) and checked by `cma.check_tenant_setting()`; `211` B1 and B8b prove the refusal, a bulk month, a late straggler, a store without migration, a tenant share of 3 % and a share no month holds. Matches the definition |
+
 ### Placeholder store
 
 | Field | Value |
