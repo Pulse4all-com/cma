@@ -5143,6 +5143,20 @@ export const mockData: CmaData = {
     else x.inboxes.push({ inboxId: input.inboxId, name: input.inboxId, isCounted: input.isCounted, market: input.market, isActive: true });
   },
 
+  // the variant mapping (addition 0009ze): the mock holds no subscriptions connection, so every id is not found (CMA02),
+  // as the database answers for a connection of another kind
+  async getSubscriptionVariants(me, connectionId) {
+    const x = sourceOf(me, connectionId);
+    if (x.connection.kind !== "subscriptions") throw new CmaDbError("CMA02", "no subscriptions connection in the current tenant");
+    return { variants: [], models: [], propositions: [] };
+  },
+
+  async setSubscriptionVariant(me, input) {
+    const x = sourceOf(me, input.connectionId);
+    if (x.connection.kind !== "subscriptions") throw new CmaDbError("CMA02", "no subscriptions connection in the current tenant");
+    throw new CmaDbError("CMA02", "the connection holds no such variant");
+  },
+
   async setSourceMailbox(me, id, input) {
     const x = sourceOf(me, id);
     if (x.connection.kind === "telephony" || x.connection.kind === "commerce") throw new CmaDbError("CMA04", "email activity belongs to the CRM");

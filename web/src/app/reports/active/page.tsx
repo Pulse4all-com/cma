@@ -956,7 +956,7 @@ function Mix({ ctx, rest }: { ctx: Ctx; rest: ActiveReport }) {
             const label = word("pay", b.key);
             return {
               key: b.key, value: b.subscriptions, text: n(b.subscriptions), title: `${label}: ${n(b.subscriptions)}`,
-              label: b.key === "in_retry" || b.key === "failed"
+              label: b.key === "in_retry" || b.key === "charged_back" || b.key === "awaiting_payment" || b.key === "failed"
                 ? <Link href={flashHref("/reports/flash", { o: "subscriptions", f_payment_state: b.key }) as Route} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.openFlashPayment.replace("{state}", label)}>{label}</Link>
                 : label,
             };

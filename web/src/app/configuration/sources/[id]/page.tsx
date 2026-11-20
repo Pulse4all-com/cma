@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SourceConfig } from "@/components/configuration/SourceConfig";
 import { SourceKindRules } from "@/components/configuration/SourceKindRules";
 import { SourceReasons } from "@/components/configuration/SourceReasons";
+import { SourceVariants } from "@/components/configuration/SourceVariants";
 import { Card } from "@/components/primitives";
 import { data } from "@/lib/data";
 import { CmaDbError } from "@/lib/data/errors";
@@ -71,6 +72,8 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   // the reasons and the record kind rules (addition 0008zb), for a connection with customer records
   const crm = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("fields");
   const kinds = crm ? await data().getRecordKinds(me) : [];
+  // the variant mapping (addition 0009ze), on a subscriptions connection
+  const variants = detail.connection.kind === "subscriptions" ? await data().getSubscriptionVariants(me, detail.connection.id) : null;
   return (
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare trail={[{ label: detail.connection.name }]}>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
@@ -79,6 +82,7 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
         conversationMinSeconds={conversation === undefined ? null : Number(conversation)} email={email} reviews={reviews} />
       {crm ? <SourceReasons key={`reasons:${JSON.stringify(detail.fields)}`} detail={detail} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} /> : null}
       {crm ? <SourceKindRules detail={detail} kinds={kinds} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} /> : null}
+      {variants ? <SourceVariants connectionId={detail.connection.id} variants={variants} copy={{ ...pickCopy(copy, "configSources", "configuration"), hints: pickHints(copy, "about") }} /> : null}
     </ConfigurationPage>
   );
 }

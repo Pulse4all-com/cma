@@ -416,6 +416,9 @@ export function mockActive(me: Principal, fromMonth: string | null, filter: Acti
       paymentState: [
         { key: "paid", subscriptions: holdingSubs.filter((s) => s.status === "active" && !inRetry.has(s.id)).length },
         { key: "in_retry", subscriptions: inRetry.size },
+        // since addition 0009ze the mix holds every payment state of cma.payment_states(): the mock has none charged back or awaiting payment
+        { key: "charged_back", subscriptions: 0 },
+        { key: "awaiting_payment", subscriptions: 0 },
         { key: "failed", subscriptions: holdingSubs.filter((s) => s.status === "failed").length },
         { key: "paused", subscriptions: Math.round(all.length * 0.02) },
       ],

@@ -1,10 +1,10 @@
 import "server-only";
-import { ApiError } from "@/lib/api/respond";
+import { ApiError, uuidParam } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
   SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
   SourceStore, SourceTagInput, SourceTagMeaningInput, SourceTaskStatusInput, SourceTaskTypeInput, TagMeaning, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput, SourceReviewChannelInput,
-  RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput,
+  RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput, SubscriptionVariantInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem, TAG_MEANINGS } from "@/lib/sources";
 
@@ -333,6 +333,33 @@ export function checkMailboxInput(b: Record<string, unknown>): SourceMailboxInpu
     throw new ApiError(400, "invalid_label", "label must be 1 to 80 characters without an @, or empty");
   }
   return { accountId: ref(b.accountId, "accountId"), label: label === null ? null : (label as string).trim(), isCounted: flag(b, "isCounted"), market: marketOrNull(b.market, "market") };
+}
+
+/**
+ * { connectionId, variantSourceId, lineKind, modelKey, devicesPerUnit, proposition }: one product variant's mapping (addition
+ * 0009ze). A line kind of null removes the mapping; a model only for a device line; devices per unit a whole number from 0
+ * to 20 or null (1 for a device, 0 otherwise); a proposition a code or null. The database checks the model, the
+ * proposition and the variant against the tenant's
+ */
+export function checkSubscriptionVariantInput(b: Record<string, unknown>): SubscriptionVariantInput {
+  const connectionId = uuidParam(typeof b.connectionId === "string" ? b.connectionId : null, "connectionId");
+  const variantSourceId = ref(b.variantSourceId, "variantSourceId");
+  const kinds = ["device", "accessory", "service", "other"] as const;
+  const lineKind = b.lineKind == null ? null : kinds.find((k) => k === b.lineKind) ?? null;
+  if (b.lineKind != null && lineKind === null) throw new ApiError(400, "invalid_line_kind", "lineKind is device, accessory, service, other or null");
+  const code = (v: unknown, name: string): string | null => {
+    if (v == null || v === "") return null;
+    if (typeof v !== "string" || !/^[a-z0-9][a-z0-9_-]{0,39}$/.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} is a code of lower-case letters, digits, _ and -, or null`);
+    return v;
+  };
+  const modelKey = code(b.modelKey, "modelKey");
+  const proposition = code(b.proposition, "proposition");
+  const units = b.devicesPerUnit;
+  if (units != null && (typeof units !== "number" || !Number.isInteger(units) || units < 0 || units > 20)) {
+    throw new ApiError(400, "invalid_devices_per_unit", "devicesPerUnit is a whole number from 0 to 20, or null");
+  }
+  return { connectionId, variantSourceId, lineKind, modelKey: lineKind === null ? null : modelKey, devicesPerUnit: lineKind === null ? null : (units as number | null) ?? null,
+    proposition: lineKind === null ? null : proposition };
 }
 
 /** { channelId, isCounted }: one channel of a CRM connection's conversations (0008m) */
