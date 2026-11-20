@@ -1,0 +1,34 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:db/207_verify_subscription_full_read_guard.sql:38: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                                      check_name                                                                                                                       | result |                                                                                                                   detail                                                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zc recorded, after 0009zb                                                                                                                                                                                                             | PASS   | 
+ A2 the audit the owner's only, security invoker, stable, jit off; the run finish the application's                                                                                                                                                    | PASS   | cma_owner:false:s:jit=off:false:false:false:false | true
+ B1 a run finishes with missing_confirmed and missing_reappeared, stored; an unknown count refused (CMA04), its run left running                                                                                                                       | PASS   | ok CMA04 | succeeded 1 6 | running
+ B2 a store whose subscriptions are all paused (the pause from its event where paused_at is not stated) or ended has no hole in its months (ok); one active subscription makes them holes (fail)                                                       | PASS   | no event: none ok | fail true
+ B3 billing_link: a purchase's store order (purchase order), a store order of kind first (first order), another store order of a customer with a subscription (other store order); a test order and an unknown one unlinked (explain); the own id wins | PASS   | chargebacks: subscription 1, renewal order 0, purchase order 1, first order 1, other store order 1, unlinked 2; refund events: subscription 0, renewal order 0, purchase order 0, first order 0, other store order 0, unlinked 0 | explain
+ B4 after_chargeback follows the purchase-order, first-order and store-order links: renewed 1, nothing 3                                                                                                                                               | PASS   | renewed 1, failed renewal 0, moved to failed 0, canceled 0, expired 0, nothing 3, under 30 days 0 | ok
+ B5 status_chain's expected text: the pair's order and the pause that began or ended on its date without an event                                                                                                                                      | PASS   | 0, or explained: a pair reads the latest status event's status > the subscription's; active>paused or paused>active is a pause that began or ended on its date without a paused or resumed event
+ verdict                                                                                                                                                                                                                                               | PASS   | 207_verify_subscription_full_read_guard: 7 PASS, 0 FAIL
+(8 rows)
+
+RESET
