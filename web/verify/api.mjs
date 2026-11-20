@@ -19,7 +19,8 @@
  * where the tenant lets a person clock in again (the branch that ran is printed), status changes from the tenant's own list, the
  * two export files in the tenant's format, time per status for the Dashboard (the same minutes as Team
  * hours), app links per person, the team now for the Live board (a person's own entry equals the
- * own-day read), the Team screen (migration 0004: who is listed and editable, roles, teams, skills,
+ * own-day read but for the board's two paid inputs, which the own-day read never carries), the Team
+ * screen (migration 0004: who is listed and editable, roles, teams, skills,
  * adding a person) and the memberships for the Live board's team filter, the configuration screens
  * (migration 0005a: statuses, app links, absence types, coverage targets, settings; the admin only,
  * everything undone at the end), the own profile for My account (addition 0005b), and messaging
@@ -630,10 +631,13 @@ expect("the profile says whose time is kept",
   [200, false, true, true], [200, true, true, true]);
 expect("an unknown identity gets no profile", (await get(NOBODY, "/api/v1/me/profile")).status, 403, 200);
 
-// ---- team now (addition 0003e), 6 checks ---------------------------------------------------------
+// ---- team now (addition 0003e), 8 checks ---------------------------------------------------------
 // The Live board's read. Agent Two's day is open (started above), the supervisor's too. A person's
 // own entry must equal GET /api/v1/me/day field for field, because both come from the same
-// stretches; the analyst reads but is not listed (no clock); nobody without monitoring.live reads.
+// stretches, but for the clock's two paid inputs (addition 0009z, #297): the board carries them for Paid today, the
+// own-day read never does (whether a pause is paid is not shown to agents; decision of #297), so the comparison leaves
+// them out and two checks hold the decision itself; the analyst reads but is not listed (no clock); nobody without
+// monitoring.live reads.
 const meN = (await get(ANALYST, "/api/v1/me")).body?.data ?? null;
 const nowA = await get(AGENT, "/api/v1/team/now");
 expect("an agent cannot read the team now", nowA.status, 403, 200);
@@ -643,9 +647,27 @@ try { teamNow = JSON.parse(nowRes.text).data ?? teamNow; } catch { /* left empty
 expect("the supervisor reads the team now, never cached",
   [nowRes.status, nowRes.headers.get("cache-control"), teamNow.people.length > 0, teamNow.statusFlags.length > 0],
   [200, "no-store", true, true], [200, "public", true, true]);
-const ownDay = (await get(AGENT, "/api/v1/me/day")).body?.data ?? null;
+const ownDayRes = await get(AGENT, "/api/v1/me/day");
+const ownDay = ownDayRes.body?.data ?? null;
 const agentEntry = teamNow.people.find((p) => p.userId === meA.userId) ?? null;
-expect("the agent's own entry equals the own-day read", agentEntry?.day ?? null, ownDay, { ...ownDay, statusSince: null });
+// The board's paid inputs (addition 0009z), on the board's day only
+const PAID_FIELDS = ["paidClosedSeconds", "paidRunningSince"];
+const withoutPaid = (day) => (day ? { ...day, clock: Object.fromEntries(Object.entries(day.clock ?? {}).filter(([k]) => !PAID_FIELDS.includes(k))) } : null);
+expect("the agent's own entry equals the own-day read, but for the board's paid inputs",
+  withoutPaid(agentEntry?.day ?? null), ownDay, { ...ownDay, statusSince: null });
+// The decision of #297: the own-day read carries neither paid input anywhere in its whole answer, nor any other key named
+// for pay (a paid input added later under another name, or a status's isPaid)
+const ownDayText = JSON.stringify(ownDayRes.body ?? {});
+const allKeysOf = (v) => (v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [k, ...allKeysOf(x)]) : []);
+expect("the own-day read carries no paid inputs (a pause's pay is not shown to agents)",
+  [ownDay !== null, ...PAID_FIELDS.map((k) => ownDayText.includes(`"${k}"`)), allKeysOf(ownDayRes.body).filter((k) => /paid/i.test(k))],
+  [true, false, false, []], [true, true, false, []]);
+// The board's entry for the agent carries both: whole seconds paid so far, and the running paid stretch's start or null
+const boardClock = agentEntry?.day?.clock ?? {};
+expect("the board's entry carries the paid inputs: seconds and a time or null",
+  [Number.isInteger(boardClock.paidClosedSeconds) && boardClock.paidClosedSeconds >= 0,
+   boardClock.paidRunningSince === null || (typeof boardClock.paidRunningSince === "string" && !Number.isNaN(Date.parse(boardClock.paidRunningSince)))],
+  [true, true], [true, false]);
 // The day's sessions (addition 0008zp) are part of both reads, field for field
 const SESSION_FIELDS = ["sessions", "sessionStartedAt", "clockInAgain", "canClockInAgain"];
 expect("both reads carry the day's sessions",

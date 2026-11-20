@@ -2997,9 +2997,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Hours worked" or "worked" for this figure (Worked counts `is_working` only); Payment state's Paid (another term) |
 | Status | Decided |
-| Decided | 19 November 2026 (Martin); docs/decisions.md, 19 Nov 2026, "Definitions: Paid (nl: Betaald) and Paid today on the Live board" and the three build choices of addition 0009z (this PR) |
+| Decided | 19 November 2026 (Martin); docs/decisions.md, 19 Nov 2026, "Definitions: Paid (nl: Betaald) and Paid today on the Live board" and the three build choices of addition 0009z (this PR); the verification query's session rule, 19 Nov 2026, "The metric catalog's verify_sql never depends on the session" (this PR) |
 | Used by | `live.paid_today_minutes`; copy keys `live.paidToday`, `live.paidTodayHint`; the Live board's Team panel; `GET /api/v1/team/now` and `GET /api/v1/live/board` (`day.clock.paidClosedSeconds`, `day.clock.paidRunningSince`, for `monitoring.live` only) |
-| As built today | `200` (`cma.team_now` dropped and created from `134` with `paid_closed_seconds` and `paid_running_since` last) and `201` (addition 0009z); `paidSeconds` and `paidTodayMinutes` in `web/src/lib/live.ts`. `WorkdayClock`'s `paidClosedSeconds` and `paidRunningSince` are optional and only the Live board's read fills them: `GET /api/v1/me/day`, My day and the own-day read never carry them, because whether a pause is paid is not shown to agents. Matches the definition |
+| As built today | `200` (`cma.team_now` dropped and created from `134` with `paid_closed_seconds` and `paid_running_since` last) and `201` (addition 0009z); `paidSeconds` and `paidTodayMinutes` in `web/src/lib/live.ts`. `WorkdayClock`'s `paidClosedSeconds` and `paidRunningSince` are optional and only the Live board's read fills them: `GET /api/v1/me/day`, My day and the own-day read never carry them, because whether a pause is paid is not shown to agents. The metric's verification query takes time kept for `:tenant_id` from base tables, has an optional `:organisation_key` and returns `paid_today_minutes` and `people_with_a_day`. Matches the definition |
 
 ## Retired words
 

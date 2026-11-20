@@ -589,7 +589,7 @@ badge n = mine.leads + mine.tickets + mine.tasks from cma.my_follow_up_counts() 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.owner_user_id = cma.current_user_id()
+select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.owner_user_id = :user_id
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -640,7 +640,7 @@ mine.leads, mine.tickets, mine.tasks from cma.my_follow_up_counts() (since 0009u
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select i.kind, count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.owner_user_id = cma.current_user_id() group by i.kind
+select i.kind, count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.owner_user_id = :user_id group by i.kind
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -773,7 +773,7 @@ liveGroupOf(person): no day -> notClockedIn; day.status = 'ended' or no current 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with kept as (select u.id as user_id, cma.user_timezone(u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)), day as (select k.user_id, w.id as workday_id, w.status as day_status from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date), cur as (select d.user_id, d.day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = d.workday_id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from day d) select c.user_id, case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id order by 1
+with kept as (select u.id as user_id, (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))), day as (select k.user_id, w.id as workday_id, w.status as day_status from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date), cur as (select d.user_id, d.day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = d.workday_id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from day d) select c.user_id, case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id order by 1
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -825,7 +825,7 @@ count of liveRows whose liveGroupOf(person) = the tile's group, over ALL rows (b
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with kept as (select u.id as user_id, cma.user_timezone(u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)), cur as (select k.user_id, w.status as day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = w.id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date) select case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp, count(*) from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id group by 1 order by 1
+with kept as (select u.id as user_id, (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))), cur as (select k.user_id, w.status as day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = w.id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date) select case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp, count(*) from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id group by 1 order by 1
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -874,7 +874,7 @@ count of people where day is not null and (day.status = 'ended' (the last effect
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) from cma.app_user u join cma.workday w on w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone cma.user_timezone(u.id))::date and w.status = 'ended' where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)
+select count(*) from cma.app_user u join cma.workday w on w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id))::date and w.status = 'ended' where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -923,7 +923,7 @@ count of people where day is null (no cma.workday row on today's business date i
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) from cma.app_user u where u.tenant_id = :tenant_id and cma.time_is_kept(u.id) and not exists (select 1 from cma.workday w where w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone cma.user_timezone(u.id))::date)
+select count(*) from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own')) and not exists (select 1 from cma.workday w where w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id))::date)
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -981,21 +981,27 @@ paidTodayMinutes(rows shown, now) = sum over the rows of floor(paidSeconds(clock
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
+-- independent of the session: the tenant is :tenant_id, every person's today their own business date in their own zone (the person's, else the
+-- organisation's, else the tenant's), time kept as cma.time_is_kept says it (active, holding workday.own) but for :tenant_id. :organisation_key is the
+-- board's key (as in /live/<key>) or null for the whole tenant. Returns the figure with no filter set and the people with a day today
 with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
-kept as (select u.id as user_id, coalesce(u.timezone, o.timezone, t.timezone) as tz from cma.app_user u join cma.tenant t on t.id = u.tenant_id left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)),
+kept as (select u.id as user_id, coalesce(u.timezone, o.timezone, t.timezone) as tz from cma.app_user u join cma.tenant t on t.id = u.tenant_id left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id
+         where u.tenant_id = :tenant_id and u.status = 'active'
+           and exists (select 1 from cma.user_role ur join cma.role_permission rp on rp.tenant_id = ur.tenant_id and rp.role_id = ur.role_id where ur.tenant_id = :tenant_id and ur.user_id = u.id and rp.permission_key = 'workday.own')
+           and ((:organisation_key)::text is null or o.key = :organisation_key)),
 eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
 iv as (select w.user_id, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id join kept k on k.user_id = w.user_id and w.business_date = (now() at time zone k.tz)::date),
 per_person as (select iv.user_id, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where ws.is_paid), 0) / 60)::bigint as m from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.user_id)
-select coalesce(sum(m), 0) as paid_today_minutes from per_person
+select coalesce(sum(m), 0) as paid_today_minutes, count(*) as people_with_a_day from per_person
 ```
 
-**Fixture check** Not run here: this session has no database. db/201_verify_live_paid_today.sql proves the board's paid inputs on fixed test days (a paid break, a split shift, clocked out, capped at the window end, a removed day) and per tenant against cma.team_hours for today at one instant (R2); Martin runs it and this query in Studio and compares the value with the board with no filter set.
+**Fixture check** Run on the local fixture database (PostgreSQL 16.15, the perf and hours volume fixtures and 30 invented people of Newco with a day today), 19 November 2026, in a session with no app.tenant_id: :tenant_id and :organisation_key 'newco' gave 14710 minutes and 30 people with a day, the board's 245h 10m on /live/newco (the standalone build with mock sign-in on the same database); null gave the same (nobody else had a day), 'pulse4all' gave 0 and 0. The previous query, which called cma.time_is_kept, gave 0 there. db/201_verify_live_paid_today.sql proves the board's paid inputs on fixed test days and per tenant against cma.team_hours for today at one instant (R2). Martin runs this query in Studio with :tenant_id and :organisation_key (the board's key, or null) and compares it with the board, no filter set.
 
 **Documented in** definitions.md, Paid and Paid today (Time terms); api.md, Live board (increment b); api.md, GET /api/v1/team/now; features.md §9, Live
 
 **Notes**
 
-Same meaning as team_hours.paid_minutes for today: the sum over people of floor(paid seconds / 60) (decision 7 Oct 2026), not floor of the summed seconds. The figure follows the filters while the tiles count every row (the panel's {n} of {total} people line says how many are shown). A person on a status set inactive since counts by its stored flags. Team hours lists a day of a person whose time is no longer kept, the board does not. The verify_sql reproduces the database's count at the query's instant for all people on the board; the on-screen figure adds the client tick since the read and stops at each day's end. Only the board's read carries the paid inputs: GET /api/v1/me/day and My day do not (whether a pause is paid is not shown to agents).
+Same meaning as team_hours.paid_minutes for today: the sum over people of floor(paid seconds / 60) (decision 7 Oct 2026), not floor of the summed seconds. The figure follows the filters while the tiles count every row (the panel's {n} of {total} people line says how many are shown). A person on a status set inactive since counts by its stored flags. Team hours lists a day of a person whose time is no longer kept, the board does not. The verify_sql reproduces the database's count at the query's instant for all people on the board; the on-screen figure adds the client tick since the read and stops at each day's end. Only the board's read carries the paid inputs: GET /api/v1/me/day and My day do not (whether a pause is paid is not shown to agents). The verify_sql reads nothing from the session (19 Nov 2026): it takes the tenant from :tenant_id and time kept as cma.time_is_kept defines it (active, holding workday.own), because cma.time_is_kept and cma.has_permission filter on cma.current_tenant_id() and answered 0 in prod without app.tenant_id; :organisation_key narrows it to one board, as the figure is per organisation.
 
 #### `live.people.shown_of_total`
 
@@ -1034,7 +1040,7 @@ n = rows.filter(group/employer/team match).length; total = rows.length. Filters 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) as total from cma.app_user u where u.tenant_id = :tenant_id and cma.time_is_kept(u.id)
+select count(*) as total from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -1082,7 +1088,7 @@ secondsSince(statusSince, now) = max(0, floor((now - statusSince)/1000)), format
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select e.user_id, extract(epoch from (now() - max(e.occurred_at)))::int as since_seconds from cma.time_event e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id and w.status = 'open' and w.business_date = (now() at time zone w.timezone)::date and now() <= cma.business_day_end(w.business_date, w.timezone) where e.tenant_id = :tenant_id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) group by e.user_id
+select e.user_id, extract(epoch from (now() - max(e.occurred_at)))::int as since_seconds from cma.time_event e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id and w.status = 'open' and w.business_date = (now() at time zone w.timezone)::date and now() <= cma.business_day_time(w.business_date, w.timezone, (select coalesce(we_ts.value, we_s.default_value)::time from cma.setting we_s left join cma.tenant_setting we_ts on we_ts.tenant_id = :tenant_id and we_ts.key = we_s.key where we_s.key = 'workday.window_end')) where e.tenant_id = :tenant_id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) group by e.user_id
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -1130,7 +1136,7 @@ fmtTime(day.started_at, person zone, viewer locale); zoneLabel = fmtZoneShort(..
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select u.display_name, w.started_at, w.started_at at time zone w.timezone as local_in from cma.app_user u join cma.workday w on w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone cma.user_timezone(u.id))::date where u.tenant_id = :tenant_id and cma.time_is_kept(u.id) order by u.display_name
+select u.display_name, w.started_at, w.started_at at time zone w.timezone as local_in from cma.app_user u join cma.workday w on w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id))::date where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own')) order by u.display_name
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -1178,7 +1184,7 @@ fmtTime(day.ended_at, person zone, viewer locale) when ended_at is set, else emp
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select u.display_name, w.ended_at, w.ended_at at time zone w.timezone as local_out from cma.app_user u join cma.workday w on w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone cma.user_timezone(u.id))::date where u.tenant_id = :tenant_id and cma.time_is_kept(u.id) and w.ended_at is not null order by u.display_name
+select u.display_name, w.ended_at, w.ended_at at time zone w.timezone as local_out from cma.app_user u join cma.workday w on w.tenant_id = :tenant_id and w.user_id = u.id and w.business_date = (now() at time zone (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id))::date where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own')) and w.ended_at is not null order by u.display_name
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -1228,7 +1234,7 @@ workedSeconds(clock, now) = closedSeconds + (runningSince ? secondsSince(running
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with ev as (select e.workday_id, e.user_id, e.kind, e.status_id, e.occurred_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as next_at, cma.business_day_end(w.business_date, w.timezone) as day_end from cma.time_event e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id and w.business_date = (now() at time zone w.timezone)::date where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id)) select ev.user_id, sum(greatest(0, floor(extract(epoch from (coalesce(ev.next_at, least(now(), ev.day_end)) - ev.occurred_at)))))::bigint as worked_seconds from ev join cma.work_status s on s.tenant_id = :tenant_id and s.id = ev.status_id and s.is_working where ev.kind in ('start','status') group by ev.user_id order by 1
+with ev as (select e.workday_id, e.user_id, e.kind, e.status_id, e.occurred_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as next_at, cma.business_day_time(w.business_date, w.timezone, (select coalesce(we_ts.value, we_s.default_value)::time from cma.setting we_s left join cma.tenant_setting we_ts on we_ts.tenant_id = :tenant_id and we_ts.key = we_s.key where we_s.key = 'workday.window_end')) as day_end from cma.time_event e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id and w.business_date = (now() at time zone w.timezone)::date where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id)) select ev.user_id, sum(greatest(0, floor(extract(epoch from (coalesce(ev.next_at, least(now(), ev.day_end)) - ev.occurred_at)))))::bigint as worked_seconds from ev join cma.work_status s on s.tenant_id = :tenant_id and s.id = ev.status_id and s.is_working where ev.kind in ('start','status') group by ev.user_id order by 1
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -1280,7 +1286,7 @@ cma.roster_today(): per person on the roster (time kept and roster.planned, cma.
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select distinct on (e.user_id) e.user_id, e.kind, e.start_time, e.end_time, a.name as absence_name from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id and w.status = 'published' and e.recorded_at <= w.published_at and (e.valid_to is null or e.valid_to > w.published_at) left join cma.absence_type a on a.tenant_id = :tenant_id and a.id = e.absence_type_id where e.tenant_id = :tenant_id and e.business_date = (now() at time zone cma.user_timezone(e.user_id))::date order by e.user_id, w.published_at desc
+select distinct on (e.user_id) e.user_id, e.kind, e.start_time, e.end_time, a.name as absence_name from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id and w.status = 'published' and e.recorded_at <= w.published_at and (e.valid_to is null or e.valid_to > w.published_at) left join cma.absence_type a on a.tenant_id = :tenant_id and a.id = e.absence_type_id where e.tenant_id = :tenant_id and e.business_date = (now() at time zone (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = e.user_id))::date order by e.user_id, w.published_at desc
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -1337,7 +1343,7 @@ adherence(planned, actual, date, person zone, nowMs, tol): no plan -> startedAt 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select distinct on (e.user_id) e.user_id, e.kind, e.start_time, e.end_time, ((e.business_date::text || ' ' || case when e.start_time = '24:00' then '00:00' else coalesce(e.start_time::text,'') end)::timestamp at time zone wd.timezone) as planned_start_at, ((e.business_date + case when e.end_time = '24:00' then 1 else 0 end)::text || ' ' || case when e.end_time = '24:00' then '00:00' else coalesce(e.end_time::text,'') end)::timestamp at time zone wd.timezone as planned_end_at, wd.started_at, wd.ended_at from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id and w.status = 'published' and e.recorded_at <= w.published_at and (e.valid_to is null or e.valid_to > w.published_at) left join cma.workday wd on wd.tenant_id = :tenant_id and wd.user_id = e.user_id and wd.business_date = e.business_date where e.tenant_id = :tenant_id and e.business_date = (now() at time zone cma.user_timezone(e.user_id))::date order by e.user_id, w.published_at desc
+select distinct on (e.user_id) e.user_id, e.kind, e.start_time, e.end_time, ((e.business_date::text || ' ' || case when e.start_time = '24:00' then '00:00' else coalesce(e.start_time::text,'') end)::timestamp at time zone wd.timezone) as planned_start_at, ((e.business_date + case when e.end_time = '24:00' then 1 else 0 end)::text || ' ' || case when e.end_time = '24:00' then '00:00' else coalesce(e.end_time::text,'') end)::timestamp at time zone wd.timezone as planned_end_at, wd.started_at, wd.ended_at from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id and w.status = 'published' and e.recorded_at <= w.published_at and (e.valid_to is null or e.valid_to > w.published_at) left join cma.workday wd on wd.tenant_id = :tenant_id and wd.user_id = e.user_id and wd.business_date = e.business_date where e.tenant_id = :tenant_id and e.business_date = (now() at time zone (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = e.user_id))::date order by e.user_id, w.published_at desc
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -36307,14 +36313,16 @@ orders = count(the courtesy orders, every one since courtesy.start_date, whose c
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
--- as the application (app.tenant_id and app.user_id set): the courtesy orders completed in the period by completion date (completed_date: its day in the order's
--- market zone), placed on any date (0009d), with the outcomes; beside them the page's tile and Per market's total row
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own; ctx, materialized, runs before the page's reads): cma.courtesy_page reads both,
+-- :user_id a person of the tenant holding reports.view or performance.team. The courtesy orders completed in the period by completion date
+-- (completed_date: its day in the order's market zone), placed on any date (0009d), with the outcomes; beside them the page's tile and Per market's total row
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
 select count(*) filter (where x.completed_date between :from and :to) as orders,
        count(*) filter (where x.completed_date between :from and :to and x.outcome = 'positive') as positive,
        count(*) filter (where x.completed_date between :from and :to and x.outcome = 'neutral') as neutral,
        count(*) filter (where x.completed_date between :from and :to and x.outcome = 'negative') as negative,
-       (select (j -> 'completed' ->> 'orders')::int from (select cma.courtesy_page(:from, :to) as j) p) as tile,
-       (select (j -> 'markets_total' ->> 'completed_in_period')::int from (select cma.courtesy_page(:from, :to) as j) p) as per_market_total
+       (select (p.j -> 'completed' ->> 'orders')::int from (select cma.courtesy_page(:from, :to) as j from ctx) p) as tile,
+       (select (p.j -> 'markets_total' ->> 'completed_in_period')::int from (select cma.courtesy_page(:from, :to) as j from ctx) p) as per_market_total
 from cma.courtesy_orders_of(:tenant_id, null, null) x
 ```
 
@@ -36817,11 +36825,13 @@ completed_in_period(market) = count(the courtesy orders of that market whose com
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
--- as the application (app.tenant_id and app.user_id set): per market the courtesy orders completed in the period, each in its own market (0009d), the
--- total row and the tile; the total and the tile are equal
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own; ctx, materialized, runs before the page's read): cma.courtesy_page reads both,
+-- :user_id a person of the tenant holding reports.view or performance.team. Per market the courtesy orders completed in the period, each in its own
+-- market (0009d), the total row and the tile; the total and the tile are equal
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
 select m ->> 'market' as market, (m ->> 'completed_in_period')::int as completed_in_period,
        (p.j -> 'markets_total' ->> 'completed_in_period')::int as total, (p.j -> 'completed' ->> 'orders')::int as tile
-from (select cma.courtesy_page(:from, :to) as j) p
+from (select cma.courtesy_page(:from, :to) as j from ctx) p
 cross join lateral jsonb_array_elements(p.j -> 'markets') m
 ```
 
@@ -41398,7 +41408,7 @@ cma.my_follow_up().leads: every snapshot lead item with owner_user_id = the call
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.kind = 'lead' and i.owner_user_id = cma.current_user_id()
+select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.kind = 'lead' and i.owner_user_id = :user_id
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -41457,7 +41467,7 @@ cma.my_follow_up().tickets: every snapshot ticket item with owner_user_id = the 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.kind = 'ticket' and i.owner_user_id = cma.current_user_id()
+select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.kind = 'ticket' and i.owner_user_id = :user_id
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -41509,7 +41519,7 @@ cma.my_follow_up().tasks: every snapshot task item with owner_user_id = the call
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.kind = 'task' and i.owner_user_id = cma.current_user_id()
+select count(*) from cma.follow_up_item i where i.tenant_id = :tenant_id and i.kind = 'task' and i.owner_user_id = :user_id
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
@@ -46448,7 +46458,7 @@ day_ends_at = cma.business_day_end(workday_summary.business_date, workday_summar
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select w.business_date, ((w.business_date::text || ' ' || (select coalesce(ts.value, s.default_value) from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'))::timestamp at time zone w.timezone) as day_ends_at from cma.workday_summary w where w.tenant_id = :tenant_id and w.business_date between :from and :to
+select w.business_date, ((w.business_date::text || ' ' || (select coalesce(ts.value, s.default_value) from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'))::timestamp at time zone w.timezone) as day_ends_at from cma.workday_summary_all w where w.tenant_id = :tenant_id and w.business_date between :from and :to
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -47812,7 +47822,7 @@ stretches = count of the day's closed-or-capped intervals in that status, from t
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select i.user_id, (i.from_at at time zone u.timezone)::date as day, i.status_id, count(*)::integer as stretches from cma.time_interval i join cma.app_user u on u.tenant_id = i.tenant_id and u.id = i.user_id where i.tenant_id = :tenant_id and (i.from_at at time zone u.timezone)::date between :from and :to group by 1, 2, 3
+select i.user_id, (i.from_at at time zone u.timezone)::date as day, i.status_id, count(*)::integer as stretches from cma.time_interval_all i join cma.app_user u on u.tenant_id = i.tenant_id and u.id = i.user_id where i.tenant_id = :tenant_id and (i.from_at at time zone u.timezone)::date between :from and :to group by 1, 2, 3
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
