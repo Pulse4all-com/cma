@@ -1,6 +1,9 @@
 /**
- * Juo's Admin API for one subscriptions connection (addition 0008zl, brief B20). Read only: the adapter sends GET
- * requests, and nothing is ever written to Juo.
+ * Juo's Admin API for one subscriptions connection (addition 0008zl, brief B20). Read only: nothing is ever written to
+ * Juo. Since addition 0009za (brief B39 Part A) every request passes an allow-list of method and path before anything is
+ * sent (before the key is read): GET /subscriptions, GET /events, GET /products, GET /analytics/metrics and POST
+ * /analytics/query (a read with a body: Juo's own figures, Part B). Any other method or path throws method_not_allowed
+ * and no request leaves the process (verify/juo-mapping.mjs proves it).
  *
  *   key       the store's Admin API key, from the Secret Manager secret the connection's token secret name names
  *             (ingest-juo-<handle>-key): the header X-Juo-Admin-Api-Key. Keys are per store. A missing secret fails
@@ -8,7 +11,7 @@
  *   store     the header X-Tenant-ID, the connection's account id: the store's own domain, <handle>.myshopify.com
  *             (lower case; another form fails with tenant_id_invalid before any request). A key answers 401 for
  *             another store's id: the read fails key_rejected
- *   requests  GET https://api.juo.io/admin/v1/<path>, each one counted per endpoint on the job's budget (ids replaced,
+ *   requests  GET (or the one POST) https://api.juo.io/admin/v1/<path>, each one counted per endpoint on the job's budget (ids replaced,
  *             no query value: the run's log line) and paced per connection and process at the connection setting
  *             subscriptions_max_per_second (default 2, 1 to 10). Juo states no rate limit (no rate-limit header was
  *             seen on a GET, 28 October 2026). A 429 holds the connection until its Retry-After (seconds or a date, at
@@ -101,6 +104,21 @@ export function holdMsOf(rateLimit, now = Date.now()) {
   return Math.min(Math.max(ms, 0), HOLD_MAX_MS) * paceFactor();
 }
 
+/**
+ * The requests the adapter may send: method and path (the query left out). Juo's Admin API answers every write too, so the
+ * client refuses everything else itself (decision of 18 November 2026, brief B39: the adapter may POST to /analytics/query
+ * only, a read with a body).
+ */
+export const ALLOWED = Object.freeze([
+  ["GET", "/subscriptions"], ["GET", "/events"], ["GET", "/products"], ["GET", "/analytics/metrics"], ["POST", "/analytics/query"],
+].map((pair) => Object.freeze(pair)));
+
+/** Throws SourceError method_not_allowed unless the method and the path (its query left out) are on the allow-list. */
+export function assertAllowed(method, path) {
+  const bare = typeof path === "string" ? path.split("?")[0] : "";
+  if (!ALLOWED.some(([m, p]) => m === method && p === bare)) throw new SourceError("method_not_allowed");
+}
+
 /** The path as its endpoint template for the counts: the query left out, every id replaced (GET /subscriptions/{id}). */
 export function endpointOf(method, path) {
   return `${method} ${path.split("?")[0].replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "/{id}")}`;
@@ -114,7 +132,8 @@ export function juoClient(connection, settings, budget) {
   const base = apiBase();
   const tenantId = tenantIdOf(connection);
   const pace = paceOf(connection.connectionId, juoSettings(settings).perSecond);
-  const call = async (path) => {
+  const call = async (method, path, body) => {
+    assertAllowed(method, path);
     let key;
     try {
       key = await getSecret(connection.tokenSecretName);
@@ -123,9 +142,10 @@ export function juoClient(connection, settings, budget) {
     }
     for (let attempt = 1; ; attempt += 1) {
       await pace.wait();
-      budget.count?.(endpointOf("GET", path));
+      budget.count?.(endpointOf(method, path));
       try {
-        return await requestJson(`${base}${path}`, { headers: { "x-juo-admin-api-key": key, "x-tenant-id": tenantId }, signal: budget.signal(PER_CALL_MS) });
+        return await requestJson(`${base}${path}`, { method, body: method === "POST" ? body : undefined,
+          headers: { "x-juo-admin-api-key": key, "x-tenant-id": tenantId }, signal: budget.signal(PER_CALL_MS) });
       } catch (err) {
         if (err instanceof SourceError && err.code === "http_401") throw new SourceError("key_rejected", 401);
         if (!(err instanceof SourceError && err.code === "rate_limited")) throw err;
@@ -137,7 +157,13 @@ export function juoClient(connection, settings, budget) {
       }
     }
   };
-  return { get: call };
+  return {
+    get: (path) => call("GET", path),
+    /** A read with a body (POST /analytics/query only; nothing calls it before Part B) */
+    query: (path, body) => call("POST", path, body),
+    /** Test aid for the allow-list: any method and path, refused unless allowed */
+    request: call,
+  };
 }
 
 /** Test aid: forget the paces of this process. */

@@ -75,9 +75,17 @@
  * name, an email, an address or a payment detail):
  *   subscriptionStore()         cma.ingest_subscription_store: the store whose handle the connection's account id names,
  *                               { handle, storeConnectionId }, or null (the adapter fails the run store_not_configured)
- *   upsertSubscriptions(items)  cma.ingest_upsert_subscriptions in parts of at most 500: per subscription { sourceId,
- *                               outcome, customerMatched }
+ *   upsertSubscriptions(items, runId)   cma.ingest_upsert_subscriptions in parts of at most 500, with the run (its
+ *                               observed changes name it; addition 0009za): per subscription { sourceId, outcome,
+ *                               customerMatched, changesObserved }
+ *   upsertSubscriptionLines(subscriptionIds, lines, runId)   cma.ingest_upsert_subscription_lines: the lines of these
+ *                               subscriptions as a set, in parts of at most 500 subscriptions and 5,000 lines (a
+ *                               subscription's lines never split over two parts); { inserted, updated, unchanged,
+ *                               missing_now, changes_observed } summed (addition 0009za)
+ *   upsertSubscriptionProducts(variants)   cma.ingest_upsert_subscription_products: the catalog's full set in one call;
+ *                               { inserted, updated, unchanged, missing_now } (addition 0009za)
  *   upsertSubscriptionEvents(items)   cma.ingest_upsert_subscription_events in parts of at most 500: { outcome: count }
+ *   upsertBillingEvents(items)  cma.ingest_upsert_billing_events in parts of at most 500: { outcome: count } (addition 0009za)
  *   markSubscriptionsMissing(sourceIds, from, before)   cma.ingest_mark_subscriptions_missing: one slice of a full read's
  *                               final step; { missing_now, missing_ms }
  *   storeCustomersHeld(storeConnectionId, ids)   which of these customer ids the store's customers hold (the dry run)
@@ -515,19 +523,54 @@ export function storeFor(ctx, connectionId) {
     async subscriptionStore() {
       return withTenant(ctx, async (q) => (await q.query("select cma.ingest_subscription_store($1) as s", [connectionId])).rows[0].s);
     },
-    async upsertSubscriptions(items) {
+    async upsertSubscriptions(items, runId = null) {
       const out = [];
-      for (const part of chunks(items)) {
+      // in id order, so two runs on one connection (the poll and the reconcile) lock the rows in the same order
+      for (const part of chunks([...items].sort((a, b) => (a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0)))) {
         await withTenant(ctx, async (q) => {
-          const r = await q.query("select source_id, outcome, customer_matched from cma.ingest_upsert_subscriptions($1, $2::jsonb)",
-            [connectionId, JSON.stringify(part)]);
-          for (const x of r.rows) out.push({ sourceId: x.source_id, outcome: x.outcome, customerMatched: x.customer_matched });
+          const r = await q.query(
+            "select source_id, outcome, customer_matched, changes_observed from cma.ingest_upsert_subscriptions($1, $2::jsonb, $3::uuid)",
+            [connectionId, JSON.stringify(part), runId]);
+          for (const x of r.rows) out.push({ sourceId: x.source_id, outcome: x.outcome, customerMatched: x.customer_matched, changesObserved: x.changes_observed });
         });
       }
       return out;
     },
+    async upsertSubscriptionLines(subscriptionIds, lines, runId = null) {
+      // in id order (subscriptions, then their lines), so two runs lock the rows in the same order
+      const byId = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+      const bySub = new Map([...subscriptionIds].sort(byId).map((id) => [id, []]));
+      for (const l of [...lines].sort((a, b) => byId(a.sourceId, b.sourceId))) bySub.get(l.subscriptionSourceId)?.push(l);
+      const total = { inserted: 0, updated: 0, unchanged: 0, missing_now: 0, changes_observed: 0 };
+      const parts = [];
+      let ids = [];
+      let part = [];
+      for (const [id, own] of bySub) {
+        if (ids.length && (ids.length >= 500 || part.length + own.length > 5000)) {
+          parts.push([ids, part]);
+          ids = [];
+          part = [];
+        }
+        ids.push(id);
+        part.push(...own);
+      }
+      if (ids.length) parts.push([ids, part]);
+      for (const [pIds, pLines] of parts) {
+        const r = await withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_subscription_lines($1, $2::text[], $3::jsonb, $4::uuid) as r",
+          [connectionId, pIds, JSON.stringify(pLines), runId])).rows[0].r);
+        for (const k of Object.keys(total)) total[k] += Number(r?.[k] ?? 0);
+      }
+      return total;
+    },
+    async upsertSubscriptionProducts(variants) {
+      return withTenant(ctx, async (q) =>
+        (await q.query("select cma.ingest_upsert_subscription_products($1, $2::jsonb) as r", [connectionId, JSON.stringify(variants)])).rows[0].r);
+    },
     async upsertSubscriptionEvents(items) {
       return outcomes(ctx, "select outcome from cma.ingest_upsert_subscription_events($1, $2::jsonb)", connectionId, items);
+    },
+    async upsertBillingEvents(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_billing_events($1, $2::jsonb)", connectionId, items);
     },
     async markSubscriptionsMissing(sourceIds, from, before) {
       return withTenant(ctx, async (q) =>

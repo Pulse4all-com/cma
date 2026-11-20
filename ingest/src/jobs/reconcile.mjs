@@ -51,9 +51,9 @@ export async function reconcileStream({ adapter, connection, store, budget, obje
   const resume = budget.floorPct === null ? null : await store.cursor(resumeStream(object));
   const sinceMs = Number.isFinite(resume?.from) ? Math.min(resume.from, lookbackFrom) : lookbackFrom;
   const mark = budget.mark();
-  const r = await withRun(store, { job: "reconcile", stream: object, from: new Date(sinceMs), to: new Date(untilMs) }, async (counts) =>
+  const r = await withRun(store, { job: "reconcile", stream: object, from: new Date(sinceMs), to: new Date(untilMs) }, async (counts, runId) =>
     // An adapter may answer { error } after its listing (a check that failed); the run then fails with it
-    adapter.reconcile({ connection, store, budget, object, sinceMs, untilMs, process: process(counts), counts }));
+    adapter.reconcile({ connection, store, budget, object, sinceMs, untilMs, process: process(counts), counts, runId }));
   if (r.paused) await store.setCursor(resumeStream(object), { from: sinceMs });
   else if (r.ok && Number.isFinite(resume?.from)) await store.setCursor(resumeStream(object), { from: null });
   return { r, usage: budget.usage(mark) };

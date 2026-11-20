@@ -225,10 +225,10 @@ async function backfillConnection({ c, adapter, object, from = null, again = fal
   const budget = given ?? new JobBudget(adapter.rates, undefined, { floorPct });
   onBudget?.(budget);
   const mark = budget.mark();
-  const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts) => {
+  const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts, runId) => {
     const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "backfill" }));
     return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt ? fromAt.getTime() : null, untilMs, process, counts,
-      again, runAt: untilMs });
+      again, runAt: untilMs, runId });
   });
   const total = { connection: c.connectionId, object, from: date ?? "all history", again, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
   info(r.paused ? "backfill paused" : "backfill", { ...total, ...budget.usage(mark), ms: Date.now() - started });
