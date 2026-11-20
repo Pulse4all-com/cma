@@ -3311,13 +3311,21 @@ cd web && npm run verify:datamap
 Expected: until the refresh it fails on this branch (the six new tables and two new views are not in `schema.json`): expected; after the refresh and `node tools/datamap/build.mjs`, `datamap: PASS (… all described; index.html current)`. After the merge: in the Claude project, say "republish the data map".
 
 ## 20.3 Terminal: the migrations in prod, before the merge
+First the baseline of the payment state's cost on Flash (Martin, 20 Nov 2026: 124 before and after 210). **File:**
+`db/124_time_flash.sql`; **Studio** (cma-prod-pg): paste and Run as your own login. Expected: its usual rows; keep the output
+outside the repository; the rows "list subscriptions …" and "overview subscriptions" are compared after 20.8.
+
 Main's web runs unchanged on `210` (the new payment-state columns come after the old ones and no page reads a new object before the merge).
 
 **Terminal**
 ```bash
-run_migration prod 210_subscription_facts.sql 211_verify_subscription_facts.sql 0009ze-prod-$(date +%F) 119_verify_subscriptions.sql
+run_migration prod 210_subscription_facts.sql 211_verify_subscription_facts.sql 0009ze-prod-$(date +%F) 119_verify_subscriptions.sql 173_verify_active_customers.sql 185_verify_active_device_bands.sql
 ```
 Expected: 210 `COMMIT`; 211 refuses prod (no dev seed): `verdict | REFUSED`, expected in prod as 207; the prod-safe verifies pass as before.
+
+Then Pulse4all's propositions for the variant mapping (for Kira to confirm). **File:** the last block of
+`db/02_seed_pulse4all.sql` (from "-- The subscription facts (after addition 0009ze"); **Studio** (cma-prod-pg): paste and Run.
+Expected: `DO`; `select value from cma.tenant_setting where key = 'subscriptions.propositions'` answers `hs1,frx,buurt_aed,outdoor`.
 
 ## 20.4 Terminal: the merge and the deploys
 Merge the PR; `cma-web-main` builds and deploys the web app. The ingest does not deploy itself: deploy it from `main` as 17.4 (the service with its front, then `--jobs`). The job `refresh-active-customers` runs the web image: redeploy it per docs/scheduler (`docs/scheduler/deploy-active-customers.sh`) so it carries the facts' step.
