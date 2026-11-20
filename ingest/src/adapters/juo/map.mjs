@@ -96,7 +96,7 @@ export const STATUSES = ["active", "paused", "canceled", "expired", "failed", "m
 /** The reasons kept, as Juo writes them: its own codes, never a caller's text */
 export const REASON_CODES = ["billing-attempt-failed"];
 /** The payment instrument's types in the CMA's codes (cma.payment_instrument_type_ok) */
-export const INSTRUMENTS = ["card", "paypal", "sepa_direct_debit", "ideal", "bancontact", "invoice", "other"];
+export const INSTRUMENTS = ["card", "paypal", "sepa_direct_debit", "bacs_direct_debit", "ideal", "bancontact", "invoice", "other"];
 /** Juo's event type → the CMA's, and the status the type moves a subscription to */
 export const EVENT_TYPES = {
   "subscription:renewed": { type: "renewed", to: null },
@@ -213,12 +213,13 @@ const currencyOf = (v) => (typeof v === "string" && /^[A-Z]{3}$/.test(v) ? v : n
 /**
  * An instrument's type as one of INSTRUMENTS: { code, unknown } where unknown is Juo's own type name when the mapping does
  * not know it (stored as other), else null. Juo writes types as credit-card, CreditCard, paypal, sepa-direct-debit,
- * SepaDirectDebit; null without a type.
+ * SepaDirectDebit, Bacs or bacs (a BACS direct debit, since 0009zb); null without a type.
  */
 export function instrumentInfoOf(type) {
   if (typeof type !== "string" || !type.trim()) return null;
   const s = type.trim().toLowerCase().replace(/[^a-z]/g, "");
-  const code = s.includes("paypal") ? "paypal" : s.includes("sepa") ? "sepa_direct_debit" : s === "ideal" ? "ideal"
+  const code = s.includes("paypal") ? "paypal" : s.includes("sepa") ? "sepa_direct_debit"
+    : s.includes("bacs") ? "bacs_direct_debit" : s === "ideal" ? "ideal"
     : s.includes("bancontact") ? "bancontact" : s.includes("invoice") ? "invoice" : s.includes("card") ? "card" : "other";
   return { code, unknown: code === "other" ? (TYPE_NAME.test(type.trim()) ? type.trim() : "unnamed") : null };
 }

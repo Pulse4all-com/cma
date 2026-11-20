@@ -87,14 +87,20 @@ expect("A4 the statuses in the CMA's spelling: the seven, cancelled as canceled,
 expect("A5 a subscription of an unknown status, or without an id, is unreadable (none)",
   [map.subscriptionItem({ ...sub(1), status: "pending" }), map.subscriptionItem({ ...sub(1), id: "has space" }), map.subscriptionItem({ ...sub(1), id: undefined })],
   [null, null, null], [{}, {}, {}]);
-expect("A6 the instrument's type in the seven codes: a card, SEPA direct debit, paypal; an unexpanded payment method none",
+expect("A6 the instrument's type in the eight codes: a card, SEPA direct debit, paypal; an unexpanded payment method none",
   [sub(1), sub(2), sub(3)].map((s) => map.instrumentOf(s.paymentMethod)).concat([map.instrumentOf("pm-0001"), map.instrumentOf({ instrument: { type: "shop-pay-card" } }),
     map.instrumentOf({ instrument: {} })]),
   ["card", "sepa_direct_debit", "paypal", null, "card", null], []);
-expect("A6b Juo's instrument type names → the seven codes (credit-card, CreditCard, SepaDirectDebit, PayPal, iDEAL, Bancontact, Invoice); an unknown one other and named, never a value",
+expect("A6b Juo's instrument type names → the eight codes (credit-card, CreditCard, SepaDirectDebit, PayPal, iDEAL, Bancontact, Invoice, bacs); an unknown one other and named, never a value",
   ["credit-card", "CreditCard", "SepaDirectDebit", "sepa-direct-debit", "PayPal", "paypal", "iDEAL", "bancontact", "Invoice", "Klarna", "person@example.invalid", "", null]
     .map((t) => { const i = map.instrumentInfoOf(t); return i ? `${i.code}${i.unknown ? `:${i.unknown}` : ""}` : null; }),
   ["card", "card", "sepa_direct_debit", "sepa_direct_debit", "paypal", "paypal", "ideal", "bancontact", "invoice", "other:Klarna", "other:unnamed", null, null],
+  []);
+expect("A6c BACS direct debit (0009zb): Juo's bacs, Bacs and BacsDirectDebit → bacs_direct_debit, not other and never unknown, on a subscription's payment method",
+  [...["bacs", "Bacs", "BacsDirectDebit", "bacs-direct-debit"].map((t) => { const i = map.instrumentInfoOf(t); return `${i.code}:${i.unknown}`; }),
+    map.instrumentOf({ instrument: { type: "bacs" } }), map.subscriptionItem({ ...sub(1), paymentMethod: { instrument: { type: "bacs" } } })?.paymentInstrumentType,
+    map.INSTRUMENTS.includes("bacs_direct_debit"), map.INSTRUMENTS.length],
+  ["bacs_direct_debit:null", "bacs_direct_debit:null", "bacs_direct_debit:null", "bacs_direct_debit:null", "bacs_direct_debit", "bacs_direct_debit", true, 8],
   []);
 expect("A9 the app's number, the cycle bounds (billing policy's, else the lines'), the count of discounts (never a code) and of current lines",
   [map.subscriptionItem(sub(213)).minCycles, map.subscriptionItem(sub(213)).maxCycles, map.subscriptionItem({ ...sub(1), billingPolicy: { interval: "MONTH", intervalCount: 1, minCycles: 6, maxCycles: 24 } }).minCycles,
@@ -304,6 +310,9 @@ expect("H3b the return code: a scheme's four characters, or a card dispute reaso
   [codeOf("MD01"), codeOf("AM04"), codeOf("fraudulent"), codeOf("product_not_received"), codeOf("NL91ABNA0417164300"), codeOf("Fraudulent"), codeOf("md01x"),
     codeOf("invented_person"), map.instrumentInfoOf("Invented Person").unknown],
   ["MD01", "AM04", "fraudulent", "product_not_received", "dropped", "dropped", "dropped", "dropped", "unnamed"], []);
+const bacsOf = map.billingEventItem({ ...billingEvents.find((e) => e.type === "chargeback:created"), data: { reasonCode: "MD01", instrumentType: "bacs" } });
+expect("H3c a BACS chargeback (0009zb): the instrument bacs_direct_debit, not other, and no unknown instrument counted",
+  [bacsOf.item.instrumentType, bacsOf.instrumentUnknown ?? null], ["bacs_direct_debit", null], ["other", "bacs"]);
 expect("F5 catalog text: a line or paragraph separator and a format character dropped as the database's check would; a cut never splits a character",
   [map.catalogTextOf("a\u2028b").dropped, map.catalogTextOf("a\u200bb").dropped, Array.from(map.catalogTextOf("é".repeat(99) + "😀😀").value).length,
     map.catalogTextOf("é".repeat(99) + "😀😀").value.endsWith("😀")],
