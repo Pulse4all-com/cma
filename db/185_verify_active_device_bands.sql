@@ -8,6 +8,8 @@
 --   on every active tenant with a subscription whose sources are set up (R, D, L, E): the refresh and the document
 --     against the definitions 184 replaces, kept here verbatim as pg_temp functions (133's pattern: 174's refresh and
 --     172's below-the-fold document), in a step that is always rolled back: the tenant's take is left as it was.
+-- Since addition 0009ze (210_subscription_facts.sql; edited by that change): where 0009ze is recorded the kept
+-- below-the-fold document's payment states are cma.payment_states()'s six; without it the four as before.
 -- Run as your own IAM login, after 184. Output: tenant slugs, counts, band keys and milliseconds only.
 -- While it runs: a real tenant's step computes the take twice and holds, until it rolls back, the take's row (a
 -- settings save that marks the take stale waits), the tenant's refresh lock (the job answers running) and the analyze's
@@ -451,7 +453,10 @@ begin
                       where b.is_holding
                       group by 1) q),
       'payment_state', (select coalesce(jsonb_agg(jsonb_build_object('key', x.state, 'subscriptions', coalesce(q.n, 0)) order by x.ord), '[]'::jsonb)
-                        from (values ('paid', 1), ('in_retry', 2), ('failed', 3), ('paused', 4)) x(state, ord)
+                        -- since 0009ze (210) the payment states of cma.payment_states(): Charged back and Awaiting payment too
+                        from (select v.state, v.ord from (values ('paid', 1), ('in_retry', 2), ('charged_back', 3), ('awaiting_payment', 4), ('failed', 5), ('paused', 6)) v(state, ord)
+                              where v.state not in ('charged_back', 'awaiting_payment')
+                                 or exists (select 1 from cma.schema_migration m where m.version = '0009ze')) x
                         left join (select b.payment_state, count(*) as n from b group by 1) q on q.payment_state = x.state)),
     'notes', jsonb_build_object(
       'no_amount', (select count(*) from b where b.is_holding and b.is_paying and (b.monthly_amount is null or b.currency is null)),

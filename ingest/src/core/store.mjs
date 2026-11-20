@@ -86,6 +86,7 @@
  *                               { inserted, updated, unchanged, missing_now } (addition 0009za)
  *   upsertSubscriptionEvents(items)   cma.ingest_upsert_subscription_events in parts of at most 500: { outcome: count }
  *   upsertBillingEvents(items)  cma.ingest_upsert_billing_events in parts of at most 500: { outcome: count } (addition 0009za)
+ *   fillPurchaseOrders(items)  cma.ingest_fill_purchase_orders in parts of at most 500: the purchases filled (addition 0009ze)
  *   presentSubscriptionIds()   the connection's subscriptions the CMA holds present (source_deleted_at null), as a Set of
  *                         source ids: what a full read's guard reads again by id when the list left them out (0009zc)
  *   markSubscriptionsMissing(sourceIds, from, before)   cma.ingest_mark_subscriptions_missing: one slice of a full read's
@@ -573,6 +574,14 @@ export function storeFor(ctx, connectionId) {
     },
     async upsertBillingEvents(items) {
       return outcomes(ctx, "select outcome from cma.ingest_upsert_billing_events($1, $2::jsonb)", connectionId, items);
+    },
+    async fillPurchaseOrders(items) {
+      let n = 0;
+      for (const part of chunks(items)) {
+        n += await withTenant(ctx, async (q) =>
+          (await q.query("select cma.ingest_fill_purchase_orders($1, $2::jsonb) as n", [connectionId, JSON.stringify(part)])).rows[0].n);
+      }
+      return n;
     },
     async presentSubscriptionIds() {
       return withTenant(ctx, async (q) => new Set((await q.query(`select source_id from cma.subscription

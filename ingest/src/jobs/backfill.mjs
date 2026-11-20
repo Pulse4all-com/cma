@@ -131,6 +131,7 @@ function assertAdapterTakes(adapter, name, object, { from, dryRun }) {
   }
   if (from && adapter.wholeObjects?.includes(object)) throw new UsageError(`--object ${object} is read whole: it takes no --from`);
   if (dryRun && !adapter.dryRun) throw new UsageError(`the ${name} adapter has no dry run`);
+  if (dryRun && adapter.dryRunObjects && !adapter.dryRunObjects.includes(object)) throw new UsageError(`--object ${object} has no dry run`);
 }
 
 /**

@@ -14,6 +14,9 @@
 -- 1, the B2C customers hold 0.25 each on average where it was 0.50, and the markets' devices are 2 and 3 where they were
 -- 3 and 4; T1's comparison with 0009l's kept definitions differs in the three parts that state devices and nowhere else.
 -- In a database without 0009r it expects what it always did. 185_verify_active_device_bands.sql proves the new parts.
+-- Since addition 0009ze (210_subscription_facts.sql; edited by that change): where 0009ze is recorded the payment states
+-- of the mix are cma.payment_states()'s six (Charged back and Awaiting payment added, at 0 in the seed's data); without it
+-- the four as before.
 -- Universal: no seed is assumed, so it runs in dev and in prod. Block S checks the addition, the functions, the grants,
 -- the settings and the readers' views. Block P proves the pure functions on arrays made here (random ones against a brute
 -- force, hand-made ones against hand-computed tables): no table is read. Block B works on two throwaway tenants inside a
@@ -664,7 +667,10 @@ begin
                       where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.subscription_ref is not null
                       group by 1) q),
       'payment_state', (select coalesce(jsonb_agg(jsonb_build_object('key', x.state, 'subscriptions', coalesce(q.n, 0)) order by x.ord), '[]'::jsonb)
-                        from (values ('paid', 1), ('in_retry', 2), ('failed', 3), ('paused', 4)) x(state, ord)
+                        -- since 0009ze (210) the payment states of cma.payment_states(): Charged back and Awaiting payment too
+                        from (select v.state, v.ord from (values ('paid', 1), ('in_retry', 2), ('charged_back', 3), ('awaiting_payment', 4), ('failed', 5), ('paused', 6)) v(state, ord)
+                              where v.state not in ('charged_back', 'awaiting_payment')
+                                 or exists (select 1 from cma.schema_migration m where m.version = '0009ze')) x
                         left join (select b.payment_state, count(*) as n from b group by 1) q on q.payment_state = x.state)),
     'notes', jsonb_build_object(
       'no_ended_time', (select count(*) from b where b.left_out = 'no_ended_time'),
@@ -1505,7 +1511,9 @@ begin
       || ' ; GB 2/0.2500/2/1/{"GBP": {"amount": 90.00, "average": 45.00, "customers": 2}} age 17.5 churn 0 net 0 ind - {"B2C": 1, "unknown": 1}'
       || ' spark [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]'
       || ' ; total 8/1/10/4 age 13.0 churn 1 net 1 ind 0.5000'
-      || ' | mix billing monthly:8,yearly:1,other:1 ; device_band 0:7,1:3,2:0,3+:0 ; model vm1:2,vm2:1 ; payment_state paid:8,in_retry:1,failed:1,paused:1'
+      || ' | mix billing monthly:8,yearly:1,other:1 ; device_band 0:7,1:3,2:0,3+:0 ; model vm1:2,vm2:1 ; payment_state paid:8,in_retry:1,'
+      || case when exists (select 1 from cma.schema_migration m where m.version = '0009ze') then 'charged_back:0,awaiting_payment:0,' else '' end
+      || 'failed:1,paused:1'
       || ' | payment states differ 0 | churn 1=1'
       || ' | notes {"no_amount": 0, "no_ended_time": 1, "history_starts": [{"date": "2024-12-01", "store": "v-nl", "market": "NL"}, {"date": "2025-02-20", "store": "v-gb", "market": "GB"}],'
       || ' "dominant_cohort": null, "no_created_time": 1, "reconstruction_gap": 0, "unmatched_subscriptions": 1}'];

@@ -207,11 +207,11 @@ expect("C5 the queries: each family's events of a window (after, from, before), 
   [`${SUBSCRIPTION_FAMILY} AND occurredAt:>'2026-10-28T12:00:00.000Z'`,
     `${SUBSCRIPTION_FAMILY} AND occurredAt:>='2026-10-28T12:00:00.000Z' AND occurredAt:<'2026-10-28T12:01:00.000Z'`,
     `${BILLING_FAMILY} AND occurredAt:>'2026-10-28T12:00:00.000Z'`, "(id:'a-1' OR id:'c-3')", null, "family_unknown"], []);
-expect("C6 the adapter registered as juo, polling only (no route), subscriptions and the catalog read whole, four objects backfilled, two reconciled, a connection without a key skipped",
-  [ADAPTERS.juo === juo, juo.kind, juo.wholeObjects, juo.backfillObjects, juo.reconcileObjects, juo.skipReason({ tokenSecretName: null }),
+expect("C6 the adapter registered as juo, polling only (no route), subscriptions and the catalog read whole, five objects backfilled (purchase_order since 0009ze, without a dry run), two reconciled, a connection without a key skipped",
+  [ADAPTERS.juo === juo, juo.kind, juo.wholeObjects, juo.backfillObjects, juo.dryRunObjects, juo.reconcileObjects, juo.skipReason({ tokenSecretName: null }),
     juo.skipReason({ tokenSecretName: "ingest-juo-fixture-one-key" })],
-  [true, "poll", ["subscription", "subscription_product"], ["subscription", "subscription_product", "subscription_event", "billing_event"],
-    ["subscription", "subscription_product"], "key_not_set", null], []);
+  [true, "poll", ["subscription", "subscription_product"], ["subscription", "subscription_product", "subscription_event", "billing_event", "purchase_order"],
+    ["subscription", "subscription_product", "subscription_event", "billing_event"], ["subscription", "subscription_product"], "key_not_set", null], []);
 const startOf = async (setting) => juo.backfillFrom("subscription_event", { settings: async () => ({ "subscriptions.history_start_date": setting }) });
 expect("C7 an events backfill's start without --from: subscriptions.history_start_date, else all history; subscriptions and the catalog all history",
   [await startOf("2025-05-01"), await startOf(""), await startOf(" "), await juo.backfillFrom("billing_event", { settings: async () => ({}) }),

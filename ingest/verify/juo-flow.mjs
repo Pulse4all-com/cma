@@ -27,6 +27,7 @@
  * run succeeds); tenant two's store loads into tenant two only; no personal fixture text in any row of the run's tenants
  * or in a log line; nothing written to another tenant; the jobs' pool of 2 (the poll under its lock: at most 2 connections
  * at once, its work on one, no wait on its own pool; P1 the same for every poll, reconcile and backfill run). Since
+ * addition 0009ze (section J) the one-time fill of purchases' store orders (--object purchase_order). Since
  * addition 0008zq (section H) the backfill with --adapter juo: the two fake stores (two tenants) in one execution, each its
  * own dry-run line and its own run, in id order; the store without a key skipped (key_not_set) and counted, never a usage
  * error; the store-less handle failed store_not_configured; one store answering 503 while the other completes, the job's
@@ -613,6 +614,29 @@ expect("H6 the job process: exit 1 when a connection of the walk failed (the sto
 expect("H7 the job process: --connection with --adapter is a usage error (exit 2, nothing run)",
   [exit2.code, /"code":"usage"/.test(exit2.out), /exclude each other/.test(exit2.out)], [2, true, true], [0, false, false]);
 expect("H8 the logs of the walk hold no key and no value", [KEY1, KEY2, one.subscriptions[0].customer].filter((v) => logs.join("\n").includes(v) || exit1.out.includes(v)), [], ["x"]);
+
+// ---- J. Addition 0009ze: the one-time fill of purchases' store orders ------------------------------------------------------------
+// A purchase stored before 0009zc carries no store order: the fake's purchase (event 221, its order 6100000221) is made one
+// by the owner, as a held event of that time would be; the backfill --object purchase_order gives it its order, leaves a
+// purchase that holds one alone, and a second run with the same start reads nothing
+if ((await q("select count(*)::int as n from cma.schema_migration where version = '0009ze'"))[0].n === 1) {
+  await q(`update cma.subscription_event set raw = raw - 'orderId' where connection_id = $1 and event_type = 'purchased'`, [juo1.id]);
+  const held = (await q("select count(*)::int as n from cma.subscription_event where connection_id = $1 and event_type = 'purchased'", [juo1.id]))[0].n;
+  b = await runBackfill({ connectionId: juo1.id, object: "purchase_order" });
+  run = (await runsOf(juo1.id, "backfill")).at(-1);
+  const filled = await q(`select raw ->> 'orderId' as o from cma.subscription_event where connection_id = $1 and event_type = 'purchased' order by source_id`, [juo1.id]);
+  const again = await runBackfill({ connectionId: juo1.id, object: "purchase_order" });
+  const run2 = (await runsOf(juo1.id, "backfill")).at(-1);
+  expect("J1 the fill of purchases' orders: stream purchase_order, the held purchase without an order gains it (updated), its cursor done; a second run reads nothing",
+    [b.failed, run.stream, run.status, held >= 1, run.counts.updated, filled.every((r) => /^\d+$/.test(r.o ?? "")), (await cursor(juo1.id, "backfill:purchase_order"))?.done,
+      again.failed, run2.counts.fetched, run2.counts.updated, lastLog("backfill: purchase orders")?.purchasesFilled],
+    [0, "purchase_order", "succeeded", true, held, true, true, 0, 0, 0, 0],
+    [1, null, "failed", false, 0, false, false, 1, 1, 1, 1]);
+  expect("J2 purchase_order has no dry run (a usage error, nothing read)",
+    [await usageOf(() => runBackfill({ connectionId: juo1.id, object: "purchase_order", dryRun: true }))], ["usage"], ["ran"]);
+} else {
+  expect("J1 addition 0009ze (210) has run in this database", [false], [true], [true]);
+}
 
 // This run's connections stop being served (a later run's unfiltered jobs leave them alone); the tenants stay
 for (const [tenant, c] of [[T1, juo1.id], [T1, nostore.id], [T1, keyless.id], [T2, juo2.id]]) await asAdmin(tenant, () => q("select cma.set_connection_status($1, 'inactive')", [c]));

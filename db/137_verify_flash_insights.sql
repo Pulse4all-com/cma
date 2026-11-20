@@ -16,7 +16,9 @@
 -- the ratio's two counts (the split rows carry holding_subscriptions alone) and B7 the stored version 0008zu (without
 -- 138 they read FAIL); 139_verify_flash_totals.sql is 0008zu's own check.
 -- Expected verdict in dev and in prod (block C off, the default): "0008zt verified | 137_verify_flash_insights: 24 ok,
--- 0 FAIL, 1 skip" (25 checks: A1 to A7, B1 to B13, S1, D1 to D3 ok; C1 skip, volume off). A database without Pulse4all's CRM connection (a local one) reads S1 skip as
+-- 0 FAIL, 1 skip" (since 210_subscription_facts.sql, 0009ze, edited by that change: A4, A7 and B7 expect its
+-- definition version 0009ze of subscriptions and installed_base and its two data-quality checks, conditional on its row)
+-- (25 checks: A1 to A7, B1 to B13, S1, D1 to D3 ok; C1 skip, volume off). A database without Pulse4all's CRM connection (a local one) reads S1 skip as
 -- well, and one whose tenants have no set-up source reads D1 to D3 skip: still "0008zt verified" with those skips. A
 -- local run with verify.volume 'true': C1 ok. Provoked: "PROVOKED, NOT A PASS | 137_verify_flash_insights: 0 ok, <n>
 -- FAIL, <k> skip", every check that ran a FAIL.
@@ -285,7 +287,10 @@ begin
   end if;
   if (select string_agg(o.key || ':' || cma.flash_definition_version(o.key), ',' order by o.sort_order) from cma.flash_overviews() o)
      -- since 0008zu (138): customers and subscriptions 0008zu
-     is distinct from 'customers:0008zu,subscriptions:0008zu,installed_base:0008zt,churn:0008zn,orders:0008zn,payments:0008zn,open_deals:0008zn,'
+     -- since 0009ze (210): subscriptions and installed_base 0009ze
+     is distinct from 'customers:0008zu,subscriptions:'
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze,installed_base:0009ze' else '0008zu,installed_base:0008zt' end)
+                      || ',churn:0008zn,orders:0008zn,payments:0008zn,open_deals:0008zn,'
                       || 'open_tickets:0008zn,open_tasks:0008zn,reviews:0008zn,data_quality:0008zn' then
     v_bad := v_bad || 'versions; ';
   end if;
@@ -360,6 +365,9 @@ begin
      is distinct from 'customer_required_ref_missing:310,device_required_ref_missing:320,subscription_customer_unmatched:330,'
                       || 'active_subscription_without_device:340,device_subscription_ref_unknown:350,field_device_on_ended_subscription:360,'
                       || 'field_device_on_non_holding_subscription:370'
+                      -- since 0009ze (210): the variant mapping's and the device units' checks
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009ze')
+                               then ',subscription_variant_unmapped:380,subscription_device_units_mismatch:390' else '' end)
      or (select count(*) from cma.data_quality_catalog()) <> (select count(distinct check_key) from cma.data_quality_catalog())
      or cma.data_quality_fix_in('field_device_on_non_holding_subscription', 'paused') <> 'assets' then
     v_bad := v_bad || 'the catalog; ';
@@ -660,7 +668,10 @@ begin
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['17', 'B7 the snapshot equals the computation as of its date (0008zt), the document as of it; devices_on_holding = in_field_on_holding; the run''s settings; no jump on the ratio',
       -- since 0008zu (138): customers and subscriptions stored under 0008zu
-      case when v_txt = 'true 2026-10-29 true 2026-10-30 | customers:true:0008zu subscriptions:true:0008zu installed_base:true:0008zt | GB:4,5,7,1.40 NL:1,1,2,2.00 true '
+      -- since 0009ze (210): subscriptions and installed_base stored under 0009ze
+      case when v_txt = 'true 2026-10-29 true 2026-10-30 | customers:true:0008zu subscriptions:true:'
+                        || case when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze installed_base:true:0009ze' else '0008zu installed_base:true:0008zt' end
+                        || ' | GB:4,5,7,1.40 NL:1,1,2,2.00 true '
                         || '| 1,2,3 12,24,36,48,60 B2B,B2C active,failed | installed_base/devices/NL installed_base/in_field/NL installed_base/in_field_on_holding/NL '
                         || 'subscriptions/devices_on_holding/NL | snapshot 1.50 [1, 2, 3] [12, 24, 36, 48, 60] ["B2B", "B2C"] 13 none 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];

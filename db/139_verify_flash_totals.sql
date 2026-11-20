@@ -54,6 +54,16 @@ select set_config('verify.provoke', 'false', false);                 -- 'true' t
 select set_config('verify.max_overview_ms', '1500', false);          -- a live overview or the landing, as the application (Decision log, 3 Nov 2026)
 select set_config('verify.volume', 'false', false);                  -- 'true' to run block C, local databases only
 
+-- Since 210_subscription_facts.sql (0009ze; edited by that change): where 0009ze is recorded subscriptions and installed_base
+-- are counted under its definition version; an expected text names the two versions {S} and {I}
+create or replace function pg_temp.v0008zu_ver(p text)
+returns text
+language sql
+as $$
+  select case when exists (select 1 from cma.schema_migration where version = '0009ze')
+              then replace(replace(p, '{S}', '0009ze'), '{I}', '0009ze') else replace(replace(p, '{S}', '0008zu'), '{I}', '0008zt') end
+$$;
+
 drop table if exists pg_temp.verify_0008zu;
 create temp table verify_0008zu (ord int, check_name text, result text, detail text);
 
@@ -316,7 +326,7 @@ begin
   -- their definitions stay 0008zn and 0008zt
   if (select string_agg(o.key || ':' || cma.flash_definition_version(o.key) || ':' || coalesce(cma.flash_split_dim_of(o.key), '-'), ',' order by o.sort_order)
       from cma.flash_overviews() o)
-     is distinct from 'customers:0008zu:-,subscriptions:0008zu:status,installed_base:0008zt:'
+     is distinct from pg_temp.v0008zu_ver('customers:0008zu:-,subscriptions:{S}:status,installed_base:{I}:')
                       || (case when exists (select 1 from cma.schema_migration where version = '0008zy') then 'model' else '-' end)
                       || ',churn:0008zn:-,orders:0008zn:'
                       || (case when exists (select 1 from cma.schema_migration where version = '0008zw') then 'kind' else '-' end) || ',payments:0008zn:-,'
@@ -521,7 +531,7 @@ begin
              || ' ' || (j ->> 'definition_version');
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['16', 'B6 the headline, live: Total subscriptions and its split per holding status in the setting''s order, per market with a zero; its definition; no split for the customers',
-      case when v_txt = '6 active 2, failed 4 0008zu | 5 active 2, failed 3 | 1 active 0, failed 1 | 5 none 0008zu' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+      case when v_txt = pg_temp.v0008zu_ver('6 active 2, failed 4 {S} | 5 active 2, failed 3 | 1 active 0, failed 1 | 5 none 0008zu') and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B7. the take of 31 October (a month end) after 30 October stored by hand under 0008zt (GB's active customers and
     --     holding subscriptions 100): the stored figures equal the computation as of the date (one code path), under
@@ -559,7 +569,7 @@ begin
                                    from cma.flash_watch_finding f
                                    where f.tenant_id = v_t1 and f.state = 'open' and f.kind = 'jump' and f.overview in ('customers', 'subscriptions')), '-');
     v_rows := v_rows || array['17', 'B7 the take: stored as computed as of its date, under 0008zu; the month end''s customer list on the holding statuses; no jump across the change of definition',
-      case when v_txt = 'true 2026-10-31 | customers:true:0008zu subscriptions:true:0008zu | cu-1,cu-2,cu-3,cu-6,ncu-1 s-1,s-7 | -'
+      case when v_txt = pg_temp.v0008zu_ver('true 2026-10-31 | customers:true:0008zu subscriptions:true:{S} | cu-1,cu-2,cu-3,cu-6,ncu-1 s-1,s-7 | -')
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B8. the landing, as tenant one's analyst: as of 31 October the stored Total subscriptions and its split, the figure's
@@ -581,7 +591,7 @@ begin
                                    from jsonb_array_elements(j -> 'overviews') c where c ->> 'key' = 'subscriptions');
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['18', 'B8 the landing: as of a date the stored split and the definitions of the figure and of the one it is compared with; now the definitions alike',
-      case when v_txt = 'customers 5 none 0008zu 3 2026-10-30 0008zt | subscriptions 6 active 2, failed 4 0008zu 5 2026-10-30 0008zt | live 0008zu 0008zu 6 none | GB 5 active 2, failed 3 100'
+      case when v_txt = pg_temp.v0008zu_ver('customers 5 none 0008zu 3 2026-10-30 0008zt | subscriptions 6 active 2, failed 4 {S} 5 2026-10-30 0008zt | live {S} {S} 6 none | GB 5 active 2, failed 3 100')
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B9. the watch within one definition: 31 October's GB active customers set to 100 by hand, the take of 1 November
@@ -798,6 +808,8 @@ drop function if exists pg_temp.v0008zu_others(jsonb);
 drop function if exists pg_temp.v0008zu_before(uuid, text, date, date, date);
 drop function if exists pg_temp.v0008zu_fixture(uuid);
 drop function if exists pg_temp.v0008zu_split(jsonb);
+
+drop function if exists pg_temp.v0008zu_ver(text);
 
 -- Verdict: one row per check, then the verdict: no FAIL, and a skip only where the check says why (the volume off; no
 -- tenant with the source set up)
