@@ -19,7 +19,8 @@
  * where the tenant lets a person clock in again (the branch that ran is printed), status changes from the tenant's own list, the
  * two export files in the tenant's format, time per status for the Dashboard (the same minutes as Team
  * hours), app links per person, the team now for the Live board (a person's own entry equals the
- * own-day read but for the board's two paid inputs, which the own-day read never carries), the Team screen (migration 0004: who is listed and editable, roles, teams, skills,
+ * own-day read but for the board's two paid inputs, which the own-day read never carries), the Team
+ * screen (migration 0004: who is listed and editable, roles, teams, skills,
  * adding a person) and the memberships for the Live board's team filter, the configuration screens
  * (migration 0005a: statuses, app links, absence types, coverage targets, settings; the admin only,
  * everything undone at the end), the own profile for My account (addition 0005b), and messaging
@@ -646,17 +647,21 @@ try { teamNow = JSON.parse(nowRes.text).data ?? teamNow; } catch { /* left empty
 expect("the supervisor reads the team now, never cached",
   [nowRes.status, nowRes.headers.get("cache-control"), teamNow.people.length > 0, teamNow.statusFlags.length > 0],
   [200, "no-store", true, true], [200, "public", true, true]);
-const ownDay = (await get(AGENT, "/api/v1/me/day")).body?.data ?? null;
+const ownDayRes = await get(AGENT, "/api/v1/me/day");
+const ownDay = ownDayRes.body?.data ?? null;
 const agentEntry = teamNow.people.find((p) => p.userId === meA.userId) ?? null;
 // The board's paid inputs (addition 0009z), on the board's day only
 const PAID_FIELDS = ["paidClosedSeconds", "paidRunningSince"];
 const withoutPaid = (day) => (day ? { ...day, clock: Object.fromEntries(Object.entries(day.clock ?? {}).filter(([k]) => !PAID_FIELDS.includes(k))) } : null);
 expect("the agent's own entry equals the own-day read, but for the board's paid inputs",
   withoutPaid(agentEntry?.day ?? null), ownDay, { ...ownDay, statusSince: null });
-// The decision of #297: the own-day read carries neither paid input, anywhere in its answer
-const ownDayText = JSON.stringify(ownDay ?? {});
+// The decision of #297: the own-day read carries neither paid input anywhere in its whole answer, nor any other key named
+// for pay (a paid input added later under another name, or a status's isPaid)
+const ownDayText = JSON.stringify(ownDayRes.body ?? {});
+const allKeysOf = (v) => (v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [k, ...allKeysOf(x)]) : []);
 expect("the own-day read carries no paid inputs (a pause's pay is not shown to agents)",
-  [ownDay !== null, ...PAID_FIELDS.map((k) => ownDayText.includes(`"${k}"`))], [true, false, false], [true, true, false]);
+  [ownDay !== null, ...PAID_FIELDS.map((k) => ownDayText.includes(`"${k}"`)), allKeysOf(ownDayRes.body).filter((k) => /paid/i.test(k))],
+  [true, false, false, []], [true, true, false, []]);
 // The board's entry for the agent carries both: whole seconds paid so far, and the running paid stretch's start or null
 const boardClock = agentEntry?.day?.clock ?? {};
 expect("the board's entry carries the paid inputs: seconds and a time or null",
