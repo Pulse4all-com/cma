@@ -64,7 +64,7 @@
 --              subscription_survival, subscription_store_start, dq_subscription_variant_unmapped, dq_subscription_device_units_mismatch
 --   checks     data quality subscription_variant_unmapped (fixed in cma) and subscription_device_units_mismatch (assets)
 -- What it re-creates (each from its latest definition, with its -- based on: line)
---   cma.check_tenant_setting()                     202: the two settings
+--   cma.check_tenant_setting()                     202: the three settings
 --   cma.subscription_payment_state_of(uuid)        118: dropped and created (Charged back, Awaiting payment, four columns)
 --   cma.subscription_payment_state_of(uuid,uuid[]) 148: the same, narrowed first
 --   cma_read.subscription_payment_state(_rows)     118: the new columns
@@ -112,7 +112,7 @@ on conflict (key) do update
   set value_type = excluded.value_type, allowed_values = excluded.allowed_values,
       default_value = excluded.default_value, description = excluded.description;
 
--- As 0009za's (202), with the two settings of the subscription facts
+-- As 0009za's (202), with the three settings of the subscription facts
 -- based on: 202_subscription_lines.sql
 create or replace function cma.check_tenant_setting()
 returns trigger
@@ -1640,7 +1640,8 @@ alter function cma.subscription_moves_of(uuid, timestamptz) set jit = off;
 -- events; a store without migrated events at the first complete month after its first event. Derived from the data,
 -- never a date in code. A month counts toward the migration when it holds at least subscriptions.migration_bulk_min_pct
 -- of the store's migrated events; a later month below that share is a straggler: reported (its months and its events),
--- never a reason to start later. Per subscriptions connection with an event, months in the tenant's zone
+-- never a reason to start later. Where no month holds the share, the busiest month is the migration's last. Per
+-- subscriptions connection with an event, months in the tenant's zone
 create or replace function cma.subscription_rate_start_of(p_tenant_id uuid, p_now timestamptz)
 returns table (connection_id uuid, first_event_month date, migration_months jsonb, last_migration_month date,
                straggler_months jsonb, stragglers integer, rate_start_month date)
@@ -1664,7 +1665,11 @@ as $$
     select m.connection_id, m.month, m.n, m.n * 100.0 / sum(m.n) over (partition by m.connection_id) >= (select z.pct from z) as bulk
     from mm m
   ), lb as (
-    select t.connection_id, max(t.month) as last_month from mt t where t.bulk group by 1
+    -- the last month holding the share; a store whose migration is spread so thin that no month holds it takes its
+    -- busiest month (the latest of equals), so a store with migrated events never starts as one without
+    select t.connection_id,
+           coalesce(max(t.month) filter (where t.bulk), (array_agg(t.month order by t.n desc, t.month desc))[1]) as last_month
+    from mt t group by 1
   )
   select fe.connection_id, fe.first_month,
          coalesce((select jsonb_object_agg(to_char(t.month, 'YYYY-MM'), t.n) from mt t where t.connection_id = fe.connection_id), '{}'),
@@ -1892,7 +1897,8 @@ as $$
             'timezone', 'billing_event', 'subscription_line', 'subscription_product_variant', 'subscription_variant_mapping',
             'subscription_change']), '|'),
     cma.setting_of(p_tenant_id, 'flash.ended_subscription_statuses'), cma.setting_of(p_tenant_id, 'flash.device_holding_statuses'),
-    cma.setting_of(p_tenant_id, 'subscriptions.propositions'), p_today::text))
+    cma.setting_of(p_tenant_id, 'subscriptions.propositions'), cma.setting_of(p_tenant_id, 'subscriptions.migration_bulk_min_pct'),
+    p_today::text))
 $$;
 
 -- Compute the tenant's subscription facts again (C.9): skipped while its take is younger than

@@ -545,10 +545,24 @@ begin
               from cma_read.subscription_store_start x where x.tenant_id = v_t)
              || ' | ' || (select to_char(min(m.month), 'YYYY-MM') from cma.subscription_month_take m
                           where m.tenant_id = v_t and m.connection_id = v_sub_c and m.complete);
-    v_rows := v_rows || array['26', 'B8b the rates start the month after the store''s last month of migrated events (a straggler reported, not moving it), else at the first complete month after its first event; a month counts from then',
-      case when v_txt = format('BE:%1$s:{"%1$s": 20, "%4$s": 1}:%1$s:{"%4$s": 1}:1:%2$s DE:%1$s:{"%1$s": 1}:%1$s:{}:0:%2$s FR:%1$s:{}:-:{}:0:%2$s IE:%5$s:{"%5$s": 1}:%5$s:{}:0:%1$s NL:%1$s:{"%2$s": 5}:%2$s:{}:0:%3$s | %3$s',
+    -- with the tenant's share set to 3 %, BE's straggler (1 of 21, 4.8 %) holds the share: the facts' digest moves with
+    -- the setting, and BE's rates start after month 4
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'subscriptions.migration_bulk_min_pct', '3');
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_sch::text, true);
+    v_j2 := cma.subscription_facts_refresh_of(v_t, false, now() + interval '16 minutes');
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || ' | ' || coalesce(v_j2 ->> 'unchanged', 'none') || ' '
+             || (select to_char(x.rate_start_month, 'YYYY-MM') || ':' || x.stragglers from cma.subscription_store_start x where x.tenant_id = v_t and x.market = 'BE');
+    delete from cma.tenant_setting where tenant_id = v_t and key = 'subscriptions.migration_bulk_min_pct';
+    perform set_config('role', 'cma_app', true);
+    perform cma.subscription_facts_refresh_of(v_t, true, now());
+    perform set_config('role', 'cma_owner', true);
+    v_rows := v_rows || array['26', 'B8b the rates start the month after the store''s last month of migrated events (a straggler reported, not moving it), else at the first complete month after its first event; a month counts from then; a tenant share of 3 % makes BE''s straggler a migration month (the digest moves with the setting)',
+      case when v_txt = format('BE:%1$s:{"%1$s": 20, "%4$s": 1}:%1$s:{"%4$s": 1}:1:%2$s DE:%1$s:{"%1$s": 1}:%1$s:{}:0:%2$s FR:%1$s:{}:-:{}:0:%2$s IE:%5$s:{"%5$s": 1}:%5$s:{}:0:%1$s NL:%1$s:{"%2$s": 5}:%2$s:{}:0:%3$s | %3$s | false %6$s:0',
                                to_char(v_m0 + interval '1 month', 'YYYY-MM'), to_char(v_m0 + interval '2 months', 'YYYY-MM'),
-                               to_char(v_m0 + interval '3 months', 'YYYY-MM'), to_char(v_m0 + interval '4 months', 'YYYY-MM'), to_char(v_m0, 'YYYY-MM'))
+                               to_char(v_m0 + interval '3 months', 'YYYY-MM'), to_char(v_m0 + interval '4 months', 'YYYY-MM'), to_char(v_m0, 'YYYY-MM'),
+                               to_char(v_m0 + interval '5 months', 'YYYY-MM'))
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
     -- B9. survival: the IE cohort of month 0, monthly: 9 started (a10 migrated, left out), all eligible for renewals 1 and
