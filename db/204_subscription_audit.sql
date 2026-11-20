@@ -138,8 +138,9 @@ $$;
 -- Whether a text (a row's JSON text) holds what the mirror must never hold: an @ (an ASCII or a full-width one), a
 -- control character (as JSON escapes it, \n or \u0001; DEL, C1 controls and the line and paragraph separators raw), or a
 -- phone number's shape: a token of its own starting with + or 0, then 7 to 16 digits, single spaces, dots, slashes or
--- hyphens between them (+44 7700 900123, 07700 900123, 06-12345678, 0031612345678, tel:+31612345678). An id, a uuid, a
--- date, a time, an amount or a SKU does not take it. A literal backslash before n, r, t, b or f reads as a control
+-- hyphens between them (+44 7700 900123, 07700 900123, 06-12345678, 0031612345678, tel:+31612345678); a token starts
+-- after anything but a letter, a digit or _ . / : - (or after tel:), so the seconds and fraction of a timestamp
+-- (03.412321) never start one. An id, a uuid, a date, a time with its fraction, an amount or a SKU does not take it. A literal backslash before n, r, t, b or f reads as a control
 -- character: a false alarm on the safe side. Names and addresses are not detected (codes only are stored; the brief's
 -- rule 2)
 -- (plpgsql, so it is never inlined: its caller builds a row's JSON text once, where an inlined SQL function would build it
@@ -152,7 +153,7 @@ begin
   return strpos(p_text, '@') > 0 or strpos(p_text, U&'\FF20') > 0
          or p_text ~ '\\(u00[01][0-9a-fA-F]|[nrtbf])'
          or p_text ~ '[[:cntrl:]\u0080-\u009f\u2028\u2029]'
-         or p_text ~ '(^|[^0-9A-Za-z_./-])(\+|0)[0-9]([ ./-]?[0-9]){6,15}($|[^0-9A-Za-z_./-]|[ ./-][^0-9A-Za-z_])';
+         or p_text ~ '(^|[^0-9A-Za-z_./:-]|tel:)(\+|0)[0-9]([ ./-]?[0-9]){6,15}($|[^0-9A-Za-z_./-]|[ ./-][^0-9A-Za-z_])';
 end
 $$;
 
