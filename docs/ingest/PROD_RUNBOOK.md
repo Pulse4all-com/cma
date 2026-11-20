@@ -2948,7 +2948,9 @@ Expected: `Execution [ingest-backfill-…] has successfully completed.`; 16.5's 
 
 # Phase 17. Juo as a full source, Part A (addition 0009za, brief B39a)
 
-One step at a time; each says where it runs and what to expect.
+One step at a time; each says where it runs and what to expect. Run in dev and prod on 20 November 2026
+(`records/0009za-dev-2026-11-20` and `records/0009za-prod-2026-11-20`, written from Martin's report); 17.2, 17.4, 17.5
+and 17.6 were corrected afterwards where the run differed.
 
 ## 17.1 Browser: a read-only key per store, if Juo offers one
 **Browser** (Juo admin, each store → Settings → Integrations → API keys): look whether a key can be limited to reading.
@@ -2967,11 +2969,22 @@ run_migration dev 202_subscription_lines.sql 203_verify_subscription_lines.sql 0
 ```
 Expected: 202 ends with `COMMIT` and `RESET`; 203's last row `verdict | PASS | 203_verify_subscription_lines: 26 PASS, 0 FAIL`; provoked `PROVOKED, NOT A PASS | 203_verify_subscription_lines: 0 PASS, 26 FAIL`; each rerun as it passed before (119 `23 PASS`, the others their usual counts); `records clean`. 117 (heavy, 21 checks) is also named: run it on its own when dev is quiet.
 
+117 runs as a loose `psql` call, outside `run_migration`, so the session needs its database first (`PGCONN` may be unset):
+
 **Terminal**
 ```bash
-psql "$PGCONN" -f db/117_verify_asset_sync_load.sql | tail -3
+cma_db dev
 ```
-Expected: `21 ok, 0 FAIL`.
+Expected: `connected to cma as <your login>`.
+
+Its output goes to the records folder and its verdict is read from that file (the terminal's last lines cut the verdict
+off):
+
+**Terminal**
+```bash
+psql "$PGCONN" -f db/117_verify_asset_sync_load.sql > records/0009za-dev-$(date +%F)/117-rerun.txt 2>&1; awk -F'|' '/^ ([ABCZ][0-9]+ |verdict)/ {split($1,a," "); print a[1], $2, substr($3,1,100)}' records/0009za-dev-$(date +%F)/117-rerun.txt
+```
+Expected, in about 15 minutes: one line per row, A1 to A6, B1 to B8, C1 to C5, Z1 and Z2, then `verdict 0008zk verified 117_verify_asset_sync_load: 21 ok, 0 FAIL`. On dev's shared core C3, C4 or C5 may FAIL on speed alone (since 8 November 2026; C4 did on 20 November), and the verdict is then `FAIL` with that count: accepted, as long as every A, B and Z row is `ok`. Any other FAIL: report the row.
 
 ## 17.3 Terminal: the data map on the branch
 No concurrent index step in this addition: `subscription_event` keeps 122's `subscription_event_type_occurred_idx`; `billing_event` is new and its indexes are in 202. Refresh `docs/datamap/schema.json` from dev as for earlier additions (and rebuild the page with `node tools/datamap/build.mjs`), then:
@@ -2991,7 +3004,13 @@ run_migration prod 202_subscription_lines.sql 203_verify_subscription_lines.sql 
 ```
 Expected: 202 `COMMIT`; 203 refuses prod (no dev seed): `verdict | REFUSED`, expected in prod as 119 does. Then the prod-safe verifies as after 118 (105, 115) pass as before. Resume the poll.
 
-Then merge the PR; the ingest image builds from `main` (`ingest/` changed; `web/` changed only in the mock, which deploys too).
+Then merge the PR; `cma-web-main` builds and deploys the web app (`web/` changed only in the mock). The ingest does not deploy itself: deploy it from `main` before 17.5, the service with its front, then the jobs (`--front` with the service, never with `--jobs`):
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the ten jobs on the same image (`no build`), the schedules unchanged.
 
 ## 17.5 Terminal: the dry runs, one object per command (nothing written)
 **Terminal**
@@ -3010,7 +3029,7 @@ gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-w
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;billing_event;--dry-run'
 ```
-Expected: one `backfill dry run` line per store each; `unreadable` 0. Report into the chat per store: `lines`, `linesPerSubscription`, `minCyclesSet`, `maxCyclesSet`, `instrumentTypes` (subscription); `variants`, `top`, `variantsNotInCatalog` (subscription_product); `eventTypes`, `kept`, `duplicates`, `firstEventAt` (subscription_event; `eventTypes` never holds `renewal:notification-sent`, which no query asks for (Decision log, 19 Nov 2026); all history, since `subscriptions.history_start_date` is empty); `billingKinds`, `returnCodes`, `instrumentTypes`, `withSubscription`, `firstEventAt` (billing_event). The `--dry-run` takes one object (the runner refuses a list). The dry run also settles whether Juo accepts a grouped OR in a query (docs/open-decisions.md).
+The log lines arrive about a minute after the execution ends: wait that minute before reading them. Expected: 12 `backfill dry run` lines per command, one per active Juo connection; `unreadable` 0. Report into the chat per store: `lines`, `linesPerSubscription`, `minCyclesSet`, `maxCyclesSet`, `instrumentTypes` (subscription); `variants`, `top`, `variantsNotInCatalog` (subscription_product); `eventTypes`, `kept`, `duplicates`, `firstEventAt` (subscription_event; `eventTypes` never holds `renewal:notification-sent`, which no query asks for (Decision log, 19 Nov 2026); all history, since `subscriptions.history_start_date` is empty); `billingKinds`, `returnCodes`, `instrumentTypes`, `withSubscription`, `firstEventAt` (billing_event). The `--dry-run` takes one object (the runner refuses a list). The dry run also settles whether Juo accepts a grouped OR in a query (docs/open-decisions.md).
 
 ## 17.6 Terminal: the backfills from each store's first event
 Pause `ingest-poll-subscriptions` as 15.10 (d), then:
@@ -3023,7 +3042,7 @@ gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-w
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;subscription,subscription_product'
 ```
-Then resume the poll. Expected: one succeeded run per store and object; the poll's next run small.
+Then resume the poll. Expected: one succeeded run per store and object; the poll's next run small. Until the stores without subscriptions are settled (docs/open-decisions.md, Juo stores without subscriptions), the second execution ends with exit 1, `failed` 3: ES, FI and IT fail `subscription` with `empty_snapshot` (Juo returns no subscription there) while their catalogs and every other store load. Read the result from the `backfill finished` line (its `results` per connection and object), not from the exit code; any other failure: report it.
 Note: the events backfill now reads all of Juo's history (May 2025 for GB and NL): Flash's live figures for past dates gain events from before 29 October 2026, and Customers → Active's take recomputes once (its inputs key reads the events' `synced_at`); stored Flash snapshots stay as they were.
 
 ## 17.7 Studio (cma-prod-pg): the counts per store and table (counts and codes only)
