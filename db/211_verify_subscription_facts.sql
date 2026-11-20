@@ -14,7 +14,7 @@
 --      the readers; Customers → Active's inputs digest over 174's twelve markers equal to 174's own (kept below), on the
 --      dev seed's tenants; the payment state equal to 118's and 148's (kept below) row for row but where its new states apply
 --   B  on a throwaway tenant with two stores (IE: the payment states, outcomes, device units, survival; DE: a month grid):
---      the settings' refusals; the mapping's refusals and its removal; device units (a one-time line left out, an
+--      the settings' refusals; when each store's rates start (a bulk migration month, a late straggler, no migration); the mapping's refusals and its removal; device units (a one-time line left out, an
 --      unmapped line null); every payment state and the precedence (a chargeback on the latest renewal, one before a
 --      later renewal, on a purchase, an invoice placed, overdue and paid, In retry over a chargeback, Failed with its
 --      return code); every renewal outcome; every movement kind on the month grid, the base at each month's start and
@@ -198,16 +198,16 @@ begin
               and exists (select 1 from cma.schema_migration where version = '0009zc') and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
-  -- A2. the six tables: row-level security on, the application's grants; the mapping audited, the takes not
+  -- A2. the seven tables: row-level security on, the application's grants; the mapping audited, the takes not
   select string_agg(c.relname || ':' || c.relrowsecurity || c.relforcerowsecurity
                     || ':' || has_table_privilege('cma_app', c.oid, 'select') || has_table_privilege('cma_app', c.oid, 'insert')
                     || ':' || exists (select 1 from pg_trigger g where g.tgrelid = c.oid and g.tgname = 'audit'), ' ' order by c.relname collate "C")
   into v_txt
   from pg_class c join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'cma'
   where c.relname in ('subscription_variant_mapping', 'subscription_take_state', 'subscription_take', 'subscription_month_take', 'renewal_outcome',
-                      'subscription_survival_take');
-  insert into verify_0009ze values (2, 'A2 the six tables: row-level security on, the application''s grants; the mapping audited, the takes not',
-    case when v_txt = 'renewal_outcome:truefalse:truetrue:false subscription_month_take:truefalse:truetrue:false subscription_survival_take:truefalse:truetrue:false subscription_take:truefalse:truetrue:false subscription_take_state:truefalse:truetrue:false subscription_variant_mapping:truefalse:truetrue:true'
+                      'subscription_survival_take', 'subscription_store_start');
+  insert into verify_0009ze values (2, 'A2 the seven tables: row-level security on, the application''s grants; the mapping audited, the takes not',
+    case when v_txt = 'renewal_outcome:truefalse:truetrue:false subscription_month_take:truefalse:truetrue:false subscription_store_start:truefalse:truetrue:false subscription_survival_take:truefalse:truetrue:false subscription_take:truefalse:truetrue:false subscription_take_state:truefalse:truetrue:false subscription_variant_mapping:truefalse:truetrue:true'
               and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'missing'));
 
   -- A3. every new function the application's, none public's; the fill a definer's with a pinned search path; the
@@ -217,7 +217,7 @@ begin
     'cma.set_subscription_variant_mapping(uuid,text,text,text,integer,text)', 'cma.subscription_variants_of(uuid,uuid)',
     'cma.subscription_variants(uuid)', 'cma.subscription_device_units_of(uuid)', 'cma.inputs_markers_of(uuid,text[])',
     'cma.subscription_interval_group_of(text,integer)', 'cma.subscription_amount_at(uuid,uuid,text,timestamptz,numeric,text,text,integer)',
-    'cma.subscription_moves_of(uuid,timestamptz)', 'cma.renewal_outcomes_of(uuid)', 'cma.subscription_facts_inputs_key_of(uuid,date)',
+    'cma.subscription_moves_of(uuid,timestamptz)', 'cma.renewal_outcomes_of(uuid)', 'cma.subscription_rate_start_of(uuid,timestamptz)', 'cma.subscription_facts_inputs_key_of(uuid,date)',
     'cma.subscription_facts_refresh_of(uuid,boolean,timestamptz)', 'cma.subscription_facts_refresh()',
     'cma.ingest_fill_purchase_orders(uuid,jsonb)']) f
   where to_regprocedure(f) is null or not has_function_privilege('cma_app', f, 'execute') or has_function_privilege('public', f, 'execute');
@@ -236,9 +236,9 @@ begin
            || ' | ' || (select string_agg(c.relname, ',' order by c.relname collate "C") from pg_class c join pg_namespace n on n.oid = c.relnamespace
                         where n.nspname = 'cma_read' and c.relname in ('subscription_take', 'subscription_month_take', 'subscription_churn_month',
                               'renewal_outcome', 'subscription_survival', 'subscription_payment_state', 'dq_subscription_variant_unmapped',
-                              'dq_subscription_device_units_mismatch'));
-  insert into verify_0009ze values (4, 'A4 the payment state''s columns (the old nine first) and the eight readers',
-    case when v_txt = 'subscription_id,connection_id,source_id,customer_source_id,status,payment_state,retry_cycle,retry_since,last_attempt,state_since,overdue,chargeback_return_code,amount_at_risk,currency | dq_subscription_device_units_mismatch,dq_subscription_variant_unmapped,renewal_outcome,subscription_churn_month,subscription_month_take,subscription_payment_state,subscription_survival,subscription_take'
+                              'dq_subscription_device_units_mismatch', 'subscription_store_start'));
+  insert into verify_0009ze values (4, 'A4 the payment state''s columns (the old nine first) and the nine readers',
+    case when v_txt = 'subscription_id,connection_id,source_id,customer_source_id,status,payment_state,retry_cycle,retry_since,last_attempt,state_since,overdue,chargeback_return_code,amount_at_risk,currency | dq_subscription_device_units_mismatch,dq_subscription_variant_unmapped,renewal_outcome,subscription_churn_month,subscription_month_take,subscription_payment_state,subscription_store_start,subscription_survival,subscription_take'
               and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'missing'));
 
   -- A5. Customers → Active's digest: over 174's twelve markers 210's parts give 174's own digest, for every tenant; the
@@ -285,7 +285,8 @@ declare
   v_dev     boolean := current_setting('verify.dev')::boolean;
   v_rows    text[] := '{}';
   v_t uuid; v_adm uuid; v_agent uuid; v_sch uuid; v_ing uuid; v_other uuid; v_oing uuid;
-  v_shop_a uuid; v_sub_a uuid; v_shop_b uuid; v_sub_b uuid; v_assets uuid;
+  v_shop_a uuid; v_sub_a uuid; v_shop_b uuid; v_sub_b uuid; v_assets uuid; v_sub_c uuid; v_sub_d uuid; v_sub_e uuid; v_shop uuid;
+  v_st record;
   v_m0 timestamp := date_trunc('month', now() at time zone 'Europe/London') - interval '6 months';
   v_mon date := (date_trunc('month', now() at time zone 'Europe/London') - interval '6 months')::date;
   v_txt text; v_j jsonb; v_j2 jsonb; v_key1 text; v_key2 text;
@@ -325,9 +326,10 @@ begin
     -- B1. the settings: propositions of codes only, the refresh age from 1 to 1440 minutes
     v_txt := pg_temp.v0009ze_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.propositions'', ''p1,P2'')', v_t))
              || ' ' || pg_temp.v0009ze_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.take_refresh_minutes'', ''0'')', v_t))
+             || ' ' || pg_temp.v0009ze_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.migration_bulk_min_pct'', ''101'')', v_t))
              || ' ' || pg_temp.v0009ze_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.propositions'', ''p1,p2'')', v_t));
-    v_rows := v_rows || array['11', 'B1 subscriptions.propositions takes codes only and take_refresh_minutes 1 to 1440 (CMA04); p1,p2 stored',
-      case when v_txt = 'CMA04 CMA04 ok' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['11', 'B1 subscriptions.propositions takes codes only, take_refresh_minutes 1 to 1440 and migration_bulk_min_pct 1 to 100 (CMA04); p1,p2 stored',
+      case when v_txt = 'CMA04 CMA04 CMA04 ok' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- the IE store's subscriptions (all created in month 0, monthly, 30 EUR): a1 to a9 as the checks below describe, a10
     -- migrated
@@ -420,6 +422,33 @@ begin
            (v_t, v_sub_b, 'verifysubs', 'rb5', 'b5', 'reactivated', (v_m0 + interval '3 months') at time zone 'Europe/London', 'canceled', 'active'),
            (v_t, v_sub_b, 'verifysubs', 'pb6', 'b6', 'purchased', (v_m0 + interval '1 month 19 days') at time zone 'Europe/London', null, null);
 
+    -- three more stores for when the rates start: NL with its first event in month 1 and its migration (five migrated
+    -- events) in month 2; BE with twenty migrated events in month 1 and one straggler in month 4 (1 of 21, under 5 %); FR
+    -- with no migration, its first event in month 1
+    insert into cma.market (tenant_id, code, name, time_zone, language_code, currency)
+    values (v_t, 'NL', 'Verify NL', 'Europe/London', 'nl', 'EUR'), (v_t, 'BE', 'Verify BE', 'Europe/London', 'nl', 'EUR'),
+           (v_t, 'FR', 'Verify FR', 'Europe/London', 'fr', 'EUR') on conflict do nothing;
+    for v_st in select * from (values ('c', 'NL'), ('d', 'BE'), ('e', 'FR')) x(k, market) loop
+      insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, signing_secret_name)
+      values (v_t, 'verifyshop', 'Verify shop ' || v_st.k, 'verify-ze-' || v_st.k || '.shop.example', 'commerce', 'verify-ze-shop-' || v_st.k) returning id into v_shop;
+      insert into cma.commerce_store (tenant_id, connection_id, handle, name, market, currency, time_zone)
+      values (v_t, v_shop, 'verify-ze-' || v_st.k, 'Verify store ' || v_st.k, v_st.market, 'EUR', 'Europe/London');
+      insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
+      values (v_t, 'verifysubs', 'Verify subscriptions ' || v_st.k, 'verify-ze-' || v_st.k || '.shop.example', 'subscriptions', 'verify-ze-key-' || v_st.k)
+      returning id into v_shop;
+      case v_st.k when 'c' then v_sub_c := v_shop; when 'd' then v_sub_d := v_shop; else v_sub_e := v_shop; end case;
+    end loop;
+    insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at)
+    select v_t, v_sub_c, 'verifysubs', 'pc0', 'c0', 'purchased', (v_m0 + interval '1 month 9 days') at time zone 'Europe/London'
+    union all
+    select v_t, v_sub_c, 'verifysubs', 'mc' || n, 'c' || n, 'migrated', (v_m0 + interval '2 months 2 days') at time zone 'Europe/London' from generate_series(1, 5) n
+    union all
+    select v_t, v_sub_d, 'verifysubs', 'md' || n, 'd' || n, 'migrated', (v_m0 + interval '1 month 4 days') at time zone 'Europe/London' from generate_series(1, 20) n
+    union all
+    select v_t, v_sub_d, 'verifysubs', 'md21', 'd21', 'migrated', (v_m0 + interval '4 months 4 days') at time zone 'Europe/London'
+    union all
+    select v_t, v_sub_e, 'verifysubs', 'pe1', 'e1', 'purchased', (v_m0 + interval '1 month 9 days') at time zone 'Europe/London';
+
     -- B2. the mapping, as the tenant's administrator: refusals, then vdev (device, vzm, 1 per unit, p1) and vacc (accessory,
     --     p2); a removal; another user without tenant.configure refused
     perform set_config('role', 'cma_app', true);
@@ -495,7 +524,7 @@ begin
     v_txt := (select string_agg(((m.month - v_mon) / 28)::text || m.kind || m.subscriptions || case when m.complete then '*' else '' end, ' '
                                 order by m.month, m.kind collate "C")
               from cma.subscription_month_take m where m.tenant_id = v_t and m.connection_id = v_sub_b and m.currency = '' and m.month < (v_mon + interval '5 months')::date);
-    v_rows := v_rows || array['17', 'B7 the DE store''s months: Total subscriptions at start and end and the movements (new, migrated, paused, resumed, churned, moved_to_failed, reactivated); * a complete month, from the store''s first complete one',
+    v_rows := v_rows || array['17', 'B7 the DE store''s months: Total subscriptions at start and end and the movements (new, migrated, paused, resumed, churned, moved_to_failed, reactivated); * a complete month, from the month after its migration',
       case when v_txt = '1end5 1migrated1 1new4 1start0 2churned1* 2end5* 2new1* 2paused1* 2resumed1* 2start5* 3churned1* 3end4* 3moved_to_failed1* 3reactivated1* 3start5* 4churned1* 4end3* 4start4*'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
@@ -505,6 +534,22 @@ begin
               from cma_read.subscription_churn_month c where c.tenant_id = v_t and c.market = 'DE' and c.month < (v_mon + interval '5 months')::date);
     v_rows := v_rows || array['18', 'B8 Churn rate and Failed rate per market and complete month against a hand count (the reader''s view)',
       case when v_txt = '2:5:0.2000:0.0000 3:5:0.2000:0.2000 4:4:0.2500:0.0000' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
+
+    -- B8b. when each store's rates start (Martin, 20 November 2026): the month after its last month of migrated events
+    --      (IE month 1, DE month 2, NL month 3), BE's straggler of month 4 reported and not moving its start from month 2,
+    --      FR without migration at the first complete month after its first event (month 2); NL's months complete from
+    --      month 3 on
+    v_txt := (select string_agg(x.market || ':' || to_char(x.first_event_month, 'YYYY-MM') || ':' || x.migration_months::text || ':'
+                                || coalesce(to_char(x.last_migration_month, 'YYYY-MM'), '-') || ':' || x.straggler_months::text || ':' || x.stragglers
+                                || ':' || to_char(x.rate_start_month, 'YYYY-MM'), ' ' order by x.market collate "C")
+              from cma_read.subscription_store_start x where x.tenant_id = v_t)
+             || ' | ' || (select to_char(min(m.month), 'YYYY-MM') from cma.subscription_month_take m
+                          where m.tenant_id = v_t and m.connection_id = v_sub_c and m.complete);
+    v_rows := v_rows || array['26', 'B8b the rates start the month after the store''s last month of migrated events (a straggler reported, not moving it), else at the first complete month after its first event; a month counts from then',
+      case when v_txt = format('BE:%1$s:{"%1$s": 20, "%4$s": 1}:%1$s:{"%4$s": 1}:1:%2$s DE:%1$s:{"%1$s": 1}:%1$s:{}:0:%2$s FR:%1$s:{}:-:{}:0:%2$s IE:%5$s:{"%5$s": 1}:%5$s:{}:0:%1$s NL:%1$s:{"%2$s": 5}:%2$s:{}:0:%3$s | %3$s',
+                               to_char(v_m0 + interval '1 month', 'YYYY-MM'), to_char(v_m0 + interval '2 months', 'YYYY-MM'),
+                               to_char(v_m0 + interval '3 months', 'YYYY-MM'), to_char(v_m0 + interval '4 months', 'YYYY-MM'), to_char(v_m0, 'YYYY-MM'))
+                and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
     -- B9. survival: the IE cohort of month 0, monthly: 9 started (a10 migrated, left out), all eligible for renewals 1 and
     --     2; 5 survived to renewal 1, 4 to renewal 2, 1 to renewal 3
@@ -634,7 +679,7 @@ from (select ord, check_name, result, detail from verify_0009ze
       select 99, 'verdict',
              case when not current_setting('verify.dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009ze where result = 'PASS') = 22
+                  when (select count(*) from verify_0009ze where result = 'PASS') = 23
                        and not exists (select 1 from verify_0009ze where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('211_verify_subscription_facts: %s PASS, %s FAIL', (select count(*) from verify_0009ze where result = 'PASS'),

@@ -41,11 +41,13 @@
 --                 comes with that check);
 --   minimum term  the app holds none: nothing is built for it.
 -- Amounts are never summed across currencies; counts reach back to each store's first event, amounts only from the
--- first load of the observed changes (0009za's run, rule 12); a store's months count for the rates from its first
--- complete calendar month.
+-- first load of each connection (rule 12); a store's months count for the rates from the month after its last month of
+-- migrated events (Martin, 20 November 2026: the starting base then holds the store's migrated subscriptions), else
+-- from the first complete month after its first event; a later month with a small share of migrated events
+-- (subscriptions.migration_bulk_min_pct) is a straggler, reported in cma.subscription_store_start, never moving the start.
 --
 -- What it adds
---   settings   subscriptions.propositions (empty; Pulse4all's seed hs1,frx,buurt_aed,outdoor in 02_seed_pulse4all.sql, for
+--   settings   subscriptions.migration_bulk_min_pct (5), subscriptions.propositions (empty; Pulse4all's seed hs1,frx,buurt_aed,outdoor in 02_seed_pulse4all.sql, for
 --              Kira to confirm), subscriptions.take_refresh_minutes (15)
 --   table      cma.subscription_variant_mapping (tenant configuration, audited): line kind, model, devices per unit,
 --              proposition per connection and variant; cma.set_subscription_variant_mapping (tenant.configure),
@@ -56,9 +58,10 @@
 --              cma.renewal_outcomes_of, cma.subscription_facts_inputs_key_of, cma.subscription_facts_refresh_of and its
 --              job entry cma.subscription_facts_refresh() (customers.refresh), cma.ingest_fill_purchase_orders
 --   takes      cma.subscription_take_state, cma.subscription_take, cma.subscription_month_take, cma.renewal_outcome,
---              cma.subscription_survival_take (row-level security and grants, no audit trigger)
+--              cma.subscription_survival_take, cma.subscription_store_start (row-level security and grants, no audit
+--              trigger); cma.subscription_rate_start_of (when each store's rates start)
 --   readers    cma_read.subscription_take, subscription_month_take, subscription_churn_month, renewal_outcome,
---              subscription_survival, dq_subscription_variant_unmapped, dq_subscription_device_units_mismatch
+--              subscription_survival, subscription_store_start, dq_subscription_variant_unmapped, dq_subscription_device_units_mismatch
 --   checks     data quality subscription_variant_unmapped (fixed in cma) and subscription_device_units_mismatch (assets)
 -- What it re-creates (each from its latest definition, with its -- based on: line)
 --   cma.check_tenant_setting()                     202: the two settings
@@ -101,6 +104,8 @@ $$;
 insert into cma.setting (key, value_type, allowed_values, default_value, description) values
   ('subscriptions.propositions', 'text', null, '',
      'The propositions a subscription line can belong to through the variant mapping: up to twenty codes (a lower case letter, then lower case letters, digits and _, at most 40 each), comma-separated without spaces, such as hs1,frx; empty means none yet'),
+  ('subscriptions.migration_bulk_min_pct', 'integer', null, '5',
+     'The share (1 to 100 percent) of a store''s migrated events a month must hold to count toward its migration: the Churn rate and the Failed rate start the month after the last such month; a later month below it is a straggler, reported and never moving the start (addition 0009ze)'),
   ('subscriptions.take_refresh_minutes', 'integer', null, '15',
      'The age in minutes (1 to 1440) after which the minute job computes the subscription facts again (addition 0009ze); a run whose inputs did not change since the last take computes nothing')
 on conflict (key) do update
@@ -400,6 +405,9 @@ begin
   elsif new.key = 'subscriptions.propositions' and not cma.flash_list_ok(new.value, '^[a-z][a-z0-9_]{0,39}$', 20, true) then
     raise exception 'Setting % takes up to twenty codes (a lower case letter, then lower case letters, digits and _, at most 40 each), each once, comma-separated without spaces, such as hs1,frx, or nothing', new.key
       using errcode = 'CMA04';
+  elsif new.key = 'subscriptions.migration_bulk_min_pct'
+        and (case when length(new.value) > 3 then true else new.value::integer not between 1 and 100 end) then
+    raise exception 'Setting % takes a whole number of percent from 1 to 100', new.key using errcode = 'CMA04';
   elsif new.key = 'subscriptions.take_refresh_minutes'
         and (case when length(new.value) > 4 then true else new.value::integer not between 1 and 1440 end) then
     raise exception 'Setting % takes a whole number of minutes from 1 to 1440', new.key using errcode = 'CMA04';
@@ -1627,6 +1635,49 @@ as $$
 $$;
 alter function cma.subscription_moves_of(uuid, timestamptz) set jit = off;
 
+-- When a store's Churn rate and Failed rate start (C.5, Martin, 20 November 2026): at the first month whose starting
+-- base already holds the store's migrated subscriptions, that is the month after the store's last month with migrated
+-- events; a store without migrated events at the first complete month after its first event. Derived from the data,
+-- never a date in code. A month counts toward the migration when it holds at least subscriptions.migration_bulk_min_pct
+-- of the store's migrated events; a later month below that share is a straggler: reported (its months and its events),
+-- never a reason to start later. Per subscriptions connection with an event, months in the tenant's zone
+create or replace function cma.subscription_rate_start_of(p_tenant_id uuid, p_now timestamptz)
+returns table (connection_id uuid, first_event_month date, migration_months jsonb, last_migration_month date,
+               straggler_months jsonb, stragglers integer, rate_start_month date)
+language sql stable
+rows 50
+as $$
+  with z as materialized (
+    select t.timezone as zone, cma.setting_of(p_tenant_id, 'subscriptions.migration_bulk_min_pct')::numeric as pct
+    from cma.tenant t where t.id = p_tenant_id
+  ), fe as materialized (
+    select e.connection_id, date_trunc('month', min(e.occurred_at) at time zone (select z.zone from z))::date as first_month
+    from cma.subscription_event e
+    where e.tenant_id = p_tenant_id and e.occurred_at <= p_now
+    group by 1
+  ), mm as materialized (
+    select e.connection_id, date_trunc('month', e.occurred_at at time zone (select z.zone from z))::date as month, count(*) as n
+    from cma.subscription_event e
+    where e.tenant_id = p_tenant_id and e.event_type = 'migrated' and e.occurred_at <= p_now
+    group by 1, 2
+  ), mt as (
+    select m.connection_id, m.month, m.n, m.n * 100.0 / sum(m.n) over (partition by m.connection_id) >= (select z.pct from z) as bulk
+    from mm m
+  ), lb as (
+    select t.connection_id, max(t.month) as last_month from mt t where t.bulk group by 1
+  )
+  select fe.connection_id, fe.first_month,
+         coalesce((select jsonb_object_agg(to_char(t.month, 'YYYY-MM'), t.n) from mt t where t.connection_id = fe.connection_id), '{}'),
+         lb.last_month,
+         coalesce((select jsonb_object_agg(to_char(t.month, 'YYYY-MM'), t.n) from mt t
+                   where t.connection_id = fe.connection_id and not t.bulk and t.month > lb.last_month), '{}'),
+         coalesce((select sum(t.n) from mt t where t.connection_id = fe.connection_id and not t.bulk and t.month > lb.last_month), 0)::integer,
+         (coalesce(lb.last_month, fe.first_month) + interval '1 month')::date
+  from fe
+  left join lb on lb.connection_id = fe.connection_id
+$$;
+alter function cma.subscription_rate_start_of(uuid, timestamptz) set jit = off;
+
 -- ---------------------------------------------------------------------------------------------
 -- 7. The takes (C.9): per subscription, per store and month, renewal outcomes and survival cells
 -- ---------------------------------------------------------------------------------------------
@@ -1687,7 +1738,22 @@ create table if not exists cma.subscription_month_take (
   primary key (tenant_id, connection_id, month, kind, currency)
 );
 comment on table cma.subscription_month_take is
-  'Per subscriptions connection (store) and calendar month in the tenant''s zone, from the month of the store''s first event (addition 0009ze): the Total subscriptions at the month''s start (kind start, the previous month end) and end (end), and the recurring amount movements by kind. currency empty: counts, from the first event on; per currency: the movements whose monthly amount is known (from the connection''s first load: the later of amounts_from of cma.subscription_take_state and the first time the CMA held one of its subscriptions) and their monthly amount (a positive size; contraction, paused, churned and moved_to_failed reduce the base). complete: the month is over and not before the store''s first complete calendar month, so it counts for the Churn rate and the Failed rate';
+  'Per subscriptions connection (store) and calendar month in the tenant''s zone, from the month of the store''s first event (addition 0009ze): the Total subscriptions at the month''s start (kind start, the previous month end) and end (end), and the recurring amount movements by kind. currency empty: counts, from the first event on; per currency: the movements whose monthly amount is known (from the connection''s first load: the later of amounts_from of cma.subscription_take_state and the first time the CMA held one of its subscriptions) and their monthly amount (a positive size; contraction, paused, churned and moved_to_failed reduce the base). complete: the month is over and not before the month the store''s rates start (cma.subscription_store_start), so it counts for the Churn rate and the Failed rate';
+
+create table if not exists cma.subscription_store_start (
+  tenant_id             uuid not null default cma.current_tenant_id() references cma.tenant (id),
+  connection_id         uuid not null,
+  market                text not null,
+  first_event_month     date not null,
+  migration_months      jsonb not null default '{}',
+  last_migration_month  date,
+  straggler_months      jsonb not null default '{}',
+  stragglers            integer not null check (stragglers >= 0),
+  rate_start_month      date not null,
+  primary key (tenant_id, connection_id)
+);
+comment on table cma.subscription_store_start is
+  'Per subscriptions connection (store) with an event (addition 0009ze): the month of its first event, its migrated events per month (YYYY-MM: count), the last month that holds at least subscriptions.migration_bulk_min_pct of them, the later months below that share (stragglers, reported, never moving the start) and the month its Churn rate and Failed rate start: the month after that last migration month, else the first complete month after its first event';
 
 create table if not exists cma.renewal_outcome (
   tenant_id                               uuid not null default cma.current_tenant_id() references cma.tenant (id),
@@ -1729,11 +1795,13 @@ select cma.setup_tenant_table('cma.subscription_take_state');
 select cma.setup_tenant_table('cma.subscription_take');
 select cma.setup_tenant_table('cma.subscription_month_take');
 select cma.setup_tenant_table('cma.renewal_outcome');
+select cma.setup_tenant_table('cma.subscription_store_start');
 select cma.setup_tenant_table('cma.subscription_survival_take');
 drop trigger if exists audit on cma.subscription_take_state;
 drop trigger if exists audit on cma.subscription_take;
 drop trigger if exists audit on cma.subscription_month_take;
 drop trigger if exists audit on cma.renewal_outcome;
+drop trigger if exists audit on cma.subscription_store_start;
 drop trigger if exists audit on cma.subscription_survival_take;
 
 -- The renewal outcomes of a tenant (C.3), computed fresh: one row per subscription and cycle with a renewed or a failed
@@ -1869,6 +1937,7 @@ begin
       delete from cma.subscription_survival_take x where x.tenant_id = p_tenant_id;
       delete from cma.renewal_outcome x where x.tenant_id = p_tenant_id;
       delete from cma.subscription_month_take x where x.tenant_id = p_tenant_id;
+      delete from cma.subscription_store_start x where x.tenant_id = p_tenant_id;
       delete from cma.subscription_take x where x.tenant_id = p_tenant_id;
       delete from cma.subscription_take_state x where x.tenant_id = p_tenant_id;
     end if;
@@ -1964,6 +2033,15 @@ begin
   from b;
   get diagnostics n_subs = row_count;
 
+  -- 4a. when each store's rates start (C.5)
+  delete from cma.subscription_store_start x where x.tenant_id = p_tenant_id;
+  insert into cma.subscription_store_start (tenant_id, connection_id, market, first_event_month, migration_months, last_migration_month,
+                                            straggler_months, stragglers, rate_start_month)
+  select p_tenant_id, r.connection_id, coalesce(sm.market, 'unknown'), r.first_event_month, r.migration_months, r.last_migration_month,
+         r.straggler_months, r.stragglers, r.rate_start_month
+  from cma.subscription_rate_start_of(p_tenant_id, v_now) r
+  left join (select y.connection_id, y.market from cma.flash_subscription_stores_of(p_tenant_id) y) sm on sm.connection_id = r.connection_id;
+
   -- 4. per store and month (C.4, C.5): the status moves, the base at each month's start and end, the observed amount
   --    changes; months from the store's first event to the current one
   delete from cma.subscription_month_take x where x.tenant_id = p_tenant_id;
@@ -1973,11 +2051,10 @@ begin
   ), mv as materialized (
     select * from cma.subscription_moves_of(p_tenant_id, v_now)
   ), first_ev as materialized (
-    select e.connection_id, date_trunc('month', min(e.occurred_at) at time zone v_zone)::date as first_month,
-           (date_trunc('month', min(e.occurred_at) at time zone v_zone) + interval '1 month')::date as first_complete
-    from cma.subscription_event e
-    where e.tenant_id = p_tenant_id and e.occurred_at <= v_now
-    group by 1
+    -- the store's first event's month and the month its rates start (step 4a)
+    select x.connection_id, x.first_event_month as first_month, x.rate_start_month as first_complete
+    from cma.subscription_store_start x
+    where x.tenant_id = p_tenant_id
   ), months as materialized (
     select f.connection_id, g::date as month, f.first_complete
     from first_ev f
@@ -2205,7 +2282,15 @@ create or replace view cma_read.subscription_churn_month as
   where m.currency = '' and m.complete and cma_read.reader_sees(m.tenant_id)
   group by m.tenant_id, m.market, m.month;
 comment on view cma_read.subscription_churn_month is
-  'The Churn rate and the Failed rate per market and complete month of every tenant the reader sees (addition 0009ze): the subscriptions churned and moved to failed in the month over the Total subscriptions at the previous month end, over the stores whose first complete month it is or later. A share of 1 is 100 %';
+  'The Churn rate and the Failed rate per market and complete month of every tenant the reader sees (addition 0009ze): the subscriptions churned and moved to failed in the month over the Total subscriptions at the previous month end, over the stores whose rates have started by it (cma_read.subscription_store_start). A share of 1 is 100 %';
+
+create or replace view cma_read.subscription_store_start as
+  select x.tenant_id, x.connection_id, x.market, x.first_event_month, x.migration_months, x.last_migration_month, x.straggler_months,
+         x.stragglers, x.rate_start_month
+  from cma.subscription_store_start x
+  where cma_read.reader_sees(x.tenant_id);
+comment on view cma_read.subscription_store_start is
+  'Per store of every tenant the reader sees (addition 0009ze): its migrated events per month, the last month of its migration, its stragglers and the month its Churn rate and Failed rate start. Counts and months only';
 
 create or replace view cma_read.renewal_outcome as
   select r.tenant_id, r.connection_id, r.subscription_source_id, r.renewal_key, r.cycle_index, r.renewal_source_id, r.first_attempt_at,
@@ -2276,7 +2361,7 @@ begin
     'cma.subscription_variants(uuid)', 'cma.subscription_device_units_of(uuid)', 'cma.inputs_markers_of(uuid,text[])',
     'cma.subscription_interval_group_of(text,integer)',
     'cma.subscription_amount_at(uuid,uuid,text,timestamptz,numeric,text,text,integer)', 'cma.subscription_moves_of(uuid,timestamptz)',
-    'cma.renewal_outcomes_of(uuid)', 'cma.subscription_facts_lock_key(uuid)', 'cma.subscription_facts_inputs_key_of(uuid,date)',
+    'cma.renewal_outcomes_of(uuid)', 'cma.subscription_rate_start_of(uuid,timestamptz)', 'cma.subscription_facts_lock_key(uuid)', 'cma.subscription_facts_inputs_key_of(uuid,date)',
     'cma.subscription_facts_refresh_of(uuid,boolean,timestamptz)', 'cma.subscription_facts_refresh()'
   ] loop
     execute format('revoke execute on function %s from public', f);
@@ -2784,7 +2869,7 @@ where not exists (select 1 from cma.schema_migration m where m.version = '0009ze
 -- 14. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009ze', 'The subscription facts (brief B39 continued, Part B39c): the settings subscriptions.propositions and subscriptions.take_refresh_minutes; cma.subscription_variant_mapping (line kind, model, devices per unit, proposition; tenant.configure, audited) with cma.set_subscription_variant_mapping and cma.subscription_variants(_of); device units on cma.subscription; cma.subscription_payment_state_of in both forms dropped and created with Charged back and Awaiting payment, state_since, overdue, chargeback_return_code, amount_at_risk and currency (cma.payment_states() orders them; Customers → Active''s mix and worst state read it; Flash''s subscriptions and installed base move to definition version 0009ze); cma.active_inputs_key_of over cma.inputs_markers_of (per table, in parallel) with the billing events; the takes cma.subscription_take_state, subscription_take, subscription_month_take (Total subscriptions at month start and end, recurring amount movements, complete months), renewal_outcome and subscription_survival_take, refreshed by cma.subscription_facts_refresh() after Customers → Active''s take; readers cma_read.subscription_take, subscription_month_take, subscription_churn_month, renewal_outcome, subscription_survival and the payment state''s new columns; data quality subscription_variant_unmapped and subscription_device_units_mismatch; cma.ingest_fill_purchase_orders for the one-time fill of purchases'' store orders')
+values ('0009ze', 'The subscription facts (brief B39 continued, Part B39c): the settings subscriptions.propositions, subscriptions.take_refresh_minutes and subscriptions.migration_bulk_min_pct; cma.subscription_variant_mapping (line kind, model, devices per unit, proposition; tenant.configure, audited) with cma.set_subscription_variant_mapping and cma.subscription_variants(_of); device units on cma.subscription; cma.subscription_payment_state_of in both forms dropped and created with Charged back and Awaiting payment, state_since, overdue, chargeback_return_code, amount_at_risk and currency (cma.payment_states() orders them; Customers → Active''s mix and worst state read it; Flash''s subscriptions and installed base move to definition version 0009ze); cma.active_inputs_key_of over cma.inputs_markers_of (per table, in parallel) with the billing events; the takes cma.subscription_take_state, subscription_take, subscription_month_take (Total subscriptions at month start and end, recurring amount movements, complete months), renewal_outcome, subscription_survival_take and subscription_store_start (when each store''s rates start: the month after its last month of migrated events, else the first complete month), refreshed by cma.subscription_facts_refresh() after Customers → Active''s take; readers cma_read.subscription_take, subscription_month_take, subscription_churn_month, renewal_outcome, subscription_survival, subscription_store_start and the payment state''s new columns; data quality subscription_variant_unmapped and subscription_device_units_mismatch; cma.ingest_fill_purchase_orders for the one-time fill of purchases'' store orders')
 on conflict (version) do nothing;
 
 commit;
