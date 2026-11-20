@@ -51,7 +51,8 @@
  *   subscription:updated with a status change     status_changed data.status → data.input.status (for example ACTIVE → FAILED,
  *                                                                the system's move to failed); an update without a
  *                                                                status, or with the same one, is no event of the CMA
- *   subscription:purchased, :created              purchased, created
+ *   subscription:purchased, :created              purchased, created  a purchase's data.orderId in raw (orderId) only, since
+ *                                                                0009zc
  *   subscription:migrated                         migrated       data.currentCycle → cycleIndex, data.nextBillingDate →
  *                                                                billingToAt
  *   subscription:skipped                          skipped        data.skippedDate → billingFromAt, data.nextBillingDate →
@@ -96,7 +97,7 @@ export const STATUSES = ["active", "paused", "canceled", "expired", "failed", "m
 /** The reasons kept, as Juo writes them: its own codes, never a caller's text */
 export const REASON_CODES = ["billing-attempt-failed"];
 /** The payment instrument's types in the CMA's codes (cma.payment_instrument_type_ok) */
-export const INSTRUMENTS = ["card", "paypal", "sepa_direct_debit", "ideal", "bancontact", "invoice", "other"];
+export const INSTRUMENTS = ["card", "paypal", "sepa_direct_debit", "bacs_direct_debit", "ideal", "bancontact", "invoice", "other"];
 /** Juo's event type → the CMA's, and the status the type moves a subscription to */
 export const EVENT_TYPES = {
   "subscription:renewed": { type: "renewed", to: null },
@@ -213,12 +214,13 @@ const currencyOf = (v) => (typeof v === "string" && /^[A-Z]{3}$/.test(v) ? v : n
 /**
  * An instrument's type as one of INSTRUMENTS: { code, unknown } where unknown is Juo's own type name when the mapping does
  * not know it (stored as other), else null. Juo writes types as credit-card, CreditCard, paypal, sepa-direct-debit,
- * SepaDirectDebit; null without a type.
+ * SepaDirectDebit, Bacs or bacs (a BACS direct debit, since 0009zb); null without a type.
  */
 export function instrumentInfoOf(type) {
   if (typeof type !== "string" || !type.trim()) return null;
   const s = type.trim().toLowerCase().replace(/[^a-z]/g, "");
-  const code = s.includes("paypal") ? "paypal" : s.includes("sepa") ? "sepa_direct_debit" : s === "ideal" ? "ideal"
+  const code = s.includes("paypal") ? "paypal" : s.includes("sepa") ? "sepa_direct_debit"
+    : s.includes("bacs") ? "bacs_direct_debit" : s === "ideal" ? "ideal"
     : s.includes("bancontact") ? "bancontact" : s.includes("invoice") ? "invoice" : s.includes("card") ? "card" : "other";
   return { code, unknown: code === "other" ? (TYPE_NAME.test(type.trim()) ? type.trim() : "unnamed") : null };
 }
@@ -420,7 +422,9 @@ export function eventItem(e) {
   const reasonCode = reasonHeld && REASON_CODES.includes(reasonHeld) ? reasonHeld : null;
   const reasonDropped = Boolean(reasonHeld) && !reasonCode;
   const errorCode = typeof data.errorCode === "string" && CODE.test(data.errorCode.trim()) ? data.errorCode.trim().toUpperCase() : null;
-  const orderId = known.type === "renewed" ? customerIdOf(data.orderId) : null;
+  // the store's order: a renewal's in its column (order_source_id, renewals only), a purchase's in raw only (addition 0009zc:
+  // what a chargeback on a first order joins)
+  const orderId = known.type === "renewed" || known.type === "purchased" ? customerIdOf(data.orderId) : null;
   const t = known.type;
   const from = data.from && typeof data.from === "object" ? data.from : {};
   const to = data.to && typeof data.to === "object" ? data.to : {};
@@ -441,7 +445,7 @@ export function eventItem(e) {
     linesUpdated: juoType === "subscription:lines-changed" ? countOf(data.updated) : known.lines === "linesUpdated" ? 1 : null,
     relatedSubscriptionSourceId: ["merged_to", "merged_from", "split_to", "split_from"].includes(t) ? relatedOf(data, subscriptionSourceId) : null,
     operationSourceId: idOf(e?.operationId),
-    orderSourceId: orderId,
+    orderSourceId: t === "renewed" ? orderId : null,
   };
   item.raw = strip({ id: sourceId, type: juoType, occurredAt, subscriptionId: subscriptionSourceId, customerId: customerIdOf(e?.customerId),
     actorType, actorId: actorSourceId, cycleIndex: item.cycleIndex, attempt: item.attempt, errorCode, reason: reasonCode,

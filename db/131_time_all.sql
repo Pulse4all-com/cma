@@ -45,7 +45,10 @@
 -- (the night's before run: the 92-day reads were not reached), so verify.part splits it: 'a' (the polls, the agent
 -- pages, the Live board, Team, Roster, Follow-up, Sources, System health, Data quality, the Flash landing, Campaigns),
 -- 'b' (the report cores over the previous month), 'c' (the report cores over the last 92 days); 'all' runs the three
--- in one go where the window allows it. The morning runbook runs a, b and c as three Studio runs.
+-- in one go where the window allows it. The morning runbook runs a, b and c as three Studio runs. Since addition 0009zb
+-- (after 204_subscription_audit.sql) 'audit' times the subscription audit alone, once per tenant as its owner, for
+-- information (no budget: Martin runs the audit by hand, never a page or a job; a database without 204 reads skip, an
+-- error FAIL); 'all' leaves it out, as it would take a large share of Studio's window. Its verdict is INFO without a FAIL.
 -- A read that raises an error reads FAIL with its SQLSTATE and the others still run, except an error a read names as
 -- nothing to time: an as-of read whose date has no snapshot (CMA02) reads skip with that reason, and its page's set too
 -- (Martin, 6 November 2026; Decision log). A page's set sums the reads the reader waits for first: a Flash overview loads
@@ -141,7 +144,7 @@ begin
 end
 $$;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every timed read fail
-select set_config('verify.part', 'all', false);                      -- 'a', 'b', 'c' or 'all'
+select set_config('verify.part', 'all', false);                      -- 'a', 'b', 'c', 'all' or 'audit' (0009zb, the subscription audit alone)
 select set_config('verify.max_poll_ms', '20', false);                -- a poll (unread count, team now, inbound now, shifts today, the identity)
 select set_config('verify.max_agent_ms', '50', false);               -- one read of an agent page or the Live board
 select set_config('verify.max_agent_set_ms', '100', false);          -- an agent page's or the Live board's reads together
@@ -494,8 +497,8 @@ declare
   v_skip text[]; v_out boolean[]; v_err text; v_skipped boolean;
   r_name text[] := '{}'; r_result text[] := '{}'; r_detail text[] := '{}'; r_ms numeric[] := '{}';
 begin
-  if v_part not in ('a', 'b', 'c', 'all') then
-    raise exception 'verify.part is a, b, c or all, not %', v_part;
+  if v_part not in ('a', 'b', 'c', 'all', 'audit') then
+    raise exception 'verify.part is a, b, c, all or audit, not %', v_part;
   end if;
   begin
     perform set_config('app.actor_label', 'time-0131', true);
@@ -609,6 +612,32 @@ begin
                                      when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
         r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
                                      else coalesce(v_ms || ' ms (best of 3)', 'the read failed') || ' against ' || v_max || ' ms' end;
+        r_ms := r_ms || v_ms;
+      end if;
+      -- the subscription audit (addition 0009zb), part audit only: as the owner (it is executable by cma_owner only), once,
+      -- for information; its rows' verdicts counted, never listed (Martin reads the audit itself in Studio). Not started
+      -- after verify.time_budget_s; a statement timeout inside it reads FAIL (the session's statement_timeout bounds the
+      -- whole run, every tenant's audit together); provoked, the row FAILs as every timed row does
+      if v_part = 'audit' then
+        v_ms := null; v_cur := null;
+        if to_regprocedure('cma.subscription_audit_of(uuid)') is not null and clock_timestamp() < v_stop then
+          begin
+            v_mark0 := clock_timestamp();
+            select jsonb_build_object('rows', count(*), 'ok', count(*) filter (where a.verdict = 'ok'),
+                                      'explain', count(*) filter (where a.verdict = 'explain'), 'fail', count(*) filter (where a.verdict = 'fail'))
+            into v_cur from cma.subscription_audit_of(t.id) a;
+            v_ms := round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1);
+          exception
+            when query_canceled then v_cur := jsonb_build_object('error', '57014 (statement_timeout)');
+            when others then v_cur := jsonb_build_object('error', sqlstate);
+          end;
+        end if;
+        r_name := r_name || (t.slug || ' subscription audit');
+        r_result := r_result || case when to_regprocedure('cma.subscription_audit_of(uuid)') is null then 'skip'
+                                     when v_provoke or v_cur is null or v_cur ? 'error' then 'FAIL' else 'info' end;
+        r_detail := r_detail || case when to_regprocedure('cma.subscription_audit_of(uuid)') is null then 'addition 0009zb has not run: nothing to time'
+                                     when v_cur is null then 'not timed: the run stopped starting reads at verify.time_budget_s'
+                                     else coalesce(v_ms || ' ms, once, no budget: ', '') || v_cur::text end;
         r_ms := r_ms || v_ms;
       end if;
       for rd in
@@ -726,6 +755,7 @@ from (select ord, check_name, result, detail from pg_temp.time_0131
       select 1000000, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from pg_temp.time_0131 where result = 'FAIL') then 'FAIL'
+                  when current_setting('verify.part') = 'audit' then 'INFO'
                   when not exists (select 1 from pg_temp.time_0131 where result = 'ok') then 'FAIL'
                   else 'PASS' end,
              format('131_time_all (part %s): %s ok, %s FAIL, %s skip; worst %s ms (%s)', current_setting('verify.part'),

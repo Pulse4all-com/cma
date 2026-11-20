@@ -9,19 +9,26 @@
  *   GET /admin/v1/subscriptions   limit (at most 100), expand=paymentMethod (the payment method as an object; else its
  *                                 id), includeCanceledItems (true: every line; else the lines Juo has not canceled),
  *                                 query (none: every subscription; (id:'<id>' OR …): those ids; anything else 400),
- *                                 after (an endCursor): the store's subscriptions in creation order, a page at a time,
- *                                 { resource: "list", hasNextPage, hasPrevPage, endCursor, startCursor, data }
+ *                                 sort (none or createdAt:asc, Juo's default, or createdAt:asc,id:asc; anything else 400),
+ *                                 after (an endCursor): the store's subscriptions in that order, a page at a time,
+ *                                 { resource: "list", hasNextPage, hasPrevPage, endCursor, startCursor, data }. Paged as Juo
+ *                                 pages (addition 0009zc): the endCursor holds the sort's keys of the page's last row and
+ *                                 the next page starts after them, so under createdAt alone a page boundary inside a tie
+ *                                 skips the rest of the tie (the fixture's s-0095 to s-0106 share one createdAt across the
+ *                                 boundary at 100)
  *   GET /admin/v1/events          limit, sort (occurredAt:asc,id:asc only), query (one of the two families, SUBSCRIPTION_FAMILY
  *                                 or BILLING_FAMILY, AND occurredAt:>'<ISO>' or >= [AND occurredAt:<'<ISO>']; anything
  *                                 else 400), after: the store's events of that family and window, oldest first
- *   GET /admin/v1/products        limit, after: the store's catalog (153 products: two pages), each with its variants
+ *   GET /admin/v1/products        limit, sort (none or id:asc), after: the store's catalog (153 products: two pages), each
+ *                                 with its variants, paged on id
  *   GET /admin/v1/event-types     the types the fixture's events use, with their stream, category and severity
  * Any other method answers 405 (the adapter never sends one: its allow-list refuses it before a request).
  *
  * Every call needs X-Juo-Admin-Api-Key and X-Tenant-ID: a key answers for its own store only (401 for another store's id,
  * as the GB key does for the NL store). Switches on state: fail429 (the next n calls answer 429 with Retry-After:
  * retryAfter seconds, as text), failAfter (after n more pages, every call answers 503 until cleared), failTenant (one
- * store's domain: every call for that store answers 503 while the others answer as before). state.requests
+ * store's domain: every call for that store answers 503 while the others answer as before), hiddenFromList (a Set of
+ * subscription ids a list without a query leaves out while a query by id still returns them: the guard's case). state.requests
  * records { path, params, tenant, authorized, at } per call (never the key); state.queriesSeen every query a call carried,
  * never cleared (the flow proves no call ever asked for Juo's renewal notice).
  */
@@ -41,7 +48,7 @@ export const FIXTURE_EVENT_TYPES = [
 
 /**
  * A store's fixture: its domain (<handle>.myshopify.com), its key, 230 subscriptions (three pages of 100) and their
- * events. The cases of the payment state: s-0001 to s-0200 active and renewed (paid), s-0201 active with an open failed
+ * events. s-0095 to s-0106 share one createdAt (as migrated subscriptions do), across the first page's boundary. The cases of the payment state: s-0001 to s-0200 active and renewed (paid), s-0201 active with an open failed
  * renewal (in retry), s-0202 active, its failed cycle renewed later (paid), s-0203 failed (moved there by an update),
  * s-0204 paused (by staff), s-0205 canceled (by its customer, with a free-text reason), s-0206 expired, s-0207 merged,
  * s-0208 never-subscribed, s-0209 resumed, s-0210 reactivated; s-0211 to s-0230 active. Customers c-…: every subscription's
@@ -55,7 +62,7 @@ export function juoStore({ handle, key, nowMs = Date.now(), prefix = "s" }) {
     const status = { 203: "failed", 204: "paused", 205: "canceled", 206: "expired", 207: "merged", 208: "never-subscribed" }[n] ?? "active";
     subscriptions.push({
       id: `${prefix}-${pad(n)}-0000-4000-8000-000000000000`.slice(0, 36), resource: "subscription", serial: `#${1000 + n}`, status,
-      createdAt: ago(60 * 24 * 300 - n), updatedAt: ago(60 * 24 * 2 + n), canceledAt: n === 205 || n === 203 ? ago(60 * 24 * 3) : null,
+      createdAt: ago(60 * 24 * 300 - (n >= 95 && n <= 106 ? 95 : n)), updatedAt: ago(60 * 24 * 2 + n), canceledAt: n === 205 || n === 203 ? ago(60 * 24 * 3) : null,
       nextBillingDate: status === "active" ? ago(-60 * 24 * 20) : null, currentCycle: 6, currencyCode: "GBP",
       billingPolicy: { interval: "MONTH", intervalCount: 1 }, deliveryPolicy: { interval: "MONTH", intervalCount: 1 },
       deliveryMethod: { type: "shipping", title: "Free", description: null },
@@ -198,7 +205,8 @@ const EVENTS = new RegExp(`^(${escape(SUBSCRIPTION_FAMILY)}|${escape(BILLING_FAM
 
 /** Starts the fake for some stores (juoStore); answers { url, state, close }. */
 export async function startFakeJuo({ stores }) {
-  const state = { requests: [], queriesSeen: [], fail429: 0, retryAfter: "1", failAfter: null, failTenant: null, pagesAnswered: 0, stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
+  const state = { requests: [], queriesSeen: [], fail429: 0, retryAfter: "1", failAfter: null, failTenant: null, pagesAnswered: 0,
+    hiddenFromList: new Set(), stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
   const json = (res, status, body, headers = {}) => {
     res.writeHead(status, { "content-type": "application/json", ...headers });
     res.end(JSON.stringify(body));
@@ -212,6 +220,24 @@ export async function startFakeJuo({ stores }) {
     return { resource: "list", hasNextPage: more, hasPrevPage: start > 0, endCursor: more ? Buffer.from(`i:${start + limit}`).toString("base64url") : null,
       startCursor: start > 0 ? Buffer.from(`i:${start}`).toString("base64url") : null, data: slice.map(map) };
   };
+  // Juo's keyset paging: the rows in the sort's order (its keys, then id, so a tie has one order), the endCursor the sort's
+  // keys of the page's last row, the next page the rows after those keys. With a key list that is not unique (createdAt
+  // alone) the rows of a tie that the page did not reach are never served
+  const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+  const keyset = (list, params, keys, map = (x) => x) => {
+    const limit = Math.min(100, Math.max(1, Number(params.get("limit") ?? 20)));
+    const sorted = [...list].sort((a, b) => keys.reduce((r, k) => r || cmp(a[k], b[k]), 0) || cmp(a.id, b.id));
+    const after = params.get("after");
+    const cur = after ? JSON.parse(Buffer.from(after, "base64url").toString("utf8")) : null;
+    const rest = cur ? sorted.filter((x) => keys.reduce((r, k) => r || cmp(x[k], cur[k]), 0) > 0) : sorted;
+    const slice = rest.slice(0, limit);
+    const more = rest.length > limit;
+    const last = slice.at(-1);
+    return { resource: "list", hasNextPage: more, hasPrevPage: Boolean(cur),
+      endCursor: more ? Buffer.from(JSON.stringify(Object.fromEntries(keys.map((k) => [k, last[k]])))).toString("base64url") : null,
+      startCursor: null, data: slice.map(map) };
+  };
+  const SUBSCRIPTION_SORTS = { "createdAt:asc": ["createdAt"], "createdAt:asc,id:asc": ["createdAt", "id"] };
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://x");
     const tenant = req.headers["x-tenant-id"] ?? null;
@@ -233,21 +259,24 @@ export async function startFakeJuo({ stores }) {
     if (url.pathname === "/admin/v1/event-types") return json(res, 200, { resource: "list", data: FIXTURE_EVENT_TYPES });
     if (url.pathname === "/admin/v1/subscriptions") {
       const q = params.get("query");
+      const keys = SUBSCRIPTION_SORTS[params.get("sort") ?? "createdAt:asc"];
+      if (!keys) return json(res, 400, { error: "invalid_sort" });
       let list = [...store.subscriptions];
       if (q) {
         if (!IDS.test(q)) return json(res, 400, { error: "invalid_query" });
         const ids = new Set([...q.matchAll(/id:'([^']+)'/g)].map((m) => m[1]));
         list = list.filter((s) => ids.has(s.id));
-      }
+      } else list = list.filter((s) => !state.hiddenFromList.has(s.id));
       const expand = params.getAll("expand").includes("paymentMethod");
       const canceledItems = params.get("includeCanceledItems") === "true";
       state.pagesAnswered += 1;
-      return json(res, 200, page(list, params, (s) => ({ ...s, paymentMethod: expand ? s.paymentMethod : s.paymentMethod?.id ?? null,
+      return json(res, 200, keyset(list, params, keys, (s) => ({ ...s, paymentMethod: expand ? s.paymentMethod : s.paymentMethod?.id ?? null,
         items: canceledItems ? s.items : s.items.filter((it) => !it.canceledAt) })));
     }
     if (url.pathname === "/admin/v1/products") {
+      if ((params.get("sort") ?? "id:asc") !== "id:asc") return json(res, 400, { error: "invalid_sort" });
       state.pagesAnswered += 1;
-      return json(res, 200, page(store.products, params));
+      return json(res, 200, keyset(store.products, params, ["id"]));
     }
     if (url.pathname === "/admin/v1/events") {
       const m = EVENTS.exec(params.get("query") ?? "");

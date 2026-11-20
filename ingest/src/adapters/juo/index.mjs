@@ -19,7 +19,10 @@
  *   reconcileObjects, reconcile   the job ingest-reconcile (03:30): subscription, the full read of every subscription of
  *                         the store with its lines, upserted as the pages come, then the final step in slices
  *                         (core/slices.mjs, SLICE_SIZE ids each, cma.ingest_mark_subscriptions_missing): a subscription the
- *                         read no longer returned gets source_deleted_at; then subscription_product, the store's catalog
+ *                         read no longer returned gets source_deleted_at, but only once Juo does not return it by id either
+ *                         (since addition 0009zc: the present subscriptions the list left out are read again by id first;
+ *                         those Juo returns are upserted, counted missing_reappeared, and never marked; the others are
+ *                         counted missing_confirmed); then subscription_product, the store's catalog
  *                         (every page of GET /products) as one full set (a variant the read no longer holds marked
  *                         missing). A read that returns none fails empty_snapshot instead of marking everything missing;
  *                         a read that fails before its final step marks nothing
@@ -42,7 +45,9 @@
  * id the store's customers do not hold), reason_dropped (a reason left out), return_code_dropped (a chargeback's reason
  * out of the code form), instrument_unknown (an instrument type the mapping does not know, stored as other),
  * catalog_text_dropped (a title or SKU with an @ or a control character), missing_now and slice_max_ms (a full read's
- * final step). The log line adds the details (events read, kept, skipped, by Juo's type when it is a type name, else
+ * final step), missing_confirmed and missing_reappeared (the guard before it, since 0009zc; missing_reappeared also
+counts a subscription the poll stored while the list was read, after the list had passed its place: read again by id,
+never missing). The log line adds the details (events read, kept, skipped, by Juo's type when it is a type name, else
  * "unknown"; subscriptions and lines read; the instrument types known and the names of those not known) and the
  * requests per endpoint. It names fields, types and codes, never a value, a key or an id of a customer.
  */
@@ -97,7 +102,13 @@ export const emptyDetail = () => ({ eventsRead: 0, eventsKept: 0, eventsOtherTyp
   billingKept: 0, subscriptionsRead: 0, subscriptionsUnreadable: 0, linesRead: 0, linesUnreadable: 0, instrumentKnown: 0,
   instrumentUnknownTypes: {} });
 
-/** sync_run's counts of a subscriptions run, every key written as 0 to start with. */
+/**
+ * The full read guard's counts (0009zc): written by a full read only, so a poll's counts never hold a key that a
+ * database without 206 refuses (cma.ingest_sync_run_finish)
+ */
+export const GUARD_COUNTS = ["missing_confirmed", "missing_reappeared"];
+
+/** sync_run's counts of a subscriptions run, every key written as 0 to start with (the guard's by a full read). */
 function startCounts(counts) {
   for (const k of RUN_COUNTS) counts[k] = Number(counts[k] ?? 0);
   return counts;
@@ -246,11 +257,14 @@ export async function pollSubscriptions({ connection, store, budget, now = Date.
 
 /**
  * The full read of one connection's subscriptions with their lines (the nightly reconcile, a backfill): every page
- * upserted as it comes, then the final step in slices marks the subscriptions the read did not return. empty_snapshot
- * when it returned none.
+ * upserted as it comes; then the guard (addition 0009zc): the subscriptions the CMA holds present that the list did not
+ * return are read again by id, and those Juo returns are upserted like any page (a missing one comes back, its lines
+ * with it) and kept out of the marking (missing_reappeared); the rest are missing_confirmed. Then the final step in
+ * slices marks the subscriptions neither read returned. empty_snapshot when the list returned none.
  */
 async function fullRead({ connection, store, budget, counts, runId = null }) {
   startCounts(counts);
+  for (const k of GUARD_COUNTS) counts[k] = Number(counts[k] ?? 0);
   const { api } = await prepare({ connection, store, budget });
   const detail = emptyDetail();
   const ids = new Set();
@@ -262,6 +276,15 @@ async function fullRead({ connection, store, budget, counts, runId = null }) {
       fetched: detail.subscriptionsRead });
     throw new SourceError("empty_snapshot");
   }
+  // the guard: a subscription the list left out is marked missing only when Juo does not return it by id either
+  const unread = [...(await store.presentSubscriptionIds())].filter((id) => !ids.has(id)).sort();
+  for await (const page of api.subscriptionsById(unread)) {
+    for (const id of await ingestSubscriptions({ store, page, counts, detail, runId })) ids.add(id);
+  }
+  // counted from the ids asked for, whatever else an answer held
+  const reappeared = unread.filter((id) => ids.has(id)).length;
+  counts.missing_reappeared += reappeared;
+  counts.missing_confirmed += unread.length - reappeared;
   const slices = slicesOf([...ids], SLICE_SIZE);
   counts.slice_max_ms = 0;
   for (const slice of slices) {
@@ -270,7 +293,7 @@ async function fullRead({ connection, store, budget, counts, runId = null }) {
     counts.slice_max_ms = Math.max(counts.slice_max_ms, Math.round(performance.now() - t0));
     counts.missing_now += Number(marked?.missing_now ?? 0);
   }
-  return { ...detail, slices: slices.length };
+  return { ...detail, slices: slices.length, rereadById: unread.length };
 }
 
 /** Every variant of the store's catalog: { variants (each id once), products, unreadable, textDropped }. */
