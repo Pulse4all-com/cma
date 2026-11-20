@@ -76,7 +76,6 @@ const SLACK_MS = 2 * 60_000;
 /** The counts a run adds to sync_run's five */
 export const RUN_COUNTS = ["inserted", "updated", "unchanged", "missing_now", "events_new", "customers_unmatched", "reason_dropped",
   "lines_new", "lines_missing", "variants_new", "billing_events_new", "changes_observed", "instrument_unknown", "duplicate_skipped",
-  "missing_confirmed", "missing_reappeared",
   "return_code_dropped", "catalog_text_dropped"];
 /** The events objects and their family and backfill cursor */
 const EVENT_OBJECTS = {
@@ -101,7 +100,13 @@ export const emptyDetail = () => ({ eventsRead: 0, eventsKept: 0, eventsOtherTyp
   billingKept: 0, subscriptionsRead: 0, subscriptionsUnreadable: 0, linesRead: 0, linesUnreadable: 0, instrumentKnown: 0,
   instrumentUnknownTypes: {} });
 
-/** sync_run's counts of a subscriptions run, every key written as 0 to start with. */
+/**
+ * The full read guard's counts (0009zc): written by a full read only, so a poll's counts never hold a key that a
+ * database without 206 refuses (cma.ingest_sync_run_finish)
+ */
+export const GUARD_COUNTS = ["missing_confirmed", "missing_reappeared"];
+
+/** sync_run's counts of a subscriptions run, every key written as 0 to start with (the guard's by a full read). */
 function startCounts(counts) {
   for (const k of RUN_COUNTS) counts[k] = Number(counts[k] ?? 0);
   return counts;
@@ -257,6 +262,7 @@ export async function pollSubscriptions({ connection, store, budget, now = Date.
  */
 async function fullRead({ connection, store, budget, counts, runId = null }) {
   startCounts(counts);
+  for (const k of GUARD_COUNTS) counts[k] = Number(counts[k] ?? 0);
   const { api } = await prepare({ connection, store, budget });
   const detail = emptyDetail();
   const ids = new Set();
