@@ -3248,7 +3248,9 @@ One step at a time; each says where it runs and what to expect. The change adds 
 ## 20.0 Studio (cma-prod-pg): the stores' migration months and when their rates start
 Before anything else, and before 210 runs (it reads `cma.subscription_event` only). One Run in one tab of Cloud SQL Studio on
 `cma-prod-pg`, as your own IAM login. Counts and months only: keep the output outside the repository (as the audit's,
-~/cma-audit) and paste the table into the PR's conversation; the PR's description is then updated with it.
+~/cma-audit). The repository is public until launch, so paste into the PR's conversation only each store's
+`migrated_month`s, their `kind` and its `rate_start_month` (not the counts or shares); the PR's description is then updated
+with it. If the Run stops with an error, close the tab (it may still hold the role cma_owner).
 
 **Studio (cma-prod-pg)**
 ```sql
@@ -3264,16 +3266,16 @@ with t as (
   select e.connection_id, date_trunc('month', e.occurred_at at time zone (select timezone from t))::date as month, count(*) as n
   from cma.subscription_event e where e.tenant_id = (select id from t) and e.event_type = 'migrated' group by 1, 2
 ), mt as (
-  select m.connection_id, m.month, m.n, round(100.0 * m.n / sum(m.n) over (partition by m.connection_id), 1) as share_pct
+  select m.connection_id, m.month, m.n, 100.0 * m.n / sum(m.n) over (partition by m.connection_id) as share
   from mm m
 ), lb as (
   select connection_id,
-         coalesce(max(month) filter (where share_pct >= 5), (array_agg(month order by n desc, month desc))[1]) as last_month
+         coalesce(max(month) filter (where share >= 5), (array_agg(month order by n desc, month desc))[1]) as last_month
   from mt group by 1
 )
 select coalesce(st.market, 'unknown') as store, to_char(fe.first_month, 'YYYY-MM') as first_event_month,
-       coalesce(to_char(mt.month, 'YYYY-MM'), '-') as migrated_month, mt.n as migrated_events, mt.share_pct,
-       case when mt.month is null then '-' when mt.share_pct >= 5 then 'migration' when mt.month > lb.last_month then 'straggler' else 'before the bulk' end as kind,
+       coalesce(to_char(mt.month, 'YYYY-MM'), '-') as migrated_month, mt.n as migrated_events, round(mt.share, 1) as share_pct,
+       case when mt.month is null then '-' when mt.share >= 5 then 'migration' when mt.month > lb.last_month then 'straggler' else 'before the bulk' end as kind,
        to_char((coalesce(lb.last_month, fe.first_month) + interval '1 month')::date, 'YYYY-MM') as rate_start_month
 from fe
 left join st on st.connection_id = fe.connection_id
