@@ -529,7 +529,7 @@ Since 0009za the table also holds (14 more types, 21 in all):
 | `invoice:placed`, `:paid`, `:overdue`, `:payment-failed` | `invoice_placed`, `invoice_paid`, `invoice_overdue`, `invoice_payment_failed` | total, currency, `renewalId` |
 | `order:placement-failed`, `order:draft-created` | `order_placement_failed`, `order_draft_created` | order |
 
-`subscription:chargeback-created` and `subscription:refund-created`, `-completed`, `-failed` are the same events as the billing family's: skipped, counted `duplicate_skipped`. Instrument types map to `card`, `paypal`, `sepa_direct_debit` (`SepaDirectDebit`), `ideal`, `bancontact`, `invoice`; any other is `other`, counted `instrument_unknown` with Juo's type name in the log.
+`subscription:chargeback-created` and `subscription:refund-created`, `-completed`, `-failed` are the same events as the billing family's: skipped, counted `duplicate_skipped`. Instrument types map to `card`, `paypal`, `sepa_direct_debit` (`SepaDirectDebit`), `bacs_direct_debit` (`bacs`), `ideal`, `bancontact`, `invoice`; any other is `other`, counted `instrument_unknown` with Juo's type name in the log.
 
 Every other event of a subscription (the cancellation flow, `:delivery-address-changed`, …) is read, its subscription is read again by the poll, and it is not stored (counted `skipped`). Customer, login and mail events are not read (Yordi). Statuses arrive in lower case on a subscription and in upper case in an event; the adapter writes the seven in lower case (`cancelled` as `canceled`, `NEVER_SUBSCRIBED` as `never-subscribed`). The reasons kept (`map.mjs` `REASON_CODES`): `billing-attempt-failed`. The actor: `staff`, `customer`, `system`, `bulk` (Juo's `bulk-action`), `api`; a staff actor's id only, never a name.
 

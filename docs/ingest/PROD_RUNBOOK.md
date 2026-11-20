@@ -3114,3 +3114,108 @@ Expected: one row per store; lines about one to three per subscription; `first_e
 **File:** `db/131_time_all.sql`: copy all of it. **Studio (cma-prod-pg):** paste and Run, as your own login, after 17.6's backfill (read only, as always).
 
 Expected: every row within its budget as before, in particular the rows that read `cma.subscription_event` (Flash's landing and churn headline, Installed base, part b's Active customers). This checks the decision of no new index on `subscription_event` (Decision log, 18 Nov 2026, confirmed 19 Nov 2026): a row over its budget reopens it, and the index goes in by a concurrent Terminal step in a later PR.
+
+# Phase 18. The subscription audit and BACS direct debit (addition 0009zb, brief B39a2)
+
+One step at a time; each says where it runs and what to expect. The audit is read only, run by hand as the owner and called by no page or job. Its prod output is the record `records/0009zb-prod-<date>/audit.txt`, written from your report; nothing is written there before a run has happened.
+
+## 18.1 Terminal: the branch, the migration and its verifies in dev
+**Terminal** (~/cma)
+```bash
+gh pr checkout <PR> && git log --oneline -1
+```
+Expected: the PR's last commit.
+
+**Terminal**
+```bash
+run_migration dev 204_subscription_audit.sql 205_verify_subscription_audit.sql 0009zb-dev-$(date +%F) 203_verify_subscription_lines.sql 119_verify_subscriptions.sql
+```
+Expected: 204 ends with `COMMIT` and `RESET`; 205's last row `verdict | PASS | 205_verify_subscription_audit: 15 PASS, 0 FAIL`; provoked `PROVOKED, NOT A PASS | 205_verify_subscription_audit: 0 PASS, 15 FAIL`; 203 `26 PASS`; 119 `23 PASS`; `records clean`.
+
+## 18.2 Studio (cma-dev-pg): the audit in dev
+Run each statement on its own: Studio's timer is the session's, so the first one lengthens it for the call (a function's own setting cannot).
+
+**Studio** (cma-dev-pg)
+```sql
+set statement_timeout = '120s';
+```
+**Studio** (cma-dev-pg)
+```sql
+set role cma_owner;
+```
+**Studio** (cma-dev-pg)
+```sql
+select * from cma.subscription_audit_of((select id from cma.tenant where slug = 'pulse4all-subscriptions'));
+```
+**Studio** (cma-dev-pg)
+```sql
+reset role;
+```
+Expected: 16 rows per active store (48 for dev's DE, GB and NL). Dev's seed is sparse, so `fail` on `no_lines` and on `events_by_month` is expected there (the seed has no lines and gaps in its months). Values are counts, codes and months only.
+
+## 18.3 Terminal: the data map on the branch
+No table, view or column changes in this addition, so `docs/datamap/schema.json` is not refreshed.
+
+**Terminal**
+```bash
+cd web && npm run verify:datamap
+```
+Expected: `datamap: PASS (… tables, … views, all described; index.html current)`.
+
+## 18.4 Terminal: the migration in prod
+No ingest pause is needed: the migration takes no table lock beyond SHARE UPDATE EXCLUSIVE from two comments.
+
+**Terminal**
+```bash
+run_migration prod 204_subscription_audit.sql 205_verify_subscription_audit.sql 0009zb-prod-$(date +%F) 203_verify_subscription_lines.sql 119_verify_subscriptions.sql
+```
+Expected: 204 `COMMIT`; 205 `REFUSED` (A1 to A5 PASS, block B FAIL: no dev seed), as 203; 203 and 119 `REFUSED` as on 20 November 2026.
+
+## 18.5 Terminal: the audit in prod, written straight to the record
+The output holds counts, codes, months and store labels only, no customer rows, so a Terminal block is allowed. It makes commercial volumes (subscriptions per status, chargebacks per market) public while the repository is public: decide before committing the record.
+
+**Terminal** (~/cma)
+```bash
+cma_db prod
+```
+Expected: `connected to cma as <your login>`.
+
+**Terminal**
+```bash
+mkdir -p records/0009zb-prod-$(date +%F) && psql "$PGCONN" -c "set statement_timeout = '120s'" -c "set role cma_owner" -c "select * from cma.subscription_audit_of((select id from cma.tenant where slug = 'pulse4all-subscriptions'))" > records/0009zb-prod-$(date +%F)/audit.txt
+```
+Expected, in about 30 seconds: about 16 rows per active store (9 stores), then the file in the records folder.
+
+**Terminal**
+```bash
+node tools/check-records.mjs records/0009zb-prod-$(date +%F)
+```
+Expected: the check passes (`records clean`). Do not commit the record before it does.
+
+## 18.6 Claude chat: the audit against Juo
+**Claude chat:** paste `audit.txt`. Each `status_mix` row is compared with Juo's own count per store (Juo's read tools); each `fail` is classified as a code defect or a Juo fact.
+
+## 18.7 Claude Code: the fixes and the record's README
+**Claude Code:** fixes for code defects on the same branch; the record's README with every check's outcome.
+
+## 18.8 Terminal: the merge, the ingest deploy and GB's backfill
+Merge the PR. 204 must already be in prod (18.4) before the ingest deploys, or every BACS subscription would fail its upsert with `CMA04`.
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: as 17.4: `main`'s ingest tag, the image built once, `health: {"ok":true,"version":"<that tag>"}`, then the ten jobs on the same image.
+
+Then read GB's subscriptions now, without waiting for 03:30:
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<GB conn>,--object,subscription
+```
+Expected: one succeeded run with `instrument_unknown` 0. Then the audit's `instruments` row for GB again (18.5's three statements, in a session of your own): subscriptions without `other`; a billing event `other` stored before this change stays `other` and reads as explain.
+
+## 18.9 Studio (cma-prod-pg): the audit's time, optional
+**File:** `db/131_time_all.sql`: copy all of it, and in Studio's editor change the line `select set_config('verify.part', 'all', false);` to `select set_config('verify.part', 'audit', false);` (nothing is saved to the file). **Studio** (cma-prod-pg): run `set statement_timeout = '300s';` on its own first (every tenant's audit runs in one statement), then paste the edited script and Run, as your own login, once, for information.
+
+Expected: the audit's row with verdict `INFO`, no budget.
