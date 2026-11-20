@@ -12,7 +12,7 @@
 --   A  the addition row after 0009zc; the tables' row-level security, grants and audit (the mapping audited, the takes
 --      not); the functions the application's, the fill a definer's; the payment state's columns (the old nine first);
 --      the readers; Customers → Active's inputs digest over 174's twelve markers equal to 174's own (kept below), on the
---      dev seed's tenants
+--      dev seed's tenants; the payment state equal to 118's and 148's (kept below) row for row but where its new states apply
 --   B  on a throwaway tenant with two stores (IE: the payment states, outcomes, device units, survival; DE: a month grid):
 --      the settings' refusals; the mapping's refusals and its removal; device units (a one-time line left out, an
 --      unmapped line null); every payment state and the precedence (a chargeback on the latest renewal, one before a
@@ -89,6 +89,102 @@ as $$
     (select t.timezone from cma.tenant t where t.id = p_tenant_id)))
 $$;
 
+-- 118's and 148's payment state, as they defined it (the second version must answer the same but where its new states
+-- apply: A7)
+create or replace function pg_temp.v0009ze_ps_118(p_tenant_id uuid)
+returns table (subscription_id uuid, connection_id uuid, source_id text, customer_source_id text, status text, payment_state text,
+               retry_cycle integer, retry_since timestamptz, last_attempt integer)
+language sql stable
+as $$
+  with s as (
+    select s.id, s.connection_id, s.source_id, s.customer_source_id, s.status
+    from cma.subscription s
+    where s.tenant_id = p_tenant_id and s.source_deleted_at is null
+      and s.status in ('active', 'paused', 'canceled', 'expired', 'failed')
+  ),
+  open_failure as (
+    select f.connection_id, f.subscription_source_id, f.cycle_index, f.occurred_at, f.attempt
+    from cma.subscription_event f
+    join s on s.connection_id = f.connection_id and s.source_id = f.subscription_source_id and s.status = 'active'
+    where f.tenant_id = p_tenant_id and f.event_type = 'renew_failed'
+      and not exists (select 1 from cma.subscription_event r
+                      where r.tenant_id = f.tenant_id and r.connection_id = f.connection_id
+                        and r.subscription_source_id = f.subscription_source_id and r.event_type = 'renewed'
+                        and case when f.cycle_index is not null and r.cycle_index is not null then r.cycle_index >= f.cycle_index
+                                 else r.occurred_at > f.occurred_at end)
+  ),
+  retry as (
+    select o.connection_id, o.subscription_source_id,
+           (array_agg(o.cycle_index order by o.cycle_index desc nulls last, o.occurred_at desc))[1] as cycle_index
+    from open_failure o
+    group by 1, 2
+  ),
+  retry_detail as (
+    select r.connection_id, r.subscription_source_id, r.cycle_index, min(o.occurred_at) as since, max(o.attempt) as last_attempt
+    from retry r
+    join open_failure o on o.connection_id = r.connection_id and o.subscription_source_id = r.subscription_source_id
+                       and o.cycle_index is not distinct from r.cycle_index
+    group by 1, 2, 3
+  )
+  select s.id, s.connection_id, s.source_id, s.customer_source_id, s.status,
+         case when s.status = 'failed' then 'failed'
+              when s.status = 'paused' then 'paused'
+              when s.status in ('canceled', 'expired') then 'canceled'
+              when d.subscription_source_id is not null then 'in_retry'
+              else 'paid' end,
+         d.cycle_index, d.since, d.last_attempt
+  from s
+  left join retry_detail d on d.connection_id = s.connection_id and d.subscription_source_id = s.source_id
+$$;
+
+create or replace function pg_temp.v0009ze_ps_148(p_tenant_id uuid, p_subscription_ids uuid[])
+returns table (subscription_id uuid, connection_id uuid, source_id text, customer_source_id text, status text, payment_state text,
+               retry_cycle integer, retry_since timestamptz, last_attempt integer)
+language sql stable
+rows 500   -- a list's page of subscriptions (CLAUDE.md, Performance: a set-returning function says its rows)
+as $$
+  with s as (
+    select s.id, s.connection_id, s.source_id, s.customer_source_id, s.status
+    from cma.subscription s
+    where s.tenant_id = p_tenant_id and s.source_deleted_at is null
+      and s.status in ('active', 'paused', 'canceled', 'expired', 'failed')
+      and s.id = any (p_subscription_ids)
+  ),
+  open_failure as (
+    select f.connection_id, f.subscription_source_id, f.cycle_index, f.occurred_at, f.attempt
+    from cma.subscription_event f
+    join s on s.connection_id = f.connection_id and s.source_id = f.subscription_source_id and s.status = 'active'
+    where f.tenant_id = p_tenant_id and f.event_type = 'renew_failed'
+      and not exists (select 1 from cma.subscription_event r
+                      where r.tenant_id = f.tenant_id and r.connection_id = f.connection_id
+                        and r.subscription_source_id = f.subscription_source_id and r.event_type = 'renewed'
+                        and case when f.cycle_index is not null and r.cycle_index is not null then r.cycle_index >= f.cycle_index
+                                 else r.occurred_at > f.occurred_at end)
+  ),
+  retry as (
+    select o.connection_id, o.subscription_source_id,
+           (array_agg(o.cycle_index order by o.cycle_index desc nulls last, o.occurred_at desc))[1] as cycle_index
+    from open_failure o
+    group by 1, 2
+  ),
+  retry_detail as (
+    select r.connection_id, r.subscription_source_id, r.cycle_index, min(o.occurred_at) as since, max(o.attempt) as last_attempt
+    from retry r
+    join open_failure o on o.connection_id = r.connection_id and o.subscription_source_id = r.subscription_source_id
+                       and o.cycle_index is not distinct from r.cycle_index
+    group by 1, 2, 3
+  )
+  select s.id, s.connection_id, s.source_id, s.customer_source_id, s.status,
+         case when s.status = 'failed' then 'failed'
+              when s.status = 'paused' then 'paused'
+              when s.status in ('canceled', 'expired') then 'canceled'
+              when d.subscription_source_id is not null then 'in_retry'
+              else 'paid' end,
+         d.cycle_index, d.since, d.last_attempt
+  from s
+  left join retry_detail d on d.connection_id = s.connection_id and d.subscription_source_id = s.source_id
+$$;
+
 -- A. Structure and privileges
 do $$
 declare
@@ -156,6 +252,26 @@ begin
   into v_txt from cma.tenant t;
   insert into verify_0009ze values (5, 'A5 Customers → Active''s digest: 174''s twelve markers give 174''s digest, every tenant; the digest adds the billing events',
     case when v_txt is not null and v_txt not like '%false%' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no tenant'));
+  -- A7. the payment state against 118's (every subscription of every tenant) and 148's (each tenant's first 200 by id):
+  --     the nine old columns equal row for row, but where the new state is Charged back or Awaiting payment (then the
+  --     old one read Paid or In retry)
+  select string_agg(t.slug || ':' || (
+           select count(*) from pg_temp.v0009ze_ps_118(t.id) o
+           full join cma.subscription_payment_state_of(t.id) n on n.subscription_id = o.subscription_id
+           where (o.subscription_id, o.connection_id, o.source_id, o.customer_source_id, o.status, o.payment_state, o.retry_cycle, o.retry_since, o.last_attempt)
+                 is distinct from (n.subscription_id, n.connection_id, n.source_id, n.customer_source_id, n.status, n.payment_state, n.retry_cycle, n.retry_since, n.last_attempt)
+             and not (n.payment_state in ('charged_back', 'awaiting_payment') and o.payment_state in ('paid', 'in_retry')))
+         || '/' || (
+           select count(*) from pg_temp.v0009ze_ps_148(t.id, array(select x.id from cma.subscription x where x.tenant_id = t.id order by x.id limit 200)) o
+           full join cma.subscription_payment_state_of(t.id, array(select x.id from cma.subscription x where x.tenant_id = t.id order by x.id limit 200)) n
+             on n.subscription_id = o.subscription_id
+           where (o.subscription_id, o.status, o.payment_state, o.retry_cycle, o.retry_since, o.last_attempt)
+                 is distinct from (n.subscription_id, n.status, n.payment_state, n.retry_cycle, n.retry_since, n.last_attempt)
+             and not (n.payment_state in ('charged_back', 'awaiting_payment') and o.payment_state in ('paid', 'in_retry')))
+         || '/' || (select count(*) from cma.subscription x where x.tenant_id = t.id), ' ' order by t.slug collate "C")
+  into v_txt from cma.tenant t;
+  insert into verify_0009ze values (7, 'A7 the payment state equals 118''s and 148''s row for row, every tenant, but where Charged back or Awaiting payment applies (differing/differing/subscriptions)',
+    case when v_txt is not null and v_txt !~ ':[1-9]|/[1-9][0-9]*/' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no tenant'));
   v_txt := pg_temp.v0009ze_code('select cma.inputs_markers_of(gen_random_uuid(), array[''orders''])');
   insert into verify_0009ze values (6, 'A6 an unknown input is refused (CMA04)',
     case when v_txt = 'CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
@@ -419,6 +535,26 @@ begin
       case when v_txt = 'subscription_device_units_mismatch:a1:more_paid:assets subscription_device_units_mismatch:a2:more_placed:assets subscription_variant_unmapped:vonce:1:cma subscription_variant_unmapped:vunm:1:cma'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
+    -- B11b. an observed change of b6's amount (30 to 40 EUR, monthly) in the current month, after the connection's first
+    --      load: an expansion of 10.00 EUR (count and amount); the current month's Total subscriptions at its end with
+    --      their monthly amounts, from the first load on; survival's renewal 24 of month 0 not mature yet
+    perform set_config('role', 'cma_owner', true);
+    update cma.subscription set amount_per_cycle = 40 where tenant_id = v_t and source_id = 'b6';
+    insert into cma.subscription_change (tenant_id, connection_id, subscription_source_id, field, old_value, new_value, observed_at)
+    values (v_t, v_sub_b, 'b6', 'amount_per_cycle', '30.00', '40.00', now() - interval '1 minute');
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_sch::text, true);
+    perform cma.subscription_facts_refresh_of(v_t, true, now());
+    perform set_config('role', 'cma_owner', true);
+    v_txt := (select string_agg(m.kind || ':' || coalesce(nullif(m.currency, ''), '-') || ':' || m.subscriptions || ':' || coalesce(m.amount::text, '-'), ' '
+                                order by m.kind collate "C", m.currency collate "C")
+              from cma.subscription_month_take m
+              where m.tenant_id = v_t and m.connection_id = v_sub_b and m.month = (v_mon + interval '6 months')::date and m.kind in ('expansion', 'end'))
+             || ' | ' || (select v.started || ':' || v.eligible || ':' || v.survived || ':' || v.mature from cma_read.subscription_survival v
+                          where v.tenant_id = v_t and v.connection_id = v_sub_a and v.cohort_month = v_mon and v.interval_group = 'monthly' and v.renewal_number = 24);
+    v_rows := v_rows || array['25', 'B11b an expansion from an observed change (its count and its monthly amount), the month end''s Total subscriptions with their amounts; an immature survival cell',
+      case when v_txt = 'end:-:3:- end:EUR:3:100.00 expansion:-:1:- expansion:EUR:1:10.00 | 9:0:0:false' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
+
     -- B12. the take's skip: within subscriptions.take_refresh_minutes fresh; after it, with nothing changed, unchanged; a
     --      new event computes again
     perform set_config('role', 'cma_app', true);
@@ -447,8 +583,9 @@ begin
     v_rows := v_rows || array['23', 'B13 another tenant''s application sees none of the takes or the mapping (row-level security)',
       case when v_txt = '0 0 0 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B14. the one-time fill as the ingest: a purchase without an order gains it, one with an order keeps its own, an
+    -- B14. the one-time fill as the ingest (it moves the events' marker, so the takes see it): a purchase without an order gains it, one with an order keeps its own, an
     --      event that is not a purchase is left; bad items refused
+    v_key1 := md5(array_to_string(cma.inputs_markers_of(v_t, array['subscription_event']), '|'));
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_ing::text, true);
     v_txt := (select cma.ingest_fill_purchase_orders(v_sub_a, '[{"sourceId": "pa1", "orderSourceId": "9001"}, {"sourceId": "pa3", "orderSourceId": "7777"}, {"sourceId": "ra1-1", "orderSourceId": "7778"}]'::jsonb))::text
@@ -464,9 +601,10 @@ begin
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', v_t::text, true);
     v_txt := v_txt || ' | ' || (select string_agg(e.source_id || ':' || coalesce(e.raw ->> 'orderId', '-'), ' ' order by e.source_id collate "C")
-                                from cma.subscription_event e where e.tenant_id = v_t and e.source_id in ('pa1', 'pa3', 'ra1-1'));
+                                from cma.subscription_event e where e.tenant_id = v_t and e.source_id in ('pa1', 'pa3', 'ra1-1'))
+             || ' ' || (v_key1 is distinct from (select md5(array_to_string(cma.inputs_markers_of(v_t, array['subscription_event']), '|'))))::text;
     v_rows := v_rows || array['24', 'B14 the one-time fill: a purchase without an order gains it, one with an order and a renewal are left; bad items refused (CMA04); another tenant''s ingest fills nothing of it (CMA02)',
-      case when v_txt = '1 CMA04 CMA02 | pa1:- pa3:9003 ra1-1:-' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = '1 CMA04 CMA02 | pa1:- pa3:9003 ra1-1:- true' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
@@ -486,6 +624,8 @@ $$;
 -- The helpers are dropped first, so the verdict is the last thing the script prints
 drop function if exists pg_temp.v0009ze_code(text);
 drop function if exists pg_temp.v0009ze_key_174(uuid);
+drop function if exists pg_temp.v0009ze_ps_118(uuid);
+drop function if exists pg_temp.v0009ze_ps_148(uuid, uuid[]);
 
 -- Verdict: one row per check, then the verdict
 select check_name, result, detail
@@ -494,7 +634,7 @@ from (select ord, check_name, result, detail from verify_0009ze
       select 99, 'verdict',
              case when not current_setting('verify.dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009ze where result = 'PASS') = 20
+                  when (select count(*) from verify_0009ze where result = 'PASS') = 22
                        and not exists (select 1 from verify_0009ze where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('211_verify_subscription_facts: %s PASS, %s FAIL', (select count(*) from verify_0009ze where result = 'PASS'),

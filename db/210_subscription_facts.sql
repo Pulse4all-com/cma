@@ -18,6 +18,8 @@
 --     147_verify_installed_base_models.sql, 159_verify_flash_current_take.sql, 181_verify_flash_stored_cards.sql;
 --   cma.data_quality_of, cma.data_quality(), cma.data_quality_flash_checks() and cma.data_quality_fix_in: 41, 69, 73, 75,
 --     101, 105, 113, 117, 123, 133_verify_perf.sql, 137, 161, 179_verify_job_reads.sql;
+--   through cma.flash_rows_of (the payment state of a list's page): 149, 161, 189_verify_fleet_management.sql and
+--     193_verify_fleet_page.sql;
 --   cma.check_tenant_setting(): 73, 101, 113, 121, 123, 137, 179; through its trigger 14 and 27;
 --   131_time_all.sql (edited by this change: the facts' rows).
 -- Prod: this script and 211 before the merge of its pull request (main's web runs unchanged on it: the new columns of the
@@ -595,6 +597,7 @@ alter function cma.subscription_device_units_of(uuid) set jit = off;
 create or replace function cma.payment_states()
 returns table (key text, sort_order integer, worst_rank integer)
 language sql immutable
+rows 7
 as $$
   values ('paid', 1, 6), ('in_retry', 2, 3), ('charged_back', 3, 2), ('awaiting_payment', 4, 4), ('failed', 5, 1), ('paused', 6, 5),
          ('canceled', 7, 7)
@@ -607,6 +610,11 @@ drop view if exists cma_read.subscription_payment_state;
 drop function if exists cma_read.subscription_payment_state_rows();
 drop function if exists cma.subscription_payment_state_of(uuid);
 drop function if exists cma.subscription_payment_state_of(uuid, uuid[]);
+
+-- The invoice renewals are read by connection and renewal (Awaiting payment): billing_event is not a busy table, so its
+-- index is made here
+create index if not exists billing_event_renewal_idx on cma.billing_event (tenant_id, connection_id, renewal_source_id)
+  where renewal_source_id is not null;
 
 -- Per subscription, its payment state (C.2, C.0): Failed, Paused and Canceled by its status (a failed subscription keeps
 -- the return code of a chargeback on its latest renewal's store order as its reason); for an active one, in this order,
@@ -667,7 +675,11 @@ as $$
       select e.raw ->> 'orderId' as purchase_order from cma.subscription_event e
       where e.tenant_id = p_tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
         and e.event_type = 'purchased' and (e.raw ->> 'orderId') ~ '^\d{1,30}$'
-      order by e.occurred_at, e.source_id collate "C" limit 1) p on r.source_id is null
+      order by e.occurred_at, e.source_id collate "C" limit 1) p
+      on r.source_id is null
+     and not exists (select 1 from cma.subscription_event z
+                     where z.tenant_id = p_tenant_id and z.connection_id = s.connection_id and z.subscription_source_id = s.source_id
+                       and z.event_type = 'renewed')
     where s.status in ('active', 'failed')
   ),
   last_order as (
@@ -684,34 +696,38 @@ as $$
     where o.order_source_id is not null
     order by o.id, b.occurred_at desc, b.source_id collate "C" desc
   ),
-  inv as materialized (
-    -- the invoice events of the active subscriptions' connections, each with its subscription: its own, else one a
-    -- sibling of the same renewal names, else the customer's one active subscription of the connection
-    select b.connection_id, b.kind, b.occurred_at, b.renewal_source_id, b.source_id,
-           coalesce(b.subscription_source_id,
-                    (select max(b2.subscription_source_id) from cma.billing_event b2
-                     where b2.tenant_id = p_tenant_id and b2.connection_id = b.connection_id and b2.renewal_source_id = b.renewal_source_id
-                       and b2.subscription_source_id is not null),
-                    (select min(x.source_id) from cma.subscription x
-                     where x.tenant_id = p_tenant_id and x.connection_id = b.connection_id and x.customer_source_id = b.customer_source_id
-                       and x.source_deleted_at is null and x.status = 'active'
-                     having count(*) = 1)) as subscription_source_id
+  ren as materialized (
+    -- the invoice renewals of the active subscriptions' connections, one row per renewal in one pass: the subscription an
+    -- event of it names, the customer, the latest invoice placed, and whether a paid or an overdue invoice of it came
+    select b.connection_id, b.renewal_source_id,
+           max(b.subscription_source_id) as subscription_source_id, min(b.customer_source_id) as customer_source_id,
+           max(b.occurred_at) filter (where b.kind = 'invoice_placed') as placed_at,
+           bool_or(b.kind = 'invoice_paid') as paid, bool_or(b.kind = 'invoice_overdue') as overdue
     from cma.billing_event b
     where b.tenant_id = p_tenant_id and b.kind in ('invoice_placed', 'invoice_paid', 'invoice_overdue') and b.renewal_source_id is not null
       and b.connection_id in (select s.connection_id from s where s.status = 'active')
+    group by b.connection_id, b.renewal_source_id
+  ),
+  sole as (
+    -- a customer's one active subscription of the connection, for a renewal whose events name no subscription
+    select x.connection_id, x.customer_source_id, min(x.source_id) as source_id
+    from cma.subscription x
+    join (select distinct r.connection_id, r.customer_source_id from ren r
+          where r.subscription_source_id is null and r.customer_source_id is not null) c
+      on c.connection_id = x.connection_id and c.customer_source_id = x.customer_source_id
+    where x.tenant_id = p_tenant_id and x.source_deleted_at is null and x.status = 'active'
+    group by 1, 2
+    having count(*) = 1
   ),
   awaiting as (
     -- an active subscription's latest invoice placed for a renewal that no paid invoice of that renewal followed; overdue
     -- once an overdue invoice of that renewal came
-    select distinct on (s.id) s.id, v.occurred_at,
-           exists (select 1 from inv d where d.connection_id = v.connection_id and d.renewal_source_id = v.renewal_source_id
-                                         and d.kind = 'invoice_overdue') as overdue,
-           exists (select 1 from inv d where d.connection_id = v.connection_id and d.renewal_source_id = v.renewal_source_id
-                                         and d.kind = 'invoice_paid') as paid
-    from s
-    join inv v on v.connection_id = s.connection_id and v.subscription_source_id = s.source_id and v.kind = 'invoice_placed'
-    where s.status = 'active'
-    order by s.id, v.occurred_at desc, v.source_id collate "C" desc
+    select distinct on (s.id) s.id, r.placed_at as occurred_at, r.overdue, r.paid
+    from ren r
+    left join sole o on o.connection_id = r.connection_id and o.customer_source_id = r.customer_source_id and r.subscription_source_id is null
+    join s on s.connection_id = r.connection_id and s.source_id = coalesce(r.subscription_source_id, o.source_id) and s.status = 'active'
+    where r.placed_at is not null
+    order by s.id, r.placed_at desc, r.renewal_source_id collate "C" desc
   ),
   since as (
     -- a failed subscription, and a paused or ended one without its own paused or canceled time: its latest event into
@@ -805,7 +821,11 @@ as $$
       select e.raw ->> 'orderId' as purchase_order from cma.subscription_event e
       where e.tenant_id = p_tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
         and e.event_type = 'purchased' and (e.raw ->> 'orderId') ~ '^\d{1,30}$'
-      order by e.occurred_at, e.source_id collate "C" limit 1) p on r.source_id is null
+      order by e.occurred_at, e.source_id collate "C" limit 1) p
+      on r.source_id is null
+     and not exists (select 1 from cma.subscription_event z
+                     where z.tenant_id = p_tenant_id and z.connection_id = s.connection_id and z.subscription_source_id = s.source_id
+                       and z.event_type = 'renewed')
     where s.status in ('active', 'failed')
   ),
   last_order as (
@@ -822,34 +842,38 @@ as $$
     where o.order_source_id is not null
     order by o.id, b.occurred_at desc, b.source_id collate "C" desc
   ),
-  inv as materialized (
-    -- the invoice events of the active subscriptions' connections, each with its subscription: its own, else one a
-    -- sibling of the same renewal names, else the customer's one active subscription of the connection
-    select b.connection_id, b.kind, b.occurred_at, b.renewal_source_id, b.source_id,
-           coalesce(b.subscription_source_id,
-                    (select max(b2.subscription_source_id) from cma.billing_event b2
-                     where b2.tenant_id = p_tenant_id and b2.connection_id = b.connection_id and b2.renewal_source_id = b.renewal_source_id
-                       and b2.subscription_source_id is not null),
-                    (select min(x.source_id) from cma.subscription x
-                     where x.tenant_id = p_tenant_id and x.connection_id = b.connection_id and x.customer_source_id = b.customer_source_id
-                       and x.source_deleted_at is null and x.status = 'active'
-                     having count(*) = 1)) as subscription_source_id
+  ren as materialized (
+    -- the invoice renewals of the active subscriptions' connections, one row per renewal in one pass: the subscription an
+    -- event of it names, the customer, the latest invoice placed, and whether a paid or an overdue invoice of it came
+    select b.connection_id, b.renewal_source_id,
+           max(b.subscription_source_id) as subscription_source_id, min(b.customer_source_id) as customer_source_id,
+           max(b.occurred_at) filter (where b.kind = 'invoice_placed') as placed_at,
+           bool_or(b.kind = 'invoice_paid') as paid, bool_or(b.kind = 'invoice_overdue') as overdue
     from cma.billing_event b
     where b.tenant_id = p_tenant_id and b.kind in ('invoice_placed', 'invoice_paid', 'invoice_overdue') and b.renewal_source_id is not null
       and b.connection_id in (select s.connection_id from s where s.status = 'active')
+    group by b.connection_id, b.renewal_source_id
+  ),
+  sole as (
+    -- a customer's one active subscription of the connection, for a renewal whose events name no subscription
+    select x.connection_id, x.customer_source_id, min(x.source_id) as source_id
+    from cma.subscription x
+    join (select distinct r.connection_id, r.customer_source_id from ren r
+          where r.subscription_source_id is null and r.customer_source_id is not null) c
+      on c.connection_id = x.connection_id and c.customer_source_id = x.customer_source_id
+    where x.tenant_id = p_tenant_id and x.source_deleted_at is null and x.status = 'active'
+    group by 1, 2
+    having count(*) = 1
   ),
   awaiting as (
     -- an active subscription's latest invoice placed for a renewal that no paid invoice of that renewal followed; overdue
     -- once an overdue invoice of that renewal came
-    select distinct on (s.id) s.id, v.occurred_at,
-           exists (select 1 from inv d where d.connection_id = v.connection_id and d.renewal_source_id = v.renewal_source_id
-                                         and d.kind = 'invoice_overdue') as overdue,
-           exists (select 1 from inv d where d.connection_id = v.connection_id and d.renewal_source_id = v.renewal_source_id
-                                         and d.kind = 'invoice_paid') as paid
-    from s
-    join inv v on v.connection_id = s.connection_id and v.subscription_source_id = s.source_id and v.kind = 'invoice_placed'
-    where s.status = 'active'
-    order by s.id, v.occurred_at desc, v.source_id collate "C" desc
+    select distinct on (s.id) s.id, r.placed_at as occurred_at, r.overdue, r.paid
+    from ren r
+    left join sole o on o.connection_id = r.connection_id and o.customer_source_id = r.customer_source_id and r.subscription_source_id is null
+    join s on s.connection_id = r.connection_id and s.source_id = coalesce(r.subscription_source_id, o.source_id) and s.status = 'active'
+    where r.placed_at is not null
+    order by s.id, r.placed_at desc, r.renewal_source_id collate "C" desc
   ),
   since as (
     -- a failed subscription, and a paused or ended one without its own paused or canceled time: its latest event into
@@ -1505,6 +1529,7 @@ create or replace function cma.subscription_amount_at(p_tenant_id uuid, p_connec
                                                       p_amount numeric, p_currency text, p_interval text, p_count integer)
 returns table (monthly_amount numeric, currency text)
 language sql stable
+rows 1
 as $$
   select coalesce((select c.old_value::numeric from cma.subscription_change c
                    where c.tenant_id = p_tenant_id and c.connection_id = p_connection_id and c.subscription_source_id = p_source_id
@@ -1660,7 +1685,7 @@ create table if not exists cma.subscription_month_take (
   primary key (tenant_id, connection_id, month, kind, currency)
 );
 comment on table cma.subscription_month_take is
-  'Per subscriptions connection (store) and calendar month in the tenant''s zone, from the month of the store''s first event (addition 0009ze): the Total subscriptions at the month''s start (kind start, the previous month end) and end (end), and the recurring amount movements by kind. currency empty: counts, from the first event on; per currency: the movements whose monthly amount is known (from the first load, amounts_from of cma.subscription_take_state) and their monthly amount (a positive size; contraction, paused, churned and moved_to_failed reduce the base). complete: the month is over and not before the store''s first complete calendar month, so it counts for the Churn rate and the Failed rate';
+  'Per subscriptions connection (store) and calendar month in the tenant''s zone, from the month of the store''s first event (addition 0009ze): the Total subscriptions at the month''s start (kind start, the previous month end) and end (end), and the recurring amount movements by kind. currency empty: counts, from the first event on; per currency: the movements whose monthly amount is known (from the connection''s first load: the later of amounts_from of cma.subscription_take_state and the first time the CMA held one of its subscriptions) and their monthly amount (a positive size; contraction, paused, churned and moved_to_failed reduce the base). complete: the month is over and not before the store''s first complete calendar month, so it counts for the Churn rate and the Failed rate';
 
 create table if not exists cma.renewal_outcome (
   tenant_id                               uuid not null default cma.current_tenant_id() references cma.tenant (id),
@@ -1696,7 +1721,7 @@ create table if not exists cma.subscription_survival_take (
   primary key (tenant_id, connection_id, cohort_month, interval_group, renewal_number)
 );
 comment on table cma.subscription_survival_take is
-  'Renewal survival (addition 0009ze): per store, start cohort (the month of the original start) and interval group, for renewal 1 to 24: the subscriptions started (purchased in the app; migrated ones are left out, their renewals before the app not being in its events), those whose own renewal of that number is due by now (eligible: the original start plus that many intervals has passed) and those that survived to it (survived: that many renewed cycles). A cell is mature when every started subscription is eligible; until then the page shows a dash';
+  'Renewal survival (addition 0009ze): per store, start cohort (the month the subscription was created in the app) and interval group, for renewal 1 to 24: the subscriptions started (purchased in the app; migrated ones are left out, their renewals before the app not being in its events), those whose own renewal of that number is due by now (eligible: its created date plus that many intervals has passed) and those that survived to it (survived: that many renewed cycles). A cell is mature when every started subscription is eligible; until then the page shows a dash';
 
 select cma.setup_tenant_table('cma.subscription_take_state');
 select cma.setup_tenant_table('cma.subscription_take');
@@ -1959,6 +1984,12 @@ begin
   ), x as materialized (
     select s.id, s.connection_id, s.source_id, s.amount_per_cycle, s.currency, s.billing_interval, s.billing_interval_count
     from cma.subscription s where s.tenant_id = p_tenant_id and s.source_deleted_at is null
+  ), af as materialized (
+    -- amounts are known from each connection's first load on (rule 12): the later of the observed changes' start (0009za)
+    -- and the first time the CMA held a subscription of the connection
+    select s.connection_id, greatest(v_amounts, min(s.first_seen_at)) as amounts_from
+    from cma.subscription s where s.tenant_id = p_tenant_id
+    group by 1
   ), bounds as materialized (
     select mo.connection_id, mo.month, k.kind, k.boundary
     from months mo
@@ -1989,7 +2020,8 @@ begin
     from bounds b
     join spans sp on sp.connection_id = b.connection_id and sp.from_at < b.boundary and (sp.to_at is null or sp.to_at >= b.boundary)
                  and sp.status = any (v_holding)
-    where v_amounts is not null and b.boundary >= v_amounts
+    join af on af.connection_id = b.connection_id
+    where v_amounts is not null and b.boundary >= af.amounts_from
   ), moved as (
     select m.connection_id, (date_trunc('month', m.at at time zone v_zone))::date as month, m.kind, m.subscription_id,
            case when m.kind in ('new', 'migrated', 'reactivated', 'resumed') then m.at else m.at - interval '1 microsecond' end as boundary
@@ -2028,7 +2060,8 @@ begin
     join x on x.id = c.subscription_id
     cross join lateral cma.subscription_amount_at(p_tenant_id, c.connection_id, x.source_id, c.boundary,
                                                   x.amount_per_cycle, x.currency, x.billing_interval, x.billing_interval_count) am
-    where v_amounts is not null and c.boundary >= v_amounts
+    join af on af.connection_id = c.connection_id
+    where v_amounts is not null and c.boundary >= af.amounts_from
     union all
     select ch.connection_id, ch.month, ch.kind, ch.subscription_id, ch.currency, ch.amount from changed ch
   ), rows_ as (
@@ -2051,11 +2084,13 @@ begin
   where r.month >= f.first_month and r.month <= v_month;
   get diagnostics n_months = row_count;
 
-  -- 5. renewal survival (C.6): subscriptions purchased in the app (not migrated) by start cohort and interval group
+  -- 5. renewal survival (C.6): subscriptions purchased in the app (not migrated) by start cohort and interval group; the
+  --    start is the subscription's own in the app (its created date), never the estimated original start, whose first
+  --    store order may be another subscription's of the same customer
   delete from cma.subscription_survival_take x where x.tenant_id = p_tenant_id;
   insert into cma.subscription_survival_take (tenant_id, connection_id, market, cohort_month, interval_group, renewal_number, started, eligible, survived)
-  select p_tenant_id, t.connection_id, t.market, t.cohort_month, t.interval_group, n.n, count(*)::integer,
-         count(*) filter (where t.original_start_at + make_interval(
+  select p_tenant_id, t.connection_id, t.market, date_trunc('month', s.source_created_at at time zone v_zone)::date, t.interval_group, n.n, count(*)::integer,
+         count(*) filter (where s.source_created_at + make_interval(
                                    months => case s.billing_interval when 'month' then s.billing_interval_count * n.n
                                                                      when 'year' then 12 * s.billing_interval_count * n.n else 0 end,
                                    days => case s.billing_interval when 'day' then s.billing_interval_count * n.n
@@ -2064,9 +2099,9 @@ begin
   from cma.subscription_take t
   join cma.subscription s on s.tenant_id = t.tenant_id and s.id = t.subscription_id
   cross join generate_series(1, 24) n(n)
-  where t.tenant_id = p_tenant_id and not t.migrated and t.cohort_month is not null and s.billing_interval is not null
+  where t.tenant_id = p_tenant_id and not t.migrated and s.source_created_at is not null and s.billing_interval is not null
     and s.billing_interval_count is not null
-  group by t.connection_id, t.market, t.cohort_month, t.interval_group, n.n;
+  group by t.connection_id, t.market, date_trunc('month', s.source_created_at at time zone v_zone)::date, t.interval_group, n.n;
   get diagnostics n_cells = row_count;
 
   -- 6. the take's row
@@ -2175,8 +2210,8 @@ comment on view cma_read.subscription_survival is
 -- ---------------------------------------------------------------------------------------------
 -- A purchase stored before 0009zc carries no store order (the events table is append-only, and the ingest leaves an
 -- event it holds as it is). The ingest's backfill --object purchase_order reads the app's purchase events again and
--- hands their orders here: a purchased event of the connection whose raw holds no orderId gains it, nothing else of it
--- changes, and an event that holds one keeps it. SECURITY DEFINER (the application may not update an event), after the
+-- hands their orders here: a purchased event of the connection whose raw holds no orderId gains it and a new synced_at
+-- (so the takes' input markers see the change), nothing else of it changes, and an event that holds one keeps it. SECURITY DEFINER (the application may not update an event), after the
 -- ingest's own check of the connection and its permission (ingest.write); owned by cma_owner, search path pinned,
 -- executable by the application only. Answers the events filled. Audited (the events' audit trigger)
 create or replace function cma.ingest_fill_purchase_orders(p_connection_id uuid, p_items jsonb)
@@ -2198,7 +2233,7 @@ begin
     raise exception 'items must be an array of at most 500 purchases, each a sourceId and an orderSourceId of digits' using errcode = 'CMA04';
   end if;
   update cma.subscription_event e
-  set raw = e.raw || jsonb_build_object('orderId', x.order_id)
+  set raw = e.raw || jsonb_build_object('orderId', x.order_id), synced_at = clock_timestamp()
   from (select distinct on (y ->> 'sourceId') y ->> 'sourceId' as source_id, y ->> 'orderSourceId' as order_id
         from jsonb_array_elements(p_items) y order by y ->> 'sourceId', y ->> 'orderSourceId') x
   where e.tenant_id = v_tenant and e.connection_id = p_connection_id and e.source_id = x.source_id and e.event_type = 'purchased'

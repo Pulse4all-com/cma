@@ -125,7 +125,8 @@ export async function refreshTenants({ connect, log }) {
         const counts = {
           ...(r.refreshed ? { rows: r.rows, duration_ms: r.duration_ms, skipped: 0 } : { rows: 0, duration_ms: 0, skipped: 1 }),
           facts_rows: f?.refreshed ? Number(f.rows ?? 0) : 0, facts_duration_ms: f?.refreshed ? Number(f.duration_ms ?? 0) : 0,
-          facts_skipped: f?.refreshed ? 0 : 1,
+          // a run that found the facts' inputs unchanged computed nothing: skipped, as a fresh one
+          facts_skipped: f?.refreshed && !f.unchanged ? 0 : 1,
         };
         await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
         return { r, counts };

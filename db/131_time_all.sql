@@ -618,8 +618,9 @@ begin
       end if;
       -- the subscription facts (addition 0009ze, brief B39c C.9), part b: their refresh as the tenant's scheduler, every
       -- take written again (forced), once, against verify.max_facts_ms, rolled back at once as Active's above; and the
-      -- variant mapping's list (Configuration → Sources, the panel of a subscriptions connection), as the tenant's first
-      -- person with tenant.configure, the best of two, against verify.max_list_ms. A database without 210 reads skip
+      -- variant mapping's list (Configuration → Sources, the panel of a subscriptions connection), as the application
+      -- (cma_app, row-level security on, the tenant's scheduler), the best of two, against verify.max_list_ms. A database
+      -- without 210 reads skip
       if v_part in ('b', 'all') then
         v_cur := null; v_ms := null;
         if to_regprocedure('cma.subscription_facts_refresh_of(uuid,boolean,timestamptz)') is not null and v_sched is not null then
@@ -650,6 +651,8 @@ begin
         r_ms := r_ms || v_ms;
         v_ms := null; v_cur := null;
         if to_regprocedure('cma.subscription_variants_of(uuid,uuid)') is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', coalesce(v_sched::text, ''), true);
           begin
             for i in 1 .. 2 loop
               v_mark0 := clock_timestamp();
@@ -659,6 +662,8 @@ begin
           exception
             when others then v_ms := null; v_cur := jsonb_build_object('error', sqlstate);
           end;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
         end if;
         v_max := case when v_provoke then 0 else current_setting('verify.max_list_ms')::numeric end;
         r_name := r_name || (t.slug || ' subscription variants list');
