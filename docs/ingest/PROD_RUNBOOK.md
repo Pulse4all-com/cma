@@ -3297,3 +3297,12 @@ Configuration → Sources, open each subscriptions connection, panel "Variant ma
 
 ## 20.8 Studio (cma-prod-pg): the facts' refresh and the current takes' refresh
 **File:** `db/131_time_all.sql`: copy all of it; **Studio** (cma-prod-pg): paste and Run as your own login. Expected: part b's row "subscription facts refresh" within its 3,000 ms (proposed) and "subscription variants list" within its budget, and the row for the current takes' refresh no slower than 7,868 ms; the rows of `124` (Flash's Subscriptions list) before and after the migration, since the payment state costs more (about 312 ms against 132 locally at three times prod's volume; the list may cross 400 ms p75). Also check `cma.active_inputs_key_of`'s time (the markers row, budget 300 ms; 440.7 ms on 20 November). Report the times in the chat; a record is written from your report.
+
+
+After the first refresh, check where each store's rates start. **Studio** (cma-prod-pg):
+
+```sql
+select market, migration_months, straggler_months, rate_start_month from cma_read.subscription_store_start order by market;
+```
+
+Expected: GB June 2025 (April with 2 events and August with 1 noted); BE July 2025 with a September straggler; DE, FR and SE July 2025; NL June or July 2025, depending on the share of its 2 June batch; AT June 2026; DK and IE July 2026. Report the rows in the chat; a record is written from your report.

@@ -285,6 +285,11 @@
           "name": "subscription_survival_take",
           "what": "Renewal survival per store, start cohort (the month the subscription was created in the app) and interval group, for renewal 1 to 24: the subscriptions started (purchased in the app; migrated ones are left out), those eligible (their own renewal of that number is due by now) and those that survived to it; a cell is mature when every started subscription is eligible; counts only (0009ze)",
           "how": "Written again in full by cma.subscription_facts_refresh() in the minute job refresh_active_customers (step 2), from cma.subscription and its renewed events; the application only reads it"
+        },
+        {
+          "name": "subscription_store_start",
+          "what": "Per subscriptions connection (store) with an event: the month of its first event, its migrated events per month, the last month that holds at least subscriptions.migration_bulk_min_pct (default 5) of them, the later months below that share (stragglers, reported, never moving the start) and the month its Churn rate and Failed rate start: the month after that last migration month, else the first complete month after its first event (0009ze)",
+          "how": "Written again in full by cma.subscription_facts_refresh() in the minute job refresh_active_customers (step 2), from the subscription app's events (cma.subscription_event) through cma.subscription_rate_start_of; the application only reads it"
         }
       ]
     },
@@ -885,11 +890,15 @@
     },
     {
       "name": "subscription_churn_month",
-      "what": "The Churn rate and the Failed rate per tenant, market and complete month: the subscriptions churned and moved to failed in the month over the Total subscriptions at the previous month end, from each store's first complete calendar month; a share of 1 is 100 %; counts and shares only. A plain read of cma.subscription_month_take (0009ze)"
+      "what": "The Churn rate and the Failed rate per tenant, market and complete month: the subscriptions churned and moved to failed in the month over the Total subscriptions at the previous month end, from each store's start month (see subscription_store_start); a share of 1 is 100 %; counts and shares only. A plain read of cma.subscription_month_take (0009ze)"
     },
     {
       "name": "subscription_survival",
       "what": "Renewal survival per store, start cohort, interval group and renewal number: started, eligible, survived and whether the cell is mature (every started subscription eligible); counts only. A plain read of cma.subscription_survival_take (0009ze)"
+    },
+    {
+      "name": "subscription_store_start",
+      "what": "Per store of every tenant the reader sees: its migrated events per month, the last month of its migration, its stragglers (later months under subscriptions.migration_bulk_min_pct of the migrated events) and the month its Churn rate and Failed rate start; counts and months only. A read of cma.subscription_store_start (0009ze)"
     }
   ],
   "flows": {
