@@ -49,6 +49,7 @@ import { randomBytes } from "node:crypto";
 import pg from "pg";
 import { expect, verdict, poolCheck, writesOutside, PROVOKE } from "./lib.mjs";
 import { juoStore, startFakeJuo } from "./juo-fake.mjs";
+import { SUBSCRIPTIONS_SORT } from "../src/adapters/juo/read.mjs";
 
 console.log(`verify/juo-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
@@ -241,6 +242,29 @@ expect("C3 the backfill of the subscriptions: stream subscription, 230 inserted,
     Number.isInteger(run.counts.slice_max_ms), run.counts.lines_new, run.counts.lines_missing, run.counts.changes_observed, run.counts.instrument_unknown,
     await counted("subscription_line", juo1.id), await counted("subscription_change", juo1.id)],
   [0, "subscription", "succeeded", 230, 230, 230, 30, 0, true, 464, 0, 0, 0, 464, 0], [1, null, "failed", 0, 0, 0, 0, 1, false, 0, 1, 1, 1, 0, 1]);
+// The tie at a page boundary (addition 0009zc): s-0095 to s-0106 share one createdAt across the first page's end. The
+// adapter's read names createdAt:asc,id:asc and returns every subscription once (C3: 230 inserted, none missing). The
+// same pages read here directly with the sort under test: the adapter's, or (--provoke) Juo's default createdAt alone,
+// whose cursor skips the rest of the tie, so the check fails
+const listIds = async (sort) => {
+  const ids = [];
+  let after = null;
+  for (let i = 0; i < 10; i += 1) {
+    const qs = new URLSearchParams({ limit: "100", ...(sort ? { sort } : {}), ...(after ? { after } : {}) });
+    const r = await (await fetch(`${fake.url}/admin/v1/subscriptions?${qs}`, { headers: { "X-Juo-Admin-Api-Key": KEY1, "X-Tenant-ID": one.domain } })).json();
+    ids.push(...r.data.map((x) => x.id));
+    if (!r.hasNextPage) break;
+    after = r.endCursor;
+  }
+  return ids;
+};
+const tied = new Set(one.subscriptions.slice(94, 106).map((x) => x.id));
+const readIds = await listIds(PROVOKE ? null : SUBSCRIPTIONS_SORT);
+expect("C3b a tie of twelve subscriptions on one createdAt across a page boundary: the read under test returns all 230 once, the twelve among them, none held missing; the adapter's list requests name createdAt:asc,id:asc (--provoke reads with Juo's default createdAt alone and skips six)",
+  [readIds.length, new Set(readIds).size, [...tied].filter((id) => readIds.includes(id)).length,
+    (await q("select count(*)::int as n from cma.subscription where connection_id = $1 and source_deleted_at is null", [juo1.id]))[0].n,
+    fake.state.requests.filter((r) => r.path.endsWith("/subscriptions") && r.tenant === one.domain).every((r) => r.params.sort === SUBSCRIPTIONS_SORT)],
+  [230, 230, 12, 230, true], [230, 230, 12, 230, true]);
 let st = await states(T1);
 expect("C4 the payment state of each case: in_retry, paid after a renewal of the failed cycle, failed, paused, canceled (canceled and expired); merged and never-subscribed left out",
   [st["s-0201"], st["s-0202"], st["s-0203"], st["s-0204"], st["s-0205"], st["s-0206"], st["s-0207"], st["s-0208"], st["s-0001"], st["s-0209"], st["s-0210"],
@@ -317,8 +341,40 @@ expect("E2 empty_snapshot: a full read that returns no subscription fails, nothi
 one.subscriptions.push(...kept, gone);
 total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
 run = (await runsOf(juo1.id, "reconcile")).at(-1);
-expect("E3 the next full read brings the missing subscription back", [total.failed, run.counts.updated, run.counts.missing_now,
-  (await q("select count(*)::int as n from cma.subscription where connection_id = $1 and source_deleted_at is not null", [juo1.id]))[0].n], [0, 1, 0, 0], [1, 0, 1, 1]);
+expect("E3 the next full read brings the missing subscription back, source_deleted_at cleared and every line of it present",
+  [total.failed, run.counts.updated, run.counts.missing_now,
+    (await q("select count(*)::int as n from cma.subscription where connection_id = $1 and source_deleted_at is not null", [juo1.id]))[0].n,
+    (await q("select count(*)::int as n from cma.subscription_line where connection_id = $1 and subscription_source_id = $2 and source_deleted_at is not null", [juo1.id, gone.id]))[0].n,
+    (await q("select count(*)::int as n from cma.subscription_line where connection_id = $1 and subscription_source_id = $2", [juo1.id, gone.id]))[0].n > 0],
+  [0, 1, 0, 0, 0, true], [1, 0, 1, 1, 1, false]);
+// The guard (addition 0009zc): a subscription the list leaves out while Juo returns it by id is read again by id, upserted
+// and never marked (missing_reappeared); one Juo no longer returns at all is marked (missing_confirmed)
+const hidden = one.subscriptions[9];
+fake.state.hiddenFromList.add(hidden.id);
+fake.state.requests.length = 0;
+total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
+run = (await runsOf(juo1.id, "reconcile")).at(-1);
+const hiddenRow = (await q("select source_deleted_at is not null as missing from cma.subscription where connection_id = $1 and source_id = $2", [juo1.id, hidden.id]))[0];
+const byIdAsked = fake.state.requests.filter((r) => r.path.endsWith("/subscriptions") && r.params.query?.includes(hidden.id)).length;
+expect("E4 the guard: a subscription the list left out but Juo returns by id is read again by id and not marked missing (missing_reappeared 1, missing_confirmed 0)",
+  [total.failed, run.status, run.counts.missing_reappeared, run.counts.missing_confirmed, run.counts.missing_now, hiddenRow?.missing, byIdAsked,
+    run.counts.fetched, lastLog("reconcile: subscription full read")?.rereadById],
+  [0, "succeeded", 1, 0, 0, false, 1, 230, 1], [1, "failed", 0, 1, 1, true, 0, 229, 0]);
+fake.state.hiddenFromList.clear();
+const gone2 = one.subscriptions.splice(10, 1)[0];
+total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
+run = (await runsOf(juo1.id, "reconcile")).at(-1);
+expect("E5 …while one Juo no longer returns, in the list or by id, is marked missing (missing_confirmed 1, missing_reappeared 0); back in the list, it comes back",
+  [total.failed, run.counts.missing_confirmed, run.counts.missing_reappeared, run.counts.missing_now,
+    (await q("select source_deleted_at is not null as missing from cma.subscription where connection_id = $1 and source_id = $2", [juo1.id, gone2.id]))[0]?.missing],
+  [0, 1, 0, 1, true], [1, 0, 1, 0, false]);
+one.subscriptions.splice(10, 0, gone2);
+total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
+run = (await runsOf(juo1.id, "reconcile")).at(-1);
+expect("E6 …and the next full read brings it back: source_deleted_at cleared, nothing missing",
+  [total.failed, run.counts.updated, run.counts.missing_now, run.counts.missing_confirmed,
+    (await q("select count(*)::int as n from cma.subscription where connection_id = $1 and source_deleted_at is not null", [juo1.id]))[0].n],
+  [0, 1, 0, 0, 0], [1, 0, 1, 1, 1]);
 
 // ---- F. The refusals: no store, no key, another store's key; a 429 -------------------------------------------------------------
 fake.state.requests.length = 0;

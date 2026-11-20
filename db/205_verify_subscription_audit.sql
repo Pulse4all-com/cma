@@ -31,6 +31,8 @@
 --      the stores, its rows read by privacy as other connections.
 --      An unknown tenant CMA02. The application refused execution (42501). bacs_direct_debit taken by both tables'
 --      checks, klarna refused (23514)
+-- Edited by 206_subscription_full_read_guard.sql (0009zc): B2 and B5 expect billing_link's buckets as 206 names them
+-- (renewal order, first order, other store order); run against the audit of 0009zc.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
 
@@ -264,7 +266,7 @@ begin
              || ' | no variant 0; not in the catalog 0; missing from the catalog 0'
              || ' | events 0 (subscriptions 0); lines 0; billing events 0 | broken 0 (none); no status event 3'
              || ' | chargeback 1, invoice_placed 1, refund_created 1'
-             || ' | chargebacks: subscription 0, order 1, unlinked 0; refund events: subscription 1, order 0, unlinked 0'
+             || ' | chargebacks: subscription 0, renewal order 1, first order 0, other store order 0, unlinked 0; refund events: subscription 1, renewal order 0, first order 0, other store order 0, unlinked 0'
              || ' | renewed 1, failed renewal 0, moved to failed 0, canceled 0, expired 0, nothing 0, under 30 days 0'
              || ' | migrated 1; below -35: 0, -35 to -1: 0, 0 to 35: 1, above 35: 0; no store order 0; no cycle, date or interval 0'
              || ' | subscriptions: bacs_direct_debit 1, card 2, paypal 1, sepa_direct_debit 1; billing events: card 1; instrument_unknown of the latest run: no run'
@@ -336,7 +338,7 @@ begin
     v_exp := '1 | 1 | no discount 1 of 3; with a discount 1 of 1; discounts not stated 0 of 0 | no variant 0; not in the catalog 1; missing from the catalog 0'
              || ' | no event: ' || to_char(v_m0 + interval '5 months', 'YYYY-MM')
              || ' | events 1 (subscriptions 1); lines 0; billing events 0 | broken 1 (active>paused 1); no status event 6'
-             || ' | chargebacks: subscription 0, order 1, unlinked 1; refund events: subscription 1, order 0, unlinked 0'
+             || ' | chargebacks: subscription 0, renewal order 1, first order 0, other store order 0, unlinked 1; refund events: subscription 1, renewal order 0, first order 0, other store order 0, unlinked 0'
              || ' | migrated 3; below -35: 1, -35 to -1: 0, 0 to 35: 1, above 35: 1; no store order 0; no cycle, date or interval 0'
              || ' | subscriptions: bacs_direct_debit 1, card 2, none 3, other 1, paypal 1'
              || ' | subscription 0, subscription_event 0, subscription_line 0, subscription_product_variant 2, billing_event 0, subscription_change 0; catalog text over 100 characters 0'

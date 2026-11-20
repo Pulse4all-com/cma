@@ -287,7 +287,11 @@ expect("G6 Juo's renewal notice is not read (19 Nov 2026): no type mapping, neit
   [false, false, "type", "type", false], [true, true, undefined, undefined, true]);
 expect("G5 a renewal keeps its store order as orderSourceId (what a chargeback's order joins); no other type does",
   [map.eventItem(eventsOf(1)[0]).item.orderSourceId, map.eventItem(eventsOf(201)[0]).item.orderSourceId, ev(221, "subscription:purchased").orderSourceId],
-  ["610000001", undefined, undefined], [undefined, "x", "6100000221"]);
+  ["610000001", undefined, null], [undefined, "x", "6100000221"]);
+expect("G5b a purchase keeps its store order in raw only (orderId; a chargeback on a first order joins it, 0009zc); the column stays a renewal's",
+  [ev(221, "subscription:purchased").raw.orderId, ev(221, "subscription:purchased").orderSourceId, map.eventItem(eventsOf(1)[0]).item.raw.orderId,
+    ev(222, "subscription:created").raw.orderId],
+  ["6100000221", null, "610000001", undefined], [undefined, "6100000221", undefined, "x"]);
 
 // ---- H. Billing events -------------------------------------------------------------------------------------------------
 const billingEvents = one.events.filter(map.isBillingEvent);
@@ -369,6 +373,10 @@ expect("D1 paging: the 230 subscriptions in three pages of at most 100, the paym
   [[100, 100, 30], true, "paymentMethod", "true", 2, { "GET /subscriptions": 3 }], [[230], false, undefined, undefined, 1, {}]);
 const byId = await collect(read.clientFor(conn(), settings, new JobBudget({})).subscriptionsById(one.subscriptions.slice(0, 30).map((s) => s.id)));
 expect("D2 subscriptions read again by id, 25 a query: 30 ids in two batches", byId.map((b) => b.length), [25, 5], [30]);
+expect("D1b every paged read names a sort with a unique last key (0009zc): subscriptions createdAt:asc,id:asc (the 230 once each, s-0095 to s-0106 sharing one createdAt across the first page's boundary), the by-id reads too",
+  [fake.state.requests.filter((r) => r.path.endsWith("/subscriptions")).every((r) => r.params.sort === "createdAt:asc,id:asc"), new Set(pages.flat().map((x) => x.id)).size,
+    new Set(one.subscriptions.slice(94, 106).map((x) => x.createdAt)).size, read.SUBSCRIPTIONS_SORT, read.PRODUCTS_SORT, read.EVENTS_SORT],
+  [true, 230, 1, "createdAt:asc,id:asc", "id:asc", "occurredAt:asc,id:asc"], [false, 224, 12, "createdAt:asc", null, null]);
 const evPages = await collect(read.clientFor(conn(), settings, new JobBudget({})).events(read.eventsQuery(NOW - 60 * 24 * 60_000 * 30)));
 const evList = evPages.flat();
 const blList = (await collect(read.clientFor(conn(), settings, new JobBudget({})).events(read.eventsQuery(NOW - 60 * 24 * 60_000 * 30, null, { family: "billing" })))).flat();
@@ -378,6 +386,8 @@ expect("D3 each family's events of a window, oldest first, in pages: the subscri
   [subEvents.length, true, billingEvents.length, one.events.length - 1, true, false], [0, false, 0, 0, false, true]);
 const prodPages = await collect(read.clientFor(conn(), settings, new JobBudget({})).products());
 expect("D3b the catalog in pages: 153 products in two pages", prodPages.map((x) => x.length), [100, 53], [153]);
+expect("D3e the catalog's pages name the sort id:asc (Juo's default, sent so the read never rests on it; 0009zc)",
+  fake.state.requests.filter((r) => r.path.endsWith("/products")).slice(-2).map((r) => r.params.sort), ["id:asc", "id:asc"], [undefined, undefined]);
 // The catalog's dry run (#299's finding 1: variantsOnActiveLines 0 in every store): the lines of active subscriptions that
 // Juo has not canceled, per variant. The fixture's lines are shaped as Juo's SubscriptionItem: variant and product as id
 // strings (not expanded), canceledAt null or a date-time. Active: s-0001 to s-0230 but s-0203 to s-0208 (224); line a on
