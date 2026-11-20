@@ -36,12 +36,9 @@ the ten jobs on the same image, schedules unchanged.
 
 ## 18.12 The full read of every active store
 
-One execution, `ingest-backfill-kpgfs` (`--adapter juo --object subscription`).
-
-| Store | GB | NL | FR | DE | BE | SE | AT | DK | IE |
-|---|---|---|---|---|---|---|---|---|---|
-| `subscriptionsRead` | 4,537 | 1,504 | 227 | 1,174 | 149 | 193 | 59 | 13 | 6 |
-| the dry run of 20 November (`fetched`, `records/0009za-prod-2026-11-20`) | 4,224 | 1,487 | 226 | 1,174 | 149 | 193 | 59 | 13 | 6 |
+One execution, `ingest-backfill-kpgfs` (`--adapter juo --object subscription`). Every store's full read returned more
+subscriptions than, or as many as, the dry run of 20 November (`records/0009za-prod-2026-11-20`): more in GB, NL and FR,
+as many in the others.
 
 `rereadById` 0 in every store: the list sorted on `createdAt` and `id` left out no present subscription.
 `instrumentUnknownTypes` empty in every store but NL, `{manual: 1}`: one NL subscription pays by an instrument Juo calls
@@ -50,15 +47,15 @@ One execution, `ingest-backfill-kpgfs` (`--adapter juo --object subscription`).
 ## 18.13 The audit again
 
 The audit's raw output is not committed: Martin keeps it outside the repository, in `~/cma-audit` (Decision log, 20 Nov
-2026). Verdicts and causes only.
+2026). Results and causes only, a comparison with Juo's own count as equal or "n apart".
 
 | Check | Result | Cause |
 |---|---|---|
 | `status_mix` | missing 0 in every store | The skipped ties of the first audit are read (`records/0009zb-prod-2026-11-20`, finding 1) |
 | `status_mix` against Juo's own counts of 20 November (active plus failed) | GB equal; NL 2 apart; DE 4 apart | Juo's snapshot is from earlier in the day; the difference is that day's renewal run |
 | `orphan_events` | 0 in every store | as `status_mix` |
-| `instruments` | GB: BACS (`bacs_direct_debit`) on 306 subscriptions | 0009zb's code, applied by the full read |
-| `billing_link` | still unlinked: DE 17 and NL 52; NL 10 more on another store order | Older chargebacks on first orders, from before the CMA's order history; purchases stored before 0009zc carry no order id (docs/open-decisions.md) |
+| `instruments` | GB's BACS subscriptions read `bacs_direct_debit` | 0009zb's code, applied by the full read |
+| `billing_link` | some still unlinked in DE and NL, and some NL ones on another store order | Older chargebacks on first orders, from before the CMA's order history; purchases stored before 0009zc carry no order id (docs/open-decisions.md) |
 
 The undercount of GB and NL is closed: the full read of 20 November 2026 brought both to Juo's own count within the day's
 movement (docs/open-decisions.md).

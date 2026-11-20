@@ -41,28 +41,31 @@ report and those files; the values are his.
 The audit's raw output holds commercial volumes (subscriptions per status, chargebacks per market) and the repository is
 public, so it is not committed: Martin keeps it outside the repository, in `~/cma-audit` (Decision log, 20 Nov 2026). This
 supersedes the first paragraph's and the last line's "once Martin adds it" above: `audit.txt` is not added to this folder.
-This record gives each check's verdict and its cause ("finding" where Martin's report gives a finding without the verdict word); a comparison with Juo's own count is given as equal or "n apart".
+This record gives each check's verdict and its cause, a finding as a direction or a share, and a comparison with Juo's
+own count as equal or "n apart"; no count per status, per instrument or per market.
 
 ## The first audit's verdicts, every check
 
+Verdicts as Martin reported them, per check: "ok everywhere", or ok with the stores named that read otherwise.
+
 | Check | Verdict | Cause |
 |---|---|---|
-| `status_mix` | finding | GB 194 and NL 12 active subscriptions below Juo's own active count. The full read paged on `createdAt` alone and skipped the rows of a tie (finding 1 above); fixed by 0009zc |
-| `no_lines` | ok | |
-| `lines_histogram` | not in Martin's report | |
-| `line_currency` | ok | |
-| `amount_vs_lines` | ok | |
-| `variant_missing` | ok | |
-| `events_by_month` | fail for IE, DK explained | IE: all its subscriptions paused or ended, so no renewal is due (finding 2a); DK's July: no subscription held then (finding 2b) |
-| `orphan_events` | finding | GB: events of 121 subscriptions the CMA did not hold. Three sampled GB subscriptions "missing" in the CMA were returned active by Juo by id: the same skipped ties (finding 1); fixed by 0009zc |
-| `status_chain` | explain | finding 5 above |
-| `billing_kinds` | finding | Invoice events in GB, DE and NL only |
-| `billing_link` | finding | finding 3 above |
-| `after_chargeback` | finding | Juo moves most charged-back subscriptions to failed: NL 201 of 304 linked chargebacks, DE 69 of 112, also AT, BE, and FR (11 of 12). Some stay active with nothing after: NL 46, DE 14, GB 9 |
-| `migration_cycles` | finding | No migrated subscription has a store order: the CMA holds store orders from 1 October 2026 only, after the migration to Juo |
-| `instruments` | finding | GB's `other` is BACS (`bacs_direct_debit` since 0009zb, applied at the next full read); NL's `other` is finding 4 above |
-| `privacy` | ok | All six tables, and the three switched-off connections |
-| `changes` | ok | |
+| `status_mix` | explain everywhere | Active subscriptions GB 194 apart and NL 12 apart from Juo's own active count, the CMA lower. The full read paged on `createdAt` alone and skipped the rows of a tie (finding 1 above); fixed by 0009zc |
+| `no_lines` | ok everywhere | |
+| `lines_histogram` | ok everywhere | |
+| `line_currency` | ok everywhere | |
+| `amount_vs_lines` | ok everywhere | |
+| `variant_missing` | ok everywhere | |
+| `events_by_month` | ok; IE fail | IE: all its subscriptions paused or ended, so no renewal is due (finding 2a). DK's July is ok: no subscription held then (finding 2b) |
+| `orphan_events` | ok; GB explain | GB: events of subscriptions the CMA did not hold. Three sampled GB subscriptions "missing" in the CMA were returned active by Juo by id: the same skipped ties (finding 1); fixed by 0009zc |
+| `status_chain` | ok; DE and NL explain | finding 5 above |
+| `billing_kinds` | ok everywhere | Invoice events in GB, DE and NL only |
+| `billing_link` | ok; DE and NL explain | finding 3 above |
+| `after_chargeback` | ok everywhere | About two thirds of linked chargebacks moved to failed (NL, DE; also AT, BE and FR); some stayed active with nothing after (NL, DE, GB) |
+| `migration_cycles` | ok everywhere | No migrated subscription has a store order: the CMA holds store orders from 1 October 2026 only, after the migration to Juo |
+| `instruments` | ok; GB and NL fail | GB's `other` is BACS (`bacs_direct_debit` since 0009zb, applied at the next full read); NL's `other` is finding 4 above |
+| `privacy` | ok everywhere | All six tables, and the three switched-off connections |
+| `changes` | ok everywhere | |
 
 The fixes are proved in prod by the full read and the second audit after 0009zc's deploy:
 `records/0009zc-prod-2026-11-20`.
