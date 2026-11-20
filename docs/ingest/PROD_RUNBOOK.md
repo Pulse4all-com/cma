@@ -3254,6 +3254,7 @@ with it. If the Run stops with an error, close the tab (it may still hold the ro
 
 **Studio (cma-prod-pg)**
 ```sql
+set statement_timeout = '60s';
 set role cma_owner;
 with t as (
   select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'
