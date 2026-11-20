@@ -1,0 +1,30 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/207_verify_subscription_full_read_guard.sql:38: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+                                             check_name                                             | result  |                                 detail                                 
+----------------------------------------------------------------------------------------------------+---------+------------------------------------------------------------------------
+ A1 addition 0009zc recorded, after 0009zb                                                          | PASS    | 
+ A2 the audit the owner's only, security invoker, stable, jit off; the run finish the application's | PASS    | cma_owner:false:s:jit=off:false:false:false:false | true
+ B a dev or local database (the dev seed's agent.two@example.com active)                            | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing ran
+ verdict                                                                                            | REFUSED | 207_verify_subscription_full_read_guard: 2 PASS, 1 FAIL
+(4 rows)
+
+RESET

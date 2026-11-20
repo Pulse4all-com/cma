@@ -1,0 +1,37 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/205_verify_subscription_audit.sql:51: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                   check_name                                                                                   | result  |                                                                                                         detail                                                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zb recorded, after 0009za                                                                                                                                      | PASS    | 
+ A2 eight instrument codes, bacs_direct_debit among them; klarna, bacs and an empty code refused                                                                                | PASS    | bacs_direct_debit bancontact card ideal invoice other paypal sepa_direct_debit | null null
+ A3 the audit and its helpers the owner's, security invoker, stable or immutable, no execute for the application, readers, the BigQuery login or public; the audit with jit off | PASS    | subscription_audit_of:cma_owner:false:s:false:false:false:false:jit=off subscription_audit_stores_of:cma_owner:false:s:false:false:false:false:- subscription_audit_suspect:cma_owner:false:i:false:false:false:false:-
+ A4 the audit answers check_key, store, value, expected, verdict                                                                                                                | PASS    | TABLE(check_key text, store text, value text, expected text, verdict text)
+ A5 the privacy test: @, full-width @, control characters and thirteen phone shapes suspect; ids, uuids, times, amounts, SKUs and titles not                                    | PASS    | yyyyyyyyyyyyynnnn
+ B a dev or local database (the dev seed's agent.two@example.com active)                                                                                                        | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing ran
+ verdict                                                                                                                                                                        | REFUSED | 205_verify_subscription_audit: 5 PASS, 1 FAIL
+(7 rows)
+
+RESET

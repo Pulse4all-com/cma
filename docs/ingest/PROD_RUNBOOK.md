@@ -3117,7 +3117,7 @@ Expected: every row within its budget as before, in particular the rows that rea
 
 # Phase 18. The subscription audit and BACS direct debit (addition 0009zb, brief B39a2)
 
-One step at a time; each says where it runs and what to expect. 18.1 to 18.5 ran on 20 November 2026 (`204` and `205` in dev and prod, the audit in prod). The audit is read only, run by hand as the owner and called by no page or job. Its prod output is the record `records/0009zb-prod-<date>/audit.txt`, written from your report; nothing is written there before a run has happened.
+One step at a time; each says where it runs and what to expect. 18.1 to 18.5 ran on 20 November 2026 (`204` and `205` in dev and prod, the audit in prod). The audit is read only, run by hand as the owner and called by no page or job. Its prod output holds commercial volumes (subscriptions per status, chargebacks per market) and the repository is public, so it is never committed: it is written to `~/cma-audit/<addition>-prod-<date>-audit.txt`, outside the repository, and the record's README gives each check's verdict and cause only, a comparison with Juo's count as equal or "n apart" (Decision log, 20 Nov 2026).
 
 ## 18.1 Terminal: the branch, the migration and its verifies in dev
 **Terminal** (~/cma)
@@ -3162,8 +3162,8 @@ run_migration prod 204_subscription_audit.sql 205_verify_subscription_audit.sql 
 ```
 Expected: 204 `COMMIT`; 205 `REFUSED` (A1 to A5 PASS, block B FAIL: no dev seed), as 203; 203 and 119 `REFUSED` as on 20 November 2026.
 
-## 18.5 Terminal: the audit in prod, written straight to the record
-The output holds counts, codes, months and store labels only, no customer rows, so a Terminal block is allowed. It makes commercial volumes (subscriptions per status, chargebacks per market) public while the repository is public: decide before committing the record.
+## 18.5 Terminal: the audit in prod, written outside the repository
+The output holds counts, codes, months and store labels only, no customer rows, so a Terminal block is allowed. It holds commercial volumes (subscriptions per status, chargebacks per market), so it goes to `~/cma-audit`, never to `records/` (Decision log, 20 Nov 2026); the record's README gets each check's verdict and cause from your report.
 
 **Terminal** (~/cma)
 ```bash
@@ -3173,18 +3173,12 @@ Expected: `connected to cma as <your login>`.
 
 **Terminal**
 ```bash
-mkdir -p records/0009zb-prod-$(date +%F) && psql "$PGCONN" -c "set statement_timeout = '120s'" -c "set role cma_owner" -c "select * from cma.subscription_audit_of((select id from cma.tenant where slug = 'pulse4all-subscriptions'))" > records/0009zb-prod-$(date +%F)/audit.txt
+mkdir -p ~/cma-audit && psql "$PGCONN" -c "set statement_timeout = '120s'" -c "set role cma_owner" -c "select * from cma.subscription_audit_of((select id from cma.tenant where slug = 'pulse4all-subscriptions'))" > ~/cma-audit/0009zb-prod-$(date +%F)-audit.txt
 ```
-Expected, in about 30 seconds: about 16 rows per active store (9 stores), then the file in the records folder.
-
-**Terminal**
-```bash
-node tools/check-records.mjs records/0009zb-prod-$(date +%F)
-```
-Expected: the check passes (`records clean`). Do not commit the record before it does.
+Expected, in about 30 seconds: about 16 rows per active store (9 stores), then the file in `~/cma-audit`. Nothing is added to `records/`.
 
 ## 18.6 Claude chat: the audit against Juo
-**Claude chat:** paste `audit.txt`. Each `status_mix` row is compared with Juo's own count per store (Juo's read tools); each `fail` is classified as a code defect or a Juo fact.
+**Claude chat:** paste the audit's file from `~/cma-audit`. Each `status_mix` row is compared with Juo's own count per store (Juo's read tools); each `fail` is classified as a code defect or a Juo fact.
 
 ## 18.7 Claude Code: the fixes and the record's README
 **Claude Code:** fixes for code defects on the same branch; the record's README with every check's outcome.
@@ -3196,7 +3190,7 @@ Expected: the check passes (`records clean`). Do not commit the record before it
 ```bash
 run_migration dev 206_subscription_full_read_guard.sql 207_verify_subscription_full_read_guard.sql 0009zc-dev-$(date +%F) 205_verify_subscription_audit.sql 203_verify_subscription_lines.sql 119_verify_subscriptions.sql 33_verify_intake_core.sql 69_verify_email_activity.sql 75_verify_forms_reporting.sql 79_verify_system_health.sql 105_verify_reviews.sql 107_verify_review_reference_guard.sql 109_verify_legacy_call_outcome.sql 115_verify_asset_sync.sql
 ```
-Then `117_verify_asset_sync_load.sql` on its own, pasted in Studio (cma-dev-pg) as in 17.2.
+Then `117_verify_asset_sync_load.sql` on its own, as a loose `psql` call from the Terminal, as in 17.2 (`cma_db dev`, then 17.2's block with the folder `0009zc-dev-$(date +%F)`), not in Studio: Studio stops a statement after 300 seconds, and 117 takes about 15 minutes.
 
 Expected: `206` ends with `COMMIT`; `207`'s last row `verdict | PASS | 207_verify_subscription_full_read_guard: 7 PASS, 0 FAIL`, provoked `0 PASS, 7 FAIL`; `205` `15 PASS`; `203` `26 PASS`; `119` `23 PASS`; the others as before; `records clean`.
 
@@ -3240,7 +3234,7 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 Expected: GB empty; NL one type name. Report it in the chat: it decides whether a code is added in a later PR (docs/open-decisions.md).
 
 ## 18.13 Terminal: the audit again
-18.5's block (`cma_db prod`, the audit into the record, the check), with the folder `records/0009zc-prod-$(date +%F)/audit.txt` and `node tools/check-records.mjs records/0009zc-prod-$(date +%F)`. Expected: GB and NL missing active near 0 (`status_mix`'s missing), `orphan_events` 0, `status_mix` within a few of Juo's own count per store, `events_by_month` ok for IE, `billing_link`'s unlinked lower in DE and NL. Do not commit the record before the check passes.
+18.5's block (`cma_db prod`, the audit into `~/cma-audit`), with the file `~/cma-audit/0009zc-prod-$(date +%F)-audit.txt`; nothing is added to `records/`. Expected: GB and NL missing active near 0 (`status_mix`'s missing), `orphan_events` 0, `status_mix` within a few of Juo's own count per store, `events_by_month` ok for IE, `billing_link`'s unlinked lower in DE and NL.
 
 ## 18.14 Studio (cma-prod-pg): the audit's time, optional
 **File:** `db/131_time_all.sql`: copy all of it, and in Studio's editor change the line `select set_config('verify.part', 'all', false);` to `select set_config('verify.part', 'audit', false);` (nothing is saved to the file). **Studio** (cma-prod-pg): run `set statement_timeout = '300s';` on its own first (every tenant's audit runs in one statement), then paste the edited script and Run, as your own login, once, for information.

@@ -1,0 +1,58 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/69_verify_email_activity.sql:63: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                              check_name                                               | result |                                                                                                                                                    detail                                                                                                                                                     
+-------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008m recorded, after 0008l                                                               | PASS   | 
+ A2 the six tables: RLS, tenant policy, audit, no delete, events insert-only, a reader view each       | PASS   | 
+ A3 the reporting views' exact columns: every column but raw                                           | PASS   | 
+ A4 no subject, body, text, address, sender or recipient column in the new tables and views            | PASS   | 
+ A5 the settings email.start_date, reply_target_minutes, no_response_days, market_order                | PASS   | email.market_order=text:contact,form,record,inbox email.no_response_days=integer:5 email.reply_target_minutes=integer:240 email.start_date=text:
+ A6 the functions the application's only, in the caller's rights; the category rule the owner's only   | PASS   | 
+ A7 the country slots, country_source, the contact view, the added data-quality check                  | PASS   | 
+ B1 the settings: the start date, the market order, thirteen refusals                                  | PASS   | 2026-10-01 2026-09-15 2026-08-01 2026-09-15 inbox,record contact,form,record,inbox | 13 of 13 refused
+ B2 an inbox and channel refresh keeps the configuration; four refusals                                | PASS   | 2 2 | in-1:Verify inbox one renamed:f:NL:verify-sales:phone:active in-2:Verify inbox two:t:-:-:email:archived in-3:Verify inbox three:t:-:-:email:active | ch-1:Verify email:email:email:t:active ch-2:Verify chat renamed:chat:phone:t:active ch-3:Verify forms:other:-:f:archived | CMA02,CMA02,CMA02,CMA04
+ B3 the stale guard on emails and threads; deletion and return                                         | PASS   | inserted,stale,sent,updated,deleted,unknown,bounced:own-1:{}:t,updated,t | inserted:open:- stale:open:- updated:closed:09:55 updated:closed:09:55 updated:open:- 
+ B4 thread events idempotent on the source message id; three refusals                                  | PASS   | inserted,inserted,inserted known,known,known,inserted 4 own-2 agent>agent,agent>-,system>-,ai>- | CMA04,CMA04,CMA04
+ B5 the market by email.market_order, step by step (contact, form, record, inbox), at query time       | PASS   | e-m1=GB/contact m-1=GB/contact e-f=GB/form e-g=NL/record m-3=NL/inbox e-m2=unknown/- m-2=unknown/- | e-m1=DE/record m-1=DE/record th-1=DE/record | m-1=NL/inbox e-m1=DE/record e-f=unknown/- | e-m1=NL/record e-m1=GB/contact e-g=unknown/- | m-2=NL/contact
+ B6 rule ordering, an inactive rule, words normalised; nine refusals                                   | PASS   | system_mail billing billing_nl - - | billing | catch_all | {factuur,invoice} {reminder} | catch_all,billing,billing_nl,system_mail | 9 of 9 refused
+ B7 the contact's privacy deletion clears it on emails and threads                                     | PASS   | {"refs": 0, "calls": 0, "emails": 2, "threads": 1, "contacts": 0, "submissions": 0} {"refs": 0, "calls": 0, "contacts": 0, "submissions": 0} 0 0 c-1
+ B8 a conversation's privacy deletion keeps ids and times; later reads take nothing back               | PASS   | {"threads": 1, "messages": 1} -:-:{}:closed:08:00:t e-f2:c-5:{"n": 2}:unknown m-f2a:-:{}:unknown m-f2b:-:{}:agent forgotten closed - -:{}
+ B9 tenant isolation with equal refs, also against the owner's view                                    | PASS   | 1 bounced 1 1 1 0 unknown CMA02 CMA02 | 2 2
+ B10 the Ingest user cannot configure, a configuring person cannot ingest; agents and no user refused  | PASS   | CMA06 CMA06 CMA06 CMA06 | CMA06 CMA06 CMA06 CMA06 CMA06 CMA06 CMA06 | CMA06 CMA06 CMA06 | CMA01 | ok ok
+ B11 nothing personal stored: the raw payload filtered, refs with @ or spaces refused, nothing written | PASS   | {"n": 3, "hs_email_status": "SENT", "hs_email_direction": "EMAIL", "hs_email_thread_id": "th-x"} | CMA04,CMA04,CMA04,CMA04,CMA04 | 15 15 | 0 rows with the text
+ B12 email activity belongs to a CRM connection; email rows make a connection crm                      | PASS   | CMA04 {} {crm} CMA03 ok CMA04
+ B13 email engagements' associations stored as calls' are; two refusals                                | PASS   | crm_email>contact:on crm_email>deal:on crm_email>ticket:off CMA04 CMA04 ok 1
+ B14 connection_config gives the inboxes, the source channels and the rules                            | PASS   | in-1:false:NL:verify-sales:phone in-2:true:-:-:email in-3:true:-:-:email | ch-1:email:email:true ch-2:chat:phone:true ch-3:other:-:false | 4 true
+ B15 where each thread's messages stand                                                                | PASS   | th-1:10:50:1:4:f th-2:10:00:1:0:f th-f2:11:00:3:0:t CMA04
+ B16 the email poll's runs (job email_poll)                                                            | PASS   | email_poll succeeded {"stale": 1, "fetched": 3, "upserted": 2} CMA04
+ B17 contacts held for an email and a thread; the privacy deletion forgets, the thread's does not      | PASS   | inserted,inserted,not_held | {"refs": 1, "calls": 0, "emails": 1, "contacts": 1, "submissions": 0} -:-:t:0:- | {"threads": 1, "messages": 0} GB:1:-
+ B18 the country slots: contiguous, no property twice, removed from the end; six refusals              | PASS   | contact_country:1 country_dropdown:2 country_extra:3 | CMA04 CMA03 CMA03 CMA04 CMA04 CMA04 ok | contact_country:1 | contact_country:1 country_dropdown:2
+ B19 the country chosen from its slots, with its source; four refusals                                 | PASS   | c-s1=NL/1 c-s2=GB/2 c-s3=DE/2 c-s4=Atlantis/1 c-s5=-/- c-s6=Narnia/2 | CMA04 CMA04 CMA04 CMA04
+ B20 a single country behaves exactly as before                                                        | PASS   | c-b1=Nederland/1 c-b2=NL/1 c-b3=GB/1 c-b4=-/- c-b5=-/- true | updated,stale,deleted c-b1=-/- c-b2=-/- c-b3=GB/1
+ B21 the fallback check: listed with slot 2, fires once, clears; fifteen rows without fallback slots   | PASS   | listed:0 | 1 contact:c-q1:2 view 1 | 0 - | 15 f
+ B22 tenant isolation for contacts, slots and the fallback check, also against the owner's view        | PASS   | 1 GB/1 0 0 CMA02 CMA02 | 2 c-q1:2
+ verdict                                                                                               | PASS   | 29 PASS, 0 FAIL
+(30 rows)
+
+DROP FUNCTION
+RESET
