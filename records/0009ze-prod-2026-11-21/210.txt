@@ -1,0 +1,149 @@
+DO
+BEGIN
+SET
+SET
+DO
+INSERT 0 3
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+psql:db/210_subscription_facts.sql:450: NOTICE:  policy "tenant_app" for relation "subscription_variant_mapping" does not exist, skipping
+psql:db/210_subscription_facts.sql:450: NOTICE:  policy "tenant_readonly" for relation "subscription_variant_mapping" does not exist, skipping
+psql:db/210_subscription_facts.sql:450: NOTICE:  trigger "audit" for relation "subscription_variant_mapping" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+DROP VIEW
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+CREATE INDEX
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+psql:db/210_subscription_facts.sql:1799: NOTICE:  policy "tenant_app" for relation "subscription_take_state" does not exist, skipping
+psql:db/210_subscription_facts.sql:1799: NOTICE:  policy "tenant_readonly" for relation "subscription_take_state" does not exist, skipping
+psql:db/210_subscription_facts.sql:1799: NOTICE:  trigger "audit" for relation "subscription_take_state" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/210_subscription_facts.sql:1800: NOTICE:  policy "tenant_app" for relation "subscription_take" does not exist, skipping
+psql:db/210_subscription_facts.sql:1800: NOTICE:  policy "tenant_readonly" for relation "subscription_take" does not exist, skipping
+psql:db/210_subscription_facts.sql:1800: NOTICE:  trigger "audit" for relation "subscription_take" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/210_subscription_facts.sql:1801: NOTICE:  policy "tenant_app" for relation "subscription_month_take" does not exist, skipping
+psql:db/210_subscription_facts.sql:1801: NOTICE:  policy "tenant_readonly" for relation "subscription_month_take" does not exist, skipping
+psql:db/210_subscription_facts.sql:1801: NOTICE:  trigger "audit" for relation "subscription_month_take" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/210_subscription_facts.sql:1802: NOTICE:  policy "tenant_app" for relation "renewal_outcome" does not exist, skipping
+psql:db/210_subscription_facts.sql:1802: NOTICE:  policy "tenant_readonly" for relation "renewal_outcome" does not exist, skipping
+psql:db/210_subscription_facts.sql:1802: NOTICE:  trigger "audit" for relation "renewal_outcome" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/210_subscription_facts.sql:1803: NOTICE:  policy "tenant_app" for relation "subscription_store_start" does not exist, skipping
+psql:db/210_subscription_facts.sql:1803: NOTICE:  policy "tenant_readonly" for relation "subscription_store_start" does not exist, skipping
+psql:db/210_subscription_facts.sql:1803: NOTICE:  trigger "audit" for relation "subscription_store_start" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/210_subscription_facts.sql:1804: NOTICE:  policy "tenant_app" for relation "subscription_survival_take" does not exist, skipping
+psql:db/210_subscription_facts.sql:1804: NOTICE:  policy "tenant_readonly" for relation "subscription_survival_take" does not exist, skipping
+psql:db/210_subscription_facts.sql:1804: NOTICE:  trigger "audit" for relation "subscription_survival_take" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+DROP TRIGGER
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE VIEW
+CREATE VIEW
+COMMENT
+CREATE VIEW
+COMMENT
+CREATE VIEW
+COMMENT
+CREATE VIEW
+COMMENT
+CREATE VIEW
+COMMENT
+CREATE VIEW
+COMMENT
+CREATE FUNCTION
+REVOKE
+GRANT
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE VIEW
+CREATE VIEW
+UPDATE 1
+INSERT 0 1
+COMMIT
+RESET

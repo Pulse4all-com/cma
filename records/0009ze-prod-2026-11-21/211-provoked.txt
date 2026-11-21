@@ -1,0 +1,39 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+psql:/tmp/provoke.sql:39: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                          check_name                                                                           | result  |                                                                                                                                                                                                            detail                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009ze recorded, after 0009zc                                                                                                                     | FAIL    | provoked
+ A2 the seven tables: row-level security on, the application's grants; the mapping audited, the takes not                                                      | FAIL    | renewal_outcome:truefalse:truetrue:false subscription_month_take:truefalse:truetrue:false subscription_store_start:truefalse:truetrue:false subscription_survival_take:truefalse:truetrue:false subscription_take:truefalse:truetrue:false subscription_take_state:truefalse:truetrue:false subscription_variant_mapping:truefalse:truetrue:true
+ A3 the functions the application's and no one else's; the fill a definer's, search path pinned; the reader the readers'                                       | FAIL    | true:search_path=pg_catalog, cma, pg_temp | truefalse
+ A4 the payment state's columns (the old nine first) and the nine readers                                                                                      | FAIL    | subscription_id,connection_id,source_id,customer_source_id,status,payment_state,retry_cycle,retry_since,last_attempt,state_since,overdue,chargeback_return_code,amount_at_risk,currency | dq_subscription_device_units_mismatch,dq_subscription_variant_unmapped,renewal_outcome,subscription_churn_month,subscription_month_take,subscription_payment_state,subscription_store_start,subscription_survival,subscription_take
+ A5 Customers → Active's digest: 174's twelve markers give 174's digest, every tenant; the digest adds the billing events                                      | FAIL    | pulse4all-invest:true:true pulse4all-subscriptions:true:true
+ A6 an unknown input is refused (CMA04)                                                                                                                        | FAIL    | CMA04
+ A7 the payment state equals 118's and 148's row for row, every tenant, but where Charged back or Awaiting payment applies (differing/differing/subscriptions) | FAIL    | pulse4all-invest:0/0/0 pulse4all-subscriptions:0/0/7863
+ B a dev or local database (the dev seed's agent.two@example.com active)                                                                                       | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing ran
+ verdict                                                                                                                                                       | REFUSED | 211_verify_subscription_facts: 0 PASS, 8 FAIL
+(9 rows)
+
+RESET
