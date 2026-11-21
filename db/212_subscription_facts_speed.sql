@@ -46,8 +46,11 @@
 --     189_verify_fleet_management.sql, 193_verify_fleet_page.sql;
 --   cma.subscription_facts_refresh_of: 211;
 --   131_time_all.sql and 124_time_flash.sql (131 edited by this change: the facts' budget).
--- None of these verifies is edited by this change. Prod: the first index, this script and 213, then 119, 173 and 185,
--- before or after the merge of its pull request (the web reads nothing new).
+-- One of these verifies is edited by this change, 185: R1, D1 and D2 read the take its forced refresh writes, and where
+-- that refresh did not run (it answers running while the minute job holds the tenant's take) they now read one skip row
+-- naming the answer, where they compared the take as it was stored before (in prod on 21 November 2026 that read D2 as a
+-- FAIL: records/0009ze-prod-2026-11-21). No other verify is edited. Prod: the first index, this script and 213, then
+-- 119, 173 and 185, before or after the merge of its pull request (the web reads nothing new).
 --
 -- Why (Martin, 21 November 2026; records/0009ze-prod-2026-11-21; Decision log, 21 Nov 2026). After 210 ran in prod:
 --   the inputs' markers   cma.active_inputs_key_of took 964.9 ms against 300 (440.7 ms the day before, about 145 ms before

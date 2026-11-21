@@ -10,10 +10,18 @@
 --     172's below-the-fold document), in a step that is always rolled back: the tenant's take is left as it was.
 -- Since addition 0009ze (210_subscription_facts.sql; edited by that change): where 0009ze is recorded the kept
 -- below-the-fold document's payment states are cma.payment_states()'s six; without it the four as before.
+-- Since addition 0009zf (212_subscription_facts_speed.sql; edited by that change): R1, D1 and D2 read the take the step's
+-- forced refresh writes, so they are compared only where both forced refreshes ran. Where one did not (its answer running:
+-- the minute job holds the tenant's take; or any other answer without refreshed), the three read one skip row that names
+-- both answers ("run again"), where they compared the take as it was stored before: in prod on 21 November 2026 the job
+-- held the lock, and D2 read documents stored before 210 as a FAIL (records/0009ze-prod-2026-11-21). L1 to E2 read the
+-- stored take as it is and run either way. Provoked, the three rows are compared as before, with their deliberate
+-- difference: a provoked run never reads skip.
 -- Run as your own IAM login, after 184. Output: tenant slugs, counts, band keys and milliseconds only.
 -- While it runs: a real tenant's step computes the take twice and holds, until it rolls back, the take's row (a
 -- settings save that marks the take stale waits), the tenant's refresh lock (the job answers running) and the analyze's
--- lock on the take's tables. Run it outside the busy hours. Rows written by an ingest during a step: R1 compares two
+-- lock on the take's tables. Run it outside the busy hours. A step that meets the minute job at work finds the lock
+-- taken instead: its forced refreshes answer running and R1 to D2 read skip (above). Rows written by an ingest during a step: R1 compares two
 -- refreshes of two moments and D1 the take with a fresh read; where the inputs' markers moved meanwhile they read skip
 -- ("run again"). What the markers do not hold (a CRM deal or call arriving between R1's two refreshes) can still read
 -- R1 FAIL: run again.
@@ -969,6 +977,7 @@ declare
   d_old text; d_new text;
   v_d1 text; v_d2 text; v_l1 text; v_l2 text;
   v_k0 text; v_k1 text; v_k2 text; v_moved boolean;
+  v_ran_174 jsonb; v_ran_184 jsonb; v_ran boolean;
   v_bounds integer[]; v_bands text[]; v_band text; v_few text;
   v_user uuid;
   j jsonb;
@@ -982,7 +991,7 @@ begin
     end if;
     v_any := true;
     v_err := null; d_old := null; d_new := null; v_d1 := null; v_d2 := null; v_l1 := null; v_l2 := null; v_rest := null; v_list := null;
-    v_k0 := null; v_k1 := null; v_k2 := null;
+    v_k0 := null; v_k1 := null; v_k2 := null; v_ran_174 := null; v_ran_184 := null;
     v_bounds := cma.flash_bounds_of(cma.setting_of(t.id, 'customers.device_bands'));
     v_bands := cma.flash_count_bands_of(v_bounds);
     begin
@@ -999,7 +1008,7 @@ begin
 
       -- R1. the take as 174's refresh writes it, in a step of its own
       begin
-        perform pg_temp.v0009r_refresh_174(t.id, true, v_now);
+        v_ran_174 := pg_temp.v0009r_refresh_174(t.id, true, v_now);
         perform set_config('role', 'cma_owner', true);
         d_old := (select string_agg(x || ' ' || pg_temp.v0009r_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
                  || ' | customers but devices ' || pg_temp.v0009r_digest('active_customer', t.id, array['devices'])
@@ -1011,6 +1020,7 @@ begin
       perform set_config('role', 'cma_app', true);
       -- and as 184's writes it, at the same moment; the checks after it read this take
       j := cma.active_refresh_of(t.id, true, v_now);
+      v_ran_184 := j;   -- the refresh's answer, kept: j is used again below
       v_k1 := cma.active_inputs_key_of(t.id);
       perform set_config('role', 'cma_owner', true);
       d_new := (select string_agg(x || ' ' || pg_temp.v0009r_digest(x, t.id, '{}'), ' | ' order by o) from unnest(v_tables) with ordinality u(x, o))
@@ -1110,22 +1120,32 @@ begin
       insert into pg_temp.verify_0009r values (100, 'R1 to E2 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
       continue;
     end if;
-    v_moved := v_k0 is distinct from v_k1 and current_setting('verify.provoke') = 'false';
-    if v_moved then
-      insert into pg_temp.verify_0009r values (30, 'R1 ' || t.slug || ': the two refreshes compared on the same rows', 'skip',
-        'the inputs moved during the check (an ingest wrote a subscription, a device, a customer, an order or a contact): run again');
+    -- R1, D1 and D2 read the take the forced refresh writes: without both refreshes there is nothing of this step to compare
+    -- (the stored take is an earlier refresh's, maybe an earlier definition's). Provoked, they are compared all the same
+    v_ran := coalesce((v_ran_174 ->> 'refreshed')::boolean, false) and coalesce((v_ran_184 ->> 'refreshed')::boolean, false);
+    if not v_ran and current_setting('verify.provoke') = 'false' then
+      insert into pg_temp.verify_0009r values (30, 'R1 to D2 ' || t.slug || ': the take the forced refresh writes, compared', 'skip',
+        format('the forced refresh did not run: 174''s answered %s, 184''s %s (running: another refresh, the minute job''s, holds this tenant''s take): run again',
+               coalesce(v_ran_174 ->> 'reason', case when (v_ran_174 ->> 'refreshed')::boolean then 'refreshed' else 'nothing' end),
+               coalesce(v_ran_184 ->> 'reason', case when (v_ran_184 ->> 'refreshed')::boolean then 'refreshed' else 'nothing' end)));
     else
-      perform pg_temp.v0009r_row(30, 'R1', t.slug || ': a forced refresh of 184 writes the take 174''s writes at the same moment, but for the customers'' devices and the parts that state them', d_new, d_old);
+      v_moved := v_k0 is distinct from v_k1 and current_setting('verify.provoke') = 'false';
+      if v_moved then
+        insert into pg_temp.verify_0009r values (30, 'R1 ' || t.slug || ': the two refreshes compared on the same rows', 'skip',
+          'the inputs moved during the check (an ingest wrote a subscription, a device, a customer, an order or a contact): run again');
+      else
+        perform pg_temp.v0009r_row(30, 'R1', t.slug || ': a forced refresh of 184 writes the take 174''s writes at the same moment, but for the customers'' devices and the parts that state them', d_new, d_old);
+      end if;
+      if v_k1 is distinct from v_k2 and current_setting('verify.provoke') = 'false' then
+        insert into pg_temp.verify_0009r values (40, 'D1 ' || t.slug || ': the take''s devices against the fresh computation', 'skip',
+          'the inputs moved during the check (an ingest wrote a subscription, a device, a customer, an order or a contact): run again');
+      else
+        perform pg_temp.v0009r_row(40, 'D1', t.slug || ': a customer''s devices in the take are the devices in the field on its holding subscriptions, as the fresh computation', v_d1,
+          'customers whose devices differ from the devices in the field on their holding subscriptions: 0; from the fresh computation: 0');
+      end if;
+      perform pg_temp.v0009r_row(41, 'D2', t.slug || ': every stored below-the-fold document equals a fresh computation, its bands add up, and it equals 172''s but for devices', v_d2,
+        'stored below-the-fold documents some, differing from fresh 0, whose bands do not add up 0, differing from 172''s but for devices 0');
     end if;
-    if v_k1 is distinct from v_k2 and current_setting('verify.provoke') = 'false' then
-      insert into pg_temp.verify_0009r values (40, 'D1 ' || t.slug || ': the take''s devices against the fresh computation', 'skip',
-        'the inputs moved during the check (an ingest wrote a subscription, a device, a customer, an order or a contact): run again');
-    else
-      perform pg_temp.v0009r_row(40, 'D1', t.slug || ': a customer''s devices in the take are the devices in the field on its holding subscriptions, as the fresh computation', v_d1,
-        'customers whose devices differ from the devices in the field on their holding subscriptions: 0; from the fresh computation: 0');
-    end if;
-    perform pg_temp.v0009r_row(41, 'D2', t.slug || ': every stored below-the-fold document equals a fresh computation, its bands add up, and it equals 172''s but for devices', v_d2,
-      'stored below-the-fold documents some, differing from fresh 0, whose bands do not add up 0, differing from 172''s but for devices 0');
     perform pg_temp.v0009r_row(50, 'L1', t.slug || ': the list under each band of the setting', v_l1,
       format('the bands'' totals add up to the list''s: true; rows of another band on a first page: 0; first pages as a plain read of the band: %s of %s',
              cardinality(v_bands), cardinality(v_bands)));
