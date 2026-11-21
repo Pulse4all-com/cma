@@ -3585,7 +3585,7 @@ Expected: one row; `runs` about 1,440, `computed` at most 96 (one per 15 minutes
 
 # Phase 22. Customers → Subscriptions (addition 0009zh, brief B39d)
 
-One step at a time; each says where it runs and what to expect. The phase number follows the merge order: brief B39b (addition 0009zg) may take a number of its own before or after this one. `216` changes no table, view or column: it adds nine functions that read the subscription facts' stored takes, and `217` checks the page against the takes and Flash's headline. It needs Phase 20's `210` and Phase 21's `212` to have run in the database.
+One step at a time; each says where it runs and what to expect. The phase number follows the merge order: brief B39b (addition 0009zg) may take a number of its own before or after this one. `216` changes no table, view or column: it adds nine functions that read the subscription facts' stored takes, and `217` checks the page against the takes for every filter (on the dev seed, in a rolled-back block). It needs Phase 20's `210` and Phase 21's `212` to have run in the database.
 
 ## 22.1 Terminal: the branch
 **Terminal** (~/cma)
