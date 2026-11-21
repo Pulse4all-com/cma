@@ -932,6 +932,10 @@ begin
     for i in 1 .. cardinality(v_checks) loop
       v_ord := v_ord + 1; v_diff := null; v_err := null;
       begin
+        -- E5 with no key of the catalog found in the old copy compares nothing: a FAIL, never an empty ok
+        if i = 5 and cardinality(v_known) = 0 then
+          raise exception using errcode = 'CMA04', message = 'no check key of the catalog in the old copy';
+        end if;
         perform set_config('role', 'cma_app', true);
         v_diff := pg_temp.v0009o_diff(v_sql_new[i], v_sql_old[i], v_ordered[i]);
         perform set_config('role', 'cma_owner', true);
