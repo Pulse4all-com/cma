@@ -3243,7 +3243,7 @@ Expected: the audit's row with verdict `INFO`, no budget.
 
 # Phase 19. Juo's own figures (addition 0009zg, brief B39b)
 
-One step at a time; each says where it runs and what to expect. The change adds one table (`cma.source_figure`), two readers in `cma_read`, one check on Data quality (`source_figure_gap`), the job `ingest-source-figures` and the backfill object `source_figure`. It runs after Phase 21's `212` (addition 0009zf) in the database. The job is created paused (19.5) and resumed at 19.8, after one manual run (19.6) and the first look at the stored figures (19.7). Counts and dates only in the chat, the PR and the record: the amounts are commercial and the repository is public until launch.
+One step at a time; each says where it runs and what to expect. The change adds one table (`cma.source_figure`), two readers in `cma_read`, one check on Data quality (`source_figure_gap`), the job `ingest-source-figures` and the backfill object `source_figure`. It runs after Phase 21's `212` (addition 0009zf) in the database. The figures include `exits` (the app's moves into canceled, failed or expired). The job is created paused (19.5) and resumed at 19.8, after one manual run (19.6) and the first look at the stored figures (19.7). Counts and dates only in the chat, the PR and the record: the amounts are commercial and the repository is public until launch.
 
 ## 19.1 Terminal: the branch
 **Terminal**
@@ -3319,6 +3319,42 @@ order by 1 collate "C", 2 collate "C", 3 collate "C", 4;
 reset role;
 ```
 Expected: per store the four status counts for today and the flows for yesterday and today, each with the app's value and the CMA's value of the same scope. A store with no rows had no read (19.6): look at its log line first.
+
+The unit check: `recurring_amount_active` is stored in the currency's own unit as read (Martin, 21 Nov 2026). This shows ratios only, never an amount (amounts are commercial).
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '60s';
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+act as (
+  -- Customers → Active's Monthly recurring amount now: the paying subscriptions of its present base, per store and currency
+  select s.connection_id, p.currency, sum(p.monthly_amount) filter (where p.is_paying) as active_amount
+  from cma.active_present_of((select id from t)) p
+  join cma.subscription s on s.tenant_id = (select id from t) and s.id = p.subscription_id
+  where p.currency is not null
+  group by 1, 2
+), app as (
+  -- the app's latest recurring_amount_active per store
+  select distinct on (f.connection_id) f.connection_id, f.business_date, f.value as app_amount, f.currency, f.cma_value
+  from cma.source_figure f
+  where f.tenant_id = (select id from t) and f.figure_key = 'recurring_amount_active'
+  order by f.connection_id, f.business_date desc
+)
+select coalesce(sm.market, 'unknown') as store, a.currency, app.business_date,
+       round(app.app_amount / nullif(a.active_amount, 0), 3) as app_over_active,
+       round(app.cma_value / nullif(a.active_amount, 0), 3) as cma_over_active,
+       case when app.app_amount is null then 'no figure'
+            when app.currency is distinct from a.currency then 'other currency'
+            when app.app_amount / nullif(a.active_amount, 0) not between 0.2 and 5 then 'FINDING: factor'
+            else 'ok' end as check_unit
+from act a
+left join app on app.connection_id = a.connection_id
+left join cma.flash_subscription_stores_of((select id from t)) sm on sm.connection_id = a.connection_id
+order by coalesce(sm.market, 'unknown') collate "C", a.currency collate "C";
+reset role;
+```
+Expected: one row per store and currency. `ok` where the app's amount and Active's are of one size (a ratio near 1: Active counts the paying subscriptions that hold a device, the app every active one, and the app leaves out one-time lines, so they differ by those causes). `FINDING: factor` (a ratio below 0.2 or above 5; a factor of 100 reads about 100 or 0.01) is a finding: Juo's unit is not the currency's own after all; record it and raise it before the schedule is resumed (19.8). `other currency` when the store's figure has a currency Active does not hold there; `no figure` for a store without a figure yet (its 19.6 log line). Only the ratios and `check_unit` go into the chat or the record, never an amount.
 
 ## 19.8 Terminal: resume the schedule
 **Terminal**
