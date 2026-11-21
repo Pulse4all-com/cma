@@ -285,9 +285,9 @@ for (const m of fixBody.matchAll(/when p_check_key (?:= '([a-z_]+)'|in \(([^)]*)
   for (const k of keys) (fixSql[where] ??= []).push(k);
 }
 const fixMismatch = Object.keys(FLASH_FIX_IN).filter((k) => [...FLASH_FIX_IN[k]].sort().join() !== [...(fixSql[k] ?? [])].sort().join());
-expect("where a check is fixed: the lists are cma.data_quality_fix_in's (crm, commerce, assets; the Workspace otherwise)",
+expect("where a check is fixed: the lists are cma.data_quality_fix_in's (crm, commerce, subscriptions, assets; the Workspace otherwise)",
   [PROVOKE ? ["provoked"] : fixMismatch, Object.keys(fixSql).sort(), fixInOf("device_required_ref_missing"), fixInOf("pipeline_unreviewed")],
-  [[], ["assets", "commerce", "crm"], "assets", "cma"], [[], [], "", ""]);
+  [[], ["assets", "commerce", "crm", "subscriptions"], "assets", "cma"], [[], [], "", ""]);
 
 // ---- The breakdown file and the filters column ----------------------------------------------------------------------
 const subs = overviewOf("subscriptions");

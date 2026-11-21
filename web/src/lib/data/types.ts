@@ -2488,6 +2488,19 @@ export interface SubscriptionsRowsQuery extends SubscriptionsFilter {
 }
 /** A month's base (the Total subscriptions at the previous month end) and its churned and moved-to-failed subscriptions */
 export interface SubscriptionsRateParts { base: number | null; churned: number; movedToFailed: number }
+/**
+ * The subscription app's own counts beside the tiles (cma.subscriptions_source_counts_of, addition 0009zh over 0009zg's
+ * source figures): each store's latest figures of today or yesterday, summed over the stores in scope (stores of inScope
+ * have one), each beside the CMA's value it was compared with when read and whether the two differ beyond both
+ * source_figures tolerances (a Source figure gap)
+ */
+export interface SubscriptionsSourceCounts {
+  stores: number; inScope: number; from: DateKey; to: DateKey; fetchedAt: Instant | null;
+  total: number | null; totalCma: number | null; totalGap: boolean;
+  paused: number | null; pausedCma: number | null; pausedGap: boolean;
+  amounts: { currency: string; amount: number; cma: number | null; gap: boolean }[];
+  tolerancePct: number; toleranceMin: number;
+}
 export interface SubscriptionsTiles {
   /** The Total subscriptions (a device-holding status) with the split per holding status of flash.device_holding_statuses */
   total: { value: number; byStatus: Record<string, number> };
@@ -2500,8 +2513,8 @@ export interface SubscriptionsTiles {
   rates: (SubscriptionsRateParts & { month: DateKey }) | null;
   /** Device units over the Total subscriptions, and those among them with device units unknown (a line whose variant is not mapped) */
   devices: { units: number; unmapped: number };
-  /** The subscription app's own counts beside the tiles (brief B39b): null until that part is in prod; never a zero */
-  sourceCounts: null;
+  /** The subscription app's own counts beside the tiles (Source figures, addition 0009zg): null while no store in scope has one, and under a proposition or interval filter; never a zero */
+  sourceCounts: SubscriptionsSourceCounts | null;
 }
 export interface SubscriptionsMonth {
   month: DateKey;

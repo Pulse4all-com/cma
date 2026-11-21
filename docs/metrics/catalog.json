@@ -99135,6 +99135,108 @@
       "notes": "The list's measure paused lists the same subscriptions (217 B6)."
     },
     {
+      "key": "subscriptions.source_counts",
+      "surface": "report",
+      "page": "/reports/subscriptions",
+      "tile": "Subscription app: {n} on {date}",
+      "title": {
+        "en": "Subscription app's own counts",
+        "nl": "Cijfers van de abonnementen-app"
+      },
+      "definition": "Under Total subscriptions, Paused and the Monthly recurring amount: the subscription app's own figure of the day (Source figure), summed over the stores in scope that have one, and a Source figure gap where it differs from the CMA's value of the same read beyond both tolerances.",
+      "formula": "cma.subscriptions_source_counts_of: per store under the market and store filters, its latest business date of today or yesterday with a subscriptions_in_status figure; sum(value) over dims.status in flash.device_holding_statuses (total) and = paused; recurring_amount_active per currency; beside sum(cma_value); gap when abs(cma - app) > source_figures.tolerance_min and abs(cma - app) * 100 > source_figures.tolerance_pct * app; null under a proposition or interval filter or without a figure",
+      "unit": "count",
+      "grain": [
+        "now",
+        "per_market",
+        "per_status",
+        "per_currency"
+      ],
+      "sources": [
+        {
+          "table": "cma.source_figure",
+          "columns": [
+            "connection_id",
+            "figure_key",
+            "business_date",
+            "dims",
+            "value",
+            "currency",
+            "cma_value",
+            "fetched_at"
+          ],
+          "owner": "Juo",
+          "fed_by": "Juo analytics (POST /analytics/query) → ingest-source-figures → cma.ingest_upsert_source_figures (addition 0009zg)",
+          "cadence": "hourly job, one read a store a day after source_figures.local_time"
+        }
+      ],
+      "filters": [
+        "tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)",
+        "the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only",
+        "a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero"
+      ],
+      "time": "Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.",
+      "comparison": "None on the tiles; the months stand side by side.",
+      "settings": [
+        {
+          "key": "flash.device_holding_statuses",
+          "default": "active",
+          "pulse4all": "active,failed"
+        },
+        {
+          "key": "source_figures.tolerance_pct",
+          "default": "1",
+          "pulse4all": "1"
+        },
+        {
+          "key": "source_figures.tolerance_min",
+          "default": "2",
+          "pulse4all": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.subscriptions_source_counts_of",
+            "migration": "0009zh"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/SubscriptionsReport.tsx",
+            "export": "SubscriptionsTiles"
+          }
+        ]
+      },
+      "verify_sql": "select sum(f.value) filter (where f.figure_key = 'subscriptions_in_status' and f.dims ->> 'status' = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses')))), sum(f.value) filter (where f.dims ->> 'status' = 'paused') from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.source_figure f where f.tenant_id = :tenant_id and f.business_date = :to and f.figure_key = 'subscriptions_in_status'",
+      "fixture_check": "217 B12 builds figures for two stores in a rolled-back block and checks the sums, the CMA's values, the gap rule, the market filter and the absence under a proposition filter (13 PASS locally); Martin runs 217 in dev.",
+      "prerequisites": [
+        {
+          "item": "The job ingest-source-figures has read the day's figures (PROD_RUNBOOK phase 19)",
+          "check": "source_figure_gap"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Customers -> Subscriptions)",
+        "kpis.md 4",
+        "api.md, GET /api/v1/reports/subscriptions",
+        "data-model/0008.md, Customers -> Subscriptions (addition 0009zh)",
+        "definitions.md, Subscription terms"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "The app's figure and the CMA's value it was compared with are both of the read (fetched_at), not of the tile's take (Refreshed at): the line shows the app's value and its day, and the gap is B39b's comparison of that read. A store without a figure of today or yesterday is left out and the line names how many stores it covers. Renewal survival is not compared with the app's own yet."
+    },
+    {
       "key": "subscriptions.monthly_recurring_amount",
       "surface": "report",
       "page": "/reports/subscriptions",

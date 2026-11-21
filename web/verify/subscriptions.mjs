@@ -17,7 +17,7 @@
  *      Total subscriptions), each month's end is the next month's start, the rates' rows equal the months' complete
  *      parts, the list's totals per measure equal the tiles, every mix breakdown sums to the Total subscriptions,
  *      the proposition and interval filters leave the months as they are, survival's cells never exceed their cohort,
- *      the source counts' place is null (never a zero), Invest is not set up, an agent is refused (CMA06)
+ *      the subscription app's own counts beside the CMA's with 214's gap rule (none under a proposition or interval), Invest is not set up, an agent is refused (CMA06)
  *   R  rates: a share of a base, null without one
  */
 import { readFileSync } from "node:fs";
@@ -127,14 +127,19 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
     out.push([
       Object.values(t.total.byStatus).reduce((a, b) => a + b, 0) === t.total.value, chain, rateParts,
       rows("total") === t.total.value && rows("paused") === t.paused && rows("unmapped") === t.devices.unmapped, mixOk,
-      JSON.stringify(narrowed.months) === JSON.stringify(ms) && narrowed.tiles.total.value < t.total.value, survOk, t.sourceCounts,
+      JSON.stringify(narrowed.months) === JSON.stringify(ms) && narrowed.tiles.total.value < t.total.value, survOk,
+      // the app's own counts: beside the CMA's of the read, every store in scope, a gap only where both tolerances are exceeded, none under P or I
+      t.sourceCounts !== null && t.sourceCounts.totalCma === t.total.value && t.sourceCounts.stores === t.sourceCounts.inScope
+        && t.sourceCounts.totalGap === (Math.abs(t.sourceCounts.totalCma - t.sourceCounts.total) > t.sourceCounts.toleranceMin
+          && Math.abs(t.sourceCounts.totalCma - t.sourceCounts.total) * 100 > t.sourceCounts.tolerancePct * t.sourceCounts.total)
+        && narrowed.tiles.sourceCounts === null,
       ms.length === 13 && ms[12].month === month && ms.every((m) => m.counts !== null), t.rates !== null,
     ]);
   }
   Date.now = realNow;
-  const ok = [true, 0, true, true, true, true, true, null, true, true];
-  expect("M1 on four months: tiles add up, end = next start, rates = months' complete parts, list totals = tiles, mix sums, P and I leave the months, survival bounded, no source counts, a whole range",
-    out, Array(4).fill(ok), Array(4).fill([false, 1, false, false, false, false, false, 0, false, false]));
+  const ok = [true, 0, true, true, true, true, true, true, true, true];
+  expect("M1 on four months: tiles add up, end = next start, rates = months' complete parts, list totals = tiles, mix sums, P and I leave the months, survival bounded, the app's counts beside the CMA's (none under P or I), a whole range",
+    out, Array(4).fill(ok), Array(4).fill([false, 1, false, false, false, false, false, false, false, false]));
   const inv = mockSubscriptionsPage({ ...me, tenantId: "00000000-0000-7000-8000-000000000002" },
     { market: null, store: null, proposition: null, interval: null, from: "2026-01-01", to: currentMonthIn(me.timeZone), measure: "total", sort: "monthly_amount", descending: true });
   let agent = "ok";

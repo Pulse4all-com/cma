@@ -37,6 +37,11 @@
  *                         purchase_order [--from <date>] (addition 0009ze): the subscription family's purchase events
  *                         read again from the same start, each one's store order given to a held purchase without one
  *                         (cma.ingest_fill_purchase_orders), resumable from backfill:purchase_order; no dry run
+ *   figuresDue, readFigures   the job ingest-source-figures (hourly; addition 0009zg): once a day after
+ *                         source_figures.local_time in the tenant's zone, Juo's own figures for yesterday and today
+ *                         (figures.mjs: POST /analytics/query, the one POST), stored with the CMA's value of the same
+ *                         scope; --object source_figure backfills the flow figures month by month (cursor
+ *                         backfill:source_figure; no dry run)
  *   skipReason            a connection without a token secret name is not read: the jobs skip it with one log line (code
  *                         key_not_set) and no run; the backfill refuses it
  *
@@ -59,6 +64,7 @@ import { SourceError } from "../../core/http.mjs";
 import { slicesOf } from "../../core/slices.mjs";
 import { juoSettings, tenantIdOf } from "./client.mjs";
 import { clientFor, eventsQuery } from "./read.mjs";
+import { dailyQueries, monthQueries, runQueries, monthStart, monthEnd } from "./figures.mjs";
 import {
   OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING, subscriptionItem, lineItems, productItems, eventItem, billingEventItem,
   isBillingEvent, eventSubscriptionOf, customerIdOf, eventTypeOf, TYPE_NAME,
@@ -422,8 +428,88 @@ async function backfillPurchaseOrders({ connection, store, budget, fromMs, until
   return { ...detail, from: new Date(from).toISOString() };
 }
 
+// ---- Juo's own figures (addition 0009zg) ------------------------------------------------------------------------------
+
+/** The figures' backfill: the flow figures month by month (its own cursor; the daily read keeps none) */
+export const OBJECT_SOURCE_FIGURE = "source_figure";
+export const BACKFILL_FIGURES_STREAM = `backfill:${OBJECT_SOURCE_FIGURE}`;
+
+/** sync_run's counts of a figures run: its own five and the write's three */
+function figureCounts(counts) {
+  for (const k of ["fetched", "inserted", "updated", "unchanged", "skipped"]) counts[k] = Number(counts[k] ?? 0);
+  return counts;
+}
+
+/** A read's items written and counted (fetched: the items read; upserted: inserted and updated; skipped: per query) */
+async function storeFigures({ store, items, skipped, counts, runId }) {
+  const w = items.length ? await store.upsertSourceFigures(items, runId) : { inserted: 0, updated: 0, unchanged: 0 };
+  counts.fetched += items.length;
+  for (const k of ["inserted", "updated", "unchanged"]) counts[k] += w[k];
+  counts.upserted += w.inserted + w.updated;
+  counts.skipped += Object.values(skipped).reduce((n, v) => n + v, 0);
+  return w;
+}
+
+/**
+ * Whether a connection's daily read of Juo's figures is due (cma.source_figures_due_of: after source_figures.local_time
+ * in the tenant's zone, once a day until a run started after it has succeeded), with the dates it reads
+ */
+export async function figuresDue({ store }) {
+  return store.figuresDue();
+}
+
+/**
+ * The daily read (the job ingest-source-figures): every figure of figures.mjs for yesterday and today in the tenant's zone,
+ * stored with the CMA's value of the same scope (cma.ingest_upsert_source_figures). A skipped figure is counted by its
+ * code (detail.skipped), never a failed run. Answers the detail the run logs
+ */
+export async function readFigures({ connection, store, budget, counts, runId = null, due }) {
+  figureCounts(counts);
+  const { api } = await prepare({ connection, store, budget });
+  const dates = { today: due.today, yesterday: due.yesterday, timezone: due.timezone };
+  const r = await runQueries(api, dailyQueries(dates), dates);
+  await storeFigures({ store, items: r.items, skipped: r.skipped, counts, runId });
+  return { queries: r.queries, items: r.items.length, skipped: r.skipped, today: dates.today };
+}
+
+/**
+ * The figures' backfill (--object source_figure [--from <date>]): the flow figures month by month from --from, else the
+ * connection's earliest held event, to yesterday in the tenant's zone, so Part A's backfill is checked month by month
+ * against Juo's own history. The stock figures and the survival are not read: Juo cannot recompute a past day's count.
+ * Resumable (cursor backfill:source_figure = { from, value: the next month's first day, done }); a finished one with the
+ * same start reads nothing
+ */
+async function backfillFigures({ connection, store, budget, fromMs, counts, runId = null }) {
+  figureCounts(counts);
+  const due = await store.figuresDue();
+  const first = Number.isFinite(fromMs) ? fromMs : (await store.firstSubscriptionEventAt())?.getTime?.() ?? null;
+  const detail = { months: 0, queries: 0, items: 0, skipped: {}, from: null };
+  if (!Number.isFinite(first)) return detail;
+  const from = new Intl.DateTimeFormat("en-CA", { timeZone: due.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(first));
+  detail.from = from;
+  const cur = await store.cursor(BACKFILL_FIGURES_STREAM);
+  if (cur && cur.from === from && cur.done) return detail;
+  let month = cur && cur.from === from && typeof cur.value === "string" ? cur.value : monthStart(from);
+  const { api } = await prepare({ connection, store, budget });
+  while (month <= due.yesterday) {
+    const start = month < from ? from : month;
+    const end = monthEnd(month) < due.yesterday ? monthEnd(month) : due.yesterday;
+    const dates = { today: due.today, timezone: due.timezone };
+    const r = await runQueries(api, monthQueries({ from: start, to: end, timezone: due.timezone }), dates);
+    await storeFigures({ store, items: r.items, skipped: r.skipped, counts, runId });
+    detail.months += 1;
+    detail.queries += r.queries;
+    detail.items += r.items.length;
+    for (const [k, v] of Object.entries(r.skipped)) detail.skipped[k] = (detail.skipped[k] ?? 0) + v;
+    month = monthStart(monthEnd(month), -1);
+    await store.setCursor(BACKFILL_FIGURES_STREAM, { from, value: month, done: false });
+  }
+  await store.setCursor(BACKFILL_FIGURES_STREAM, { from, done: true });
+  return detail;
+}
+
 export const RECONCILE_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT];
-export const BACKFILL_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING, OBJECT_PURCHASE_ORDER];
+export const BACKFILL_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING, OBJECT_PURCHASE_ORDER, OBJECT_SOURCE_FIGURE];
 
 export async function reconcile({ connection, store, budget, object, counts, runId = null }) {
   if (object === OBJECT_SUBSCRIPTION) {
@@ -460,6 +546,11 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
     info("backfill: purchase orders", { connection: connection.connectionId, ...detail });
     return undefined;
   }
+  if (object === OBJECT_SOURCE_FIGURE) {
+    const detail = await backfillFigures({ connection, store, budget, fromMs, counts, runId });
+    info("backfill: source figures", { connection: connection.connectionId, ...detail });
+    return undefined;
+  }
   throw new SourceError("object_not_backfilled");
 }
 
@@ -482,7 +573,7 @@ const lineBand = (n) => (n <= 3 ? String(n) : n <= 5 ? "4-5" : "6+");
  *                          returnCodeDropped, instrumentTypes (names), instrumentUnknown, withSubscription, firstEventAt
  */
 export async function dryRun({ connection, store, budget, object, fromMs, untilMs = Date.now() }) {
-  if (!BACKFILL_OBJECTS.includes(object) || object === OBJECT_PURCHASE_ORDER) throw new SourceError("object_not_backfilled");
+  if (!BACKFILL_OBJECTS.includes(object) || object === OBJECT_PURCHASE_ORDER || object === OBJECT_SOURCE_FIGURE) throw new SourceError("object_not_backfilled");
   const from = EVENT_OBJECTS[object] ? await eventsStart(store, fromMs) : null;
   const { api, shop } = await prepare({ connection, store, budget });
   const customers = new Set();
@@ -594,6 +685,9 @@ export const juo = {
   skipReason,
   pollDue,
   pollSubscriptions,
+  /** Juo's own figures (addition 0009zg): the job ingest-source-figures */
+  figuresDue,
+  readFigures,
   reconcileObjects: RECONCILE_OBJECTS,
   reconcile,
   backfillObjects: BACKFILL_OBJECTS,
@@ -605,6 +699,7 @@ export const juo = {
    * subscriptions.history_start_date, else all of the app's history (never intake.start_date)
    */
   backfillFrom: async (object, store) => {
+    // source_figure without --from: from the connection's earliest held event (backfillFigures)
     if (!EVENT_OBJECTS[object] && object !== OBJECT_PURCHASE_ORDER) return { allHistory: true };
     const v = String((await store.settings())[HISTORY_SETTING] ?? "").trim();
     return v || { allHistory: true };

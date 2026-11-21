@@ -8,7 +8,7 @@
  */
 import type {
   DateKey, SubscriptionMoveKind, SubscriptionRow, SubscriptionRowsList, SubscriptionRowsPage, SubscriptionsChurnCard, SubscriptionsFilter,
-  SubscriptionsInterval, SubscriptionsMeasure, SubscriptionsPage, SubscriptionsRateParts, SubscriptionsSort,
+  SubscriptionsInterval, SubscriptionsMeasure, SubscriptionsPage, SubscriptionsRateParts, SubscriptionsSort, SubscriptionsSourceCounts,
 } from "@/lib/data";
 
 export const SUBSCRIPTIONS_PATH = "/reports/subscriptions";
@@ -195,6 +195,19 @@ function kindsOf(v: unknown): Partial<Record<SubscriptionMoveKind, number>> | nu
   return Object.fromEntries(Object.entries(v as J).map(([k, n]) => [k, Number(n)])) as Partial<Record<SubscriptionMoveKind, number>>;
 }
 
+/** The subscription app's own counts beside the tiles: null without a figure (never zeros) */
+export function sourceCountsFromDb(v: unknown): SubscriptionsSourceCounts | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as J;
+  return {
+    stores: num(o.stores), inScope: num(o.in_scope), from: day(o.from) ?? "", to: day(o.to) ?? "", fetchedAt: str(o.fetched_at),
+    total: numOrNull(o.total), totalCma: numOrNull(o.total_cma), totalGap: o.total_gap === true,
+    paused: numOrNull(o.paused), pausedCma: numOrNull(o.paused_cma), pausedGap: o.paused_gap === true,
+    amounts: arr(o.amounts).map((a) => ({ currency: String(a.currency), amount: num(a.amount), cma: numOrNull(a.cma), gap: a.gap === true })),
+    tolerancePct: num(o.tolerance_pct), toleranceMin: num(o.tolerance_min),
+  };
+}
+
 export function subscriptionRowFromDb(r: J): SubscriptionRow {
   return {
     subscriptionId: String(r.subscription_id), sourceId: String(r.source_id), number: str(r.number), store: str(r.store), market: String(r.market ?? "unknown"),
@@ -266,7 +279,7 @@ export function subscriptionsPageFromDb(j: J, query: { from: DateKey; to: DateKe
       eur: tiles.eur ? { amount: num((tiles.eur as J).amount), asOf: str((tiles.eur as J).as_of) } : null,
       rates: tiles.rates ? { month: String((tiles.rates as J).month).slice(0, 10), ...partsOf(tiles.rates)! } : null,
       devices: { units: num((tiles.devices as J)?.units), unmapped: num((tiles.devices as J)?.unmapped) },
-      sourceCounts: null,
+      sourceCounts: sourceCountsFromDb(tiles.source_counts),
     } : null,
     months: arr(j.months).map((m) => ({ month: String(m.month).slice(0, 10), counts: kindsOf(m.counts),
       amounts: m.amounts && typeof m.amounts === "object"

@@ -92,6 +92,11 @@
  *   markSubscriptionsMissing(sourceIds, from, before)   cma.ingest_mark_subscriptions_missing: one slice of a full read's
  *                               final step; { missing_now, missing_ms }
  *   storeCustomersHeld(storeConnectionId, ids)   which of these customer ids the store's customers hold (the dry run)
+ *   figuresDue()               cma.source_figures_due_of: whether the day's read of the source's own figures is due, its
+ *                               dates (today, yesterday) and the tenant's zone (addition 0009zg)
+ *   upsertSourceFigures(items, runId)   cma.ingest_upsert_source_figures in parts of at most 1,000, in key order;
+ *                               { inserted, updated, unchanged } summed (addition 0009zg)
+ *   firstSubscriptionEventAt()  the connection's earliest held event (the figures backfill's default start)
  *
  * For the legacy call import (addition 0008zg), the store of the CRM connection the rows are matched against; each its
  * own short transaction, ids, dates, meanings and counts only (never an email, a phone number, a name or a customer id
@@ -590,6 +595,29 @@ export function storeFor(ctx, connectionId) {
     async markSubscriptionsMissing(sourceIds, from, before) {
       return withTenant(ctx, async (q) =>
         (await q.query("select cma.ingest_mark_subscriptions_missing($1, $2::text[], $3, $4) as c", [connectionId, sourceIds, from, before])).rows[0].c);
+    },
+    async figuresDue() {
+      return withTenant(ctx, async (q) => {
+        const r = (await q.query(`select due, to_char(today, 'YYYY-MM-DD') as today, to_char(yesterday, 'YYYY-MM-DD') as yesterday, timezone, due_at
+          from cma.source_figures_due_of($1)`, [connectionId])).rows[0];
+        return { due: r.due, today: r.today, yesterday: r.yesterday, timezone: r.timezone, dueAt: r.due_at };
+      });
+    },
+    async upsertSourceFigures(items, runId = null) {
+      const total = { inserted: 0, updated: 0, unchanged: 0 };
+      // in key order, so two runs on one connection lock the rows in the same order
+      const key = (i) => `${i.figureKey}|${i.businessDate}|${JSON.stringify(i.dims)}`;
+      const sorted = [...items].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+      for (const part of chunks(sorted, 1000)) {
+        const r = await withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_source_figures($1, $2::uuid, $3::jsonb) as r",
+          [connectionId, runId, JSON.stringify(part)])).rows[0].r);
+        for (const k of Object.keys(total)) total[k] += Number(r?.[k] ?? 0);
+      }
+      return total;
+    },
+    async firstSubscriptionEventAt() {
+      return withTenant(ctx, async (q) => (await q.query(`select min(occurred_at) as at from cma.subscription_event
+          where tenant_id = cma.current_tenant_id() and connection_id = $1`, [connectionId])).rows[0].at);
     },
     async storeCustomersHeld(storeConnectionId, ids) {
       const held = new Set();

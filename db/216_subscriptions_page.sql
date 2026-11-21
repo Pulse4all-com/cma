@@ -3,8 +3,9 @@
 -- read, its list and file, and the Churn rate card of Customers → Active, all from the subscription facts' stored takes
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
--- 212_subscription_facts_speed.sql (0009zf); 214/215 (0009zg, brief B39b) may run before or after it: this script
--- re-creates no function, so it touches nothing 214 does. Rerunnable, forward-only, in one transaction with a lock
+-- 214_source_figures.sql (0009zg, brief B39b: its cma.source_figure gives the tiles the subscription app's own counts).
+-- This script re-creates no function, so it touches none of the functions 214 re-creates (cma.check_tenant_setting, the
+-- data-quality functions, cma.flash_findings_compute_of, cma.flash_watch_of). Rerunnable, forward-only, in one transaction with a lock
 -- timeout. Run as your own IAM login: dev first, then 217_verify_subscriptions_page.sql there (normal, then provoked).
 -- No other verify reads what this script adds; no verify is edited. 131_time_all.sql is edited by this change (the
 -- page's rows). Prod: this script and 217 before the merge of its pull request (the web that calls these functions comes
@@ -36,14 +37,21 @@
 --   The proposition and interval filters narrow what is per subscription (the tiles, the mix, the list and, for the
 --   interval, renewal survival); the month take is per store, so the movements and the rates follow the market and store
 --   filters only, and the page says so.
---   The subscription app's own counts beside the tiles (B39b, addition 0009zg) have a place in the answer
---   (source_counts, null until B39b is in prod), never a zero.
+--   The subscription app's own counts beside the tiles (source_counts): from cma.source_figure (B39b, 0009zg), each
+--   store's latest figures of today or yesterday in the tenant's zone, for the stores under the market and store filters:
+--   subscriptions_in_status summed over the holding statuses (Total subscriptions) and over paused, and
+--   recurring_amount_active per currency, each with the CMA's value the figure was compared with when read and whether
+--   the two differ by more than both source_figures tolerances (214's rule, Source figure gap). Null while no store in
+--   scope has such a figure, and under a proposition or an interval filter (the app counts neither); never a zero.
+--   Renewal survival is not compared with the app's own (B39b's renewal_survival) yet: its cohorts are read monthly and
+--   need their own cells (a later increment).
 --
 -- What it adds (functions only; no table, view or column changes; nothing in cma_read)
 --   cma.assert_subscriptions_filter   the page's filters (CMA04)
 --   cma.assert_subscription_list      the list's measure, sort and direction (CMA04)
 --   cma.subscriptions_scope_of        the take's rows under the filters (the base of the tiles, mix and list)
 --   cma.subscription_rows_of          the list: a page of 50 (or the file's rows), a measure, a sort from a fixed list
+--   cma.subscriptions_source_counts_of  the subscription app's own counts beside the tiles (B39b's source figures)
 --   cma.subscriptions_page_of         the page in one read: take state, settings, filters' choices, tiles, months,
 --                                     rates, store starts, survival, mix and the list's first page
 --   cma.subscriptions_page, cma.subscription_rows   reports.view or performance.team (CMA06), filters (CMA04); set_up
@@ -68,8 +76,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009zf') then
-    raise exception 'addition 0009zf (212_subscription_facts_speed.sql) has not run in this database';
+  if not exists (select 1 from cma.schema_migration where version = '0009zg') then
+    raise exception 'addition 0009zg (214_source_figures.sql) has not run in this database';
   end if;
 end
 $$;
@@ -254,6 +262,70 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
+-- 3b. The subscription app's own counts beside the tiles (B39b's source figures)
+-- ---------------------------------------------------------------------------------------------
+-- Per store under the market and store filters, its latest business date of today or yesterday (the tenant's zone)
+-- with a subscriptions_in_status figure: that date's subscriptions_in_status (summed over the holding statuses, and over
+-- paused) and recurring_amount_active (per currency; a store whose active subscriptions hold several currencies has no
+-- currency and is left out of the amounts). Each sum beside the CMA's values the figures were compared with when read
+-- (cma_value, the same scope at the fetch) and gap: the two differ by more than source_figures.tolerance_min and
+-- source_figures.tolerance_pct percent of the app's value, both (214's rule). stores: those with a figure; in_scope: the
+-- stores under the filters. Null while no store in scope has a figure, and under a proposition or interval filter.
+-- Reads cma.source_figure by its date index (tenant_id, business_date): a few rows a store
+create or replace function cma.subscriptions_source_counts_of(p_tenant_id uuid, p_market text, p_store uuid, p_proposition text,
+                                                              p_interval text, p_now timestamptz)
+returns jsonb
+language sql stable
+as $$
+  with z as materialized (
+    select (p_now at time zone t.timezone)::date as today,
+           cma.flash_list_of(cma.setting_of(p_tenant_id, 'flash.device_holding_statuses')) as holding,
+           cma.setting_of(p_tenant_id, 'source_figures.tolerance_pct')::numeric as pct,
+           cma.setting_of(p_tenant_id, 'source_figures.tolerance_min')::numeric as mn
+    from cma.tenant t where t.id = p_tenant_id
+  ), sm as materialized (
+    select y.connection_id from cma.flash_subscription_stores_of(p_tenant_id) y
+    where (p_market is null or coalesce(y.market, 'unknown') = p_market) and (p_store is null or y.connection_id = p_store)
+  ), f as materialized (
+    select x.connection_id, x.figure_key, x.business_date, x.dims, x.value, x.currency, x.cma_value, x.fetched_at
+    from cma.source_figure x
+    where x.tenant_id = p_tenant_id and x.business_date between (select z.today from z) - 1 and (select z.today from z)
+      and x.figure_key in ('subscriptions_in_status', 'recurring_amount_active')
+      and x.connection_id in (select sm.connection_id from sm)
+  ), latest as (
+    select f.connection_id, max(f.business_date) as d from f where f.figure_key = 'subscriptions_in_status' group by 1
+  ), r as materialized (
+    select f.* from f join latest l on l.connection_id = f.connection_id and l.d = f.business_date
+  ), c as (
+    select sum(r.value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = any ((select z.holding from z)::text[])) as total,
+           sum(r.cma_value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = any ((select z.holding from z)::text[])) as total_cma,
+           sum(r.value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = 'paused') as paused,
+           sum(r.cma_value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = 'paused') as paused_cma
+    from r
+  )
+  -- 214's rule on each pair of sums: the CMA's less the app's exceeds both tolerances
+  select case
+    when p_proposition is not null or p_interval is not null or not exists (select 1 from latest) then null
+    else jsonb_build_object(
+      'stores', (select count(*) from latest), 'in_scope', (select count(*) from sm),
+      'from', (select min(l.d) from latest l), 'to', (select max(l.d) from latest l), 'fetched_at', (select max(r.fetched_at) from r),
+      'total', (select c.total from c), 'total_cma', (select c.total_cma from c),
+      'total_gap', (select c.total_cma is not null and abs(c.total_cma - c.total) > (select z.mn from z)
+                           and abs(c.total_cma - c.total) * 100 > (select z.pct from z) * c.total from c),
+      'paused', (select c.paused from c), 'paused_cma', (select c.paused_cma from c),
+      'paused_gap', (select c.paused_cma is not null and abs(c.paused_cma - c.paused) > (select z.mn from z)
+                            and abs(c.paused_cma - c.paused) * 100 > (select z.pct from z) * c.paused from c),
+      'amounts', (select coalesce(jsonb_agg(jsonb_build_object('currency', a.currency, 'amount', a.v, 'cma', a.cv,
+                                                               'gap', a.cv is not null and abs(a.cv - a.v) > (select z.mn from z)
+                                                                      and abs(a.cv - a.v) * 100 > (select z.pct from z) * a.v)
+                                            order by a.currency collate "C"), '[]'::jsonb)
+                  from (select r.currency, sum(r.value) as v, sum(r.cma_value) as cv from r
+                        where r.figure_key = 'recurring_amount_active' and r.currency is not null group by 1) a),
+      'tolerance_pct', (select z.pct from z), 'tolerance_min', (select z.mn from z))
+  end
+$$;
+
+-- ---------------------------------------------------------------------------------------------
 -- 4. The page in one read
 -- ---------------------------------------------------------------------------------------------
 -- The page's document for the filters and the month range, as of the stored take (history false and nothing from the
@@ -265,7 +337,8 @@ $$;
 --   tiles         Total subscriptions with its split per holding status; Paused; the Monthly recurring amount per
 --                 currency over the active statuses (and the indicative euros only while every currency has a rate);
 --                 the last complete month's churn and failed counts over its base (market and store filters only);
---                 Device units over the Total subscriptions with the unmapped among them; source_counts null (B39b)
+--                 Device units over the Total subscriptions with the unmapped among them; source_counts (the
+--                 subscription app's own, cma.subscriptions_source_counts_of)
 --   months        per month of the range: the counts per movement kind (start, end and every kind), the amounts per
 --                 currency and kind, and the complete stores' base, churned and moved_to_failed (null where none is
 --                 complete)
@@ -363,7 +436,7 @@ begin
                                           'as_of', v_fx ->> 'as_of') end,
       'devices', jsonb_build_object('units', (select coalesce(sum(h.device_units), 0) from h),
                                     'unmapped', (select count(*) from h where h.device_units is null)),
-      'source_counts', null),
+      'source_counts', cma.subscriptions_source_counts_of(p_tenant_id, p_market, p_store, p_proposition, p_interval, p_now)),
     'mix', jsonb_build_object(
       'proposition', (select coalesce(jsonb_agg(jsonb_build_object('key', z.k, 'subscriptions', z.n) order by z.n desc, z.k collate "C"), '[]'::jsonb)
                       from (select coalesce(p.p, 'none') as k, count(*) as n
@@ -614,6 +687,7 @@ begin
     'cma.subscriptions_scope_of(uuid,text,uuid,text,text)',
     'cma.subscription_rows_of(uuid,text,uuid,text,text,text,text,boolean,integer,integer,boolean,timestamptz)',
     'cma.subscriptions_page_of(uuid,text,uuid,text,text,date,date,text,text,boolean,timestamptz,integer)',
+    'cma.subscriptions_source_counts_of(uuid,text,uuid,text,text,timestamptz)',
     'cma.subscriptions_page(text,uuid,text,text,date,date,text,text,boolean,integer)',
     'cma.subscription_rows(text,uuid,text,text,text,text,boolean,integer,integer,boolean)',
     'cma.subscription_file_record(text,text,uuid,text,text,text,integer,date,date)',
@@ -631,7 +705,7 @@ $$;
 -- 7. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zh', 'Customers → Subscriptions (brief B39 continued, Part B39d): cma.subscriptions_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles, the movements and rates per month, the stores'' starts, renewal survival, the mix and the list''s first page, from the subscription facts'' takes), cma.subscription_rows (a page of the list or the file''s rows), cma.subscription_file_record (the audit row of every read that hands out rows: records, months or rows) and cma.subscriptions_churn_card (Customers → Active''s Churn rate card), over cma.assert_subscriptions_filter, cma.assert_subscription_list, cma.subscriptions_scope_of, cma.subscription_rows_of and cma.subscriptions_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
+values ('0009zh', 'Customers → Subscriptions (brief B39 continued, Part B39d): cma.subscriptions_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles, the movements and rates per month, the stores'' starts, renewal survival, the mix and the list''s first page, from the subscription facts'' takes), cma.subscription_rows (a page of the list or the file''s rows), cma.subscription_file_record (the audit row of every read that hands out rows: records, months or rows) and cma.subscriptions_churn_card (Customers → Active''s Churn rate card), the tiles'' source counts from cma.source_figure (cma.subscriptions_source_counts_of), over cma.assert_subscriptions_filter, cma.assert_subscription_list, cma.subscriptions_scope_of, cma.subscription_rows_of and cma.subscriptions_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
 on conflict (version) do nothing;
 
 commit;

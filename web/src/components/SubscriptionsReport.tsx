@@ -23,6 +23,7 @@ import { heatColour, monthLabel } from "@/lib/active";
 import type { Copy, Locale, SubscriptionsCopy } from "@/lib/copy";
 import type {
   DateKey, SubscriptionMoveKind, SubscriptionRowsPage, SubscriptionsInterval, SubscriptionsMeasure, SubscriptionsPage, SubscriptionsSort,
+  SubscriptionsSourceCounts,
 } from "@/lib/data";
 import { flashHref } from "@/lib/flash";
 import { fmtCount, fmtRate1, fmtShare } from "@/lib/reports";
@@ -106,12 +107,13 @@ const intervalWord = (i: string, t: T) => (t as Record<string, string>)[`interva
  * The six tiles (D.2): Total subscriptions with its split per holding status, Paused, the Monthly recurring amount per
  * currency (and the indicative euros), the last complete month's Churn rate (its churned count linked to Flash's Churn
  * for that month) and Failed rate, and the Device units with the subscriptions whose variant is not mapped (linked to
- * Data quality). The subscription app's own counts (B39b) take a line under each tile once they are stored: until then
- * nothing stands there, never a zero
+ * Data quality). Under Total subscriptions, Paused and the amount, the subscription app's own figure of the day (Source
+ * figure, addition 0009zg) once one is stored: until then nothing stands there, never a zero
  */
 export function SubscriptionsTiles({ page, t, copy, locale }: { page: SubscriptionsPage; t: T; copy: Copy; locale: Locale }) {
   const tiles = page.tiles;
   if (!tiles) return null;
+  const sc = tiles.sourceCounts;
   const rates = tiles.rates;
   const { churn, failed } = ratesOf(rates);
   const month = rates ? monthName(rates.month, locale) : "";
@@ -124,14 +126,21 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
         {Object.entries(tiles.total.byStatus).map(([s, n]) => (
           <span key={s} data-testid="subscriptions-tile-total-status" data-status={s}>{t.statusLine.replace("{status}", statusWord(s, t)).replace("{n}", fmtCount(n, locale))}</span>
         ))}
+        {sc && sc.total !== null ? <SourceLine t={t} sc={sc} text={fmtCount(sc.total, locale)} gap={sc.totalGap && sc.totalCma !== null ? fmtCount(Math.abs(sc.totalCma - sc.total), locale) : null} locale={locale} testId="subscriptions-source-total" /> : null}
       </Tile>
-      <Tile testId="subscriptions-tile-paused" label={t.tile_paused} hint={t.h_paused} copy={copy} value={fmtCount(tiles.paused, locale)} />
+      <Tile testId="subscriptions-tile-paused" label={t.tile_paused} hint={t.h_paused} copy={copy} value={fmtCount(tiles.paused, locale)}>
+        {sc && sc.paused !== null ? <SourceLine t={t} sc={sc} text={fmtCount(sc.paused, locale)} gap={sc.pausedGap && sc.pausedCma !== null ? fmtCount(Math.abs(sc.pausedCma - sc.paused), locale) : null} locale={locale} testId="subscriptions-source-paused" /> : null}
+      </Tile>
       <Tile testId="subscriptions-tile-amount" label={t.tile_amount} hint={t.h_amount} copy={copy}
         value={tiles.amounts.length === 0 ? <span className="text-p4a-muted">{t.noAmount}</span> : (
           <span className="flex flex-col text-panel">
             {tiles.amounts.map((a) => <span key={a.currency} data-currency={a.currency}>{fmtAmount(a.amount, a.currency, locale)}</span>)}
           </span>
         )}>
+        {sc ? sc.amounts.map((a) => (
+          <SourceLine key={a.currency} t={t} sc={sc} text={fmtAmount(a.amount, a.currency, locale)} gap={a.gap && a.cma !== null ? fmtAmount(Math.abs(a.cma - a.amount), a.currency, locale) : null}
+            locale={locale} testId="subscriptions-source-amount" />
+        )) : null}
         {tiles.eur ? <span data-testid="subscriptions-tile-eur">{t.eurLine.replace("{amount}", fmtAmount(tiles.eur.amount, "EUR", locale)).replace("{date}", tiles.eur.asOf ? fmtDate(tiles.eur.asOf, locale, "medium") : "–")}</span> : null}
       </Tile>
       <Tile testId="subscriptions-tile-churn" label={t.tile_churn} hint={t.h_churn} copy={copy}
@@ -155,6 +164,29 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
         ) : null}
       </Tile>
     </div>
+  );
+}
+
+/**
+ * A tile's line with the subscription app's own figure (a Source figure, read daily by B39b's job): its value and day,
+ * the stores read where not every store in scope has one, and, where the two differ beyond both tolerances, the Source
+ * figure gap in the warning colour with a link to Data quality's check (never the colour alone)
+ */
+function SourceLine({ t, sc, text, gap, locale, testId }: {
+  t: T; sc: SubscriptionsSourceCounts; text: string; gap: string | null; locale: Locale; testId: string;
+}) {
+  const when = sc.to ? fmtDate(sc.to, locale, "medium") : "";
+  const partial = sc.stores < sc.inScope ? t.sourceStores.replace("{k}", fmtCount(sc.stores, locale)).replace("{m}", fmtCount(sc.inScope, locale)) : null;
+  return (
+    <span className="flex flex-col" data-testid={testId}>
+      <span>{t.sourceLine.replace("{n}", text).replace("{date}", when)}{partial ? `, ${partial}` : ""}</span>
+      {gap ? (
+        <Link href={flashHref("/reports/flash", { o: "data_quality", f_check: "source_figure_gap" }) as Route} className="font-semibold text-p4a-warning underline-offset-2 hover:underline"
+          data-testid={`${testId}-gap`}>
+          {t.sourceGap.replace("{n}", gap)}
+        </Link>
+      ) : null}
+    </span>
   );
 }
 

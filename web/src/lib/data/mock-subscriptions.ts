@@ -240,6 +240,28 @@ function monthRows(b: Base, f: SubscriptionsFilter) {
   return { rows: out, stores };
 }
 
+/**
+ * The subscription app's own counts in mock mode: each store in scope read today, its count of holding and paused
+ * subscriptions as the CMA's (the CMA's value at the read), with the GB store counting six more holding subscriptions
+ * than the CMA (a Source figure gap at the mock's tolerances, 1 % and 2), and its amount per currency a little above the
+ * CMA's; none under a proposition or interval filter, as the database answers
+ */
+function sourceCountsOf(b: Base, f: SubscriptionsFilter, h: MockSub[], t: MockSub[], amounts: { currency: string; amount: number }[], zone: string) {
+  if (f.proposition !== null || f.interval !== null) return null;
+  const stores = STORES.filter((s) => (f.market === null || s.market === f.market) && (f.store === null || s.connectionId === f.store));
+  if (stores.length === 0) return null;
+  const extra = stores.some((s) => s.market === "GB") ? 6 : 0;
+  const today = dateKeyInZone(new Date(b.now), zone);
+  const paused = t.filter((s) => statusNow(s) === "paused").length;
+  return {
+    stores: stores.length, inScope: stores.length, from: today, to: today, fetchedAt: new Date(b.now - 3 * 3_600_000).toISOString(),
+    total: h.length + extra, totalCma: h.length, totalGap: extra > 2 && extra * 100 > h.length + extra,
+    paused, pausedCma: paused, pausedGap: false,
+    amounts: amounts.map((a) => ({ currency: a.currency, amount: Math.round(a.amount * 1.002 * 100) / 100, cma: a.amount, gap: false })),
+    tolerancePct: 1, toleranceMin: 2,
+  };
+}
+
 export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery): SubscriptionsPage {
   const b = baseOf(me);
   const filter: SubscriptionsFilter = { market: q.market, store: q.store, proposition: q.proposition, interval: q.interval };
@@ -305,7 +327,7 @@ export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery):
       eur: amounts.length > 0 && eurs.every((e) => e !== null) ? { amount: Math.round(eurs.reduce((n: number, e) => n + (e ?? 0), 0) * 100) / 100, asOf: FX.as_of } : null,
       rates: last ? { month: last, ...partsOf(mrows.filter((r) => r.month === last && r.complete))! } : null,
       devices: { units: h.reduce((n, s) => n + (s.deviceUnits ?? 0), 0), unmapped: h.filter((s) => s.deviceUnits === null).length },
-      sourceCounts: null,
+      sourceCounts: sourceCountsOf(b, filter, h, t, amounts, me.timeZone),
     },
     months: monthsBetween(q.from, q.to).map((m) => {
       const rs = mrows.filter((r) => r.month === m);

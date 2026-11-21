@@ -426,6 +426,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
   "/reports/subscriptions": [
     "subscriptions.total_subscriptions",
     "subscriptions.paused",
+    "subscriptions.source_counts",
     "subscriptions.monthly_recurring_amount",
     "subscriptions.churn_rate",
     "subscriptions.failed_rate",

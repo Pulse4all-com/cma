@@ -17,7 +17,8 @@
 -- 138 they read FAIL); 139_verify_flash_totals.sql is 0008zu's own check.
 -- Expected verdict in dev and in prod (block C off, the default): "0008zt verified | 137_verify_flash_insights: 24 ok,
 -- 0 FAIL, 1 skip" (since 210_subscription_facts.sql, 0009ze, edited by that change: A4, A7 and B7 expect its
--- definition version 0009ze of subscriptions and installed_base and its two data-quality checks, conditional on its row)
+-- definition version 0009ze of subscriptions and installed_base and its two data-quality checks, conditional on its row;
+-- since 214_source_figures.sql, 0009zg, edited by that change: A7 expects its check source_figure_gap, conditional on its row)
 -- (25 checks: A1 to A7, B1 to B13, S1, D1 to D3 ok; C1 skip, volume off). A database without Pulse4all's CRM connection (a local one) reads S1 skip as
 -- well, and one whose tenants have no set-up source reads D1 to D3 skip: still "0008zt verified" with those skips. A
 -- local run with verify.volume 'true': C1 ok. Provoked: "PROVOKED, NOT A PASS | 137_verify_flash_insights: 0 ok, <n>
@@ -368,6 +369,9 @@ begin
                       -- since 0009ze (210): the variant mapping's and the device units' checks
                       || (case when exists (select 1 from cma.schema_migration where version = '0009ze')
                                then ',subscription_variant_unmapped:380,subscription_device_units_mismatch:390' else '' end)
+                      -- since 0009zg (214): the subscription app's own figures against the CMA's
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009zg')
+                               then ',source_figure_gap:400' else '' end)
      or (select count(*) from cma.data_quality_catalog()) <> (select count(distinct check_key) from cma.data_quality_catalog())
      or cma.data_quality_fix_in('field_device_on_non_holding_subscription', 'paused') <> 'assets' then
     v_bad := v_bad || 'the catalog; ';

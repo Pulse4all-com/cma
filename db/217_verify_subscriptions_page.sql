@@ -9,14 +9,15 @@
 -- reads the page as the seed's manager (cma_app, row-level security on). Every check writes one row, PASS or FAIL, and
 -- the last row is the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM login after
 -- 216_subscriptions_page.sql, in dev. No row carries a name, an address, an email or a phone number.
---   A  the addition row after 0009zf; the eight functions the application's (not public's), invoker's rights, JIT off
+--   A  the addition row after 0009zf; the ten functions the application's (not public's), invoker's rights, JIT off
 --   B  for every filter (none, each market, each store, a proposition, none, each interval group, a market with an
 --      interval, a store with a proposition): the tiles against the take; the months against the month take (and the
 --      proposition and interval filters leaving them as they are); the last complete month's rates against the month
 --      take and Customers → Active's card; renewal survival against its take with the migrated left out; the mix's sums;
 --      the list's totals per measure against the tiles, its pages walked whole under two sorts, the file's rows; the
 --      refusals (CMA06 for an agent, CMA04 for every bad filter, measure, sort and page); the file's audit row; another
---      tenant's application sees none of the take; the list's codes read from the mirror equal it
+--      tenant's application sees none of the take; the list's codes read from the mirror equal it; the subscription app's
+--      own counts beside the tiles (B39b's source figures, built for two stores) summed and compared by 214's rule
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
 
@@ -61,14 +62,14 @@ begin
             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
             where n.nspname = 'cma' and p.proname in ('assert_subscriptions_filter', 'assert_subscription_list', 'subscriptions_scope_of', 'subscription_rows_of',
                                                       'subscriptions_page_of', 'subscriptions_page', 'subscription_rows',
-                                                      'subscription_file_record', 'subscriptions_churn_card'))
+                                                      'subscription_file_record', 'subscriptions_churn_card', 'subscriptions_source_counts_of'))
            || ' | ' || coalesce((select (m.applied_at >= p.applied_at)::text from cma.schema_migration m, cma.schema_migration p
                                  where m.version = '0009zh' and p.version = '0009zf'), 'missing');
-  insert into verify_0009zh values (1, 'A1 0009zh recorded after 0009zf; the nine functions executable by cma_app and not by public, with the caller''s rights and JIT off',
+  insert into verify_0009zh values (1, 'A1 0009zh recorded after 0009zf; the ten functions executable by cma_app and not by public, with the caller''s rights and JIT off',
     case when v_txt = 'assert_subscription_list:true:false:false:true assert_subscriptions_filter:true:false:false:true subscription_file_record:true:false:false:true '
                       || 'subscription_rows:true:false:false:true subscription_rows_of:true:false:false:true '
                       || 'subscriptions_churn_card:true:false:false:true subscriptions_page:true:false:false:true '
-                      || 'subscriptions_page_of:true:false:false:true subscriptions_scope_of:true:false:false:true | true'
+                      || 'subscriptions_page_of:true:false:false:true subscriptions_scope_of:true:false:false:true subscriptions_source_counts_of:true:false:false:true | true'
               and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
 end
 $$;
@@ -85,7 +86,7 @@ declare
   v_f record; v_j jsonb; v_j0 jsonb; v_k jsonb;
   v_bad text := ''; v_bad2 text := ''; v_bad3 text := ''; v_bad4 text := ''; v_bad5 text := ''; v_bad6 text := '';
   v_txt text; v_n integer; v_size integer; v_ids uuid[]; v_page integer; v_seen uuid[]; v_prev numeric; v_prevc text; v_ok boolean;
-  v_m1 text; v_s1 uuid; v_s2 uuid; v_audit bigint;
+  v_m1 text; v_s1 uuid; v_s2 uuid; v_audit bigint; v_today date;
 begin
   if not v_dev then
     insert into verify_0009zh values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
@@ -102,6 +103,7 @@ begin
     select u.id into v_agent from cma.app_user u where u.tenant_id = v_t and u.email = 'agent.two@example.com';
     select u.id into v_sch from cma.app_user u where u.tenant_id = v_t and u.kind = 'system' and u.email = 'scheduler@system.invalid';
     v_month := date_trunc('month', now() at time zone v_zone)::date;
+    v_today := (now() at time zone v_zone)::date;
     v_from := (v_month - interval '23 months')::date;
     v_holding := cma.flash_list_of(cma.setting_of(v_t, 'flash.device_holding_statuses'));
     v_active := cma.flash_list_of(cma.setting_of(v_t, 'flash.active_subscription_statuses'));
@@ -165,7 +167,8 @@ begin
                case when (v_j #>> '{tiles,devices,units}')::bigint is distinct from (select coalesce(sum(t.device_units), 0) from t where t.status = any (v_holding))
                          or (v_j #>> '{tiles,devices,unmapped}')::bigint is distinct from (select count(*) from t where t.status = any (v_holding) and t.device_units is null)
                     then 'devices' end,
-               case when v_j #> '{tiles,source_counts}' <> 'null'::jsonb then 'source_counts' end)
+               case when (v_f.proposition is not null or v_f.interval_group is not null) and v_j #> '{tiles,source_counts}' <> 'null'::jsonb
+                    then 'source_counts' end)
       into v_txt;
       if v_txt <> '' then v_bad := v_bad || v_f.n || ':' || v_txt || ' '; end if;
 
@@ -295,7 +298,7 @@ begin
       if v_txt <> '' then v_bad6 := v_bad6 || v_f.n || ':' || v_txt || ' '; end if;
     end loop;
 
-    v_rows := v_rows || array['10', 'B1 the tiles equal the take for every filter: Total subscriptions and its split per holding status, Paused, the Monthly recurring amount per currency, device units and the unmapped; no source counts before B39b',
+    v_rows := v_rows || array['10', 'B1 the tiles equal the take for every filter: Total subscriptions and its split per holding status, Paused, the Monthly recurring amount per currency, device units and the unmapped; no source counts under a proposition or interval filter',
       case when v_bad = '' and (select count(*) from v0009zh_filters) >= 12 and not v_provoke then 'PASS' else 'FAIL' end,
       'filters ' || (select count(*) from v0009zh_filters) || '; mismatches: ' || coalesce(nullif(v_bad, ''), 'none')];
     v_rows := v_rows || array['11', 'B2 the months'' counts per kind and amounts per currency equal the month take under the market and store filters; a proposition or interval filter leaves months and rates as they are',
@@ -433,6 +436,46 @@ begin
     v_rows := v_rows || array['20', 'B11 the list''s number, payment instrument, store and CRM contact equal the mirror''s for its subscriptions (the store customer of the store connection)',
       case when v_txt ~ '^0/[1-9][0-9]*/' and not v_provoke then 'PASS' else 'FAIL' end, 'mismatches/rows/with a contact: ' || v_txt];
 
+    -- B12 the subscription app's own counts beside the tiles (B39b's source figures): two stores' figures of today (one
+    --     of them also an older day, which the page leaves out), a third store's of four days ago (out of date: left out);
+    --     the sums over the holding statuses and paused, the amounts per currency, the CMA's values beside them and 214's
+    --     gap rule; a market filter keeps its stores only; none under a proposition filter; none without any figure
+    delete from cma.source_figure x where x.tenant_id = v_t;
+    insert into cma.source_figure (tenant_id, connection_id, figure_key, source_metric, business_date, dims, value, unit, currency, cma_value, cma_at, fetched_at)
+    select v_t, c.id, k.figure_key, 'verify:zh', v_today - k.back, k.dims, k.value, k.unit, k.currency, k.cma, now(), now()
+    from (select y.connection_id as id, row_number() over (order by y.handle collate "C") as n from cma.flash_subscription_stores_of(v_t) y) c
+    cross join lateral (values
+      ('subscriptions_in_status', 0, '{"status": "active"}'::jsonb, 100.0 * c.n, 'count', null::text, 100.0 * c.n),
+      ('subscriptions_in_status', 0, '{"status": "failed"}'::jsonb, 10.0, 'count', null, 30.0),
+      ('subscriptions_in_status', 0, '{"status": "paused"}'::jsonb, 5.0, 'count', null, 5.0),
+      ('subscriptions_in_status', 0, '{"status": "canceled"}'::jsonb, 50.0, 'count', null, 50.0),
+      ('subscriptions_in_status', 1, '{"status": "active"}'::jsonb, 999.0, 'count', null, 999.0),
+      ('recurring_amount_active', 0, '{}'::jsonb, 1000.0 * c.n, 'amount', 'EUR', 1000.0 * c.n + 1),
+      ('subscriptions_in_status', 4, '{"status": "active"}'::jsonb, 7.0, 'count', null, 7.0)) k(figure_key, back, dims, value, unit, currency, cma)
+    where (c.n <= 2 and k.back <= 1) or (c.n = 3 and k.back = 4);
+    perform set_config('app.user_id', v_mgr::text, true);
+    perform set_config('role', 'cma_app', true);
+    v_j := cma.subscriptions_page(null, null, null, null, v_from, v_month) #> '{tiles,source_counts}';
+    v_j0 := cma.subscriptions_page(v_m1, null, null, null, v_from, v_month) #> '{tiles,source_counts}';
+    v_k := cma.subscriptions_page(null, null, 'vp1', null, v_from, v_month) #> '{tiles,source_counts}';
+    perform set_config('role', 'cma_owner', true);
+    v_txt := concat_ws(' ', v_j ->> 'stores', v_j ->> 'in_scope', v_j ->> 'to', trim_scale((v_j ->> 'total')::numeric), trim_scale((v_j ->> 'total_cma')::numeric),
+                       v_j ->> 'total_gap', trim_scale((v_j ->> 'paused')::numeric), v_j ->> 'paused_gap', trim_scale((v_j #>> '{amounts,0,amount}')::numeric),
+                       trim_scale((v_j #>> '{amounts,0,cma}')::numeric), v_j #>> '{amounts,0,gap}', coalesce(v_j0 ->> 'stores', 'none'),
+                       coalesce(nullif(v_k::text, 'null'), 'none'));
+    -- expected: the holding statuses of the tenant's setting (the dev seed's active,failed: 100 + 200 active and 10 + 10
+    -- failed; the CMA 300 + 60, a gap of 40 over 2 and 1 % of 320); paused 10, equal; amounts 3,000 against 3,002 (2 over 2:
+    -- no gap); the first market's stores alone under its filter; nothing under a proposition
+    v_n := (select count(*) from cma.flash_subscription_stores_of(v_t));
+    v_rows := v_rows || array['21', 'B12 the subscription app''s own counts beside the tiles: today''s figures of the stores that have them (an older day and an out-of-date store left out), the sums, the CMA''s values and 214''s gap rule; a market''s stores alone; none under a proposition filter',
+      case when v_txt = format('2 %s %s %s %s true 10 false 3000 3002 false %s none', v_n, v_today,
+                               case when 'failed' = any (v_holding) then 320 else 300 end, case when 'failed' = any (v_holding) then 360 else 300 end,
+                               (select count(*) from (select y.connection_id, row_number() over (order by y.handle collate "C") as n
+                                                       from cma.flash_subscription_stores_of(v_t) y) q
+                                join cma.flash_subscription_stores_of(v_t) y2 on y2.connection_id = q.connection_id
+                                where q.n <= 2 and coalesce(y2.market, 'unknown') = v_m1))
+                and 'failed' = any (v_holding) and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -458,7 +501,7 @@ from (select ord, check_name, result, detail from verify_0009zh
       select 99, 'verdict',
              case when not current_setting('verify.dev')::boolean then 'REFUSED'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009zh where result = 'PASS') = 12
+                  when (select count(*) from verify_0009zh where result = 'PASS') = 13
                        and not exists (select 1 from verify_0009zh where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('217_verify_subscriptions_page: %s PASS, %s FAIL', (select count(*) from verify_0009zh where result = 'PASS'),
