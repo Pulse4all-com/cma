@@ -33,7 +33,10 @@
  *                         --from an events backfill starts at the tenant's subscriptions.history_start_date, or reads all
  *                         of the app's history when it is empty (from HISTORY_FLOOR, 1 January 2000); either may lie
  *                         before intake.start_date. A --from before a history start that is set is refused
- *                         (from_before_history_start). The dry run reads and counts and writes nothing (see dryRun)
+ *                         (from_before_history_start). The dry run reads and counts and writes nothing (see dryRun).
+ *                         purchase_order [--from <date>] (addition 0009ze): the subscription family's purchase events
+ *                         read again from the same start, each one's store order given to a held purchase without one
+ *                         (cma.ingest_fill_purchase_orders), resumable from backfill:purchase_order; no dry run
  *   skipReason            a connection without a token secret name is not read: the jobs skip it with one log line (code
  *                         key_not_set) and no run; the backfill refuses it
  *
@@ -65,6 +68,14 @@ export const EVENTS_STREAM = "juo:events";
 export const CADENCE_STREAM = "juo:cadence";
 export const BACKFILL_EVENTS_STREAM = `backfill:${OBJECT_EVENT}`;
 export const BACKFILL_BILLING_STREAM = `backfill:${OBJECT_BILLING}`;
+/**
+ * The one-time fill of purchases' store orders (addition 0009ze, brief B39c C.0): the subscription family's purchase
+ * events read again from the history start, each one's store order handed to cma.ingest_fill_purchase_orders, which
+ * gives it to a held purchase that has none (the events table is otherwise append-only). Its own cursor; the poll's is
+ * left as it stands
+ */
+export const OBJECT_PURCHASE_ORDER = "purchase_order";
+export const BACKFILL_PURCHASE_STREAM = `backfill:${OBJECT_PURCHASE_ORDER}`;
 export const OVERLAP_MS = 5 * 60_000;
 /** The first poll's window, without a cursor (the backfill of events moves the cursor to its own start) */
 export const FIRST_POLL_MS = 24 * 60 * 60_000;
@@ -369,8 +380,50 @@ async function backfillEvents({ connection, store, budget, object, fromMs, until
   return { ...detail, from: new Date(from).toISOString() };
 }
 
+/**
+ * The fill of purchases' store orders (0009ze): from the events backfill's start (the history setting, else all of the
+ * app's history) to untilMs, resumable as the events backfill (cursor backfill:purchase_order); the purchases with a
+ * store order are handed to the database in parts, which fills only a held purchase without one. counts.updated: the
+ * purchases filled
+ */
+async function backfillPurchaseOrders({ connection, store, budget, fromMs, untilMs, counts }) {
+  startCounts(counts);
+  const from = await eventsStart(store, fromMs);
+  const cur = await store.cursor(BACKFILL_PURCHASE_STREAM);
+  const detail = { eventsRead: 0, purchasesRead: 0, purchasesWithOrder: 0, purchasesFilled: 0 };
+  if (cur && cur.from === from && cur.done) return detail;
+  const resumeAt = cur && cur.from === from && Number.isFinite(cur.value) ? cur.value : from;
+  const { api } = await prepare({ connection, store, budget });
+  for await (const page of api.events(eventsQuery(resumeAt, untilMs, { inclusive: true, family: "subscription" }))) {
+    const items = new Map();
+    let latest = null;
+    for (const e of page) {
+      detail.eventsRead += 1;
+      const at = Date.parse(e?.occurredAt);
+      if (Number.isFinite(at)) latest = Math.max(latest ?? at, at);
+      if (isBillingEvent(e)) continue;
+      const m = eventItem(e);
+      if (!m?.item || m.item.eventType !== "purchased") continue;
+      detail.purchasesRead += 1;
+      const order = m.item.raw?.orderId;
+      if (!order) continue;
+      detail.purchasesWithOrder += 1;
+      items.set(m.item.sourceId, { sourceId: m.item.sourceId, orderSourceId: order });
+    }
+    if (items.size) {
+      const filled = await store.fillPurchaseOrders([...items.values()]);
+      detail.purchasesFilled += filled;
+      counts.updated += filled;
+    }
+    counts.fetched = (counts.fetched ?? 0) + page.length;
+    if (Number.isFinite(latest)) await store.setCursor(BACKFILL_PURCHASE_STREAM, { from, value: latest, done: false });
+  }
+  await store.setCursor(BACKFILL_PURCHASE_STREAM, { from, done: true });
+  return { ...detail, from: new Date(from).toISOString() };
+}
+
 export const RECONCILE_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT];
-export const BACKFILL_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING];
+export const BACKFILL_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING, OBJECT_PURCHASE_ORDER];
 
 export async function reconcile({ connection, store, budget, object, counts, runId = null }) {
   if (object === OBJECT_SUBSCRIPTION) {
@@ -402,6 +455,11 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
     info(object === OBJECT_EVENT ? "backfill: subscription events" : "backfill: billing events", { connection: connection.connectionId, ...detail });
     return undefined;
   }
+  if (object === OBJECT_PURCHASE_ORDER) {
+    const detail = await backfillPurchaseOrders({ connection, store, budget, fromMs, untilMs, counts });
+    info("backfill: purchase orders", { connection: connection.connectionId, ...detail });
+    return undefined;
+  }
   throw new SourceError("object_not_backfilled");
 }
 
@@ -424,7 +482,7 @@ const lineBand = (n) => (n <= 3 ? String(n) : n <= 5 ? "4-5" : "6+");
  *                          returnCodeDropped, instrumentTypes (names), instrumentUnknown, withSubscription, firstEventAt
  */
 export async function dryRun({ connection, store, budget, object, fromMs, untilMs = Date.now() }) {
-  if (!BACKFILL_OBJECTS.includes(object)) throw new SourceError("object_not_backfilled");
+  if (!BACKFILL_OBJECTS.includes(object) || object === OBJECT_PURCHASE_ORDER) throw new SourceError("object_not_backfilled");
   const from = EVENT_OBJECTS[object] ? await eventsStart(store, fromMs) : null;
   const { api, shop } = await prepare({ connection, store, budget });
   const customers = new Set();
@@ -547,9 +605,11 @@ export const juo = {
    * subscriptions.history_start_date, else all of the app's history (never intake.start_date)
    */
   backfillFrom: async (object, store) => {
-    if (!EVENT_OBJECTS[object]) return { allHistory: true };
+    if (!EVENT_OBJECTS[object] && object !== OBJECT_PURCHASE_ORDER) return { allHistory: true };
     const v = String((await store.settings())[HISTORY_SETTING] ?? "").trim();
     return v || { allHistory: true };
   },
   dryRun,
+  /** the objects a dry run takes: purchase_order (0009ze) has none */
+  dryRunObjects: [OBJECT_SUBSCRIPTION, OBJECT_PRODUCT, OBJECT_EVENT, OBJECT_BILLING],
 };

@@ -116,16 +116,26 @@ export async function refreshTenants({ connect, log }) {
         // 3. The refresh: skipped while the tenant's take is younger than its setting and not stale (reason fresh), when
         // its sources are not set up (reason not_set_up) or when another refresh of this tenant holds its lock (running)
         const r = (await asScheduler(client, tenant_id, me, "select cma.active_refresh() as r")).rows[0].r;
-        const counts = r.refreshed
-          ? { rows: r.rows, duration_ms: r.duration_ms, skipped: 0 }
-          : { rows: 0, duration_ms: 0, skipped: 1 };
+        // 4. The subscription facts (addition 0009ze, brief B39c C.9), in a step and a transaction of their own after
+        // Active's: skipped while younger than subscriptions.take_refresh_minutes, when their inputs did not change
+        // (unchanged), when the subscriptions source is not set up or another refresh holds their lock. A database without
+        // 210 has no such function: the step is left out (the run counts no facts)
+        const has = (await asScheduler(client, tenant_id, me, "select to_regprocedure('cma.subscription_facts_refresh()') is not null as has")).rows[0].has;
+        const f = has ? (await asScheduler(client, tenant_id, me, "select cma.subscription_facts_refresh() as f")).rows[0].f : null;
+        const counts = {
+          ...(r.refreshed ? { rows: r.rows, duration_ms: r.duration_ms, skipped: 0 } : { rows: 0, duration_ms: 0, skipped: 1 }),
+          facts_rows: f?.refreshed ? Number(f.rows ?? 0) : 0, facts_duration_ms: f?.refreshed ? Number(f.duration_ms ?? 0) : 0,
+          // a run that found the facts' inputs unchanged computed nothing: skipped, as a fresh one
+          facts_skipped: f?.refreshed && !f.unchanged ? 0 : 1,
+        };
         await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
         return { r, counts };
       }), { log, fields: { tenant_id } });
       // A fresh take is the normal case between two due minutes, as a tenant without its sources: INFO; a refresh skipped
       // for a running one is a warning
       log(r.refreshed || r.reason === "fresh" || r.reason === "not_set_up" ? "INFO" : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
-        ...(r.refreshed ? {} : { reason: r.reason ?? "running" }) });
+        ...(r.refreshed ? {} : { reason: r.reason ?? "running" }),
+        facts_rows: counts.facts_rows, facts_duration_ms: counts.facts_duration_ms, facts_refreshed: counts.facts_skipped === 0 });
     } catch (e) {
       failed += 1;
       log("ERROR", { tenant_id, rows: 0, duration_ms: 0, refreshed: false, error: codeOf(e) });

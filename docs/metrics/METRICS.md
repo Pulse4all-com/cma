@@ -39331,7 +39331,7 @@ The active customers under the filters, 50 a page, sorted and paged in the datab
 **Formula as computed**
 
 ```
-one row per active customer (cma.active_rows); monthly amount = the sum of its paying holding subscriptions in its main currency; worst payment state = failed, then in_retry, then paused, then paid over its subscriptions; default order the monthly amount descending within currency
+one row per active customer (cma.active_rows); monthly amount = the sum of its paying holding subscriptions in its main currency; worst payment state = failed, then charged_back, then in_retry, then awaiting_payment, then paused, then paid over its subscriptions (cma.payment_states(), addition 0009ze); default order the monthly amount descending within currency
 ```
 
 **Unit** text · **Grain** now · **Status** prerequisite_missing

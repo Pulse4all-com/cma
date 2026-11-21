@@ -97,6 +97,9 @@ function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = 
       // the data-quality refresh (0008zr): tenant 1 refreshed, tenant 2's result still fresh
       if (/cma\.refresh_data_quality\(\)/.test(text)) return { rows: [{ r: tenant === T2 ? { refreshed: false, reason: "fresh", age_seconds: 40 } : { refreshed: true, rows: 3, duration_ms: 7 } }], rowCount: 1 };
       // the refresh of Customers → Active's take (0009l): tenant 1 refreshed, tenant 2's take still fresh
+      // the subscription facts (0009ze), the job's second step: the function exists, every tenant's facts refreshed
+      if (/to_regprocedure\('cma\.subscription_facts_refresh\(\)'\)/.test(text)) return { rows: [{ has: true }], rowCount: 1 };
+      if (/cma\.subscription_facts_refresh\(\)/.test(text)) return { rows: [{ f: { refreshed: true, rows: 4, duration_ms: 3 } }], rowCount: 1 };
       if (/cma\.active_refresh\(\)/.test(text)) return { rows: [{ r: tenant === T2 ? { refreshed: false, reason: "fresh" } : { refreshed: true, rows: 5, duration_ms: 9 } }], rowCount: 1 };
       if (/cma\.flash_current_refresh\(/.test(text)) return { rows: [{ r: current(tenant) }], rowCount: 1 };
       // a failed take of the last TAKE_RETRY_MINUTES without a succeeded one since (0009e's backoff); none by default
@@ -266,8 +269,13 @@ expect("idle reset: unheard it throws (the 16:04 crash), heard it is one warning
     [{ tenants: 2, failed: 1 }, [], [], false]);
   expect("active customers: the job's own entry, and a log line holds ids and counts only",
     [pool.state.statements.some((q) => /cma\.active_refresh\(\)/.test(q.text)),
-      lines.every((l) => Object.keys(l).every((k) => ["severity", "message", "tenant_id", "rows", "duration_ms", "refreshed", "reason", "error", "step"].includes(k)))],
+      lines.every((l) => Object.keys(l).every((k) => ["severity", "message", "tenant_id", "rows", "duration_ms", "refreshed", "reason", "error", "step",
+        "facts_rows", "facts_duration_ms", "facts_refreshed"].includes(k)))],
     [true, true], [false, false]);
+  expect("active customers: the subscription facts (0009ze) refreshed after Active's take in every tenant, their counts in the run's row",
+    [count(pool, /select cma\.subscription_facts_refresh\(\)/, T1), count(pool, /select cma\.subscription_facts_refresh\(\)/, T2),
+      pool.state.runFinishes.map((x) => `${x.counts.facts_rows}:${x.counts.facts_skipped}`)],
+    [1, 1, ["4:0", "4:0"]], [0, 0, []]);
 }
 {
   const pool = mockPool({ faults: [{ on: /cma\.active_refresh\(\)/, tenant: T1, times: 1, error: reset }] });

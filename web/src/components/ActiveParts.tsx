@@ -478,7 +478,7 @@ export function CustomerList({ list, sort, descending, page, pageSize, href, hin
   const total = list.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const first = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const payment: Record<string, "success" | "warning" | "error" | "neutral"> = { paid: "success", in_retry: "warning", failed: "error", paused: "neutral" };
+  const payment: Record<string, "success" | "warning" | "error" | "neutral"> = { paid: "success", in_retry: "warning", charged_back: "error", awaiting_payment: "warning", failed: "error", paused: "neutral" };
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <Scroll testId="active-list" label={t.listCard}>

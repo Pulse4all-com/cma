@@ -690,7 +690,8 @@ export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma" | "subscrip
   commerce: ["customer_in_two_stores", "subscription_customer_unmatched"],
   assets: ["device_serial_missing", "device_serial_duplicate", "device_model_unmapped", "device_status_unmapped", "device_market_unmapped",
     "device_customer_ref_invalid", "component_due_unknown", "field_device_without_subscription_ref", "device_required_ref_missing",
-    "active_subscription_without_device", "device_subscription_ref_unknown", "field_device_on_ended_subscription", "field_device_on_non_holding_subscription"],
+    "active_subscription_without_device", "device_subscription_ref_unknown", "field_device_on_ended_subscription", "field_device_on_non_holding_subscription",
+    "subscription_device_units_mismatch"],
 };
 
 /** Where a check's findings are fixed; the Workspace for every other check */

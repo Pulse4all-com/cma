@@ -161,7 +161,9 @@ begin
     into v_txt
   from cma.flash_overviews() o where o.key = 'installed_base';
   insert into verify_0008zy values (3, 'S3 the catalog: installed_base''s sets with [market, model, subscription_status]; its split by model; definition 0008zt; the other splits as 0008zw',
-    case when v_txt = '[[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"]] 0008zt '
+    -- since 210 (0009ze; edited by that change) the installed base's definition is 0009ze's (the payment states)
+    case when v_txt = '[[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"]] '
+                      || case when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze ' else '0008zt ' end
                       || 'subscriptions:status:market/status,installed_base:model:market/status/model/warehouse/link,orders:kind:market/store/kind'
               and not current_setting('verify.provoke')::boolean then 'ok' else 'FAIL' end, v_txt);
 end

@@ -98127,7 +98127,7 @@
         "nl": "Klantenlijst"
       },
       "definition": "The active customers under the filters, 50 a page, sorted and paged in the database: the store's id of the customer, store, market, segment, acquisition channel with First orders' level, Customer start and age, subscriptions, devices, the Monthly recurring amount, realised value, the worst payment state and the CRM contact's link. The download holds the whole filtered list. The list can be narrowed to one band of Devices per active customer (the band of the devices panel).",
-      "formula": "one row per active customer (cma.active_rows); monthly amount = the sum of its paying holding subscriptions in its main currency; worst payment state = failed, then in_retry, then paused, then paid over its subscriptions; default order the monthly amount descending within currency",
+      "formula": "one row per active customer (cma.active_rows); monthly amount = the sum of its paying holding subscriptions in its main currency; worst payment state = failed, then charged_back, then in_retry, then awaiting_payment, then paused, then paid over its subscriptions (cma.payment_states(), addition 0009ze); default order the monthly amount descending within currency",
       "unit": "text",
       "grain": [
         "now"

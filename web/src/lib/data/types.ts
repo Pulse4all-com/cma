@@ -3183,6 +3183,47 @@ export interface SourceInboxInput {
   market: string | null;
 }
 
+/** What a line of a product variant is (the variant mapping, addition 0009ze) */
+export type VariantLineKind = "device" | "accessory" | "service" | "other";
+
+/**
+ * A product variant of a subscriptions connection with its variant mapping (Configuration → Sources, addition 0009ze):
+ * the store's catalog texts (merchant text, never a customer's), the active lines (not canceled, of a subscription in a
+ * device-holding status) and the mapping, null while it has none
+ */
+export interface SubscriptionVariant {
+  connectionId: string;
+  market: string | null;
+  variantSourceId: string;
+  productSourceId: string | null;
+  productTitle: string | null;
+  variantTitle: string | null;
+  sku: string | null;
+  inCatalog: boolean;
+  activeLines: number;
+  lineKind: VariantLineKind | null;
+  modelKey: string | null;
+  devicesPerUnit: number | null;
+  proposition: string | null;
+}
+
+/** A subscriptions connection's variants (unmapped on an active line first), the device models and the tenant's propositions */
+export interface SubscriptionVariants {
+  variants: SubscriptionVariant[];
+  models: { key: string; name: string }[];
+  propositions: string[];
+}
+
+/** One variant's mapping (cma.set_subscription_variant_mapping, tenant.configure); a line kind of null removes it */
+export interface SubscriptionVariantInput {
+  connectionId: string;
+  variantSourceId: string;
+  lineKind: VariantLineKind | null;
+  modelKey: string | null;
+  devicesPerUnit: number | null;
+  proposition: string | null;
+}
+
 export interface SourceMailboxInput {
   accountId: string;
   label: string | null;
@@ -4273,6 +4314,10 @@ export interface CmaData {
   setSourceTaskType(me: Principal, id: string, input: SourceTaskTypeInput): Promise<void>;
   /** One inbox of a CRM connection (set_inbox, 0008m: counted and market; its work type and channel kept) */
   setSourceInbox(me: Principal, id: string, input: SourceInboxInput): Promise<void>;
+  /** A subscriptions connection's product variants with their mapping (cma.subscription_variants, addition 0009ze; tenant.configure) */
+  getSubscriptionVariants(me: Principal, connectionId: string): Promise<SubscriptionVariants>;
+  /** One variant's mapping (cma.set_subscription_variant_mapping, 0009ze): CMA02 an unknown connection or variant, CMA04 a refused value */
+  setSubscriptionVariant(me: Principal, input: SubscriptionVariantInput): Promise<void>;
   /** One mailbox (set_inbox_account, 0008t): label, counted, market; a label with an @ CMA04 */
   setSourceMailbox(me: Principal, id: string, input: SourceMailboxInput): Promise<void>;
   /** One channel of the conversations (set_inbox_channel, 0008m: counted; its tenant channel kept) */

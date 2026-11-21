@@ -3004,6 +3004,33 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getSubscriptionVariants(me, connectionId) {
+    // one transaction: the variants with their mapping, the device models, the tenant's propositions (0009ze)
+    return withTenant(ctx(me), async (q) => {
+      const v = await q.query<{ connection_id: string; market: string | null; variant_source_id: string; product_source_id: string | null;
+        product_title: string | null; variant_title: string | null; sku: string | null; in_catalog: boolean; active_lines: number;
+        line_kind: "device" | "accessory" | "service" | "other" | null; model_key: string | null; devices_per_unit: number | null; proposition: string | null }>(
+        `select connection_id, market, variant_source_id, product_source_id, product_title, variant_title, sku, in_catalog, active_lines,
+                line_kind, model_key, devices_per_unit, proposition
+           from cma.subscription_variants($1::uuid)`, [connectionId]);
+      const m = await q.query<{ key: string; name: string }>(
+        `select key, name from cma.device_model where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, name collate "C", key collate "C"`);
+      const p = await q.query<{ v: string }>(`select cma.setting_of(cma.current_tenant_id(), 'subscriptions.propositions') as v`);
+      return {
+        variants: v.rows.map((r) => ({ connectionId: r.connection_id, market: r.market, variantSourceId: r.variant_source_id, productSourceId: r.product_source_id,
+          productTitle: r.product_title, variantTitle: r.variant_title, sku: r.sku, inCatalog: r.in_catalog, activeLines: Number(r.active_lines),
+          lineKind: r.line_kind, modelKey: r.model_key, devicesPerUnit: r.devices_per_unit === null ? null : Number(r.devices_per_unit), proposition: r.proposition })),
+        models: m.rows,
+        propositions: (p.rows[0]?.v ?? "").split(",").map((x) => x.trim()).filter(Boolean),
+      };
+    });
+  },
+
+  async setSubscriptionVariant(me, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_subscription_variant_mapping($1::uuid, $2, $3, $4, $5, $6)`,
+      [input.connectionId, input.variantSourceId, input.lineKind, input.modelKey, input.devicesPerUnit, input.proposition]));
+  },
+
   async setSourceMailbox(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_inbox_account($1::uuid, $2, $3, $4, $5)`, [id, input.accountId, input.label, input.isCounted, input.market]));
   },

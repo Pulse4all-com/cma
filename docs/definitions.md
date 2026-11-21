@@ -966,7 +966,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Status | Proposed (for Kira to confirm) |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 18 November 2026, "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
 | Used by | `flash.subscriptions.*` (the Subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the data map's tables `subscription_line`, `subscription_product_variant`, `billing_event` and `subscription_change` (`docs/datamap/catalog.json`); the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
-| As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` one of the eight codes of Payment instrument, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Since `202` (addition 0009za, B39a): `source_number` (Juo's own sequence number such as #2502, so staff can find the subscription in Juo's admin; not a device serial), `min_cycles` and `max_cycles` (the billing policy's, else the highest of its lines'; null when Juo states none), `discount_count` (how many discounts, never a code or a value), `line_count` (its lines Juo has not canceled) and `device_units` (null until Part C of brief B39 fills it from the variant mapping); the subscription is always read with its lines, canceled ones included (`includeCanceledItems`), stored as Subscription line; `cma.ingest_upsert_subscriptions` has a run-taking form that writes the Observed subscription changes, and the two-argument form stays as its wrapper. Matches the definition |
+| As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` one of the eight codes of Payment instrument, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Since `202` (addition 0009za, B39a): `source_number` (Juo's own sequence number such as #2502, so staff can find the subscription in Juo's admin; not a device serial), `min_cycles` and `max_cycles` (the billing policy's, else the highest of its lines'; null when Juo states none), `discount_count` (how many discounts, never a code or a value), `line_count` (its lines Juo has not canceled) and `device_units` (Device units: the facts' refresh fills it from the Variant mapping since addition 0009ze, null while a recurring line is unmapped); the subscription is always read with its lines, canceled ones included (`includeCanceledItems`), stored as Subscription line; `cma.ingest_upsert_subscriptions` has a run-taking form that writes the Observed subscription changes, and the two-argument form stays as its wrapper. Matches the definition |
 
 ### Subscription status
 
@@ -992,20 +992,20 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 
 | Field | Value |
 |---|---|
-| Term | Payment state (nl: Betaalstand) |
-| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of` (the tenant, or the tenant with a subscription set), `cma_read.subscription_payment_state`; the field `payment_state` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
-| Definition | Per subscription, Juo's renewal state of it, one of six: Paid (status active, no open failed renewal), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Failed (status failed), Paused (status paused), Canceled (status canceled or expired) and Awaiting payment (Pending: a renewal by draft order, Mollie, not paid yet; not built). It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
-| Source | `cma.subscription` and `cma.subscription_event` only, computed at read time by `cma.subscription_payment_state_of(tenant)` (or `(tenant, subscriptions)`, the same derivation for the given subscriptions) with no call to Juo: the subscription's status and its `renewed` and `renew_failed` events. Where either event lacks its cycle, a renewal after the failure closes it |
-| Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Customers → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
-| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; Reports → Flash (Subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
-| Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
+| Term | Payment state (nl: Betaalstand); Charged back (nl: Teruggeboekt), Awaiting payment (nl: Wacht op betaling), both proposed for Kira |
+| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `charged_back`, `awaiting_payment`, `paused`, `canceled`; `retry_cycle`, `retry_since`, `last_attempt`, `state_since`, `overdue`, `chargeback_return_code`, `amount_at_risk`, `currency`; SQL `cma.subscription_payment_state_of` (the tenant, or the tenant with a subscription set), `cma.payment_states()` (the states in their worst-first order), `cma_read.subscription_payment_state`; the field `payment_state` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
+| Definition | Per subscription, Juo's renewal state of it, one of seven: Paid (status active, nothing open), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Charged back (status active, the store order of its latest renewal, the highest cycle, or without a renewal its purchase's order, was charged back), Awaiting payment (status active, the latest invoice placed for a renewal with no paid invoice of it; `overdue` once an overdue invoice came), Failed (status failed), Paused (status paused) and Canceled (status canceled or expired). In that order of precedence for an active subscription: In retry, Charged back, Awaiting payment, Paid. The worst state over several subscriptions is failed, charged_back, in_retry, awaiting_payment, paused, paid. It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
+| Source | `cma.subscription`, `cma.subscription_event` (its `renewed` and `renew_failed` events; where either lacks its cycle, a renewal after the failure closes it) and, since 0009ze, `cma.billing_event` (chargebacks linked by store order, and the invoice events), computed at read time by `cma.subscription_payment_state_of(tenant)` (or `(tenant, subscriptions)`, the same derivation for the given subscriptions) with no call to Juo |
+| Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Failed stays status-based: Juo moves most charged-back subscriptions to failed itself, so a failed subscription carries the chargeback's return code as `chargeback_return_code` (its reason), and Charged back is only an active subscription Juo left active. Awaiting payment exists only in a store that has invoice events (GB, DE and NL on 20 November 2026); elsewhere no subscription has it. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Customers → Cancellations counts cancellation requests, and Cancellation stays under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
+| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; `state_since` is when the state began (the first failure, the chargeback, the invoice placed, or the status change), `overdue` is true for an Awaiting payment with an overdue invoice, and Amount at risk the amount at stake; Reports → Flash (Subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
+| Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read; the take `cma.subscription_take` holds the state as of its last refresh |
 | Scope | As Subscription |
-| Equivalent in the source system | None: the CMA's own derivation from Juo's status and its renewal events |
-| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "paid" for a payment in NetSuite, since Paid here is Juo's renewal state; Paid (time), a person's time in paid statuses under Time terms, is another term and never a payment state |
-| Status | Proposed (for Kira to confirm); Awaiting payment is Pending: whether a renewal by draft order is a payment state of its own, per store (docs/open-decisions.md), and nothing is built as if settled |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
-| Used by | `cma.subscription_payment_state_of` (both forms), `cma_read.subscription_payment_state`; the installed base's records (`cma.flash_rows_of`, the page's subscriptions only); the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
-| As built today | `cma.subscription_payment_state_of(tenant)` (`118`): Failed for status failed, Paused for paused, Canceled for canceled or expired, In retry for active with an open failed renewal (also `retry_cycle`, the latest open cycle, `retry_since`, its first failure, and `last_attempt`, its highest attempt), else Paid; `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function. The overload `(tenant, subscriptions)` (`148`, addition 0008zz) is the same derivation narrowed to the given subscriptions first, and `cma.flash_rows_of` reads it for the page's subscriptions only. Awaiting payment is not built: no subscription has it. Matches the definition apart from Awaiting payment (Pending) |
+| Equivalent in the source system | None: the CMA's own derivation from Juo's status, its renewal events, chargebacks and invoice events. HubSpot's warehouse object `juo_subscription` has a field "Payment state" with another meaning; the CMA never reads or writes it |
+| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "failed payment" (Failed renewal); "paid" for a payment in NetSuite, since Paid here is Juo's renewal state; Paid (time), a person's time in paid statuses under Time terms, is another term and never a payment state |
+| Status | Proposed (for Kira to confirm); Charged back and Awaiting payment are Proposed with addition 0009ze, and Awaiting payment's meaning changed then from a renewal by draft order (Mollie) to invoice renewals |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 20 November 2026, "Charged back is built and Failed stays status-based", "Awaiting payment is built from invoice events", "The order of payment states for the worst state is failed, …" and "Definitions: Payment state gains Charged back …" (addition 0009ze, this PR) |
+| Used by | `cma.subscription_payment_state_of` (both forms), `cma.payment_states()`, `cma_read.subscription_payment_state`, `cma.subscription_take`; the installed base's records (`cma.flash_rows_of`, the page's subscriptions only); the worst state of Customers → Active's list (`cma.active_rows_of`) and its mix (`cma.active_rest_body_of`); the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
+| As built today | `cma.subscription_payment_state_of(tenant)` and its overload `(tenant, subscriptions)` (`210`, dropped and created from `118` and `148`, four columns more after the old nine): Failed for status failed (with the return code of a linked chargeback), Paused, Canceled, In retry, Charged back and Awaiting payment as above, else Paid; `amount_at_risk` is the amount per cycle while In retry, Failed, Charged back or an overdue Awaiting payment, in the subscription's `currency`. `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function and gains the new columns at its end. `cma.flash_rows_of` reads the overload for the page's subscriptions only. `211` A7 proves the result equal to `118`'s and `148`'s row for row but where a new state applies. Matches the definition |
 
 ### Failed renewal
 
@@ -1042,7 +1042,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Not to use | "Line" alone for it: Line (key `line`) is the Aircall number of a call (Call terms); say Subscription line wherever both could be meant, and never "item" or "product" for a line in a label (Juo's `items[]` stays in the adapter). The recurring part is Juo's `recurringCycleLimit` null; "add-on" means a line with `recurring_cycle_limit` 1 only |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
-| Used by | `cma.subscription_line`, `cma_read.subscription_line`, `cma.ingest_upsert_subscription_lines`; `cma.subscription.line_count`; the data map's table `subscription_line`; no page yet: Parts C to F of brief B39 build the device units and the mix from it |
+| Used by | `cma.subscription_line`, `cma_read.subscription_line`, `cma.ingest_upsert_subscription_lines`; `cma.subscription.line_count`; the data map's table `subscription_line`; no page yet: the Variant mapping and Device units (addition 0009ze) are built from it; Parts D to F of brief B39 build the mix from it |
 | As built today | `cma.subscription_line` (`202`): unique per tenant, connection and `source_id`; checks on every column and `raw` (fixed keys, no @); `cma.ingest_upsert_subscription_lines(connection, subscription ids, items, run)` takes the given subscriptions' lines as a set (new inserted, changed updated, absent marked missing, at most 500 subscriptions a call); the application cannot delete a line. A change of a subscription's line count or of the sum of its recurring lines' quantities is written as an Observed subscription change. Matches the definition |
 
 ### Product variant
@@ -1058,10 +1058,10 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Time rule | `first_seen_at` and `synced_at` are the CMA's own read times |
 | Scope | As Subscription |
 | Equivalent in the source system | A variant of Juo's product catalog (`GET /products`) |
-| Not to use | "Model" for it: Model (filter) is a device model of the tenant's model catalog, and the variant to model mapping is tenant configuration built in Part C of brief B39; "product" alone for a variant; "SKU" for a device serial or a subscription's number |
+| Not to use | "Model" for it: Model (filter) is a device model of the tenant's model catalog, and the variant to model mapping is tenant configuration, the Variant mapping (addition 0009ze); "product" alone for a variant; "SKU" for a device serial or a subscription's number |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
-| Used by | `cma.subscription_product_variant`, `cma_read.subscription_product_variant`, `cma.ingest_upsert_subscription_products`, `cma.catalog_text_ok`; the data map's table `subscription_product_variant`; no page yet (Part C's variant mapping reads it) |
+| Used by | `cma.subscription_product_variant`, `cma_read.subscription_product_variant`, `cma.ingest_upsert_subscription_products`, `cma.catalog_text_ok`; the data map's table `subscription_product_variant`; Configuration → Sources' Variant mapping panel and the check `subscription_variant_unmapped` read it (addition 0009ze) |
 | As built today | `cma.subscription_product_variant` (`202`): unique per tenant, connection and `variant_source_id`; `cma.catalog_text_ok` checks each title and SKU (length 1 to 100, no @, no control character; null passes); the adapter leaves a failing text out and counts it before the database sees it; the application cannot delete a row. Matches the definition |
 
 ### Billing event
@@ -1091,7 +1091,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Key | `chargeback` (`cma.billing_event.kind`); `amount`, `currency`, `order_source_id`, `return_code`, `instrument_type` |
 | Definition | A payment the customer's bank reversed after the subscription app took it, in Juo's word (convention 2): the amount, its currency, the store's order and the Return code. A renewal that Juo reports as renewed can be charged back later. |
 | Source | Juo's event `chargeback:created` (typed payload: amount, currency, order id, reason code, instrument type), kept as kind `chargeback`; `subscription:chargeback-created` describes the same chargeback and is counted `duplicate_skipped` |
-| Counts / does not count | One row per chargeback event. It does not change a subscription's status or payment state (Payment state has no Charged back state yet: Part C of brief B39 adds it). The reason message is never read |
+| Counts / does not count | One row per chargeback event. It does not change a subscription's status; Payment state's Charged back (and the return code of a Failed subscription) is derived from it since addition 0009ze. The reason message is never read |
 | Unit and display | A count and an amount per currency; the Return code as a code |
 | Time rule | `occurred_at`, the instant Juo reports |
 | Scope | As Subscription |
@@ -1099,7 +1099,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Not to use | "Failed payment" and "dunning" (README, Source of truth); "dispute" for a SEPA reversal; "refund" (Refund is the merchant's own return of money) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
-| Used by | `cma.billing_event` (kind `chargeback`), `cma_read.billing_event`; no page yet |
+| Used by | `cma.billing_event` (kind `chargeback`), `cma_read.billing_event`; Payment state (Charged back, `chargeback_return_code`) through the order it names; the outcome charged_back of Renewal attempt; no page yet |
 | As built today | Stored as a Billing event of kind `chargeback`; the only kind that may carry a return code (a check); the dry run's `billingKinds` and `returnCodes` show them per store. Matches the definition |
 
 ### Return code
@@ -1149,15 +1149,15 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | A renewal that the subscription app bills by invoice, in Juo's words: the invoice is placed for a renewal, then paid, overdue or its payment failed. It is the subscription app's invoice renewal, not NetSuite's invoice. |
 | Source | Juo's events `invoice:placed`, `invoice:paid`, `invoice:overdue` and `invoice:payment-failed` (total, currency, `renewalId`; GB has them), read as billing events |
 | Counts / does not count | One row per event. NetSuite keeps its own invoices, payment status, days to pay and dunning stages (Decision log, 1 November 2026; README, Source of truth); a billing event never stands in for them. `invoice_payment_failed` is Juo's word, kept under convention 2, and is never labelled "failed payment". Orders the app could not place or created as a draft (`order_placement_failed`, `order_draft_created`) are billing events but not invoice renewals |
-| Unit and display | A count per kind and an amount per currency; no page yet (Awaiting payment, Part C of brief B39, is built from it) |
+| Unit and display | A count per kind and an amount per currency; no page yet (Payment state's Awaiting payment is built from it, and Renewal attempt's invoice outcomes) |
 | Time rule | `occurred_at`, the instant Juo reports |
 | Scope | As Subscription |
 | Equivalent in the source system | Juo's `invoice:*` events; not a NetSuite invoice |
 | Not to use | "Invoice" alone (NetSuite's invoice); "failed payment", "payment status" and "dunning" (README, Source of truth) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
-| Used by | `cma.billing_event` (the four invoice kinds), `cma_read.billing_event`; no page yet; Payment state's Awaiting payment (Pending) is built from it in Part C |
-| As built today | Stored as Billing events of the four kinds; nothing derives a state from them yet. Matches the definition |
+| Used by | `cma.billing_event` (the four invoice kinds), `cma_read.billing_event`; no page yet; Payment state's Awaiting payment is built from it since addition 0009ze |
+| As built today | Stored as Billing events of the four kinds; `cma.subscription_payment_state_of` reads them for Awaiting payment (an index `billing_event_renewal_idx` on the renewal, `210`) and `cma.renewal_outcomes_of` for the outcomes invoice_paid and invoice_open. Matches the definition |
 
 ### Payment instrument
 
@@ -1213,7 +1213,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Not to use | "Change" for a Juo event (Line change and the other event types are Juo's); "history" of a value before 0009za's first read (none exists) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "A value stored as null is a start, never a change" (confirmed 19 Nov 2026) (addition 0009za, B39a, #294) |
-| Used by | `cma.subscription_change`, `cma_read.subscription_change`; the data map's table `subscription_change`; no page yet (Part C's recurring amount movements read it) |
+| Used by | `cma.subscription_change`, `cma_read.subscription_change`; the data map's table `subscription_change`; the facts' refresh reads it for the amounts of Recurring amount movement (addition 0009ze); no page yet |
 | As built today | `cma.subscription_change` (`202`): `run_id` is a soft reference (checked as a running run of the connection when written, no foreign key, because `sync_run` is a busy table); the application cannot update or delete a row. Matches the definition |
 
 ### Subscription history start
@@ -1234,6 +1234,25 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "The events backfill without --from starts at subscriptions.history_start_date" and "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
 | Used by | `cma.check_tenant_setting()`, the Juo adapter's `backfillFrom` (`ingest/src/adapters/juo/index.mjs`) |
 | As built today | The setting is in the catalog (`202`: text, default empty) and checked by `cma.check_tenant_setting()` (made again, based on `184`); the adapter reads it as `reviews.history_start_date` is read for reviews. Matches the definition |
+
+### Migration share
+
+| Field | Value |
+|---|---|
+| Term | Migration share (nl: Migratie-aandeel); a month below it after the migration is a Straggler (nl: Nakomer) |
+| Key | `subscriptions.migration_bulk_min_pct` (tenant setting, whole percent 1 to 100, default 5); `cma.subscription_rate_start_of`, `cma.subscription_store_start` and `cma_read.subscription_store_start` (`migration_months`, `last_migration_month`, `straggler_months`, `stragglers`, `rate_start_month`) |
+| Definition | The share of a store's migrated events (the subscription app's `migrated` events) a calendar month must hold to count toward the store's migration. The store's Churn rate and Failed rate start the month after the last month that holds it; a later month below it is a Straggler, reported and never moving the start; where no month holds it, the busiest month counts as the migration's last; a store without migrated events starts at the first complete month after its first event |
+| Source | The tenant's settings (`cma.tenant_setting`) and the app's `migrated` events (`cma.subscription_event`) |
+| Counts / does not count | Counts the store's migrated events per month in the tenant's zone, each month's share of the store's total; never a date in code |
+| Unit and display | A whole percent; the start month as a month; no page yet (Customers → Subscriptions, Part D) |
+| Time rule | Months in the tenant's zone; computed again by the subscription facts' refresh, whose digest holds the setting |
+| Scope | Per tenant; applied per store (subscriptions connection) |
+| Equivalent in the source system | None |
+| Not to use | "Cut-off" or "go-live date" for the start month (it is derived, never set) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 20 November 2026 (Proposed; Martin, the rule; the share as a tenant setting); docs/decisions.md, 20 Nov 2026, "The Churn rate and the Failed rate of a store start …" and "Definitions: Migration share and Straggler …" (addition 0009ze, PR #303) |
+| Used by | `cma.check_tenant_setting()`, `cma.subscription_rate_start_of`, `cma.subscription_facts_inputs_key_of`, `cma.subscription_store_start`, `cma_read.subscription_store_start`, `cma.subscription_month_take` (`complete`), `cma_read.subscription_churn_month`; Churn rate, Failed rate |
+| As built today | `210` (addition 0009ze): the setting in the catalog (integer, default 5) and checked by `cma.check_tenant_setting()`; `211` B1 and B8b prove the refusal, a bulk month, a late straggler, a store without migration, a tenant share of 3 % and a share no month holds. Matches the definition |
 
 ### Placeholder store
 
@@ -1272,6 +1291,139 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The subscription audit (`cma.subscription_audit_of`) is a read-only function", "The audit's caller sets `statement_timeout`", "The audit's two windows", "The audit's `events_by_month`", "The audit leaves placeholder stores out" and "Definitions: Subscription audit is a new term" (addition 0009zb, B39a2, this PR); 20 Nov 2026, "The audit's `events_by_month` holds a month only while a subscription that renews was held, …" and "Definitions: Subscription audit's `billing_link` buckets are …" (addition 0009zc, this PR, PR #301) |
 | Used by | `cma.subscription_audit_of`, `db/204_subscription_audit.sql`, `db/205_verify_subscription_audit.sql`, `db/206_subscription_full_read_guard.sql` (re-creates it), `db/207_verify_subscription_full_read_guard.sql`, `db/131_time_all.sql` (verify.part 'audit', for information, row 'info', verdict INFO); `docs/ingest/PROD_RUNBOOK.md` Phase 18; no catalog key, page or job |
 | As built today | `204` and `206` (0009zc, which re-creates the function): owner-only (no grant to the application, the readers, BigQuery or public), invoker rights, stable, jit off; the caller sets `statement_timeout` to 120 s first. `status_chain`, `after_chargeback` and `migration_cycles` give the shape that settles Part C's rules of brief B39 (records/0009zb-prod-<date>); `status_chain`'s expected text says a pair reads the latest status event's status > the subscription's, and active>paused or paused>active is a pause that began or ended on its date without a paused or resumed event. Matches the definition |
+
+### Variant mapping, Proposition and Device units
+
+| Field | Value |
+|---|---|
+| Term | Variant mapping (nl: Variantkoppeling); Proposition (nl: Propositie); Device units (nl: Apparaateenheden); all proposed for Kira |
+| Key | `cma.subscription_variant_mapping` (`connection_id`, `variant_source_id`, `line_kind`, `model_key`, `devices_per_unit`, `proposition`); `cma.set_subscription_variant_mapping`, `cma.subscription_variants_of`, `cma.subscription_variants`; setting `subscriptions.propositions`; `cma.subscription.device_units`; `cma.subscription_take.propositions` and `models`; API `GET` and `PUT /api/v1/configuration/subscription-variants` (`connectionId`, `variantSourceId`, `lineKind`, `modelKey`, `devicesPerUnit`, `proposition`); data-quality checks `subscription_variant_unmapped` and `subscription_device_units_mismatch` |
+| Definition | The **Variant mapping** says, per subscriptions connection and Product variant, what a Subscription line of it is: a line kind (`device`, `accessory`, `service`, `other`), for a device the model of the tenant's catalog and the **devices per unit** (0 to 20; 1 by default for a device, 0 for every other kind), and a Proposition. A **Proposition** is a code of the tenant's setting `subscriptions.propositions` (up to twenty lower case codes, empty by default) that names what the subscription sells. **Device units** of a subscription is the sum, over its recurring lines (`recurring_cycle_limit` not 1) that are not canceled, of quantity times devices per unit; it is null while such a line is unmapped. |
+| Source | The mapping is tenant configuration, set by hand on Configuration → Sources; the lines and the catalog come from Juo (Subscription line, Product variant); the model catalog is the tenant's (`cma.device_model`) |
+| Counts / does not count | A one-time add-on (a line with `recurring_cycle_limit` 1) and a canceled line add no device units. A variant is listed for a connection when its catalog or one of its lines holds it; the check `subscription_variant_unmapped` counts variants on an active line (not canceled, of a present subscription in a device-holding status) without a mapping, fixed in `cma`. The check `subscription_device_units_mismatch` lists a subscription in a device-holding status whose device units differ from the devices in the field the asset register links to it, `more_paid` or `more_placed`, fixed in `assets`; a subscription with no device in the field is left to `active_subscription_without_device`, so none is listed twice, and a subscription with null device units is skipped. The propositions of Pulse4all (`hs1`, `frx`, `buurt_aed`, `outdoor`) are seed data for Kira to confirm, never code |
+| Unit and display | Configuration → Sources, panel "Variant mapping" under a subscriptions connection (tenant.configure): the connection's variants with SKU, titles and active lines, unmapped first; device units a whole number or empty |
+| Time rule | The mapping as of now; device units written by the facts' refresh (every `subscriptions.take_refresh_minutes`, default 15, when the inputs changed) |
+| Scope | Per tenant and subscriptions connection (store) |
+| Equivalent in the source system | None: the mapping is the CMA's own configuration; Juo's product and variant ids are the keys |
+| Not to use | "Model" for a variant (Product variant); "bundle" or "SKU mapping"; "devices" alone for device units (Devices per active customer and the installed base count devices in the field) |
+| Status | Proposed (for Kira to confirm), with Pulse4all's propositions and the Dutch labels |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The variant mapping is tenant configuration …", "The device check is two data-quality checks …" and "Definitions: Variant mapping, Proposition and Device units are new terms" (addition 0009ze, this PR) |
+| Used by | `cma.subscription_variant_mapping`, `cma.subscription.device_units`, `cma.subscription_take`; `PUT /api/v1/configuration/subscription-variants`; Configuration → Sources (`SourceVariants`); the data map's table `subscription_variant_mapping`; docs/ingest/PROD_RUNBOOK.md phase 20 |
+| As built today | `210`: the mapping audited (`cma.setup_tenant_table`), refusals `CMA04` for a device line without a model or a line kind other than device with devices, `CMA02` for an unknown connection; `cma.subscription_device_units_of` computes the units and the facts' refresh writes them to `cma.subscription` where they read differently. Matches the definition; the propositions' seed is in `02_seed_pulse4all.sql` |
+
+### Amount at risk
+
+| Field | Value |
+|---|---|
+| Term | Amount at risk (nl: Bedrag met betaalrisico; proposed for Kira) |
+| Key | `amount_at_risk`, `currency` (`cma.subscription_payment_state_of`, `cma.subscription_take`, `cma_read.subscription_payment_state`, `cma_read.subscription_take`) |
+| Definition | The amount per cycle of a subscription while its Payment state is In retry, Failed, Charged back or an overdue Awaiting payment, in the subscription's currency; empty in every other state. |
+| Source | `cma.subscription.amount_per_cycle` and `currency` with the Payment state |
+| Counts / does not count | Per currency, never added across currencies. It is the recurring amount at stake, not an amount charged back (the chargeback's own amount is on Chargeback) and not a payment in NetSuite |
+| Unit and display | An amount in the subscription's currency, two decimals; no page yet (Part D builds it) |
+| Time rule | As of now (the Payment state), and as of the take's last refresh in `cma.subscription_take` |
+| Scope | As Subscription |
+| Equivalent in the source system | None |
+| Not to use | "MRR at risk" (MRR is not the CMA's word: Monthly recurring amount); "unpaid" or "overdue amount" |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The order of payment states for the worst state is failed, …" and "Definitions: Amount at risk is a new term" (addition 0009ze, this PR) |
+| Used by | `cma.subscription_payment_state_of`, `cma.subscription_take`, `cma_read.subscription_payment_state`, `cma_read.subscription_take`; no page yet |
+| As built today | `210`: the amount per cycle for the four conditions, null otherwise. Matches the definition |
+
+### Renewal attempt, Renewal success and Recovery
+
+| Field | Value |
+|---|---|
+| Term | Renewal attempt (nl: Verlengingspoging), Renewal success (nl: Betaald bij eerste poging), Recovery (nl: Herstel); proposed for Kira |
+| Key | `cma.renewal_outcome` (`renewal_key` `cycle:<n>` or `invoice:<renewal id>`, `cycle_index`, `renewal_source_id`, `first_attempt_at`, `outcome`, `attempts`, `recovered_at`, `days_to_recover`, `error_code`, `instrument_type`, `payment_method_changed_before_recovery`), `cma_read.renewal_outcome`; outcomes `paid_first_attempt`, `recovered`, `not_recovered`, `charged_back`, `invoice_paid`, `invoice_open` |
+| Definition | A **Renewal attempt** is the first try to bill a subscription's cycle (a `renewed` or `renew_failed` event of the cycle) or an invoice placed for a renewal. A **Renewal success** is a cycle renewed at its first attempt (`paid_first_attempt`). A **Recovery** is a cycle renewed after a failed attempt (`recovered`, with `days_to_recover`); a cycle with failures and no renewal is `not_recovered`; a renewal whose store order was charged back is `charged_back`; an invoice renewal is `invoice_paid` or `invoice_open`. |
+| Source | `cma.subscription_event` (renewed and renew_failed with their cycles; events without a cycle are left out) and `cma.billing_event` (invoices, chargebacks) |
+| Counts / does not count | One row per subscription and cycle with an attempt, and one per invoice renewal. The instrument is the subscription's current one, not the one at the attempt. An attempt Juo never reported is not counted |
+| Unit and display | A count per outcome; days to recover with one decimal; no page yet (the facts' totals come with Part D) |
+| Time rule | `first_attempt_at` as Juo reports it; the take is as of its last refresh |
+| Scope | As Subscription |
+| Equivalent in the source system | None: Juo has renewal events, not an outcome per cycle |
+| Not to use | "Dunning" and "failed payment" (Failed renewal); "payment attempt"; "retry" for a Recovery (Payment state's In retry is another term) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "Definitions: Renewal attempt, Renewal success and Recovery are new terms with the outcomes of `cma.renewal_outcome`" (addition 0009ze, this PR) |
+| Used by | `cma.renewal_outcome`, `cma.renewal_outcomes_of`, `cma_read.renewal_outcome`; the data map's table `renewal_outcome`; no page yet |
+| As built today | `210`: computed fresh by `cma.renewal_outcomes_of` and written by the facts' refresh; `211` proves each outcome. Matches the definition |
+
+### Recurring amount movement
+
+| Field | Value |
+|---|---|
+| Term | Recurring amount movement (nl: Beweging terugkerend bedrag; proposed for Kira) |
+| Key | `cma.subscription_month_take` (`connection_id`, `market`, `month`, `kind`, `currency`, `subscriptions`, `amount`, `complete`), `cma_read.subscription_month_take`; kinds `new`, `migrated`, `reactivated`, `resumed`, `expansion`, `contraction`, `paused`, `churned`, `moved_to_failed`, and `start` and `end` for the Total subscriptions at a month's start and end; SQL `cma.subscription_moves_of`, `cma.subscription_amount_at` |
+| Definition | Per store and calendar month, the change in the recurring amount of subscriptions, one kind per move: `new` (a subscription enters), `migrated` (it enters as migrated by the app, never `new`), `reactivated` (from an ended status or failed to active), `resumed` (from paused), `expansion` and `contraction` (the monthly amount rose or fell without a status move), `paused`, `churned` (into a status of `flash.ended_subscription_statuses`) and `moved_to_failed`. |
+| Source | `cma.subscription_event` (the status events, reconstructed), `cma.subscription` and `cma.subscription_change` (the amounts) |
+| Counts / does not count | Counts reach back to each store's first event; amounts only from each connection's first load (the later of 0009za's `applied_at` and the connection's first subscription `first_seen_at`), because Juo's events carry no amount (rule 12), per currency and never added across currencies. A move exactly at a month's start belongs to that month, and the base at a boundary is the status just before it. Amounts use Customers → Active's month factor; a contraction, paused, churned or moved_to_failed amount is a positive size that reduces the base. Rows with currency empty hold the counts |
+| Unit and display | Counts per kind and month, amounts per currency; no page yet (Part D builds it) |
+| Time rule | The calendar month in the tenant's zone, from the store's first event; `complete` marks a month that is over and not before the store's first complete calendar month |
+| Scope | Per store (subscriptions connection) and market |
+| Equivalent in the source system | None |
+| Not to use | "MRR", "net new MRR" (MRR is not the CMA's word); "cancelled" in a key or label; "upsell" for expansion |
+| Status | Proposed (for Kira to confirm); `migrated` is an addition beside the brief's kinds |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "Recurring amount movements count from each store's first event …" and "Definitions: Recurring amount movement is a new term" (addition 0009ze, this PR) |
+| Used by | `cma.subscription_month_take`, `cma.subscription_moves_of`, `cma_read.subscription_month_take`, `cma_read.subscription_churn_month`; the data map's table `subscription_month_take`; no page yet |
+| As built today | `210`: written by the facts' refresh; `211` proves every kind on a small month grid, the base at each boundary and an amount known from the first load only. Matches the definition |
+
+### Failed rate
+
+| Field | Value |
+|---|---|
+| Term | Failed rate (nl: Mislukt-percentage; proposed for Kira) |
+| Key | `failed_rate`, `moved_to_failed`, `base` (`cma_read.subscription_churn_month`) |
+| Definition | The subscriptions that moved to failed in a month divided by the Total subscriptions at the previous month end, per market, beside the Churn rate and never inside it. |
+| Source | `cma.subscription_month_take` (kinds `moved_to_failed` and `start`) |
+| Counts / does not count | Complete months only, from each store's start month: the month after the store's last month with migrated events (a straggler under `subscriptions.migration_bulk_min_pct`, default 5 % of the store's migrated events, is reported in `cma_read.subscription_store_start` and never moves the start), else the first complete calendar month after its first event; derived from the data, never a date in code, over the stores whose start month it is or later. Whether failed counts as churn stays `flash.ended_subscription_statuses` (Kira): while it does not, Churn rate does not count a move to failed |
+| Unit and display | A share of the base (1 is 100 %), four decimals in the reader; no page yet |
+| Time rule | By calendar month in the tenant's zone |
+| Scope | Per market |
+| Equivalent in the source system | None |
+| Not to use | "Failed payment rate"; "dunning rate"; "Churn rate" for it |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The Churn rate counts per market from each store's first complete calendar month …" and "Definitions: Churn rate moves from Pending to Proposed …", "The Churn rate and the Failed rate start at the first month whose starting base holds a store's migrated subscriptions …" and "Definitions: the start of the Churn rate and the Failed rate per store …" (addition 0009ze, this PR) |
+| Used by | `cma_read.subscription_churn_month`, `cma_read.subscription_store_start` (the start month per store), `cma.subscription_store_start`; no page yet |
+| As built today | `210`: `failed_rate` = `moved_to_failed` / `base`, null without a base. `211` checks it against a hand count. Matches the definition |
+
+### Renewal survival
+
+| Field | Value |
+|---|---|
+| Term | Renewal survival (nl: Verlengingsbehoud; proposed for Kira) |
+| Key | `cma.subscription_survival_take` (`connection_id`, `market`, `cohort_month`, `interval_group`, `renewal_number` 1 to 24, `started`, `eligible`, `survived`), `cma_read.subscription_survival` (with `mature`) |
+| Definition | Per store, start cohort and billing-interval group (monthly, quarterly, yearly, other), for each renewal number from 1 to 24: of the subscriptions started in the cohort, the share that survived to it (renewed that many times). A cell is mature when every started subscription is eligible, that is when its created date plus that many intervals has passed; until then the cell is a dash. |
+| Source | `cma.subscription` and its renewed events (`cma.subscription_event`) |
+| Counts / does not count | Only subscriptions purchased in the app: a migrated subscription is left out, because its renewals before the app are not in its events. The cohort is the month of the subscription's created date in the app, not its Original start (estimated), since a customer's earlier order may belong to another subscription. Counts only: started, eligible and survived, never "reached" (a retired word) |
+| Unit and display | A share per cell (survived over started), a dash where not mature; no page yet |
+| Time rule | By the calendar month of the created date in the tenant's zone; eligibility as of the business date of the take |
+| Scope | Per store (market) |
+| Equivalent in the source system | Juo's own renewal survival is compared in brief B39b, not built |
+| Not to use | "Retention" and "reached" for a cell; "cohort" of the original start |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "Renewal survival is its own take …" and "Definitions: Renewal survival is a new term" (addition 0009ze, this PR) |
+| Used by | `cma.subscription_survival_take`, `cma_read.subscription_survival`; the data map's table `subscription_survival_take`; no page yet |
+| As built today | `210`: written by the facts' refresh; `211` proves migrated subscriptions left out and an immature cell. Matches the definition |
+
+### Original start (estimated)
+
+| Field | Value |
+|---|---|
+| Term | Original start (estimated) (nl: Oorspronkelijke start (geschat); proposed for Kira) |
+| Key | `original_start_at`, `original_start_basis` (`first_order`, `created`) of `cma.subscription_take` and `cma_read.subscription_take` |
+| Definition | When a subscription's customer probably started, estimated: the store customer's earliest store order at or before the app's created date (basis `first_order`), else the app's created date (basis `created`). |
+| Source | `cma.commerce_order` (the CMA holds orders from 1 October 2026 only) and `cma.subscription.source_created_at` |
+| Counts / does not count | An estimate, never a fact: no migrated subscription has a store order the CMA holds, so a migrated subscription has `created`. The basis `migration_cycles` (the migrated event's next billing date less cycle index intervals) is not built until Martin's hand check of migrated subscriptions against the store's first orders; the sample suggests Juo's created date of a migrated subscription is the previous system's import date, not the true start. It does not change Customers → Active's Customer start (`customers.start_basis` is not added) |
+| Unit and display | A time and a basis code; no page yet |
+| Time rule | As of the take's last refresh |
+| Scope | Per subscription |
+| Equivalent in the source system | None; Juo's created date is the closest field |
+| Not to use | "Start date" or "Customer start" for it (Customer start is Active's own term); "real start" |
+| Status | Proposed (for Kira to confirm); the basis awaits the hand check (docs/open-decisions.md) |
+| Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The original start (estimated) takes the basis `first_order` or `created` …", "Before the basis `first_order` or `created` of the original start goes live, …" and "Definitions: Original start (estimated) is a new term" (addition 0009ze, this PR) |
+| Used by | `cma.subscription_take`, `cma_read.subscription_take`; no page yet; Customers → Active is unchanged |
+| As built today | `210`: written by the facts' refresh; `211` proves both bases. Matches the definition |
 
 ## Cohort terms
 
@@ -2351,20 +2503,20 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 
 | Field | Value |
 |---|---|
-| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); a placeholder. Its card alone carries one related figure under its badge, the subscriptions churned in the last 30 days, linked to Flash's Churn overview: a figure that exists, never the rate |
-| Key | `churn_rate`; catalog `active.churn_rate` |
-| Definition | As intended: the subscriptions churned in a month (Churn (subscription)) divided by the Total subscriptions at the previous month end. |
-| Source | `cma.subscription_event` (the subscription app's events) |
-| Counts / does not count | Never computed yet: the card shows no number, no zero and no dash that reads as zero, only "Not connected yet" (nl: Nog niet gekoppeld), "Fed by: …" and Pending. Beside it the real figure "Churned, last 30 days", Churn (subscription), links to Flash |
-| Unit and display | A share of the base, once defined |
+| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); built in the data layer since addition 0009ze, per market. Customers → Active's card (`active.slot_churn_rate`) stays a placeholder until Part D fills it and alone carries one related figure under its badge, the subscriptions churned in the last 30 days, linked to Flash's Churn overview |
+| Key | `churn_rate` (`cma_read.subscription_churn_month`, with `base`, `churned`); catalog `active.churn_rate`; tenant setting `subscriptions.migration_bulk_min_pct` (default 5: the share of a store's migrated events a month needs to count toward its migration) |
+| Definition | The subscriptions churned in a month (Churn (subscription)) divided by the Total subscriptions at the previous month end, per market. |
+| Source | `cma.subscription_month_take` (kinds `churned` and `start`, from the subscription app's status events, reconstructed) |
+| Counts / does not count | Complete months only, per market, from each store's start month, derived from the data and never a date in code: the first month whose starting base already holds the store's migrated subscriptions, that is the month after the store's last month with migrated events (a month counts toward the migration when it holds at least `subscriptions.migration_bulk_min_pct` of the store's migrated events, default 5; a later month below that share is a straggler (nl: Nakomer), reported in `cma_read.subscription_store_start` and never moving the start; a store whose migration is spread so thin that no month holds the share takes its busiest migration month as the last); a store without migrated events starts at the first complete calendar month after its first event, over the stores whose start month it is or later; a move to failed counts as churn only where `flash.ended_subscription_statuses` holds failed (Kira), and the Failed rate stands beside it. The card shows no number, no zero and no dash that reads as zero, only "Not connected yet" (nl: Nog niet gekoppeld), "Fed by: …" and Pending, until Part D. Beside it the real figure "Churned, last 30 days", Churn (subscription), links to Flash |
+| Unit and display | A share of the base (1 is 100 %); the card shows it from Part D |
 | Time rule | By month |
-| Scope | The tenant; per market once defined |
+| Scope | The tenant; per market |
 | Equivalent in the source system | None |
 | Not to use | "Churn rate" for Churned, last 30 days (Churn (subscription)'s count) |
-| Status | Pending: Kira confirms Churn (subscription) and from when the rate starts; it needs at least three complete months of the subscription app's events per store (GB since 29 October 2026, the other stores since 5 November 2026) |
-| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l) |
-| Used by | `active.churn_rate`; Customers → Active (Unit economics) |
-| As built today | A placeholder card with no figure; `173` A7 proves the JSON holds none |
+| Status | Proposed (for Kira to confirm Churn (subscription), whether failed counts, and the start month per store); Martin's rule of 20 November 2026 answers GB's first month: GB moved into Juo in May 2025 (2 events in April, about 5,900 in May), so its rates start in June 2025 (docs/open-decisions.md) |
+| Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "Placeholders reserve the slot, …" (D5) and "Definitions: Active (rail page), Customer start, …" (this PR, addition 0009l); 20 November 2026, docs/decisions.md, 20 Nov 2026, "The Churn rate counts per market from each store's first complete calendar month …" and "Definitions: Churn rate moves from Pending to Proposed …", "The Churn rate and the Failed rate start at the first month whose starting base holds a store's migrated subscriptions …" and "Definitions: the start of the Churn rate and the Failed rate per store …" (addition 0009ze, this PR) |
+| Used by | `cma_read.subscription_churn_month`, `cma_read.subscription_store_start`, `cma.subscription_store_start`, `cma.subscription_rate_start_of`, `cma.subscription_month_take`; `active.churn_rate`; Customers → Active (Unit economics, still a placeholder) |
+| As built today | `210`: `cma_read.subscription_churn_month` gives, per tenant, market and complete month, `base`, `churned`, `moved_to_failed`, `churn_rate` and `failed_rate` (four decimals), from `cma.subscription_month_take`; `cma.subscription_store_start` (and its reader `cma_read.subscription_store_start`) holds per store its migrated events per month, the last month of its migration, its stragglers and the month its rates start (`cma.subscription_rate_start_of`, setting `subscriptions.migration_bulk_min_pct`, default 5); `211` checks both rates against a hand count and a store's start month with a bulk migration month, a late straggler and a store without migration. Customers → Active's card is still a placeholder with no figure (`173` A7 proves the JSON holds none) until Part D. Matches the definition |
 
 ### Cost of acquisition
 
@@ -2418,7 +2570,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 | Scope | The tenant; per segment once defined |
 | Equivalent in the source system | None |
 | Not to use | "Projected customer value" (renamed, D11) |
-| Status | Pending: it waits for the Churn rate's definition |
+| Status | Pending: it waits for the Churn rate on the Active page (Part D of brief B39) and Kira's confirmation |
 | Decided | 11 November 2026 (Martin); docs/decisions.md, 11 Nov 2026, "\"Customer value (realised)\" is renamed Customer lifetime value (realised) …" (D11) and "Definitions: Acquisition channel, Direct order, Indirect order, Customer lifetime, …" (this PR, addition 0009l) |
 | Used by | `active.clv_projected`; Customers → Active (Unit economics, the comparison) |
 | As built today | A placeholder card and row with no figure; no formula in code |
