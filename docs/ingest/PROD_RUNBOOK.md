@@ -3489,7 +3489,7 @@ Expected, within a minute: `CREATE INDEX`, then `subscription_event_synced_idx |
 ```bash
 run_migration prod 212_subscription_facts_speed.sql 213_verify_subscription_facts_speed.sql 0009zf-prod-$(date +%F) 119_verify_subscriptions.sql 173_verify_active_customers.sql 185_verify_active_device_bands.sql
 ```
-Expected: 212 `COMMIT`; 213 `verdict | REFUSED | … 5 PASS, 1 FAIL, 2 info`: A1 to A5 PASS on prod's own data (A3: every part of the markers and both digests equal to 210's; A4: the payment state of every subscription equal to 210's, its detail `…:0/0/0/subscriptions`), block B refused (no dev seed), as 211. `119` `REFUSED` as on 21 November; `173` `PASS`; `185` is expected to read `PASS` with 14 PASS if its D2 failed on 21 November because the documents were stored before 210 (the reading in `records/0009ze-prod-2026-11-21`, not checked then): the job has written them again since. A D2 that still fails is a finding: report its row.
+Expected: 212 `COMMIT`; 213 `verdict | REFUSED | … 5 PASS, 1 FAIL, 2 info`: A1 to A5 PASS on prod's own data (A3: every part of the markers and both digests equal to 210's; A4: the payment state of every subscription equal to 210's, its detail `…:0/0/0/subscriptions`), block B refused (no dev seed), as 211. `119` `REFUSED` as on 21 November; `173` `PASS`; `185` is expected to read `PASS` with 14 PASS. Its D2 failed on 21 November because the minute job held the take's lock while the verify ran: the verify's own refresh then answers `running` and writes nothing, and D2 read documents stored before 210 (`records/0009ze-prod-2026-11-21`; reproduced locally, a gap in the verify, no defect of 210). The job has written the documents again since, so even a run that meets the job now compares like with like. A D2 that fails: run `185` once more on its own (`psql "$PGCONN" -f db/185_verify_active_device_bands.sql`); a second FAIL is a finding: report its row.
 
 Before the folder is committed: an A3 or A4 that reads FAIL prints how many rows differ, which can be a volume. Report the row in the chat and leave `213.txt` out of the commit until it is masked (CLAUDE.md, Git and release).
 
@@ -3506,13 +3506,13 @@ Expected: `VACUUM`, within a minute or two.
 
 Expected, against 21 November (`records/0009ze-prod-2026-11-21`):
 - "active customers inputs markers" under its 300 ms (964.9 ms then; about 200 to 240 ms expected).
-- "subscription facts refresh" under its 10,000 ms (10,156 ms then). Expected 7 to 9 s: locally the refresh gains a third, but most of that is the invoice renewals' join, of which prod seems to hold little, so prod's gain is mostly the writes. Its detail now ends in `steps_ms`, the milliseconds per step: report those six numbers, they say where the time goes. The budget is a proposal until 21.9.
+- "subscription facts refresh" under its 10,000 ms (10,156 ms then). Expected 7 to 9 s: locally the refresh gains a third, but most of that is the invoice renewals' join, of which prod seems to hold little, so prod's gain is mostly the writes. Its detail now ends in `steps_ms`, the milliseconds per step: report those six numbers, they say where the time goes. The budget stands until 21.9's numbers set it (Martin, 21 Nov 2026).
 - "list subscriptions …" in `124` near 525 ms (684.5 ms then).
 
 Read each beside a row 212 does not touch from the same run ("list open_tickets …": 644.5 ms before 210, 793.8 ms after, on a busier database): a run where that row is slow too says the database was busy, not that the change failed. Report in the chat: the rows named here, and from 131 the Customers → Active rows "active top (stored document)", "active now …" (both), "active rest (stored document)", the three "active list …" rows of the set and "active customers (set)", from this run and from the file of 21 November: the set and the stored rest read were slow on 21 November (830.1 and 56.7 ms), the earlier records do not pin that on 210, and these rows decide. A record is written from your report, with times only.
 
 ## 21.8 Terminal: the index on renewal orders
-Only after 21.7, so the two runs of `124` show what the index adds to `212` (Decision log, 20 and 21 Nov 2026). Locally, with the table in memory, it adds nothing measurable; prod decides. Dev first (the same block after `cma_db dev`), then prod:
+Only after 21.7, so the two runs of `124` show what the index adds to `212` (Decision log, 20 and 21 Nov 2026: optional, measured in prod and dropped if it brings nothing, agreed by Martin). Locally, with the table in memory, it adds nothing measurable; prod decides. Dev first (the same block after `cma_db dev`), then prod:
 
 **Terminal**
 ```bash

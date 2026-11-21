@@ -20,8 +20,8 @@
 -- cma.my_follow_up_counts(); the follow-up's report lists and /me/follow-up's rows, whose clock fields it derives at the
 -- read, are timed too), after 190_follow_up_clock_at_read.sql; since addition 0009v (Assets -> Fleet management's page in one read),
 -- after 192_fleet_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
--- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 10,000 ms,
--- proposed from prod's first day, and its answer names each step's milliseconds). Prod is the proof; dev's shared core is for
+-- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 10,000 ms
+-- until prod's runs set it, and its answer names each step's milliseconds). Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -157,7 +157,7 @@ select set_config('verify.max_dq_ms', '500', false);                 -- data qua
 select set_config('verify.max_top_ms', '400', false);                -- Customers → Active: the live present of the tiles, and above the fold computed (decisions D15, D16)
 select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh of Customers → Active's stored take, the history and the documents written again
 select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
-select set_config('verify.max_facts_ms', '10000', false);            -- the subscription facts' refresh, forced: every take computed again (addition 0009ze, brief B39c C.9). Proposed after 0009zf: prod read 10,156 ms on 21 November 2026 and 7 to 9 s is expected after 212, so a run that gained nothing reads FAIL; to set from prod's runs after 212 (PROD_RUNBOOK 21.7 and 21.9)
+select set_config('verify.max_facts_ms', '10000', false);            -- the subscription facts' refresh, forced: every take computed again (addition 0009ze, brief B39c C.9). Since 0009zf (Martin, 21 November 2026: 10,000 ms until prod's runs set it): prod read 10,156 ms that day and 7 to 9 s is expected after 212, so a run that gained nothing reads FAIL; set from prod's runs after 212 (PROD_RUNBOOK 21.7 and 21.9)
 select set_config('verify.max_takes_ms', '5000', false);             -- the refresh of Flash's current takes, every overview of the tenant's setting (0009p; to confirm from prod's first runs)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
 select set_config('verify.poll_warmup', '6', false);                 -- a poll's untimed runs first (the plans a pooled connection keeps)
