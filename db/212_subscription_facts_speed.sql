@@ -17,9 +17,10 @@
 -- blocks give it ready to run. The script refuses to run until it exists and is valid:
 --   create index concurrently if not exists subscription_event_synced_idx on cma.subscription_event (tenant_id, synced_at);
 -- It holds every event's write time: the events' marker (count, latest write, sum of the writes) is read from it alone,
--- 2 MB in place of the table's 170 MB at three times prod's volume locally (the part 141.5 ms before, 16.3 ms after,
--- Postgres held to one CPU). This reopens the choice of no new index on cma.subscription_event (Decision log, 18 and 19
--- Nov 2026: a row over its budget reopens it, and the index goes in by a concurrent Terminal step in a later pull request).
+-- 2 MB in place of the table's 170 MB on the local volume fixture, whose events table is about one and a third times
+-- prod's (the part 141.5 ms before, 16.3 ms after, Postgres held to one CPU). This reopens the choice of no new index on
+-- cma.subscription_event (Decision log, 18 Nov 2026, checked in prod and kept on 20 Nov 2026; PROD_RUNBOOK 17.7: a row
+-- over its budget reopens it, and the index goes in by a concurrent Terminal step in a later pull request).
 --
 -- A second index, built the same way, is not required by this script (Martin, 21 November 2026: the index on renewal
 -- orders; Decision log, 20 Nov 2026: created only if prod confirms the slowdown):
@@ -28,9 +29,10 @@
 --     include (occurred_at, order_source_id, source_id) where event_type = 'renewed' and cycle_index is not null;
 -- It holds each subscription's renewals by cycle, newest first, with the renewal's time and store order, so the payment
 -- state's latest renewal per subscription (last_renewal) is an index-only read: no visit to the table per subscription.
--- 213 reads the plan where the index exists. Locally, with the whole table in memory, it measures no gain (the payment
--- state of 22,680 subscriptions 395 ms with it, 391 ms without), so prod measures 124_time_flash.sql after this script
--- first and after the index again: the index earns its place only by that difference.
+-- 213's info row I2 shows whether the planner takes it for that read; what it is worth is the difference between two
+-- runs of 124_time_flash.sql in prod, one after this script and one after the index. Locally, with the whole table in
+-- memory, it measures no gain (the payment state of 22,680 subscriptions 395 ms with it, 391 ms without): the index
+-- earns its place only by prod's difference, and is dropped again without one.
 --
 -- Run as your own IAM login: dev first, then 213_verify_subscription_facts_speed.sql there (normal, then provoked), then
 -- the verifies that read what this script re-creates:
@@ -38,8 +40,8 @@
 --     again): 175_verify_active_refresh_quiet.sql, 177_verify_active_attribution_present.sql,
 --     185_verify_active_device_bands.sql, 211_verify_subscription_facts.sql;
 --   cma.subscription_payment_state_of (both forms): 119_verify_subscriptions.sql, 149_verify_installed_base_list.sql,
---     161_verify_installed_base_now.sql, 173_verify_active_customers.sql, 177, 211; through cma.flash_rows_of, cma.flash_compute_of
---     and the data quality's checks: 123_verify_flash.sql, 137_verify_flash_insights.sql, 139_verify_flash_totals.sql,
+--     161_verify_installed_base_now.sql, 173_verify_active_customers.sql, 177, 211; through cma.flash_rows_of and
+--     cma.flash_compute_of: 123_verify_flash.sql, 137_verify_flash_insights.sql, 139_verify_flash_totals.sql,
 --     147_verify_installed_base_models.sql, 159_verify_flash_current_take.sql, 181_verify_flash_stored_cards.sql,
 --     189_verify_fleet_management.sql, 193_verify_fleet_page.sql;
 --   cma.subscription_facts_refresh_of: 211;
@@ -60,7 +62,14 @@
 --                         many invoice renewals prod holds decides its share there). It is read
 --                         by Flash's subscriptions list, Customers → Active's lists and refresh and the facts' refresh;
 --   the facts' refresh    10.2 s in prod, about every 15 minutes, of which about 3 s the insert into cma.renewal_outcome:
---                         every run deleted and inserted every row of every take.
+--                         every run deleted and inserted every row of every take;
+--   Customers → Active    131's "active customers (set)" read 830.1 ms and "active rest (stored document)" 56.7 ms. The
+--                         earlier prod records do not pin either on 210: the set read 796.0, 284.4, 530.0 and 258.1 ms
+--                         between 12 and 14 November with nothing changed between the runs, and the stored rest read
+--                         (cma.active_rest_stored_of, 172) reads a stored document and no payment state (26.7 to 10.8 ms
+--                         then). The set's three list reads do read the payment state of their page, which this script
+--                         makes cheaper where a store holds invoice renewals. Nothing else of Customers → Active is
+--                         changed here: the run after this script, read row by row, decides.
 --
 -- What it re-creates (each from its latest definition, with its -- based on: line)
 --   cma.inputs_markers_of(uuid, text[])                    210: no parallel workers (max_parallel_workers_per_gather 0 on
@@ -76,6 +85,7 @@
 --                                                          gone row deleted, a changed one updated, a new one inserted);
 --                                                          the month, survival and store start takes written as before
 --                                                          (a few thousand computed rows). Its answer gains rows_written
+--                                                          and steps_ms
 -- Not built here (the pull request sizes it): a refresh that computes only the subscriptions whose inputs changed.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
@@ -533,8 +543,12 @@ alter function cma.subscription_payment_state_of(uuid, uuid[]) set jit = off;
 -- equal the computation after a change of each kind, and that an unchanged row is not written again). 210 deleted and
 -- inserted every row at every run: in prod about 3 s of the refresh's 10.2 s for cma.renewal_outcome alone, and as many
 -- dead rows for autovacuum every 15 minutes. The month take, the survival cells and the stores' rate starts are computed
--- aggregates of a few thousand rows and are written as before. The answer's rows stays the takes' rows; rows_written
--- says how many rows this run wrote. jit off repeated
+-- aggregates of a few thousand rows and are written as before. The answer's rows stays the takes' rows (subscriptions,
+-- months, outcomes, survival cells); rows_written counts, over the same four takes, the rows this run wrote: the
+-- differences of the two large ones and every row of the month and survival takes (the stores' rate starts and the device
+-- units are in neither figure, as before). steps_ms gives the milliseconds of each step (the inputs' digest, the device
+-- units, the outcomes, the subscriptions, the months with the stores' starts, the survival cells), so a run in prod says
+-- where its time goes. jit off repeated
 -- based on: 210_subscription_facts.sql
 create or replace function cma.subscription_facts_refresh_of(p_tenant_id uuid, p_force boolean default false, p_now timestamptz default null)
 returns jsonb
@@ -560,6 +574,8 @@ declare
   n_cells    integer := 0;
   n_written  integer := 0;
   n          integer;
+  v_mark     timestamptz := clock_timestamp();
+  v_steps    jsonb := '{}';
 begin
   if p_tenant_id is distinct from cma.current_tenant_id() then
     raise exception 'a take is refreshed for the current tenant only' using errcode = 'CMA04';
@@ -592,6 +608,8 @@ begin
   v_today := (v_now at time zone v_zone)::date;
   v_month := date_trunc('month', v_today)::date;
   v_key := cma.subscription_facts_inputs_key_of(p_tenant_id, v_today);
+  v_steps := v_steps || jsonb_build_object('inputs_key', round(extract(epoch from clock_timestamp() - v_mark) * 1000));
+  v_mark := clock_timestamp();
   if not p_force and v_found and v_state.inputs_key = v_key then
     update cma.subscription_take_state t
     set computed_at = v_now, duration_ms = (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer
@@ -610,6 +628,8 @@ begin
   from subscription_facts_units u
   where x.tenant_id = p_tenant_id and x.id = u.subscription_id and x.device_units is distinct from u.device_units;
   get diagnostics n_units = row_count;
+  v_steps := v_steps || jsonb_build_object('device_units', round(extract(epoch from clock_timestamp() - v_mark) * 1000));
+  v_mark := clock_timestamp();
 
   -- 2. renewal outcomes (C.3), first: the subscriptions' renewals are counted from them. Computed into a temporary table,
   --    then only the rows that read differently are written (0009zf): a gone renewal deleted, a changed one updated, a new
@@ -652,6 +672,9 @@ begin
                     where x.tenant_id = p_tenant_id and x.connection_id = o.connection_id and x.subscription_source_id = o.subscription_source_id
                       and x.renewal_key = o.renewal_key);
   get diagnostics n = row_count; n_written := n_written + n;
+
+  v_steps := v_steps || jsonb_build_object('outcomes', round(extract(epoch from clock_timestamp() - v_mark) * 1000));
+  v_mark := clock_timestamp();
 
   -- 3. per subscription: computed into a temporary table, then written as step 2 writes its rows (0009zf)
   create temporary table if not exists subscription_facts_take (
@@ -739,6 +762,9 @@ begin
   from subscription_facts_take k
   where not exists (select 1 from cma.subscription_take x where x.tenant_id = p_tenant_id and x.subscription_id = k.subscription_id);
   get diagnostics n = row_count; n_written := n_written + n;
+
+  v_steps := v_steps || jsonb_build_object('subscriptions', round(extract(epoch from clock_timestamp() - v_mark) * 1000));
+  v_mark := clock_timestamp();
 
   -- 4a. when each store's rates start (C.5)
   delete from cma.subscription_store_start x where x.tenant_id = p_tenant_id;
@@ -885,6 +911,8 @@ begin
   left join sm on sm.connection_id = r.connection_id
   where r.month >= f.first_month and r.month <= v_month;
   get diagnostics n_months = row_count;
+  v_steps := v_steps || jsonb_build_object('months', round(extract(epoch from clock_timestamp() - v_mark) * 1000));
+  v_mark := clock_timestamp();
 
   -- 5. renewal survival (C.6): subscriptions purchased in the app (not migrated) by start cohort and interval group; the
   --    start is the subscription's own in the app (its created date), never the estimated original start, whose first
@@ -905,6 +933,7 @@ begin
     and s.billing_interval_count is not null
   group by t.connection_id, t.market, date_trunc('month', s.source_created_at at time zone v_zone)::date, t.interval_group, n.n;
   get diagnostics n_cells = row_count;
+  v_steps := v_steps || jsonb_build_object('survival', round(extract(epoch from clock_timestamp() - v_mark) * 1000));
 
   -- 6. the take's row
   insert into cma.subscription_take_state as t (tenant_id, computed_at, business_date, duration_ms, inputs_key, subscriptions, amounts_from)
@@ -916,7 +945,7 @@ begin
   return jsonb_build_object('refreshed', true, 'unchanged', false, 'device_units_written', n_units, 'subscription_rows', n_subs,
                             'month_rows', n_months, 'outcome_rows', n_outcomes, 'survival_rows', n_cells,
                             'rows', n_subs + n_months + n_outcomes + n_cells,
-                            'rows_written', n_written + n_months + n_cells,
+                            'rows_written', n_written + n_months + n_cells, 'steps_ms', v_steps,
                             'duration_ms', (extract(epoch from clock_timestamp() - v_t0) * 1000)::integer);
 end
 $$;

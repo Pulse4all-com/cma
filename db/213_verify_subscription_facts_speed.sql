@@ -8,8 +8,9 @@
 --      212 expects; the functions' settings (no parallel workers on the markers, jit off on the others) and rights; each
 --      part of the inputs' markers and both digests equal to 210's; the payment state of every subscription, in both
 --      forms, equal to 210's. A comparison whose tables were written between its two reads is read again (three times at
---      most). Two info rows give the plans: the events' marker and the latest renewal per subscription, with the index
---      each reads and its heap fetches (info: a small table is read whole, whatever index exists).
+--      most). Two info rows give the plans, read as the application (cma_app, row-level security on): the events'
+--      marker and the payment state's latest renewal per subscription, with the index each reads and its heap fetches
+--      as a share (info: a small table is read whole, whatever index exists; no count of rows is printed).
 --   B  dev and local databases only, as 211: it refuses a database without the dev seed (no active
 --      agent.two@example.com); its checks then read FAIL and the verdict REFUSED. On a throwaway tenant inside a
 --      subtransaction that is always rolled back: 6,000 events of one write time (a product that passes bigint) and a
@@ -22,7 +23,10 @@
 -- Run as your own IAM login after 212_subscription_facts_speed.sql; then the verifies 212's header names. Adapters,
 -- handles, ids, codes and secret names are invented data values; no row carries a name, an address, an email or a phone
 -- number.
--- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
+-- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead. The
+-- comparisons are provoked by a deliberate difference, as 133's: 210's side gets one marker's text changed, loses one
+-- payment-state row, has one take row changed after its refresh, and one unchanged outcome is written again, so each
+-- comparison's detail shows the difference it found.
 -- =============================================================================================
 
 do $$
@@ -53,19 +57,32 @@ exception when others then
 end
 $$;
 
--- A plan in one line: the scans of cma.subscription_event with their index, and the heap fetches of an index-only scan
+-- A plan in one line: the scans of cma.subscription_event with their index, and an index-only scan's heap fetches as a
+-- share of the rows it read (a class, never the number: this output goes to records/, and a count of rows read is a
+-- volume)
 create or replace function pg_temp.v0009zf_plan(p_sql text)
 returns text
 language plpgsql
 as $$
 declare
-  r   record;
-  out text := '';
+  r      record;
+  out    text := '';
+  m      text[];
+  n_read numeric := 0;
+  n_heap numeric;
 begin
   for r in execute 'explain (analyze, costs off, timing off, summary off) ' || p_sql loop
-    if r."QUERY PLAN" ~ '(Scan .*on subscription_event|Heap Fetches)' then
+    if r."QUERY PLAN" ~ 'Scan .*on subscription_event' then
+      m := regexp_match(r."QUERY PLAN", 'actual rows=(\d+) loops=(\d+)');
+      n_read := coalesce(m[1]::numeric * m[2]::numeric, 0);
       out := out || case when out = '' then '' else '; ' end
                  || btrim(regexp_replace(regexp_replace(r."QUERY PLAN", '\s*\(actual[^)]*\)', ''), '^\s*(->)?\s*', ''));
+    elsif r."QUERY PLAN" ~ 'Heap Fetches' then
+      n_heap := (regexp_match(r."QUERY PLAN", 'Heap Fetches: (\d+)'))[1]::numeric;
+      out := out || ', heap fetches ' || case when n_heap = 0 then 'none'
+                                              when n_heap < 0.01 * n_read then 'under 1 % of the rows read'
+                                              when n_heap < 0.1 * n_read then 'under 10 % of the rows read'
+                                              else '10 % of the rows read or more (the table''s pages are not marked all visible: vacuum it)' end;
     end if;
   end loop;
   return coalesce(nullif(out, ''), 'no scan of subscription_event');
@@ -783,11 +800,11 @@ declare
 begin
   -- A1. the addition is recorded, after 0009ze; the index 212 expects is there and valid
   v_txt := (select string_agg(m.version, ',' order by m.version collate "C") from cma.schema_migration m where m.version in ('0009ze', '0009zf'))
-           || ' | ' || coalesce((select string_agg(c.relname || ':' || i2.indisvalid, ' ' order by c.relname collate "C")
+           || ' | ' || coalesce((select string_agg(c.relname || ':' || i2.indisvalid || ':' || substring(pg_get_indexdef(i2.indexrelid) from 'USING .*$'), ' ' order by c.relname collate "C")
                                  from pg_index i2 join pg_class c on c.oid = i2.indexrelid
                                  where i2.indrelid = 'cma.subscription_event'::regclass and c.relname = 'subscription_event_synced_idx'), 'no index');
-  insert into verify_0009zf values (1, 'A1 addition 0009zf recorded, after 0009ze; the index subscription_event_synced_idx valid',
-    case when v_txt = '0009ze,0009zf | subscription_event_synced_idx:true' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
+  insert into verify_0009zf values (1, 'A1 addition 0009zf recorded, after 0009ze; the index subscription_event_synced_idx valid, on the tenant and the write time',
+    case when v_txt = '0009ze,0009zf | subscription_event_synced_idx:true:USING btree (tenant_id, synced_at)' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
 
   -- A2. the settings of the four functions and their rights: the application's and no one else's
   select string_agg(p.proname || '(' || p.pronargs || '):' || coalesce(array_to_string(p.proconfig, ','), '-')
@@ -810,6 +827,7 @@ begin
     for i in 1 .. 3 loop
       v_new := cma.inputs_markers_of(t.id, v_parts);
       v_old := pg_temp.v0009zf_markers_210(t.id, v_parts);
+      if v_provoke then v_old[2] := v_old[2] || 'x'; end if;   -- provoked: 210's events marker reads differently
       exit when v_new = v_old;
     end loop;
     n_diff := (select count(*) from generate_series(1, cardinality(v_parts)) g where v_new[g] is distinct from v_old[g]);
@@ -817,7 +835,8 @@ begin
       v_bad := v_bad || ' ' || t.slug || ':' || (select string_agg(v_parts[g], ',') from generate_series(1, cardinality(v_parts)) g where v_new[g] is distinct from v_old[g]);
     end if;
     for i in 1 .. 3 loop
-      n_diff := (cma.active_inputs_key_of(t.id) is distinct from md5(array_to_string(pg_temp.v0009zf_markers_210(t.id, v_active), '|')))::integer
+      n_diff := (cma.active_inputs_key_of(t.id) is distinct from md5(array_to_string(pg_temp.v0009zf_markers_210(t.id, v_active), '|')
+                                                                     || case when v_provoke then 'x' else '' end))::integer
               + (cma.subscription_facts_inputs_key_of(t.id, v_today) is distinct from md5(concat_ws('|',
                    array_to_string(pg_temp.v0009zf_markers_210(t.id, v_facts), '|'),
                    cma.setting_of(t.id, 'flash.ended_subscription_statuses'), cma.setting_of(t.id, 'flash.device_holding_statuses'),
@@ -841,7 +860,8 @@ begin
     for i in 1 .. 3 loop
       select count(*) filter (where a.t is distinct from b.t), count(*) into n_diff, n_subs
       from (select n.subscription_id, n::text as t from cma.subscription_payment_state_of(t.id) n) a
-      full join (select o.subscription_id, o::text as t from pg_temp.v0009zf_ps_210(t.id) o) b using (subscription_id);
+      full join (select o.subscription_id, o::text as t from pg_temp.v0009zf_ps_210(t.id) o
+                 offset case when v_provoke then 1 else 0 end) b using (subscription_id);   -- provoked: 210's side loses a row
       exit when n_diff = 0;
     end loop;
     v_txt := v_txt || case when v_txt = '' then '' else ' ' end || t.slug || ':' || n_diff;
@@ -851,7 +871,8 @@ begin
       from (select n.subscription_id, n::text as t
             from cma.subscription_payment_state_of(t.id, array(select x.id from cma.subscription x where x.tenant_id = t.id order by x.id limit 500)) n) a
       full join (select o.subscription_id, o::text as t
-                 from pg_temp.v0009zf_ps_210(t.id, array(select x.id from cma.subscription x where x.tenant_id = t.id order by x.id limit 500)) o) b
+                 from pg_temp.v0009zf_ps_210(t.id, array(select x.id from cma.subscription x where x.tenant_id = t.id order by x.id limit 500)) o
+                 offset case when v_provoke then 1 else 0 end) b
         using (subscription_id);
       exit when n_diff = 0;
     end loop;
@@ -866,7 +887,8 @@ begin
       full join (select o.subscription_id, o::text as t
                  from pg_temp.v0009zf_ps_210(t.id, array(select q.id from (select x.id, row_number() over (order by x.id) as rn
                                                                             from cma.subscription x where x.tenant_id = t.id) q
-                                                        where q.rn % 7 = 0 limit 2000)) o) b
+                                                        where q.rn % 7 = 0 limit 2000)) o
+                 offset case when v_provoke then 1 else 0 end) b
         using (subscription_id);
       exit when n_diff = 0;
     end loop;
@@ -891,18 +913,28 @@ begin
   else
     v_txt := current_setting('max_parallel_workers_per_gather');
     perform set_config('max_parallel_workers_per_gather', '0', true);   -- as the function sets it
-    insert into verify_0009zf values (6, 'I1 the plan of the events'' marker (subscription_event_synced_idx, index only, where the table is large enough)', 'info',
-      pg_temp.v0009zf_plan(format('select x.synced_at as at, count(*)::numeric as n from cma.subscription_event x where x.tenant_id = %L group by x.synced_at', t.tenant_id)));
-    insert into verify_0009zf values (7, 'I2 the plan of the latest renewal per subscription (subscription_event_renewal_order_idx, index only, where that index exists)', 'info',
-      coalesce((select 'the index exists, valid ' || i2.indisvalid from pg_index i2 join pg_class c on c.oid = i2.indexrelid
-                where i2.indrelid = 'cma.subscription_event'::regclass and c.relname = 'subscription_event_renewal_order_idx'), 'the index does not exist')
-      || ': ' || pg_temp.v0009zf_plan(format(
-        'select s.id, r.occurred_at, r.order_source_id from cma.subscription s
+    perform set_config('app.tenant_id', t.tenant_id::text, true);
+    perform set_config('role', 'cma_app', true);                         -- the application's plans: row-level security on
+    v_bad := pg_temp.v0009zf_plan(format('select x.synced_at as at, count(*)::numeric as n from cma.subscription_event x where x.tenant_id = %L group by x.synced_at', t.tenant_id));
+    perform set_config('role', 'cma_owner', true);
+    insert into verify_0009zf values (6, 'I1 the plan of the events'' marker, as the application (subscription_event_synced_idx, index only, where the table is large enough)', 'info', v_bad);
+    perform set_config('role', 'cma_app', true);
+    v_bad := pg_temp.v0009zf_plan(format(
+        'with s as materialized (
+           select s.id, s.connection_id, s.source_id, s.status from cma.subscription s
+           where s.tenant_id = %1$L and s.source_deleted_at is null and s.status in (''active'', ''paused'', ''canceled'', ''expired'', ''failed''))
+         select s.id, r.occurred_at, r.order_source_id from s
          left join lateral (select e.source_id, e.occurred_at, e.order_source_id from cma.subscription_event e
                             where e.tenant_id = %1$L and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
                               and e.event_type = ''renewed'' and e.cycle_index is not null
                             order by e.cycle_index desc limit 1) r on true
-         where s.tenant_id = %1$L and s.source_deleted_at is null and s.status in (''active'', ''failed'')', t.tenant_id)));
+         where s.status in (''active'', ''failed'')', t.tenant_id));
+    perform set_config('role', 'cma_owner', true);
+    perform set_config('app.tenant_id', '', true);
+    insert into verify_0009zf values (7, 'I2 the plan of the payment state''s latest renewal per subscription, as the application (subscription_event_renewal_order_idx, index only, where that index exists)', 'info',
+      coalesce((select 'the index exists, valid ' || i2.indisvalid from pg_index i2 join pg_class c on c.oid = i2.indexrelid
+                where i2.indrelid = 'cma.subscription_event'::regclass and c.relname = 'subscription_event_renewal_order_idx'), 'the index does not exist')
+      || ': ' || v_bad);
     perform set_config('max_parallel_workers_per_gather', v_txt, true);
   end if;
 end
@@ -943,7 +975,7 @@ begin
     insert into cma.market (tenant_id, code, name, time_zone, language_code, currency)
     values (v_t, 'IE', 'Verify IE', 'Europe/London', 'en', 'EUR') on conflict do nothing;
 
-    -- ten subscriptions: s7 and s8 share a customer; s9 holds 6,000 renewals, all written at one time
+    -- nine subscriptions (a tenth comes with the changes below): s7 and s8 share a customer; s9 holds 6,000 renewals, all written at one time
     insert into cma.subscription (tenant_id, connection_id, source_system, source_id, customer_source_id, status, billing_interval,
                                   billing_interval_count, amount_per_cycle, currency, source_created_at, source_updated_at)
     select v_t, v_sub, 'verifysubs', 's' || n, 'c' || least(n, 7) || case when n = 9 then 'x' else '' end, 'active', 'month', 1, 30, 'EUR',
@@ -977,7 +1009,8 @@ begin
     -- B1. the markers on rows of one write time (6,000 events: times its microseconds the product passes bigint) and on a
     --     tenant without a row: each part 210's text
     v_txt := (select count(*) from generate_series(1, cardinality(v_parts)) g
-              where (cma.inputs_markers_of(v_t, v_parts))[g] is distinct from (pg_temp.v0009zf_markers_210(v_t, v_parts))[g])::text
+              where (cma.inputs_markers_of(v_t, v_parts))[g]
+                    is distinct from (pg_temp.v0009zf_markers_210(v_t, v_parts))[g] || case when v_provoke and g = 2 then 'x' else '' end)::text
              || ' ' || (select count(*) from generate_series(1, cardinality(v_parts)) g
                         where (cma.inputs_markers_of(v_e, v_parts))[g] is distinct from (pg_temp.v0009zf_markers_210(v_e, v_parts))[g])::text
              || ' | events ' || split_part((cma.inputs_markers_of(v_t, array['subscription_event']))[1], '@', 1)
@@ -993,7 +1026,8 @@ begin
     --     renewal rb names none), s6 paid (its invoice paid), s7 and s8 paid (their customer holds two: rd resolves to none)
     v_txt := (select count(*) filter (where a.t is distinct from b.t)
               from (select n.subscription_id, n::text as t from cma.subscription_payment_state_of(v_t) n) a
-              full join (select o.subscription_id, o::text as t from pg_temp.v0009zf_ps_210(v_t) o) b using (subscription_id))::text
+              full join (select o.subscription_id, o::text as t from pg_temp.v0009zf_ps_210(v_t) o
+                         offset case when v_provoke then 1 else 0 end) b using (subscription_id))::text
              || '/' || (select count(*) filter (where a.t is distinct from b.t)
                         from (select n.subscription_id, n::text as t
                               from cma.subscription_payment_state_of(v_t, array(select x.id from cma.subscription x where x.tenant_id = v_t and x.source_id <> 's1')) n) a
@@ -1036,6 +1070,9 @@ begin
     perform set_config('role', 'cma_app', true);
     v_j2 := cma.subscription_facts_refresh_of(v_t, true, v_now);
     perform set_config('role', 'cma_owner', true);
+    if v_provoke then   -- provoked: an outcome that did not change is written again, as 210's refresh wrote every row
+      update cma.renewal_outcome x set attempts = x.attempts where x.tenant_id = v_t and x.subscription_source_id = 's2';
+    end if;
     select count(*) filter (where b.take = 'o' and a.key is not null and a.row = b.row and a.at = b.at),
            count(*) filter (where b.take = 'o' and a.key is not null and a.row = b.row and a.at <> b.at),
            count(*) filter (where a.take = 'o' and b.key is null),
@@ -1059,7 +1096,8 @@ begin
               || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_take x where x.tenant_id = v_t)
               || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_month_take x where x.tenant_id = v_t)
               || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_survival_take x where x.tenant_id = v_t)
-              || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_store_start x where x.tenant_id = v_t);
+              || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_store_start x where x.tenant_id = v_t)
+              || ' ' || (select md5(coalesce(string_agg(concat_ws('/', x.computed_at, x.business_date, x.inputs_key, x.subscriptions, x.amounts_from), '|'), '')) from cma.subscription_take_state x where x.tenant_id = v_t);
     v_txt := (select count(*) from cma.renewal_outcome x where x.tenant_id = v_t) || ' outcomes, ' || (select count(*) from cma.subscription_take x where x.tenant_id = v_t)
              || ' subscriptions, ' || (select count(*) from cma.subscription_month_take x where x.tenant_id = v_t) || ' month rows, '
              || (select count(*) from cma.subscription_survival_take x where x.tenant_id = v_t) || ' cells, '
@@ -1067,12 +1105,16 @@ begin
     perform set_config('role', 'cma_app', true);
     perform pg_temp.v0009zf_refresh_210(v_t, true, v_now);
     perform set_config('role', 'cma_owner', true);
+    if v_provoke then   -- provoked: one row of 210's take reads differently
+      update cma.subscription_take x set renewals = x.renewals + 1 where x.tenant_id = v_t and x.source_id = 's1';
+    end if;
     v_d210 := (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.renewal_outcome x where x.tenant_id = v_t)
               || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_take x where x.tenant_id = v_t)
               || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_month_take x where x.tenant_id = v_t)
               || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_survival_take x where x.tenant_id = v_t)
-              || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_store_start x where x.tenant_id = v_t);
-    v_rows := v_rows || array['13', 'B3 after a change of each kind the five takes are what 210''s refresh writes from the same rows (outcomes, subscriptions, months, survival cells, store starts)',
+              || ' ' || (select md5(coalesce(string_agg((x.*)::text, '|' order by (x.*)::text collate "C"), '')) from cma.subscription_store_start x where x.tenant_id = v_t)
+              || ' ' || (select md5(coalesce(string_agg(concat_ws('/', x.computed_at, x.business_date, x.inputs_key, x.subscriptions, x.amounts_from), '|'), '')) from cma.subscription_take_state x where x.tenant_id = v_t);
+    v_rows := v_rows || array['13', 'B3 after a change of each kind the five takes and the take''s own row are what 210''s refresh writes from the same rows (outcomes, subscriptions, months, survival cells, store starts; the moment, the business date, the inputs'' digest)',
       case when v_d212 = v_d210 and v_txt ~ '^6008 outcomes, 9 subscriptions, [1-9][0-9]* month rows, [1-9][0-9]* cells, 1 store$'
                 and not v_provoke then 'PASS' else 'FAIL' end,
       case when v_d212 = v_d210 then 'equal: ' else 'differing: ' end || v_txt];
@@ -1092,12 +1134,13 @@ begin
                     v_j2 ->> 'rows', (v_j2 ->> 'subscription_rows')::int + (v_j2 ->> 'month_rows')::int + (v_j2 ->> 'outcome_rows')::int + (v_j2 ->> 'survival_rows')::int,
                     v_j2 ->> 'rows_written',
                     (n_o_new + n_o_changed + n_o_gone + n_s_new + n_s_changed + n_s_gone + (v_j2 ->> 'month_rows')::int + (v_j2 ->> 'survival_rows')::int)::text);
-    v_rows := v_rows || array['15', 'B5 the answer: rows the takes'' rows, rows_written every row at the first run and the differences plus the month and survival takes at the second',
+    v_rows := v_rows || array['15', 'B5 the answer: rows the takes'' rows, rows_written every row at the first run and the differences plus the month and survival takes at the second; the six steps'' milliseconds',
       case when (v_j ->> 'rows')::int = (v_j ->> 'subscription_rows')::int + (v_j ->> 'month_rows')::int + (v_j ->> 'outcome_rows')::int + (v_j ->> 'survival_rows')::int
                 and v_j ->> 'rows_written' = v_j ->> 'rows' and (v_j ->> 'outcome_rows')::int = 6007 and (v_j ->> 'subscription_rows')::int = 9
                 and (v_j2 ->> 'rows')::int = (v_j2 ->> 'subscription_rows')::int + (v_j2 ->> 'month_rows')::int + (v_j2 ->> 'outcome_rows')::int + (v_j2 ->> 'survival_rows')::int
                 and (v_j2 ->> 'outcome_rows')::int = 6008 and (v_j2 ->> 'subscription_rows')::int = 9
                 and (v_j2 ->> 'rows_written')::int = n_o_new + n_o_changed + n_o_gone + n_s_new + n_s_changed + n_s_gone + (v_j2 ->> 'month_rows')::int + (v_j2 ->> 'survival_rows')::int
+                and v_j ? 'steps_ms' and (select count(*) from jsonb_object_keys(v_j2 -> 'steps_ms')) = 6
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';

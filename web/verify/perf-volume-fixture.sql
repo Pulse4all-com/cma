@@ -612,12 +612,13 @@ reset role;
 -- raw holds the mapped values (prod's row width), and the write time moves per page of a read (about 65 mapped events of a
 -- page of 100), not once for the whole table, so the inputs' markers meet a real spread of write times; a renewal's and a
 -- failed renewal's cycle counts the subscription's months with events (the blocks above gave a subscription's events one
--- cycle each, which left a fifth of prod's renewal outcomes: now about 150,000 at m = 3, prod about 59,000). Then per
+-- cycle each, which left about 37,000 renewal outcomes at m = 3: now about 155,000). The events table itself holds the
+-- 100,000 × m of the first block, which since 0009za's history is about one and a third times prod's at m = 3. Then per
 -- subscription a purchase with its store order or, for a fifth, a migration in its store's migration month (a few
 -- stragglers three months later); some active subscriptions failed; a catalog of 25 variants per store with a mapping for
 -- most (two device variants and three others left unmapped, for the data-quality checks); one line per subscription, a
--- second for one in fourteen, a one-time and a canceled line for a few; billing events as prod's mix (about 1,500 × m:
--- chargebacks on renewal orders and on purchases' orders, invoice renewals in three stores, half naming no subscription,
+-- second for one in fourteen, a one-time and a canceled line for a few; billing events (about 1,600 × m: chargebacks on
+-- renewal orders and on purchases' orders, invoice renewals in three stores, one in three naming no subscription,
 -- refunds); a few observed changes of an amount. Ids, codes, amounts and times only. Rerunnable: a second run finds its
 -- billing events and stops
 set role cma_owner;
@@ -745,7 +746,7 @@ begin
 
   -- billing events: chargebacks on one renewal order in seventy-five (half naming the subscription) and on one purchase's
   -- order in sixty; invoice renewals in the first three stores (three per subscription for one in forty: the last unpaid
-  -- for a third of them, overdue for half of those; every second renewal names no subscription); refunds
+  -- for a third of them, overdue for half of those; the second of the three names no subscription); refunds
   insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, subscription_source_id, customer_source_id,
                                  order_source_id, amount, currency, return_code, instrument_type, raw, synced_at)
   select v_subs, e.connection_id, 'perfsubs', 'pfcb' || e.source_id, 'chargeback', e.occurred_at + interval '9 days',
@@ -805,14 +806,22 @@ begin
 end
 $$;
 reset role;
--- the events were all written again: their dead rows go, so the table has the size it would have had (local only)
+-- The events were all written again: their dead rows go, so the table has the size it would have had, and a plain vacuum
+-- after it marks its pages all visible (a full one does not), as autovacuum does in time. Maintenance runs outside a
+-- transaction, so it cannot sit in the guarded block above: it runs only where the session set the local switch and the
+-- server is no Cloud SQL instance (psql's \if; a session without the switch skips it)
+select (coalesce(current_setting('cma.local_fixture', true), '') = 'on'
+        and not exists (select 1 from pg_roles where rolname = 'cloudsqladmin')) as cma_local_fixture \gset
+\if :cma_local_fixture
 vacuum (full, analyze) cma.subscription_event;
+vacuum (analyze) cma.subscription_event;
 vacuum (analyze) cma.subscription;
 analyze cma.subscription_line;
 analyze cma.billing_event;
 analyze cma.subscription_product_variant;
 analyze cma.subscription_variant_mapping;
 analyze cma.subscription_change;
+\endif
 
 -- The stored take of Customers → Active (decision D13 of addendum B): refreshed once here, as the scheduler's job does
 -- every minute where it runs, so the page, verify/perf.mjs and verify/round-trips.mjs read a take on this local database
@@ -824,6 +833,10 @@ declare
   t record;
   r jsonb;
 begin
+  -- as every block above: local only (a session without the switch ran this block's refreshes before 0009zf)
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
   if to_regprocedure('cma.active_refresh_of(uuid,boolean,timestamptz)') is null then
     raise notice 'Customers → Active''s stored take not present (172 not run): no take written';
     return;
