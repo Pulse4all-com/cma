@@ -3461,7 +3461,7 @@ Expected: `CREATE INDEX`, then one row `subscription_event_synced_idx | t`. An `
 ```bash
 run_migration dev 212_subscription_facts_speed.sql 213_verify_subscription_facts_speed.sql 0009zf-dev-$(date +%F) 211_verify_subscription_facts.sql 119_verify_subscriptions.sql 123_verify_flash.sql 137_verify_flash_insights.sql 139_verify_flash_totals.sql 147_verify_installed_base_models.sql 149_verify_installed_base_list.sql 159_verify_flash_current_take.sql 161_verify_installed_base_now.sql 173_verify_active_customers.sql 175_verify_active_refresh_quiet.sql 177_verify_active_attribution_present.sql 181_verify_flash_stored_cards.sql 185_verify_active_device_bands.sql 189_verify_fleet_management.sql 193_verify_fleet_page.sql
 ```
-Expected: 212 ends with `COMMIT` and `RESET`; 213's last row `verdict | PASS | 213_verify_subscription_facts_speed: 10 PASS, 0 FAIL, 2 info` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 10 FAIL, 2 info`; `211` `23 PASS`; every other verify as on 21 November (`records/0009ze-dev-2026-11-21`); `records clean`. One of them is edited by this change, `185`: its rows R1, D1 and D2 read one `skip` row where the verify's forced refresh did not run (21.6); in dev it reads `14 PASS, 0 FAIL, 0 skip` as before unless the minute job is refreshing at that moment. 213's two info rows give the plans; on dev's small tables they may read `Seq Scan`, which is expected there.
+Expected: 212 ends with `COMMIT` and `RESET`; 213's last row `verdict | PASS | 213_verify_subscription_facts_speed: 10 PASS, 0 FAIL, 2 info` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 10 FAIL, 2 info`; `211` `23 PASS`; every other verify as on 21 November (`records/0009ze-dev-2026-11-21`); `records clean`. One of them is edited by this change, `185`: its rows R1, D1 and D2 read one `skip` row where the verify's forced refresh did not run (21.6). On the screen `run_migration` prints `185_verify_active_device_bands.sql: 15 PASS rows` for a complete run (14 checks and the verdict's row) and `12 PASS rows` for a run with the skip row: after a 12, 21.6's block for a rerun, with `cma_db dev` and the dev folder. 213's two info rows give the plans; on dev's small tables they may read `Seq Scan`, which is expected there.
 
 ## 21.4 Terminal: the data map on the branch
 No table, view or column changes, and `docs/datamap/schema.json` holds no indexes, so nothing is refreshed.
@@ -3489,13 +3489,18 @@ Expected, within a minute: `CREATE INDEX`, then `subscription_event_synced_idx |
 ```bash
 run_migration prod 212_subscription_facts_speed.sql 213_verify_subscription_facts_speed.sql 0009zf-prod-$(date +%F) 119_verify_subscriptions.sql 173_verify_active_customers.sql 185_verify_active_device_bands.sql
 ```
-Expected: 212 `COMMIT`; 213 `verdict | REFUSED | … 5 PASS, 1 FAIL, 2 info`: A1 to A5 PASS on prod's own data (A3: every part of the markers and both digests equal to 210's; A4: the payment state of every subscription equal to 210's, its detail `…:0/0/0/subscriptions`), block B refused (no dev seed), as 211. `119` `REFUSED` as on 21 November; `173` `PASS`; `185` is expected to read `PASS` with `14 PASS, 0 FAIL, 0 skip`. Its D2 failed on 21 November because the minute job held the take's lock while the verify ran: the verify's own refresh then answered `running` and wrote nothing, and D2 read documents stored before 210 (`records/0009ze-prod-2026-11-21`; reproduced locally, a gap in the verify, no defect of 210). `185` is edited by this change for that: where its forced refresh did not run, R1, D1 and D2 read one row `R1 to D2 …: the take the forced refresh writes, compared | skip | the forced refresh did not run: 174's answered running, 184's running …: run again`, and the verdict then reads `PASS` with `11 PASS, 0 FAIL, 1 skip`. That row means the three checks were not made: run `185` again on its own a minute later, until it reads 14 PASS:
+Expected: 212 `COMMIT`; 213 `verdict | REFUSED | … 5 PASS, 1 FAIL, 2 info`: A1 to A5 PASS on prod's own data (A3: every part of the markers and both digests equal to 210's; A4: the payment state of every subscription equal to 210's, its detail `…:0/0/0/subscriptions`), block B refused (no dev seed), as 211. `119` `REFUSED` as on 21 November; `173` `PASS`; `185` is edited by this change. Its D2 failed on 21 November because the minute job held the take's lock while the verify ran: the verify's own refresh then answered `running` and wrote nothing, and D2 read documents stored before 210 (`records/0009ze-prod-2026-11-21`; reproduced locally, a gap in the verify, no defect of 210). Where its forced refresh does not run, R1, D1 and D2 now read one row `R1 to D2 …: the take the forced refresh writes, compared | skip | the forced refresh did not run: 174's answered running, 184's running …: run again`.
 
-**Terminal** (only after a skip row)
+What the screen shows for `185`, and what it means:
+- `185_verify_active_device_bands.sql: 15 PASS rows`: the complete run, `14 PASS, 0 FAIL, 0 skip` and the verdict's row. Expected.
+- `12 PASS rows`: the skip row. The three checks were not made, though the verdict's row reads `PASS` (`11 PASS, 0 FAIL, 1 skip`). This is an ordinary outcome here: `173` forces a refresh of the same take directly before `185`, so the minute job often catches up while `185` runs. Run the block below.
+- `13 PASS rows` or fewer without a skip row: a FAIL, as on 21 November. Report the failing row from `records/0009zf-prod-<date>/185-rerun.txt`.
+
+**Terminal** (only after `12 PASS rows`; half a minute later, so it does not meet the job's next minute)
 ```bash
-psql "$PGCONN" -f db/185_verify_active_device_bands.sql 2>&1 | grep -E '^ (R1|D1|D2|verdict)' | sed -E 's/ {3,}/  /g' | cut -c1-260
+cd ~/cma && cma_db prod && psql "$PGCONN" -f db/185_verify_active_device_bands.sql > records/0009zf-prod-$(date +%F)/185-rerun-2.txt 2>&1; grep -E '^ (R1|D1|D2|verdict)' records/0009zf-prod-$(date +%F)/185-rerun-2.txt | awk -F'|' '{print $1 "|" $2}' | sed -E 's/ {3,}/  /g'; node tools/check-records.mjs records/0009zf-prod-$(date +%F)
 ```
-Expected: R1, D1 and D2 `PASS`, the verdict `PASS` with `14 PASS, 0 FAIL, 0 skip`. A D2 that reads FAIL now is a finding: report its row.
+Expected: `connected to cma as <your login>`, then four lines, R1, D1 and D2 with `PASS` and `verdict | PASS`, then `records clean`. The file holds the whole output and is committed with the folder. A D2 that reads FAIL now is a finding: report its row from the file. A skip row again: report it and stop; a second one in a row at the job's cadence means something else holds the take's lock.
 
 Before the folder is committed: an A3 or A4 that reads FAIL prints how many rows differ, which can be a volume. Report the row in the chat and leave `213.txt` out of the commit until it is masked (CLAUDE.md, Git and release).
 
@@ -3503,7 +3508,7 @@ Before the folder is committed: an A3 or A4 that reads FAIL prints how many rows
 
 **Terminal** (only in that case)
 ```bash
-psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set statement_timeout = '10min'" -c "vacuum (analyze) cma.subscription_event"
+cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set statement_timeout = '10min'" -c "vacuum (analyze) cma.subscription_event"
 ```
 Expected: `VACUUM`, within a minute or two.
 
@@ -3531,7 +3536,7 @@ Whether the planner takes it: 213 again (read only in prod). Its info row I2 run
 
 **Terminal**
 ```bash
-psql "$PGCONN" -f db/213_verify_subscription_facts_speed.sql 2>&1 | grep -E ' I[12] |verdict' | sed -E 's/ {3,}/  /g' | cut -c1-360
+cd ~/cma && cma_db prod && psql "$PGCONN" -f db/213_verify_subscription_facts_speed.sql 2>&1 | grep -E ' I[12] |verdict' | sed -E 's/ {3,}/  /g' | cut -c1-360
 ```
 Expected: I2 `the index exists, valid true: Index Only Scan using subscription_event_renewal_order_idx on subscription_event e, heap fetches none` (or under 1 % or 10 %); the verdict `REFUSED` as in 21.6. An `Index Scan Backward using subscription_event_subscription_idx` instead: the planner did not choose the new index; report it, and the index is dropped again (`drop index concurrently cma.subscription_event_renewal_order_idx`). I2 shows that the plan uses the index for that read; what the index is worth is the next block.
 

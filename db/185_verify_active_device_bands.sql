@@ -14,14 +14,19 @@
 -- forced refresh writes, so they are compared only where both forced refreshes ran. Where one did not (its answer running:
 -- the minute job holds the tenant's take; or any other answer without refreshed), the three read one skip row that names
 -- both answers ("run again"), where they compared the take as it was stored before: in prod on 21 November 2026 the job
--- held the lock, and D2 read documents stored before 210 as a FAIL (records/0009ze-prod-2026-11-21). L1 to E2 read the
--- stored take as it is and run either way. Provoked, the three rows are compared as before, with their deliberate
--- difference: a provoked run never reads skip.
--- Run as your own IAM login, after 184. Output: tenant slugs, counts, band keys and milliseconds only.
+-- held the lock, and D2 read documents stored before 210 as a FAIL (records/0009ze-prod-2026-11-21). A run with that
+-- skip row has not made the three checks, though its verdict reads PASS as with any skip: it is run again until it reads
+-- 14 PASS (PROD_RUNBOOK 21.6). L1 to E2 read the stored take as it is and run either way; beside the skip row the step
+-- holds no refresh lock, so a take the job commits meanwhile can read L1 as a FAIL: run again too. Provoked (any value),
+-- the three rows are never replaced by this skip: they are compared as before, each with its deliberate difference under
+-- 'true' or its own id.
+-- Run as your own IAM login, after 184. Output: tenant slugs, counts, band keys, milliseconds and a refresh's answer
+-- (one word: running, not_set_up, fresh, refreshed) only.
 -- While it runs: a real tenant's step computes the take twice and holds, until it rolls back, the take's row (a
 -- settings save that marks the take stale waits), the tenant's refresh lock (the job answers running) and the analyze's
 -- lock on the take's tables. Run it outside the busy hours. A step that meets the minute job at work finds the lock
--- taken instead: its forced refreshes answer running and R1 to D2 read skip (above). Rows written by an ingest during a step: R1 compares two
+-- taken instead: its forced refreshes answer running and R1 to D2 read skip (above). Rows written by an ingest during a
+-- step: R1 compares two
 -- refreshes of two moments and D1 the take with a fresh read; where the inputs' markers moved meanwhile they read skip
 -- ("run again"). What the markers do not hold (a CRM deal or call arriving between R1's two refreshes) can still read
 -- R1 FAIL: run again.
