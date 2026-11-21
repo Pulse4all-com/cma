@@ -895,10 +895,6 @@
     {
       "name": "subscription_survival",
       "what": "Renewal survival per store, start cohort, interval group and renewal number: started, eligible, survived and whether the cell is mature (every started subscription eligible); counts only. A plain read of cma.subscription_survival_take (0009ze)"
-    },
-    {
-      "name": "subscription_store_start",
-      "what": "Per store of every tenant the reader sees: its migrated events per month, the last month of its migration, its stragglers (later months under subscriptions.migration_bulk_min_pct of the migrated events) and the month its Churn rate and Failed rate start; counts and months only. A read of cma.subscription_store_start (0009ze)"
     }
   ],
   "flows": {
