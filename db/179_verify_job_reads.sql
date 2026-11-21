@@ -28,7 +28,7 @@
 --      application and not by public; S6 the input tables: every tenant table the follow-up's functions read (derived
 --      from their bodies, recursively) is in cma.follow_up_input_tables(), and each has its audit trigger enabled
 --   E  per tenant: E1 open_tickets_of, E2 open_leads_of (in order), E3 speed_to_lead_of unbounded and E4 over the previous
---      month, E5 data_quality_of, E6 flash_findings_compute_of (as sets: it has no order by, so ties may fall either way);
+--      month, E5 data_quality_of (on the check keys the old copy knows), E6 flash_findings_compute_of (as sets: it has no order by, so ties may fall either way);
 --      each old copy calls the new functions below it, so equality is proved layer by layer; E7 business_seconds_in, business_days_in and
 --      next_business_noon_in against their _of originals on every market; E8 the follow-up refresh: after the previous
 --      definition's full rewrite the new one writes nothing and leaves the same items and snapshot; with items removed
@@ -900,7 +900,7 @@ declare
   v_checks text[]; v_sql_new text[]; v_sql_old text[]; v_ordered boolean[];
   v_from timestamptz[]; v_to timestamptz[]; m record; v_bad text;
   r jsonb; v_n_old bigint; v_only bigint; v_snap boolean;
-  -- E5 (edited by 0009zh, 21 November 2026): the old copy is 160's and knows none of the checks added since (210's
+  -- E5 (edited after 0009zg, 21 November 2026): the old copy is 160's and knows none of the checks added since (210's
   -- subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap, ...), so the new
   -- function is compared on the check keys the old copy knows: every key of the catalog that its text names, quoted.
   -- The keys it leaves out are named in the row
