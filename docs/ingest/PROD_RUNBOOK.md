@@ -3387,6 +3387,19 @@ reset role;
 ```
 Expected: one row (the snapshot holds the latest refresh only). Run it once before 19.4 (the last refresh without the check) and once after the first refresh that follows 19.5 (with it) and note both durations in the record; no budget, information.
 
+## 19.12 Terminal: 179 again (edited after 0009zg)
+`179`'s E5 failed in prod after Phase 19 (the old copy of `cma.data_quality_of` knows none of the checks added since); the PR edits it to compare only the check keys the old copy names. Rerun it in dev, then in prod, from the branch (or `main` after the merge):
+
+**Terminal**
+```bash
+cd ~/cma && cma_db dev && psql "$PGCONN" -f db/179_verify_job_reads.sql 2>&1 | grep -E '^ (E5|verdict)' | sed -E 's/ {3,}/  /g'
+```
+**Terminal**
+```bash
+cd ~/cma && cma_db prod && psql "$PGCONN" -f db/179_verify_job_reads.sql 2>&1 | grep -E '^ (E5|verdict)' | sed -E 's/ {3,}/  /g'
+```
+Expected in both: `0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL`; E5's rows say they compared on 37 keys and name the three left out: `source_figure_gap`, `subscription_device_units_mismatch` and `subscription_variant_unmapped` (covered by `211` and `215`). Any FAIL: report its row.
+
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 
 One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`). 20.0 to 20.5 and 20.8 ran on 21 November 2026 (`records/0009ze-dev-2026-11-21`, `records/0009ze-prod-2026-11-21`); 20.6 and 20.7 are open.
