@@ -62,8 +62,12 @@
 --   renewal_survival           none here (B39d compares it with the CMA's renewal survival)
 --
 -- Order to run: dev, 214 then 215_verify_source_figures.sql (normal and provoked), then the verifies that read what this
--- re-creates, unchanged and still PASS: for cma.check_tenant_setting 211; for the data-quality functions 41, 69, 73, 75,
--- 101, 105, 113, 117, 121, 133, 161, 179 and 211; for cma.flash_watch_of 123, 137, 139 and 159. Then the data map's
+-- re-creates, still PASS: for cma.check_tenant_setting 73, 101, 113, 121, 123, 137, 179 (and 211, through the settings'
+-- trigger); for cma.data_quality_flash_checks 123, 137; for cma.data_quality_of 41, 69, 73, 75, 101, 105, 113, 117, 123,
+-- 133, 137, 161, 179, 211; for cma.data_quality 41, 69, 73, 75, 105, 113, 123, 133, 137; for cma.data_quality_fix_in 123,
+-- 133, 137, 179, 211; for cma.flash_findings_compute_of 179; for cma.flash_watch_of 123, 137, 139, 159 (149 and 181 read
+-- data quality's overview through Flash: optional). 123 and 137 are edited by this change (A8 and B5, A7: they expect
+-- source_figure_gap, conditional on the 0009zg row), as are web/verify/flash.mjs and 131_time_all.sql. Then the data map's
 -- schema.json refreshed from dev on this branch, the merge, prod (214, the same verifies; 215 refuses prod's data, as
 -- the dev-seed verifies do). No index on a busy table: cma.source_figure is new and small (about 500 rows a store and
 -- month), its unique key serves every read.
