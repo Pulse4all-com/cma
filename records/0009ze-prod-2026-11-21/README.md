@@ -7,7 +7,8 @@ of purchases' store orders and the timing scripts (`docs/ingest/PROD_RUNBOOK.md`
 folder are his run (commit `55549e54`; records clean); everything else below comes from his report. This note was written
 down by Claude Code on 21 November 2026 at Martin's request, from his report and those files, and the values are his.
 Verdicts, times, months and ids of builds only: no key, no secret and no personal data, and no commercial volume (Decision
-log, 20 Nov 2026): the outputs of 20.0, `124` and `131` are not in this folder. A store is named by its market.
+log, 20 Nov 2026) but the first refresh's row count, which Martin let in: the outputs of 20.0, `124` and `131` are not in
+this folder. A store is named by its market.
 
 ## 20.0 The stores' migration months and where their rates start
 
@@ -43,9 +44,25 @@ A7 PASS: the payment state equals the old one (118's and 148's) row for row in e
 Awaiting payment applies.
 
 185's one FAIL is D2: 21 stored below-the-fold documents of Customers → Active differ from a fresh computation and from
-172's document. Martin's report: 119, 173 and 185 as expected. (Claude Code's reading of the file, not checked in prod:
-the documents were stored before 210, and 210 changes the payment states they hold; D2 passed in prod on 14 November,
-`records/0009r-prod-2026-11-14`. The next addition reruns 185 in prod.)
+172's document. Martin's report: 119, 173 and 185 as expected.
+
+What D2's FAIL is (Martin's question of 21 November 2026; worked out by Claude Code the same day from the verify and this
+file, and reproduced on a local database, not in prod): neither a dev-seed expectation that cannot hold in prod, nor a
+defect of 210. It is a gap in the verify. 185 forces a refresh of the take inside its rolled-back step and then reads the
+stored documents, without looking at the refresh's answer. While the minute job holds the take's lock, the forced refresh
+answers `running` and writes nothing, so D2 reads the committed documents: on 21 November those were stored before 210,
+with four payment states, against a fresh computation with 210's six. R1 then passes on two refreshes that both did
+nothing, as it does in this file.
+
+- Locally, with Charged back and Awaiting payment subscriptions present and the refresh running: 185 reads 14 PASS, D2
+  0, 0, 0. So the new payment states do not break D2.
+- Locally, with the documents as before 210 and another session holding the take's lock: 185 reads this file's rows
+  exactly (R1 PASS, D1 PASS, D2 21, 0, 21; 13 PASS, 1 FAIL).
+- The file does not print the refresh's answer, so this is the reading that fits every row, not an observation in prod.
+  The rerun of 185 in prod with the next addition confirms it by reading PASS. D2 passed in prod on 14 November
+  (`records/0009r-prod-2026-11-14`).
+
+Proposed follow-up: 185 reads `skip` when its refresh did not run, as 173's E4 does.
 
 Pulse4all's propositions (the last block of `db/02_seed_pulse4all.sql`), in Studio on cma-prod-pg: refused without
 `set role cma_owner` (`permission denied for schema cma`); with it, `subscriptions.propositions` reads
@@ -61,7 +78,7 @@ The first ingest deploy ran before the merge, with `HEAD` at `8876e222`: a redep
 The web image is tagged with Cloud Build's `SHORT_SHA`, seven characters (`fb704e3`), not eight;
 `cma-refresh-active-customers` runs on `web:fb704e3`.
 
-The first facts refresh, at 05:58 UTC: `facts_refreshed` true, 8,973 ms. Later runs: `reason=fresh`. In the database log
+The first facts refresh, at 05:58 UTC: `facts_refreshed` true, 74,283 fact rows, 8,973 ms. Later runs: `reason=fresh`. In the database log
 the refresh runs about every 15 minutes, and its insert into `cma.renewal_outcome` takes about 3 s.
 
 ## 20.5 The one-time fill of purchases' store orders
@@ -87,8 +104,9 @@ loss was on the client's side. The second run took 2 min 13 s: 254 ok, 40 FAIL.
 | active customers (set) | 830.1 ms | | FAIL; to be checked |
 | active rest | 56.7 ms | 50 ms | FAIL; to be checked |
 
-The other FAILs, as reported: the poll `team now`, which failed on 6 November too, and the 36 report reads of backlog
-items CMA-101, CMA-114 and CMA-115.
+The 40 FAILs: 2 new with 210 (the inputs markers and the facts refresh), 2 to check (active customers (set) and active
+rest), 1 known (the poll `team now`, which failed on 6 November too) and the 35 report reads of backlog items CMA-101,
+CMA-114 and CMA-115.
 
 ## Open
 
