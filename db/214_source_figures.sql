@@ -62,7 +62,7 @@
 --   renewals, purchases        events renewed, purchased of the connection that occurred on the business date (the tenant's
 --                              zone)
 --   exits                      events of the connection into dims.status (status_to: canceled, failed or expired) on the
---                              business date, any event type: the app's own count of exits, not the CMA's Churn
+--                              business date, any event type: Exit (subscription app), not the CMA's Churn (subscription)
 --   pauses                     events of the connection into paused on the business date, any event type
 --   renewal_survival           none here (B39d compares it with the CMA's renewal survival)
 --

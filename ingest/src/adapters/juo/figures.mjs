@@ -17,7 +17,7 @@
  *                             given, and a factor of 100 would show as a gap on the first day
  *   renewals, purchases, pauses   subscriptions:renewed, :purchased, :pauses, grain day, yesterday to today
  *   exits                     subscriptions:churned grouped by event.status_to (canceled, failed, expired), grain day: the
- *                             app's own count of moves into those statuses (Exit (subscription app)), not the CMA's Churn
+ *                             app's own count of moves into those statuses: Exit (subscription app), not the CMA's Churn (subscription)
  *   renewal_survival          subscriptions:purchased as a retention cohort by order sequence (anchor subscription:purchased),
  *                             monthly cohorts and periods (Juo answers 501 for weekly cohorts: "only day and month", 21 Nov
  *                             2026), 24 periods, the last 24 months' cohorts, stored under the first day of the read's month
