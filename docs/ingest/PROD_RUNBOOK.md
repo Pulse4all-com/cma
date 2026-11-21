@@ -3498,7 +3498,7 @@ What the screen shows for `185`, and what it means:
 
 **Terminal** (only after `12 PASS rows`; half a minute later, so it does not meet the job's next minute)
 ```bash
-cd ~/cma && cma_db prod && psql "$PGCONN" -f db/185_verify_active_device_bands.sql > records/0009zf-prod-$(date +%F)/185-rerun-2.txt 2>&1; grep -E '^ (R1|D1|D2|verdict)' records/0009zf-prod-$(date +%F)/185-rerun-2.txt | awk -F'|' '{print $1 "|" $2}' | sed -E 's/ {3,}/  /g'; node tools/check-records.mjs records/0009zf-prod-$(date +%F)
+cd ~/cma && cma_db prod && psql "$PGCONN" -f db/185_verify_active_device_bands.sql > records/0009zf-prod-$(date +%F)/185-rerun-2.txt 2>&1; grep -E '^ (R1|D1|D2|verdict)' records/0009zf-prod-$(date +%F)/185-rerun-2.txt | awk -F'|' '{print $1 "|" $2}' | sed -E 's/ {3,}/  /g'; node tools/check-records.mjs --login "$(gcloud config get-value account 2>/dev/null)" records/0009zf-prod-$(date +%F)
 ```
 Expected: `connected to cma as <your login>`, then four lines, R1, D1 and D2 with `PASS` and `verdict | PASS`, then `records clean`. The file holds the whole output and is committed with the folder. A D2 that reads FAIL now is a finding: report its row from the file. A skip row again: report it and stop; a second one in a row at the job's cadence means something else holds the take's lock.
 
