@@ -422,8 +422,6 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "courtesy.list.attempts",
     "courtesy.list.state",
   ],
-  // Customers → Active (addition 0009l): the tiles, the charts, the markets, the comparison, the cohorts, the mix, the list,
-  // and the six placeholders (Pending: a slot and a definition, no formula in code)
   // Customers → Subscriptions (addition 0009zh)
   "/reports/subscriptions": [
     "subscriptions.total_subscriptions",
@@ -437,6 +435,8 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "subscriptions.mix",
     "subscriptions.list",
   ],
+  // Customers → Active (addition 0009l): the tiles, the charts, the markets, the comparison, the cohorts, the mix, the list,
+  // and the six placeholders (Pending: a slot and a definition, no formula in code)
   "/reports/active": [
     "active.active_customers",
     "active.total_subscriptions",

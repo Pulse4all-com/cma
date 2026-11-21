@@ -3777,8 +3777,8 @@ export const postgresData: CmaData = {
       // the page in one read from the subscription facts' stored takes (addition 0009zh): the function checks the
       // permission and the filters first. One statement, one transaction
       const j = one((await q.query<{ j: Record<string, unknown> }>(
-        `select cma.subscriptions_page($1, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9) as j`,
-        [query.market, query.store, query.proposition, query.interval, query.from, query.to, query.measure, query.sort, query.descending])).rows,
+        `select cma.subscriptions_page($1, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9, $10) as j`,
+        [query.market, query.store, query.proposition, query.interval, query.from, query.to, query.measure, query.sort, query.descending, query.page ?? 1])).rows,
       "subscriptions_page").j;
       return subscriptionsPageFromDb(j, { from: query.from, to: query.to, filter: { market: query.market, store: query.store, proposition: query.proposition, interval: query.interval } });
     });

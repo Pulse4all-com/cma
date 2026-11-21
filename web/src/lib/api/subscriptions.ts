@@ -37,10 +37,12 @@ function listOf(sp: URLSearchParams): { measure: SubscriptionsMeasure; sort: Sub
   return { measure, sort, descending: dir === "desc" };
 }
 
-/** The page's query: the filters, &from and &to (YYYY-MM; the last twelve complete months and the current one when left out), and the list's &measure, &sort and &dir */
+/** The page's query: the filters, &from and &to (YYYY-MM; the last twelve complete months and the current one when left out), and the list's &measure, &sort, &dir and &page */
 export function subscriptionsPageParams(sp: URLSearchParams, me: Principal): SubscriptionsPageQuery {
   const { filter, from, to } = filterOf(sp, me);
-  return { ...filter, from, to, ...listOf(sp) };
+  const raw = sp.get("page");
+  if (raw !== null && !/^[1-9][0-9]{0,4}$/.test(raw)) throw new ApiError(400, "invalid_page", "page must be a whole number from 1");
+  return { ...filter, from, to, ...listOf(sp), page: raw === null ? 1 : Number(raw) };
 }
 
 /** The list's query: the filters, &measure, &sort, &dir and &page (from 1; 50 a page); a file reads every row up to the tenant's flash.file_max_rows */

@@ -157,7 +157,7 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
               {ACTIVE_SLOTS.map((s) => s.key === "churn_rate" ? (
                 // the Churn rate card (addition 0009zh, D.4): the last complete month's rate of the market, read with the stored
                 // answer above the fold; its related line, the churned subscriptions of the last 30 days, as before
-                <ChurnRateCard key={s.key} info={info(t.slot_churn_rate, hints.mh_slot_churn_rate!, s.metric)} copy={words}>
+                <ChurnRateCard key={s.key} info={info(t.slot_churn_rate, hints.mh_slot_churn_rate!, s.metric)} copy={words} market={filter.market}>
                   <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (
                     <ChurnRateFigures card={top.churnCard} perMarketOnly={filter.segment !== null || filter.channel !== null} locale={me.locale} t={t}
                       related={top.unitEconomics && top.unitEconomics.churned30d !== null ? (

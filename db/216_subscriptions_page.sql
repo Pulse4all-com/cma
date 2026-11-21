@@ -41,6 +41,7 @@
 --
 -- What it adds (functions only; no table, view or column changes; nothing in cma_read)
 --   cma.assert_subscriptions_filter   the page's filters (CMA04)
+--   cma.assert_subscription_list      the list's measure, sort and direction (CMA04)
 --   cma.subscriptions_scope_of        the take's rows under the filters (the base of the tiles, mix and list)
 --   cma.subscription_rows_of          the list: a page of 50 (or the file's rows), a measure, a sort from a fixed list
 --   cma.subscriptions_page_of         the page in one read: take state, settings, filters' choices, tiles, months,
@@ -79,7 +80,8 @@ $$;
 -- market: a market code or unknown; store: a subscriptions connection of the tenant mapped to a store; proposition: a
 -- code of subscriptions.propositions or none (no mapped proposition); interval: monthly, quarterly, yearly, other or
 -- unknown; from and to: first days of months, from at most to, to at most the current month in the tenant's zone, and
--- the range at most customers.history_months long. Anything else CMA04
+-- the range at most customers.history_months complete months and the current one (so the page's default, the last
+-- twelve complete months and the current one, holds for every value the setting takes). Anything else CMA04
 create or replace function cma.assert_subscriptions_filter(p_tenant_id uuid, p_market text, p_store uuid, p_proposition text, p_interval text,
                                                            p_from date, p_to date)
 returns void
@@ -87,7 +89,7 @@ language plpgsql stable
 as $$
 declare
   v_month date := date_trunc('month', (now() at time zone (select t.timezone from cma.tenant t where t.id = p_tenant_id)))::date;
-  v_max   integer := cma.setting_of(p_tenant_id, 'customers.history_months')::integer;
+  v_max   integer := cma.setting_of(p_tenant_id, 'customers.history_months')::integer + 1;
 begin
   if p_market is not null and p_market !~ '^([A-Z]{2}|unknown)$' then
     raise exception 'market is a market code or unknown' using errcode = 'CMA04';
@@ -106,6 +108,24 @@ begin
      or p_from > p_to or p_to > v_month
      or (extract(year from age(p_to, p_from)) * 12 + extract(month from age(p_to, p_from)))::integer + 1 > v_max then
     raise exception 'from and to are months, from at most to, to at most this month, and at most % months', v_max using errcode = 'CMA04';
+  end if;
+end
+$$;
+
+-- The list's measure, sort and direction (CMA04 else, a null one too): checked by every entry before anything is read
+create or replace function cma.assert_subscription_list(p_measure text, p_sort text, p_descending boolean)
+returns void
+language plpgsql immutable
+as $$
+begin
+  if p_measure is null or p_measure not in ('total', 'active', 'failed', 'paused', 'unmapped', 'all') then
+    raise exception 'measure is total, active, failed, paused, unmapped or all' using errcode = 'CMA04';
+  end if;
+  if p_sort is null or p_sort not in ('monthly_amount', 'subscription', 'market', 'status', 'payment_state', 'interval', 'device_units') then
+    raise exception 'sort is monthly_amount, subscription, market, status, payment_state, interval or device_units' using errcode = 'CMA04';
+  end if;
+  if p_descending is null then
+    raise exception 'descending is true or false' using errcode = 'CMA04';
   end if;
 end
 $$;
@@ -138,11 +158,11 @@ $$;
 -- One page of the take's subscriptions under the filters and a measure: total (a device-holding status,
 -- flash.device_holding_statuses: the Total subscriptions; the default), active (flash.active_subscription_statuses),
 -- failed, paused, unmapped (holding, with device units unknown: a line whose variant is not mapped) or all (every
--- present subscription). Sorted by a key from a fixed list (never the caller's text in the statement), then by the
--- app's id in byte order and the take's id; a page of p_limit from (p_page - 1) * p_limit; the file (p_file) every
+-- present subscription). Sorted by a key from a fixed list (never the caller's text in the statement; an amount within
+-- its currency, as every list of amounts), then by the app's id in byte order and the take's id; a page of p_limit from (p_page - 1) * p_limit; the file (p_file) every
 -- row up to flash.file_max_rows. Each row: the app's id and number, store and market, status, payment state, interval
--- group, currency and monthly amount, device units, original start (estimated) with its basis, age in whole months,
--- propositions, the payment instrument's type, and the CRM contact's id with its record link (the store customer the
+-- group, currency and monthly amount, device units, Subscription age (whole months since the app's created date; the
+-- original start (estimated) waits for the hand check of migrated subscriptions, Decision log 20 Nov 2026), propositions, the payment instrument's type, and the CRM contact's id with its record link (the store customer the
 -- CMA matched, 0008h; a file's rows carry the id alone, as the file writes no link). Ids, codes, amounts and dates only
 create or replace function cma.subscription_rows_of(p_tenant_id uuid, p_market text, p_store uuid, p_proposition text, p_interval text,
                                                     p_measure text, p_sort text, p_descending boolean, p_page integer, p_limit integer,
@@ -155,27 +175,24 @@ declare
   v_holding text[] := cma.flash_list_of(cma.setting_of(p_tenant_id, 'flash.device_holding_statuses'));
   v_active  text[] := cma.flash_list_of(cma.setting_of(p_tenant_id, 'flash.active_subscription_statuses'));
   v_max     integer := cma.setting_of(p_tenant_id, 'flash.file_max_rows')::integer;
-  v_key     text;
+  v_keys    text[];
+  v_order   text;
   v_limit   integer;
   v_offset  integer;
   v_res     jsonb;
 begin
-  if p_measure not in ('total', 'active', 'failed', 'paused', 'unmapped', 'all') then
-    raise exception 'measure is total, active, failed, paused, unmapped or all' using errcode = 'CMA04';
-  end if;
-  v_key := case p_sort
-    when 'monthly_amount' then 'coalesce(t.monthly_amount, -1)'
-    when 'subscription' then 't.source_id collate "C"'
-    when 'market' then 't.market collate "C"'
-    when 'status' then 't.status collate "C"'
-    when 'payment_state' then 'coalesce(ps.sort_order, 99)'
-    when 'interval' then 't.interval_group collate "C"'
-    when 'device_units' then 'coalesce(t.device_units, -1)'
-    when 'original_start' then $k$coalesce(t.original_start_at, '-infinity'::timestamptz)$k$
-    else null end;
-  if v_key is null then
-    raise exception 'sort is monthly_amount, subscription, market, status, payment_state, interval, device_units or original_start' using errcode = 'CMA04';
-  end if;
+  perform cma.assert_subscription_list(p_measure, p_sort, p_descending);
+  v_keys := case p_sort
+    when 'monthly_amount' then array[$k$coalesce(t.currency, '') collate "C"$k$, 'coalesce(t.monthly_amount, -1)']
+    when 'subscription' then array['t.source_id collate "C"']
+    when 'market' then array['t.market collate "C"']
+    when 'status' then array['t.status collate "C"']
+    when 'payment_state' then array['coalesce(ps.sort_order, 99)']
+    when 'interval' then array['t.interval_group collate "C"']
+    when 'device_units' then array['coalesce(t.device_units, -1)'] end;
+  -- every key in the sort's direction, then the app's id in byte order and the take's id
+  v_order := (select string_agg(k || case when p_descending then ' desc' else ' asc' end, ', ' order by o)
+              from unnest(v_keys || array['t.source_id collate "C"', 't.subscription_id']) with ordinality u(k, o));
   if p_file then
     v_limit := v_max; v_offset := 0;
   else
@@ -198,9 +215,9 @@ begin
     ), keys as materialized (
       -- the sort on the key and the ids alone (narrow rows: a sort of whole take rows spills to disk), then the page's
       -- rows joined back by id
-      select t.subscription_id, row_number() over (order by %1$s %2$s, t.source_id collate "C" %2$s, t.subscription_id %2$s) as pos
+      select t.subscription_id, row_number() over (order by %1$s) as pos
       from t left join ps on ps.key = t.payment_state
-      order by %1$s %2$s, t.source_id collate "C" %2$s, t.subscription_id %2$s
+      order by %1$s
       limit $9 offset $10
     ), page as materialized (
       select t.*, k.pos from keys k join t on t.subscription_id = k.subscription_id
@@ -215,21 +232,20 @@ begin
                  'store', sm.handle, 'market', page.market, 'status', page.status, 'payment_state', page.payment_state,
                  'interval', page.interval_group, 'currency', page.currency, 'monthly_amount', round(page.monthly_amount, 2),
                  'device_units', page.device_units,
-                 'original_start', (page.original_start_at at time zone $11)::date, 'original_start_basis', page.original_start_basis,
-                 'age_months', case when page.original_start_at is null then null
-                                    else (extract(year from age($12, page.original_start_at)) * 12
-                                          + extract(month from age($12, page.original_start_at)))::integer end,
+                 'age_months', case when s.source_created_at is null then null
+                                    else (extract(year from age($12, s.source_created_at)) * 12
+                                          + extract(month from age($12, s.source_created_at)))::integer end,
                  'propositions', to_jsonb(page.propositions), 'instrument', s.payment_instrument_type,
                  'contact_id', cc.crm_contact_source_id,
                  'contact_url', case when cc.crm_contact_source_id is not null and not $13
                                      then cma.record_url(cc.crm_connection_id, 'contact', cc.crm_contact_source_id) end)
                order by page.pos)
         from page
-        join cma.subscription s on s.tenant_id = $1 and s.id = page.subscription_id
+        left join cma.subscription s on s.tenant_id = $1 and s.id = page.subscription_id
         left join sm on sm.connection_id = page.connection_id
         left join cma.commerce_customer cc on cc.tenant_id = $1 and cc.connection_id = sm.store_connection_id
                                           and cc.source_id = s.customer_source_id), '[]'::jsonb))
-  $q$, v_key, case when p_descending then 'desc' else 'asc' end)
+  $q$, v_order)
   into v_res
   using p_tenant_id, p_market, p_store, p_proposition, p_interval, p_measure, v_holding, v_active, v_limit, v_offset, v_zone, p_now, p_file;
   return v_res || jsonb_build_object('page', case when p_file then 1 else p_page end, 'page_size', v_limit, 'measure', p_measure,
@@ -244,7 +260,7 @@ $$;
 -- takes while there is none):
 --   take          computed_at, business_date, amounts_from (amounts of movements are known from then)
 --   settings      the holding, active and ended statuses, the device bands' and age bands' bounds, the indicative
---                 euro rates (reports.fx_eur_rates), the propositions
+--                 euro rates (reports.fx_eur_rates), the propositions, customers.history_months (the range's limit)
 --   filters       the markets and stores of the take and of the stores' starts, the propositions (and none), the groups
 --   tiles         Total subscriptions with its split per holding status; Paused; the Monthly recurring amount per
 --                 currency over the active statuses (and the indicative euros only while every currency has a rate);
@@ -257,12 +273,12 @@ $$;
 --   store_starts  per store under the market and store filters: its first event's month and its rates' start month
 --   survival      per interval group, start cohort in the range and renewal number: started, eligible, survived (summed
 --                 over the stores), and the migrated subscriptions left out
---   mix           over the Total subscriptions: by proposition, model, interval group, device band, age band, payment
---                 instrument and payment state
---   list          the list's first page (cma.subscription_rows_of)
+--   mix           over the Total subscriptions: by proposition, model, interval group, device band, Subscription age
+--                 band (flash.subscription_age_months over the app's created date), payment instrument and payment state
+--   list          the list's page p_page (the first by default; cma.subscription_rows_of), so a further page is the same one read
 create or replace function cma.subscriptions_page_of(p_tenant_id uuid, p_market text, p_store uuid, p_proposition text, p_interval text,
                                                      p_from date, p_to date, p_measure text, p_sort text, p_descending boolean,
-                                                     p_now timestamptz)
+                                                     p_now timestamptz, p_page integer default 1)
 returns jsonb
 language plpgsql stable
 as $$
@@ -293,7 +309,8 @@ begin
                                    'device_bands', to_jsonb(cma.flash_count_bands_of(v_dbounds)),
                                    'age_bands', to_jsonb(cma.flash_age_bands_of(v_abounds)),
                                    'fx', case when v_fx = '{}'::jsonb then null else v_fx end,
-                                   'propositions', to_jsonb(v_props)),
+                                   'propositions', to_jsonb(v_props),
+                                   'history_months', cma.setting_of(p_tenant_id, 'customers.history_months')::integer),
     'filters', jsonb_build_object(
       'markets', (select coalesce(jsonb_agg(m.market order by (m.market = 'unknown'), mk.sort_order, m.market collate "C"), '[]'::jsonb)
                   from (select distinct x.market from cma.subscription_store_start x where x.tenant_id = p_tenant_id
@@ -316,16 +333,17 @@ begin
   ), h as materialized (
     select t.* from t where t.status = any (v_holding)
   ), inst as materialized (
-    -- the payment instrument's type of the tenant's present subscriptions (the mirror's row by its key; one scan of the
-    -- tenant's rows, joined by hash: a lookup per subscription costs more at this size)
-    select s.id, s.payment_instrument_type from cma.subscription s
+    -- the payment instrument's type and the app's created date of the tenant's present subscriptions (the mirror's row by
+    -- its key; one scan of the tenant's rows, joined by hash: a lookup per subscription costs more at this size)
+    select s.id, s.payment_instrument_type, s.source_created_at from cma.subscription s
     where s.tenant_id = p_tenant_id and s.source_deleted_at is null
   ), ages as (
-    -- the whole months since the original start, grouped first: the band is then named once per distinct age
-    select case when h.original_start_at is null then null
-                else (extract(year from age(p_now, h.original_start_at)) * 12 + extract(month from age(p_now, h.original_start_at)))::integer end as months,
+    -- Subscription age (Flash's: whole months since the app's created date; the original start (estimated) waits for the
+    -- hand check, Decision log 20 Nov 2026), grouped first: the band is then named once per distinct age
+    select case when i.source_created_at is null then null
+                else (extract(year from age(p_now, i.source_created_at)) * 12 + extract(month from age(p_now, i.source_created_at)))::integer end as months,
            count(*) as n
-    from h group by 1
+    from h left join inst i on i.id = h.subscription_id group by 1
   ), amt as (
     select t.currency, round(sum(t.monthly_amount), 2) as amount, count(*) as subscriptions
     from t where t.status = any (v_active) and t.currency is not null and t.monthly_amount is not null
@@ -459,7 +477,7 @@ begin
   v_doc := jsonb_set(v_doc, '{survival,migrated_left_out}', v_doc -> 'migrated_left_out') - 'migrated_left_out';
 
   return v_doc || jsonb_build_object('list', cma.subscription_rows_of(p_tenant_id, p_market, p_store, p_proposition, p_interval,
-                                                                       p_measure, p_sort, p_descending, 1, 50, false, p_now));
+                                                                       p_measure, p_sort, p_descending, coalesce(p_page, 1), 50, false, p_now));
 end
 $$;
 
@@ -470,7 +488,7 @@ $$;
 -- has no subscriptions connection set up (cma.flash_source_set_up_of)
 create or replace function cma.subscriptions_page(p_market text, p_store uuid, p_proposition text, p_interval text, p_from date, p_to date,
                                                   p_measure text default 'total', p_sort text default 'monthly_amount',
-                                                  p_descending boolean default true)
+                                                  p_descending boolean default true, p_page integer default 1)
 returns jsonb
 language plpgsql stable
 as $$
@@ -479,11 +497,16 @@ declare
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   perform cma.assert_subscriptions_filter(v_tenant, p_market, p_store, p_proposition, p_interval, p_from, p_to);
+  perform cma.assert_subscription_list(p_measure, p_sort, p_descending);
+  if p_page is null or p_page < 1 or p_page > 99999 then
+    raise exception 'page is a whole number from 1' using errcode = 'CMA04';
+  end if;
   if not coalesce(cma.flash_source_set_up_of(v_tenant, 'subscriptions'), false) then
     return jsonb_build_object('set_up', false);
   end if;
   return jsonb_build_object('set_up', true)
-         || cma.subscriptions_page_of(v_tenant, p_market, p_store, p_proposition, p_interval, p_from, p_to, p_measure, p_sort, p_descending, now());
+         || cma.subscriptions_page_of(v_tenant, p_market, p_store, p_proposition, p_interval, p_from, p_to, p_measure, p_sort, p_descending, now(),
+                                      p_page);
 end
 $$;
 
@@ -500,6 +523,7 @@ declare
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   perform cma.assert_subscriptions_filter(v_tenant, p_market, p_store, p_proposition, p_interval, v_month, v_month);
+  perform cma.assert_subscription_list(p_measure, p_sort, p_descending);
   if not coalesce(cma.flash_source_set_up_of(v_tenant, 'subscriptions'), false) then
     return jsonb_build_object('set_up', false);
   end if;
@@ -583,10 +607,11 @@ declare
 begin
   foreach f in array array[
     'cma.assert_subscriptions_filter(uuid,text,uuid,text,text,date,date)',
+    'cma.assert_subscription_list(text,text,boolean)',
     'cma.subscriptions_scope_of(uuid,text,uuid,text,text)',
     'cma.subscription_rows_of(uuid,text,uuid,text,text,text,text,boolean,integer,integer,boolean,timestamptz)',
-    'cma.subscriptions_page_of(uuid,text,uuid,text,text,date,date,text,text,boolean,timestamptz)',
-    'cma.subscriptions_page(text,uuid,text,text,date,date,text,text,boolean)',
+    'cma.subscriptions_page_of(uuid,text,uuid,text,text,date,date,text,text,boolean,timestamptz,integer)',
+    'cma.subscriptions_page(text,uuid,text,text,date,date,text,text,boolean,integer)',
     'cma.subscription_rows(text,uuid,text,text,text,text,boolean,integer,integer,boolean)',
     'cma.subscription_file_record(text,text,uuid,text,text,text,integer,date,date)',
     'cma.subscriptions_churn_card(text)'] loop
@@ -603,7 +628,7 @@ $$;
 -- 7. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zh', 'Customers → Subscriptions (brief B39 continued, Part B39d): cma.subscriptions_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles, the movements and rates per month, the stores'' starts, renewal survival, the mix and the list''s first page, from the subscription facts'' takes), cma.subscription_rows (a page of the list or the file''s rows), cma.subscription_file_record (the audit row of every read that hands out rows: records, months or rows) and cma.subscriptions_churn_card (Customers → Active''s Churn rate card), over cma.assert_subscriptions_filter, cma.subscriptions_scope_of, cma.subscription_rows_of and cma.subscriptions_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
+values ('0009zh', 'Customers → Subscriptions (brief B39 continued, Part B39d): cma.subscriptions_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles, the movements and rates per month, the stores'' starts, renewal survival, the mix and the list''s first page, from the subscription facts'' takes), cma.subscription_rows (a page of the list or the file''s rows), cma.subscription_file_record (the audit row of every read that hands out rows: records, months or rows) and cma.subscriptions_churn_card (Customers → Active''s Churn rate card), over cma.assert_subscriptions_filter, cma.assert_subscription_list, cma.subscriptions_scope_of, cma.subscription_rows_of and cma.subscriptions_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
 on conflict (version) do nothing;
 
 commit;

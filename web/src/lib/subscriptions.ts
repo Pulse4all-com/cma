@@ -22,7 +22,7 @@ export const SUBSCRIPTIONS_INTERVALS: readonly SubscriptionsInterval[] = ["month
 export const SUBSCRIPTIONS_MEASURES: readonly SubscriptionsMeasure[] = ["total", "active", "failed", "paused", "unmapped", "all"];
 /** The list's sort keys, the first the default (descending) */
 export const SUBSCRIPTIONS_SORTS: readonly SubscriptionsSort[] = [
-  "monthly_amount", "subscription", "market", "status", "payment_state", "interval", "device_units", "original_start",
+  "monthly_amount", "subscription", "market", "status", "payment_state", "interval", "device_units",
 ];
 /** The movements' view: counts, or the monthly amounts per currency */
 export const SUBSCRIPTIONS_VIEWS = ["counts", "amounts"] as const;
@@ -31,8 +31,8 @@ export type SubscriptionsView = (typeof SUBSCRIPTIONS_VIEWS)[number];
 export const SUBSCRIPTIONS_PAGE_ROWS = 50;
 /** The default range: the last twelve complete months and the current one */
 export const SUBSCRIPTIONS_DEFAULT_MONTHS = 13;
-/** The most months a range spans when the tenant's customers.history_months is not known (its default) */
-export const SUBSCRIPTIONS_MAX_MONTHS = 60;
+/** The most months a range spans when the tenant's customers.history_months is not known: its default (60) complete months and the current one; the page's choices follow the tenant's own value */
+export const SUBSCRIPTIONS_MAX_MONTHS = 61;
 /** The movement kinds in the bridge's order: the start, what adds, what moves out, the end (C.4) */
 export const SUBSCRIPTIONS_BRIDGE: readonly SubscriptionMoveKind[] = [
   "start", "new", "migrated", "reactivated", "resumed", "paused", "churned", "moved_to_failed", "end",
@@ -157,8 +157,8 @@ export function monthEnd(month: DateKey): DateKey {
 
 /** The file's columns: ids, codes, dates and amounts only, as the list's; the contact's id, never its link */
 export const SUBSCRIPTIONS_FILE_COLUMNS = [
-  "source_id", "number", "store", "market", "status", "payment_state", "interval", "monthly_amount", "currency", "device_units", "original_start",
-  "original_start_basis", "age_months", "propositions", "instrument", "contact_id",
+  "source_id", "number", "store", "market", "status", "payment_state", "interval", "monthly_amount", "currency", "device_units", "age_months",
+  "propositions", "instrument", "contact_id",
 ] as const;
 /** The months file's columns: per month the counts per kind and the complete stores' rate parts */
 export const SUBSCRIPTIONS_MONTHS_COLUMNS = [
@@ -195,8 +195,7 @@ export function subscriptionRowFromDb(r: J): SubscriptionRow {
   return {
     subscriptionId: String(r.subscription_id), sourceId: String(r.source_id), number: str(r.number), store: str(r.store), market: String(r.market ?? "unknown"),
     status: String(r.status), paymentState: str(r.payment_state), interval: String(r.interval ?? "unknown") as SubscriptionsInterval, currency: str(r.currency),
-    monthlyAmount: numOrNull(r.monthly_amount), deviceUnits: numOrNull(r.device_units), originalStart: day(r.original_start),
-    originalStartBasis: (str(r.original_start_basis) as SubscriptionRow["originalStartBasis"]) ?? null, ageMonths: numOrNull(r.age_months),
+    monthlyAmount: numOrNull(r.monthly_amount), deviceUnits: numOrNull(r.device_units), ageMonths: numOrNull(r.age_months),
     propositions: Array.isArray(r.propositions) ? (r.propositions as unknown[]).map(String) : [], instrument: str(r.instrument),
     contactId: str(r.contact_id), contactUrl: str(r.contact_url),
   };
@@ -223,7 +222,7 @@ export function churnCardFromDb(v: unknown): SubscriptionsChurnCard {
   return { month: String(o.month).slice(0, 10), base: numOrNull(o.base), churned: num(o.churned), movedToFailed: num(o.moved_to_failed) };
 }
 
-const EMPTY_SETTINGS: SubscriptionsPage["settings"] = { holding: [], active: [], ended: [], deviceBands: [], ageBands: [], fx: null, propositions: [] };
+const EMPTY_SETTINGS: SubscriptionsPage["settings"] = { holding: [], active: [], ended: [], deviceBands: [], ageBands: [], fx: null, propositions: [], historyMonths: 60 };
 
 export function subscriptionsPageFromDb(j: J, query: { from: DateKey; to: DateKey; filter: SubscriptionsFilter }): SubscriptionsPage {
   if (j.set_up === false) {
@@ -249,6 +248,7 @@ export function subscriptionsPageFromDb(j: J, query: { from: DateKey; to: DateKe
     settings: {
       holding: strings(settings.holding), active: strings(settings.active), ended: strings(settings.ended), deviceBands: strings(settings.device_bands),
       ageBands: strings(settings.age_bands), fx: (settings.fx as Record<string, unknown> | null) ?? null, propositions: strings(settings.propositions),
+      historyMonths: num(settings.history_months ?? 60),
     },
     filters: {
       markets: strings(filters.markets),

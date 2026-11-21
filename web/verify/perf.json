@@ -181,6 +181,12 @@
       "html_kb": 64
     },
     {
+      "path": "/reports/subscriptions?from=2021-11&view=amounts",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 72
+    },
+    {
       "path": "/api/v1/reports/subscriptions",
       "subject": "manager",
       "class": "report"
@@ -330,6 +336,7 @@
     "/reports/reviews": 22,
     "/reports/courtesy": 30,
     "/reports/active": 86,
+    "/reports/subscriptions": 64,
     "/reports/data-quality": 16,
     "/configuration/sources": 33,
     "/configuration/health": 21,
@@ -357,6 +364,7 @@
     "/reports/reviews": 169,
     "/reports/courtesy": 169,
     "/reports/active": 169,
+    "/reports/subscriptions": 169,
     "/reports/data-quality": 167,
     "/configuration/sources": 173,
     "/configuration/health": 167,

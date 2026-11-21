@@ -12,7 +12,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const KINDS: Partial<Record<string, FlashFileColumn["kind"]>> = {
-  monthly_amount: "number", device_units: "number", original_start: "date", age_months: "number", propositions: "list",
+  monthly_amount: "number", device_units: "number", age_months: "number", propositions: "list",
 };
 
 /**
@@ -31,10 +31,12 @@ export async function GET(request: Request) {
     requireAnyPermission(me, REPORT_PERMISSIONS);
     const sp = new URL(request.url).searchParams;
     const part = subscriptionsFilePart(sp);
-    const settings = exportSettingsFrom(await data().listSettings(me));
+    // the tenant's export format is read beside the rows, not before them
+    const settingsRead = data().listSettings(me).then(exportSettingsFrom);
+    settingsRead.catch(() => undefined);
     if (part === "months") {
       const q = subscriptionsPageParams(sp, me);
-      const page = await data().getSubscriptionsPage(me, q);
+      const [page, settings] = await Promise.all([data().getSubscriptionsPage(me, q), settingsRead]);
       if (!page.setUp) throw new ApiError(409, "not_set_up", "no subscriptions connection is set up, so there is no file");
       if (!page.take) throw new ApiError(409, "history_not_ready", "the stored take is being prepared, so there is no file yet");
       const filters = [...Object.entries(subscriptionsQuery(q)).map(([k, v]) => `${k}=${v}`), `from=${monthAddress(page.from)}`, `to=${monthAddress(page.to)}`].join("; ");
@@ -49,7 +51,7 @@ export async function GET(request: Request) {
       return csvFile(text, subscriptionsFileName("months", q, asOfStamp(null, new Date(page.take.computedAt), zone)));
     }
     const q = subscriptionsRowsParams(sp, me, { file: true });
-    const list = await data().getSubscriptionRows(me, q);
+    const [list, settings] = await Promise.all([data().getSubscriptionRows(me, q), settingsRead]);
     if (!list.setUp) throw new ApiError(409, "not_set_up", "no subscriptions connection is set up, so there is no file");
     if (!list.history) throw new ApiError(409, "history_not_ready", "the stored take is being prepared, so there is no file yet");
     const zone = list.timeZone || me.timeZone;
@@ -57,7 +59,7 @@ export async function GET(request: Request) {
     if (list.total > list.rows.length) filters = `${filters}; rows ${list.rows.length} of ${list.total}`;
     const rows = list.rows.map((r) => ({
       source_id: r.sourceId, number: r.number, store: r.store, market: r.market, status: r.status, payment_state: r.paymentState, interval: r.interval,
-      monthly_amount: r.monthlyAmount, currency: r.currency, device_units: r.deviceUnits, original_start: r.originalStart, original_start_basis: r.originalStartBasis,
+      monthly_amount: r.monthlyAmount, currency: r.currency, device_units: r.deviceUnits,
       age_months: r.ageMonths, propositions: r.propositions, instrument: r.instrument, contact_id: r.contactId,
     }));
     const columns: FlashFileColumn[] = SUBSCRIPTIONS_FILE_COLUMNS.map((key) => ({ key, kind: KINDS[key] ?? "text" }));

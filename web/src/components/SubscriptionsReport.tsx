@@ -15,6 +15,7 @@ import { Bars, Legend, LineChart, type LineSeries } from "@/components/ActiveCha
 import { fmtAmount } from "@/components/FlashParts";
 import { HeaderHint } from "@/components/HeaderHint";
 import { HintLabel } from "@/components/HintLabel";
+import { LinkMark } from "@/components/ActivePending";
 import { RecordLink } from "@/components/RecordLink";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge, Card, Notice } from "@/components/primitives";
@@ -35,7 +36,9 @@ type T = SubscriptionsCopy;
 export type SubscriptionsHref = (change: Record<string, string | null>) => { pathname: Route; query: Record<string, string> };
 
 const th = "h-10 px-2 py-1 align-bottom font-semibold leading-tight";
-const td = "h-10 whitespace-nowrap px-2 tabular text-right";
+const tdN = "h-10 whitespace-nowrap px-2 tabular text-right";
+// a number table's cell style is set once on the table (the cells carry no class of their own: a 61-month range draws thousands)
+const cellStyle = "[&_td]:h-10 [&_td]:whitespace-nowrap [&_td]:px-2 [&_td]:tabular [&_td]:text-right";
 const row = "border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
 const link = "font-semibold text-p4a-deepblue underline-offset-2 hover:underline";
 
@@ -71,7 +74,7 @@ export function Switch<V extends string>({ label, options, current, href, testId
           <Link key={o.value} href={href(o.value)} prefetch={false} scroll={false} aria-current={o.value === current ? "page" : undefined}
             className={["inline-flex h-8 items-center rounded-button border px-3 font-semibold",
               o.value === current ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"].join(" ")}>
-            {o.label}
+            {o.label}<LinkMark />
           </Link>
         ))}
       </nav>
@@ -156,10 +159,10 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
 }
 
 /** A table inside its scroll container (Pulse4all-Style 7.6) */
-function Scroll({ testId, label, children, fit = false }: { testId: string; label: string; children: ReactNode; fit?: boolean }) {
+function Scroll({ testId, label, children, fit = false, numbers = false }: { testId: string; label: string; children: ReactNode; fit?: boolean; numbers?: boolean }) {
   return (
     <div className="min-h-0 overflow-auto" data-testid={`${testId}-scroll`} role="region" aria-label={label} tabIndex={0}>
-      <table className={`${fit ? "w-auto" : "w-full"} border-collapse text-body leading-table [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead_th]:bg-p4a-bgblue`} data-testid={testId}>{children}</table>
+      <table className={`${fit ? "w-auto" : "w-full"} ${numbers ? cellStyle : ""} border-collapse text-body leading-table [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead_th]:bg-p4a-bgblue`} data-testid={testId}>{children}</table>
     </div>
   );
 }
@@ -199,13 +202,13 @@ export function Movements({ page, view, t, locale }: { page: SubscriptionsPage; 
   );
   if (view === "counts") {
     return (
-      <Scroll testId="subscriptions-movements" label={t.movementsTitle}>
+      <Scroll testId="subscriptions-movements" label={t.movementsTitle} numbers>
         {head}
         <tbody>
           {kinds.map((k) => (
             <tr key={k} className={row} data-kind={k}>
               {label(k)}
-              {months.map((m) => <td key={m.month} className={td}>{m.counts === null ? "–" : fmtCount(m.counts[k] ?? 0, locale)}</td>)}
+              {months.map((m) => <td key={m.month}>{m.counts === null ? "–" : fmtCount(m.counts[k] ?? 0, locale)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -218,7 +221,7 @@ export function Movements({ page, view, t, locale }: { page: SubscriptionsPage; 
       {currencies.map((c) => (
         <div key={c}>
           <h3 className="mb-2 text-body font-semibold text-p4a-heading">{c}</h3>
-          <Scroll testId={`subscriptions-amounts-${c}`} label={`${t.movementsTitle} ${c}`}>
+          <Scroll testId={`subscriptions-amounts-${c}`} label={`${t.movementsTitle} ${c}`} numbers>
             {head}
             <tbody>
               {kinds.map((k) => (
@@ -226,7 +229,7 @@ export function Movements({ page, view, t, locale }: { page: SubscriptionsPage; 
                   {label(k)}
                   {months.map((m) => {
                     const v = m.amounts?.[c]?.[k];
-                    return <td key={m.month} className={td}>{m.amounts === null || m.amounts[c] === undefined ? "–" : fmtAmount(v ?? 0, c, locale)}</td>;
+                    return <td key={m.month}>{m.amounts === null || m.amounts[c] === undefined ? "–" : fmtAmount(v ?? 0, c, locale)}</td>;
                   })}
                 </tr>
               ))}
@@ -275,7 +278,7 @@ export function Rates({ page, t, locale }: { page: SubscriptionsPage; t: T; loca
             yFormat={pct} yTop={top} yLabel={t.shareAxis} label={t.ratesChartLabel} testId="subscriptions-rates-chart"
             markers={markers} />
           {/* months down, per market its base and both rates across (the counts in each cell's title) */}
-          <Scroll testId="subscriptions-rates" label={t.ratesTitle}>
+          <Scroll testId="subscriptions-rates" label={t.ratesTitle} numbers>
             <thead>
               <tr>
                 <th scope="col" rowSpan={2} className={`${th} text-left`}>{t.monthCol}</th>
@@ -295,11 +298,11 @@ export function Rates({ page, t, locale }: { page: SubscriptionsPage; t: T; loca
                   <th scope="row" className="h-10 whitespace-nowrap px-2 text-left font-normal tabular">{monthName(m, locale)}</th>
                   {markets.flatMap((mk) => {
                     const r = page.rates.find((x) => x.market === mk && x.month === m);
-                    if (!r) return [<td key={`${mk}-b`} className={`${td} border-l border-p4a-border text-p4a-muted`}>–</td>, <td key={`${mk}-c`} className={`${td} text-p4a-muted`}>–</td>, <td key={`${mk}-f`} className={`${td} text-p4a-muted`}>–</td>];
+                    if (!r) return [<td key={`${mk}-b`} className="border-l border-p4a-border text-p4a-muted">–</td>, <td key={`${mk}-c`} className="text-p4a-muted">–</td>, <td key={`${mk}-f`} className="text-p4a-muted">–</td>];
                     return [
-                      <td key={`${mk}-b`} className={`${td} border-l border-p4a-border`}>{r.base === null ? "–" : fmtCount(r.base, locale)}</td>,
-                      <td key={`${mk}-c`} className={td} title={`${t.churnedCol}: ${fmtCount(r.churned, locale)}`}>{fmtRate(rateOf(r.churned, r.base), locale)}</td>,
-                      <td key={`${mk}-f`} className={td} title={`${t.failedCol}: ${fmtCount(r.movedToFailed, locale)}`}>{fmtRate(rateOf(r.movedToFailed, r.base), locale)}</td>,
+                      <td key={`${mk}-b`} className="border-l border-p4a-border">{r.base === null ? "–" : fmtCount(r.base, locale)}</td>,
+                      <td key={`${mk}-c`} title={`${t.churnedCol}: ${fmtCount(r.churned, locale)}`}>{fmtRate(rateOf(r.churned, r.base), locale)}</td>,
+                      <td key={`${mk}-f`} title={`${t.failedCol}: ${fmtCount(r.movedToFailed, locale)}`}>{fmtRate(rateOf(r.movedToFailed, r.base), locale)}</td>,
                     ];
                   })}
                 </tr>
@@ -341,7 +344,7 @@ export function Survival({ page, t, locale }: { page: SubscriptionsPage; t: T; l
         return (
           <div key={g.interval} data-interval={g.interval}>
             <h3 className="mb-2 text-body font-semibold text-p4a-heading">{intervalWord(g.interval, t)}</h3>
-            <Scroll testId={`subscriptions-survival-${g.interval}`} label={`${t.survivalTitle} ${intervalWord(g.interval, t)}`} fit>
+            <Scroll testId={`subscriptions-survival-${g.interval}`} label={`${t.survivalTitle} ${intervalWord(g.interval, t)}`} fit numbers>
               <thead>
                 <tr>
                   <th scope="col" rowSpan={2} className={`${th} text-left`}>{t.cohortCol}</th>
@@ -356,16 +359,14 @@ export function Survival({ page, t, locale }: { page: SubscriptionsPage; t: T; l
                 {g.cohorts.map((c) => (
                   <tr key={c.cohort} className="border-b border-p4a-border">
                     <th scope="row" className="h-10 whitespace-nowrap px-2 text-left font-normal tabular">{monthName(c.cohort, locale)}</th>
-                    <td className={td}>{fmtCount(c.started, locale)}</td>
+                    <td>{fmtCount(c.started, locale)}</td>
                     {renewals.map((r) => {
                       const cell = c.cells.find((x) => x.renewal === r);
                       const share = survivalShare(c.started, cell);
                       const heat = heatColour(share);
-                      if (share === null || !heat) return <td key={r} className={`${td} text-p4a-muted`} title={t.notMature}>–</td>;
-                      const title = t.survivalCell.replace("{cohort}", monthName(c.cohort, locale)).replace("{n}", String(r)).replace("{share}", fmtShare(share, locale))
-                        .replace("{survived}", fmtCount(cell?.survived ?? 0, locale)).replace("{started}", fmtCount(c.started, locale));
+                      if (share === null || !heat) return <td key={r} className="text-p4a-muted">–</td>;
                       return (
-                        <td key={r} className={`${td} ${heat.text === "white" ? "text-white" : "text-p4a-inkt"}`} style={{ backgroundColor: heat.background }} data-heat={heat.percent} title={title}>
+                        <td key={r} className={heat.text === "white" ? "text-white" : "text-p4a-inkt"} style={{ backgroundColor: heat.background }} data-heat={heat.percent}>
                           {fmtShare(share, locale)}
                         </td>
                       );
@@ -430,14 +431,15 @@ const SORT_COLUMNS: { sort: SubscriptionsSort | null; col: keyof T; right?: bool
   { sort: "subscription", col: "col_subscription" }, { sort: null, col: "col_number" }, { sort: null, col: "col_store" }, { sort: "market", col: "col_market" },
   { sort: "status", col: "col_status" }, { sort: "payment_state", col: "col_payment_state" }, { sort: "interval", col: "col_interval" },
   { sort: "monthly_amount", col: "col_monthly_amount", right: true }, { sort: "device_units", col: "col_device_units", right: true },
-  { sort: "original_start", col: "col_original_start" }, { sort: null, col: "col_age", right: true }, { sort: null, col: "col_propositions" },
+  { sort: null, col: "col_age", right: true }, { sort: null, col: "col_propositions" },
   { sort: null, col: "col_contact" },
 ];
 
 /**
  * The list (D.3.7): one row per subscription of the measure (a tile's population), sorted on a whitelist by its column's
- * header, 50 a page. The app's id and number, codes, the monthly amount in its currency, device units, the original
- * start with its basis, age, propositions and the contact's link; never a name or an email
+ * header, 50 a page. The app's id and number, codes, the monthly amount in its currency, device units, Subscription age,
+ * propositions and the contact's link; never a name or an email. The original start (estimated) is not shown until the
+ * hand check of migrated subscriptions (Decision log, 20 Nov 2026)
  */
 export function SubscriptionList({ list, measure, sort, descending, href, t, locale }: {
   list: SubscriptionRowsPage; measure: SubscriptionsMeasure; sort: SubscriptionsSort; descending: boolean; href: SubscriptionsHref; t: T; locale: Locale;
@@ -463,7 +465,7 @@ export function SubscriptionList({ list, measure, sort, descending, href, t, loc
                     {c.sort ? (
                       <Link href={href({ sort: c.sort === "monthly_amount" ? null : c.sort, dir: active && descending ? "asc" : "desc", page: null })}
                         prefetch={false} scroll={false} className="text-p4a-deepblue underline-offset-2 hover:underline" title={t.sortBy.replace("{column}", label)}>
-                        {label}{active ? (descending ? " ↓" : " ↑") : ""}
+                        {label}{active ? (descending ? " ↓" : " ↑") : ""}<LinkMark />
                       </Link>
                     ) : label}
                   </th>
@@ -481,12 +483,9 @@ export function SubscriptionList({ list, measure, sort, descending, href, t, loc
                 <td className="h-10 whitespace-nowrap px-2">{statusWord(r.status, t)}</td>
                 <td className="h-10 whitespace-nowrap px-2">{payWord(r.paymentState, t)}</td>
                 <td className="h-10 whitespace-nowrap px-2">{intervalWord(r.interval, t)}</td>
-                <td className={td}>{r.monthlyAmount === null || r.currency === null ? "–" : fmtAmount(r.monthlyAmount, r.currency, locale)}</td>
-                <td className={td}>{r.deviceUnits === null ? t.unmapped : fmtCount(r.deviceUnits, locale)}</td>
-                <td className="h-10 whitespace-nowrap px-2 tabular">
-                  {r.originalStart ? `${fmtDate(r.originalStart, locale, "medium")}${r.originalStartBasis ? ` (${t[`basis_${r.originalStartBasis}`]})` : ""}` : "–"}
-                </td>
-                <td className={td}>{r.ageMonths === null ? "–" : fmtCount(r.ageMonths, locale)}</td>
+                <td className={tdN}>{r.monthlyAmount === null || r.currency === null ? "–" : fmtAmount(r.monthlyAmount, r.currency, locale)}</td>
+                <td className={tdN}>{r.deviceUnits === null ? t.unmapped : fmtCount(r.deviceUnits, locale)}</td>
+                <td className={tdN}>{r.ageMonths === null ? "–" : fmtCount(r.ageMonths, locale)}</td>
                 <td className="h-10 whitespace-nowrap px-2">{r.propositions.length > 0 ? r.propositions.join(", ") : "–"}</td>
                 <td className="h-10 px-2"><RecordLink url={r.contactUrl} label={t.openContact} /></td>
               </tr>
@@ -498,12 +497,12 @@ export function SubscriptionList({ list, measure, sort, descending, href, t, loc
         <nav className="flex items-center justify-between gap-2 text-small" aria-label={t.pageOf.replace("{page}", String(list.page)).replace("{pages}", String(pages))}>
           {list.page > 1 ? (
             <Link href={href({ page: list.page - 1 === 1 ? null : String(list.page - 1) })} prefetch={false} scroll={false} data-testid="subscriptions-previous"
-              className="inline-flex h-10 items-center rounded-button border border-p4a-deepblue bg-white px-4 font-semibold text-p4a-deepblue">{t.previous}</Link>
+              className="inline-flex h-10 items-center rounded-button border border-p4a-deepblue bg-white px-4 font-semibold text-p4a-deepblue">{t.previous}<LinkMark /></Link>
           ) : <span />}
           <span className="text-p4a-muted">{t.pageOf.replace("{page}", fmtCount(list.page, locale)).replace("{pages}", fmtCount(pages, locale))}</span>
           {list.page < pages ? (
             <Link href={href({ page: String(list.page + 1) })} prefetch={false} scroll={false} data-testid="subscriptions-next"
-              className="inline-flex h-10 items-center rounded-button border border-p4a-deepblue bg-white px-4 font-semibold text-p4a-deepblue">{t.next}</Link>
+              className="inline-flex h-10 items-center rounded-button border border-p4a-deepblue bg-white px-4 font-semibold text-p4a-deepblue">{t.next}<LinkMark /></Link>
           ) : <span />}
         </nav>
       ) : null}

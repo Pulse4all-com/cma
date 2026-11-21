@@ -19,10 +19,10 @@
 -- management), after 188_fleet_management.sql; since addition 0009u (Welcome's Waiting for you reads
 -- cma.my_follow_up_counts(); the follow-up's report lists and /me/follow-up's rows, whose clock fields it derives at the
 -- read, are timed too), after 190_follow_up_clock_at_read.sql; since addition 0009v (Assets -> Fleet management's page in one read),
--- after 192_fleet_page.sql; since addition 0009zh (Customers → Subscriptions' page, its list and file, and Customers →
--- Active's Churn rate card), after 216_subscriptions_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
+-- after 192_fleet_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
 -- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 10,000 ms
--- until prod's runs set it, and its answer names each step's milliseconds). Prod is the proof; dev's shared core is for
+-- until prod's runs set it, and its answer names each step's milliseconds). Since addition 0009zh (Customers → Subscriptions' page, its list
+-- and file, and Customers → Active's Churn rate card), after 216_subscriptions_page.sql. Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -405,12 +405,15 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'fleet management further page', 'devices that need attention page 2', $q$select cma.fleet_rows(null, null, null, null, true, 2)$q$, 'list', array['reports.view', 'performance.team']),
 -- Customers → Subscriptions (addition 0009zh): the page makes one read from the subscription facts' stored takes
 -- (cma.subscriptions_page: the tiles, the months, the rates, the stores' starts, survival, the mix and the list's first
--- page) over its default range, the last twelve complete months and the current one ({month} is the current month);
+-- page) over its default range, the last twelve complete months and the current one ({month} is the current month), and
+-- over the longest range a tenant allows (customers.history_months complete months and the current one);
 -- the same read under a market, the proposition none and an interval (a request of its own); the list's further page
 -- after the first paint (cma.subscription_rows, page 2) and the records file (every Total subscription, as the file route
--- reads it), each a page of its own. Stocks at now, timed once
-('a', 'subscriptions', 'page (stored takes, the default range)', $q$select cma.subscriptions_page(null, null, null, null, (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'overview', array['reports.view', 'performance.team']),
-('a', 'subscriptions filtered', 'page under a market, no proposition and the monthly group', $q$select cma.subscriptions_page((select min(t.market) from cma.subscription_take t where t.tenant_id = cma.current_tenant_id()), null, 'none', 'monthly', (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'overview', array['reports.view', 'performance.team']),
+-- reads it), each a page of its own. Stocks at now, timed once. The page's read holds the list's first page: class list
+-- (300 ms), as Fleet management's
+('a', 'subscriptions', 'page (stored takes, the default range)', $q$select cma.subscriptions_page(null, null, null, null, (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'subscriptions longest range', 'page over customers.history_months complete months and the current one', $q$select cma.subscriptions_page(null, null, null, null, (date '{month}' - make_interval(months => cma.setting_of(cma.current_tenant_id(), 'customers.history_months')::integer))::date, date '{month}')$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'subscriptions filtered', 'page under a market, no proposition and the monthly group', $q$select cma.subscriptions_page((select min(t.market) from cma.subscription_take t where t.tenant_id = cma.current_tenant_id()), null, 'none', 'monthly', (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions further page', 'list page 2', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 2, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions file', 'records file of the Total subscriptions', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 1, 50, true)$q$, 'overview', array['reports.view', 'performance.team']),
 -- Campaigns

@@ -25,8 +25,7 @@ import { resolve } from "../../access";
  * subscription base moves over months, while Flash keeps the stock per market and day (Decision log, 21 Nov 2026).
  * reports.view or performance.team, the wide layout, team figures only, ids and links only. One read from the
  * subscription facts' stored takes (cma.subscriptions_page): the tiles, the movements and rates per month, the stores'
- * starts, renewal survival, the mix and the list's first page; a further page of the list is its own read
- * (cma.subscription_rows). Changes in the period and Who ended them need a take of the events that does not exist yet:
+ * starts, renewal survival, the mix and the list's page (a further page in the same read). Changes in the period and Who ended them need a take of the events that does not exist yet:
  * they stand as Pending parts. The address keys are market, store, proposition, interval, from, to, view, measure, sort,
  * dir and page. While no subscriptions connection is set up the placeholder stays.
  */
@@ -57,7 +56,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/re
   const pageNo = /^[1-9][0-9]{0,4}$/.test(one("page") ?? "") ? Number(one("page")) : 1;
   let problem = parsed.problem !== null || (one("measure") !== undefined && measureOf(one("measure")) === null) || (one("sort") !== undefined && sortOf(one("sort")) === null);
 
-  let query: SubscriptionsPageQuery = { ...parsed.filter, from: parsed.from, to: parsed.to, measure, sort, descending };
+  let query: SubscriptionsPageQuery = { ...parsed.filter, from: parsed.from, to: parsed.to, measure, sort, descending, page: pageNo };
   // a well-formed filter the tenant does not hold (another tenant's store, a proposition no longer in the setting): the
   // page without the filters instead, and the notice says so
   let doc = await data().getSubscriptionsPage(me, query).catch((e: unknown) => {
@@ -66,12 +65,13 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/re
   });
   if (doc === null) {
     problem = true;
-    query = { market: null, store: null, proposition: null, interval: null, from: parsed.from, to: parsed.to, measure, sort, descending };
+    const fallback = parseSubscriptionsFilter(() => undefined, currentMonth);
+    query = { market: null, store: null, proposition: null, interval: null, from: fallback.from, to: fallback.to, measure, sort, descending, page: 1 };
     doc = await data().getSubscriptionsPage(me, query);
   }
   const filter = { market: query.market, store: query.store, proposition: query.proposition, interval: query.interval };
-  let list: SubscriptionRowsPage | null = doc.list;
-  if (doc.setUp && pageNo > 1) list = await data().getSubscriptionRows(me, { ...filter, measure, sort, descending, page: pageNo });
+  // the list's page comes with the one read (a further page too: no second transaction)
+  const list: SubscriptionRowsPage | null = doc.list;
   // under CMA_DB_TRACE the request's whole cost (verify/round-trips.mjs reads it)
   const dbTrace = requestDbTrace();
 
@@ -98,7 +98,8 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/re
   const fileQuery = new URLSearchParams({ ...subscriptionsQuery(filter), ...(measure !== "total" ? { measure } : {}), ...(sort !== "monthly_amount" ? { sort } : {}),
     ...(!descending ? { dir: "asc" } : {}) }).toString();
   const monthsQuery = new URLSearchParams({ ...subscriptionsQuery(filter), from: monthAddress(doc.from), to: monthAddress(doc.to), part: "months" }).toString();
-  const months = monthsBetween(addMonths(currentMonth, -(SUBSCRIPTIONS_MAX_MONTHS - 1)), currentMonth).reverse()
+  // the months a range may take: the tenant's customers.history_months complete months and the current one
+  const months = monthsBetween(addMonths(currentMonth, -Math.max(1, doc.settings.historyMonths || SUBSCRIPTIONS_MAX_MONTHS - 1)), currentMonth).reverse()
     .map((m) => ({ value: monthAddress(m), label: monthName(m, locale) }));
   const amountsFrom = doc.take?.amountsFrom ? dateKeyInZone(new Date(doc.take.amountsFrom), doc.timeZone || me.timeZone) : null;
 

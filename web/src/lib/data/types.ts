@@ -2468,7 +2468,7 @@ export type SubscriptionsInterval = "monthly" | "quarterly" | "yearly" | "other"
 /** The list's count measures (a tile's population): total (the Total subscriptions), active, failed, paused, unmapped (device units unknown) or all */
 export type SubscriptionsMeasure = "total" | "active" | "failed" | "paused" | "unmapped" | "all";
 /** The list's sort keys (cma.subscription_rows_of's fixed list) */
-export type SubscriptionsSort = "monthly_amount" | "subscription" | "market" | "status" | "payment_state" | "interval" | "device_units" | "original_start";
+export type SubscriptionsSort = "monthly_amount" | "subscription" | "market" | "status" | "payment_state" | "interval" | "device_units";
 /** A Recurring amount movement's kind, and the month's start and end (the Total subscriptions at the previous and this month end) */
 export type SubscriptionMoveKind = "start" | "end" | "new" | "migrated" | "reactivated" | "resumed" | "expansion" | "contraction" | "paused" | "churned"
   | "moved_to_failed";
@@ -2478,6 +2478,8 @@ export interface SubscriptionsPageQuery extends SubscriptionsFilter {
   /** The month range, first days of months: from at most to, to at most the current month */
   from: DateKey; to: DateKey;
   measure: SubscriptionsMeasure; sort: SubscriptionsSort; descending: boolean;
+  /** The list's page in the same read (from 1; the first when left out) */
+  page?: number;
 }
 export interface SubscriptionsRowsQuery extends SubscriptionsFilter {
   measure: SubscriptionsMeasure; sort: SubscriptionsSort; descending: boolean;
@@ -2519,11 +2521,12 @@ export interface SubscriptionsMix {
   proposition: SubscriptionsMixRow[]; model: SubscriptionsMixRow[]; interval: SubscriptionsMixRow[]; deviceBand: SubscriptionsMixRow[];
   ageBand: SubscriptionsMixRow[]; instrument: SubscriptionsMixRow[]; paymentState: SubscriptionsMixRow[];
 }
-/** One subscription of the list: the app's id and number, codes, dates, amounts and the CRM contact's id with its record link */
+/** One subscription of the list: the app's id and number, codes, amounts, its age and the CRM contact's id with its record link */
 export interface SubscriptionRow {
   subscriptionId: string; sourceId: string; number: string | null; store: string | null; market: string; status: string; paymentState: string | null;
   interval: SubscriptionsInterval; currency: string | null; monthlyAmount: number | null; deviceUnits: number | null;
-  originalStart: DateKey | null; originalStartBasis: "first_order" | "created" | null; ageMonths: number | null; propositions: string[];
+  /** Subscription age: whole months since the app created it (the original start (estimated) waits for the hand check, Decision log 20 Nov 2026) */
+  ageMonths: number | null; propositions: string[];
   instrument: string | null; contactId: string | null; contactUrl: string | null;
 }
 export interface SubscriptionRowsPage {
@@ -2542,6 +2545,8 @@ export interface SubscriptionsPage {
   settings: {
     holding: string[]; active: string[]; ended: string[]; deviceBands: string[]; ageBands: string[];
     fx: Record<string, unknown> | null; propositions: string[];
+    /** customers.history_months: a range holds at most this many complete months and the current one */
+    historyMonths: number;
   };
   filters: { markets: string[]; stores: { connectionId: string; handle: string; market: string }[]; propositions: string[]; intervals: SubscriptionsInterval[] };
   tiles: SubscriptionsTiles | null;

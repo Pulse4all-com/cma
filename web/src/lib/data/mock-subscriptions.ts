@@ -16,7 +16,7 @@ import { dateKeyInZone } from "@/lib/time";
 
 const MOCK_TENANT_2 = "00000000-0000-7000-8000-000000000002";
 const REPORT = ["reports.view", "performance.team"];
-const HOLDING = ["active", "paused", "failed"];
+const HOLDING = ["active", "failed"];
 const ACTIVE = ["active"];
 const ENDED = ["canceled", "expired"];
 const PROPOSITIONS = ["hs1", "frx"];
@@ -145,7 +145,7 @@ function assertFilter(me: Principal, f: SubscriptionsFilter, from: DateKey, to: 
   if (f.store !== null && !STORES.some((s) => s.connectionId === f.store)) throw new CmaDbError("CMA04", "store is a subscriptions connection of the tenant");
   if (f.proposition !== null && f.proposition !== "none" && !PROPOSITIONS.includes(f.proposition)) throw new CmaDbError("CMA04", "proposition is a code of subscriptions.propositions or none");
   if (f.interval !== null && !(SUBSCRIPTIONS_INTERVALS as readonly string[]).includes(f.interval)) throw new CmaDbError("CMA04", "interval is not a group");
-  if (from > to || to > month || monthsBetween(from, to).length > 60) throw new CmaDbError("CMA04", "from and to are months, from at most to, to at most this month");
+  if (from > to || to > month || monthsBetween(from, to).length > 61) throw new CmaDbError("CMA04", "from and to are months, from at most to, to at most this month");
 }
 
 const setUp = (me: Principal) => me.tenantId !== MOCK_TENANT_2;
@@ -160,7 +160,7 @@ function rowOf(s: MockSub, now: number): SubscriptionRow {
   return {
     subscriptionId: s.id, sourceId: s.sourceId, number: s.number, store: s.store.handle, market: s.store.market, status: statusNow(s), paymentState: paymentState(s),
     interval: s.interval, currency: s.store.currency, monthlyAmount: monthly(s), deviceUnits: s.deviceUnits,
-    originalStart: new Date(s.createdAt).toISOString().slice(0, 10), originalStartBasis: "created", ageMonths: ageMonths(s.createdAt, now),
+    ageMonths: ageMonths(s.createdAt, now),
     propositions: s.propositions, instrument: s.instrument, contactId: s.contact,
     contactUrl: s.contact ? `https://app-eu1.hubspot.com/contacts/00000000/record/0-1/${s.contact}` : null,
   };
@@ -178,14 +178,13 @@ function rowsOf(b: Base, q: Pick<SubscriptionsRowsQuery, keyof SubscriptionsFilt
   }).map((s) => rowOf(s, b.now));
   const key = (r: SubscriptionRow): number | string => {
     switch (q.sort) {
-      case "monthly_amount": return r.monthlyAmount ?? -1;
+      case "monthly_amount": return `${r.currency ?? ""}|${String(Math.round((r.monthlyAmount ?? -1) * 100) + 1e9).padStart(12, "0")}`;
       case "subscription": return r.sourceId;
       case "market": return r.market;
       case "status": return r.status;
       case "payment_state": return states.indexOf(r.paymentState ?? "") + 1 || 99;
       case "interval": return r.interval;
-      case "device_units": return r.deviceUnits ?? -1;
-      default: return r.originalStart ?? "";
+      default: return r.deviceUnits ?? -1;
     }
   };
   const dir = q.descending ? -1 : 1;
@@ -248,7 +247,7 @@ export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery):
   if (!setUp(me)) {
     return {
       setUp: false, history: false, take: null, timeZone: "", today: "", month: "", from: q.from, to: q.to, filter,
-      settings: { holding: [], active: [], ended: [], deviceBands: [], ageBands: [], fx: null, propositions: [] },
+      settings: { holding: [], active: [], ended: [], deviceBands: [], ageBands: [], fx: null, propositions: [], historyMonths: 60 },
       filters: { markets: [], stores: [], propositions: [], intervals: [...SUBSCRIPTIONS_INTERVALS] }, tiles: null, months: [], rates: [], storeStarts: [],
       survival: null, mix: null, list: null,
     };
@@ -296,7 +295,7 @@ export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery):
   return {
     setUp: true, history: true, take: { computedAt: b.computedAt, businessDate: dateKeyInZone(new Date(b.computedAt), me.timeZone), amountsFrom: new Date(b.amountsFrom).toISOString() },
     timeZone: me.timeZone, today: dateKeyInZone(new Date(b.now), me.timeZone), month: b.month, from: q.from, to: q.to, filter,
-    settings: { holding: HOLDING, active: ACTIVE, ended: ENDED, deviceBands: DEVICE_BANDS, ageBands: AGE_BANDS, fx: FX, propositions: PROPOSITIONS },
+    settings: { holding: HOLDING, active: ACTIVE, ended: ENDED, deviceBands: DEVICE_BANDS, ageBands: AGE_BANDS, fx: FX, propositions: PROPOSITIONS, historyMonths: 60 },
     filters: { markets: STORES.map((s) => s.market).sort(), stores: STORES.map((s) => ({ connectionId: s.connectionId, handle: s.handle, market: s.market })),
       propositions: [...PROPOSITIONS, "none"], intervals: [...SUBSCRIPTIONS_INTERVALS] },
     tiles: {
@@ -338,7 +337,7 @@ export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery):
       instrument: mix((s) => [s.instrument ?? "unknown"]).sort(byCount),
       paymentState: mix((s) => [paymentState(s)]).sort(byOrder(["paid", "in_retry", "charged_back", "awaiting_payment", "failed", "paused", "canceled"])),
     },
-    list: rowsOf(b, { ...filter, measure: q.measure, sort: q.sort, descending: q.descending, page: 1 }),
+    list: rowsOf(b, { ...filter, measure: q.measure, sort: q.sort, descending: q.descending, page: q.page ?? 1 }),
   };
 }
 

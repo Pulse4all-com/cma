@@ -9,7 +9,8 @@
  *      words stay out of the shared catalog (they ride to no client component but the filters' own handful)
  *   A  address: the keys market, store, proposition, interval, from, to, view, measure, sort, dir, page; the default range
  *      (the last twelve complete months and the current one) on any month, January and December included; what is ignored
- *      and why; a range capped at 60 months and to at most the current month; the filters' part of an address
+ *      and why; a range capped at 60 complete months and the current one (customers.history_months' default; the page offers
+ *      the tenant's own) and to at most the current month; the filters' part of an address
  *   F  files: the list's columns and the months file's columns, ids, codes, dates, counts and amounts only (no name,
  *      email, phone, address or link column); the file's name
  *   M  the mock on four different months (any month: backlog CMA-113): the tiles add up (the split per status to the
@@ -49,7 +50,6 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
     ...["proposition", "model", "interval", "deviceBand", "ageBand", "instrument", "paymentState"].map((k) => `mix_${k}`),
     ...["paid", "in_retry", "charged_back", "awaiting_payment", "failed", "paused", "canceled", "unknown"].map((k) => `pay_${k}`),
     ...["active", "paused", "failed", "canceled", "expired", "merged", "never_subscribed"].map((k) => `status_${k}`),
-    "basis_first_order", "basis_created",
   ];
   const missing = (lang) => [...used, ...built].filter((k) => typeof subscriptionsCopy[lang][k] !== "string");
   expect("C1 every word the page reads exists in en and nl", [missing("en"), missing("nl")], [[], []], [["x"], ["x"]]);
@@ -77,10 +77,10 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
     [{ market: "GB", store: "00000000-0000-7000-8000-00000005b001", proposition: "none", interval: "yearly" }, "2026-01-01", "2026-06-01", null,
       { market: "GB", store: "00000000-0000-7000-8000-00000005b001", proposition: "none", interval: "yearly" }], []);
   const bad = (q) => { const r = parseSubscriptionsFilter(get(q), nov); return [r.problem, r.from, r.to]; };
-  expect("A4 what is ignored and why: a market, store, proposition or interval out of form, a month out of form, to after this month, from after to, more than 60 months",
+  expect("A4 what is ignored and why: a market, store, proposition or interval out of form, a month out of form, to after this month, from after to, more than 60 complete months and the current one",
     [bad({ market: "gb" })[0], bad({ store: "x" })[0], bad({ proposition: "Hs1" })[0], bad({ interval: "weekly" })[0], bad({ from: "2026-13" })[0],
       bad({ to: "2027-01" }), bad({ from: "2026-10", to: "2026-05" }), bad({ from: "2018-01" })],
-    ["market", "store", "proposition", "interval", "from", ["to", "2025-11-01", "2026-11-01"], ["range", "2025-05-01", "2026-05-01"], ["range", "2021-12-01", "2026-11-01"]],
+    ["market", "store", "proposition", "interval", "from", ["to", "2025-11-01", "2026-11-01"], ["range", "2025-05-01", "2026-05-01"], ["range", "2021-11-01", "2026-11-01"]],
     []);
   expect("A5 months move across years; the current month in a zone", [addMonths("2026-01-01", -1), addMonths("2026-12-01", 1), addMonths("2026-05-01", -17),
     currentMonthIn("Europe/Amsterdam", new Date("2026-11-30T23:30:00Z")), currentMonthIn("Europe/London", new Date("2026-11-30T23:30:00Z"))],
@@ -90,9 +90,9 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
 // ---- F. Files ---------------------------------------------------------------------------------------------------------------
 {
   const personal = /name|email|phone|address|url|link/;
-  expect("F1 the list's file: ids, codes, dates, counts and amounts only; the contact's id, never its link", [
-    [...SUBSCRIPTIONS_FILE_COLUMNS].filter((c) => personal.test(c)), SUBSCRIPTIONS_FILE_COLUMNS.includes("contact_id"), SUBSCRIPTIONS_FILE_COLUMNS.length],
-  [[], true, 16], [["x"], false, 0]);
+  expect("F1 the list's file: ids, codes, counts and amounts only; the contact's id, never its link; no original start before its hand check", [
+    [...SUBSCRIPTIONS_FILE_COLUMNS].filter((c) => personal.test(c) || /original_start/.test(c)), SUBSCRIPTIONS_FILE_COLUMNS.includes("contact_id"), SUBSCRIPTIONS_FILE_COLUMNS.length],
+  [[], true, 14], [["x"], false, 0]);
   expect("F2 the months file: the month, every movement kind and the rates' parts", [...SUBSCRIPTIONS_MONTHS_COLUMNS],
     ["month", "start", "new", "migrated", "reactivated", "resumed", "paused", "churned", "moved_to_failed", "end", "expansion", "contraction", "rate_base",
       "rate_churned", "rate_moved_to_failed"], []);

@@ -150,8 +150,8 @@ export function DataNote({ children, testId }: { children: ReactNode; testId: st
  * The Churn rate card (addition 0009zh, D.4; it was a placeholder until then): its label with the hint, its figures (a
  * streamed layer: ChurnRateFigures), a link to Customers → Subscriptions and its definition status Proposed
  */
-export function ChurnRateCard({ info, copy, children }: {
-  info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy; children: ReactNode;
+export function ChurnRateCard({ info, copy, market, children }: {
+  info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy; market: string | null; children: ReactNode;
 }) {
   const t = copy.active;
   return (
@@ -160,7 +160,7 @@ export function ChurnRateCard({ info, copy, children }: {
         <HintLabel label={t.slot_churn_rate}><HeaderHint label={info.about} text={info.text} more={info.more} /></HintLabel>
       </p>
       {children}
-      <p className="text-small"><Link href={"/reports/subscriptions" as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline">{t.churnCardOpen}</Link></p>
+      <p className="text-small"><Link href={(market ? `/reports/subscriptions?market=${encodeURIComponent(market)}` : "/reports/subscriptions") as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline">{t.churnCardOpen}</Link></p>
       <p><StatusBadge status="Proposed" copy={copy} /></p>
     </div>
   );
