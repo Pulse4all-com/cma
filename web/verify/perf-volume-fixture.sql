@@ -6,7 +6,9 @@
 -- pledge lists (a block of its own at the end, once 168 has run); since addition 0009l the active customer base (a block
 -- of its own after it, once 172 has run: the subscriptions linked to their store's customers over 60 months, segments,
 -- a year of first orders with their deals, and most failed renewals closed, then the stored take of Customers → Active
--- refreshed once)
+-- refreshed once); since addition 0009zf the subscription facts' inputs (a block of its own before that take, once 210 has
+-- run: the events as the app's with a renewal's store order, raw and a write time per page, purchases and migrations,
+-- a catalog with its mapping, lines, billing events and observed changes, then the facts' takes refreshed once)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, refuses a database without
 -- the dev seed, and refuses a Cloud SQL instance (the role cloudsqladmin exists there). Every id is invented (perf-…,
@@ -604,6 +606,214 @@ end
 $$;
 reset role;
 
+-- The subscription facts' inputs at volume (addition 0009zf, 21 November 2026; the follow-up named in the Decision log of
+-- 20 Nov 2026: lines, billing events, purchases and observed changes at three times prod's volume), once
+-- 210_subscription_facts.sql has run. The events of the blocks above read as the app's: a renewal names its store order,
+-- raw holds the mapped values (prod's row width), and the write time moves per page of a read (about 65 mapped events of a
+-- page of 100), not once for the whole table, so the inputs' markers meet a real spread of write times; a renewal's and a
+-- failed renewal's cycle counts the subscription's months with events (the blocks above gave a subscription's events one
+-- cycle each, which left a fifth of prod's renewal outcomes: now about 150,000 at m = 3, prod about 59,000). Then per
+-- subscription a purchase with its store order or, for a fifth, a migration in its store's migration month (a few
+-- stragglers three months later); some active subscriptions failed; a catalog of 25 variants per store with a mapping for
+-- most (two device variants and three others left unmapped, for the data-quality checks); one line per subscription, a
+-- second for one in fourteen, a one-time and a canceled line for a few; billing events as prod's mix (about 1,500 × m:
+-- chargebacks on renewal orders and on purchases' orders, invoice renewals in three stores, half naming no subscription,
+-- refunds); a few observed changes of an amount. Ids, codes, amounts and times only. Rerunnable: a second run finds its
+-- billing events and stops
+set role cma_owner;
+do $$
+declare
+  m       numeric := coalesce(nullif(current_setting('cma.perf_multiplier', true), ''), '3')::numeric;
+  v_subs  uuid;
+  v_base  timestamptz := date_trunc('second', now()) - interval '2 days';
+  v_mig   timestamptz := date_trunc('month', now()) - interval '17 months';
+  t0      timestamptz := clock_timestamp();
+  n_ev    bigint; n_first bigint; n_bill bigint; n_line bigint; n_var bigint;
+begin
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
+  if to_regclass('cma.subscription_take') is null then
+    raise notice 'the subscription facts are not present (210 not run): nothing shaped for them';
+    return;
+  end if;
+  select id into v_subs from cma.tenant where slug = 'pulse4all-subscriptions';
+  if not exists (select 1 from cma.integration_connection where tenant_id = v_subs and adapter = 'perfsubs') then
+    raise notice 'the perf volume fixture is not present: nothing shaped for the subscription facts';
+    return;
+  end if;
+  if exists (select 1 from cma.billing_event where tenant_id = v_subs and source_system = 'perfsubs') then
+    raise notice 'perf subscription facts already present';
+    return;
+  end if;
+  perform set_config('lock_timeout', '0', true);
+  alter table cma.subscription disable trigger audit;
+  alter table cma.subscription_event disable trigger audit;
+  alter table cma.subscription_line disable trigger audit;
+  alter table cma.subscription_product_variant disable trigger audit;
+  alter table cma.subscription_variant_mapping disable trigger audit;
+  alter table cma.billing_event disable trigger audit;
+  alter table cma.subscription_change disable trigger audit;
+
+  -- the subscriptions: an instrument each; one active subscription in twenty-five failed, with the event that moved it
+  update cma.subscription s
+     set payment_instrument_type = (array['card', 'card', 'sepa_direct_debit', 'paypal', 'bacs_direct_debit', 'ideal'])[1 + substr(s.source_id, 5)::integer % 6],
+         status = case when s.status = 'active' and substr(s.source_id, 5)::integer % 25 = 3 then 'failed' else s.status end
+   where s.tenant_id = v_subs and s.source_system = 'perfsubs';
+  insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at,
+                                      status_from, status_to)
+  select v_subs, s.connection_id, 'perfsubs', 'pffs' || substr(s.source_id, 5), s.source_id, 'status_changed',
+         now() - make_interval(days => 1 + substr(s.source_id, 5)::integer % 200), 'active', 'failed'
+  from cma.subscription s
+  where s.tenant_id = v_subs and s.source_system = 'perfsubs' and s.status = 'failed';
+
+  -- the events as the app's: a renewal's store order, the mapped values in raw, a write time per page of a read
+  update cma.subscription_event e
+     set order_source_id = case when e.event_type = 'renewed' then (7000000000 + x.rn)::text end,
+         cycle_index = case when e.event_type in ('renewed', 'renew_failed') then x.cyc else e.cycle_index end,
+         raw = jsonb_strip_nulls(jsonb_build_object(
+                 'id', e.source_id, 'type', 'subscription:' || e.event_type,
+                 'occurredAt', to_char(e.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+                 'subscriptionId', e.subscription_source_id, 'customerId', x.customer_source_id, 'actorType', 'system',
+                 'cycleIndex', case when e.event_type in ('renewed', 'renew_failed') then x.cyc else e.cycle_index end,
+                 'status', e.status_to, 'previousStatus', e.status_from,
+                 'orderId', case when e.event_type = 'renewed' then (7000000000 + x.rn)::text end)),
+         synced_at = v_base + make_interval(secs => (x.rn / 65)::integer)
+    from (select q.id, s.customer_source_id, row_number() over (order by q.connection_id, q.occurred_at, q.id) as rn,
+                 dense_rank() over (partition by q.connection_id, q.subscription_source_id order by date_trunc('month', q.occurred_at)) as cyc
+          from cma.subscription_event q
+          left join cma.subscription s on s.tenant_id = q.tenant_id and s.connection_id = q.connection_id and s.source_id = q.subscription_source_id
+          where q.tenant_id = v_subs and q.source_system = 'perfsubs') x
+   where e.id = x.id;
+  get diagnostics n_ev = row_count;
+
+  -- each subscription's start in the app: a purchase with its store order, or for a fifth a migration in its store's
+  -- migration month (the 17th month back, the 16th for every second store; one in four hundred three months later)
+  insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at,
+                                      cycle_index, raw, synced_at)
+  select v_subs, s.connection_id, 'perfsubs', 'pffp' || x.g, s.source_id, x.kind, x.at, case when x.kind = 'migrated' then 3 + x.g % 20 end,
+         jsonb_strip_nulls(jsonb_build_object(
+           'id', 'pffp' || x.g, 'type', 'subscription:' || x.kind, 'occurredAt', to_char(x.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+           'subscriptionId', s.source_id, 'customerId', s.customer_source_id,
+           'orderId', case when x.kind = 'purchased' then (8000000000 + x.g)::text end)),
+         v_base + make_interval(secs => 5000 + x.g / 65)
+  from cma.subscription s
+  cross join lateral (select substr(s.source_id, 5)::integer as g) g0
+  cross join lateral (
+    select g0.g,
+           case when g0.g % 5 = 0 then 'migrated' else 'purchased' end as kind,
+           case when g0.g % 5 = 0
+                then v_mig + make_interval(months => (g0.g % 12) % 2 + case when g0.g % 2000 = 5 then 3 else 0 end, days => g0.g % 20, mins => g0.g % 600)
+                else coalesce(s.source_created_at, now() - interval '400 days') end as at) x
+  where s.tenant_id = v_subs and s.source_system = 'perfsubs';
+  get diagnostics n_first = row_count;
+
+  -- the catalog: 25 variants of 13 products per store; a mapping for most (variants 19, 20, 24 and 25 unmapped, 7 holds
+  -- two devices a unit, 21 and 22 accessories, 23 a service)
+  insert into cma.subscription_product_variant (tenant_id, connection_id, source_system, product_source_id, variant_source_id, product_title,
+                                                variant_title, sku, product_status)
+  select v_subs, c.id, 'perfsubs', 'pprod' || (1 + v % 13), 'pvar' || v, 'Perf product ' || (1 + v % 13), 'Variant ' || v, 'PSKU-' || v, 'active'
+  from cma.integration_connection c cross join generate_series(1, 25) v
+  where c.tenant_id = v_subs and c.adapter = 'perfsubs';
+  get diagnostics n_var = row_count;
+  insert into cma.subscription_variant_mapping (tenant_id, connection_id, variant_source_id, line_kind, model_key, devices_per_unit, proposition)
+  select v_subs, c.id, 'pvar' || v,
+         case when v <= 18 then 'device' when v in (21, 22) then 'accessory' else 'service' end,
+         case when v <= 18 then (select dm.key from cma.device_model dm where dm.tenant_id = v_subs order by dm.key collate "C" offset (v % 2) limit 1) end,
+         case when v = 7 then 2 when v <= 18 then 1 else 0 end,
+         case when v <= 18 then (array['hs1', 'frx', 'buurt_aed', 'outdoor'])[1 + v % 4] end
+  from cma.integration_connection c cross join generate_series(1, 23) v
+  where c.tenant_id = v_subs and c.adapter = 'perfsubs' and v not in (19, 20)
+    and exists (select 1 from cma.device_model dm where dm.tenant_id = v_subs);
+
+  -- the lines: one per subscription, a second (an accessory or a service) for one in fourteen, a one-time line for one in
+  -- fifty, a canceled one for one in thirty-three
+  insert into cma.subscription_line (tenant_id, connection_id, source_system, source_id, subscription_source_id, product_source_id,
+                                     variant_source_id, quantity, amount_per_cycle, currency, billing_interval, billing_interval_count,
+                                     recurring_cycle_limit, canceled_at, raw)
+  select v_subs, s.connection_id, 'perfsubs', 'pfl' || k.k || '-' || g0.g, s.source_id, 'pprod' || (1 + k.v % 13), 'pvar' || k.v,
+         case when k.k = 1 and g0.g % 25 = 0 then 2 else 1 end, case when k.k = 1 then s.amount_per_cycle else 5 end, s.currency,
+         s.billing_interval, s.billing_interval_count, case when k.k = 3 then 1 end, case when k.k = 4 then now() - interval '40 days' end,
+         jsonb_build_object('id', 'pfl' || k.k || '-' || g0.g, 'subscriptionId', s.source_id, 'product', 'pprod' || (1 + k.v % 13),
+                            'variant', 'pvar' || k.v, 'quantity', 1, 'currencyCode', s.currency, 'interval', 'MONTH', 'intervalCount', 1)
+  from cma.subscription s
+  cross join lateral (select substr(s.source_id, 5)::integer as g) g0
+  cross join lateral (values (1, 1 + g0.g % 20), (2, 21 + g0.g % 3), (3, 24), (4, 25)) k(k, v)
+  where s.tenant_id = v_subs and s.source_system = 'perfsubs'
+    and (k.k = 1 or (k.k = 2 and g0.g % 14 = 0) or (k.k = 3 and g0.g % 50 = 0) or (k.k = 4 and g0.g % 33 = 0));
+  get diagnostics n_line = row_count;
+
+  -- billing events: chargebacks on one renewal order in seventy-five (half naming the subscription) and on one purchase's
+  -- order in sixty; invoice renewals in the first three stores (three per subscription for one in forty: the last unpaid
+  -- for a third of them, overdue for half of those; every second renewal names no subscription); refunds
+  insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, subscription_source_id, customer_source_id,
+                                 order_source_id, amount, currency, return_code, instrument_type, raw, synced_at)
+  select v_subs, e.connection_id, 'perfsubs', 'pfcb' || e.source_id, 'chargeback', e.occurred_at + interval '9 days',
+         case when x.n % 2 = 0 then e.subscription_source_id end, e.raw ->> 'customerId', coalesce(e.order_source_id, e.raw ->> 'orderId'), 29, 'EUR',
+         (array['MD06', 'AM04', 'AC04', 'MS02'])[1 + (x.n % 4)::integer], 'sepa_direct_debit',
+         jsonb_build_object('id', 'pfcb' || e.source_id, 'type', 'billing:chargeback-created', 'orderId', coalesce(e.order_source_id, e.raw ->> 'orderId'),
+                            'reasonCode', 'MD06', 'currencyCode', 'EUR'),
+         v_base + make_interval(secs => 9000 + (x.n / 20)::integer)
+  from cma.subscription_event e
+  cross join lateral (select substr(coalesce(e.order_source_id, e.raw ->> 'orderId'), 2)::bigint as n) x
+  where e.tenant_id = v_subs and e.source_system = 'perfsubs'
+    and ((e.event_type = 'renewed' and x.n % 75 = 0) or (e.event_type = 'purchased' and x.n % 60 = 1));
+  insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, subscription_source_id, customer_source_id,
+                                 renewal_source_id, amount, currency, raw, synced_at)
+  select v_subs, s.connection_id, 'perfsubs', 'pfin' || k.kind || '-' || g0.g || '-' || r.r, k.kind,
+         now() - make_interval(days => 20 + 30 * (3 - r.r)) + k.after,
+         case when r.r % 2 = 1 then s.source_id end, s.customer_source_id, 'pfren-' || g0.g || '-' || r.r, s.amount_per_cycle, s.currency,
+         jsonb_build_object('id', 'pfin' || k.kind || '-' || g0.g || '-' || r.r, 'type', 'invoice:' || k.kind, 'renewalId', 'pfren-' || g0.g || '-' || r.r),
+         v_base + make_interval(secs => 9500 + g0.g / 200)
+  from cma.subscription s
+  cross join lateral (select substr(s.source_id, 5)::integer as g) g0
+  cross join generate_series(1, 3) r(r)
+  cross join lateral (values ('invoice_placed', interval '0'), ('invoice_paid', interval '3 days'), ('invoice_overdue', interval '14 days')) k(kind, after)
+  where s.tenant_id = v_subs and s.source_system = 'perfsubs' and s.status = 'active' and g0.g % 40 = 0
+    and s.connection_id in (select c.id from cma.integration_connection c where c.tenant_id = v_subs and c.adapter = 'perfsubs'
+                            order by c.name collate "C" limit 3)
+    and (k.kind = 'invoice_placed'
+         or (k.kind = 'invoice_paid' and not (r.r = 3 and g0.g % 120 = 0))
+         or (k.kind = 'invoice_overdue' and r.r = 3 and g0.g % 240 = 0));
+  insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, subscription_source_id, customer_source_id,
+                                 order_source_id, amount, currency, partial, raw, synced_at)
+  select v_subs, e.connection_id, 'perfsubs', 'pfrf' || k.kind || e.source_id, k.kind, e.occurred_at + interval '2 days', e.subscription_source_id,
+         e.raw ->> 'customerId', e.order_source_id, 10, 'EUR', x.n % 3 = 0,
+         jsonb_build_object('id', 'pfrf' || k.kind || e.source_id, 'type', 'billing:' || k.kind, 'orderId', e.order_source_id), v_base + interval '9900 seconds'
+  from cma.subscription_event e
+  cross join lateral (select substr(e.order_source_id, 2)::bigint as n) x
+  cross join (values ('refund_created'), ('refund_completed')) k(kind)
+  where e.tenant_id = v_subs and e.source_system = 'perfsubs' and e.event_type = 'renewed' and x.n % 1500 = 7;
+  select count(*) into n_bill from cma.billing_event b where b.tenant_id = v_subs and b.source_system = 'perfsubs';
+
+  -- a few observed changes of an amount, after the first load
+  insert into cma.subscription_change (tenant_id, connection_id, subscription_source_id, field, old_value, new_value, observed_at)
+  select v_subs, s.connection_id, s.source_id, 'amount_per_cycle', (s.amount_per_cycle - 2)::text, s.amount_per_cycle::text,
+         now() - make_interval(mins => 5 + substr(s.source_id, 5)::integer % 30)
+  from cma.subscription s
+  where s.tenant_id = v_subs and s.source_system = 'perfsubs' and s.status = 'active' and substr(s.source_id, 5)::integer % 220 = 4;
+
+  alter table cma.subscription enable trigger audit;
+  alter table cma.subscription_event enable trigger audit;
+  alter table cma.subscription_line enable trigger audit;
+  alter table cma.subscription_product_variant enable trigger audit;
+  alter table cma.subscription_variant_mapping enable trigger audit;
+  alter table cma.billing_event enable trigger audit;
+  alter table cma.subscription_change enable trigger audit;
+  raise notice 'perf subscription facts written in % s (multiplier %): % events given their order, raw and write time, % purchases and migrations, % variants, % lines, % billing events',
+    round(extract(epoch from clock_timestamp() - t0), 1), m, n_ev, n_first, n_var, n_line, n_bill;
+end
+$$;
+reset role;
+-- the events were all written again: their dead rows go, so the table has the size it would have had (local only)
+vacuum (full, analyze) cma.subscription_event;
+vacuum (analyze) cma.subscription;
+analyze cma.subscription_line;
+analyze cma.billing_event;
+analyze cma.subscription_product_variant;
+analyze cma.subscription_variant_mapping;
+analyze cma.subscription_change;
+
 -- The stored take of Customers → Active (decision D13 of addendum B): refreshed once here, as the scheduler's job does
 -- every minute where it runs, so the page, verify/perf.mjs and verify/round-trips.mjs read a take on this local database
 -- too (no job runs here; run  node jobs/refresh-active-customers.mjs  with the local CMA_DB_* to refresh it again). A
@@ -622,6 +832,11 @@ begin
     perform set_config('app.tenant_id', t.id::text, true);
     r := cma.active_refresh_of(t.id, true);
     raise notice 'perf active take of %: %', t.slug, r;
+    -- the subscription facts' takes too, once 210 has run (the job's second step)
+    if to_regprocedure('cma.subscription_facts_refresh_of(uuid,boolean,timestamptz)') is not null then
+      r := cma.subscription_facts_refresh_of(t.id, true);
+      raise notice 'perf subscription facts of %: %', t.slug, r;
+    end if;
   end loop;
 end
 $$;

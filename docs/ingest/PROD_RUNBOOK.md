@@ -3424,7 +3424,7 @@ psql "$PGCONN" -f db/131_time_all.sql > ~/cma-audit/0009ze-prod-$(date +%F)-131.
 ```
 Expected, in two to three minutes: the rows "current takes refresh", "active customers refresh", "active customers inputs markers", "subscription facts refresh" and "subscription variants list", then the verdict's row with its counts. A line about a closed or lost connection and no verdict: the run was cut off on the client's side; run the block again.
 
-Compare: part b's row "subscription facts refresh" against its 3,000 ms (proposed) and "subscription variants list" against its budget; the current takes' refresh no slower than 7,868 ms; `cma.active_inputs_key_of`'s time (the markers row, budget 300 ms; 440.7 ms on 20 November); the rows of `124` (Flash's Subscriptions list) before and after the migration, since the payment state costs more (about 312 ms against 132 locally at three times prod's volume; the list may cross 400 ms p75). Report the times in the chat; a record is written from your report.
+Compare: part b's row "subscription facts refresh" against its budget (8,000 ms, proposed since addition 0009zf: 21.4 and 21.6) and "subscription variants list" against its budget; the current takes' refresh against its 5,000 ms; `cma.active_inputs_key_of`'s time (the markers row, budget 300 ms); the rows of `124` (Flash's Subscriptions list) before and after the migration. Report the times in the chat; a record is written from your report.
 
 
 After the first refresh, check where each store's rates start. **Studio** (cma-prod-pg):
@@ -3434,3 +3434,100 @@ select market, migration_months, straggler_months, rate_start_month from cma_rea
 ```
 
 Expected: GB June 2025 (April with 2 events and August with 1 noted); BE July 2025 with a September straggler; DE, FR and SE July 2025; NL June or July 2025, depending on the share of its 2 June batch; AT June 2026; DK and IE July 2026. Report the rows in the chat; a record is written from your report.
+
+# Phase 21. The subscription facts after their first day in prod (addition 0009zf, the follow-up of brief B39c)
+
+One step at a time; each says where it runs and what to expect. `212` changes no table, view or column and no answer: it makes three reads cheaper (the inputs' markers, the payment state, the facts' refresh), and `213` compares each with `210`'s definition row for row. It needs one index on `cma.subscription_event`, built first from the Terminal; a second index (on renewal orders) is built after prod has measured `212` alone. Nothing here runs before Phase 20's `210` has run in the database. Outputs of `124` and `131` go to `~/cma-audit`, never to `records/` (20.8).
+
+## 21.1 Terminal: the branch, the index, the migration and its verifies in dev
+**Terminal** (~/cma)
+```bash
+gh pr checkout <PR> && git log --oneline -1
+```
+Expected: the PR's last commit.
+
+The index on the events' write time, concurrently (RUNBOOK, A concurrent index on a busy table). `212` refuses to run without it.
+
+**Terminal**
+```bash
+cd ~/cma && cma_db dev && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set lock_timeout = '5s'" -c "set statement_timeout = '10min'" -c "create index concurrently if not exists subscription_event_synced_idx on cma.subscription_event (tenant_id, synced_at)" \
+  -c "select c.relname, i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = 'subscription_event_synced_idx'"
+```
+Expected: `CREATE INDEX`, then one row `subscription_event_synced_idx | t`. An `f`: `drop index concurrently cma.subscription_event_synced_idx` and run it again.
+
+**Terminal**
+```bash
+run_migration dev 212_subscription_facts_speed.sql 213_verify_subscription_facts_speed.sql 0009zf-dev-$(date +%F) 211_verify_subscription_facts.sql 119_verify_subscriptions.sql 123_verify_flash.sql 137_verify_flash_insights.sql 139_verify_flash_totals.sql 147_verify_installed_base_models.sql 149_verify_installed_base_list.sql 159_verify_flash_current_take.sql 161_verify_installed_base_now.sql 173_verify_active_customers.sql 175_verify_active_refresh_quiet.sql 177_verify_active_attribution_present.sql 181_verify_flash_stored_cards.sql 185_verify_active_device_bands.sql 189_verify_fleet_management.sql 193_verify_fleet_page.sql
+```
+Expected: 212 ends with `COMMIT` and `RESET`; 213's last row `verdict | PASS | 213_verify_subscription_facts_speed: 10 PASS, 0 FAIL, 2 info` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 10 FAIL, 2 info`; `211` `23 PASS`; every other verify as on 21 November (`records/0009ze-dev-2026-11-21`); `records clean`. None of them is edited by this change. 213's two info rows give the plans; on dev's small tables they may read `Seq Scan`, which is expected there.
+
+## 21.2 Terminal: the data map on the branch
+No table, view or column changes, and `docs/datamap/schema.json` holds no indexes, so nothing is refreshed.
+
+**Terminal**
+```bash
+cd web && npm run verify:datamap
+```
+Expected: `datamap: PASS (… all described; index.html current)`.
+
+## 21.3 Terminal: the index and the migration in prod
+Before or after the merge: the web reads nothing new. No ingest pause is needed: the concurrent build takes no lock that blocks a write, and `212` re-creates functions only.
+
+**Terminal**
+```bash
+cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set lock_timeout = '5s'" -c "set statement_timeout = '10min'" -c "create index concurrently if not exists subscription_event_synced_idx on cma.subscription_event (tenant_id, synced_at)" \
+  -c "select c.relname, i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = 'subscription_event_synced_idx'"
+```
+Expected, within a minute: `CREATE INDEX`, then `subscription_event_synced_idx | t`.
+
+**Terminal**
+```bash
+run_migration prod 212_subscription_facts_speed.sql 213_verify_subscription_facts_speed.sql 0009zf-prod-$(date +%F) 119_verify_subscriptions.sql 173_verify_active_customers.sql 185_verify_active_device_bands.sql
+```
+Expected: 212 `COMMIT`; 213 `verdict | REFUSED | … 5 PASS, 1 FAIL, 2 info`: A1 to A5 PASS on prod's own data (A3: every part of the markers and both digests equal to 210's; A4: the payment state of every subscription equal to 210's), block B refused (no dev seed), as 211. Its info row I1 should read `Index Only Scan using subscription_event_synced_idx`. `119` `REFUSED` as on 21 November; `173` `PASS`; `185` `PASS` with 14 PASS: its D2 failed on 21 November on documents stored before 210, which the job has written again since. A D2 that still fails is a finding: report its row.
+
+## 21.4 Terminal: the times after 212
+20.8's blocks (`cma_db prod`, then `124_time_flash.sql` and `131_time_all.sql` with `psql`), with `0009zf-prod-$(date +%F)-124-after212.txt` and `…-131-after212.txt` as the files' names. Keep the laptop awake for 131.
+
+Expected, against 21 November (`records/0009ze-prod-2026-11-21`): "active customers inputs markers" under its 300 ms (964.9 ms then; about 200 to 240 ms expected); "subscription facts refresh" under its 8,000 ms (10,156 ms then; about 6 s expected; the budget is a proposal, see 21.6); "list subscriptions …" in `124` near 525 ms (684.5 ms then). Read each beside a row 212 does not touch from the same run ("list open_tickets …": 644.5 ms before 210, 793.8 ms after, on a busier database): a run where that row is slow too says the database was busy, not that the change failed. Report in the chat: the rows named here, and from 131 the Customers → Active rows "active top (stored document)", "active now …" (both), "active rest (stored document)", the three "active list …" rows of the set and "active customers (set)", from this run and from the file of 21 November. A record is written from your report.
+
+## 21.5 Terminal: the index on renewal orders, and the proof that the plan uses it
+Only after 21.4, so the two runs of `124` show what the index adds to `212` (Decision log, 20 and 21 Nov 2026). Locally, with the table in memory, it adds nothing measurable; prod decides. Dev first (the same block after `cma_db dev`), then prod:
+
+**Terminal**
+```bash
+cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set lock_timeout = '5s'" -c "set statement_timeout = '10min'" -c "create index concurrently if not exists subscription_event_renewal_order_idx on cma.subscription_event (tenant_id, connection_id, subscription_source_id, cycle_index desc) include (occurred_at, order_source_id, source_id) where event_type = 'renewed' and cycle_index is not null" \
+  -c "select c.relname, i.indisvalid from pg_index i join pg_class c on c.oid = i.indexrelid where c.relname = 'subscription_event_renewal_order_idx'"
+```
+Expected: `CREATE INDEX`, then `subscription_event_renewal_order_idx | t`.
+
+The proof: 213 again (read only in prod), whose info row I2 runs the payment state's latest-renewal read and names the index it used.
+
+**Terminal**
+```bash
+psql "$PGCONN" -f db/213_verify_subscription_facts_speed.sql 2>&1 | grep -E ' I[12] |verdict' | sed -E 's/ {3,}/  /g' | cut -c1-320
+```
+Expected: I2 `the index exists, valid true: Index Only Scan using subscription_event_renewal_order_idx on subscription_event e; Heap Fetches: <a small number>`; the verdict `REFUSED` as in 21.3. An `Index Scan Backward using subscription_event_subscription_idx` instead: the planner did not choose the new index; report it, and the index is dropped again (`drop index concurrently cma.subscription_event_renewal_order_idx`).
+
+Then `124` once more (20.8's second block, file `…-124-after-index.txt`). Expected: "list subscriptions …" at or below 21.4's value. No difference beyond the run's noise: say so in the chat; the index then earns no place and is dropped, in dev too.
+
+## 21.6 Studio (cma-prod-pg): the refresh's real runs, a day after 212
+`131` times a forced run on a fresh take: the computation with few writes. What the job's runs cost is in their run rows. Counts and milliseconds only; one Run in one tab, as your own login.
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '60s';
+set role cma_owner;
+select count(*) as runs,
+       count(*) filter (where (r.counts ->> 'facts_skipped')::integer = 0) as computed,
+       round((percentile_cont(0.5) within group (order by (r.counts ->> 'facts_duration_ms')::numeric)
+                filter (where (r.counts ->> 'facts_skipped')::integer = 0))::numeric) as p50_ms,
+       round((percentile_cont(0.95) within group (order by (r.counts ->> 'facts_duration_ms')::numeric)
+                filter (where (r.counts ->> 'facts_skipped')::integer = 0))::numeric) as p95_ms,
+       max((r.counts ->> 'facts_duration_ms')::numeric) filter (where (r.counts ->> 'facts_skipped')::integer = 0) as max_ms
+from cma.sync_run r
+where r.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+  and r.job = 'refresh_active_customers' and r.status = 'succeeded' and r.started_at >= now() - interval '24 hours';
+reset role;
+```
+Expected: one row; `runs` about 1,440, `computed` at most 96 (one per 15 minutes while the inputs change). Report the row in the chat: the budget `verify.max_facts_ms` is confirmed or set from `p95_ms` plus a margin, and `computed` with `p50_ms` sizes the incremental refresh (docs/open-decisions.md).

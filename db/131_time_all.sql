@@ -20,7 +20,8 @@
 -- cma.my_follow_up_counts(); the follow-up's report lists and /me/follow-up's rows, whose clock fields it derives at the
 -- read, are timed too), after 190_follow_up_clock_at_read.sql; since addition 0009v (Assets -> Fleet management's page in one read),
 -- after 192_fleet_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
--- where 210_subscription_facts.sql has run, skip before). Prod is the proof; dev's shared core is for
+-- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 8,000 ms,
+-- proposed from prod's first day). Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -156,7 +157,7 @@ select set_config('verify.max_dq_ms', '500', false);                 -- data qua
 select set_config('verify.max_top_ms', '400', false);                -- Customers → Active: the live present of the tiles, and above the fold computed (decisions D15, D16)
 select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh of Customers → Active's stored take, the history and the documents written again
 select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
-select set_config('verify.max_facts_ms', '3000', false);             -- the subscription facts' refresh, every take written again (addition 0009ze, brief B39c C.9; proposed)
+select set_config('verify.max_facts_ms', '8000', false);             -- the subscription facts' refresh, forced: every take computed again (addition 0009ze, brief B39c C.9). Proposed after 0009zf from prod's 10,156 ms of 21 November 2026 and the local gain (9.1 to 5.5 s at three times prod's volume, one CPU): about 6 s expected, a third of margin; to confirm from prod's run after 212
 select set_config('verify.max_takes_ms', '5000', false);             -- the refresh of Flash's current takes, every overview of the tenant's setting (0009p; to confirm from prod's first runs)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
 select set_config('verify.poll_warmup', '6', false);                 -- a poll's untimed runs first (the plans a pooled connection keeps)
@@ -617,7 +618,10 @@ begin
         r_ms := r_ms || v_ms;
       end if;
       -- the subscription facts (addition 0009ze, brief B39c C.9), part b: their refresh as the tenant's scheduler, every
-      -- take written again (forced), once, against verify.max_facts_ms, rolled back at once as Active's above; and the
+      -- take computed again (forced), once, against verify.max_facts_ms, rolled back at once as Active's above. Since
+      -- addition 0009zf (212) the two large takes are written as differences, so on a take the job keeps fresh this row
+      -- times the computation and few writes: the floor of a run, not its usual cost (a run of the job that finds the
+      -- inputs unchanged computes nothing; the job's own runs keep their times in cma.sync_run's counts); and the
       -- variant mapping's list (Configuration → Sources, the panel of a subscriptions connection), as the application
       -- (cma_app, row-level security on, the tenant's scheduler), the best of two, against verify.max_list_ms. A database
       -- without 210 reads skip
@@ -647,7 +651,7 @@ begin
                                      when v_sched is null then 'no active scheduler user: nothing to time'
                                      when v_cur ->> 'reason' = 'not_set_up' then 'the subscriptions source is not set up: nothing to take'
                                      when v_cur ->> 'reason' = 'running' then 'the job is refreshing this tenant now: nothing to time'
-                                     else coalesce(v_ms || ' ms (every take written again, once) against ' || v_max || ' ms: ', '') || v_cur::text end;
+                                     else coalesce(v_ms || ' ms (every take computed again, once) against ' || v_max || ' ms: ', '') || v_cur::text end;
         r_ms := r_ms || v_ms;
         v_ms := null; v_cur := null;
         if to_regprocedure('cma.subscription_variants_of(uuid,uuid)') is not null then
