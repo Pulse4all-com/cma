@@ -16,6 +16,7 @@
  *                   notice, category notification, is never requested: Decision log, 19 Nov 2026); billing,
  *                   (type:'chargeback:created' OR type:'refund:created' OR …), the ten billing types of BILLING_TYPES,
  *                   whose category is billing or order
+ *   query           POST /analytics/query (addition 0009zg): one of Juo's own figures (figures.mjs builds the body)
  *   products        GET /products?limit=100&sort=id:asc[&after=<endCursor>] (addition 0009za): the store's catalog, each
  *                   product with its variants (id, title, SKU); map.mjs reads ids, titles, SKU and status only. id:asc is
  *                   Juo's default and unique; it is sent so the read never rests on a default (addition 0009zc)
@@ -108,6 +109,10 @@ export function clientFor(connection, settings, budget) {
     /** The store's catalog, page by page: products with their variants. */
     products() {
       return pages("/products", { limit: String(PAGE_SIZE), sort: PRODUCTS_SORT });
+    },
+    /** One analytics query (POST /analytics/query, a read with a body; addition 0009zg, figures.mjs) */
+    query(path, body) {
+      return api.query(path, body);
     },
   };
 }

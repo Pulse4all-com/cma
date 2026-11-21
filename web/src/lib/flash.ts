@@ -684,7 +684,7 @@ export type FlashFixIn = "crm" | "commerce" | "subscriptions" | "assets" | "cma"
  * (verify:flash compares the lists with db/122_flash.sql): a finding's own row in the list carries the database's answer,
  * which for customer_required_ref_missing is the Workspace when the contact is not held
  */
-export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma" | "subscriptions">, readonly string[]>> = {
+export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma">, readonly string[]>> = {
   crm: ["customer_required_ref_missing", "deal_without_contact", "deal_contact_incomplete", "crm_call_without_contact", "commerce_unmatched", "commerce_ambiguous",
     "contact_slots_full", "contact_country_differs", "contact_country_fallback", "ticket_no_owner", "ticket_no_market", "telephony_call_unlinked"],
   commerce: ["customer_in_two_stores", "subscription_customer_unmatched"],
@@ -692,6 +692,8 @@ export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma" | "subscrip
     "device_customer_ref_invalid", "component_due_unknown", "field_device_without_subscription_ref", "device_required_ref_missing",
     "active_subscription_without_device", "device_subscription_ref_unknown", "field_device_on_ended_subscription", "field_device_on_non_holding_subscription",
     "subscription_device_units_mismatch"],
+  // since 0009zg: the subscription app's own figures against the Workspace's (a missed read or a rule of that source)
+  subscriptions: ["source_figure_gap"],
 };
 
 /** Where a check's findings are fixed; the Workspace for every other check */

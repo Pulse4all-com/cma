@@ -39,7 +39,13 @@
  * the observed changes (one row per change with its run, none on the first load and none on a rerun), a chargeback
  * linked to its renewal by the store's order, the event types of the subscription family, the history start
  * (subscriptions.history_start_date: empty reads all history; set, an events backfill without --from starts there,
- * before intake.start_date, and a --from before it is refused); G2 reads the new tables too.
+ * before intake.start_date, and a --from before it is refused); G2 reads the new tables too. Since addition 0009zg (brief
+ * B39 Part B39b, section K) Juo's own figures: the job ingest-source-figures (job source_figures, stream source_figure)
+ * reads each due store once a day, ten POSTs to /analytics/query and nothing else, every figure stored with the CMA's own
+ * value (equal on the fixture); a second run the same day reads nothing; a later read replaces a value (a renewal count
+ * Juo moves) and Data quality lists the gap; a 400 is a counted skip and a store with analytics off (409) is skipped
+ * after one request, both runs succeeded; two stores in one run, each its own run; the month backfill (--object
+ * source_figure) reads the flow figures month by month from --from, resumable, a second run reads nothing.
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -89,6 +95,7 @@ const { setLogSink } = await import("../src/core/log.mjs");
 setLogSink((line) => logs.push(line));
 const { createIngestServer } = await import("../src/server.mjs");
 const { runPollSubscriptions } = await import("../src/jobs/poll-subscriptions.mjs");
+const { runSourceFigures } = await import("../src/jobs/source-figures.mjs");
 const { runReconcile } = await import("../src/jobs/reconcile.mjs");
 const { runBackfill, runAdapterBackfill } = await import("../src/jobs/backfill.mjs");
 const { UsageError, withJobLock } = await import("../src/jobs/runner.mjs");
@@ -636,6 +643,83 @@ if ((await q("select count(*)::int as n from cma.schema_migration where version 
     [await usageOf(() => runBackfill({ connectionId: juo1.id, object: "purchase_order", dryRun: true }))], ["usage"], ["ran"]);
 } else {
   expect("J1 addition 0009ze (210) has run in this database", [false], [true], [true]);
+}
+
+// ---- K. Addition 0009zg: Juo's own figures --------------------------------------------------------------------------------------
+if ((await q("select count(*)::int as n from cma.schema_migration where version = '0009zg'"))[0].n === 1) {
+  // both tenants read from 00:00 (due at once); store two's subscriptions as store one's were (C), so both compare alike
+  for (const T of [T1, T2]) await asAdmin(T, () => q("select cma.set_tenant_setting('source_figures.local_time', '00:00')"));
+  const posts = () => fake.state.requests.filter((r) => r.path === "/admin/v1/analytics/query");
+  const figs = async (conn) => q(`select figure_key, business_date::text as d, dims, value::float8 as v, cma_value::float8 as c, unit, currency, source_metric
+    from cma.source_figure where connection_id = $1 order by figure_key collate "C", business_date, dims::text collate "C"`, [conn]);
+  fake.state.requests.length = 0;
+  logs.length = 0;
+  let k = await runSourceFigures({ connectionId: juo1.id });
+  let kRun = (await runsOf(juo1.id, "source_figures")).at(-1);
+  let rows = await figs(juo1.id);
+  const stock = rows.filter((r) => r.figure_key === "subscriptions_in_status");
+  const amount = rows.find((r) => r.figure_key === "recurring_amount_active");
+  expect("K1 the daily run: one run (source_figures, stream source_figure, succeeded), ten POSTs to /analytics/query and no other request, each figure stored",
+    [k.read, k.failed, kRun.stream, kRun.status, posts().length, fake.state.requests.length, kRun.counts.fetched > 0, kRun.counts.inserted, kRun.counts.skipped,
+      [...new Set(rows.map((r) => r.figure_key))]],
+    [1, 0, "source_figure", "succeeded", 10, 10, true, rows.length, 0,
+      ["pauses", "purchases", "recurring_amount_active", "renewal_survival", "renewals", "subscriptions_in_status", "transitions_to_churn"]],
+    [0, 1, null, "failed", 0, 0, false, 0, 1, []]);
+  expect("K2 the CMA's value beside Juo's: the statuses equal, the amount in the store's currency, every flow day equal; the survival not compared",
+    [stock.map((r) => `${r.dims.status}:${r.v}:${r.c}`), [amount.unit, amount.currency, amount.v === amount.c],
+      rows.filter((r) => ["renewals", "purchases", "pauses", "transitions_to_churn"].includes(r.figure_key)).every((r) => r.v === r.c),
+      rows.filter((r) => r.figure_key === "renewal_survival").every((r) => r.c === null)],
+    [["active:224:224", "canceled:1:1", "failed:1:1", "paused:1:1"], ["amount", "GBP", true], true, true], [[], [], false, false]);
+  fake.state.requests.length = 0;
+  k = await runSourceFigures({ connectionId: juo1.id });
+  expect("K3 a second run the same day: not due, nothing asked, no run", [k.notDue, fake.state.requests.length, (await runsOf(juo1.id, "source_figures")).length],
+    [1, 0, 1], [0, 10, 2]);
+  // a later read: this throwaway tenant's figures runs removed as the owner (sync_run is append-only: a run never moves),
+  // so the store is due again as tomorrow it would be; Juo counts 7 more renewals
+  await q("delete from cma.sync_run where connection_id = $1 and job = 'source_figures'", [juo1.id]);
+  fake.state.analyticsOffset = { "subscriptions:renewed": 7 };
+  k = await runSourceFigures({ connectionId: juo1.id });
+  fake.state.analyticsOffset = {};
+  kRun = (await runsOf(juo1.id, "source_figures")).at(-1);
+  const ren = (await figs(juo1.id)).filter((r) => r.figure_key === "renewals");
+  const gaps = await q("select object_id, value from cma.data_quality_of($1) where check_key = 'source_figure_gap'", [T1.t]);
+  const raws = await q("select (raw ->> 'fetches')::int as n from cma.source_figure where connection_id = $1 and figure_key = 'renewals' order by business_date", [juo1.id]);
+  expect("K4 a later read replaces a value (renewals 7 above the CMA's on both days), the others unchanged; Data quality lists renewals for yesterday with both values",
+    [kRun.status, kRun.counts.updated, kRun.counts.unchanged > 0, ren.map((r) => r.v - r.c), raws.map((r) => r.n),
+      gaps.map((g) => g.object_id), /^\d{4}-\d{2}-\d{2} source \d+ cma \d+$/.test(gaps[0]?.value ?? "")],
+    ["succeeded", 2, true, [7, 7], [2, 2], ["renewals"], true], ["failed", 0, false, [], [], [], false]);
+  // a 400 for one metric (store one) and analytics off (409, store two), in one run over both stores
+  await q("delete from cma.sync_run where connection_id = $1 and job = 'source_figures'", [juo1.id]);
+  fake.state.analyticsFail = { "subscriptions:pauses": 400 };
+  fake.state.analyticsOff = two.domain;
+  fake.state.requests.length = 0;
+  k = await runSourceFigures();
+  fake.state.analyticsFail = {};
+  fake.state.analyticsOff = null;
+  const r1 = (await runsOf(juo1.id, "source_figures")).at(-1);
+  const r2 = (await runsOf(juo2.id, "source_figures")).at(-1);
+  expect("K5 two stores in one run, each its own run: a 400 a counted skip (store one), analytics off (409) skips store two's ten after one request, both succeeded",
+    [r1.status, r1.counts.skipped, r2.status, r2.counts.skipped, r2.counts.fetched, posts().filter((r) => r.tenant === two.domain).length,
+      lastLog("source-figures")?.read >= 2, (await figs(juo2.id)).length],
+    ["succeeded", 1, "succeeded", 10, 0, 1, true, 0], ["failed", 0, "failed", 0, 1, 10, false, 1]);
+  // the month backfill from the first of last month: the flow figures month by month, resumable, a second run reads nothing
+  const kFrom = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
+  fake.state.requests.length = 0;
+  b = await runBackfill({ connectionId: juo1.id, object: "source_figure", from: kFrom });
+  const bRun = (await runsOf(juo1.id, "backfill")).at(-1);
+  const bodies = fake.state.bodies.slice(-8).map((x) => `${x.body.metric}:${x.body.range.from}`);
+  const days = (await q(`select count(distinct business_date)::int as n from cma.source_figure where connection_id = $1 and figure_key = 'renewals'
+    and business_date >= $2::date`, [juo1.id, kFrom]))[0].n;
+  const again = await runBackfill({ connectionId: juo1.id, object: "source_figure", from: kFrom });
+  const bRun2 = (await runsOf(juo1.id, "backfill")).at(-1);
+  expect("K6 the month backfill: stream source_figure, two months of four flow figures (eight POSTs), every day stored, its cursor done; a second run reads nothing",
+    [b.failed, bRun.stream, bRun.status, posts().length, bodies.filter((x) => x.endsWith(kFrom)).length, days >= 28,
+      (await cursor(juo1.id, "backfill:source_figure"))?.done, again.failed, bRun2.counts.fetched],
+    [0, "source_figure", "succeeded", 8, 4, true, true, 0, 0], [1, null, "failed", 0, 0, false, false, 1, 1]);
+  expect("K7 no figure holds a key, a customer id or an @; the log lines no key", [JSON.stringify(await figs(juo1.id)).includes("@"),
+    [KEY1, KEY2, one.subscriptions[0].customer].filter((v) => logs.join("\n").includes(v))], [false, []], [true, ["x"]]);
+} else {
+  expect("K1 addition 0009zg (214) has run in this database", [false], [true], [true]);
 }
 
 // This run's connections stop being served (a later run's unfiltered jobs leave them alone); the tenants stay
