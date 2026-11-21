@@ -10,7 +10,7 @@ import { LinkButton, PageTitle } from "@/components/primitives";
 import { subscriptionsCopy } from "@/lib/copy";
 import { CmaDbError, data, dataIsMock, requestDbTrace, type SubscriptionRowsPage, type SubscriptionsPageQuery } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
-import { REPORT_PERMISSIONS } from "@/lib/reports";
+import { DATA_QUALITY_PERMISSIONS, REPORT_PERMISSIONS } from "@/lib/reports";
 import {
   addMonths, measureOf, monthAddress, monthOf, monthsBetween, parseSubscriptionsFilter, sortOf, SUBSCRIPTIONS_MAX_MONTHS, SUBSCRIPTIONS_PATH,
   subscriptionsQuery, SUBSCRIPTIONS_VIEWS, type SubscriptionsView,
@@ -133,7 +133,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/re
 
         {!doc.history ? <div className="mb-6" data-testid="subscriptions-preparing"><Notice tone="info">{t.preparing}</Notice></div> : (
           <div className="flex flex-col gap-6">
-            <SubscriptionsTiles page={doc} t={t} copy={copy} locale={locale} dataQuality={holdsAny(me, ["reports.view", "tenant.configure"])} />
+            <SubscriptionsTiles page={doc} t={t} copy={copy} locale={locale} dataQuality={holdsAny(me, DATA_QUALITY_PERMISSIONS)} />
             {piNoteNeeded(filter) ? <Note testId="subscriptions-pi-note">{t.piNote}</Note> : null}
 
             <Card>
