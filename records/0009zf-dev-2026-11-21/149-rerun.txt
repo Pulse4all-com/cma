@@ -1,0 +1,46 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/149_verify_installed_base_list.sql:43: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+GRANT
+DO
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                    check_name                                                                     |     result      |                                                                                                                                                    detail                                                                                                                                                    
+---------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0008zz is recorded after 0008zy                                                                                                   | ok              | 0008zy, 0008zz
+ S2 privileges: the new and remade functions the application's only, in the caller's rights; cma.flash_rows_of JIT off                             | ok              | 
+ A1 the payment state of given subscriptions is the one-argument function's rows for them; none for an empty list, another tenant's ids or no list | ok              | n-1 in_retry, s-1 in_retry, s-5 paused, s-7 failed
+ A2 one source's set-up is 0008zn's for every source, in a tenant with its sources set up and in one without; null for no source                   | ok              | commerce true/false, subscriptions true/false, assets true/false, crm true/false, reviews false/false, nope null/null
+ A3 cma.flash_sources_of is 0008zn's answer in both tenants                                                                                        | ok              | {"crm": {"set_up": true, "adapters": ["verifycrm"], "last_read_at": null}, "assets": {"set_up": true, "adapters": ["verifyregister"], "last_read_at": null}, "reviews": {"set_up": false, "adapters": [], "last_read_at": null}, "commerce": {"set_up": true, "adapters": ["verifyshop"], "last_read_at": nu
+ A4 the installed base's list is 0008zu's for every filter, sort, direction and page of a grid                                                     | ok              | 200 lists equal
+ A5 the page carries every payment state the fixture holds (in retry, paid, paused, canceled, failed, none)                                        | ok              | SN-d-1 in_retry, SN-d-10 -, SN-d-11 -, SN-d-12 -, SN-d-13 failed, SN-d-2 in_retry, SN-d-3 in_retry, SN-d-4 paid, SN-d-5 paid, SN-d-6 paid, SN-d-7 paid, SN-d-8 paused, SN-d-9 canceled, SN-nd-1 in_retry, SN-nd-2 -
+ A6 every other overview's first page is 0008zu's                                                                                                  | ok              | 
+ A7 cma.flash_rows (as the reader) is 0008zn's answer: the installed base, a market, a source not set up                                           | ok              | true/false
+ A8 a tenant whose register is not set up: an empty list, as before                                                                                | ok              | {"rows": [], "total": 0}
+ D1 every tenant: each source's set-up and cma.flash_sources_of as 0008zn's                                                                        | ok              | 2 tenant(s)
+ D2 every tenant: the payment state of all its subscriptions, and of its first 500, is the one-argument function's                                 | ok              | 2 tenant(s)
+ D3 every tenant with an asset register: the installed base's list is 0008zu's for a grid of filters, sorts and pages                              | ok              | 1 tenant(s), 20 lists equal
+ verdict                                                                                                                                           | 0008zz verified | 149_verify_installed_base_list: 13 ok, 0 FAIL, 0 skip
+(14 rows)
+
+DROP TABLE
+RESET
