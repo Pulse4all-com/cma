@@ -3731,7 +3731,7 @@ Expected: one row; `runs` about 1,440, `computed` at most 96 (one per 15 minutes
 
 # Phase 22. Customers → Subscriptions (addition 0009zh, brief B39d)
 
-One step at a time; each says where it runs and what to expect. The phase number follows the merge order: brief B39b (addition 0009zg) may take a number of its own before or after this one. `216` changes no table, view or column: it adds nine functions that read the subscription facts' stored takes, and `217` checks the page against the takes for every filter (on the dev seed, in a rolled-back block). It needs Phase 20's `210` and Phase 21's `212` to have run in the database.
+One step at a time; each says where it runs and what to expect. `216` changes no table, view or column: it adds ten functions that read the subscription facts' stored takes and, for the tiles' source lines, `cma.source_figure`, and `217` checks the page against the takes for every filter (on the dev seed, in a rolled-back block). It needs Phase 20's `210`, Phase 21's `212` and Phase 19's `214` (addition 0009zg, in prod) to have run in the database; `216` runs after `214` and re-creates none of its functions.
 
 ## 22.1 Terminal: the branch
 **Terminal** (~/cma)
@@ -3745,7 +3745,7 @@ Expected: the PR's last commit.
 ```bash
 run_migration dev 216_subscriptions_page.sql 217_verify_subscriptions_page.sql 0009zh-dev-$(date +%F)
 ```
-Expected: 216 ends with `COMMIT`; 217's last row `verdict | PASS | 217_verify_subscriptions_page: 12 PASS, 0 FAIL` and, provoked, `PROVOKED, NOT A PASS | … 0 PASS, 12 FAIL`. No other verify reads what 216 adds, so none is rerun.
+Expected: 216 ends with `COMMIT`; 217's last row `verdict | PASS | 217_verify_subscriptions_page: 13 PASS, 0 FAIL` and, provoked, `PROVOKED, NOT A PASS | … 0 PASS, 13 FAIL`. No other verify reads what 216 adds, so none is rerun.
 
 ## 22.3 Terminal: the data map on the branch
 No table, view or column changes, so `docs/datamap/schema.json` is not refreshed.
@@ -3765,13 +3765,39 @@ run_migration prod 216_subscriptions_page.sql 217_verify_subscriptions_page.sql 
 ```
 Expected: 216 `COMMIT`; 217 `verdict | REFUSED | …`: A1 PASS and row 59 FAIL for want of the dev seed (block B refused), as 211.
 
+## 22.4b Studio: the stores the source lines can cover
+The tiles' source lines show a total only when every store counted has a figure for every holding status on its latest date of today or yesterday. The Juo adapter reads only active, paused, failed and canceled, so a holding status of another kind, or a store without a point, shows no total line.
+
+**Studio** (instance cma-prod-pg; SQL only, aggregate counts per store connection id, no customer data)
+```sql
+with t as (select id, timezone from cma.tenant),
+z as (select t.id as tenant_id, (now() at time zone t.timezone)::date as today,
+             cma.flash_list_of(cma.setting_of(t.id, 'flash.device_holding_statuses')) as holding from t),
+l as (select f.tenant_id, f.connection_id, max(f.business_date) as d
+        from cma.source_figure f join z on z.tenant_id = f.tenant_id
+       where f.figure_key = 'subscriptions_in_status' and f.business_date between z.today - 1 and z.today
+       group by 1, 2)
+select l.connection_id, l.d as business_date,
+       count(distinct f.dims ->> 'status') filter (where f.dims ->> 'status' = any (z.holding)) as holding_statuses_found,
+       (select count(distinct h) from unnest(z.holding) h) as holding_statuses_expected
+  from l join z on z.tenant_id = l.tenant_id
+  join cma.source_figure f on f.tenant_id = l.tenant_id and f.connection_id = l.connection_id
+       and f.business_date = l.d and f.figure_key = 'subscriptions_in_status'
+ group by l.connection_id, l.d, z.holding
+having count(distinct f.dims ->> 'status') filter (where f.dims ->> 'status' = any (z.holding))
+     < (select count(distinct h) from unnest(z.holding) h);
+```
+Expected: 0 rows. A row is a store whose total line will not show; say so before the browser step, and fix the cause (a holding status the adapter does not read, or a store not yet read) rather than the page. A store with no figure of today or yesterday at all is not counted here: the page leaves it out and names how many stores it covers.
+
 ## 22.5 The merge deploys prod
 The PR changes files under `web/**` outside `web/verify/**`, so the merge starts Cloud Build `cma-web-main` and deploys `cma-web`. No ingest deploy, no `cloudbuild.yaml` and no environment change.
 
 ## 22.6 Browser: the page and the card
 **Browser**: `/reports/subscriptions?market=GB`, then `?market=NL`. Compare Total subscriptions and Paused with Flash's Subscriptions overview for the same market: equal as of the take's Refreshed at. Follow the churn count's link to Flash's Churn. Then open `/reports/active` for the same markets.
 
-Expected: the six tiles, the movements, the rates from each store's start month, Renewal survival, the mix and the list; Changes in the period and Who ended them as Pending parts; no name or email address anywhere. Customers → Active's Churn rate card shows the last complete month's Churn rate and Failed rate of the market filter, and under a segment or channel filter says the rate is per market.
+Then compare each tile's source line (Total subscriptions, Paused and the amounts) with Reports → Data quality's Source figure gaps: the "Source figure gaps: {n}" of a tile is a count among the figures Data quality lists, which also lists canceled and the flows, so a tile's n is never above the matching findings and the link opens that check for `reports.view` or `tenant.configure` (plain text for `performance.team`).
+
+Expected: the six tiles, with "Subscription app: {n} on {date}" under Total subscriptions, Paused and each amount once the first day's figures exist, the movements, the rates from each store's start month, Renewal survival, the mix and the list; Changes in the period and Who ended them as Pending parts; no name or email address anywhere. Customers → Active's Churn rate card shows the last complete month's Churn rate and Failed rate of the market filter, and under a segment or channel filter says the rate is per market.
 
 ## 22.7 Terminal: the times and the page verifiers on the merged build
 20.8's block (`cma_db prod`, then `131_time_all.sql` with `psql`, the file `0009zh-prod-$(date +%F)-131.txt` in `~/cma-audit`).
