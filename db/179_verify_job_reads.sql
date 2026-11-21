@@ -13,6 +13,11 @@
 -- verdict, because Cloud SQL Studio shows no notices. Run as your own IAM login after 178_job_reads.sql, dev first, then
 -- prod. Edited by 0009u (190): the copy of 154's refresh stores a lead's and a ticket's row without the clock fields, as
 -- the refresh does since 0009u, so E8 still proves the write-only-what-changed logic; since 0009u it runs after 190.
+-- Edited after 0009zg (21 November 2026; prod's E5 read 7,178 rows now against 7,097 before, the 81 all
+-- subscription_device_units_mismatch): the copy of data_quality_of is 160's and knows none of the checks added since
+-- (210's subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap), so E5 compares the
+-- new function on the check keys the old copy names (the catalog's keys quoted in its text) and names the keys it leaves
+-- out in its row; provoked it still fails.
 -- Expected verdict, in dev and in prod: "0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL, <k> skip" (a tenant
 -- without data reads ok on empty sets); provoked (verify.provoke true at the top): every E row reads FAIL (the previous
 -- definition's first row is dropped before the comparison, or the row says the set was empty), every S and A row reads
@@ -895,6 +900,15 @@ declare
   v_checks text[]; v_sql_new text[]; v_sql_old text[]; v_ordered boolean[];
   v_from timestamptz[]; v_to timestamptz[]; m record; v_bad text;
   r jsonb; v_n_old bigint; v_only bigint; v_snap boolean;
+  -- E5 (edited by 0009zh, 21 November 2026): the old copy is 160's and knows none of the checks added since (210's
+  -- subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap, ...), so the new
+  -- function is compared on the check keys the old copy knows: every key of the catalog that its text names, quoted.
+  -- The keys it leaves out are named in the row
+  v_src   text := (select p.prosrc from pg_proc p where p.oid = 'pg_temp.old_data_quality_of(uuid)'::regprocedure);
+  v_known text[] := array(select c.check_key from cma.data_quality_catalog() c
+                          where position('''' || c.check_key || '''' in v_src) > 0 order by c.check_key collate "C");
+  v_left  text := (select string_agg(c.check_key, ', ' order by c.check_key collate "C") from cma.data_quality_catalog() c
+                   where position('''' || c.check_key || '''' in v_src) = 0);
 begin
   for t in select te.id, te.slug from cma.tenant te order by te.slug loop
     perform set_config('app.tenant_id', t.id::text, true);
@@ -908,7 +922,8 @@ begin
     v_sql_new := array[format('select * from cma.open_tickets_of(%L)', t.id), format('select * from cma.open_leads_of(%L)', t.id),
                        format('select * from cma.speed_to_lead_of(%L, null, null)', t.id),
                        format('select * from cma.speed_to_lead_of(%L, date_trunc(''month'', now()) - interval ''1 month'', date_trunc(''month'', now()))', t.id),
-                       format('select * from cma.data_quality_of(%L)', t.id), format('select * from cma.flash_findings_compute_of(%L)', t.id)];
+                       format('select * from cma.data_quality_of(%L) where check_key = any (%L::text[])', t.id, v_known),
+                       format('select * from cma.flash_findings_compute_of(%L)', t.id)];
     v_sql_old := array[format('select * from pg_temp.old_open_tickets_of(%L)', t.id), format('select * from pg_temp.old_open_leads_of(%L)', t.id),
                        format('select * from pg_temp.old_speed_to_lead_of(%L, null, null)', t.id),
                        format('select * from pg_temp.old_speed_to_lead_of(%L, date_trunc(''month'', now()) - interval ''1 month'', date_trunc(''month'', now()))', t.id),
@@ -926,7 +941,9 @@ begin
       end;
       insert into verify_0009o values (v_ord, v_checks[i] || ' (' || t.slug || ')',
         case when v_err is null and v_diff is null then 'ok' else 'FAIL' end,
-        coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end));
+        coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end)
+        || case when i = 5 then format(' (on the %s check keys the old copy knows; left out, added since: %s)', cardinality(v_known), coalesce(v_left, 'none'))
+                else '' end);
     end loop;
 
     -- E7 the business-time functions on every market of the tenant, over a grid of instants: a year of them around the
