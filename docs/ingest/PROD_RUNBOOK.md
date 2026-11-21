@@ -3439,6 +3439,8 @@ Expected: GB June 2025 (April with 2 events and August with 1 noted); BE July 20
 
 One step at a time; each says where it runs and what to expect. `212` changes no table, view or column and no answer: it makes three reads cheaper (the inputs' markers, the payment state, the facts' refresh), and `213` compares each with `210`'s definition row for row. It needs one index on `cma.subscription_event`, built first from the Terminal; a second index (on renewal orders) is built after prod has measured `212` alone. Nothing here runs before Phase 20's `210` has run in the database. Outputs of `124` and `131` go to `~/cma-audit`, never to `records/` (20.8), and a record written from them carries times and verdicts only.
 
+The merge deploys nothing. Under `web/`, `#305` touches only `web/verify/perf-volume-fixture.sql`, and the trigger `cma-web-main` ignores `web/verify/**` (RUNBOOK 2), so no Cloud Build run starts. `cma-web` and the job `cma-refresh-active-customers` stay on `web:fb704e3`, which is right: `212` changes only the database. No ingest deploy either: `ingest/` is untouched.
+
 ## 21.1 Terminal: the branch
 **Terminal** (~/cma)
 ```bash
@@ -3510,7 +3512,13 @@ Before the folder is committed: an A3 or A4 that reads FAIL prints how many rows
 ```bash
 cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set statement_timeout = '10min'" -c "vacuum (analyze) cma.subscription_event"
 ```
-Expected: `VACUUM`, within a minute or two.
+Expected: `VACUUM`, within a minute or two. Then read I1 again before 21.7:
+
+**Terminal** (only after the vacuum)
+```bash
+cd ~/cma && cma_db prod && psql "$PGCONN" -f db/213_verify_subscription_facts_speed.sql 2>&1 | grep -E ' I1 |verdict' | sed -E 's/ {3,}/  /g' | cut -c1-360
+```
+Expected: I1 `… heap fetches none` (or under 1 %); the verdict `REFUSED` with `5 PASS, 1 FAIL, 2 info`, as before. In prod on 21 November 2026 the first read said `10 % of the rows read or more` and the read after the vacuum `none`. The output stays on the screen; `213.txt` in the record keeps the first read.
 
 ## 21.7 Terminal: the times after 212
 20.8's blocks (`cma_db prod`, then `124_time_flash.sql` and `131_time_all.sql` with `psql`), with `0009zf-prod-$(date +%F)-124-after212.txt` and `…-131-after212.txt` as the files' names. Keep the laptop awake for 131.
@@ -3520,7 +3528,7 @@ Expected, against 21 November (`records/0009ze-prod-2026-11-21`):
 - "subscription facts refresh" under its 10,000 ms (10,156 ms then). Expected 7 to 9 s: locally the refresh gains a third, but most of that is the invoice renewals' join, of which prod seems to hold little, so prod's gain is mostly the writes. Its detail now ends in `steps_ms`, the milliseconds per step: report those six numbers, they say where the time goes. The budget stands until 21.9's numbers set it (Martin, 21 Nov 2026).
 - "list subscriptions …" in `124` near 525 ms (684.5 ms then).
 
-Read each beside a row 212 does not touch from the same run ("list open_tickets …": 644.5 ms before 210, 793.8 ms after, on a busier database): a run where that row is slow too says the database was busy, not that the change failed. Report in the chat: the rows named here, and from 131 the Customers → Active rows "active top (stored document)", "active now …" (both), "active rest (stored document)", the three "active list …" rows of the set and "active customers (set)", from this run and from the file of 21 November: the set and the stored rest read were slow on 21 November (830.1 and 56.7 ms), the earlier records do not pin that on 210, and these rows decide. A record is written from your report, with times only.
+Read each beside a row 212 does not touch from the same run ("list open_tickets …": 644.5 ms before 210, 793.8 ms after, on a busier database): a run where that row is slow too says the database was busy, not that the change failed. From `131`, compare three untouched rows with the morning's file too: "follow-up lists open tickets", and "installed base records" first page and page of 50. Prod has one vCPU and the minute job's Active refresh (about 13 s) and facts refresh (about 11 s) overlap the reads: on 21 November 2026 after 212 those three rows took about twice the morning's time, and the facts refresh read 11,478 ms (FAIL) on that run (`records/0009zf-prod-2026-11-21`). A run that slow judges no change; 21.9's own run rows set the facts budget. Report in the chat: the rows named here, and from 131 the Customers → Active rows "active top (stored document)", "active now …" (both), "active rest (stored document)", the three "active list …" rows of the set and "active customers (set)", from this run and from the file of 21 November: the set and the stored rest read were slow on 21 November (830.1 and 56.7 ms), the earlier records do not pin that on 210, and these rows decide. A record is written from your report, with times only.
 
 ## 21.8 Terminal: the index on renewal orders
 Only after 21.7, so the two runs of `124` show what the index adds to `212` (Decision log, 20 and 21 Nov 2026: optional, measured in prod and dropped if it brings nothing, agreed by Martin). Locally, with the table in memory, it adds nothing measurable; prod decides. Dev first (the same block after `cma_db dev`), then prod:
@@ -3540,7 +3548,14 @@ cd ~/cma && cma_db prod && psql "$PGCONN" -f db/213_verify_subscription_facts_sp
 ```
 Expected: I2 `the index exists, valid true: Index Only Scan using subscription_event_renewal_order_idx on subscription_event e, heap fetches none` (or under 1 % or 10 %); the verdict `REFUSED` as in 21.6. An `Index Scan Backward using subscription_event_subscription_idx` instead: the planner did not choose the new index; report it, and the index is dropped again (`drop index concurrently cma.subscription_event_renewal_order_idx`). I2 shows that the plan uses the index for that read; what the index is worth is the next block.
 
-Then `124` once more (20.8's second block, file `…-124-after-index.txt`). Expected: "list subscriptions …" at or below 21.7's value. No difference beyond the run's noise (compare "list open_tickets …" again): say so in the chat; the index then earns no place and is dropped, in dev too.
+Then `124` once more (20.8's second block, file `…-124-after-index.txt`). Expected: "list subscriptions …" at or below 21.7's value. Judge it against "list open_tickets …", which reads no subscription: the index gains only if the subscriptions list falls by more than open_tickets does. If not, say so in the chat; the index then earns no place and is dropped, in prod and in dev (the block below, then the same after `cma_db dev`). On 21 November 2026 the subscriptions list fell 11 % and open_tickets 29 %, so it was dropped in both (`records/0009zf-prod-2026-11-21`).
+
+**Terminal** (only when the index brings no gain)
+```bash
+cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set lock_timeout = '5s'" -c "set statement_timeout = '10min'" -c "drop index concurrently if exists cma.subscription_event_renewal_order_idx" \
+  -c "select count(*) as left_over from pg_class where relname = 'subscription_event_renewal_order_idx'"
+```
+Expected: `DROP INDEX`, then `left_over` `0`.
 
 ## 21.9 Studio (cma-prod-pg): the refresh's real runs, a day after 212
 `131` times a forced run on a fresh take: the computation with few writes. What the job's runs cost is in their run rows. Run counts and milliseconds only; one Run in one tab, as your own login.
@@ -3555,10 +3570,15 @@ select count(*) as runs,
                 filter (where (r.counts ->> 'facts_skipped')::integer = 0))::numeric) as p50_ms,
        round((percentile_cont(0.95) within group (order by (r.counts ->> 'facts_duration_ms')::numeric)
                 filter (where (r.counts ->> 'facts_skipped')::integer = 0))::numeric) as p95_ms,
-       max((r.counts ->> 'facts_duration_ms')::numeric) filter (where (r.counts ->> 'facts_skipped')::integer = 0) as max_ms
+       max((r.counts ->> 'facts_duration_ms')::numeric) filter (where (r.counts ->> 'facts_skipped')::integer = 0) as max_ms,
+       count(*) filter (where (r.counts ->> 'skipped')::integer = 0) as active_computed,
+       round((percentile_cont(0.95) within group (order by (r.counts ->> 'duration_ms')::numeric)
+                filter (where (r.counts ->> 'skipped')::integer = 0))::numeric) as active_p95_ms,
+       count(*) filter (where (r.counts ->> 'skipped')::integer = 0 and (r.counts ->> 'facts_skipped')::integer = 0) as both_computed,
+       round(sum(coalesce((r.counts ->> 'duration_ms')::numeric, 0) + coalesce((r.counts ->> 'facts_duration_ms')::numeric, 0)) / 1000) as busy_s
 from cma.sync_run r
 where r.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
   and r.job = 'refresh_active_customers' and r.status = 'succeeded' and r.started_at >= now() - interval '24 hours';
 reset role;
 ```
-Expected: one row; `runs` about 1,440, `computed` at most 96 (one per 15 minutes while the inputs change). Report the row in the chat: the budget `verify.max_facts_ms` is set from `p95_ms` plus a margin, and `computed` with `p50_ms` and 21.7's step times size the incremental refresh (docs/open-decisions.md).
+Expected: one row; `runs` about 1,440, `computed` at most 96 (one per 15 minutes while the inputs change). Report the row in the chat: the budget `verify.max_facts_ms` is set from `p95_ms` plus a margin, and `computed` with `p50_ms` and 21.7's step times size the incremental refresh (docs/open-decisions.md, the facts refresh). `active_computed`, `active_p95_ms`, `both_computed` (runs that computed both) and `busy_s` (the seconds of a day the job's two refreshes hold the database's one vCPU) size the database load (docs/open-decisions.md, Database load).

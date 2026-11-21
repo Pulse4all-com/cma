@@ -228,8 +228,10 @@ gh pr create --fill && gh pr view --web=false
 gh pr merge --squash --delete-branch && git log --oneline -1
 ```
 
-A merge to `main` that touches `web/**` or `cloudbuild.yaml` builds and deploys **prod** automatically.
-README, `db/` and `records/` changes do not build.
+A merge to `main` that touches `cloudbuild.yaml`, or a file under `web/**` outside `web/verify/**`, builds and deploys
+**prod** automatically. The trigger `cma-web-main` ignores `web/verify/**` (the verifiers and their fixtures,
+docs/architecture/infrastructure.md), so a merge whose only `web/` files are there builds nothing and prod keeps its
+image. README, `db/`, `docs/` and `records/` changes do not build.
 
 ## 2a. A pull request from Claude Code
 
@@ -251,7 +253,8 @@ Then merge:
 gh pr merge <number> --squash --delete-branch && git log --oneline -1
 ```
 
-A merge to `main` that touches `web/**` or `cloudbuild.yaml` builds and deploys **prod** automatically.
+A merge to `main` that touches `cloudbuild.yaml`, or a file under `web/**` outside `web/verify/**`, builds and deploys
+**prod** automatically; one whose only `web/` files are under `web/verify/**` builds nothing (section 2).
 
 ## 3. Watch the prod build
 

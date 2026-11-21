@@ -1,0 +1,46 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+                   set_config                   
+------------------------------------------------
+ [A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}
+(1 row)
+
+psql:db/119_verify_subscriptions.sql:47: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                  check_name                                                  | result  |                                                                                                                        detail                                                                                                                         
+--------------------------------------------------------------------------------------------------------------+---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zl recorded, after 0008zk                                                                    | PASS    | 
+ A2 both tables tenant-aware (RLS, policy, audit); no delete by the application, no update of an event        | PASS    | 
+ A3 the unique keys (tenant_id, connection_id, source_id) and (tenant_id, id) on both tables                  | PASS    | 
+ A4 the job subscriptions_poll and the connection kind subscriptions                                          | PASS    | 
+ A5 every function the application's only and invoker; the reader function the readers' only, definer, pinned | PASS    | 
+ A6 the reader views (no raw), readable by readers                                                            | PASS    | 
+ A7 the settings by form: the poll interval from 1 to 60, the pace from 1 to 10                               | PASS    | ok ok ok ok subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes subscriptions_max_per_second subscriptions_max_per_second subscriptions_max_per_second ok
+ B a dev or local database (the dev seed's agent.two@example.com active)                                      | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing ran
+ Z1 a dev or local database (the dev seed's agent.two@example.com active)                                     | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing read
+ verdict                                                                                                      | REFUSED | 119_verify_subscriptions: 7 PASS, 2 FAIL
+(10 rows)
+
+RESET
