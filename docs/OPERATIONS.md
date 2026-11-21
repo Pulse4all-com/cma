@@ -29,7 +29,7 @@ record or a runbook. Where a pull request of the audit changes a step, the step 
 
 | Part | Where | Deployed by | Image |
 |---|---|---|---|
-| `cma-web` (the Workspace, `workspace.pulse4all.app`, behind IAP) | Cloud Run service, `p4a-cma-prod` | the Cloud Build trigger `cma-web-main` on every merge to `main` that touches `web/**` or `cloudbuild.yaml` (RUNBOOK 2 and 3; dev first with RUNBOOK 4) | `europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<short sha>` |
+| `cma-web` (the Workspace, `workspace.pulse4all.app`, behind IAP) | Cloud Run service, `p4a-cma-prod` | the Cloud Build trigger `cma-web-main` on every merge to `main` that touches `cloudbuild.yaml` or `web/**` outside `web/verify/**`, which it ignores (RUNBOOK 2 and 3; dev first with RUNBOOK 4) | `europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<short sha>` |
 | `cma-ingest` (`ingest.pulse4all.app`, no IAP, Cloud Armor) | Cloud Run service | `bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app …` by hand, dev first from the same commit (`docs/ingest/README.md`, Deploy) | `…/cma/ingest:<short sha>` of the last commit under `ingest/` |
 | `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-poll-reviews`, `ingest-reconcile`, `ingest-outbox`, `ingest-backfill`, `ingest-import-legacy-calls` | Cloud Run jobs | `bash docs/ingest/deploy.sh prod --jobs` | the ingest image |
 | `cma-close-forgotten-workdays` | Cloud Run job | `bash docs/scheduler/deploy.sh prod <short sha>` after a web deploy that changes the job | the web image |
@@ -657,8 +657,8 @@ No phone numbers or addresses here: the team's directory holds them.
 - Never a prod service deploy of the ingest without `--front ingest.pulse4all.app`; the script refuses it since
   16 October 2026 (and a non-`main` checkout since #158), so a refusal is the guard working.
 - Dev first, prod from the same commit: a prod deploy that builds is a sign dev was skipped.
-- Never push to `main`; it accepts pull requests only, Martin squash-merges, and a merge touching `web/**` or
-  `cloudbuild.yaml` deploys prod at once (the repository's working rules).
+- Never push to `main`; it accepts pull requests only, Martin squash-merges, and a merge touching `cloudbuild.yaml`
+  or `web/**` outside `web/verify/**` deploys prod at once (the repository's working rules).
 - No secret value, personal id, email address, phone number or hash value in a record, a PR, a chat or a
   screenshot; secret names only. Records hold values from real runs only, written from Martin's report.
 - Migrations are forward-only; a mistake is a new pair, never an edit of one that has run.

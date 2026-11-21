@@ -22,7 +22,7 @@ CLAUDE.md (Git and release, Subagents, Instructions for Martin) sets the content
 
 **Review**: `cma-reviewer`'s three-line summary; one line each from the specialised reviewers that ran; the performance opportunities taken and those left (with where they are recorded); any Critical still open after the second round, stated as open; the docs keeper's file list.
 
-**Deploy note**: whether the merge builds and deploys PROD (it does when `web/**` or `cloudbuild.yaml` change; README, `db/`, `docs/`, `records/` do not). Say explicitly when cloudbuild.yaml substitutions or environment variables change, or that they do not.
+**Deploy note**: whether the merge builds and deploys PROD (it does when `cloudbuild.yaml` or a file under `web/**` outside `web/verify/**` changes; README, `db/`, `docs/`, `records/` and `web/verify/**` alone do not: the trigger ignores `web/verify/**`). Say explicitly when cloudbuild.yaml substitutions or environment variables change, or that they do not.
 
 **What Martin still has to run**: one step at a time, each with the expected output, each block labelled **Studio** (SQL in Cloud SQL Studio, naming `cma-dev-pg` or `cma-prod-pg`), **Terminal** (his own Linux terminal, in ~/cma unless stated), **Browser** (a page or click path) or **File** (a repository path). SQL and shell never in one block. A query that returns customer rows is a Studio block, never Terminal. For a change with a migration, the order is in the `new-migration` skill, section 6.
 
