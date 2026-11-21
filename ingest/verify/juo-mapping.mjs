@@ -469,9 +469,9 @@ const k3 = [
   figures.itemsOf(dq[0], { series: [at("2026-11-20", 1230), at("2026-11-21", 1234)], meta: {} }, DATES),
   figures.itemsOf(dq[4], { series: [at("2026-11-21", 5678.904)], meta: { unit: "money_minor" } }, DATES),
   figures.itemsOf(dq[5], { series: [at("2026-11-21", 7)], meta: {} }, DATES),
-  figures.itemsOf(dq[6], { series: [at("2026-11-20", 3, { "event.status_to": "canceled" }), at("2026-11-20", 31, { "event.status_to": "failed" }),
+  figures.itemsOf(dq[6], { series: [at("2026-11-20", 4, { "event.status_to": "canceled" }), at("2026-11-20", 12, { "event.status_to": "failed" }),
     at("2026-11-20", 2, { "event.status_to": "merged" })], meta: {} }, DATES),
-  figures.itemsOf(dq[9], { series: [at("2026-08-01", 152, { cohort: "2026-08", period: 1 }), at("2026-08-01", 145, { cohort: "2026-08", period: 2 }),
+  figures.itemsOf(dq[9], { series: [at("2026-08-01", 80, { cohort: "2026-08", period: 1 }), at("2026-08-01", 76, { cohort: "2026-08", period: 2 }),
     at("2026-08-01", 9, { cohort: "2026-8", period: 3 }), at("2026-08-01", 9, { cohort: "2026-08", period: 25 })], meta: {} }, DATES)];
 const brief = (r) => r.items.map((i) => `${i.figureKey}|${i.businessDate}|${JSON.stringify(i.dims)}|${i.value}|${i.unit}|${i.sourceMetric}`);
 expect("K3 the answers mapped: a gauge's latest point under today, the amount to cents under today, a flow's day without a row as 0, churn per status (merged left out), the survival's cells (a cohort or period out of form left out)",
@@ -479,11 +479,11 @@ expect("K3 the answers mapped: a gauge's latest point under today, the amount to
   [["subscriptions_in_status|2026-11-21|{\"status\":\"active\"}|1234|count|subscriptions:count"],
     ["recurring_amount_active|2026-11-21|{}|5678.9|amount|subscriptions:current-mrr"],
     ["renewals|2026-11-20|{}|0|count|subscriptions:renewed", "renewals|2026-11-21|{}|7|count|subscriptions:renewed"],
-    ["transitions_to_churn|2026-11-20|{\"status\":\"canceled\"}|3|count|subscriptions:churned", "transitions_to_churn|2026-11-20|{\"status\":\"failed\"}|31|count|subscriptions:churned",
+    ["transitions_to_churn|2026-11-20|{\"status\":\"canceled\"}|4|count|subscriptions:churned", "transitions_to_churn|2026-11-20|{\"status\":\"failed\"}|12|count|subscriptions:churned",
       "transitions_to_churn|2026-11-20|{\"status\":\"expired\"}|0|count|subscriptions:churned", "transitions_to_churn|2026-11-21|{\"status\":\"canceled\"}|0|count|subscriptions:churned",
       "transitions_to_churn|2026-11-21|{\"status\":\"failed\"}|0|count|subscriptions:churned", "transitions_to_churn|2026-11-21|{\"status\":\"expired\"}|0|count|subscriptions:churned"],
-    ["renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":1}|152|count|subscriptions:purchased",
-      "renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":2}|145|count|subscriptions:purchased"]],
+    ["renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":1}|80|count|subscriptions:purchased",
+      "renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":2}|76|count|subscriptions:purchased"]],
   [[], [], [], [], []]);
 const summer = { today: "2026-06-02", yesterday: "2026-06-01", timezone: "Europe/Amsterdam" };
 const sq = figures.dailyQueries(summer)[5];
