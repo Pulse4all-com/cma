@@ -42,7 +42,7 @@
 --   subscriptions_in_status summed over the holding statuses (Total subscriptions) and over paused, and
 --   recurring_amount_active per currency, each with the CMA's value the figures were compared with when read and the
 --   number of them that are a Source figure gap one by one (214's rule on each figure, never on a sum, so the tile
---   counts what Data quality lists); a total or a paused count only where every store counted has a figure for each
+--   counts figures among those Data quality lists); a total or a paused count only where every store counted has a figure for each
 --   of its statuses, and an amount with the stores it covers. Null while no store in
 --   scope has such a figure, and under a proposition or an interval filter (the app counts neither); never a zero.
 --   Renewal survival is not compared with the app's own (B39b's renewal_survival) yet: its cohorts are read monthly and
@@ -277,7 +277,7 @@ $$;
 -- Each beside the CMA's values the figures were compared with when read (cma_value: null when one figure has none) and
 -- gaps: the figures among them that are a Source figure gap one by one, by 214's rule on each row (the CMA's less the
 -- app's exceeds source_figures.tolerance_min and source_figures.tolerance_pct percent of the app's value, both; a row
--- without a CMA value is not compared), so the tile counts what Data quality lists and never tests a sum (null where
+-- without a CMA value is not compared), so the tile counts figures among those Data quality lists and never tests a sum (null where
 -- nothing is compared). stores: those with a figure; from and to: the oldest and latest of their dates; in_scope: the
 -- stores under the filters. Null while no store in scope has a figure, and under a proposition or interval filter.
 -- Reads cma.source_figure by its date index (tenant_id, business_date): a few rows a store
@@ -313,7 +313,7 @@ as $$
     from f join latest l on l.connection_id = f.connection_id and l.d = f.business_date
   ), w as (
     -- whole: every store counted has a figure for every holding status, and for paused
-    select bool_and(p.held_statuses = (select cardinality(z.holding) from z)) as total_whole, bool_and(p.paused_rows > 0) as paused_whole
+    select bool_and(p.held_statuses = (select count(distinct h) from z, unnest(z.holding) h)) as total_whole, bool_and(p.paused_rows > 0) as paused_whole
     from (select r.connection_id, count(distinct r.status) filter (where r.held) as held_statuses, count(*) filter (where r.paused) as paused_rows
           from r group by 1) p
   ), c as (

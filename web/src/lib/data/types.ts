@@ -2492,8 +2492,8 @@ export interface SubscriptionsRateParts { base: number | null; churned: number; 
  * The subscription app's own counts beside the tiles (cma.subscriptions_source_counts_of, addition 0009zh over 0009zg's
  * source figures): each store's latest figures of today or yesterday, summed over the stores in scope (stores of inScope
  * have one, read on from to to), each beside the CMA's value it was compared with when read (null where one figure has
- * none) and the number of those figures that are a Source figure gap one by one (214's rule on each figure, as Data
- * quality lists them; null where none is compared). total and paused are null unless every store counted has a figure
+ * none) and the number of those figures that are a Source figure gap one by one (214's rule on each figure: figures
+ * among those Data quality lists; null where none is compared). total and paused are null unless every store counted has a figure
  * for each of their statuses; an amount names the stores it covers
  */
 export interface SubscriptionsSourceCounts {

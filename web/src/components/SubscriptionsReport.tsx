@@ -175,18 +175,21 @@ export function SubscriptionsTiles({ page, t, copy, locale, dataQuality }: { pag
 /**
  * A tile's line with the subscription app's own figure (Source figures, read daily by B39b's job): its value and its day
  * (both days where the stores were read on two), the stores it covers where not every store in scope is among them,
- * and the number of its figures that are a Source figure gap one by one, as Data quality lists them: a link to Data
+ * and the number of its figures that are a Source figure gap one by one (figures among those Data quality lists): a link to Data
  * quality's check for a viewer who may open it (reports.view or tenant.configure), plain text otherwise
  */
 function SourceLine({ t, sc, text, stores, gaps, link: toDq, locale, testId }: {
   t: T; sc: SubscriptionsSourceCounts; text: string; stores: number; gaps: number | null; link: boolean; locale: Locale; testId: string;
 }) {
-  const when = !sc.to ? "" : sc.from && sc.from !== sc.to ? `${fmtDate(sc.from, locale, "medium")} – ${fmtDate(sc.to, locale, "medium")}` : fmtDate(sc.to, locale, "medium");
+  const twoDays = Boolean(sc.from && sc.to && sc.from !== sc.to);
+  const line = twoDays
+    ? t.sourceLineDays.replace("{n}", text).replace("{from}", fmtDate(sc.from, locale, "medium")).replace("{to}", fmtDate(sc.to, locale, "medium"))
+    : t.sourceLine.replace("{n}", text).replace("{date}", sc.to ? fmtDate(sc.to, locale, "medium") : "");
   const partial = stores < sc.inScope ? t.sourceStores.replace("{k}", fmtCount(stores, locale)).replace("{m}", fmtCount(sc.inScope, locale)) : null;
   const gapText = gaps ? t.sourceGap.replace("{n}", fmtCount(gaps, locale)) : null;
   return (
     <span className="flex flex-col" data-testid={testId}>
-      <span>{t.sourceLine.replace("{n}", text).replace("{date}", when)}{partial ? `, ${partial}` : ""}</span>
+      <span>{line}{partial ? `, ${partial}` : ""}</span>
       {gapText && toDq ? (
         <Link href={flashHref("/reports/flash", { o: "data_quality", f_check: "source_figure_gap" }) as Route} className={link} title={t.openDataQuality}
           data-testid={`${testId}-gap`}>

@@ -39803,7 +39803,7 @@ The list's measure paused lists the same subscriptions (217 B6).
 
 **Subscription app: {n} on {date}** on /reports/subscriptions · Source figures (Bronwaarden)
 
-Under Total subscriptions, Paused and the Monthly recurring amount: the subscription app's own figures of the day (Source figures), summed over the stores in scope that have one, with the number of those figures that are a Source figure gap one by one (as Data quality lists them; the rule is never applied to the sum).
+Under Total subscriptions, Paused and the Monthly recurring amount: the subscription app's own figures of the day (Source figures), summed over the stores in scope that have one, with the number of those figures that are a Source figure gap one by one (figures among those Data quality lists; the rule is never applied to the sum).
 
 **Formula as computed**
 
@@ -39846,7 +39846,7 @@ cma.subscriptions_source_counts_of: per store under the market and store filters
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select sum(f.value) filter (where f.figure_key = 'subscriptions_in_status' and f.dims ->> 'status' = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses')))), sum(f.value) filter (where f.dims ->> 'status' = 'paused') from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.source_figure f where f.tenant_id = :tenant_id and f.business_date = :day and f.figure_key = 'subscriptions_in_status' (:day: the date of source_counts.to, where every store was read that day; otherwise per store at its own latest date)
+with z as (select (now() at time zone t.timezone)::date as today, cma.flash_list_of(cma.setting_of(t.id, 'flash.device_holding_statuses')) as holding, cma.setting_of(t.id, 'source_figures.tolerance_pct')::numeric as pct, cma.setting_of(t.id, 'source_figures.tolerance_min')::numeric as mn from cma.tenant t where t.id = :tenant_id), l as (select f.connection_id, max(f.business_date) as d from cma.source_figure f, z where f.tenant_id = :tenant_id and f.figure_key = 'subscriptions_in_status' and f.business_date between z.today - 1 and z.today group by 1), r as (select f.*, f.dims ->> 'status' = any (z.holding) as held, f.cma_value is not null and abs(f.cma_value - f.value) > z.mn and abs(f.cma_value - f.value) * 100 > z.pct * f.value as gap from cma.source_figure f join l on l.connection_id = f.connection_id and l.d = f.business_date, z where f.tenant_id = :tenant_id and f.figure_key = 'subscriptions_in_status') select count(distinct r.connection_id) as stores, sum(r.value) filter (where r.held) as total, sum(r.cma_value) filter (where r.held) as total_cma, count(*) filter (where r.held and r.gap) as total_gaps, sum(r.value) filter (where r.dims ->> 'status' = 'paused') as paused, count(*) filter (where r.dims ->> 'status' = 'paused' and r.gap) as paused_gaps, (select count(*) from (select r2.connection_id from r r2 group by 1 having count(distinct r2.dims ->> 'status') filter (where r2.held) < (select count(distinct h) from z, unnest(z.holding) h)) x) as stores_missing_a_holding_status from (select set_config('app.tenant_id', :tenant_id::text, true)) s, r
 ```
 
 **Fixture check** 217 B12 builds figures for four stores in a rolled-back block (today, yesterday only, out of date; opposite gaps whose sum is within; a paused figure without a CMA value; an amount without a currency) and checks the sums, the CMA's values, the gaps per figure, the amounts' stores, the market filter, the absence under a proposition filter and no total where a holding status has no figure (13 PASS locally, provoked 0 of 13); Martin runs 217 in dev.
@@ -39854,6 +39854,7 @@ select sum(f.value) filter (where f.figure_key = 'subscriptions_in_status' and f
 **Data prerequisites**
 
 - The job ingest-source-figures has read the day's figures (PROD_RUNBOOK phase 19) (data quality check `source_figure_gap`)
+- Every store has a subscriptions_in_status figure for each holding status (flash.device_holding_statuses) and for paused on its latest date: the adapter reads active, paused, failed and canceled only and skips a status the app answers without a value, and a total or paused count is shown only where every store counted has one (data quality check `verify_sql's stores_missing_a_holding_status is 0`)
 
 **Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
 

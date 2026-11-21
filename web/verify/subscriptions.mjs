@@ -121,6 +121,8 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
     const chain = ms.slice(1).filter((m, i) => m.counts && ms[i].counts && (m.counts.start ?? 0) !== (ms[i].counts.end ?? 0)).length;
     const rateParts = p.rates.reduce((n, r) => n + r.churned, 0) === ms.reduce((n, m) => n + (m.complete?.churned ?? 0), 0);
     const rows = (measure) => mockSubscriptionRows(me, { ...q, measure, page: 1 }).total;
+    // the app's figure of a market's active subscriptions in the mock: the CMA's and six more for GB (one row a store)
+    const byStoreActive = (_p, market) => mockSubscriptionRows(me, { ...q, market, measure: "active", page: 1 }).total + 6;
     const mixOk = ["interval", "deviceBand", "ageBand", "instrument", "paymentState"].every((k) => p.mix[k].reduce((n, r) => n + r.subscriptions, 0) === t.total.value);
     const narrowed = mockSubscriptionsPage(me, { ...q, proposition: "hs1", interval: "monthly" });
     const survOk = p.survival.groups.every((g) => g.cohorts.every((c) => c.cells.every((x) => x.survived <= c.started && x.eligible <= c.started)));
@@ -133,7 +135,7 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
       t.sourceCounts !== null && t.sourceCounts.totalCma === t.total.value && t.sourceCounts.stores === t.sourceCounts.inScope
         && Number.isInteger(t.sourceCounts.totalGaps) && t.sourceCounts.totalGaps <= t.sourceCounts.stores * Object.keys(t.total.byStatus).length
         && (t.sourceCounts.totalGaps === 0 || t.sourceCounts.total !== t.sourceCounts.totalCma)
-        && (t.sourceCounts.totalGaps > 0) === (Math.abs(t.sourceCounts.totalCma - t.sourceCounts.total) > t.sourceCounts.toleranceMin)
+        && t.sourceCounts.totalGaps === (t.sourceCounts.total - t.sourceCounts.totalCma > 0 && (t.sourceCounts.total - t.sourceCounts.totalCma) * 100 > t.sourceCounts.tolerancePct * byStoreActive(p, "GB") ? 1 : 0)
         && t.sourceCounts.amounts.length === t.amounts.length
         && t.sourceCounts.amounts.every((a) => a.stores >= 1 && a.stores <= t.sourceCounts.inScope && a.gaps === 0)
         && narrowed.tiles.sourceCounts === null,
