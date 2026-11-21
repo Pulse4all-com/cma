@@ -108,7 +108,7 @@ begin
            || ' | ' || (select string_agg(c.check_key || ':' || c.sort_order, ' ' order by c.sort_order) from cma.data_quality_flash_checks() c
                         where c.sort_order >= 390)
            || ' | ' || cma.data_quality_fix_in('source_figure_gap', null) || ' ' || cma.data_quality_fix_in('subscription_variant_unmapped', null);
-  insert into verify_0009zg values (5, 'A5 the seven figures with their kind, unit, dims and comparison; source_figure_gap at 400, fixed in subscriptions (the variant check still the Workspace''s)',
+  insert into verify_0009zg values (5, 'A5 the seven figures with their kind, unit, dims and comparison; source_figure_gap at 400, fixed in subscriptions (the variant check still the CMA''s)',
     case when v_txt = 'subscriptions_in_status:stock:count:status:true recurring_amount_active:stock:amount::true renewals:flow:count::true transitions_to_churn:flow:count:status:true purchases:flow:count::true pauses:flow:count::true renewal_survival:cohort:count:cohort_start+period:false | subscription_device_units_mismatch:390 source_figure_gap:400 | subscriptions cma'
               and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'missing'));
 end
@@ -213,10 +213,11 @@ begin
     v_txt := v_txt || ' | ' || pg_temp.v0009zg_code(format($q$select cma.ingest_upsert_source_figures(%L, null, '[]')$q$, v_sub_a));
     perform set_config('app.user_id', v_ing::text, true);
     v_txt := v_txt || ' ' || pg_temp.v0009zg_code(format($q$select cma.ingest_upsert_source_figures(%L, null, '[]')$q$, v_shop_a))
+             || ' ' || pg_temp.v0009zg_code(format('select * from cma.source_figures_due_of(%L)', v_shop_a))
              || ' ' || (select count(*) from cma.source_figure f where f.tenant_id = v_t)::text;
     perform set_config('role', 'cma_owner', true);
-    v_rows := v_rows || array['12', 'B2 the write refuses an unknown figure, a key outside the list, a status and a dims key not the figure''s, a unit not its own, a negative value, an impossible date and a cohort not on a month''s first day (CMA04); an agent may not write (CMA06); nothing written',
-      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 | CMA06 ok 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['12', 'B2 the write refuses an unknown figure, a key outside the list, a status and a dims key not the figure''s, a unit not its own, a negative value, an impossible date and a cohort not on a month''s first day (CMA04); an agent may not write (CMA06); a connection that is no subscriptions connection is refused by the write and the due check (CMA02); nothing written',
+      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 | CMA06 CMA02 CMA02 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B3. the CMA's value per figure, against a hand count: active 5 (a6 deleted at the source left out), paused 2, failed
     --     1, canceled 1; 4 × 30 + 120 / 12 = 130.00 GBP a month; on D renewals 3 (its two ends: 00:00 in, 24:00 out),
@@ -248,18 +249,19 @@ begin
       case when v_txt = '{"updated": 0, "inserted": 12, "unchanged": 0} | pauses=2.00 purchases=2.00 recurring_amount_active=130.00:GBP renewal_survival=null renewals=3.00 subscriptions_in_status:active=5.00 subscriptions_in_status:canceled=1.00 subscriptions_in_status:failed=1.00 subscriptions_in_status:paused=2.00 transitions_to_churn:canceled=1.00 transitions_to_churn:expired=0.00 transitions_to_churn:failed=1.00 | 11 130.00'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B4. a later read replaces a value and keeps the first read: renewals 4 now (one more), the rest unchanged
+    -- B4. a later read replaces a value and keeps the first read: renewals given twice in one call, 9 then 4 (the later
+    --     one wins), the rest unchanged
     update cma.source_figure f set raw = jsonb_build_object('first_fetched_at', '2026-01-01T00:00:00Z', 'fetches', 1)
     where f.tenant_id = v_t and f.figure_key = 'renewals';
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_ing::text, true);
     v_j := cma.ingest_upsert_source_figures(v_sub_a, v_run,
-             jsonb_set(v_items, '{5,value}', '4'::jsonb) || jsonb_build_array(jsonb_set(v_items -> 5, '{value}', '4'::jsonb)));
+             jsonb_set(v_items, '{5,value}', '9'::jsonb) || jsonb_build_array(jsonb_set(v_items -> 5, '{value}', '4'::jsonb)));
     perform set_config('role', 'cma_owner', true);
     v_txt := v_j::text || ' | ' || (select f.value || ' ' || (f.raw ->> 'first_fetched_at') || ' ' || (f.raw ->> 'fetches') from cma.source_figure f
                                     where f.tenant_id = v_t and f.figure_key = 'renewals')
              || ' | ' || (select count(*) from cma.source_figure f where f.tenant_id = v_t)::text;
-    v_rows := v_rows || array['14', 'B4 a later read replaces a value (one key given twice counts once) and keeps the first read in raw; the others unchanged',
+    v_rows := v_rows || array['14', 'B4 a later read replaces a value (one key given twice in a call: the later value wins, counted once) and keeps the first read in raw; the others unchanged',
       case when v_txt = '{"updated": 1, "inserted": 0, "unchanged": 11} | 4.00 2026-01-01T00:00:00Z 2 | 12' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B5. an amount in two currencies is stored without a currency and not compared; none active is 0 without one
@@ -268,7 +270,7 @@ begin
     perform cma.ingest_upsert_source_figures(v_sub_b, null, jsonb_build_array(v_items -> 4));
     perform cma.ingest_upsert_source_figures(v_sub_c, null, jsonb_build_array(jsonb_set(v_items -> 4, '{value}', '0'::jsonb)));
     perform set_config('role', 'cma_owner', true);
-    v_txt := (select string_agg(coalesce(f.currency, '-') || ':' || coalesce(f.cma_value::text, 'null') || ':' || r.state, ' ' order by r.store nulls last)
+    v_txt := (select string_agg(coalesce(f.currency, '-') || ':' || coalesce(f.cma_value::text, 'null') || ':' || r.state, ' ' order by r.store collate "C" nulls last)
               from cma.source_figure f
               join cma.source_figure_rows_of(v_t, v_today, v_today) r on r.connection_id = f.connection_id and r.figure_key = f.figure_key
               where f.tenant_id = v_t and f.figure_key = 'recurring_amount_active' and f.connection_id in (v_sub_b, v_sub_c));
@@ -289,8 +291,10 @@ begin
     v_txt := (select string_agg(r.gap || ':' || coalesce(r.gap_pct::text, '-') || ':' || r.state, ' ' order by r.business_date desc)
               from generate_series(1, 5) n
               cross join lateral cma.source_figure_compare_of(v_t, v_d - n) r where r.connection_id = v_sub_c)
-             || ' | ' || (select string_agg(r.figure_key || coalesce(':' || (r.dims ->> 'status'), '') || ':' || r.state || ':' || coalesce(r.store, '-') || ':' || coalesce(r.market, '-'), ' ')
-                          from cma.source_figure_compare_of(v_t, v_today) r where r.connection_id = v_sub_a);
+             || ' | ' || (select string_agg(r.figure_key || coalesce(':' || (r.dims ->> 'status'), '') || ':' || r.state || ':' || coalesce(r.store, '-') || ':' || coalesce(r.market, '-'), ' '
+                                            order by k.sort_order, r.dims::text collate "C")
+                          from cma.source_figure_compare_of(v_t, v_today) r join cma.source_figure_keys() k on k.figure_key = r.figure_key
+                          where r.connection_id = v_sub_a);
     v_rows := v_rows || array['16', 'B6 the tolerance: a gap of 2 on 100 and of 1 % on 1,000 within, 3 on 100, 11 on 1,000 and 3 on 0 a gap; the day''s comparison in the catalog''s order with its store and market',
       case when v_txt = '2.00:2.00:within 3.00:3.00:gap 10.00:1.00:within 11.00:1.10:gap 3.00:-:gap | subscriptions_in_status:active:within:verify-zg-a:GB subscriptions_in_status:canceled:gap:verify-zg-a:GB subscriptions_in_status:failed:within:verify-zg-a:GB subscriptions_in_status:paused:within:verify-zg-a:GB recurring_amount_active:within:verify-zg-a:GB'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -306,9 +310,9 @@ begin
       case when v_txt = 'CMA06 CMA06 CMA06' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B8. the check: per figure and dims the latest date read (a flow's latest complete day): store A's canceled count
-    --     (9 against 1, today) is listed with its market and fixed in subscriptions; connection C's purchases are listed
-    --     for D - 1? No: its latest complete day is D - 1 (within), so none; a gap today on a flow is not listed (today
-    --     is not complete); store A's renewals on D - 1 a gap but D within: none
+    --     (9 against 1, today) is listed with its market and fixed in subscriptions; connection C's purchases are not:
+    --     their latest complete day, D - 1, is within the tolerance, and today's gap is not read (today is not
+    --     complete); store A's renewals neither: D - 1 is a gap, but D, the latest complete day, is within
     insert into cma.source_figure (tenant_id, connection_id, figure_key, source_metric, business_date, dims, value, unit, cma_value, cma_at)
     values (v_t, v_sub_c, 'purchases', 'x', v_today, '{}', 100, 'count', 500, now()),
            (v_t, v_sub_a, 'renewals', 'x', v_d - 1, '{}', 100, 'count', 500, now());
@@ -348,7 +352,7 @@ begin
 
     -- B10. the Flash watch: connection A polls every five minutes (two runs a minute and six minutes ago) and read its
     --      figures six and five days ago (a day apart): the poll is fresh, the figures job stale (7,200 minutes against
-    --      three days), so one source_stale finding of the source source_figures for store A
+    --      one and a half days), so one source_stale finding of the source source_figures for store A
     insert into cma.sync_run (tenant_id, connection_id, job, stream, status, started_at, finished_at)
     values (v_t, v_sub_a, 'subscriptions_poll', 'subscriptions', 'succeeded', now() - interval '6 minutes', now() - interval '6 minutes'),
            (v_t, v_sub_a, 'subscriptions_poll', 'subscriptions', 'succeeded', now() - interval '1 minute', now() - interval '1 minute'),
@@ -359,8 +363,8 @@ begin
     perform cma.flash_watch_of(v_t, v_today, now());
     v_txt := (select string_agg(f.dims::text || ':' || f.value || '/' || f.threshold || ':' || (f.detail ->> 'job'), ' ' order by f.dims::text collate "C")
               from cma.flash_watch_finding f where f.tenant_id = v_t and f.kind = 'source_stale');
-    v_rows := v_rows || array['20', 'B10 the Flash watch: the figures job stale on its own (source source_figures, 7,200 minutes against 4,320) beside a fresh poll of the same connection',
-      case when v_txt = '{"store": "verify-zg-a", "source": "source_figures", "adapter": "verifysubs"}:7200/4320:source_figures' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['20', 'B10 the Flash watch: the figures job stale on its own (source source_figures, 7,200 minutes against one and a half cadences, 2,160) beside a fresh poll of the same connection',
+      case when v_txt = '{"store": "verify-zg-a", "source": "source_figures", "adapter": "verifysubs"}:7200/2160:source_figures' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B11. the runs: the job's run finishes with the counts the job writes; another tenant's application sees no figure
     perform set_config('role', 'cma_app', true);

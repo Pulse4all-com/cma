@@ -686,9 +686,10 @@ begin
         r_ms := r_ms || v_ms;
       end if;
       -- the source figures' due check (addition 0009zg), part a: what the hourly job ingest-source-figures asks first for
-      -- every subscriptions connection, as the tenant's ingest (ingest.write), the best of three, against verify.max_poll_ms
-      -- (each hour costs one such read a connection); a database without 214, or a tenant without an active subscriptions
-      -- connection or an ingest user, reads skip
+      -- every subscriptions connection, as the tenant's ingest (ingest.write), the best of three, against verify.max_poll_ms.
+      -- A job's read, not a page's poll: one call a connection an hour, each in a fresh job process, so the best of three
+      -- is its cost (the generic plan after five calls never comes; its seventh call read 0.14 ms on the volume fixture,
+      -- one CPU). A database without 214, or a tenant without an active subscriptions connection or an ingest user, reads skip
       if v_part in ('a', 'all') then
         v_ms := null; v_cur := null; v_fig_user := null; v_fig_conn := null;
         select x.user_id into v_fig_user from cma.app_user_external_id x

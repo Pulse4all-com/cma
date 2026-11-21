@@ -466,8 +466,8 @@ expect("K2 a backfill month: the four flow figures only, over its days",
 const at = (d, v, dims = {}) => ({ start: `${d}T00:00:00.000Z`, end: `${d}T23:59:59.999Z`, dimensions: dims, value: v });
 const london = (iso) => ({ start: iso, end: iso, dimensions: {}, value: 1 });
 const k3 = [
-  figures.itemsOf(dq[0], { series: [at("2026-11-20", 3491), at("2026-11-21", 3498)], meta: {} }, DATES),
-  figures.itemsOf(dq[4], { series: [at("2026-11-21", 131584.164)], meta: { unit: "money_minor" } }, DATES),
+  figures.itemsOf(dq[0], { series: [at("2026-11-20", 1230), at("2026-11-21", 1234)], meta: {} }, DATES),
+  figures.itemsOf(dq[4], { series: [at("2026-11-21", 5678.904)], meta: { unit: "money_minor" } }, DATES),
   figures.itemsOf(dq[5], { series: [at("2026-11-21", 7)], meta: {} }, DATES),
   figures.itemsOf(dq[6], { series: [at("2026-11-20", 3, { "event.status_to": "canceled" }), at("2026-11-20", 31, { "event.status_to": "failed" }),
     at("2026-11-20", 2, { "event.status_to": "merged" })], meta: {} }, DATES),
@@ -476,8 +476,8 @@ const k3 = [
 const brief = (r) => r.items.map((i) => `${i.figureKey}|${i.businessDate}|${JSON.stringify(i.dims)}|${i.value}|${i.unit}|${i.sourceMetric}`);
 expect("K3 the answers mapped: a gauge's latest point under today, the amount to cents under today, a flow's day without a row as 0, churn per status (merged left out), the survival's cells (a cohort or period out of form left out)",
   k3.map(brief),
-  [["subscriptions_in_status|2026-11-21|{\"status\":\"active\"}|3498|count|subscriptions:count"],
-    ["recurring_amount_active|2026-11-21|{}|131584.16|amount|subscriptions:current-mrr"],
+  [["subscriptions_in_status|2026-11-21|{\"status\":\"active\"}|1234|count|subscriptions:count"],
+    ["recurring_amount_active|2026-11-21|{}|5678.9|amount|subscriptions:current-mrr"],
     ["renewals|2026-11-20|{}|0|count|subscriptions:renewed", "renewals|2026-11-21|{}|7|count|subscriptions:renewed"],
     ["transitions_to_churn|2026-11-20|{\"status\":\"canceled\"}|3|count|subscriptions:churned", "transitions_to_churn|2026-11-20|{\"status\":\"failed\"}|31|count|subscriptions:churned",
       "transitions_to_churn|2026-11-20|{\"status\":\"expired\"}|0|count|subscriptions:churned", "transitions_to_churn|2026-11-21|{\"status\":\"canceled\"}|0|count|subscriptions:churned",

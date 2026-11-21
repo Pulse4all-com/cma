@@ -10,8 +10,8 @@
 -- script's definitions of the functions both re-create (the data-quality functions and cma.check_tenant_setting).
 --
 -- Why (Martin, 20 and 21 November 2026; brief B39 continued, Part B39b; Decision log, 21 Nov 2026): the app owns these
--- measures. The audit of 0009zb compared its counts with the CMA's by hand in the chat (GB 3,498 active in the app
--- against 3,304 in the CMA on 20 November, which named the paging defect 0009zc fixed). A daily, stored comparison makes
+-- measures. The audit of 0009zb compared its counts with the CMA's by hand in the chat (records/0009zb-prod-2026-11-20:
+-- a gap in one store that named the paging defect 0009zc fixed). A daily, stored comparison makes
 -- a missed read or a wrong rule show within a day; a gap is a defect or a documented difference, never a silent
 -- tolerance (Decision log, 21 Nov 2026).
 --
@@ -28,7 +28,8 @@
 --                every write a sync_run (job source_figures)
 --   catalog      cma.source_figure_keys(): the seven figures, their kind (stock, flow, cohort), unit and dims, and whether
 --                the CMA's value is compared here (renewal_survival is compared on Customers → Subscriptions, B39d)
---   writes       cma.ingest_upsert_source_figures(connection, run, items): ingest.write; the CMA's value computed in the
+--   writes       cma.ingest_upsert_source_figures(connection, run, items): ingest.write, a subscriptions connection of the
+--                current tenant (CMA02 otherwise); the CMA's value computed in the
 --                same statement, per figure (below); answers { inserted, updated, unchanged }
 --   reads        cma.source_figure_rows_of(tenant, from, to) (the owner's core, no permission check: the data-quality
 --                refresh reads it), cma.source_figure_compare_of(tenant, date) (reports.view or tenant.configure, the
@@ -38,9 +39,12 @@
 --                store, figure and dims, the latest date read (a flow's latest complete day), when the gap exceeds both
 --                tolerances. cma.data_quality_flash_checks, cma.data_quality_of, cma.data_quality and
 --                cma.data_quality_fix_in re-created from 210's definitions, with the check added and nothing else changed
+--   market       cma.flash_findings_compute_of re-created from 178's definition: a source_figure finding takes its store's
+--                market; nothing else changes
 --   watch        cma.flash_watch_of re-created from 158's definition: the figures job is watched on its own (source
---                source_figures, its cadence its runs' median gap as every job's), so the five-minute poll of the same
---                connection does not hide a day without figures; nothing else changes
+--                source_figures, its cadence its runs' median gap as every job's, stale after one and a half cadences
+--                instead of three, so a day without figures shows at the next morning's snapshot), so the five-minute poll
+--                of the same connection does not hide it; nothing else changes
 --   runs         sync_run.job gains source_figures (its counts are sync_run's own: fetched, inserted, updated,
 --                unchanged, skipped)
 --   readers      cma_read.source_figure (every column but raw), cma_read.dq_source_figure_gap
@@ -69,8 +73,8 @@
 -- data quality's overview through Flash: optional). 123 and 137 are edited by this change (A8 and B5, A7: they expect
 -- source_figure_gap, conditional on the 0009zg row), as are web/verify/flash.mjs and 131_time_all.sql. Then the data map's
 -- schema.json refreshed from dev on this branch, the merge, prod (214, the same verifies; 215 refuses prod's data, as
--- the dev-seed verifies do). No index on a busy table: cma.source_figure is new and small (about 500 rows a store and
--- month), its unique key serves every read.
+-- the dev-seed verifies do). No index on a busy table: cma.source_figure is new and small (about 900 rows a store and
+-- month: some 15 a day and 480 survival cells); source_figure_date_idx (tenant_id, business_date) serves the reads of a date range.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -495,6 +499,9 @@ comment on column cma.source_figure.business_date is 'The day the figure is of, 
 comment on column cma.source_figure.value is 'The source''s value: a count, or an amount in the currency''s own unit (as the CMA stores amounts)';
 comment on column cma.source_figure.cma_value is 'The CMA''s own value of the same figure, date and dims, taken at cma_at (when the row was last written); null where the figure is not compared here or the scope has no single currency';
 comment on column cma.source_figure.raw is 'first_fetched_at (the first read of this row) and fetches (how many reads wrote it); nothing else';
+-- the reads of a date range (the comparison of a day, the check's last seven days); the table is new, so the index is
+-- built here, not concurrently
+create index if not exists source_figure_date_idx on cma.source_figure (tenant_id, business_date);
 select cma.setup_tenant_table('cma.source_figure');
 drop trigger if exists audit on cma.source_figure;
 
@@ -518,6 +525,9 @@ declare
 begin
   perform cma.assert_permission('ingest.write');
   perform cma.active_connection_adapter(p_connection_id);
+  if not exists (select 1 from cma.integration_connection c where c.tenant_id = v_tenant and c.id = p_connection_id and c.kind = 'subscriptions') then
+    raise exception 'connection % is not a subscriptions connection', p_connection_id using errcode = 'CMA02';
+  end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) > 2000 then
     raise exception 'source figures are an array of at most 2,000 items' using errcode = 'CMA04';
   end if;
@@ -535,7 +545,7 @@ begin
            when coalesce(i.x ->> 'sourceMetric', '') !~ '^[a-z][a-z0-9:._-]{0,79}$' then 'sourceMetric is out of its form'
            when coalesce(i.x ->> 'businessDate', '') !~ '^\d{4}-\d{2}-\d{2}$' then 'businessDate is no date as YYYY-MM-DD'
            when jsonb_typeof(i.x -> 'value') is distinct from 'number' then 'value is no number'
-           when (i.x ->> 'value')::numeric < 0 or (i.x ->> 'value')::numeric >= 1e16 then 'value is out of its range (0 to 10^16)'
+           when (i.x ->> 'value')::numeric < 0 or round((i.x ->> 'value')::numeric, 2) >= 1e16 then 'value is out of its range (0 to 10^16)'
            when (i.x ->> 'unit') is distinct from k.unit then 'unit is not the figure''s'
            when not cma.source_figure_dims_ok(k.figure_key, coalesce(i.x -> 'dims', '{}'::jsonb)) then 'dims are not the figure''s'
          end as fault) f
@@ -637,10 +647,14 @@ returns table (connection_id uuid, store text, market text, figure_key text, kin
 language sql stable
 rows 500
 as $$
-  -- the two tolerances once (scalar subqueries, never a cross join a per-row loop would repeat: CLAUDE.md, N06)
+  -- the two tolerances once (scalar subqueries, never a cross join a per-row loop would repeat: CLAUDE.md, N06), and the
+  -- stores once: a join on the stores' function itself was run again for every row (5,355 loops, 409 ms on the volume
+  -- fixture with about 10,000 rows)
   with s as materialized (
     select cma.setting_of(p_tenant_id, 'source_figures.tolerance_pct')::numeric as pct,
            cma.setting_of(p_tenant_id, 'source_figures.tolerance_min')::numeric as mn
+  ), sm as materialized (
+    select x.connection_id, x.handle, x.market from cma.flash_subscription_stores_of(p_tenant_id) x
   )
   select f.connection_id, sm.handle, sm.market, f.figure_key, k.kind, f.business_date, f.dims, f.unit, f.currency,
          f.value, f.cma_value, f.cma_value - f.value,
@@ -652,8 +666,9 @@ as $$
          f.fetched_at, f.cma_at
   from cma.source_figure f
   join cma.source_figure_keys() k on k.figure_key = f.figure_key
-  left join (select x.connection_id, x.handle, x.market from cma.flash_subscription_stores_of(p_tenant_id) x offset 0) sm
-    on sm.connection_id = f.connection_id
+  left join sm on sm.connection_id = f.connection_id
+  -- keyed by p_tenant_id alone: cma_read.data_quality_rows() (a definer) reads every tenant a reader sees through
+  -- cma.data_quality_of; under the application row-level security keeps the current tenant's rows
   where f.tenant_id = p_tenant_id and f.business_date between p_from and p_to
 $$;
 
@@ -685,6 +700,7 @@ $$;
 create or replace function cma.source_figures_due_of(p_connection_id uuid)
 returns table (due boolean, today date, yesterday date, timezone text, due_at timestamptz)
 language plpgsql stable
+rows 1
 as $$
 declare
   v_tenant uuid := cma.current_tenant_id();
@@ -694,6 +710,9 @@ declare
 begin
   perform cma.assert_permission('ingest.write');
   perform cma.active_connection_adapter(p_connection_id);
+  if not exists (select 1 from cma.integration_connection c where c.tenant_id = v_tenant and c.id = p_connection_id and c.kind = 'subscriptions') then
+    raise exception 'connection % is not a subscriptions connection', p_connection_id using errcode = 'CMA02';
+  end if;
   select t.timezone into v_zone from cma.tenant t where t.id = v_tenant;
   v_today := (now() at time zone v_zone)::date;
   v_due_at := (v_today + cma.setting_of(v_tenant, 'source_figures.local_time')::time) at time zone v_zone;
@@ -743,6 +762,9 @@ declare
   v_codes   jsonb := (select coalesce(jsonb_object_agg(c.value, c.code), '{}'::jsonb) from cma.market_codes_of(p_tenant_id) c);
   v_holding text[] := cma.flash_holding_statuses_of(p_tenant_id);
   v_ended   text[] := cma.flash_ended_statuses_of(p_tenant_id);
+  -- 0009zg: the tenant's today once, for the source figures' check (a function that reads a table, never inlined: a
+  -- filter on it would call it once per row)
+  v_today   date := cma.tenant_today_of(p_tenant_id);
 begin
   select cma.setting_of(t.id, 'intake.start_date')::date::timestamp at time zone t.timezone into v_start
   from cma.tenant t where t.id = p_tenant_id;
@@ -1103,8 +1125,8 @@ begin
          g.business_date::text || ' source ' || trim_scale(g.source_value)::text || ' cma ' || trim_scale(g.cma_value)::text
   from (select distinct on (r.connection_id, r.figure_key, r.dims) r.connection_id, r.figure_key, r.dims, r.business_date,
                r.source_value, r.cma_value, r.state
-        from cma.source_figure_rows_of(p_tenant_id, cma.tenant_today_of(p_tenant_id) - 7, cma.tenant_today_of(p_tenant_id)) r
-        where r.kind = 'stock' or (r.kind = 'flow' and r.business_date < cma.tenant_today_of(p_tenant_id))
+        from cma.source_figure_rows_of(p_tenant_id, v_today - 7, v_today) r
+        where r.kind = 'stock' or (r.kind = 'flow' and r.business_date < v_today)
         order by r.connection_id, r.figure_key, r.dims, r.business_date desc) g
   where g.state = 'gap';
 
@@ -1415,13 +1437,16 @@ begin
            z.detail || jsonb_build_object('connections', z.n)
     from (select distinct on (st.dims) st.dims, st.value, st.threshold, st.detail, count(*) over (partition by st.dims) as n
           from (select jsonb_strip_nulls(jsonb_build_object('source', g.kind, 'adapter', g.adapter, 'store', g.store)) as dims,
-                       round(extract(epoch from p_now - g.last_at) / 60) as value, round(3 * g.cadence) as threshold,
+                       round(extract(epoch from p_now - g.last_at) / 60) as value,
+                       -- 0009zg: the daily figures job is stale after one and a half of its cadences, so a day without
+                       -- figures shows at the next morning's snapshot (three cadences of a day would be three days)
+                       round((case when g.kind = 'source_figures' then 1.5 else 3 end) * g.cadence) as threshold,
                        jsonb_build_object('cadence_minutes', round(g.cadence, 1), 'cadence_basis', g.basis,
                                           'age_minutes', round(extract(epoch from p_now - g.last_at) / 60), 'last_read_at', g.last_at)
                        || jsonb_strip_nulls(jsonb_build_object('job', g.job, 'stream', g.stream)) as detail,
                        g.last_at
                 from gov g
-                where extract(epoch from p_now - g.last_at) / 60 > 3 * g.cadence) st
+                where extract(epoch from p_now - g.last_at) / 60 > (case when g.kind = 'source_figures' then 1.5 else 3 end) * g.cadence) st
           order by st.dims, st.last_at, st.value desc) z
     union all
     -- snapshot_missing
@@ -1499,6 +1524,12 @@ begin
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
+  end loop;
+  -- JIT off on the plpgsql reads and the write: on the volume fixture JIT compiled the write's statement on each of a
+  -- session's first five calls (1.2 s a call; 12 ms without it), and the job's calls are each a session's first
+  foreach f in array array['cma.ingest_upsert_source_figures(uuid,uuid,jsonb)', 'cma.source_figure_compare_of(uuid,date)',
+                           'cma.source_figures_due_of(uuid)'] loop
+    execute format('alter function %s set jit = off', f);
   end loop;
 end
 $$;

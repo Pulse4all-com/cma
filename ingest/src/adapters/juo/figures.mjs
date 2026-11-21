@@ -13,7 +13,7 @@
  *   recurring_amount_active   subscriptions:current-mrr, grain total, today: the active subscriptions' monthly amount now, in
  *                             the store's currency (Juo names none; the database takes the currency of the connection's
  *                             active subscriptions). Juo labels it money_minor; its values read as the currency's own unit
- *                             (GB 131,584.16 for 3,498 active on 20 November 2026), as the CMA stores amounts: stored as
+ *                             (a store's amount on 20 November 2026 against its active count: tens per subscription, not tenths), as the CMA stores amounts: stored as
  *                             given, and a factor of 100 would show as a gap on the first day
  *   renewals, purchases, pauses   subscriptions:renewed, :purchased, :pauses, grain day, yesterday to today
  *   transitions_to_churn      subscriptions:churned grouped by event.status_to (canceled, failed, expired), grain day
