@@ -3241,6 +3241,152 @@ Expected: GB empty; NL one type name. Report it in the chat: it decides whether 
 
 Expected: the audit's row with verdict `INFO`, no budget.
 
+# Phase 19. Juo's own figures (addition 0009zg, brief B39b)
+
+One step at a time; each says where it runs and what to expect. The change adds one table (`cma.source_figure`), two readers in `cma_read`, one check on Data quality (`source_figure_gap`), the job `ingest-source-figures` and the backfill object `source_figure`. It runs after Phase 21's `212` (addition 0009zf) in the database. The figures include `exits` (the app's moves into canceled, failed or expired). The job is created paused (19.5) and resumed at 19.8, after one manual run (19.6) and the first look at the stored figures (19.7). Counts and dates only in the chat, the PR and the record: the amounts are commercial and the repository is public until launch.
+
+## 19.1 Terminal: the branch
+**Terminal**
+```bash
+gh pr checkout <PR> && git log --oneline -1
+```
+Expected: the branch's last commit.
+
+## 19.2 Terminal: the migration and its verifies in dev
+**Terminal**
+```bash
+run_migration dev 214_source_figures.sql 215_verify_source_figures.sql 0009zg-dev-$(date +%F) 41_verify_lead_metrics.sql 69_verify_email_activity.sql 73_verify_follow_up.sql 75_verify_forms_reporting.sql 101_verify_definitions_calls.sql 105_verify_reviews.sql 113_verify_assets.sql 117_verify_asset_sync_load.sql 121_verify_lead_cohorts.sql 123_verify_flash.sql 133_verify_perf.sql 137_verify_flash_insights.sql 139_verify_flash_totals.sql 159_verify_flash_current_take.sql 161_verify_installed_base_now.sql 179_verify_job_reads.sql 211_verify_subscription_facts.sql
+```
+Expected: 214 ends with `COMMIT`; 215's last row `PASS | 215_verify_source_figures: 16 PASS, 0 FAIL` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 16 FAIL`; every other verify as on 21 November (`123` and `137` are edited by this change: they expect `source_figure_gap`); `records clean`.
+
+## 19.3 Terminal: the data map on the branch
+Refresh `docs/datamap/schema.json` from dev after the migration ran there, then rebuild the page, as 20.2:
+
+**Terminal**
+```bash
+cd web && npm run verify:datamap
+```
+Expected: until the refresh it fails on this branch (the table `cma.source_figure` and the views `cma_read.source_figure` and `cma_read.dq_source_figure_gap` are not in `schema.json`): expected; after the refresh and `node tools/datamap/build.mjs`, `datamap: PASS (… all described; index.html current)`. After the merge: in the Claude project, say "republish the data map".
+
+## 19.4 Terminal: the migration in prod, before the merge
+Main's web and ingest run unchanged on `214`: nothing reads the new objects before the merge, and the only table is new.
+
+**Terminal**
+```bash
+run_migration prod 214_source_figures.sql 215_verify_source_figures.sql 0009zg-prod-$(date +%F) 123_verify_flash.sql 137_verify_flash_insights.sql 139_verify_flash_totals.sql 159_verify_flash_current_take.sql 179_verify_job_reads.sql
+```
+Expected: 214 `COMMIT`; 215 refuses prod (no dev seed): `verdict | REFUSED`, expected in prod as 211; the prod-safe verifies pass as before.
+
+## 19.5 Terminal: the merge and the deploys
+Merge the PR first; `cma-web-main` builds and deploys the web app (the copy, System health's job label and the Flash watch). The ingest does not deploy itself: check that `main` holds the merge before deploying, as 20.4.
+
+**Terminal** (in `~/cma`)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format='%h %s'
+```
+Expected: the merge's commit, its title ending in the PR's number. Any other commit: the merge is not in yet; do not deploy.
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: as 17.4, `health: {"ok":true,"version":"<that tag>"}`, then the eleven jobs on the same image; `ingest-source-figures` is created with its schedule `41 * * * *` paused (a redeploy keeps its state); the other schedules unchanged.
+
+## 19.6 Terminal: one manual run
+After 05:00 Amsterdam time (`source_figures.local_time`), so every store is due:
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-source-figures --project=p4a-cma-prod --region=europe-west4 --wait
+```
+Expected: the execution succeeds; the log line `source-figures` shows `read` equal to the number of active Juo connections, `failed` 0 and per connection the counts, the skips by code and the requests; no value in it. Before 05:00 the same run reads nothing: `notDue` equal to the number of stores. A `failed` above 0 is read from its connection's line (`code`): a key refused, a timeout or a 5xx; the next hourly run repeats it while the day is due.
+
+## 19.7 Studio (cma-prod-pg): the first stored figures
+One Run, as your own IAM login. Counts and dates only: the amount figure is left out of the output, and no value of it goes into the chat, the PR or a record unless Martin decides.
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '60s';
+set role cma_owner;
+select coalesce(st.market, 'unknown') as store, f.figure_key, f.dims ->> 'status' as status, f.business_date,
+       f.value, f.cma_value, f.fetched_at
+from cma.source_figure f
+left join cma.flash_subscription_stores_of(f.tenant_id) st on st.connection_id = f.connection_id
+where f.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+  and f.figure_key <> 'recurring_amount_active' and f.figure_key <> 'renewal_survival'
+  and f.business_date >= current_date - 2
+order by 1 collate "C", 2 collate "C", 3 collate "C", 4;
+reset role;
+```
+Expected: per store the four status counts for today and the flows for yesterday and today, each with the app's value and the CMA's value of the same scope. A store with no rows had no read (19.6): look at its log line first.
+
+The unit check: `recurring_amount_active` is stored in the currency's own unit as read (Martin, 21 Nov 2026). This shows ratios only, never an amount (amounts are commercial).
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '60s';
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+act as (
+  -- Customers → Active's Monthly recurring amount now: the paying subscriptions of its present base, per store and currency
+  select s.connection_id, p.currency, sum(p.monthly_amount) filter (where p.is_paying) as active_amount
+  from cma.active_present_of((select id from t)) p
+  join cma.subscription s on s.tenant_id = (select id from t) and s.id = p.subscription_id
+  where p.currency is not null
+  group by 1, 2
+), app as (
+  -- the app's latest recurring_amount_active per store
+  select distinct on (f.connection_id) f.connection_id, f.business_date, f.value as app_amount, f.currency, f.cma_value
+  from cma.source_figure f
+  where f.tenant_id = (select id from t) and f.figure_key = 'recurring_amount_active'
+  order by f.connection_id, f.business_date desc
+)
+select coalesce(sm.market, 'unknown') as store, a.currency, app.business_date,
+       round(app.app_amount / nullif(a.active_amount, 0), 3) as app_over_active,
+       round(app.cma_value / nullif(a.active_amount, 0), 3) as cma_over_active,
+       case when app.app_amount is null then 'no figure'
+            when app.currency is distinct from a.currency then 'other currency'
+            when app.app_amount / nullif(a.active_amount, 0) not between 0.2 and 5 then 'FINDING: factor'
+            else 'ok' end as check_unit
+from act a
+left join app on app.connection_id = a.connection_id
+left join cma.flash_subscription_stores_of((select id from t)) sm on sm.connection_id = a.connection_id
+order by coalesce(sm.market, 'unknown') collate "C", a.currency collate "C";
+reset role;
+```
+Expected: one row per store and currency. `ok` where the app's amount and Active's are of one size (a ratio near 1: Active counts the paying subscriptions that hold a device, the app every active one, and the app leaves out one-time lines, so they differ by those causes). `FINDING: factor` (a ratio below 0.2 or above 5; a factor of 100 reads about 100 or 0.01) is a finding: Juo's unit is not the currency's own after all; record it and raise it before the schedule is resumed (19.8). `other currency` when the store's figure has a currency Active does not hold there; `no figure` for a store without a figure yet (its 19.6 log line). Only the ratios and `check_unit` go into the chat or the record, never an amount.
+
+## 19.8 Terminal: resume the schedule
+**Terminal**
+```bash
+gcloud scheduler jobs resume ingest-source-figures --project=p4a-cma-prod --location=europe-west4
+```
+Expected: the job's state `ENABLED`. Its next hourly run at :41 reads nothing for a store already read that day (`notDue`).
+
+## 19.9 Terminal: the months before
+The flows month by month, from each connection's earliest held event (resumable by its cursor `backfill:source_figure`; no dry run):
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--adapter;juo;--object;source_figure'
+```
+Expected: the execution succeeds; the log shows per connection the months read and the rows written, `failed` 0. The history's months compare flows only: no standing count, amount or survival is backfilled.
+
+## 19.10 Browser: Reports → Data quality
+Open Reports → Data quality and refresh it. Expected: the check `source_figure_gap` per store. Each gap is named with its cause in `records/0009zg-prod-<date>` (counts and dates only, written from Martin's report), or is a finding to fix in subscriptions. The causes known and documented are in docs/definitions.md (Source figure gap): the amount leaves out one-time and virtual lines, and a status count differs by the movement between the app's snapshot and the read. A gap is never closed by widening `source_figures.tolerance_pct` or `tolerance_min` without a documented cause (Decision log, 21 Nov 2026).
+
+## 19.11 Studio or Terminal: the times
+`131_time_all.sql` part a, as 20.8 runs it. Expected: the rows `<store> source figures due check` and `data quality: source figures compared today` end `ok`. Also the data-quality refresh's duration from before and after as information:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select computed_at, duration_ms from cma.data_quality_snapshot
+where tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+reset role;
+```
+Expected: one row (the snapshot holds the latest refresh only). Run it once before 19.4 (the last refresh without the check) and once after the first refresh that follows 19.5 (with it) and note both durations in the record; no budget, information.
+
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 
 One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`). 20.0 to 20.5 and 20.8 ran on 21 November 2026 (`records/0009ze-dev-2026-11-21`, `records/0009ze-prod-2026-11-21`); 20.6 and 20.7 are open.

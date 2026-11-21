@@ -22,7 +22,17 @@
  *   GET /admin/v1/products        limit, sort (none or id:asc), after: the store's catalog (153 products: two pages), each
  *                                 with its variants, paged on id
  *   GET /admin/v1/event-types     the types the fixture's events use, with their stream, category and severity
- * Any other method answers 405 (the adapter never sends one: its allow-list refuses it before a request).
+ *   GET /admin/v1/analytics/metrics  the index of the metrics the adapter reads (addition 0009zg)
+ *   POST /admin/v1/analytics/query   Juo's own figures from the store's fixture (addition 0009zg), the body as the adapter
+ *                                 sends it: subscriptions:count (filter event.status_to eq a status; one point, the range's
+ *                                 last day), subscriptions:current-mrr (grain total: the active subscriptions' lines not
+ *                                 canceled, each line's total price per cycle), subscriptions:renewed, :purchased, :pauses and :churned (grouped by
+ *                                 event.status_to) per day in the body's timezone (no row for a day without events, as Juo),
+ *                                 and a retention cohort of subscriptions:purchased (monthly only: a weekly cohort answers
+ *                                 501, as Juo). Anything else 400. Switches: analyticsOffset (metric → a number added to each
+ *                                 of its values; a flow's every day of the range then has a row), analyticsFail (metric → a status it answers), analyticsOff (a store's
+ *                                 domain: every query answers 409), analyticsIgnored (metric → its meta.ignoredFilters)
+ * Any other method or path answers 405 (the adapter never sends one: its allow-list refuses it before a request).
  *
  * Every call needs X-Juo-Admin-Api-Key and X-Tenant-ID: a key answers for its own store only (401 for another store's id,
  * as the GB key does for the NL store). Switches on state: fail429 (the next n calls answer 429 with Retry-After:
@@ -203,10 +213,74 @@ const escape = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const IDS = new RegExp(`^\\((id:${QUOTED})( OR id:${QUOTED})*\\)$`);
 const EVENTS = new RegExp(`^(${escape(SUBSCRIPTION_FAMILY)}|${escape(BILLING_FAMILY)}) AND occurredAt:(>=|>)${QUOTED}( AND occurredAt:<${QUOTED})?$`);
 
+// ---- Juo's own figures (addition 0009zg) ------------------------------------------------------------------------------------
+export const ANALYTICS_METRICS = ["subscriptions:count", "subscriptions:current-mrr", "subscriptions:renewed", "subscriptions:purchased",
+  "subscriptions:pauses", "subscriptions:churned"];
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const dayIn = (iso, tz) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+const STATUS_TO = { "subscription:cancelled": "canceled", "subscription:canceled": "canceled", "subscription:paused": "paused" };
+/** An event's status after it, as Juo's status changes see it (an update's input status in lower case) */
+const statusTo = (e) => STATUS_TO[e.type] ?? (e.type === "subscription:updated" && e.data?.input?.status ? String(e.data.input.status).toLowerCase() : null);
+
+/** One analytics query against a store's fixture: { status, body } (Juo's answer shape: { series, meta }) */
+function analyticsOf(store, body, state) {
+  if (!body || !ANALYTICS_METRICS.includes(body.metric) || !body.range || !DAY.test(body.range.from ?? "") || !DAY.test(body.range.to ?? "")) {
+    return { status: 400, body: { error: "invalid_query" } };
+  }
+  const tz = body.timezone ?? "UTC";
+  const plus = Number(state.analyticsOffset[body.metric] ?? 0);
+  const meta = { additivity: "additive", sourceModel: "events", currencyConverted: false,
+    ...(state.analyticsIgnored[body.metric] ? { ignoredFilters: state.analyticsIgnored[body.metric] } : {}) };
+  const point = (day, dimensions, value) => ({ start: `${day}T00:00:00.000Z`, end: `${day}T23:59:59.999Z`, dimensions, value: value + plus });
+  if (body.cohort) {
+    if (body.cohort.periodGrain !== "month") return { status: 501, body: { error: "Not Implemented", message: `cohort grain '${body.cohort.periodGrain}' not yet supported (only 'day' and 'month')` } };
+    const cohort = body.range.to.slice(0, 7);
+    return { status: 200, body: { series: [1, 2, 3].map((n) => point(`${cohort}-01`, { cohort, period: n }, 10 - n)), meta } };
+  }
+  if (body.metric === "subscriptions:count") {
+    const status = body.filter?.field === "event.status_to" && body.filter?.operator === "eq" ? body.filter.value : null;
+    if (!status) return { status: 400, body: { error: "filter_required" } };
+    return { status: 200, body: { series: [point(body.range.to, {}, store.subscriptions.filter((x) => x.status === status).length)], meta } };
+  }
+  if (body.metric === "subscriptions:current-mrr") {
+    if (body.grain !== "total") return { status: 400, body: { error: "grain_total_only" } };
+    const amount = store.subscriptions.filter((x) => x.status === "active")
+      .reduce((n, x) => n + x.items.filter((it) => !it.canceledAt).reduce((m, it) => m + it.totalPrice, 0), 0);
+    return { status: 200, body: { series: [{ start: `${body.range.from}T00:00:00.000Z`, end: `${body.range.to}T23:59:59.999Z`, dimensions: {},
+      value: Math.round(amount * 100) / 100 + plus }], meta: { ...meta, unit: "money_minor" } } };
+  }
+  const days = new Map();
+  const inRange = (d) => d >= body.range.from && d <= body.range.to;
+  const add = (d, k) => { const key = `${d}|${k ?? ""}`; days.set(key, (days.get(key) ?? 0) + 1); };
+  for (const e of store.events) {
+    if (e.category !== "subscription") continue;
+    const d = dayIn(e.occurredAt, tz);
+    if (!inRange(d)) continue;
+    const to = statusTo(e);
+    if (body.metric === "subscriptions:renewed" && e.type === "subscription:renewed") add(d);
+    if (body.metric === "subscriptions:purchased" && e.type === "subscription:purchased") add(d);
+    if (body.metric === "subscriptions:pauses" && to === "paused") add(d);
+    if (body.metric === "subscriptions:churned" && ["canceled", "failed", "expired"].includes(to)) add(d, to);
+  }
+  const grouped = Array.isArray(body.dimensions) && body.dimensions.includes("event.status_to");
+  // the offset switch moves every day of the range, a day without events included (a test's handle, not Juo's behaviour)
+  if (plus && !grouped) {
+    for (let d = Date.parse(`${body.range.from}T00:00:00Z`); d <= Date.parse(`${body.range.to}T00:00:00Z`); d += 86_400_000) {
+      const key = `${new Date(d).toISOString().slice(0, 10)}|`;
+      if (!days.has(key)) days.set(key, 0);
+    }
+  }
+  return { status: 200, body: { series: [...days].sort().map(([key, n]) => {
+    const [d, k] = key.split("|");
+    return point(d, grouped && k ? { "event.status_to": k } : {}, n);
+  }), meta } };
+}
+
 /** Starts the fake for some stores (juoStore); answers { url, state, close }. */
 export async function startFakeJuo({ stores }) {
   const state = { requests: [], queriesSeen: [], fail429: 0, retryAfter: "1", failAfter: null, failTenant: null, pagesAnswered: 0,
-    hiddenFromList: new Set(), stores: Object.fromEntries(stores.map((s) => [s.domain, s])) };
+    hiddenFromList: new Set(), stores: Object.fromEntries(stores.map((s) => [s.domain, s])),
+    analyticsOffset: {}, analyticsFail: {}, analyticsOff: null, analyticsIgnored: {}, bodies: [] };
   const json = (res, status, body, headers = {}) => {
     res.writeHead(status, { "content-type": "application/json", ...headers });
     res.end(JSON.stringify(body));
@@ -246,6 +320,22 @@ export async function startFakeJuo({ stores }) {
     state.requests.push({ path: url.pathname, params: Object.fromEntries(url.searchParams), tenant, authorized, at: Date.now(),
       keyInUrl: Object.values(state.stores).some((s) => req.url.includes(s.key)) });
     if (url.searchParams.has("query")) state.queriesSeen.push(url.searchParams.get("query"));
+    if (req.method === "POST" && url.pathname === "/admin/v1/analytics/query") {
+      const chunks = [];
+      req.on("data", (c) => chunks.push(c));
+      req.on("end", () => {
+        let body = null;
+        try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { body = null; }
+        state.bodies.push({ tenant, body });
+        if (!authorized) return json(res, 401, { error: "unauthorized", message: "The API key is not valid for this tenant" });
+        if (state.analyticsOff && tenant === state.analyticsOff) return json(res, 409, { error: "analytics_disabled" });
+        const fail = state.analyticsFail[body?.metric];
+        if (fail) return json(res, fail, { error: "failed" });
+        const r = analyticsOf(store, body, state);
+        return json(res, r.status, r.body);
+      });
+      return undefined;
+    }
     req.resume();
     if (req.method !== "GET") return json(res, 405, { error: "method_not_allowed" });
     if (!authorized) return json(res, 401, { error: "unauthorized", message: "The API key is not valid for this tenant" });
@@ -257,6 +347,9 @@ export async function startFakeJuo({ stores }) {
     if (state.failTenant !== null && tenant === state.failTenant) return json(res, 503, { error: "unavailable" });
     const params = url.searchParams;
     if (url.pathname === "/admin/v1/event-types") return json(res, 200, { resource: "list", data: FIXTURE_EVENT_TYPES });
+    if (url.pathname === "/admin/v1/analytics/metrics") {
+      return json(res, 200, { metrics: ANALYTICS_METRICS.map((key) => ({ key, kind: key.endsWith("count") || key.endsWith("mrr") ? "gauge" : "count" })) });
+    }
     if (url.pathname === "/admin/v1/subscriptions") {
       const q = params.get("query");
       const keys = SUBSCRIPTION_SORTS[params.get("sort") ?? "createdAt:asc"];

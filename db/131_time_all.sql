@@ -21,7 +21,9 @@
 -- read, are timed too), after 190_follow_up_clock_at_read.sql; since addition 0009v (Assets -> Fleet management's page in one read),
 -- after 192_fleet_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
 -- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 10,000 ms
--- until prod's runs set it, and its answer names each step's milliseconds). Prod is the proof; dev's shared core is for
+-- until prod's runs set it, and its answer names each step's milliseconds; since addition 0009zg the source figures' due
+-- check, part a, and their comparison of today under Data quality, outside its set, both skip before
+-- 214_source_figures.sql). Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -358,6 +360,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    where o.tenant_id = cma.current_tenant_id() and o.status in ('pending', 'failed', 'in_flight') and o.next_attempt_at < now() - make_interval(mins => 10)$q$, 'agent', array['reports.view', 'tenant.configure']),
 ('a', 'data quality', 'flash data quality overview', $q$select cma.flash_overview('data_quality', null, null, null, null)$q$, 'dq', array['reports.view', 'performance.team', 'tenant.configure']),
 ('a', 'data quality', 'flash data quality first page', $q$select cma.flash_rows('data_quality', '{}', 'check', true, 500, 0, null, null, null)$q$, 'dq', array['reports.view', 'performance.team', 'tenant.configure']),
+('a', 'data quality', 'source figures compared today', $q$select * from cma.source_figure_compare_of(cma.current_tenant_id(), '{today}'::date)$q$, 'dq', array['reports.view', 'tenant.configure']),
 -- Flash
 ('a', 'flash', 'landing', $q$select cma.flash_page(null, null, '{from}', '{to}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('a', 'flash', 'snapshots', $q$select cma.flash_snapshots(null, null)$q$, 'agent', array['reports.view', 'performance.team']),
@@ -479,6 +482,10 @@ update pg_temp.reads_0131 set in_set = false
 where page = 'pledge lists now' and name in ('pledge file today', 'pledge file stored');
 update pg_temp.reads_0131 set skip_state = 'CMA02', skip_why = 'no quarter file yet'
 where page = 'pledge lists now' and name = 'pledge file stored';
+-- The source figures' comparison (addition 0009zg): no page reads it yet (Customers → Subscriptions will, B39d), so it is
+-- outside Data quality's set; a database without 214 has nothing to time (42883)
+update pg_temp.reads_0131 set in_set = false, skip_state = '42883', skip_why = 'addition 0009zg has not run'
+where page = 'data quality' and name = 'source figures compared today';
 -- Customers → Active: the set is the page's four reads; what is computed without a stored document, the filtered list
 -- and the file are reads of other requests
 update pg_temp.reads_0131 set in_set = false
@@ -494,6 +501,7 @@ declare
   v_user uuid; v_sys text; v_ext text; v_conn uuid; v_today date; v_monday date; v_month date; v_from date; v_to date; v_from92 date;
   v_ms numeric; v_max numeric; v_sql text; v_page text; v_set_max numeric; v_audit_after bigint; v_sched uuid; v_cur jsonb;
   v_t0 timestamptz; v_key text; v_mark0 timestamptz;
+  v_fig_user uuid; v_fig_conn uuid;   -- the source figures' due check (0009zg): its own, so {conn} keeps the tenant's first connection
   -- per page and tenant: the sum of its reads and whether one failed
   v_pages text[]; v_sums numeric[]; v_bad boolean[]; p integer;
   -- per page: a read in its set had nothing to time (and why); a read outside its set (a page that loads in two parts)
@@ -675,6 +683,43 @@ begin
                                      when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
         r_detail := r_detail || case when to_regprocedure('cma.subscription_variants_of(uuid,uuid)') is null then 'addition 0009ze has not run: nothing to time'
                                      else coalesce(v_ms || ' ms (best of 2) against ' || v_max || ' ms: ', 'the read failed: ') || coalesce(v_cur::text, '') end;
+        r_ms := r_ms || v_ms;
+      end if;
+      -- the source figures' due check (addition 0009zg), part a: what the hourly job ingest-source-figures asks first for
+      -- every subscriptions connection, as the tenant's ingest (ingest.write), the best of three, against verify.max_poll_ms.
+      -- A job's read, not a page's poll: one call a connection an hour, each in a fresh job process, so the best of three
+      -- is its cost (the generic plan after five calls never comes; its seventh call read 0.14 ms on the volume fixture,
+      -- one CPU). A database without 214, or a tenant without an active subscriptions connection or an ingest user, reads skip
+      if v_part in ('a', 'all') then
+        v_ms := null; v_cur := null; v_fig_user := null; v_fig_conn := null;
+        select x.user_id into v_fig_user from cma.app_user_external_id x
+        join cma.app_user u on u.tenant_id = x.tenant_id and u.id = x.user_id and u.status = 'active'
+        where x.tenant_id = t.id and x.system = 'ingest' and x.external_id = 'ingest';
+        select c.id into v_fig_conn from cma.integration_connection c
+        where c.tenant_id = t.id and c.kind = 'subscriptions' and c.status = 'active' order by c.id limit 1;
+        if to_regprocedure('cma.source_figures_due_of(uuid)') is not null and v_fig_user is not null and v_fig_conn is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_fig_user::text, true);
+          begin
+            for i in 1 .. 3 loop
+              v_mark0 := clock_timestamp();
+              select jsonb_build_object('due', d.due) into v_cur from cma.source_figures_due_of(v_fig_conn) d;
+              v_ms := least(coalesce(v_ms, 1e9), round(extract(epoch from clock_timestamp() - v_mark0) * 1000, 1));
+            end loop;
+          exception
+            when others then v_ms := null; v_cur := jsonb_build_object('error', sqlstate);
+          end;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_poll_ms')::numeric end;
+        r_name := r_name || (t.slug || ' source figures due check');
+        r_result := r_result || case when v_provoke then 'FAIL'
+                                     when to_regprocedure('cma.source_figures_due_of(uuid)') is null or v_fig_user is null or v_fig_conn is null then 'skip'
+                                     when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when to_regprocedure('cma.source_figures_due_of(uuid)') is null then 'addition 0009zg has not run: nothing to time'
+                                     when v_fig_user is null or v_fig_conn is null then 'no active subscriptions connection or ingest user: nothing to time'
+                                     else coalesce(v_ms || ' ms (best of 3) against ' || v_max || ' ms: ', 'the read failed: ') || coalesce(v_cur::text, '') end;
         r_ms := r_ms || v_ms;
       end if;
       -- the subscription audit (addition 0009zb), part audit only: as the owner (it is executable by cma_owner only), once,

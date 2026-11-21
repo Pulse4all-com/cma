@@ -69,6 +69,10 @@
 #                                     subscriptions_poll_interval_minutes (default 5), the events of the store's subscriptions
 #                                     since its cursor less five minutes, then the subscriptions they touched; created paused,
 #                                     resumed by PROD_RUNBOOK 15.9 (a redeploy keeps its state)
+#   ingest-source-figures hourly at :41  the subscriptions connections with a token secret name (addition 0009zg, brief B39
+#                                     Part B39b): once a day after source_figures.local_time (default 05:00, the tenant's
+#                                     zone), the app's own figures for yesterday and today beside the CMA's; not due: one short
+#                                     read; created paused, resumed by PROD_RUNBOOK phase 19 (a redeploy keeps its state)
 #   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also the polled forms' submissions,
 #                                     email engagements and inbox threads, and the inbox trash); Aircall: calls of the last
 #                                     26 hours and the webhook;
@@ -286,6 +290,7 @@ if [ "$JOBS" = 1 ]; then
   deploy_job ingest-poll-reviews poll-reviews.mjs 30m ""
   deploy_job ingest-poll-assets poll-assets.mjs 10m ""
   deploy_job ingest-poll-subscriptions poll-subscriptions.mjs 10m ""
+  deploy_job ingest-source-figures source-figures.mjs 10m ""
   deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
   deploy_job ingest-outbox outbox.mjs 10m ""
   deploy_job ingest-backfill backfill.mjs 24h ""
@@ -319,6 +324,7 @@ if [ "$JOBS" = 1 ]; then
   schedule ingest-poll-reviews "7 * * * *"
   schedule ingest-poll-assets "*/5 * * * *" paused
   schedule ingest-poll-subscriptions "*/5 * * * *" paused
+  schedule ingest-source-figures "41 * * * *" paused
   schedule ingest-reconcile "$RECONCILE_EVERY"
   # The outbox has nothing to deliver since 0008h: no schedule, and one left by an earlier deploy is paused
   if gcloud scheduler jobs describe ingest-outbox --project="$PROJECT" --location="$REGION" --format='value(state)' 2>/dev/null | grep -qx ENABLED; then
@@ -342,8 +348,8 @@ if [ "$JOBS" = 1 ]; then
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-poll-assets and ingest-poll-subscriptions (every 5 minutes), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox, ingest-backfill and ingest-import-legacy-calls (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review|device|subscription|subscription_product|subscription_event|billing_event>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history; device reads the asset register whole, without --from, and takes --dry-run; subscription reads a store's subscriptions and their lines whole and subscription_product its catalog whole, both without --from; subscription_event and billing_event read from --from, without it from subscriptions.history_start_date, empty: all history; --adapter;juo in place of --connection;<id> serves every active Juo connection; the four take --dry-run, one object per dry run)"
+  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-poll-assets and ingest-poll-subscriptions (every 5 minutes), ingest-source-figures (hourly at :41, one read a day per store), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox, ingest-backfill and ingest-import-legacy-calls (manual)"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review|device|subscription|subscription_product|subscription_event|billing_event|purchase_order|source_figure>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history; device reads the asset register whole, without --from, and takes --dry-run; subscription reads a store's subscriptions and their lines whole and subscription_product its catalog whole, both without --from; subscription_event and billing_event read from --from, without it from subscriptions.history_start_date, empty: all history; source_figure reads the app's own flow figures month by month from --from, without it from the connection's earliest held event; --adapter;juo in place of --connection;<id> serves every active Juo connection; the four read whole or from a start take --dry-run, one object per dry run)"
   echo "import:    gcloud run jobs execute ingest-import-legacy-calls --project=${PROJECT} --region=${REGION} --wait --args='^|^--connection|<CRM connection id>|--file|gs://${IMPORT_BUCKET}/<object>|--source-system|<name>|--cutover|<YYYY-MM-DD>|--date-format|<DD-MM-YYYY>|--columns|<role=header,…>|--meanings|<label>=<meaning>;…[|--min-customer-id-digits|<n>][|--unmatched|<store or skip>][|--dry-run]'  (docs/import/legacy-calls.md)"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"

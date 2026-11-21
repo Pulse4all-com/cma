@@ -7,8 +7,11 @@
  * since 0009za the lines (E), the catalog (F), the new event types (G), the billing events with their instrument types and
  * return codes (H) and the client's allow-list of method and path (I: a write refused with no request sent); then the
  * client against the fake Juo on localhost: paging, the key in a header only, 401 for another store's id (key_rejected),
- * a 429 paced and sent again, a third 429 failing rate_limited, a missing secret, a store id out of its form. Everything
- * is invented.
+ * a 429 paced and sent again, a third 429 failing rate_limited, a missing secret, a store id out of its form. Since
+ * addition 0009zg (K) Juo's own figures: the queries of a day's read and of a backfill month (the bodies, Juo's metric
+ * keys in the adapter only), the answers mapped (a gauge's latest point, a flow's day with no row as 0, exits per status,
+ * the survival cells), the skips (400, 501, 409, an ignored filter, a bad value, no value) and the one POST against the
+ * fake, with the key in a header. Everything is invented.
  *
  *   node verify/juo-mapping.mjs             every check must PASS
  *   node verify/juo-mapping.mjs --provoke   every check must FAIL
@@ -33,6 +36,8 @@ setLogSink((line) => logs.push(line));
 const map = await import("../src/adapters/juo/map.mjs");
 const client = await import("../src/adapters/juo/client.mjs");
 const read = await import("../src/adapters/juo/read.mjs");
+const figures = await import("../src/adapters/juo/figures.mjs");
+const { SourceError } = await import("../src/core/http.mjs");
 const { juo } = await import("../src/adapters/juo/index.mjs");
 const { ADAPTERS } = await import("../src/adapters/index.mjs");
 const { JobBudget } = await import("../src/core/budget.mjs");
@@ -207,11 +212,13 @@ expect("C5 the queries: each family's events of a window (after, from, before), 
   [`${SUBSCRIPTION_FAMILY} AND occurredAt:>'2026-10-28T12:00:00.000Z'`,
     `${SUBSCRIPTION_FAMILY} AND occurredAt:>='2026-10-28T12:00:00.000Z' AND occurredAt:<'2026-10-28T12:01:00.000Z'`,
     `${BILLING_FAMILY} AND occurredAt:>'2026-10-28T12:00:00.000Z'`, "(id:'a-1' OR id:'c-3')", null, "family_unknown"], []);
-expect("C6 the adapter registered as juo, polling only (no route), subscriptions and the catalog read whole, five objects backfilled (purchase_order since 0009ze, without a dry run), two reconciled, a connection without a key skipped",
+expect("C6 the adapter registered as juo, polling only (no route), subscriptions and the catalog read whole, six objects backfilled (purchase_order since 0009ze and source_figure since 0009zg, neither with a dry run), two reconciled, a connection without a key skipped; the figures read by the job (0009zg)",
   [ADAPTERS.juo === juo, juo.kind, juo.wholeObjects, juo.backfillObjects, juo.dryRunObjects, juo.reconcileObjects, juo.skipReason({ tokenSecretName: null }),
-    juo.skipReason({ tokenSecretName: "ingest-juo-fixture-one-key" })],
-  [true, "poll", ["subscription", "subscription_product"], ["subscription", "subscription_product", "subscription_event", "billing_event", "purchase_order"],
-    ["subscription", "subscription_product", "subscription_event", "billing_event"], ["subscription", "subscription_product"], "key_not_set", null], []);
+    juo.skipReason({ tokenSecretName: "ingest-juo-fixture-one-key" }), typeof juo.readFigures, typeof juo.figuresDue,
+    await juo.backfillFrom("source_figure", { settings: async () => ({ "subscriptions.history_start_date": "2025-05-01" }) })],
+  [true, "poll", ["subscription", "subscription_product"], ["subscription", "subscription_product", "subscription_event", "billing_event", "purchase_order", "source_figure"],
+    ["subscription", "subscription_product", "subscription_event", "billing_event"], ["subscription", "subscription_product"], "key_not_set", null,
+    "function", "function", { allHistory: true }], []);
 const startOf = async (setting) => juo.backfillFrom("subscription_event", { settings: async () => ({ "subscriptions.history_start_date": setting }) });
 expect("C7 an events backfill's start without --from: subscriptions.history_start_date, else all history; subscriptions and the catalog all history",
   [await startOf("2025-05-01"), await startOf(""), await startOf(" "), await juo.backfillFrom("billing_event", { settings: async () => ({}) }),
@@ -438,6 +445,88 @@ expect("D7 no secret → token_unavailable; a store id out of its form → tenan
   [await codeOfRun(() => collect(read.clientFor(conn(one.domain, "ingest-juo-missing-key"), settings, new JobBudget({})).subscriptions())),
     await codeOfRun(() => collect(read.clientFor(conn("fixture-one"), settings, new JobBudget({})).subscriptions())), fake.state.requests.length],
   ["token_unavailable", "tenant_id_invalid", 0], ["ok", "ok", 1]);
+// ---- K. Juo's own figures (addition 0009zg) -----------------------------------------------------------------------------
+const DATES = { today: "2026-11-21", yesterday: "2026-11-20", timezone: "Europe/London" };
+const dq = figures.dailyQueries(DATES);
+expect("K1 a day's read: ten queries (four statuses, the amount, four flows, the survival), yesterday to today in the tenant's zone, Juo's metric keys",
+  [dq.length, dq.map((x) => `${x.figure}:${x.body.metric}${x.status ? `:${x.status}` : ""}`), dq.every((x) => x.body.timezone === "Europe/London"),
+    dq[0].body.filter, dq[0].body.rollup, dq[4].body.grain, dq[4].body.range, dq[5].body.range, dq[6].body.dimensions, dq[9].body.cohort, dq[9].body.range],
+  [10, ["subscriptions_in_status:subscriptions:count:active", "subscriptions_in_status:subscriptions:count:paused", "subscriptions_in_status:subscriptions:count:failed",
+    "subscriptions_in_status:subscriptions:count:canceled", "recurring_amount_active:subscriptions:current-mrr", "renewals:subscriptions:renewed",
+    "exits:subscriptions:churned", "purchases:subscriptions:purchased", "pauses:subscriptions:pauses", "renewal_survival:subscriptions:purchased"], true,
+    { field: "event.status_to", operator: "eq", value: "active" }, "last", "total", { from: "2026-11-21", to: "2026-11-21" }, { from: "2026-11-20", to: "2026-11-21" },
+    ["event.status_to"], { anchorEvent: "subscription:purchased", periodGrain: "month", measure: "retention", periodBasis: "order_sequence", periods: 24 },
+    { from: "2024-12-01", to: "2026-11-21" }],
+  [0, [], false, null, null, null, null, null, null, null, null]);
+const mq = figures.monthQueries({ from: "2025-05-26", to: "2025-05-31", timezone: "Europe/Amsterdam" });
+expect("K2 a backfill month: the four flow figures only, over its days",
+  [mq.map((x) => x.figure), mq.every((x) => x.body.range.from === "2025-05-26" && x.body.range.to === "2025-05-31" && x.body.grain === "day"),
+    figures.monthStart("2025-12-14", -1), figures.monthEnd("2024-02-10"), figures.monthStart("2026-11-21", 23)],
+  [["renewals", "exits", "purchases", "pauses"], true, "2026-01-01", "2024-02-29", "2024-12-01"], [[], false, null, null, null]);
+const at = (d, v, dims = {}) => ({ start: `${d}T00:00:00.000Z`, end: `${d}T23:59:59.999Z`, dimensions: dims, value: v });
+const london = (iso) => ({ start: iso, end: iso, dimensions: {}, value: 1 });
+const k3 = [
+  figures.itemsOf(dq[0], { series: [at("2026-11-20", 1230), at("2026-11-21", 1234)], meta: {} }, DATES),
+  figures.itemsOf(dq[4], { series: [at("2026-11-21", 5678.904)], meta: { unit: "money_minor" } }, DATES),
+  figures.itemsOf(dq[5], { series: [at("2026-11-21", 7)], meta: {} }, DATES),
+  figures.itemsOf(dq[6], { series: [at("2026-11-20", 4, { "event.status_to": "canceled" }), at("2026-11-20", 12, { "event.status_to": "failed" }),
+    at("2026-11-20", 2, { "event.status_to": "merged" })], meta: {} }, DATES),
+  figures.itemsOf(dq[9], { series: [at("2026-08-01", 80, { cohort: "2026-08", period: 1 }), at("2026-08-01", 76, { cohort: "2026-08", period: 2 }),
+    at("2026-08-01", 9, { cohort: "2026-8", period: 3 }), at("2026-08-01", 9, { cohort: "2026-08", period: 25 })], meta: {} }, DATES)];
+const brief = (r) => r.items.map((i) => `${i.figureKey}|${i.businessDate}|${JSON.stringify(i.dims)}|${i.value}|${i.unit}|${i.sourceMetric}`);
+expect("K3 the answers mapped: a gauge's latest point under today, the amount to cents under today, a flow's day without a row as 0, exits per status (merged left out), the survival's cells (a cohort or period out of form left out)",
+  k3.map(brief),
+  [["subscriptions_in_status|2026-11-21|{\"status\":\"active\"}|1234|count|subscriptions:count"],
+    ["recurring_amount_active|2026-11-21|{}|5678.9|amount|subscriptions:current-mrr"],
+    ["renewals|2026-11-20|{}|0|count|subscriptions:renewed", "renewals|2026-11-21|{}|7|count|subscriptions:renewed"],
+    ["exits|2026-11-20|{\"status\":\"canceled\"}|4|count|subscriptions:churned", "exits|2026-11-20|{\"status\":\"failed\"}|12|count|subscriptions:churned",
+      "exits|2026-11-20|{\"status\":\"expired\"}|0|count|subscriptions:churned", "exits|2026-11-21|{\"status\":\"canceled\"}|0|count|subscriptions:churned",
+      "exits|2026-11-21|{\"status\":\"failed\"}|0|count|subscriptions:churned", "exits|2026-11-21|{\"status\":\"expired\"}|0|count|subscriptions:churned"],
+    ["renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":1}|80|count|subscriptions:purchased",
+      "renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":2}|76|count|subscriptions:purchased"]],
+  [[], [], [], [], []]);
+const summer = { today: "2026-06-02", yesterday: "2026-06-01", timezone: "Europe/Amsterdam" };
+const sq = figures.dailyQueries(summer)[5];
+expect("K4 a bucket's day in the tenant's zone, whether Juo writes its start as the zone's midnight or as the date at UTC midnight (summer time)",
+  [brief(figures.itemsOf(sq, { series: [london("2026-05-31T22:00:00.000Z"), london("2026-06-01T22:00:00.000Z")] }, summer)),
+    brief(figures.itemsOf(sq, { series: [london("2026-06-01T00:00:00.000Z"), london("2026-06-02T00:00:00.000Z")] }, summer))],
+  [["renewals|2026-06-01|{}|1|count|subscriptions:renewed", "renewals|2026-06-02|{}|1|count|subscriptions:renewed"],
+    ["renewals|2026-06-01|{}|1|count|subscriptions:renewed", "renewals|2026-06-02|{}|1|count|subscriptions:renewed"]], [[], []]);
+expect("K5 the skips: an ignored filter, a negative value, a gauge or amount without any value, an answer without series; 400 and 501 unsupported, 409 analytics_off, anything else fails the run",
+  [figures.itemsOf(dq[0], { series: [at("2026-11-21", 5)], meta: { ignoredFilters: ["event.status_to"] } }, DATES).skip,
+    figures.itemsOf(dq[5], { series: [at("2026-11-21", -1)] }, DATES).skip, figures.itemsOf(dq[0], { series: [] }, DATES).skip,
+    figures.itemsOf(dq[4], { series: [] }, DATES).skip, figures.itemsOf(dq[5], { data: [] }, DATES).skip,
+    ["http_400", "http_501", "http_409", "http_503", "key_rejected", "timeout"].map((c) => figures.skipCodeOf(new SourceError(c)))],
+  ["filter_ignored", "bad_value", "no_value", "no_value", "bad_response", ["unsupported", "unsupported", "analytics_off", null, null, null]],
+  [null, null, null, null, null, []]);
+fake.state.requests.length = 0;
+fake.state.bodies.length = 0;
+const kApi = read.clientFor(conn(), settings, (budget = new JobBudget({})));
+let kr = await figures.runQueries(kApi, figures.dailyQueries({ today: "2026-10-28", yesterday: "2026-10-27", timezone: "Europe/London" }),
+  { today: "2026-10-28", timezone: "Europe/London" });
+expect("K6 against the fake: ten POSTs to /analytics/query with the store's id and the key in a header only, the bodies as built, the items mapped, nothing skipped",
+  [fake.state.requests.length, fake.state.requests.every((r) => r.path === "/admin/v1/analytics/query" && r.authorized && !r.keyInUrl && r.tenant === one.domain),
+    budget.usage().api, fake.state.bodies.map((b) => b.body.metric).join(","), kr.items.filter((i) => i.figureKey === "subscriptions_in_status").map((i) => i.value),
+    kr.skipped],
+  [10, true, { "POST /analytics/query": 10 },
+    "subscriptions:count,subscriptions:count,subscriptions:count,subscriptions:count,subscriptions:current-mrr,subscriptions:renewed,subscriptions:churned,subscriptions:purchased,subscriptions:pauses,subscriptions:purchased",
+    [224, 1, 1, 1], {}],
+  [0, false, {}, "", [], { x: 1 }]);
+fake.state.analyticsFail = { "subscriptions:pauses": 400 };
+kr = await figures.runQueries(kApi, figures.dailyQueries(DATES), DATES);
+const kSkip1 = kr.skipped;
+fake.state.analyticsFail = {};
+fake.state.analyticsOff = one.domain;
+fake.state.requests.length = 0;
+kr = await figures.runQueries(kApi, figures.dailyQueries(DATES), DATES);
+const k7sent = fake.state.requests.length;
+fake.state.analyticsOff = null;
+fake.state.analyticsFail = { "subscriptions:renewed": 503 };
+const k7fail = await codeOfRun(() => figures.runQueries(kApi, figures.dailyQueries(DATES), DATES));
+fake.state.analyticsFail = {};
+expect("K7 a 400 skips its figure, a 409 the store's remaining figures after one request; a 503 fails the read",
+  [kSkip1, kr.skipped, kr.items.length, k7sent, k7fail], [{ unsupported: 1 }, { analytics_off: 10 }, 0, 1, "http_503"],
+  [{}, {}, 1, 10, "ok"]);
 const logText = logs.join("\n");
 expect("D8 the log holds no key, no value: codes and counts only", [KEY, KEY2, "Invented", "example.invalid"].filter((v) => logText.includes(v)), [], ["x"]);
 

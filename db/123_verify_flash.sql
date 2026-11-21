@@ -19,7 +19,9 @@
 -- Since 180_flash_stored_cards.sql (0009p) A3 expects flash.current_overviews' default to be every stock overview but data
 -- quality (an edit of 0009p, conditional on its row). Since 210_subscription_facts.sql (0009ze; edited by that change) A8
 -- and B5 expect its two data-quality checks and B8 the version 0009ze of installed_base and subscriptions, each
--- conditional on its row; 211_verify_subscription_facts.sql is its check.
+-- conditional on its row; 211_verify_subscription_facts.sql is its check. Since 214_source_figures.sql (0009zg; edited by
+-- that change) A8 and B5 expect its data-quality check source_figure_gap, conditional on its row;
+-- 215_verify_source_figures.sql is its check.
 -- Expected verdict, in dev and in prod (block C off, the default in every database): "0008zn verified | 123_verify_flash:
 -- 40 ok, 0 FAIL, 4 skip" (44 checks: A1 to A8 and the B rows ok, C1 to C4 skip with "not run: volume off"); a local run
 -- with verify.volume set to 'true' at the top: "FAIL | 123_verify_flash: 43 ok, 1 FAIL, 0 skip", C2 the FAIL (at the
@@ -404,6 +406,9 @@ begin
                       -- since 0009ze (210): the variant mapping's and the device units' checks
                       || (case when exists (select 1 from cma.schema_migration where version = '0009ze')
                                then ',subscription_variant_unmapped:380,subscription_device_units_mismatch:390' else '' end)
+                      -- since 0009zg (214): the subscription app's own figures against the CMA's
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009zg')
+                               then ',source_figure_gap:400' else '' end)
      or (select count(*) from cma.data_quality_catalog()) <> (select count(distinct check_key) from cma.data_quality_catalog())
      or (select count(*) from cma.schema_migration where version = '0008zn') <> 1 then
     v_bad := v_bad || 'the catalog or something twice; ';
@@ -726,7 +731,10 @@ begin
                         || '1 assets/verifyregister/subscription:s-3 | active_subscription_without_device=2 customer_required_ref_missing=2 '
                         || 'device_required_ref_missing=1 device_subscription_ref_unknown=1 field_device_on_ended_subscription=1 '
                         -- since 0008zt (136): the seventh check, listed with the subscriptions and the register set up (none here)
-                        || 'field_device_on_non_holding_subscription=0 subscription_customer_unmatched=1'
+                        || 'field_device_on_non_holding_subscription=0'
+                        -- since 0009zg (214): the app's own figures, listed with the subscriptions set up (none here)
+                        || case when exists (select 1 from cma.schema_migration where version = '0009zg') then ' source_figure_gap=0' else '' end
+                        || ' subscription_customer_unmatched=1'
                         -- since 0009ze (210): its two checks, listed with the subscriptions (and the register) set up
                         || case when exists (select 1 from cma.schema_migration where version = '0009ze')
                                 then ' subscription_device_units_mismatch=0 subscription_variant_unmapped=0' else '' end || ' | CMA04'
