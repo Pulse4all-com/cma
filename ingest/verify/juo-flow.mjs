@@ -663,11 +663,11 @@ if ((await q("select count(*)::int as n from cma.schema_migration where version 
     [k.read, k.failed, kRun.stream, kRun.status, posts().length, fake.state.requests.length, kRun.counts.fetched > 0, kRun.counts.inserted, kRun.counts.skipped,
       [...new Set(rows.map((r) => r.figure_key))]],
     [1, 0, "source_figure", "succeeded", 10, 10, true, rows.length, 0,
-      ["pauses", "purchases", "recurring_amount_active", "renewal_survival", "renewals", "subscriptions_in_status", "transitions_to_churn"]],
+      ["exits", "pauses", "purchases", "recurring_amount_active", "renewal_survival", "renewals", "subscriptions_in_status"]],
     [0, 1, null, "failed", 0, 0, false, 0, 1, []]);
   expect("K2 the CMA's value beside Juo's: the statuses equal, the amount in the store's currency, every flow day equal; the survival not compared",
     [stock.map((r) => `${r.dims.status}:${r.v}:${r.c}`), [amount.unit, amount.currency, amount.v === amount.c],
-      rows.filter((r) => ["renewals", "purchases", "pauses", "transitions_to_churn"].includes(r.figure_key)).every((r) => r.v === r.c),
+      rows.filter((r) => ["renewals", "purchases", "pauses", "exits"].includes(r.figure_key)).every((r) => r.v === r.c),
       rows.filter((r) => r.figure_key === "renewal_survival").every((r) => r.c === null)],
     [["active:224:224", "canceled:1:1", "failed:1:1", "paused:1:1"], ["amount", "GBP", true], true, true], [[], [], false, false]);
   fake.state.requests.length = 0;

@@ -61,7 +61,8 @@
 --                              and virtual lines out; the CMA's amount per cycle sums every line not canceled: a known cause
 --   renewals, purchases        events renewed, purchased of the connection that occurred on the business date (the tenant's
 --                              zone)
---   transitions_to_churn       events of the connection into dims.status (status_to) on the business date, any event type
+--   exits                      events of the connection into dims.status (status_to: canceled, failed or expired) on the
+--                              business date, any event type: the app's own count of exits, not the CMA's Churn
 --   pauses                     events of the connection into paused on the business date, any event type
 --   renewal_survival           none here (B39d compares it with the CMA's renewal survival)
 --
@@ -445,7 +446,7 @@ as $$
     ('subscriptions_in_status', 'stock',  'count',  array['status'],                 true,  10),
     ('recurring_amount_active', 'stock',  'amount', array[]::text[],                  true,  20),
     ('renewals',                'flow',   'count',  array[]::text[],                  true,  30),
-    ('transitions_to_churn',    'flow',   'count',  array['status'],                 true,  40),
+    ('exits',                   'flow',   'count',  array['status'],                 true,  40),
     ('purchases',               'flow',   'count',  array[]::text[],                  true,  50),
     ('pauses',                  'flow',   'count',  array[]::text[],                  true,  60),
     ('renewal_survival',        'cohort', 'count',  array['cohort_start', 'period'], false, 70)
@@ -474,7 +475,7 @@ create table if not exists cma.source_figure (
   tenant_id         uuid not null default cma.current_tenant_id() references cma.tenant (id),
   connection_id     uuid not null,
   figure_key        text not null check (figure_key in ('subscriptions_in_status', 'recurring_amount_active', 'renewals',
-                                                        'transitions_to_churn', 'purchases', 'pauses', 'renewal_survival')),
+                                                        'exits', 'purchases', 'pauses', 'renewal_survival')),
   source_metric     text not null check (source_metric ~ '^[a-z][a-z0-9:._-]{0,79}$'),
   business_date     date not null,
   dims              jsonb not null default '{}'::jsonb check (cma.source_figure_dims_ok(figure_key, dims)),
@@ -595,7 +596,7 @@ begin
                         when 'renewals' then e.event_type = 'renewed'
                         when 'purchases' then e.event_type = 'purchased'
                         when 'pauses' then e.status_to = 'paused'
-                        when 'transitions_to_churn' then e.status_to = it.dims ->> 'status'
+                        when 'exits' then e.status_to = it.dims ->> 'status'
                       end)::numeric
            end as cma_value
     from it

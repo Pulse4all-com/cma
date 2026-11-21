@@ -109,7 +109,7 @@ begin
                         where c.sort_order >= 390)
            || ' | ' || cma.data_quality_fix_in('source_figure_gap', null) || ' ' || cma.data_quality_fix_in('subscription_variant_unmapped', null);
   insert into verify_0009zg values (5, 'A5 the seven figures with their kind, unit, dims and comparison; source_figure_gap at 400, fixed in subscriptions (the variant check still the CMA''s)',
-    case when v_txt = 'subscriptions_in_status:stock:count:status:true recurring_amount_active:stock:amount::true renewals:flow:count::true transitions_to_churn:flow:count:status:true purchases:flow:count::true pauses:flow:count::true renewal_survival:cohort:count:cohort_start+period:false | subscription_device_units_mismatch:390 source_figure_gap:400 | subscriptions cma'
+    case when v_txt = 'subscriptions_in_status:stock:count:status:true recurring_amount_active:stock:amount::true renewals:flow:count::true exits:flow:count:status:true purchases:flow:count::true pauses:flow:count::true renewal_survival:cohort:count:cohort_start+period:false | subscription_device_units_mismatch:390 source_figure_gap:400 | subscriptions cma'
               and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'missing'));
 end
 $$;
@@ -221,7 +221,7 @@ begin
 
     -- B3. the CMA's value per figure, against a hand count: active 5 (a6 deleted at the source left out), paused 2, failed
     --     1, canceled 1; 4 × 30 + 120 / 12 = 130.00 GBP a month; on D renewals 3 (its two ends: 00:00 in, 24:00 out),
-    --     purchases 2, pauses 2 (any event into paused), into canceled 1, failed 1, expired 0; survival none
+    --     purchases 2, pauses 2 (any event into paused), into canceled 1, failed 1, expired 0 (exits); survival none
     v_items := jsonb_build_array(
       jsonb_build_object('figureKey', 'subscriptions_in_status', 'sourceMetric', 'subscriptions:count', 'businessDate', v_today, 'dims', jsonb_build_object('status', 'active'), 'value', 5, 'unit', 'count'),
       jsonb_build_object('figureKey', 'subscriptions_in_status', 'sourceMetric', 'subscriptions:count', 'businessDate', v_today, 'dims', jsonb_build_object('status', 'paused'), 'value', 2, 'unit', 'count'),
@@ -231,9 +231,9 @@ begin
       jsonb_build_object('figureKey', 'renewals', 'sourceMetric', 'subscriptions:renewed', 'businessDate', v_d, 'dims', '{}'::jsonb, 'value', 3, 'unit', 'count'),
       jsonb_build_object('figureKey', 'purchases', 'sourceMetric', 'subscriptions:purchased', 'businessDate', v_d, 'dims', '{}'::jsonb, 'value', 2, 'unit', 'count'),
       jsonb_build_object('figureKey', 'pauses', 'sourceMetric', 'subscriptions:pauses', 'businessDate', v_d, 'dims', '{}'::jsonb, 'value', 2, 'unit', 'count'),
-      jsonb_build_object('figureKey', 'transitions_to_churn', 'sourceMetric', 'subscriptions:churned', 'businessDate', v_d, 'dims', jsonb_build_object('status', 'canceled'), 'value', 1, 'unit', 'count'),
-      jsonb_build_object('figureKey', 'transitions_to_churn', 'sourceMetric', 'subscriptions:churned', 'businessDate', v_d, 'dims', jsonb_build_object('status', 'failed'), 'value', 1, 'unit', 'count'),
-      jsonb_build_object('figureKey', 'transitions_to_churn', 'sourceMetric', 'subscriptions:churned', 'businessDate', v_d, 'dims', jsonb_build_object('status', 'expired'), 'value', 0, 'unit', 'count'),
+      jsonb_build_object('figureKey', 'exits', 'sourceMetric', 'subscriptions:churned', 'businessDate', v_d, 'dims', jsonb_build_object('status', 'canceled'), 'value', 1, 'unit', 'count'),
+      jsonb_build_object('figureKey', 'exits', 'sourceMetric', 'subscriptions:churned', 'businessDate', v_d, 'dims', jsonb_build_object('status', 'failed'), 'value', 1, 'unit', 'count'),
+      jsonb_build_object('figureKey', 'exits', 'sourceMetric', 'subscriptions:churned', 'businessDate', v_d, 'dims', jsonb_build_object('status', 'expired'), 'value', 0, 'unit', 'count'),
       jsonb_build_object('figureKey', 'renewal_survival', 'sourceMetric', 'subscriptions:purchased', 'businessDate', date_trunc('month', v_today)::date, 'dims', jsonb_build_object('cohort_start', to_char(date_trunc('month', v_today) - interval '2 months', 'YYYY-MM-DD'), 'period', 2), 'value', 40, 'unit', 'count'));
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_ing::text, true);
@@ -246,7 +246,7 @@ begin
              || ' | ' || (select count(*) from cma.source_figure f where f.tenant_id = v_t and f.run_id = v_run and f.cma_at is not null)::text
              || ' ' || (select f.value::text from cma.source_figure f where f.tenant_id = v_t and f.figure_key = 'recurring_amount_active');
     v_rows := v_rows || array['13', 'B3 the CMA''s value per figure against a hand count (statuses now, the monthly amount with the month factor, the day''s events in the tenant''s zone, both ends), survival not compared; the run named, the amount rounded to cents',
-      case when v_txt = '{"updated": 0, "inserted": 12, "unchanged": 0} | pauses=2.00 purchases=2.00 recurring_amount_active=130.00:GBP renewal_survival=null renewals=3.00 subscriptions_in_status:active=5.00 subscriptions_in_status:canceled=1.00 subscriptions_in_status:failed=1.00 subscriptions_in_status:paused=2.00 transitions_to_churn:canceled=1.00 transitions_to_churn:expired=0.00 transitions_to_churn:failed=1.00 | 11 130.00'
+      case when v_txt = '{"updated": 0, "inserted": 12, "unchanged": 0} | exits:canceled=1.00 exits:expired=0.00 exits:failed=1.00 pauses=2.00 purchases=2.00 recurring_amount_active=130.00:GBP renewal_survival=null renewals=3.00 subscriptions_in_status:active=5.00 subscriptions_in_status:canceled=1.00 subscriptions_in_status:failed=1.00 subscriptions_in_status:paused=2.00 | 11 130.00'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B4. a later read replaces a value and keeps the first read: renewals given twice in one call, 9 then 4 (the later

@@ -16,7 +16,8 @@
  *                             (a store's amount on 20 November 2026 against its active count: tens per subscription, not tenths), as the CMA stores amounts: stored as
  *                             given, and a factor of 100 would show as a gap on the first day
  *   renewals, purchases, pauses   subscriptions:renewed, :purchased, :pauses, grain day, yesterday to today
- *   transitions_to_churn      subscriptions:churned grouped by event.status_to (canceled, failed, expired), grain day
+ *   exits                     subscriptions:churned grouped by event.status_to (canceled, failed, expired), grain day: the
+ *                             app's own count of moves into those statuses (Exit (subscription app)), not the CMA's Churn
  *   renewal_survival          subscriptions:purchased as a retention cohort by order sequence (anchor subscription:purchased),
  *                             monthly cohorts and periods (Juo answers 501 for weekly cohorts: "only day and month", 21 Nov
  *                             2026), 24 periods, the last 24 months' cohorts, stored under the first day of the read's month
@@ -35,10 +36,10 @@ import { SourceError } from "../../core/http.mjs";
 
 export const ANALYTICS_QUERY = "/analytics/query";
 export const STATUSES_IN = ["active", "paused", "failed", "canceled"];
-export const STATUSES_CHURN = ["canceled", "failed", "expired"];
+export const STATUSES_EXIT = ["canceled", "failed", "expired"];
 export const SURVIVAL_PERIODS = 24;
 /** The flow figures, as the daily read and the month backfill take them */
-export const FLOWS = ["renewals", "transitions_to_churn", "purchases", "pauses"];
+export const FLOWS = ["renewals", "exits", "purchases", "pauses"];
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COHORT = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -78,7 +79,7 @@ function flowQueries(figure, from, to, timezone) {
     case "renewals": return [{ figure, metric: "subscriptions:renewed", body: { metric: "subscriptions:renewed", ...base } }];
     case "purchases": return [{ figure, metric: "subscriptions:purchased", body: { metric: "subscriptions:purchased", ...base } }];
     case "pauses": return [{ figure, metric: "subscriptions:pauses", body: { metric: "subscriptions:pauses", ...base } }];
-    case "transitions_to_churn":
+    case "exits":
       return [{ figure, metric: "subscriptions:churned", body: { metric: "subscriptions:churned", ...base, dimensions: ["event.status_to"] } }];
     default: throw new SourceError("figure_unknown");
   }
@@ -147,13 +148,13 @@ export function itemsOf(query, answer, { today, timezone }) {
     }
     return { items };
   }
-  // a flow: every day of the range, 0 where Juo has no row; churn per status of STATUSES_CHURN (others left out)
+  // a flow: every day of the range, 0 where Juo has no row; exits per status of STATUSES_EXIT (others left out)
   const days = datesBetween(body.range.from, body.range.to);
-  const keys = figure === "transitions_to_churn" ? STATUSES_CHURN : [null];
+  const keys = figure === "exits" ? STATUSES_EXIT : [null];
   const sums = new Map(days.flatMap((d) => keys.map((k) => [`${d}|${k}`, 0])));
   for (const p of series) {
     const d = dateIn(p.start, timezone);
-    const k = figure === "transitions_to_churn" ? p.dimensions?.["event.status_to"] : null;
+    const k = figure === "exits" ? p.dimensions?.["event.status_to"] : null;
     if (!sums.has(`${d}|${k}`)) continue;
     const v = valueOf(p.value);
     if (v === null) return { skip: "bad_value" };

@@ -9,7 +9,7 @@
  * client against the fake Juo on localhost: paging, the key in a header only, 401 for another store's id (key_rejected),
  * a 429 paced and sent again, a third 429 failing rate_limited, a missing secret, a store id out of its form. Since
  * addition 0009zg (K) Juo's own figures: the queries of a day's read and of a backfill month (the bodies, Juo's metric
- * keys in the adapter only), the answers mapped (a gauge's latest point, a flow's day with no row as 0, churn per status,
+ * keys in the adapter only), the answers mapped (a gauge's latest point, a flow's day with no row as 0, exits per status,
  * the survival cells), the skips (400, 501, 409, an ignored filter, a bad value, no value) and the one POST against the
  * fake, with the key in a header. Everything is invented.
  *
@@ -453,7 +453,7 @@ expect("K1 a day's read: ten queries (four statuses, the amount, four flows, the
     dq[0].body.filter, dq[0].body.rollup, dq[4].body.grain, dq[4].body.range, dq[5].body.range, dq[6].body.dimensions, dq[9].body.cohort, dq[9].body.range],
   [10, ["subscriptions_in_status:subscriptions:count:active", "subscriptions_in_status:subscriptions:count:paused", "subscriptions_in_status:subscriptions:count:failed",
     "subscriptions_in_status:subscriptions:count:canceled", "recurring_amount_active:subscriptions:current-mrr", "renewals:subscriptions:renewed",
-    "transitions_to_churn:subscriptions:churned", "purchases:subscriptions:purchased", "pauses:subscriptions:pauses", "renewal_survival:subscriptions:purchased"], true,
+    "exits:subscriptions:churned", "purchases:subscriptions:purchased", "pauses:subscriptions:pauses", "renewal_survival:subscriptions:purchased"], true,
     { field: "event.status_to", operator: "eq", value: "active" }, "last", "total", { from: "2026-11-21", to: "2026-11-21" }, { from: "2026-11-20", to: "2026-11-21" },
     ["event.status_to"], { anchorEvent: "subscription:purchased", periodGrain: "month", measure: "retention", periodBasis: "order_sequence", periods: 24 },
     { from: "2024-12-01", to: "2026-11-21" }],
@@ -462,7 +462,7 @@ const mq = figures.monthQueries({ from: "2025-05-26", to: "2025-05-31", timezone
 expect("K2 a backfill month: the four flow figures only, over its days",
   [mq.map((x) => x.figure), mq.every((x) => x.body.range.from === "2025-05-26" && x.body.range.to === "2025-05-31" && x.body.grain === "day"),
     figures.monthStart("2025-12-14", -1), figures.monthEnd("2024-02-10"), figures.monthStart("2026-11-21", 23)],
-  [["renewals", "transitions_to_churn", "purchases", "pauses"], true, "2026-01-01", "2024-02-29", "2024-12-01"], [[], false, null, null, null]);
+  [["renewals", "exits", "purchases", "pauses"], true, "2026-01-01", "2024-02-29", "2024-12-01"], [[], false, null, null, null]);
 const at = (d, v, dims = {}) => ({ start: `${d}T00:00:00.000Z`, end: `${d}T23:59:59.999Z`, dimensions: dims, value: v });
 const london = (iso) => ({ start: iso, end: iso, dimensions: {}, value: 1 });
 const k3 = [
@@ -474,14 +474,14 @@ const k3 = [
   figures.itemsOf(dq[9], { series: [at("2026-08-01", 80, { cohort: "2026-08", period: 1 }), at("2026-08-01", 76, { cohort: "2026-08", period: 2 }),
     at("2026-08-01", 9, { cohort: "2026-8", period: 3 }), at("2026-08-01", 9, { cohort: "2026-08", period: 25 })], meta: {} }, DATES)];
 const brief = (r) => r.items.map((i) => `${i.figureKey}|${i.businessDate}|${JSON.stringify(i.dims)}|${i.value}|${i.unit}|${i.sourceMetric}`);
-expect("K3 the answers mapped: a gauge's latest point under today, the amount to cents under today, a flow's day without a row as 0, churn per status (merged left out), the survival's cells (a cohort or period out of form left out)",
+expect("K3 the answers mapped: a gauge's latest point under today, the amount to cents under today, a flow's day without a row as 0, exits per status (merged left out), the survival's cells (a cohort or period out of form left out)",
   k3.map(brief),
   [["subscriptions_in_status|2026-11-21|{\"status\":\"active\"}|1234|count|subscriptions:count"],
     ["recurring_amount_active|2026-11-21|{}|5678.9|amount|subscriptions:current-mrr"],
     ["renewals|2026-11-20|{}|0|count|subscriptions:renewed", "renewals|2026-11-21|{}|7|count|subscriptions:renewed"],
-    ["transitions_to_churn|2026-11-20|{\"status\":\"canceled\"}|4|count|subscriptions:churned", "transitions_to_churn|2026-11-20|{\"status\":\"failed\"}|12|count|subscriptions:churned",
-      "transitions_to_churn|2026-11-20|{\"status\":\"expired\"}|0|count|subscriptions:churned", "transitions_to_churn|2026-11-21|{\"status\":\"canceled\"}|0|count|subscriptions:churned",
-      "transitions_to_churn|2026-11-21|{\"status\":\"failed\"}|0|count|subscriptions:churned", "transitions_to_churn|2026-11-21|{\"status\":\"expired\"}|0|count|subscriptions:churned"],
+    ["exits|2026-11-20|{\"status\":\"canceled\"}|4|count|subscriptions:churned", "exits|2026-11-20|{\"status\":\"failed\"}|12|count|subscriptions:churned",
+      "exits|2026-11-20|{\"status\":\"expired\"}|0|count|subscriptions:churned", "exits|2026-11-21|{\"status\":\"canceled\"}|0|count|subscriptions:churned",
+      "exits|2026-11-21|{\"status\":\"failed\"}|0|count|subscriptions:churned", "exits|2026-11-21|{\"status\":\"expired\"}|0|count|subscriptions:churned"],
     ["renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":1}|80|count|subscriptions:purchased",
       "renewal_survival|2026-11-01|{\"cohort_start\":\"2026-08-01\",\"period\":2}|76|count|subscriptions:purchased"]],
   [[], [], [], [], []]);
