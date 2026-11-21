@@ -171,6 +171,18 @@
     {
       "path": "/reports/subscriptions",
       "subject": "manager",
+      "class": "report",
+      "html_kb": 64
+    },
+    {
+      "path": "/reports/subscriptions?market=GB&interval=monthly&view=amounts",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 64
+    },
+    {
+      "path": "/api/v1/reports/subscriptions",
+      "subject": "manager",
       "class": "report"
     },
     {

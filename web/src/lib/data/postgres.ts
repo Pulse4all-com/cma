@@ -4,7 +4,7 @@ import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import { tenantCache } from "@/lib/cache";
 import type {
-  ActiveList, ActiveNow, ActiveReport,
+  ActiveList, ActiveNow, ActiveReport, SubscriptionRowsList, SubscriptionsPage,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
@@ -37,6 +37,7 @@ import { REMOVE_REFUSAL } from "@/lib/corrections";
 import { FLASH_CARD_ORDER, FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
 import { dateKeyInZone } from "@/lib/time";
 import { activeFromDb, activeNowFromDb, activeRowsFromDb } from "@/lib/active";
+import { churnCardFromDb, SUBSCRIPTIONS_PAGE_ROWS, subscriptionRowsFromDb, subscriptionsPageFromDb } from "@/lib/subscriptions";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -3725,9 +3726,12 @@ export const postgresData: CmaData = {
       // above the fold (addition 0009l, decisions D15 and D16): the function checks the permission and the parameters first
       // and answers the document the refresh stored for these filters (a key lookup; computed from the take's rows for a
       // combination of filters), as of the take; nothing live. One statement, one transaction
-      const j = one((await q.query<{ j: Record<string, unknown> }>(`select cma.active_top($1::date, $2, $3, $4) as j`,
-        [fromMonth, filter.market, filter.segment, filter.channel])).rows, "active_top").j;
-      return activeFromDb(j);
+      // since addition 0009zh the Churn rate card's last complete month of the market (cma.subscriptions_churn_card, D.4) in
+      // the same statement: no round trip more
+      const r = one((await q.query<{ j: Record<string, unknown>; c: unknown }>(
+        `select cma.active_top($1::date, $2, $3, $4) as j, cma.subscriptions_churn_card($2) as c`,
+        [fromMonth, filter.market, filter.segment, filter.channel])).rows, "active_top");
+      return { ...activeFromDb(r.j), churnCard: churnCardFromDb(r.c) };
     });
   },
 
@@ -3765,6 +3769,35 @@ export const postgresData: CmaData = {
   async recordActiveFile(me, filter, rows, band): Promise<void> {
     await withTenant(ctx(me), async (q) => {
       await q.query(`select cma.active_file_record($1, $2, $3, $4, $5)`, [filter.market, filter.segment, filter.channel, rows, band ?? null]);
+    });
+  },
+
+  async getSubscriptionsPage(me, query): Promise<SubscriptionsPage> {
+    return withTenant(ctx(me), async (q) => {
+      // the page in one read from the subscription facts' stored takes (addition 0009zh): the function checks the
+      // permission and the filters first. One statement, one transaction
+      const j = one((await q.query<{ j: Record<string, unknown> }>(
+        `select cma.subscriptions_page($1, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9) as j`,
+        [query.market, query.store, query.proposition, query.interval, query.from, query.to, query.measure, query.sort, query.descending])).rows,
+      "subscriptions_page").j;
+      return subscriptionsPageFromDb(j, { from: query.from, to: query.to, filter: { market: query.market, store: query.store, proposition: query.proposition, interval: query.interval } });
+    });
+  },
+
+  async getSubscriptionRows(me, query): Promise<SubscriptionRowsList> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: Record<string, unknown> }>(
+        `select cma.subscription_rows($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10) as j`,
+        [query.market, query.store, query.proposition, query.interval, query.measure, query.sort, query.descending, query.page, SUBSCRIPTIONS_PAGE_ROWS,
+          query.file === true])).rows, "subscription_rows").j;
+      return subscriptionRowsFromDb(j);
+    });
+  },
+
+  async recordSubscriptionFile(me, part, filter, measure, rows): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.subscription_file_record($1, $2, $3::uuid, $4, $5, $6, $7)`,
+        [part, filter.market, filter.store, filter.proposition, filter.interval, measure, rows]);
     });
   },
 

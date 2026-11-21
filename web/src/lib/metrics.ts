@@ -424,6 +424,19 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
   // Customers → Active (addition 0009l): the tiles, the charts, the markets, the comparison, the cohorts, the mix, the list,
   // and the six placeholders (Pending: a slot and a definition, no formula in code)
+  // Customers → Subscriptions (addition 0009zh)
+  "/reports/subscriptions": [
+    "subscriptions.total_subscriptions",
+    "subscriptions.paused",
+    "subscriptions.monthly_recurring_amount",
+    "subscriptions.churn_rate",
+    "subscriptions.failed_rate",
+    "subscriptions.device_units",
+    "subscriptions.movements",
+    "subscriptions.renewal_survival",
+    "subscriptions.mix",
+    "subscriptions.list",
+  ],
   "/reports/active": [
     "active.active_customers",
     "active.total_subscriptions",

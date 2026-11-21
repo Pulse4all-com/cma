@@ -19,7 +19,8 @@
 -- management), after 188_fleet_management.sql; since addition 0009u (Welcome's Waiting for you reads
 -- cma.my_follow_up_counts(); the follow-up's report lists and /me/follow-up's rows, whose clock fields it derives at the
 -- read, are timed too), after 190_follow_up_clock_at_read.sql; since addition 0009v (Assets -> Fleet management's page in one read),
--- after 192_fleet_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
+-- after 192_fleet_page.sql; since addition 0009zh (Customers → Subscriptions' page, its list and file, and Customers →
+-- Active's Churn rate card), after 216_subscriptions_page.sql; since addition 0009ze (the subscription facts' refresh and the variant mapping's list, timed
 -- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 10,000 ms
 -- until prod's runs set it, and its answer names each step's milliseconds). Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
@@ -142,6 +143,11 @@ begin
   -- Assets -> Fleet management's page in one read (cma.fleet_page) since addition 0009v
   if not exists (select 1 from cma.schema_migration where version = '0009v') then
     raise exception 'addition 0009v (192_fleet_page.sql) has not run in this database';
+  end if;
+  -- Customers → Subscriptions (cma.subscriptions_page, cma.subscription_rows) and Customers → Active's Churn rate card
+  -- (cma.subscriptions_churn_card) since addition 0009zh
+  if not exists (select 1 from cma.schema_migration where version = '0009zh') then
+    raise exception 'addition 0009zh (216_subscriptions_page.sql) has not run in this database';
   end if;
 end
 $$;
@@ -397,6 +403,16 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- time the computations themselves whatever the setting. The page's read holds a list's first page: class list (300 ms)
 ('a', 'fleet management', 'page', $q$select cma.fleet_page(null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'fleet management further page', 'devices that need attention page 2', $q$select cma.fleet_rows(null, null, null, null, true, 2)$q$, 'list', array['reports.view', 'performance.team']),
+-- Customers → Subscriptions (addition 0009zh): the page makes one read from the subscription facts' stored takes
+-- (cma.subscriptions_page: the tiles, the months, the rates, the stores' starts, survival, the mix and the list's first
+-- page) over its default range, the last twelve complete months and the current one ({month} is the current month);
+-- the same read under a market, the proposition none and an interval (a request of its own); the list's further page
+-- after the first paint (cma.subscription_rows, page 2) and the records file (every Total subscription, as the file route
+-- reads it), each a page of its own. Stocks at now, timed once
+('a', 'subscriptions', 'page (stored takes, the default range)', $q$select cma.subscriptions_page(null, null, null, null, (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'overview', array['reports.view', 'performance.team']),
+('a', 'subscriptions filtered', 'page under a market, no proposition and the monthly group', $q$select cma.subscriptions_page((select min(t.market) from cma.subscription_take t where t.tenant_id = cma.current_tenant_id()), null, 'none', 'monthly', (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'overview', array['reports.view', 'performance.team']),
+('a', 'subscriptions further page', 'list page 2', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 2, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'subscriptions file', 'records file of the Total subscriptions', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 1, 50, true)$q$, 'overview', array['reports.view', 'performance.team']),
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)
@@ -445,6 +461,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- (below), on its own row
 -- against verify.max_refresh_ms; stocks at now, so timed once
 ('b', 'active customers', 'active top (stored document)', $q$select cma.active_top(null, null, null, null)$q$, 'agent', array['reports.view', 'performance.team']),
+('b', 'active customers', 'churn rate card (the last complete month, addition 0009zh: the same statement as active top)', $q$select cma.subscriptions_churn_card(null)$q$, 'agent', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active now (the present by the tenant''s setting: live or from the take)', $q$select cma.active_now(null, null, null)$q$, 'top', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active now, the take''s path (the present from the stored take)', $q$select cma.active_now_of(cma.current_tenant_id(), null, null, null, now(), true)$q$, 'top', array['reports.view', 'performance.team']),
 ('b', 'active customers', 'active rest (stored document)', $q$select cma.active_rest(null, null, null, null, 'month')$q$, 'agent', array['reports.view', 'performance.team']),

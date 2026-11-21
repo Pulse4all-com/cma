@@ -78,6 +78,7 @@ import { activePartOf } from "@/lib/active";
 import { FLASH_CARD_ORDER, FLASH_OVERVIEWS } from "@/lib/flash";
 import { mockActive, mockActiveNow, mockActiveRows } from "./mock-active";
 import { mockFleetAreas, mockFleetPage, mockFleetRows } from "./mock-fleet";
+import { mockSubscriptionRows, mockSubscriptionsChurnCard, mockSubscriptionsPage } from "./mock-subscriptions";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -5048,7 +5049,7 @@ export const mockData: CmaData = {
   // see). The stored answers are quick, the live present of the tiles takes longer, as in the database (decision D16)
   async getActiveTop(me, fromMonth, filter) {
     await new Promise((r) => setTimeout(r, 60));
-    return activePartOf(mockActive(me, fromMonth, filter, "month"), "top");
+    return { ...activePartOf(mockActive(me, fromMonth, filter, "month"), "top"), churnCard: mockSubscriptionsChurnCard(me, filter.market) };
   },
 
   async getActiveNow(me, filter) {
@@ -5067,6 +5068,21 @@ export const mockData: CmaData = {
   },
 
   async recordActiveFile() {
+    // nothing is kept in the mock: the audit log is the database's
+  },
+
+  // Customers → Subscriptions (addition 0009zh): the stored takes answer quickly, as in the database
+  async getSubscriptionsPage(me, query) {
+    await new Promise((r) => setTimeout(r, 60));
+    return mockSubscriptionsPage(me, query);
+  },
+
+  async getSubscriptionRows(me, query) {
+    await new Promise((r) => setTimeout(r, 40));
+    return mockSubscriptionRows(me, query);
+  },
+
+  async recordSubscriptionFile() {
     // nothing is kept in the mock: the audit log is the database's
   },
 

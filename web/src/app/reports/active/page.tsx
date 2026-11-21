@@ -5,7 +5,7 @@ import { ActiveFilters } from "@/components/ActiveFilters";
 import { Bars, FLOW_BG, FlowChart, Legend, LineChart, type LineSeries } from "@/components/ActiveCharts";
 import {
   type ActivePageCopy, ActiveTile, type ActiveHref, BandChip, ChangeLine, CohortHeatmap, ComparisonTable, CustomerList, DataNote, DeviceBands, LinkSwitch, MARKET_SORTS, type MarketSort,
-  MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets, splitPercent,
+  ChurnRateCard, ChurnRateFigures, MarketsTable, monthEndText, PanelTitle, PlaceholderCard, sortMarkets, splitPercent,
 } from "@/components/ActiveParts";
 import { PrintWhenReady, Streamed } from "@/components/ActivePending";
 import { fmtAmount, fmtNumber } from "@/components/FlashParts";
@@ -150,22 +150,27 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
               boundary is a new one on every view, so no click waits for the live read */}
           <Layer {...layer("tiles", "top")} read={topRead}>{(top) => <Tiles ctx={ctx} top={top} nowRead={nowRead} />}</Layer>
 
-          {/* 3.3 the unit economics: placeholders in the frame, never a number; the one real figure beside them */}
+          {/* 3.3 the unit economics: placeholders in the frame, never a number; the Churn rate card holds its figure since addition 0009zh */}
           <section aria-label={t.unitEconomics} data-testid="active-slots">
             <PanelTitle label={t.unitEconomics} hint={hints.mh_unit_economics!} status="Pending" copy={words} />
             <div className="grid grid-cols-3 gap-4 xl:grid-cols-6">
-              {ACTIVE_SLOTS.map((s) => (
-                <PlaceholderCard key={s.key} slot={s.key} info={info(t[`slot_${s.key}`], hints[`mh_slot_${s.key}`]!, s.metric)} copy={words}
-                  // the one real figure of the row sits in the Churn rate card, under its badge: the subscriptions churned in the last 30 days, linked to Flash's Churn overview
-                  related={s.key === "churn_rate" ? (
-                    <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (top.unitEconomics && top.unitEconomics.churned30d !== null ? (
-                      <p data-testid="active-churned">
-                        <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
-                          {t.churned30dLine.replace("{n}", fmtCount(top.unitEconomics.churned30d, me.locale))}
-                        </Link>
-                      </p>
-                    ) : top.figures && !top.history ? <p className="text-p4a-muted" data-testid="active-churned-preparing">{t.historyPreparing}</p> : null)}</Layer>
-                  ) : undefined} />
+              {ACTIVE_SLOTS.map((s) => s.key === "churn_rate" ? (
+                // the Churn rate card (addition 0009zh, D.4): the last complete month's rate of the market, read with the stored
+                // answer above the fold; its related line, the churned subscriptions of the last 30 days, as before
+                <ChurnRateCard key={s.key} info={info(t.slot_churn_rate, hints.mh_slot_churn_rate!, s.metric)} copy={words}>
+                  <Layer {...layer("churn", "top")} read={topRead} plain>{(top) => (
+                    <ChurnRateFigures card={top.churnCard} perMarketOnly={filter.segment !== null || filter.channel !== null} locale={me.locale} t={t}
+                      related={top.unitEconomics && top.unitEconomics.churned30d !== null ? (
+                        <p data-testid="active-churned">
+                          <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
+                            {t.churned30dLine.replace("{n}", fmtCount(top.unitEconomics.churned30d, me.locale))}
+                          </Link>
+                        </p>
+                      ) : top.figures && !top.history ? <p className="text-p4a-muted" data-testid="active-churned-preparing">{t.historyPreparing}</p> : null} />
+                  )}</Layer>
+                </ChurnRateCard>
+              ) : (
+                <PlaceholderCard key={s.key} slot={s.key} info={info(t[`slot_${s.key}`], hints[`mh_slot_${s.key}`]!, s.metric)} copy={words} />
               ))}
             </div>
           </section>

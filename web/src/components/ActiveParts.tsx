@@ -14,9 +14,10 @@ import type { ReactNode } from "react";
 import type { ActiveCopy, Copy as SharedCopy, Locale } from "@/lib/copy";
 import type {
   ActiveCohort, ActiveComparisonRow, ActiveDeviceCustomers, ActiveGrouping, ActiveList, ActiveMarketRow, ActiveMeasure, ActiveReport, ActiveSlotKey, ActiveSort,
+  SubscriptionsChurnCard,
 } from "@/lib/data";
 import { ACTIVE_SLOTS, changeAgainst, cohortLabel, cohortShare, counted, heatColour, signed, wholePercents } from "@/lib/active";
-import { fmtCount, fmtPct, fmtShare } from "@/lib/reports";
+import { fmtCount, fmtPct, fmtRate1, fmtShare } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
 import { FLOW_BG, SERIES_BG, Sparkline } from "./ActiveCharts";
 import { LinkMark } from "./ActivePending";
@@ -143,6 +144,58 @@ export function PlaceholderCard({ slot, info, copy, related: given }: {
 /** A quiet note above a panel: what the figures below leave out or cannot know, in words; never a figure of its own */
 export function DataNote({ children, testId }: { children: ReactNode; testId: string }) {
   return <p className="mb-4 rounded-button border-l-4 border-p4a-border bg-p4a-offwhite px-4 py-2 text-small text-p4a-muted" role="note" data-testid={testId}>{children}</p>;
+}
+
+/**
+ * The Churn rate card (addition 0009zh, D.4; it was a placeholder until then): its label with the hint, its figures (a
+ * streamed layer: ChurnRateFigures), a link to Customers → Subscriptions and its definition status Proposed
+ */
+export function ChurnRateCard({ info, copy, children }: {
+  info: { about: string; text: string; more?: { href: string; label: string } }; copy: Copy; children: ReactNode;
+}) {
+  const t = copy.active;
+  return (
+    <div className="flex flex-col gap-2 rounded-card border border-p4a-border bg-white p-5" data-testid="active-slot-churn_rate" data-tile="">
+      <p className="text-caption text-p4a-grey" data-hint-anchor="">
+        <HintLabel label={t.slot_churn_rate}><HeaderHint label={info.about} text={info.text} more={info.more} /></HintLabel>
+      </p>
+      {children}
+      <p className="text-small"><Link href={"/reports/subscriptions" as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline">{t.churnCardOpen}</Link></p>
+      <p><StatusBadge status="Proposed" copy={copy} /></p>
+    </div>
+  );
+}
+
+/**
+ * The Churn rate card's figures: the last complete month's Churn rate of the market filter (or every market) from the
+ * subscription facts' month take, with the month and its churned count over the base, and the Failed rate under it. The
+ * rate is per market: under a segment or channel filter the card says so instead of a figure. Without a complete month
+ * it says that, never a zero. related: the churned subscriptions of the last 30 days, linked to Flash, as before
+ */
+export function ChurnRateFigures({ card, perMarketOnly, t, related, locale }: {
+  card: SubscriptionsChurnCard | undefined; perMarketOnly: boolean; t: T; related?: ReactNode; locale: Locale;
+}) {
+  const rate = card && card.base ? card.churned / card.base : null;
+  const failed = card && card.base ? card.movedToFailed / card.base : null;
+  const month = card ? new Intl.DateTimeFormat(locale === "nl" ? "nl-NL" : "en-GB", { month: "short", year: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(Number(card.month.slice(0, 4)), Number(card.month.slice(5, 7)) - 1, 1))) : "";
+  return (
+    <div className="flex flex-col gap-1">
+      {perMarketOnly ? <p className="text-small text-p4a-muted" data-testid="active-churn-per-market">{t.churnCardPerMarket}</p>
+        : !card || rate === null ? <p className="text-small text-p4a-muted" data-testid="active-churn-no-month">{t.churnCardNoMonth}</p> : (
+          <>
+            <p className="tabular text-title font-bold text-p4a-heading" data-testid="active-churn-rate">{fmtRate1(rate * 100, locale)}</p>
+            <p className="text-small text-p4a-muted">
+              {t.churnCardMonth.replace("{month}", month).replace("{churned}", fmtCount(card.churned, locale)).replace("{base}", fmtCount(card.base ?? 0, locale))}
+            </p>
+            <p className="text-small text-p4a-muted" data-testid="active-failed-rate">
+              {t.churnCardFailed.replace("{share}", failed === null ? "–" : fmtRate1(failed * 100, locale)).replace("{n}", fmtCount(card.movedToFailed, locale))}
+            </p>
+          </>
+        )}
+      {related ? <div className="text-small" data-related="">{related}</div> : null}
+    </div>
+  );
 }
 
 function hintOf(copy: Copy) {
