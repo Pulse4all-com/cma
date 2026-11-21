@@ -3442,7 +3442,7 @@ One step at a time; each says where it runs and what to expect. `212` changes no
 ## 21.1 Terminal: the branch
 **Terminal** (~/cma)
 ```bash
-gh pr checkout <PR> && git log --oneline -1
+gh pr checkout 305 && git log --oneline -1
 ```
 Expected: the PR's last commit.
 
