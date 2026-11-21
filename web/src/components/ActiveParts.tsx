@@ -155,7 +155,7 @@ export function ChurnRateCard({ info, copy, children }: {
 }) {
   const t = copy.active;
   return (
-    <div className="flex flex-col gap-2 rounded-card border border-p4a-border bg-white p-5" data-testid="active-slot-churn_rate" data-tile="">
+    <div className="flex flex-col gap-2 rounded-card border border-p4a-border bg-white p-5" data-testid="active-slot-churn_rate">
       <p className="text-caption text-p4a-grey" data-hint-anchor="">
         <HintLabel label={t.slot_churn_rate}><HeaderHint label={info.about} text={info.text} more={info.more} /></HintLabel>
       </p>
