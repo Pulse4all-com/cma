@@ -3243,7 +3243,7 @@ Expected: the audit's row with verdict `INFO`, no budget.
 
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 
-One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`).
+One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`). 20.0 to 20.5 and 20.8 ran on 21 November 2026 (`records/0009ze-dev-2026-11-21`, `records/0009ze-prod-2026-11-21`); 20.6 and 20.7 are open.
 
 ## 20.0 Studio (cma-prod-pg): the stores' migration months and when their rates start
 Before anything else, and before 210 runs (it reads `cma.subscription_event` only). One Run in one tab of Cloud SQL Studio on
@@ -3311,9 +3311,10 @@ cd web && npm run verify:datamap
 Expected: until the refresh it fails on this branch (the six new tables and two new views are not in `schema.json`): expected; after the refresh and `node tools/datamap/build.mjs`, `datamap: PASS (… all described; index.html current)`. After the merge: in the Claude project, say "republish the data map".
 
 ## 20.3 Terminal: the migrations in prod, before the merge
-First the baseline of the payment state's cost on Flash (Martin, 20 Nov 2026: 124 before and after 210). **File:**
-`db/124_time_flash.sql`; **Studio** (cma-prod-pg): paste and Run as your own login. Expected: its usual rows; keep the output
-outside the repository; the rows "list subscriptions …" and "overview subscriptions" are compared after 20.8.
+First the baseline of the payment state's cost on Flash (Martin, 20 Nov 2026: 124 before and after 210): 20.8's
+first two blocks (`cma_db prod`, then `124_time_flash.sql` with `psql`), with `124-before` in the file's name. Expected: its
+usual rows, the output in `~/cma-audit`, outside the repository; the rows "list subscriptions …" and "overview
+subscriptions" are compared after 20.8.
 
 Main's web runs unchanged on `210` (the new payment-state columns come after the old ones and no page reads a new object before the merge).
 
@@ -3323,18 +3324,67 @@ run_migration prod 210_subscription_facts.sql 211_verify_subscription_facts.sql 
 ```
 Expected: 210 `COMMIT`; 211 refuses prod (no dev seed): `verdict | REFUSED`, expected in prod as 207; the prod-safe verifies pass as before.
 
-Then Pulse4all's propositions for the variant mapping (for Kira to confirm). **File:** the last block of
-`db/02_seed_pulse4all.sql` (from "-- The subscription facts (after addition 0009ze"); **Studio** (cma-prod-pg): paste and Run.
-Expected: `DO`; `select value from cma.tenant_setting where key = 'subscriptions.propositions'` answers `hs1,frx,buurt_aed,outdoor`.
+Then Pulse4all's propositions for the variant mapping (for Kira to confirm): the last block of
+`db/02_seed_pulse4all.sql` (from "-- The subscription facts (after addition 0009ze"), as the owner. One Run in one tab:
+Studio does not keep `set role` across tabs or runs, and without it the block is refused (`permission denied for schema
+cma`). If the Run stops with an error, close the tab (it may still hold the role cma_owner).
+
+**Studio** (cma-prod-pg)
+```sql
+set role cma_owner;
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'subscriptions.propositions') then
+    raise notice 'The subscription facts do not exist yet (addition 0009ze): rerun this seed after 210_subscription_facts.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'subscriptions.propositions', 'hs1,frx,buurt_aed,outdoor')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+select value from cma.tenant_setting
+where key = 'subscriptions.propositions' and tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+reset role;
+```
+Expected: one row, `hs1,frx,buurt_aed,outdoor`.
 
 ## 20.4 Terminal: the merge and the deploys
-Merge the PR; `cma-web-main` builds and deploys the web app. The ingest does not deploy itself: deploy it from `main` as 17.4 (the service with its front, then `--jobs`). The job `refresh-active-customers` runs the web image: redeploy it per docs/scheduler (`docs/scheduler/deploy-active-customers.sh`) so it carries the facts' step.
+Merge the PR first; `cma-web-main` builds and deploys the web app. The ingest does not deploy itself, and `deploy.sh` tags its image with the last commit that touched `ingest/`: run before the merge it redeploys the image `main` already has. So check that `main` holds the merge before deploying.
+
+**Terminal** (in `~/cma`)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format='%h %s'
+```
+Expected: the merge's commit, its title ending in the PR's number, such as `(#303)`. Any other commit: the merge is not in yet; do not deploy.
+
+Then the ingest from `main`, as 17.4 (the service with its front, then `--jobs`):
 
 **Terminal** (in `~/cma`, on `main` after the merge)
 ```bash
-git switch -q main && git pull -q --ff-only && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
 ```
-Expected: as 17.4; the schedules unchanged.
+Expected: as 17.4, the image built once under the merge's tag, `health: {"ok":true,"version":"<that tag>"}`, then the ten jobs on the same image; the schedules unchanged.
+
+Before 20.5, check that the jobs run the merge's image: a backfill job left on the earlier image does not know `purchase_order` and exits 2 with `backfill usage`.
+
+**Terminal**
+```bash
+gcloud run jobs describe ingest-backfill --project=p4a-cma-prod --region=europe-west4 --format='value(spec.template.spec.template.spec.containers[0].image)'
+```
+Expected: the image `…/cma/ingest:<the merge's tag>`, the tag of the health line above. An earlier tag: run the `--jobs` deploy again, then this check again.
+
+The job `cma-refresh-active-customers` runs the web image: redeploy it so it carries the facts' step. The web image's tag is Cloud Build's `SHORT_SHA`, seven characters (`fb704e3` for #303), not the eight of the ingest's tag: an eight-character tag names no web image.
+
+**Terminal** (in `~/cma`, after the `cma-web-main` build of the merge succeeded)
+```bash
+bash docs/scheduler/deploy-active-customers.sh prod $(git rev-parse --short=7 HEAD)
+```
+`HEAD` is the merge's commit here (the check above); after a later merge that built no web image, give the seven characters of the last commit that did.
+
+Expected: the job `cma-refresh-active-customers` on the image `…/cma/web:<seven characters>`, the schedule `cma-refresh-active-customers-minutely` unchanged. Its next run refreshes the subscription facts for the first time (`facts_refreshed` true in its log line); later runs within `subscriptions.take_refresh_minutes` say `reason=fresh`.
 
 ## 20.5 Terminal: the one-time fill of purchases' store orders
 Run it once for every Juo store (resumable; it has no dry run):
@@ -3351,8 +3401,30 @@ Ten GB subscriptions from the 18 April 2025 created-date cluster are listed (ids
 ## 20.7 Browser: the variant mapping per store
 Configuration → Sources, open each subscriptions connection, panel "Variant mapping": for every variant set its kind (device, accessory, service, other), for a device the model and the devices per unit, and a proposition. Pulse4all's propositions (`hs1`, `frx`, `buurt_aed`, `outdoor`) are a seed for Kira to confirm. Expected: Reports → Flash → Data quality shows `subscription_variant_unmapped` at 0 once every variant on an active line is mapped; `subscription_device_units_mismatch` lists what to look at in Assets.
 
-## 20.8 Studio (cma-prod-pg): the facts' refresh and the current takes' refresh
-**File:** `db/131_time_all.sql`: copy all of it; **Studio** (cma-prod-pg): paste and Run as your own login. Expected: part b's row "subscription facts refresh" within its 3,000 ms (proposed) and "subscription variants list" within its budget, and the row for the current takes' refresh no slower than 7,868 ms; the rows of `124` (Flash's Subscriptions list) before and after the migration, since the payment state costs more (about 312 ms against 132 locally at three times prod's volume; the list may cross 400 ms p75). Also check `cma.active_inputs_key_of`'s time (the markers row, budget 300 ms; 440.7 ms on 20 November). Report the times in the chat; a record is written from your report.
+## 20.8 Terminal: the facts' refresh and the current takes' refresh
+`124_time_flash.sql` and `131_time_all.sql` run with `psql` from the Terminal, their output into `~/cma-audit`, outside the repository: ids, codes and milliseconds only, no customer rows, so a Terminal block is allowed. Not in Studio, where a pasted run keeps no file (Martin, 21 Nov 2026).
+
+**Terminal** (~/cma)
+```bash
+cma_db prod
+```
+Expected: `connected to cma as <your login>`.
+
+**Terminal**
+```bash
+mkdir -p ~/cma-audit && psql "$PGCONN" -f db/124_time_flash.sql > ~/cma-audit/0009ze-prod-$(date +%F)-124-after.txt 2>&1; grep -E 'subscriptions|verdict' ~/cma-audit/0009ze-prod-$(date +%F)-124-after.txt | cut -c1-220
+```
+Expected, within a minute: the rows "overview subscriptions" and "list subscriptions …" and the verdict's row. For the baseline before 210 (20.3) the same block with `124-before` in the file's name.
+
+131 takes over two minutes and loses its connection when the laptop sleeps: keep the laptop awake until the prompt returns.
+
+**Terminal**
+```bash
+psql "$PGCONN" -f db/131_time_all.sql > ~/cma-audit/0009ze-prod-$(date +%F)-131.txt 2>&1; grep -E 'refresh|inputs markers|variants list|verdict|server closed|connection' ~/cma-audit/0009ze-prod-$(date +%F)-131.txt | cut -c1-220
+```
+Expected, in two to three minutes: the rows "current takes refresh", "active customers refresh", "active customers inputs markers", "subscription facts refresh" and "subscription variants list", then the verdict's row with its counts. A line about a closed or lost connection and no verdict: the run was cut off on the client's side; run the block again.
+
+Compare: part b's row "subscription facts refresh" against its 3,000 ms (proposed) and "subscription variants list" against its budget; the current takes' refresh no slower than 7,868 ms; `cma.active_inputs_key_of`'s time (the markers row, budget 300 ms; 440.7 ms on 20 November); the rows of `124` (Flash's Subscriptions list) before and after the migration, since the payment state costs more (about 312 ms against 132 locally at three times prod's volume; the list may cross 400 ms p75). Report the times in the chat; a record is written from your report.
 
 
 After the first refresh, check where each store's rates start. **Studio** (cma-prod-pg):
