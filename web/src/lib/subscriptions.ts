@@ -201,9 +201,9 @@ export function sourceCountsFromDb(v: unknown): SubscriptionsSourceCounts | null
   const o = v as J;
   return {
     stores: num(o.stores), inScope: num(o.in_scope), from: day(o.from) ?? "", to: day(o.to) ?? "", fetchedAt: str(o.fetched_at),
-    total: numOrNull(o.total), totalCma: numOrNull(o.total_cma), totalGap: o.total_gap === true,
-    paused: numOrNull(o.paused), pausedCma: numOrNull(o.paused_cma), pausedGap: o.paused_gap === true,
-    amounts: arr(o.amounts).map((a) => ({ currency: String(a.currency), amount: num(a.amount), cma: numOrNull(a.cma), gap: a.gap === true })),
+    total: numOrNull(o.total), totalCma: numOrNull(o.total_cma), totalGaps: numOrNull(o.total_gaps),
+    paused: numOrNull(o.paused), pausedCma: numOrNull(o.paused_cma), pausedGaps: numOrNull(o.paused_gaps),
+    amounts: arr(o.amounts).map((a) => ({ currency: String(a.currency), amount: num(a.amount), cma: numOrNull(a.cma), stores: num(a.stores), gaps: numOrNull(a.gaps) })),
     tolerancePct: num(o.tolerance_pct), toleranceMin: num(o.tolerance_min),
   };
 }

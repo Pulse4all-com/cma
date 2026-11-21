@@ -2491,14 +2491,16 @@ export interface SubscriptionsRateParts { base: number | null; churned: number; 
 /**
  * The subscription app's own counts beside the tiles (cma.subscriptions_source_counts_of, addition 0009zh over 0009zg's
  * source figures): each store's latest figures of today or yesterday, summed over the stores in scope (stores of inScope
- * have one), each beside the CMA's value it was compared with when read and whether the two differ beyond both
- * source_figures tolerances (a Source figure gap)
+ * have one, read on from to to), each beside the CMA's value it was compared with when read (null where one figure has
+ * none) and the number of those figures that are a Source figure gap one by one (214's rule on each figure, as Data
+ * quality lists them; null where none is compared). total and paused are null unless every store counted has a figure
+ * for each of their statuses; an amount names the stores it covers
  */
 export interface SubscriptionsSourceCounts {
   stores: number; inScope: number; from: DateKey; to: DateKey; fetchedAt: Instant | null;
-  total: number | null; totalCma: number | null; totalGap: boolean;
-  paused: number | null; pausedCma: number | null; pausedGap: boolean;
-  amounts: { currency: string; amount: number; cma: number | null; gap: boolean }[];
+  total: number | null; totalCma: number | null; totalGaps: number | null;
+  paused: number | null; pausedCma: number | null; pausedGaps: number | null;
+  amounts: { currency: string; amount: number; cma: number | null; stores: number; gaps: number | null }[];
   tolerancePct: number; toleranceMin: number;
 }
 export interface SubscriptionsTiles {

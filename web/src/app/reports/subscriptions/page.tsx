@@ -133,7 +133,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/re
 
         {!doc.history ? <div className="mb-6" data-testid="subscriptions-preparing"><Notice tone="info">{t.preparing}</Notice></div> : (
           <div className="flex flex-col gap-6">
-            <SubscriptionsTiles page={doc} t={t} copy={copy} locale={locale} />
+            <SubscriptionsTiles page={doc} t={t} copy={copy} locale={locale} dataQuality={holdsAny(me, ["reports.view", "tenant.configure"])} />
             {piNoteNeeded(filter) ? <Note testId="subscriptions-pi-note">{t.piNote}</Note> : null}
 
             <Card>

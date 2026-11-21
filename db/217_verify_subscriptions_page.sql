@@ -9,7 +9,7 @@
 -- reads the page as the seed's manager (cma_app, row-level security on). Every check writes one row, PASS or FAIL, and
 -- the last row is the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM login after
 -- 216_subscriptions_page.sql, in dev. No row carries a name, an address, an email or a phone number.
---   A  the addition row after 0009zf; the ten functions the application's (not public's), invoker's rights, JIT off
+--   A  the addition row after 0009zg; the ten functions the application's (not public's), invoker's rights, JIT off
 --   B  for every filter (none, each market, each store, a proposition, none, each interval group, a market with an
 --      interval, a store with a proposition): the tiles against the take; the months against the month take (and the
 --      proposition and interval filters leaving them as they are); the last complete month's rates against the month
@@ -64,8 +64,8 @@ begin
                                                       'subscriptions_page_of', 'subscriptions_page', 'subscription_rows',
                                                       'subscription_file_record', 'subscriptions_churn_card', 'subscriptions_source_counts_of'))
            || ' | ' || coalesce((select (m.applied_at >= p.applied_at)::text from cma.schema_migration m, cma.schema_migration p
-                                 where m.version = '0009zh' and p.version = '0009zf'), 'missing');
-  insert into verify_0009zh values (1, 'A1 0009zh recorded after 0009zf; the ten functions executable by cma_app and not by public, with the caller''s rights and JIT off',
+                                 where m.version = '0009zh' and p.version = '0009zg'), 'missing');
+  insert into verify_0009zh values (1, 'A1 0009zh recorded after 0009zg; the ten functions executable by cma_app and not by public, with the caller''s rights and JIT off',
     case when v_txt = 'assert_subscription_list:true:false:false:true assert_subscriptions_filter:true:false:false:true subscription_file_record:true:false:false:true '
                       || 'subscription_rows:true:false:false:true subscription_rows_of:true:false:false:true '
                       || 'subscriptions_churn_card:true:false:false:true subscriptions_page:true:false:false:true '
@@ -86,7 +86,7 @@ declare
   v_f record; v_j jsonb; v_j0 jsonb; v_k jsonb;
   v_bad text := ''; v_bad2 text := ''; v_bad3 text := ''; v_bad4 text := ''; v_bad5 text := ''; v_bad6 text := '';
   v_txt text; v_n integer; v_size integer; v_ids uuid[]; v_page integer; v_seen uuid[]; v_prev numeric; v_prevc text; v_ok boolean;
-  v_m1 text; v_s1 uuid; v_s2 uuid; v_audit bigint; v_today date;
+  v_m1 text; v_m text; v_s1 uuid; v_s2 uuid; v_s4 uuid; v_k2 jsonb; v_audit bigint; v_today date;
 begin
   if not v_dev then
     insert into verify_0009zh values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
@@ -436,45 +436,73 @@ begin
     v_rows := v_rows || array['20', 'B11 the list''s number, payment instrument, store and CRM contact equal the mirror''s for its subscriptions (the store customer of the store connection)',
       case when v_txt ~ '^0/[1-9][0-9]*/' and not v_provoke then 'PASS' else 'FAIL' end, 'mismatches/rows/with a contact: ' || v_txt];
 
-    -- B12 the subscription app's own counts beside the tiles (B39b's source figures): two stores' figures of today (one
-    --     of them also an older day, which the page leaves out), a third store's of four days ago (out of date: left out);
-    --     the sums over the holding statuses and paused, the amounts per currency, the CMA's values beside them and 214's
-    --     gap rule; a market filter keeps its stores only; none under a proposition filter; none without any figure
+    -- B12 the subscription app's own counts beside the tiles (B39b's source figures), with the block's own settings
+    --     (holding statuses active,failed; tolerances 1 % and 2, rolled back with the block). Four stores in handle order:
+    --     1 and 2 read today (an older day of 1 left out): 1's active +10 and 2's active -10 against the CMA, two gaps one
+    --     by one whose sum differs by 1, and 2's failed off by 1 (within); 3 read yesterday only (the window's other day):
+    --     its paused without a CMA value and an amount without a currency (several currencies: left out of the amounts);
+    --     4 read four days ago (out of date: left out). The sums, the CMA's values (none where one row has none), the
+    --     gaps counted per row, the amounts' stores, from and to; the market of store 1 keeps its stores alone; none
+    --     under a proposition filter; then store 4 read today for active alone: its total is none (a holding status
+    --     without a figure), and so is its paused
+    insert into cma.tenant_setting (tenant_id, key, value)
+    values (v_t, 'flash.device_holding_statuses', 'active,failed'), (v_t, 'source_figures.tolerance_pct', '1'), (v_t, 'source_figures.tolerance_min', '2')
+    on conflict (tenant_id, key) do update set value = excluded.value;
     delete from cma.source_figure x where x.tenant_id = v_t;
     insert into cma.source_figure (tenant_id, connection_id, figure_key, source_metric, business_date, dims, value, unit, currency, cma_value, cma_at, fetched_at)
     select v_t, c.id, k.figure_key, 'verify:zh', v_today - k.back, k.dims, k.value, k.unit, k.currency, k.cma, now(), now()
     from (select y.connection_id as id, row_number() over (order by y.handle collate "C") as n from cma.flash_subscription_stores_of(v_t) y) c
-    cross join lateral (values
-      ('subscriptions_in_status', 0, '{"status": "active"}'::jsonb, 100.0 * c.n, 'count', null::text, 100.0 * c.n),
-      ('subscriptions_in_status', 0, '{"status": "failed"}'::jsonb, 10.0, 'count', null, 30.0),
-      ('subscriptions_in_status', 0, '{"status": "paused"}'::jsonb, 5.0, 'count', null, 5.0),
-      ('subscriptions_in_status', 0, '{"status": "canceled"}'::jsonb, 50.0, 'count', null, 50.0),
-      ('subscriptions_in_status', 1, '{"status": "active"}'::jsonb, 999.0, 'count', null, 999.0),
-      ('recurring_amount_active', 0, '{}'::jsonb, 1000.0 * c.n, 'amount', 'EUR', 1000.0 * c.n + 1),
-      ('subscriptions_in_status', 4, '{"status": "active"}'::jsonb, 7.0, 'count', null, 7.0)) k(figure_key, back, dims, value, unit, currency, cma)
-    where (c.n <= 2 and k.back <= 1) or (c.n = 3 and k.back = 4);
+    join (values
+      (1, 'subscriptions_in_status', 0, '{"status": "active"}'::jsonb, 100.0, 'count', null::text, 110.0),
+      (1, 'subscriptions_in_status', 0, '{"status": "failed"}'::jsonb, 10.0, 'count', null, 10.0),
+      (1, 'subscriptions_in_status', 0, '{"status": "paused"}'::jsonb, 5.0, 'count', null, 5.0),
+      (1, 'subscriptions_in_status', 0, '{"status": "canceled"}'::jsonb, 50.0, 'count', null, 50.0),
+      (1, 'subscriptions_in_status', 1, '{"status": "active"}'::jsonb, 999.0, 'count', null, 999.0),
+      (1, 'recurring_amount_active', 0, '{}'::jsonb, 1000.0, 'amount', 'EUR', 1001.0),
+      (2, 'subscriptions_in_status', 0, '{"status": "active"}'::jsonb, 200.0, 'count', null, 190.0),
+      (2, 'subscriptions_in_status', 0, '{"status": "failed"}'::jsonb, 10.0, 'count', null, 11.0),
+      (2, 'subscriptions_in_status', 0, '{"status": "paused"}'::jsonb, 5.0, 'count', null, 5.0),
+      (2, 'recurring_amount_active', 0, '{}'::jsonb, 2000.0, 'amount', 'EUR', 2001.0),
+      (3, 'subscriptions_in_status', 1, '{"status": "active"}'::jsonb, 300.0, 'count', null, 300.0),
+      (3, 'subscriptions_in_status', 1, '{"status": "failed"}'::jsonb, 0.0, 'count', null, 0.0),
+      (3, 'subscriptions_in_status', 1, '{"status": "paused"}'::jsonb, 2.0, 'count', null, null),
+      (3, 'recurring_amount_active', 1, '{}'::jsonb, 50.0, 'amount', null, null),
+      (4, 'subscriptions_in_status', 4, '{"status": "active"}'::jsonb, 7.0, 'count', null, 7.0)) k(n, figure_key, back, dims, value, unit, currency, cma)
+      on k.n = c.n;
+    select coalesce(y.market, 'unknown') into v_m
+    from (select y.market, row_number() over (order by y.handle collate "C") as n from cma.flash_subscription_stores_of(v_t) y) y where y.n = 1;
+    select y.connection_id into v_s4
+    from (select y.connection_id, row_number() over (order by y.handle collate "C") as n from cma.flash_subscription_stores_of(v_t) y) y where y.n = 4;
     perform set_config('app.user_id', v_mgr::text, true);
     perform set_config('role', 'cma_app', true);
     v_j := cma.subscriptions_page(null, null, null, null, v_from, v_month) #> '{tiles,source_counts}';
-    v_j0 := cma.subscriptions_page(v_m1, null, null, null, v_from, v_month) #> '{tiles,source_counts}';
+    v_j0 := cma.subscriptions_page(v_m, null, null, null, v_from, v_month) #> '{tiles,source_counts}';
     v_k := cma.subscriptions_page(null, null, 'vp1', null, v_from, v_month) #> '{tiles,source_counts}';
     perform set_config('role', 'cma_owner', true);
-    v_txt := concat_ws(' ', v_j ->> 'stores', v_j ->> 'in_scope', v_j ->> 'to', trim_scale((v_j ->> 'total')::numeric), trim_scale((v_j ->> 'total_cma')::numeric),
-                       v_j ->> 'total_gap', trim_scale((v_j ->> 'paused')::numeric), v_j ->> 'paused_gap', trim_scale((v_j #>> '{amounts,0,amount}')::numeric),
-                       trim_scale((v_j #>> '{amounts,0,cma}')::numeric), v_j #>> '{amounts,0,gap}', coalesce(v_j0 ->> 'stores', 'none'),
-                       coalesce(nullif(v_k::text, 'null'), 'none'));
-    -- expected: the holding statuses of the tenant's setting (the dev seed's active,failed: 100 + 200 active and 10 + 10
-    -- failed; the CMA 300 + 60, a gap of 40 over 2 and 1 % of 320); paused 10, equal; amounts 3,000 against 3,002 (2 over 2:
-    -- no gap); the first market's stores alone under its filter; nothing under a proposition
+    insert into cma.source_figure (tenant_id, connection_id, figure_key, source_metric, business_date, dims, value, unit, currency, cma_value, cma_at, fetched_at)
+    values (v_t, v_s4, 'subscriptions_in_status', 'verify:zh', v_today, '{"status": "active"}', 7, 'count', null, 7, now(), now());
+    perform set_config('role', 'cma_app', true);
+    v_k2 := cma.subscriptions_page(null, v_s4, null, null, v_from, v_month) #> '{tiles,source_counts}';
+    perform set_config('role', 'cma_owner', true);
+    v_txt := concat_ws(' ', v_j ->> 'stores', v_j ->> 'in_scope', v_j ->> 'from', v_j ->> 'to',
+                       trim_scale((v_j ->> 'total')::numeric), trim_scale((v_j ->> 'total_cma')::numeric), v_j ->> 'total_gaps',
+                       trim_scale((v_j ->> 'paused')::numeric), coalesce(v_j ->> 'paused_cma', 'none'), v_j ->> 'paused_gaps',
+                       jsonb_array_length(v_j -> 'amounts'), v_j #>> '{amounts,0,currency}', trim_scale((v_j #>> '{amounts,0,amount}')::numeric),
+                       trim_scale((v_j #>> '{amounts,0,cma}')::numeric), v_j #>> '{amounts,0,stores}', v_j #>> '{amounts,0,gaps}',
+                       coalesce(v_j0 ->> 'stores', 'none'), coalesce(nullif(v_k::text, 'null'), 'none'),
+                       coalesce(v_k2 ->> 'stores', 'none'), coalesce(v_k2 ->> 'total', 'none'), coalesce(v_k2 ->> 'paused', 'none'));
+    -- expected: 3 stores of all in scope, yesterday to today; total 100 + 10 + 200 + 10 + 300 + 0 = 620 against the CMA's
+    -- 110 + 10 + 190 + 11 + 300 + 0 = 621 (a sum within tolerance) with 2 gaps; paused 12, the CMA's none (store 3 has
+    -- none), 0 gaps; one amount, EUR 3,000 against 3,002 over 2 stores, 0 gaps; store 1's market: its stores among 1 to 3;
+    -- none under a proposition; store 4 alone: 1 store, no total, no paused
     v_n := (select count(*) from cma.flash_subscription_stores_of(v_t));
-    v_rows := v_rows || array['21', 'B12 the subscription app''s own counts beside the tiles: today''s figures of the stores that have them (an older day and an out-of-date store left out), the sums, the CMA''s values and 214''s gap rule; a market''s stores alone; none under a proposition filter',
-      case when v_txt = format('2 %s %s %s %s true 10 false 3000 3002 false %s none', v_n, v_today,
-                               case when 'failed' = any (v_holding) then 320 else 300 end, case when 'failed' = any (v_holding) then 360 else 300 end,
-                               (select count(*) from (select y.connection_id, row_number() over (order by y.handle collate "C") as n
+    v_rows := v_rows || array['21', 'B12 the subscription app''s own counts beside the tiles: each store''s latest figures of today or yesterday (an older day and an out-of-date store left out), the sums, the CMA''s values, 214''s gap rule counted row by row, the amounts per currency with their stores; a market''s stores alone; none under a proposition filter; no total where a holding status has no figure',
+      case when v_txt = format('3 %s %s %s 620 621 2 12 none 0 1 EUR 3000 3002 2 0 %s none 1 none none', v_n,
+                               to_char(v_today - 1, 'YYYY-MM-DD'), to_char(v_today, 'YYYY-MM-DD'),
+                               (select count(*) from (select y.market, row_number() over (order by y.handle collate "C") as n
                                                        from cma.flash_subscription_stores_of(v_t) y) q
-                                join cma.flash_subscription_stores_of(v_t) y2 on y2.connection_id = q.connection_id
-                                where q.n <= 2 and coalesce(y2.market, 'unknown') = v_m1))
-                and 'failed' = any (v_holding) and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+                                where q.n <= 3 and coalesce(q.market, 'unknown') = v_m))
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception

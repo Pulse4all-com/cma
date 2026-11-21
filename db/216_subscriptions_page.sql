@@ -40,8 +40,10 @@
 --   The subscription app's own counts beside the tiles (source_counts): from cma.source_figure (B39b, 0009zg), each
 --   store's latest figures of today or yesterday in the tenant's zone, for the stores under the market and store filters:
 --   subscriptions_in_status summed over the holding statuses (Total subscriptions) and over paused, and
---   recurring_amount_active per currency, each with the CMA's value the figure was compared with when read and whether
---   the two differ by more than both source_figures tolerances (214's rule, Source figure gap). Null while no store in
+--   recurring_amount_active per currency, each with the CMA's value the figures were compared with when read and the
+--   number of them that are a Source figure gap one by one (214's rule on each figure, never on a sum, so the tile
+--   counts what Data quality lists); a total or a paused count only where every store counted has a figure for each
+--   of its statuses, and an amount with the stores it covers. Null while no store in
 --   scope has such a figure, and under a proposition or an interval filter (the app counts neither); never a zero.
 --   Renewal survival is not compared with the app's own (B39b's renewal_survival) yet: its cohorts are read monthly and
 --   need their own cells (a later increment).
@@ -265,11 +267,18 @@ $$;
 -- 3b. The subscription app's own counts beside the tiles (B39b's source figures)
 -- ---------------------------------------------------------------------------------------------
 -- Per store under the market and store filters, its latest business date of today or yesterday (the tenant's zone)
--- with a subscriptions_in_status figure: that date's subscriptions_in_status (summed over the holding statuses, and over
--- paused) and recurring_amount_active (per currency; a store whose active subscriptions hold several currencies has no
--- currency and is left out of the amounts). Each sum beside the CMA's values the figures were compared with when read
--- (cma_value, the same scope at the fetch) and gap: the two differ by more than source_figures.tolerance_min and
--- source_figures.tolerance_pct percent of the app's value, both (214's rule). stores: those with a figure; in_scope: the
+-- with a subscriptions_in_status figure, and that date's figures:
+--   total         subscriptions_in_status summed over the holding statuses (flash.device_holding_statuses); null unless
+--                 every store counted has a figure for every holding status (a status the app was not read for, or one
+--                 it skipped, never makes a smaller total pass for the whole)
+--   paused        subscriptions_in_status of paused, null unless every store counted has one
+--   amounts       recurring_amount_active per currency with the stores it covers (a store whose active subscriptions
+--                 hold several currencies has no currency and is left out, as 214 leaves it uncompared)
+-- Each beside the CMA's values the figures were compared with when read (cma_value: null when one figure has none) and
+-- gaps: the figures among them that are a Source figure gap one by one, by 214's rule on each row (the CMA's less the
+-- app's exceeds source_figures.tolerance_min and source_figures.tolerance_pct percent of the app's value, both; a row
+-- without a CMA value is not compared), so the tile counts what Data quality lists and never tests a sum (null where
+-- nothing is compared). stores: those with a figure; from and to: the oldest and latest of their dates; in_scope: the
 -- stores under the filters. Null while no store in scope has a figure, and under a proposition or interval filter.
 -- Reads cma.source_figure by its date index (tenant_id, business_date): a few rows a store
 create or replace function cma.subscriptions_source_counts_of(p_tenant_id uuid, p_market text, p_store uuid, p_proposition text,
@@ -295,32 +304,46 @@ as $$
   ), latest as (
     select f.connection_id, max(f.business_date) as d from f where f.figure_key = 'subscriptions_in_status' group by 1
   ), r as materialized (
-    select f.* from f join latest l on l.connection_id = f.connection_id and l.d = f.business_date
+    -- each row with its kind (held: a holding status) and 214's rule on the row itself
+    select f.connection_id, f.figure_key, f.dims ->> 'status' as status, f.value, f.currency, f.cma_value, f.fetched_at,
+           f.figure_key = 'subscriptions_in_status' and f.dims ->> 'status' = any ((select z.holding from z)::text[]) as held,
+           f.figure_key = 'subscriptions_in_status' and f.dims ->> 'status' = 'paused' as paused,
+           f.cma_value is not null and abs(f.cma_value - f.value) > (select z.mn from z)
+             and abs(f.cma_value - f.value) * 100 > (select z.pct from z) * f.value as gap
+    from f join latest l on l.connection_id = f.connection_id and l.d = f.business_date
+  ), w as (
+    -- whole: every store counted has a figure for every holding status, and for paused
+    select bool_and(p.held_statuses = (select cardinality(z.holding) from z)) as total_whole, bool_and(p.paused_rows > 0) as paused_whole
+    from (select r.connection_id, count(distinct r.status) filter (where r.held) as held_statuses, count(*) filter (where r.paused) as paused_rows
+          from r group by 1) p
   ), c as (
-    select sum(r.value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = any ((select z.holding from z)::text[])) as total,
-           sum(r.cma_value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = any ((select z.holding from z)::text[])) as total_cma,
-           sum(r.value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = 'paused') as paused,
-           sum(r.cma_value) filter (where r.figure_key = 'subscriptions_in_status' and r.dims ->> 'status' = 'paused') as paused_cma
+    select sum(r.value) filter (where r.held) as total, sum(r.cma_value) filter (where r.held) as total_cma,
+           count(*) filter (where r.held and r.cma_value is null) as total_open,
+           count(*) filter (where r.held and r.cma_value is not null) as total_compared, count(*) filter (where r.held and r.gap) as total_gaps,
+           sum(r.value) filter (where r.paused) as paused, sum(r.cma_value) filter (where r.paused) as paused_cma,
+           count(*) filter (where r.paused and r.cma_value is null) as paused_open,
+           count(*) filter (where r.paused and r.cma_value is not null) as paused_compared, count(*) filter (where r.paused and r.gap) as paused_gaps
     from r
   )
-  -- 214's rule on each pair of sums: the CMA's less the app's exceeds both tolerances
   select case
     when p_proposition is not null or p_interval is not null or not exists (select 1 from latest) then null
     else jsonb_build_object(
       'stores', (select count(*) from latest), 'in_scope', (select count(*) from sm),
       'from', (select min(l.d) from latest l), 'to', (select max(l.d) from latest l), 'fetched_at', (select max(r.fetched_at) from r),
-      'total', (select c.total from c), 'total_cma', (select c.total_cma from c),
-      'total_gap', (select c.total_cma is not null and abs(c.total_cma - c.total) > (select z.mn from z)
-                           and abs(c.total_cma - c.total) * 100 > (select z.pct from z) * c.total from c),
-      'paused', (select c.paused from c), 'paused_cma', (select c.paused_cma from c),
-      'paused_gap', (select c.paused_cma is not null and abs(c.paused_cma - c.paused) > (select z.mn from z)
-                            and abs(c.paused_cma - c.paused) * 100 > (select z.pct from z) * c.paused from c),
-      'amounts', (select coalesce(jsonb_agg(jsonb_build_object('currency', a.currency, 'amount', a.v, 'cma', a.cv,
-                                                               'gap', a.cv is not null and abs(a.cv - a.v) > (select z.mn from z)
-                                                                      and abs(a.cv - a.v) * 100 > (select z.pct from z) * a.v)
+      'total', (select case when w.total_whole then c.total end from c, w),
+      'total_cma', (select case when w.total_whole and c.total_open = 0 then c.total_cma end from c, w),
+      'total_gaps', (select case when w.total_whole and c.total_compared > 0 then c.total_gaps end from c, w),
+      'paused', (select case when w.paused_whole then c.paused end from c, w),
+      'paused_cma', (select case when w.paused_whole and c.paused_open = 0 then c.paused_cma end from c, w),
+      'paused_gaps', (select case when w.paused_whole and c.paused_compared > 0 then c.paused_gaps end from c, w),
+      'amounts', (select coalesce(jsonb_agg(jsonb_build_object('currency', a.currency, 'amount', a.v,
+                                                               'cma', case when a.open = 0 then a.cv end, 'stores', a.stores,
+                                                               'gaps', case when a.compared > 0 then a.gaps end)
                                             order by a.currency collate "C"), '[]'::jsonb)
-                  from (select r.currency, sum(r.value) as v, sum(r.cma_value) as cv from r
-                        where r.figure_key = 'recurring_amount_active' and r.currency is not null group by 1) a),
+                  from (select r.currency, sum(r.value) as v, sum(r.cma_value) as cv, count(distinct r.connection_id) as stores,
+                               count(*) filter (where r.cma_value is null) as open, count(*) filter (where r.cma_value is not null) as compared,
+                               count(*) filter (where r.gap) as gaps
+                        from r where r.figure_key = 'recurring_amount_active' and r.currency is not null group by 1) a),
       'tolerance_pct', (select z.pct from z), 'tolerance_min', (select z.mn from z))
   end
 $$;

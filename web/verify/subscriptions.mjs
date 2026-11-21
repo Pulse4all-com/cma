@@ -128,10 +128,14 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
       Object.values(t.total.byStatus).reduce((a, b) => a + b, 0) === t.total.value, chain, rateParts,
       rows("total") === t.total.value && rows("paused") === t.paused && rows("unmapped") === t.devices.unmapped, mixOk,
       JSON.stringify(narrowed.months) === JSON.stringify(ms) && narrowed.tiles.total.value < t.total.value, survOk,
-      // the app's own counts: beside the CMA's of the read, every store in scope, a gap only where both tolerances are exceeded, none under P or I
+      // the app's own counts: beside the CMA's of the read, every store in scope, gaps counted per figure (at most one a
+      // store and holding status, none where the sums agree), amounts over the stores of their currency, none under P or I
       t.sourceCounts !== null && t.sourceCounts.totalCma === t.total.value && t.sourceCounts.stores === t.sourceCounts.inScope
-        && t.sourceCounts.totalGap === (Math.abs(t.sourceCounts.totalCma - t.sourceCounts.total) > t.sourceCounts.toleranceMin
-          && Math.abs(t.sourceCounts.totalCma - t.sourceCounts.total) * 100 > t.sourceCounts.tolerancePct * t.sourceCounts.total)
+        && Number.isInteger(t.sourceCounts.totalGaps) && t.sourceCounts.totalGaps <= t.sourceCounts.stores * Object.keys(t.total.byStatus).length
+        && (t.sourceCounts.totalGaps === 0 || t.sourceCounts.total !== t.sourceCounts.totalCma)
+        && (t.sourceCounts.totalGaps > 0) === (Math.abs(t.sourceCounts.totalCma - t.sourceCounts.total) > t.sourceCounts.toleranceMin)
+        && t.sourceCounts.amounts.length === t.amounts.length
+        && t.sourceCounts.amounts.every((a) => a.stores >= 1 && a.stores <= t.sourceCounts.inScope && a.gaps === 0)
         && narrowed.tiles.sourceCounts === null,
       ms.length === 13 && ms[12].month === month && ms.every((m) => m.counts !== null), t.rates !== null,
     ]);

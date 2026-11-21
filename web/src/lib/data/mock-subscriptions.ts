@@ -242,22 +242,26 @@ function monthRows(b: Base, f: SubscriptionsFilter) {
 
 /**
  * The subscription app's own counts in mock mode: each store in scope read today, its count of holding and paused
- * subscriptions as the CMA's (the CMA's value at the read), with the GB store counting six more holding subscriptions
- * than the CMA (a Source figure gap at the mock's tolerances, 1 % and 2), and its amount per currency a little above the
- * CMA's; none under a proposition or interval filter, as the database answers
+ * subscriptions as the CMA's (the CMA's value at the read), with the GB store counting six more active subscriptions
+ * than the CMA (one Source figure gap at the mock's tolerances, 1 % and 2, where the store holds fewer than 600), and its
+ * amount per currency a little above the CMA's (within); none under a proposition or interval filter, as the database
+ * answers
  */
 function sourceCountsOf(b: Base, f: SubscriptionsFilter, h: MockSub[], t: MockSub[], amounts: { currency: string; amount: number }[], zone: string) {
   if (f.proposition !== null || f.interval !== null) return null;
   const stores = STORES.filter((s) => (f.market === null || s.market === f.market) && (f.store === null || s.connectionId === f.store));
   if (stores.length === 0) return null;
-  const extra = stores.some((s) => s.market === "GB") ? 6 : 0;
+  const gb = stores.find((s) => s.market === "GB");
+  const extra = gb ? 6 : 0;
+  const gbActive = gb ? h.filter((s) => s.store.connectionId === gb.connectionId && statusNow(s) === "active").length : 0;
   const today = dateKeyInZone(new Date(b.now), zone);
   const paused = t.filter((s) => statusNow(s) === "paused").length;
+  const storesOf = (c: string) => stores.filter((s) => s.currency === c).length;
   return {
     stores: stores.length, inScope: stores.length, from: today, to: today, fetchedAt: new Date(b.now - 3 * 3_600_000).toISOString(),
-    total: h.length + extra, totalCma: h.length, totalGap: extra > 2 && extra * 100 > h.length + extra,
-    paused, pausedCma: paused, pausedGap: false,
-    amounts: amounts.map((a) => ({ currency: a.currency, amount: Math.round(a.amount * 1.002 * 100) / 100, cma: a.amount, gap: false })),
+    total: h.length + extra, totalCma: h.length, totalGaps: gb && extra * 100 > gbActive + extra ? 1 : 0,
+    paused, pausedCma: paused, pausedGaps: 0,
+    amounts: amounts.map((a) => ({ currency: a.currency, amount: Math.round(a.amount * 1.002 * 100) / 100, cma: a.amount, stores: storesOf(a.currency), gaps: 0 })),
     tolerancePct: 1, toleranceMin: 2,
   };
 }

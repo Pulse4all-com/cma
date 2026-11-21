@@ -107,10 +107,11 @@ const intervalWord = (i: string, t: T) => (t as Record<string, string>)[`interva
  * The six tiles (D.2): Total subscriptions with its split per holding status, Paused, the Monthly recurring amount per
  * currency (and the indicative euros), the last complete month's Churn rate (its churned count linked to Flash's Churn
  * for that month) and Failed rate, and the Device units with the subscriptions whose variant is not mapped (linked to
- * Data quality). Under Total subscriptions, Paused and the amount, the subscription app's own figure of the day (Source
- * figure, addition 0009zg) once one is stored: until then nothing stands there, never a zero
+ * Data quality for a viewer who may open it, dataQuality: reports.view or tenant.configure; plain text otherwise). Under
+ * Total subscriptions, Paused and the amount, the subscription app's own figure of the day (Source figures, addition
+ * 0009zg) once one is stored: until then nothing stands there, never a zero
  */
-export function SubscriptionsTiles({ page, t, copy, locale }: { page: SubscriptionsPage; t: T; copy: Copy; locale: Locale }) {
+export function SubscriptionsTiles({ page, t, copy, locale, dataQuality }: { page: SubscriptionsPage; t: T; copy: Copy; locale: Locale; dataQuality: boolean }) {
   const tiles = page.tiles;
   if (!tiles) return null;
   const sc = tiles.sourceCounts;
@@ -126,10 +127,10 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
         {Object.entries(tiles.total.byStatus).map(([s, n]) => (
           <span key={s} data-testid="subscriptions-tile-total-status" data-status={s}>{t.statusLine.replace("{status}", statusWord(s, t)).replace("{n}", fmtCount(n, locale))}</span>
         ))}
-        {sc && sc.total !== null ? <SourceLine t={t} sc={sc} text={fmtCount(sc.total, locale)} gap={sc.totalGap && sc.totalCma !== null ? fmtCount(Math.abs(sc.totalCma - sc.total), locale) : null} locale={locale} testId="subscriptions-source-total" /> : null}
+        {sc && sc.total !== null ? <SourceLine t={t} sc={sc} text={fmtCount(sc.total, locale)} stores={sc.stores} gaps={sc.totalGaps} link={dataQuality} locale={locale} testId="subscriptions-source-total" /> : null}
       </Tile>
       <Tile testId="subscriptions-tile-paused" label={t.tile_paused} hint={t.h_paused} copy={copy} value={fmtCount(tiles.paused, locale)}>
-        {sc && sc.paused !== null ? <SourceLine t={t} sc={sc} text={fmtCount(sc.paused, locale)} gap={sc.pausedGap && sc.pausedCma !== null ? fmtCount(Math.abs(sc.pausedCma - sc.paused), locale) : null} locale={locale} testId="subscriptions-source-paused" /> : null}
+        {sc && sc.paused !== null ? <SourceLine t={t} sc={sc} text={fmtCount(sc.paused, locale)} stores={sc.stores} gaps={sc.pausedGaps} link={dataQuality} locale={locale} testId="subscriptions-source-paused" /> : null}
       </Tile>
       <Tile testId="subscriptions-tile-amount" label={t.tile_amount} hint={t.h_amount} copy={copy}
         value={tiles.amounts.length === 0 ? <span className="text-p4a-muted">{t.noAmount}</span> : (
@@ -138,7 +139,7 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
           </span>
         )}>
         {sc ? sc.amounts.map((a) => (
-          <SourceLine key={a.currency} t={t} sc={sc} text={fmtAmount(a.amount, a.currency, locale)} gap={a.gap && a.cma !== null ? fmtAmount(Math.abs(a.cma - a.amount), a.currency, locale) : null}
+          <SourceLine key={a.currency} t={t} sc={sc} text={fmtAmount(a.amount, a.currency, locale)} stores={a.stores} gaps={a.gaps} link={dataQuality}
             locale={locale} testId="subscriptions-source-amount" />
         )) : null}
         {tiles.eur ? <span data-testid="subscriptions-tile-eur">{t.eurLine.replace("{amount}", fmtAmount(tiles.eur.amount, "EUR", locale)).replace("{date}", tiles.eur.asOf ? fmtDate(tiles.eur.asOf, locale, "medium") : "–")}</span> : null}
@@ -156,11 +157,15 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
         {rates ? <span>{t.failedLine.replace("{n}", fmtCount(rates.movedToFailed, locale)).replace("{month}", month)}</span> : null}
       </Tile>
       <Tile testId="subscriptions-tile-devices" label={t.tile_devices} hint={t.h_devices} copy={copy} value={fmtCount(tiles.devices.units, locale)}>
-        {tiles.devices.unmapped > 0 ? (
+        {tiles.devices.unmapped > 0 && dataQuality ? (
           <Link href={flashHref("/reports/flash", { o: "data_quality", f_check: "subscription_variant_unmapped" }) as Route} className={link}
             title={t.openDataQuality} data-testid="subscriptions-tile-unmapped">
             {tiles.devices.unmapped === 1 ? t.unmappedOne : t.unmappedLine.replace("{n}", fmtCount(tiles.devices.unmapped, locale))}
           </Link>
+        ) : tiles.devices.unmapped > 0 ? (
+          <span data-testid="subscriptions-tile-unmapped">
+            {tiles.devices.unmapped === 1 ? t.unmappedOne : t.unmappedLine.replace("{n}", fmtCount(tiles.devices.unmapped, locale))}
+          </span>
         ) : null}
       </Tile>
     </div>
@@ -168,24 +173,26 @@ export function SubscriptionsTiles({ page, t, copy, locale }: { page: Subscripti
 }
 
 /**
- * A tile's line with the subscription app's own figure (a Source figure, read daily by B39b's job): its value and day,
- * the stores read where not every store in scope has one, and, where the two differ beyond both tolerances, the Source
- * figure gap in the warning colour with a link to Data quality's check (never the colour alone)
+ * A tile's line with the subscription app's own figure (Source figures, read daily by B39b's job): its value and its day
+ * (both days where the stores were read on two), the stores it covers where not every store in scope is among them,
+ * and the number of its figures that are a Source figure gap one by one, as Data quality lists them: a link to Data
+ * quality's check for a viewer who may open it (reports.view or tenant.configure), plain text otherwise
  */
-function SourceLine({ t, sc, text, gap, locale, testId }: {
-  t: T; sc: SubscriptionsSourceCounts; text: string; gap: string | null; locale: Locale; testId: string;
+function SourceLine({ t, sc, text, stores, gaps, link: toDq, locale, testId }: {
+  t: T; sc: SubscriptionsSourceCounts; text: string; stores: number; gaps: number | null; link: boolean; locale: Locale; testId: string;
 }) {
-  const when = sc.to ? fmtDate(sc.to, locale, "medium") : "";
-  const partial = sc.stores < sc.inScope ? t.sourceStores.replace("{k}", fmtCount(sc.stores, locale)).replace("{m}", fmtCount(sc.inScope, locale)) : null;
+  const when = !sc.to ? "" : sc.from && sc.from !== sc.to ? `${fmtDate(sc.from, locale, "medium")} – ${fmtDate(sc.to, locale, "medium")}` : fmtDate(sc.to, locale, "medium");
+  const partial = stores < sc.inScope ? t.sourceStores.replace("{k}", fmtCount(stores, locale)).replace("{m}", fmtCount(sc.inScope, locale)) : null;
+  const gapText = gaps ? t.sourceGap.replace("{n}", fmtCount(gaps, locale)) : null;
   return (
     <span className="flex flex-col" data-testid={testId}>
       <span>{t.sourceLine.replace("{n}", text).replace("{date}", when)}{partial ? `, ${partial}` : ""}</span>
-      {gap ? (
-        <Link href={flashHref("/reports/flash", { o: "data_quality", f_check: "source_figure_gap" }) as Route} className="font-semibold text-p4a-warning underline-offset-2 hover:underline"
+      {gapText && toDq ? (
+        <Link href={flashHref("/reports/flash", { o: "data_quality", f_check: "source_figure_gap" }) as Route} className={link} title={t.openDataQuality}
           data-testid={`${testId}-gap`}>
-          {t.sourceGap.replace("{n}", gap)}
+          {gapText}
         </Link>
-      ) : null}
+      ) : gapText ? <span data-testid={`${testId}-gap`}>{gapText}</span> : null}
     </span>
   );
 }

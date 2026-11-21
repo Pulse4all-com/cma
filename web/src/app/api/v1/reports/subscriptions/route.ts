@@ -13,8 +13,10 @@ export const dynamic = "force-dynamic";
  * nothing more, while no subscriptions connection is set up), `history` (false while no take is stored), `take`
  * (computedAt: Refreshed at; amountsFrom: amounts of movements are known from then), `settings`, the filters' choices,
  * `tiles` (Total subscriptions with its split per holding status, Paused, the Monthly recurring amount per currency and
- * the indicative euros, the last complete month's rate parts, Device units with the unmapped, and `sourceCounts`: null
- * until the subscription app's own counts are stored, never a zero), `months` (counts per movement kind, amounts per
+ * the indicative euros, the last complete month's rate parts, Device units with the unmapped, and `sourceCounts`: the
+ * subscription app's own figures of today or yesterday (Source figures: stores, inScope, from, to, fetchedAt, total,
+ * totalCma, totalGaps, paused, pausedCma, pausedGaps, amounts with their stores and gaps, the two tolerances), null while
+ * no store in scope has one and under a proposition or interval filter, never a zero), `months` (counts per movement kind, amounts per
  * currency, the complete stores' rate parts), `rates` per market and complete month, `storeStarts`, `survival`, `mix` and
  * the list's first page. The movements and the rates follow the market and store filters only (the month take is per
  * store); the proposition and interval filters narrow the tiles, the mix, the list and (the interval) survival. Needs

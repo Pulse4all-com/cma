@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-659 figures. Statuses: verified 461 · discrepancy 18 · ambiguous 35 · prerequisite_missing 152 · cadence_unconfirmed 74.
+659 figures. Statuses: verified 460 · discrepancy 18 · ambiguous 35 · prerequisite_missing 153 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -39801,17 +39801,17 @@ The list's measure paused lists the same subscriptions (217 B6).
 
 #### `subscriptions.source_counts`
 
-**Subscription app: {n} on {date}** on /reports/subscriptions · Subscription app's own counts (Cijfers van de abonnementen-app)
+**Subscription app: {n} on {date}** on /reports/subscriptions · Source figures (Bronwaarden)
 
-Under Total subscriptions, Paused and the Monthly recurring amount: the subscription app's own figure of the day (Source figure), summed over the stores in scope that have one, and a Source figure gap where it differs from the CMA's value of the same read beyond both tolerances.
+Under Total subscriptions, Paused and the Monthly recurring amount: the subscription app's own figures of the day (Source figures), summed over the stores in scope that have one, with the number of those figures that are a Source figure gap one by one (as Data quality lists them; the rule is never applied to the sum).
 
 **Formula as computed**
 
 ```
-cma.subscriptions_source_counts_of: per store under the market and store filters, its latest business date of today or yesterday with a subscriptions_in_status figure; sum(value) over dims.status in flash.device_holding_statuses (total) and = paused; recurring_amount_active per currency; beside sum(cma_value); gap when abs(cma - app) > source_figures.tolerance_min and abs(cma - app) * 100 > source_figures.tolerance_pct * app; null under a proposition or interval filter or without a figure
+cma.subscriptions_source_counts_of: per store under the market and store filters, its latest business date of today or yesterday with a subscriptions_in_status figure; sum(value) over dims.status in flash.device_holding_statuses (total) and = paused; recurring_amount_active per currency; total and paused only where every store counted has a figure for each of their statuses; beside sum(cma_value) (null where one figure has none); gaps = count of the figures with abs(cma_value - value) > source_figures.tolerance_min and abs(cma_value - value) * 100 > source_figures.tolerance_pct * value (214's rule per row); each amount with its stores; null under a proposition or interval filter or without a figure
 ```
 
-**Unit** count · **Grain** now, per_market, per_status, per_currency · **Status** verified
+**Unit** count · **Grain** now, per_market, per_status, per_currency · **Status** prerequisite_missing
 
 **Sources**
 
@@ -39825,9 +39825,9 @@ cma.subscriptions_source_counts_of: per store under the market and store filters
 - the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
 - a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
 
-**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+**Time** Each store's latest business date of today or yesterday in the tenant's time zone (the read's day; from and to are the oldest and latest of them, both shown when they differ) and the read's moment (fetched_at), not the tile's take; the month range does not apply.
 
-**Previous period** None on the tiles; the months stand side by side.
+**Previous period** The CMA's value of the same read (cma_value) per figure, by 214's rule.
 
 **Settings**
 
@@ -39839,17 +39839,17 @@ cma.subscriptions_source_counts_of: per store under the market and store filters
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+**Refresh** On page load, inside the page's one read (cma.subscriptions_page); the figures themselves are read once a store a day after source_figures.local_time by the hourly job ingest-source-figures. No polling.
 
 **Computed in** `cma.subscriptions_source_counts_of` (0009zh); `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select sum(f.value) filter (where f.figure_key = 'subscriptions_in_status' and f.dims ->> 'status' = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses')))), sum(f.value) filter (where f.dims ->> 'status' = 'paused') from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.source_figure f where f.tenant_id = :tenant_id and f.business_date = :to and f.figure_key = 'subscriptions_in_status'
+select sum(f.value) filter (where f.figure_key = 'subscriptions_in_status' and f.dims ->> 'status' = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses')))), sum(f.value) filter (where f.dims ->> 'status' = 'paused') from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.source_figure f where f.tenant_id = :tenant_id and f.business_date = :day and f.figure_key = 'subscriptions_in_status' (:day: the date of source_counts.to, where every store was read that day; otherwise per store at its own latest date)
 ```
 
-**Fixture check** 217 B12 builds figures for two stores in a rolled-back block and checks the sums, the CMA's values, the gap rule, the market filter and the absence under a proposition filter (13 PASS locally); Martin runs 217 in dev.
+**Fixture check** 217 B12 builds figures for four stores in a rolled-back block (today, yesterday only, out of date; opposite gaps whose sum is within; a paused figure without a CMA value; an amount without a currency) and checks the sums, the CMA's values, the gaps per figure, the amounts' stores, the market filter, the absence under a proposition filter and no total where a holding status has no figure (13 PASS locally, provoked 0 of 13); Martin runs 217 in dev.
 
 **Data prerequisites**
 
@@ -39859,7 +39859,7 @@ select sum(f.value) filter (where f.figure_key = 'subscriptions_in_status' and f
 
 **Notes**
 
-The app's figure and the CMA's value it was compared with are both of the read (fetched_at), not of the tile's take (Refreshed at): the line shows the app's value and its day, and the gap is B39b's comparison of that read. A store without a figure of today or yesterday is left out and the line names how many stores it covers. Renewal survival is not compared with the app's own yet.
+The app's figure and the CMA's value it was compared with are both of the read (fetched_at), not of the tile's take (Refreshed at): the line shows the app's value and its day, and the gap is B39b's comparison of that read. A store without a figure of today or yesterday is left out and the line names how many stores it covers. Renewal survival is not compared with the app's own yet. Unit count for the total and paused; the amount line is in its currency's own unit.
 
 #### `subscriptions.monthly_recurring_amount`
 
