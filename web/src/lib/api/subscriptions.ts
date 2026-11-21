@@ -20,7 +20,7 @@ function filterOf(sp: URLSearchParams, me: Principal): { filter: SubscriptionsFi
   if (problem === "proposition") throw new ApiError(400, "invalid_proposition", "proposition must be a proposition's code or none");
   if (problem === "interval") throw new ApiError(400, "invalid_interval", "interval must be monthly, quarterly, yearly, other or unknown");
   if (problem === "from" || problem === "to" || problem === "range") {
-    throw new ApiError(400, `invalid_${problem}`, "from and to must be months as YYYY-MM, from at most to, to at most this month, at most 60 months");
+    throw new ApiError(400, `invalid_${problem}`, "from and to must be months as YYYY-MM, from at most to, to at most this month, within the tenant's history");
   }
   return { filter, from, to };
 }

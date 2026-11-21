@@ -31,8 +31,12 @@ export type SubscriptionsView = (typeof SUBSCRIPTIONS_VIEWS)[number];
 export const SUBSCRIPTIONS_PAGE_ROWS = 50;
 /** The default range: the last twelve complete months and the current one */
 export const SUBSCRIPTIONS_DEFAULT_MONTHS = 13;
-/** The most months a range spans when the tenant's customers.history_months is not known: its default (60) complete months and the current one; the page's choices follow the tenant's own value */
-export const SUBSCRIPTIONS_MAX_MONTHS = 61;
+/**
+ * The most months an address may ask for: customers.history_months' largest value (120) complete months and the current
+ * one. The tenant's own limit (customers.history_months complete months and the current one) is the database's to apply
+ * (CMA04), and the page offers only the months it allows
+ */
+export const SUBSCRIPTIONS_MAX_MONTHS = 121;
 /** The movement kinds in the bridge's order: the start, what adds, what moves out, the end (C.4) */
 export const SUBSCRIPTIONS_BRIDGE: readonly SubscriptionMoveKind[] = [
   "start", "new", "migrated", "reactivated", "resumed", "paused", "churned", "moved_to_failed", "end",

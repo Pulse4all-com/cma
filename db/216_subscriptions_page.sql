@@ -559,6 +559,9 @@ begin
   if p_rows is null or p_rows < 0 then
     raise exception 'a file record names its rows' using errcode = 'CMA04';
   end if;
+  if (p_from is not null or p_to is not null) and (p_part <> 'months' or p_from is null or p_to is null or p_from > p_to) then
+    raise exception 'a range goes with the months part alone, from at most to' using errcode = 'CMA04';
+  end if;
   insert into cma.audit_log (tenant_id, table_name, action, old_row, new_row, actor_user_id, actor_label)
   values (v_tenant, 'subscription_file', 'insert', null,
           jsonb_strip_nulls(jsonb_build_object('part', p_part, 'market', p_market, 'store', p_store, 'proposition', p_proposition, 'interval', p_interval,

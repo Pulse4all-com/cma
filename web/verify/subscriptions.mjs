@@ -77,10 +77,10 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
     [{ market: "GB", store: "00000000-0000-7000-8000-00000005b001", proposition: "none", interval: "yearly" }, "2026-01-01", "2026-06-01", null,
       { market: "GB", store: "00000000-0000-7000-8000-00000005b001", proposition: "none", interval: "yearly" }], []);
   const bad = (q) => { const r = parseSubscriptionsFilter(get(q), nov); return [r.problem, r.from, r.to]; };
-  expect("A4 what is ignored and why: a market, store, proposition or interval out of form, a month out of form, to after this month, from after to, more than 60 complete months and the current one",
+  expect("A4 what is ignored and why: a market, store, proposition or interval out of form, a month out of form, to after this month, from after to, more than 120 complete months and the current one (the tenant's own limit is the database's)",
     [bad({ market: "gb" })[0], bad({ store: "x" })[0], bad({ proposition: "Hs1" })[0], bad({ interval: "weekly" })[0], bad({ from: "2026-13" })[0],
-      bad({ to: "2027-01" }), bad({ from: "2026-10", to: "2026-05" }), bad({ from: "2018-01" })],
-    ["market", "store", "proposition", "interval", "from", ["to", "2025-11-01", "2026-11-01"], ["range", "2025-05-01", "2026-05-01"], ["range", "2021-11-01", "2026-11-01"]],
+      bad({ to: "2027-01" }), bad({ from: "2026-10", to: "2026-05" }), bad({ from: "2010-01" })],
+    ["market", "store", "proposition", "interval", "from", ["to", "2025-11-01", "2026-11-01"], ["range", "2025-05-01", "2026-05-01"], ["range", "2016-11-01", "2026-11-01"]],
     []);
   expect("A5 months move across years; the current month in a zone", [addMonths("2026-01-01", -1), addMonths("2026-12-01", 1), addMonths("2026-05-01", -17),
     currentMonthIn("Europe/Amsterdam", new Date("2026-11-30T23:30:00Z")), currentMonthIn("Europe/London", new Date("2026-11-30T23:30:00Z"))],

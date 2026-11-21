@@ -376,11 +376,12 @@ begin
            format('select cma.subscriptions_page(null, null, null, null, %L, %L, ''total'', ''monthly_amount'', true, 0)', v_from, v_month),
            'select cma.subscription_file_record(''records'', null, null, null, null, ''total'', -1)',
            'select cma.subscription_file_record(''list'', null, null, null, null, ''total'', 3)',
+           format('select cma.subscription_file_record(''records'', null, null, null, null, ''total'', 3, %L, %L)', v_from, v_month),
            'select cma.subscriptions_churn_card(''xx'')']) with ordinality u(q, o))
       || ' | ' || pg_temp.v0009zh_code(format('select cma.subscriptions_page(null, null, ''none'', ''other'', %L, %L, ''unmapped'', ''device_units'', false)', v_from, v_month));
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['17', 'B8 an agent is refused every read and the file record (CMA06); a bad market, store, proposition, interval, range, measure (null too), sort, direction, page, limit, row count or file part is refused (CMA04); a valid rare combination answers',
-      case when v_txt = 'CMA06 CMA06 CMA06 CMA06 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 | ok'
+      case when v_txt = 'CMA06 CMA06 CMA06 CMA06 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 | ok'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B9 the file's audit row: the filters, the measure and the rows, never a listed subscription; Customers → Active's card

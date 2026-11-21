@@ -99,7 +99,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/re
     ...(!descending ? { dir: "asc" } : {}) }).toString();
   const monthsQuery = new URLSearchParams({ ...subscriptionsQuery(filter), from: monthAddress(doc.from), to: monthAddress(doc.to), part: "months" }).toString();
   // the months a range may take: the tenant's customers.history_months complete months and the current one
-  const months = monthsBetween(addMonths(currentMonth, -Math.max(1, doc.settings.historyMonths || SUBSCRIPTIONS_MAX_MONTHS - 1)), currentMonth).reverse()
+  const months = monthsBetween(addMonths(currentMonth, -Math.max(1, Math.min(doc.settings.historyMonths || 60, SUBSCRIPTIONS_MAX_MONTHS - 1))), currentMonth).reverse()
     .map((m) => ({ value: monthAddress(m), label: monthName(m, locale) }));
   const amountsFrom = doc.take?.amountsFrom ? dateKeyInZone(new Date(doc.take.amountsFrom), doc.timeZone || me.timeZone) : null;
 
