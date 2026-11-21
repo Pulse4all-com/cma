@@ -322,8 +322,8 @@
   {
     "path": "/api/v1/reports/subscriptions",
     "subject": "manager",
-    "tx": 2,
-    "rt": 9
+    "tx": 3,
+    "rt": 13
   },
   {
     "path": "/api/v1/reports/subscriptions/rows?page=2",

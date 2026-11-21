@@ -4534,8 +4534,9 @@ export interface CmaData {
   getSubscriptionsPage(me: Principal, query: SubscriptionsPageQuery): Promise<SubscriptionsPage>;
   /** A page of the list, or the file's rows (cma.subscription_rows) */
   getSubscriptionRows(me: Principal, query: SubscriptionsRowsQuery): Promise<SubscriptionRowsList>;
-  /** A file read in the audit log (cma.subscription_file_record): who, which part, filters and measure, how many rows */
-  recordSubscriptionFile(me: Principal, part: "records" | "months", filter: SubscriptionsFilter, measure: SubscriptionsMeasure, rows: number): Promise<void>;
+  /** A file or an API read of the list in the audit log (cma.subscription_file_record): who, which part, filters, range and measure, how many rows */
+  recordSubscriptionFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, measure: SubscriptionsMeasure, rows: number,
+    range?: { from: DateKey; to: DateKey }): Promise<void>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
   getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;

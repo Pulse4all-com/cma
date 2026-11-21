@@ -47,7 +47,7 @@
 --                                     rates, store starts, survival, mix and the list's first page
 --   cma.subscriptions_page, cma.subscription_rows   reports.view or performance.team (CMA06), filters (CMA04); set_up
 --                                     false while no subscriptions connection is set up
---   cma.subscription_file_record      the file's audit row, written before the file is sent
+--   cma.subscription_file_record      the audit row of a file or an API read of the list, written before it is sent
 --   cma.subscriptions_churn_card      Customers → Active's Churn rate card: the last complete month's Churn rate and
 --                                     Failed rate of a market or of every market
 --
@@ -511,11 +511,12 @@ begin
 end
 $$;
 
--- The file's audit row (as Customers → Active's, 172): written before the file is sent, with the part (records: the
--- list; months: the movements and rates by month), the filters, the measure and the rows; never an id of a listed
--- subscription
+-- The audit row of a read that hands out subscriptions' rows (as Customers → Active's, 172), written before they are
+-- sent: the part (records: the list's file; months: the movements and rates by month, with their range; rows: a page of
+-- the list through the API, the page's own answer included), the filters, the measure and the rows; never an id of a
+-- listed subscription
 create or replace function cma.subscription_file_record(p_part text, p_market text, p_store uuid, p_proposition text, p_interval text,
-                                                        p_measure text, p_rows integer)
+                                                        p_measure text, p_rows integer, p_from date default null, p_to date default null)
 returns void
 language plpgsql
 as $$
@@ -525,8 +526,8 @@ declare
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   perform cma.assert_subscriptions_filter(v_tenant, p_market, p_store, p_proposition, p_interval, v_month, v_month);
-  if p_part is null or p_part not in ('records', 'months') then
-    raise exception 'part is records or months' using errcode = 'CMA04';
+  if p_part is null or p_part not in ('records', 'months', 'rows') then
+    raise exception 'part is records, months or rows' using errcode = 'CMA04';
   end if;
   if p_measure is null or p_measure not in ('total', 'active', 'failed', 'paused', 'unmapped', 'all') then
     raise exception 'measure is total, active, failed, paused, unmapped or all' using errcode = 'CMA04';
@@ -537,7 +538,7 @@ begin
   insert into cma.audit_log (tenant_id, table_name, action, old_row, new_row, actor_user_id, actor_label)
   values (v_tenant, 'subscription_file', 'insert', null,
           jsonb_strip_nulls(jsonb_build_object('part', p_part, 'market', p_market, 'store', p_store, 'proposition', p_proposition, 'interval', p_interval,
-                                               'measure', p_measure, 'rows', p_rows)),
+                                               'measure', p_measure, 'from', p_from, 'to', p_to, 'rows', p_rows)),
           cma.current_user_id(), cma.current_actor_label());
 end
 $$;
@@ -587,7 +588,7 @@ begin
     'cma.subscriptions_page_of(uuid,text,uuid,text,text,date,date,text,text,boolean,timestamptz)',
     'cma.subscriptions_page(text,uuid,text,text,date,date,text,text,boolean)',
     'cma.subscription_rows(text,uuid,text,text,text,text,boolean,integer,integer,boolean)',
-    'cma.subscription_file_record(text,text,uuid,text,text,text,integer)',
+    'cma.subscription_file_record(text,text,uuid,text,text,text,integer,date,date)',
     'cma.subscriptions_churn_card(text)'] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
@@ -602,7 +603,7 @@ $$;
 -- 7. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zh', 'Customers → Subscriptions (brief B39 continued, Part B39d): cma.subscriptions_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles, the movements and rates per month, the stores'' starts, renewal survival, the mix and the list''s first page, from the subscription facts'' takes), cma.subscription_rows (a page of the list or the file''s rows), cma.subscription_file_record (the file''s audit row: records or months) and cma.subscriptions_churn_card (Customers → Active''s Churn rate card), over cma.assert_subscriptions_filter, cma.subscriptions_scope_of, cma.subscription_rows_of and cma.subscriptions_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
+values ('0009zh', 'Customers → Subscriptions (brief B39 continued, Part B39d): cma.subscriptions_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles, the movements and rates per month, the stores'' starts, renewal survival, the mix and the list''s first page, from the subscription facts'' takes), cma.subscription_rows (a page of the list or the file''s rows), cma.subscription_file_record (the audit row of every read that hands out rows: records, months or rows) and cma.subscriptions_churn_card (Customers → Active''s Churn rate card), over cma.assert_subscriptions_filter, cma.subscriptions_scope_of, cma.subscription_rows_of and cma.subscriptions_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
 on conflict (version) do nothing;
 
 commit;

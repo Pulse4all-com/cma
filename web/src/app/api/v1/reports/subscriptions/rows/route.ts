@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     requireAnyPermission(me, REPORT_PERMISSIONS);
     const q = subscriptionsRowsParams(new URL(request.url).searchParams, me);
     const list = await data().getSubscriptionRows(me, q);
-    if (list.setUp) await data().recordSubscriptionFile(me, "records", q, q.measure, list.rows.length);
+    if (list.setUp) await data().recordSubscriptionFile(me, "rows", q, q.measure, list.rows.length);
     return ok(list);
   });
 }

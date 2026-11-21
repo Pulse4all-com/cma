@@ -374,7 +374,7 @@ begin
     --    equals the page's last complete month for a market and for every market
     select count(*) into v_audit from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'subscription_file';
     perform set_config('role', 'cma_app', true);
-    perform cma.subscription_file_record('records', v_m1, v_s1, 'vp1', 'monthly', 'total', 12);
+    perform cma.subscription_file_record('months', v_m1, v_s1, 'vp1', 'monthly', 'total', 12, v_from, v_month);
     v_j := cma.subscriptions_churn_card(v_m1);
     v_j0 := cma.subscriptions_page(v_m1, null, null, null, v_from, v_month);
     v_k := cma.subscriptions_churn_card(null);
@@ -382,9 +382,9 @@ begin
     perform set_config('role', 'cma_owner', true);
     v_txt := (((select count(*) - v_audit from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'subscription_file') || ' '
                || (select a.new_row::text from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'subscription_file' order by a.changed_at desc, a.id desc limit 1))
-              = format('1 {"part": "records", "rows": 12, "store": "%s", "market": "%s", "measure": "total", "interval": "monthly", "proposition": "vp1"}', v_s1, v_m1))::text
+              = format('1 {"to": "%s", "from": "%s", "part": "months", "rows": 12, "store": "%s", "market": "%s", "measure": "total", "interval": "monthly", "proposition": "vp1"}', v_month, v_from, v_s1, v_m1))::text
              || ' ' || (v_j = (v_j0 #> '{tiles,rates}'))::text || ' ' || v_txt || ' ' || (v_j is not null)::text;
-    v_rows := v_rows || array['18', 'B9 the file''s audit row holds the filters, the measure and the rows only; Customers → Active''s card equals the page''s last complete month, for a market and for every market',
+    v_rows := v_rows || array['18', 'B9 the file''s audit row holds the part, the filters, the range, the measure and the rows only; Customers → Active''s card equals the page''s last complete month, for a market and for every market',
       case when v_txt = 'true true true true' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B10 another tenant's application sees none of the take: its own page has no history, the scope is empty

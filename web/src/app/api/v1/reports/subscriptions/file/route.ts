@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       const columns: FlashFileColumn[] = SUBSCRIPTIONS_MONTHS_COLUMNS.map((key) => ({ key, kind: key === "month" ? "date" : "number" }));
       const zone = page.timeZone || me.timeZone;
       const text = flashCsv(page.take.computedAt, filters, columns, rows, settings, zone);
-      await data().recordSubscriptionFile(me, "months", q, q.measure, rows.length);
+      await data().recordSubscriptionFile(me, "months", q, q.measure, rows.length, { from: page.from, to: page.to });
       return csvFile(text, subscriptionsFileName("months", q, asOfStamp(null, new Date(page.take.computedAt), zone)));
     }
     const q = subscriptionsRowsParams(sp, me, { file: true });

@@ -3794,10 +3794,10 @@ export const postgresData: CmaData = {
     });
   },
 
-  async recordSubscriptionFile(me, part, filter, measure, rows): Promise<void> {
+  async recordSubscriptionFile(me, part, filter, measure, rows, range): Promise<void> {
     await withTenant(ctx(me), async (q) => {
-      await q.query(`select cma.subscription_file_record($1, $2, $3::uuid, $4, $5, $6, $7)`,
-        [part, filter.market, filter.store, filter.proposition, filter.interval, measure, rows]);
+      await q.query(`select cma.subscription_file_record($1, $2, $3::uuid, $4, $5, $6, $7, $8::date, $9::date)`,
+        [part, filter.market, filter.store, filter.proposition, filter.interval, measure, rows, range?.from ?? null, range?.to ?? null]);
     });
   },
 
