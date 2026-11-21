@@ -23,7 +23,7 @@ Follow CLAUDE.md (Database, Performance) and docs/RUNBOOK.md, section 7. Nothing
 - A new tenant table: `select cma.setup_tenant_table('<table>');`
 - A new index on a busy table (`ingest_event`, `sync_run`, `subscription_event`, `crm_record`, `telephony_call`, `commerce_order`, `crm_call`, `commerce_customer`) never goes in the migration: give Martin a Terminal block with `create index concurrently if not exists`, one statement each, with `lock_timeout` and `statement_timeout`, and a check of `pg_index.indisvalid`. A constraint or other ACCESS EXCLUSIVE change on such a table goes last, directly before the `schema_migration` insert.
 - Last: `insert into cma.schema_migration (version, description) values ('<version>', '<what it does>') on conflict (version) do nothing;`
-- Performance traps (CLAUDE.md, Performance; night N06): scalar subqueries `(select s.x from s)` instead of `cross join s`; `min(<indexed column>) is not null` instead of `exists()` over a big table; no ordered aggregate over a long history; no grouped or windowed view that must take a caller's bound.
+- Performance traps (CLAUDE.md, Performance; night N06): scalar subqueries `(select s.x from s)` instead of `cross join s`; `min(<indexed column>) is not null` instead of `exists()` over a big table; no ordered aggregate over a long history; no grouped or windowed view that must take a caller's bound; measure on one CPU as well (prod has one vCPU) and force no parallel plans.
 
 ## 4. Verify script (the shape of `db/163_verify_remove_day.sql`)
 - Refuses `postgres` as session user; `set role cma_owner;` `select set_config('verify.provoke', 'false', false);` a temp results table; synthetic data only (example.invalid), fixed dates; blocks inside subtransactions that always roll back.
