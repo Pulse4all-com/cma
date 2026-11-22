@@ -3402,6 +3402,45 @@ cd ~/cma && cma_db prod && psql "$PGCONN" -f db/179_verify_job_reads.sql 2>&1 | 
 ```
 Expected in both: `0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL`; E5's rows say they compared on 37 keys and name the three left out: `source_figure_gap`, `subscription_device_units_mismatch` and `subscription_variant_unmapped` (covered by `211` and `215`). Any FAIL: report its row.
 
+## 19.13 Studio (cma-prod-pg): the exits and pauses as stored, before 0009zi
+The first run (22 Nov 2026) found exits into canceled on 21 November double on the CMA's side (DE 22 against the app's 11, GB 2 against 1): one cancellation arrives as `canceled` and as `status_changed` into canceled, and `214` counted both. `218` (addition 0009zi) counts one move into a status once and recounts the stored rows. Before it, one Run, as your own IAM login; counts and dates only:
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '60s';
+set role cma_owner;
+select coalesce(st.market, 'unknown') as store, f.figure_key, f.dims ->> 'status' as status, f.business_date, f.value, f.cma_value
+from cma.source_figure f
+left join cma.flash_subscription_stores_of(f.tenant_id) st on st.connection_id = f.connection_id
+where f.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+  and f.figure_key in ('exits', 'pauses') and f.cma_value is distinct from f.value
+order by coalesce(st.market, 'unknown') collate "C", f.figure_key collate "C", (f.dims ->> 'status') collate "C", f.business_date;
+reset role;
+```
+Expected: the rows where the CMA's value differs from the app's, at least DE and GB exits canceled on 2026-11-21 (11 against 22, 1 against 2); any later date read since (22 November's, and the months of 19.9 if that ran) may add rows. Keep the output for 19.16.
+
+## 19.14 Terminal: 0009zi in dev
+**Terminal**
+```bash
+run_migration dev 218_source_figure_moves.sql 219_verify_source_figure_moves.sql 0009zi-dev-$(date +%F) 215_verify_source_figures.sql
+```
+Expected: 218 ends with `COMMIT` (its NOTICE names the dev rows it recounted, likely `none changed`); 219's last row `PASS | 219_verify_source_figure_moves: 6 PASS, 0 FAIL` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 6 FAIL`; 215 `16 PASS, 0 FAIL` as before (unchanged); `records clean`. No data map refresh: 0009zi adds a function and no table, view or column.
+
+## 19.15 Terminal: 0009zi in prod
+No page and no ingest code changes with it, so it runs before or after the merge; the next figures job uses the new rule at once.
+
+**Terminal**
+```bash
+run_migration prod 218_source_figure_moves.sql 219_verify_source_figure_moves.sql 0009zi-prod-$(date +%F)
+```
+Expected: 218 `COMMIT`, its NOTICE `0009zi: the stored CMA values recounted: exits <n> row(s), <old> to <new>` (from 19.13: at least 2 rows, 24 to 12) and a pauses part only where a pause was reported twice; 219 in prod: A1 to A3 `PASS` (A3 `<n> rows, 0 differ`), B `REFUSED` (no dev seed, as 215), verdict `PASS, A ONLY | 219_verify_source_figure_moves: 3 PASS, 0 FAIL`.
+
+## 19.16 Studio (cma-prod-pg): the exits and pauses after 0009zi
+The query of 19.13 again. Expected: DE and GB exits canceled on 2026-11-21 are gone from the list (the CMA's 11 and 1 now equal the app's); a row still listed is a finding with its cause (a status count's movement, a late event), named in `records/0009zi-prod-<date>`.
+
+## 19.17 Browser: Reports → Data quality
+Refresh it after the next data-quality refresh (`data_quality.refresh_minutes`). Expected: `source_figure_gap` lists no DE or GB exits canceled for 21 November. Flash's snapshot of 22 November keeps the finding it took that morning (a stored snapshot is not recomputed); the next morning's snapshot reads the corrected values.
+
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 
 One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`). 20.0 to 20.5 and 20.8 ran on 21 November 2026 (`records/0009ze-dev-2026-11-21`, `records/0009ze-prod-2026-11-21`); 20.6 and 20.7 are open.
