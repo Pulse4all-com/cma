@@ -3243,7 +3243,7 @@ Expected: the audit's row with verdict `INFO`, no budget.
 
 # Phase 19. Juo's own figures (addition 0009zg, brief B39b)
 
-One step at a time; each says where it runs and what to expect. The change adds one table (`cma.source_figure`), two readers in `cma_read`, one check on Data quality (`source_figure_gap`), the job `ingest-source-figures` and the backfill object `source_figure`. It runs after Phase 21's `212` (addition 0009zf) in the database. The figures include `exits` (the app's moves into canceled, failed or expired). The job is created paused (19.5) and resumed at 19.8, after one manual run (19.6) and the first look at the stored figures (19.7). Counts and dates only in the chat, the PR and the record: the amounts are commercial and the repository is public until launch.
+One step at a time; each says where it runs and what to expect. The change adds one table (`cma.source_figure`), two readers in `cma_read`, one check on Data quality (`source_figure_gap`), the job `ingest-source-figures` and the backfill object `source_figure`. It runs after Phase 21's `212` (addition 0009zf) in the database. The figures include `exits` (the app's moves into canceled, failed or expired). The job is created paused (19.5) and resumed at 19.8, after one manual run (19.6) and the first look at the stored figures (19.7). Counts and dates only in the chat, the PR and the record: the amounts are commercial and the repository is public until launch. 19.2 to 19.11 ran on 21 November 2026 (`records/0009zg-dev-2026-11-21`, `records/0009zg-prod-2026-11-21`); 19.7's first query reads as corrected on 22 November (an ordinal with `collate` is refused: `collations are not supported by type integer`).
 
 ## 19.1 Terminal: the branch
 **Terminal**
@@ -3315,7 +3315,7 @@ left join cma.flash_subscription_stores_of(f.tenant_id) st on st.connection_id =
 where f.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
   and f.figure_key <> 'recurring_amount_active' and f.figure_key <> 'renewal_survival'
   and f.business_date >= current_date - 2
-order by 1 collate "C", 2 collate "C", 3 collate "C", 4;
+order by coalesce(st.market, 'unknown') collate "C", f.figure_key collate "C", (f.dims ->> 'status') collate "C", f.business_date;
 reset role;
 ```
 Expected: per store the four status counts for today and the flows for yesterday and today, each with the app's value and the CMA's value of the same scope. A store with no rows had no read (19.6): look at its log line first.
