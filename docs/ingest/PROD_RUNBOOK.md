@@ -3315,9 +3315,11 @@ left join cma.flash_subscription_stores_of(f.tenant_id) st on st.connection_id =
 where f.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
   and f.figure_key <> 'recurring_amount_active' and f.figure_key <> 'renewal_survival'
   and f.business_date >= current_date - 2
-order by 1 collate "C", 2 collate "C", 3 collate "C", 4;
+order by coalesce(st.market, 'unknown') collate "C", f.figure_key collate "C", (f.dims ->> 'status') collate "C", f.business_date;
 reset role;
 ```
+The order names its expressions: Postgres reads `order by 1 collate "C"` as the number 1 with a collation, not as the first column, and refuses it ("collations are not supported by type integer", Martin's first run on 22 Nov 2026).
+
 Expected: per store the four status counts for today and the flows for yesterday and today, each with the app's value and the CMA's value of the same scope. A store with no rows had no read (19.6): look at its log line first.
 
 The unit check: `recurring_amount_active` is stored in the currency's own unit as read (Martin, 21 Nov 2026). This shows ratios only, never an amount (amounts are commercial).
