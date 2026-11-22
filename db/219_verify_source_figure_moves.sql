@@ -10,7 +10,7 @@
 -- Studio shows no notices. Run as your own IAM login after 218_source_figure_moves.sql; then 215.
 --   A  A1 the addition after 0009zg; A2 cma.source_figure_moves_of and the write the application's and no one else's, the
 --      write's JIT still off and its exits and pauses read through the rule; A3 every stored exits and pauses row's CMA
---      value equals the rule's recount for the moment it was taken (218's recount, and every read since)
+--      value equals the rule's recount of the events the CMA held when it was taken (218's recount, and every read since)
 --   B  on a throwaway tenant (Europe/London), one subscriptions connection, the day D (yesterday in London):
 --      B1 the write as the ingest: exits into canceled 4 where 214's rule gave 8 (one cancellation reported as canceled
 --         and as status_changed, at one instant and a second apart: 1 each; cancel, reactivate, cancel: 2; a report into
@@ -19,7 +19,8 @@
 --         (paused and status_changed into paused: 1; pause, resume, pause: 2); renewals and purchases unchanged
 --      B2 B39c's moves (cma.subscription_moves_of, the Churn rate's and Failed rate's input) on the same events: churned,
 --         moved_to_failed and paused on D equal the figures (4, 2, 3), and none of the double reports is a second move
---      B3 the rule against the day's bounds: an event at D 00:00 counts, at D + 1 00:00 not
+--      B3 the rule against the day's bounds: an event at D 00:00 counts, at D + 1 00:00 not; an event the CMA held only
+--         after the moment asked for (synced_at) is not counted
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
 
@@ -63,9 +64,9 @@ begin
 
   -- A2. the two functions the application's and no one else's; the write's JIT off and its exits and pauses by the rule
   select string_agg(f, ', ') into v_bad
-  from unnest(array['cma.source_figure_moves_of(uuid,uuid,text,timestamptz,timestamptz)', 'cma.ingest_upsert_source_figures(uuid,uuid,jsonb)']) f
+  from unnest(array['cma.source_figure_moves_of(uuid,uuid,text,timestamptz,timestamptz,timestamptz)', 'cma.ingest_upsert_source_figures(uuid,uuid,jsonb)']) f
   where to_regprocedure(f) is null or not has_function_privilege('cma_app', f, 'execute') or has_function_privilege('public', f, 'execute');
-  select coalesce(array_to_string(p.proconfig, ','), '-') || ' ' || (p.prosrc like '%cma.source_figure_moves_of(v_tenant, p_connection_id, ''paused''%')
+  select coalesce(array_to_string(p.proconfig, ','), '-') || ' ' || (p.prosrc like '%cma.source_figure_moves_of(v_tenant, p_connection_id, ''paused''%now())%')
          || ' ' || (p.prosrc like '%cma.source_figure_moves_of(v_tenant, p_connection_id, it.dims ->> ''status''%')
          || ' ' || (p.prosrc like '%e.status_to = it.dims%')
   into v_txt
@@ -83,11 +84,11 @@ begin
                cma.source_figure_moves_of(f.tenant_id, f.connection_id,
                                           case f.figure_key when 'pauses' then 'paused' else f.dims ->> 'status' end,
                                           f.business_date::timestamp at time zone t.timezone,
-                                          least((f.business_date + 1)::timestamp at time zone t.timezone, f.cma_at))::numeric as recount
+                                          (f.business_date + 1)::timestamp at time zone t.timezone, f.cma_at)::numeric as recount
         from cma.source_figure f
         join cma.tenant t on t.id = f.tenant_id
         where f.figure_key in ('exits', 'pauses') and f.cma_value is not null and f.cma_at is not null) x;
-  insert into verify_0009zi values (3, 'A3 every stored exits and pauses row''s CMA value equals the rule''s recount for the moment it was taken (every tenant; counts only)',
+  insert into verify_0009zi values (3, 'A3 every stored exits and pauses row''s CMA value equals the rule''s recount of the events the CMA held when it was taken (every tenant; counts only)',
     case when v_txt like '% rows, 0 differ' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'missing'));
 end
 $$;
@@ -208,9 +209,11 @@ begin
     insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at, status_from, status_to)
     values (v_t, v_sub, 'verifysubs', 'e1-a', 'e1', 'status_changed', v_d0, 'active', 'expired'),
            (v_t, v_sub, 'verifysubs', 'e2-a', 'e2', 'status_changed', v_d1, 'active', 'expired');
-    v_txt := cma.source_figure_moves_of(v_t, v_sub, 'expired', v_d0, v_d1) || ' ' || cma.source_figure_moves_of(v_t, v_sub, 'expired', v_d1, v_d1 + interval '1 day');
-    v_rows := v_rows || array['13', 'B3 the day''s bounds: a move at D 00:00 counts on D, one at D + 1 00:00 on the next day',
-      case when v_txt = '1 1' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_txt := cma.source_figure_moves_of(v_t, v_sub, 'expired', v_d0, v_d1, now()) || ' ' || cma.source_figure_moves_of(v_t, v_sub, 'expired', v_d1, v_d1 + interval '1 day', now());
+    -- an event the CMA came to hold after a moment is not counted for it: e1's report, held from now on, unknown an hour ago
+    v_txt := v_txt || ' ' || cma.source_figure_moves_of(v_t, v_sub, 'expired', v_d0, v_d1, now() - interval '1 hour');
+    v_rows := v_rows || array['13', 'B3 the day''s bounds: a move at D 00:00 counts on D, one at D + 1 00:00 on the next day; an event the CMA held only after the moment asked for is not counted',
+      case when v_txt = '1 1 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception

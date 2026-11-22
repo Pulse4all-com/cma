@@ -3318,7 +3318,7 @@ where f.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscript
 order by coalesce(st.market, 'unknown') collate "C", f.figure_key collate "C", (f.dims ->> 'status') collate "C", f.business_date;
 reset role;
 ```
-The order names its expressions: Postgres reads `order by 1 collate "C"` as the number 1 with a collation, not as the first column, and refuses it ("collations are not supported by type integer", Martin's first run on 22 Nov 2026).
+The order names its expressions: Postgres reads `order by 1 collate "C"` as the number 1 with a collation, not as the first column, and refuses it ("collations are not supported by type integer").
 
 Expected: per store the four status counts for today and the flows for yesterday and today, each with the app's value and the CMA's value of the same scope. A store with no rows had no read (19.6): look at its log line first.
 
@@ -3417,7 +3417,15 @@ where f.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscript
 order by coalesce(st.market, 'unknown') collate "C", f.figure_key collate "C", (f.dims ->> 'status') collate "C", f.business_date;
 reset role;
 ```
-Expected: the rows where the CMA's value differs from the app's, at least DE and GB exits canceled on 2026-11-21 (11 against 22, 1 against 2); any later date read since (22 November's, and the months of 19.9 if that ran) may add rows. Keep the output for 19.16.
+Expected: the rows where the CMA's value differs from the app's, at least DE and GB exits canceled on 2026-11-21 (11 against 22, 1 against 2); any later date read since (22 November's, and the months of 19.9 if that ran) may add rows. Keep the output for 19.16. The rows 218 recounts, for its size:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select f.figure_key, count(*) as stored_rows from cma.source_figure f where f.figure_key in ('exits', 'pauses') group by 1 order by 1;
+reset role;
+```
+Expected: a few rows a store and day read (exits three statuses, pauses one); 218 counts each once, some milliseconds a row.
 
 ## 19.14 Terminal: 0009zi in dev
 **Terminal**
@@ -3427,7 +3435,7 @@ run_migration dev 218_source_figure_moves.sql 219_verify_source_figure_moves.sql
 Expected: 218 ends with `COMMIT` (its NOTICE names the dev rows it recounted, likely `none changed`); 219's last row `PASS | 219_verify_source_figure_moves: 6 PASS, 0 FAIL` and provoked `PROVOKED, NOT A PASS | … 0 PASS, 6 FAIL`; 215 `16 PASS, 0 FAIL` as before (unchanged); `records clean`. No data map refresh: 0009zi adds a function and no table, view or column.
 
 ## 19.15 Terminal: 0009zi in prod
-No page and no ingest code changes with it, so it runs before or after the merge; the next figures job uses the new rule at once.
+No page and no ingest code changes with it, so it runs before or after the merge; the next figures job uses the new rule at once. Run it away from the hourly figures job (`41 * * * *`), so the job's write never waits on the rows the recount holds until its commit.
 
 **Terminal**
 ```bash
@@ -3436,7 +3444,7 @@ run_migration prod 218_source_figure_moves.sql 219_verify_source_figure_moves.sq
 Expected: 218 `COMMIT`, its NOTICE `0009zi: the stored CMA values recounted: exits <n> row(s), <old> to <new>` (from 19.13: at least 2 rows, 24 to 12) and a pauses part only where a pause was reported twice; 219 in prod: A1 to A3 `PASS` (A3 `<n> rows, 0 differ`), B `REFUSED` (no dev seed, as 215), verdict `PASS, A ONLY | 219_verify_source_figure_moves: 3 PASS, 0 FAIL`.
 
 ## 19.16 Studio (cma-prod-pg): the exits and pauses after 0009zi
-The query of 19.13 again. Expected: DE and GB exits canceled on 2026-11-21 are gone from the list (the CMA's 11 and 1 now equal the app's); a row still listed is a finding with its cause (a status count's movement, a late event), named in `records/0009zi-prod-<date>`.
+The query of 19.13 again. Expected: DE and GB exits canceled on 2026-11-21 are gone from the list (the CMA's 11 and 1 now equal the app's); a row still listed is a finding with its cause, named in `records/0009zi-prod-<date>`. Then 19.7's first query: expected the 108 figures of the first run all equal (106 before). The rule trusts the events' history: a move the app made without an event (the audit's status_chain) hides the next report into the same status, so a failed or pauses figure that matched before and differs now names that cause.
 
 ## 19.17 Browser: Reports → Data quality
 Refresh it after the next data-quality refresh (`data_quality.refresh_minutes`). Expected: `source_figure_gap` lists no DE or GB exits canceled for 21 November. Flash's snapshot of 22 November keeps the finding it took that morning (a stored snapshot is not recomputed); the next morning's snapshot reads the corrected values.

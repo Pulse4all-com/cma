@@ -24,19 +24,31 @@
 -- before the event is the one its previous status event set (by time, then the event's id in "C" order, as
 -- cma.subscription_moves_of orders them), else the event's own status_from. So the second report of one cancellation is
 -- no move, a cancel, reactivation and cancel on one day are two, and a report into canceled of a subscription canceled the
--- day before is none. This is the move cma.subscription_moves_of reads for the Churn rate and the Failed rate (B39c),
--- which already counts each move once (219 C proves both on the same events).
+-- day before is none. It is the same rule for reported moves as cma.subscription_moves_of's for the Churn rate and the
+-- Failed rate (B39c), which already counts each move once (219 B2 proves both on the same events). Where they differ,
+-- none of it the double report: that one reads present subscriptions only, adds a last move into the current status
+-- where no event reports it, takes a first event's missing status_from as active and calls a move from one ended status
+-- into another no churn; this one counts the events of every subscription the app reported, a first event without a
+-- status_from as a move, and a move into expired from canceled as an exit into expired. Only events the CMA held by a moment count (synced_at, the moment the
+-- CMA first held the event; events are append-only), so a stored value can be counted again exactly as it was taken.
+-- A data prerequisite (CLAUDE.md, principle 6): a move the app reports with no event (the audit's status_chain, 210) is
+-- missing here as in cma.subscription_moves_of: canceled, reactivated without an event, canceled again counts once.
 --
 -- What it adds
---   function   cma.source_figure_moves_of(tenant, connection, status, from, to): the moves of a connection into a status
---              between two moments (the application's: the write calls it under the ingest)
+--   function   cma.source_figure_moves_of(tenant, connection, status, from, to, known_by): the moves of a connection into a
+--              status between two moments, of the events the CMA held by known_by (the application's: the write calls it
+--              under the ingest with now())
 -- What it re-creates
 --   cma.ingest_upsert_source_figures(uuid,uuid,jsonb)   214: exits and pauses count moves (the rest unchanged); JIT off
 -- What it changes in stored rows
---   cma.source_figure.cma_value of every exits and pauses row: recounted with the rule for the same moment (its business
---   date's day, up to cma_at when the row was read during that day), cma_at kept: the value is the CMA's for the moment it
---   was taken. A NOTICE names the rows changed per figure. No audit trigger on the table (214): the rows changed are the
---   NOTICE's count and 219's A3, which compares every stored row with the rule.
+--   cma.source_figure.cma_value of every exits and pauses row: recounted with the rule for its business date, of the
+--   events the CMA held at cma_at, cma_at kept: the value is the CMA's as it was taken, counted by the rule. A NOTICE names the rows changed per figure (psql shows it; Studio does not, so the
+--   runbook runs this from the Terminal and lists the differing rows before and after from Studio: PROD_RUNBOOK 19.13 and
+--   19.16). No audit trigger on the table (214); 219's A3 proves the state after it, not what it changed.
+-- Who reads the recounted values: cma.source_figure_rows_of and cma.source_figure_compare_of, so data quality's
+-- source_figure_gap and through it Flash's findings (from their next refresh; a stored Flash snapshot keeps what it took),
+-- and cma_read.source_figure. #308's source counts (216) read only subscriptions_in_status and recurring_amount_active,
+-- which this does not touch.
 -- No index: the day's events of a connection are found as 214 found them (subscription_event_occurred_idx), and each
 -- event's previous status event through subscription_event_subscription_idx (tenant, connection, subscription); a day
 -- holds some 20 such events a store.
@@ -67,16 +79,17 @@ $$;
 -- 1. The moves of a connection into a status between two moments
 -- ---------------------------------------------------------------------------------------------
 -- Keyed by p_tenant_id (the owner's recount below reads every tenant; under the application row-level security keeps the
--- current tenant's rows). Events from p_from up to, not including, p_to
+-- current tenant's rows). Events from p_from up to, not including, p_to, the CMA held by p_known_by (synced_at), the
+-- previous status event among them too
 create or replace function cma.source_figure_moves_of(p_tenant_id uuid, p_connection_id uuid, p_status text, p_from timestamptz,
-                                                      p_to timestamptz)
+                                                      p_to timestamptz, p_known_by timestamptz)
 returns bigint
 language sql stable
 as $$
   select count(*)
   from cma.subscription_event e
   where e.tenant_id = p_tenant_id and e.connection_id = p_connection_id
-    and e.occurred_at >= p_from and e.occurred_at < p_to
+    and e.occurred_at >= p_from and e.occurred_at < p_to and e.synced_at <= p_known_by
     and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
     and case e.event_type when 'status_changed' then e.status_to when 'canceled' then 'canceled' when 'paused' then 'paused'
                           else 'active' end = p_status
@@ -85,7 +98,7 @@ as $$
                                            when 'paused' then 'paused' else 'active' end
                    from cma.subscription_event p
                    where p.tenant_id = p_tenant_id and p.connection_id = p_connection_id
-                     and p.subscription_source_id = e.subscription_source_id
+                     and p.subscription_source_id = e.subscription_source_id and p.synced_at <= p_known_by
                      and p.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
                      and (p.occurred_at < e.occurred_at
                           or (p.occurred_at = e.occurred_at and p.source_id collate "C" < e.source_id collate "C"))
@@ -93,8 +106,8 @@ as $$
                    limit 1),
                   e.status_from) is distinct from p_status
 $$;
-comment on function cma.source_figure_moves_of(uuid, uuid, text, timestamptz, timestamptz) is
-  'The moves of a subscriptions connection into a status between two moments (addition 0009zi): events that set a status while the subscription was not in it already (its previous status event''s status, else the event''s status_from), so one move counts once however many of the app''s events report it';
+comment on function cma.source_figure_moves_of(uuid, uuid, text, timestamptz, timestamptz, timestamptz) is
+  'The moves of a subscriptions connection into a status between two moments, of the events the CMA held by a third (synced_at) (addition 0009zi): events that set a status while the subscription was not in it already (its previous status event''s status, else the event''s status_from), so one move counts once however many of the app''s events report it';
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. The write: exits and pauses count moves
@@ -190,10 +203,10 @@ begin
                  -- cancellation arrives as canceled and as status_changed into canceled)
                  when 'pauses' then
                    cma.source_figure_moves_of(v_tenant, p_connection_id, 'paused', (it.business_date::timestamp at time zone v_zone),
-                                              ((it.business_date + 1)::timestamp at time zone v_zone))::numeric
+                                              ((it.business_date + 1)::timestamp at time zone v_zone), now())::numeric
                  when 'exits' then
                    cma.source_figure_moves_of(v_tenant, p_connection_id, it.dims ->> 'status', (it.business_date::timestamp at time zone v_zone),
-                                              ((it.business_date + 1)::timestamp at time zone v_zone))::numeric
+                                              ((it.business_date + 1)::timestamp at time zone v_zone), now())::numeric
                end
            end as cma_value
     from it
@@ -233,11 +246,11 @@ do $$
 declare
   f text;
 begin
-  foreach f in array array['cma.source_figure_moves_of(uuid,uuid,text,timestamptz,timestamptz)', 'cma.ingest_upsert_source_figures(uuid,uuid,jsonb)'] loop
+  foreach f in array array['cma.source_figure_moves_of(uuid,uuid,text,timestamptz,timestamptz,timestamptz)', 'cma.ingest_upsert_source_figures(uuid,uuid,jsonb)'] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
   end loop;
-  -- a create or replace keeps a function's settings, a drop does not: said again, as 214 set it
+  -- a create or replace replaces a function's settings: JIT off said again, as 214 set it
   execute 'alter function cma.ingest_upsert_source_figures(uuid,uuid,jsonb) set jit = off';
 end
 $$;
@@ -245,9 +258,9 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 3. The stored values recounted
 -- ---------------------------------------------------------------------------------------------
--- Every exits and pauses row with a CMA value, every tenant: the moves of its business date in the tenant's zone, up to
--- cma_at where the row was taken during that day (a read of the current day), so the value stays the CMA's at cma_at.
--- Only a value that differs is written; cma_at is kept
+-- Every exits and pauses row with a CMA value, every tenant: the moves of its business date in the tenant's zone among
+-- the events the CMA held at cma_at, so the value is the one 214 took then, counted by the rule. Only a value that
+-- differs is written; cma_at is kept
 do $$
 declare
   v_changes text;
@@ -257,7 +270,7 @@ begin
            cma.source_figure_moves_of(f.tenant_id, f.connection_id,
                                       case f.figure_key when 'pauses' then 'paused' else f.dims ->> 'status' end,
                                       f.business_date::timestamp at time zone t.timezone,
-                                      least((f.business_date + 1)::timestamp at time zone t.timezone, f.cma_at))::numeric as new_value
+                                      (f.business_date + 1)::timestamp at time zone t.timezone, f.cma_at)::numeric as new_value
     from cma.source_figure f
     join cma.tenant t on t.id = f.tenant_id
     where f.figure_key in ('exits', 'pauses') and f.cma_value is not null and f.cma_at is not null
