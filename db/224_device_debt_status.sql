@@ -8,28 +8,35 @@
 -- own IAM login: dev first, then 225_verify_device_debt_status.sql there (and its provoked run), then the verifies that
 -- read what this changes:
 --   the load, its row types and the staging (cma.device_raw_ok, cma.device_import_staging_insert, cma.device_rows_apply,
---     cma.device_snapshot_apply, cma.ingest_load_device_chunk): 113, 115, 117 and 169; 113's A2 (the device's and the
---     staging's columns), 117's A2 (the row types' attribute counts) and 169's S1 (the staging's last columns) are edited by
---     this change;
+--     cma.device_snapshot_apply, cma.ingest_load_device_chunk): 113, 115, 117 and 169;
 --   connection_field's checks (as text): 85, 99, 115, 137 and 169;
---   cma.maintenance_items_of (dropped and created: two more columns) and its readers (the maintenance reads of 116, cma.flash_devices_of,
---     cma.data_quality_of, cma.fleet_devices_of): 113, 117, 123, 137, 147, 149, 161, 179, 181, 189 and 193;
---   cma.data_quality_assets_checks, cma.data_quality_of and cma.data_quality_fix_in: 41, 69, 73, 75, 101, 105, 113 (its
---     B13 lists the assets checks and is edited by this change), 117, 123, 133, 137, 161, 179, 211 and 215;
+--   cma.maintenance_items_of (dropped and created: two more columns) and its readers (112's cma.maintenance_due_of, made
+--     again here, and cma_read.maintenance_due_rows; 116's cma.maintenance_bucket_dates_of, cma.maintenance_bucketed_of and
+--     the forms over them; cma.flash_devices_of, cma.data_quality_of, cma.fleet_devices_of; each names its columns):
+--     113, 117, 123, 137, 147, 149, 161, 179, 181, 189 and 193;
+--   cma.data_quality_assets_checks, cma.data_quality_of and cma.data_quality_fix_in: 41, 69, 73, 75, 101, 105, 113, 117,
+--     123, 133, 137, 161, 179, 211 and 215;
 --   the installed base's definition (cma.flash_overviews, cma.flash_compute_of, cma.flash_labels_of, cma.flash_rows_of,
---     cma.flash_definition_version): 123, 137, 139, 143, 147, 149, 159, 161, 173, 181 and 189 (147's set and measure lists
---     are edited by this change);
+--     cma.flash_definition_version): 123, 137, 139, 143, 147, 149, 159, 161, 173, 181 and 189;
+--   edited by this change, where they pin a shape this changes (each edit conditional on 0009zl's row, or a no-op before
+--   it): 113 (A2 the columns, A7 and B13 the assets checks), 117 (A2 the row types' attribute counts), 123 (B2 the
+--   installed base's figures, B8 the versions), 137 (A4 the catalog and versions, B7 the stored version), 139 (A2's
+--   version helper), 147 (S3 the sets and version, D2's comparison without the new set and measure), 149 and 161 (the
+--   lists compared with 148's without each row's debt_status), 159 (A4 tenant two's take one row more), 169 (S2 the
+--   staging's last columns) and 181 (D1's comparison without the new set and measure); and 131_time_all.sql
+--   (Maintenance's read in its new form, the debt filters' records and Maintenance's list);
 --   then the data map's schema refresh from dev on this branch; then prod: the point-in-time recovery check, 224, 225 and
 --   the same verifies, before the merge. The ingest of main sends rows without debt_status, which this script's chunk load
 --   still takes (a missing key is an empty value); the ingest of this change sends it, which the database before this
 --   script refuses, so in prod this script runs before that ingest is deployed. The web of main calls the Maintenance
 --   report's forms of 112, which this script leaves as they were; the web of this change calls the new forms.
 --
--- Why (Martin, 23 November 2026; brief 0009zc, numbered 0009zl because 0009zc is 206's; Decision log, 23 Nov 2026): the
+-- Why (Martin, 23 November 2026; the brief named the addition 0009zc, which is 206's, so it is 0009zl; Decision log, 23
+-- Nov 2026): the
 -- asset register (Airtable 2.0, Installed Base) gains the field debt_status. A device under a debt status gets no
 -- maintenance until the customer pays (the register empties the field) or the device comes back (its status leaves the
--- field). The register's analysis of 22 November 2026: 522 of 7,078 Active/Customer devices carry one of four labels, none
--- on any other status, holding about 40% of the recorded past-due pads and batteries. All four pause maintenance.
+-- field). The register's analysis of 22 November 2026 (figures in the PR, not here: the repository is public): four
+-- labels, on devices in the field only. All four pause maintenance.
 --
 -- What it adds
 --   the catalog        cma.device_debt_status (tenant, key, name, pauses_maintenance default true, sort order) and
@@ -56,7 +63,7 @@
 --                      cma.maintenance_bucket_dates_of (8 arguments), cma.maintenance_page_of (8), cma.maintenance_rows_of
 --                      (11), cma.maintenance_page (6) and cma.maintenance_rows (9), none with a default, so no call matches
 --                      two forms; the filter is cma.maintenance_debt_matches (null every device, unpaused, none, any or a
---                      key) and cma.assert_maintenance_debt checks it (CMA04). The page's answer gains paused_devices,
+--                      key) and cma.assert_maintenance_debt checks it (CMA04). The page's answer gains maintenance_paused_devices,
 --                      debt and debt_statuses; a row ends with its device's debt_status_key and maintenance_paused. 116's
 --                      and 112's forms stay as they were (the web of main, 113 and 117 call them)
 --   data quality       device_debt_status_unmapped (305, after the asset register's checks): a device whose register gives
@@ -125,7 +132,8 @@ comment on column cma.device_debt_status.pauses_maintenance is 'Whether the Main
 create or replace trigger set_updated_at before update on cma.device_debt_status
   for each row execute function cma.set_updated_at();
 select cma.setup_tenant_table('cma.device_debt_status');
--- The application never deletes a catalog row (112's rule): a status no device carries simply counts nothing
+-- The application never deletes a catalog row (112's rule): a status no device carries simply counts nothing. Note:
+-- cma.setup_tenant_table grants delete, so a later script that calls it on this table repeats this revoke (225's S1 checks)
 revoke delete on cma.device_debt_status from cma_app;
 
 -- A register's debt status label to its key, matched lower-cased and trimmed. One key per alias; several aliases may
@@ -773,28 +781,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 6. The register's field as configuration
--- ---------------------------------------------------------------------------------------------
--- As 0009j (168), with debt_status as a field and among an asset register's device fields (each list's new entry last)
-alter table cma.connection_field drop constraint if exists connection_field_field_check;
-alter table cma.connection_field add constraint connection_field_field_check
-  check (field = any (array['market', 'language', 'country', 'currency', 'store', 'amount', 'source_channel', 'category', 'ref', 'created_at',
-                            'reason', 'serial', 'model', 'status', 'warehouse_ref', 'customer_ref', 'subscription_ref', 'order_ref',
-                            'first_shipped_on', 'stock_received_on', 'last_shipped_on', 'warranty_until', 'end_of_life_on', 'expires_on',
-                            'segment', 'pledge_ref', 'debt_status']));
-alter table cma.connection_field drop constraint if exists connection_field_entity_field_check;
-alter table cma.connection_field add constraint connection_field_entity_field_check
-  check (case when entity = 'contact' then field = any (array['country', 'language', 'currency', 'store', 'ref', 'created_at', 'segment'])
-              when entity = 'device' then field = any (array['serial', 'model', 'status', 'country', 'warehouse_ref', 'customer_ref',
-                                                             'subscription_ref', 'order_ref', 'first_shipped_on', 'stock_received_on',
-                                                             'last_shipped_on', 'warranty_until', 'end_of_life_on', 'ref', 'pledge_ref',
-                                                             'language', 'debt_status'])
-              when entity = 'device_component' then field = any (array['serial', 'expires_on'])
-              when field = 'reason' then entity in ('deal', 'ticket')
-              else field = any (array['market', 'language', 'currency', 'amount', 'source_channel', 'category']) end);
-
--- ---------------------------------------------------------------------------------------------
--- 7. Maintenance: the forecast keeps every item; the pause is a filter
+-- 6. Maintenance: the forecast keeps every item; the pause is a filter
 -- ---------------------------------------------------------------------------------------------
 -- As 0008zk (116), the same rows, each with its device's debt status key and maintenance_paused (its debt status pauses
 -- maintenance and its device status is in the field). Every item stays: the pause is a filter of the Maintenance report's reads, never a deletion, and every
@@ -923,7 +910,7 @@ as $$
     and cma.maintenance_debt_matches(p_debt, i.debt_status_key, i.maintenance_paused)
 $$;
 
--- As 0008zk's (116), with the debt status filter, and paused_devices, debt and debt_statuses in the answer. A form of its
+-- As 0008zk's (116), with the debt status filter, and maintenance_paused_devices, debt and debt_statuses in the answer. A form of its
 -- own (eight arguments); 116's stays as it was
 -- based on: 116_asset_sync_load.sql
 create or replace function cma.maintenance_page_of(p_tenant_id uuid, p_from_month date, p_months integer, p_market text, p_model text,
@@ -998,7 +985,7 @@ as $$
                   and cma.maintenance_debt_matches(p_debt, t.debt_status_key, t.paused)),
     -- 0009zl: the tracked devices of the scope, market and model whose debt status pauses maintenance (the page says how
     -- many the default leaves out), the filter as asked, and the catalog's statuses in their order for the selector
-    'paused_devices', (select count(*) from tracked t
+    'maintenance_paused_devices', (select count(*) from tracked t
                        where (p_scope is null or (p_scope = 'field' and t.is_in_field) or (p_scope = 'stock' and t.is_in_stock))
                          and (p_market is null or t.market = p_market) and (p_model is null or t.model_key = p_model) and t.paused),
     'debt', p_debt,
@@ -1134,7 +1121,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 8. Data quality: device_debt_status_unmapped
+-- 7. Data quality: device_debt_status_unmapped
 -- ---------------------------------------------------------------------------------------------
 -- As 0008zi (112), plus device_debt_status_unmapped after the device checks (305: the asset register's checks end at 300,
 -- the cross-source checks begin at 310), shown as they are: once the tenant has an asset register set up, or while one
@@ -1583,7 +1570,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 9. The installed base: under_debt_status and the debt status
+-- 8. The installed base: under_debt_status and the debt status
 -- ---------------------------------------------------------------------------------------------
 -- As 0008zy (146), with the installed base's dim debt_status (a debt status's key, none without one), its set
 -- [market, model, debt_status] and the measure under_debt_status (devices in the field with a debt status)
@@ -2021,12 +2008,15 @@ begin
                   and ($1 ->> ''model'' is null or x.model = $1 ->> ''model'') and ($1 ->> ''warehouse'' is null or x.warehouse = $1 ->> ''warehouse'')
                   and ($1 ->> ''link'' is null or x.link = $1 ->> ''link'')
                   and ($1 ->> ''subscription_status'' is null or x.subscription_status = $1 ->> ''subscription_status'')
+                  -- each case hashes the devices with a debt status (the partial index device_debt_status_idx), a small
+                  -- set: none is the devices not among them
                   and ($1 ->> ''debt_status'' is null
-                       or x.device_id in (select dv.id from cma.device dv
-                                          where dv.tenant_id = $2 and dv.source_deleted_at is null
-                                            and case $1 ->> ''debt_status'' when ''none'' then dv.debt_status_key is null
-                                                                            when ''any'' then dv.debt_status_key is not null
-                                                                            else dv.debt_status_key = $1 ->> ''debt_status'' end))
+                       or ($1 ->> ''debt_status'' = ''none''
+                           and x.device_id not in (select dv.id from cma.device dv where dv.tenant_id = $2 and dv.debt_status_key is not null))
+                       or ($1 ->> ''debt_status'' <> ''none''
+                           and x.device_id in (select dv.id from cma.device dv
+                                               where dv.tenant_id = $2 and dv.debt_status_key is not null
+                                                 and ($1 ->> ''debt_status'' = ''any'' or dv.debt_status_key = $1 ->> ''debt_status''))))
                   and ($1 ->> ''serial'' is null or lower(x.serial) = lower(btrim($1 ->> ''serial'')))
                   and ($1 ->> ''without_subscription_ref'' is null
                        or x.device_id in (select u.device_id from cma.field_devices_without_subscription_ref_of($2) u))
@@ -2124,6 +2114,28 @@ $$;
 alter function cma.flash_rows_of(uuid, text, jsonb, text, boolean, integer, integer, date, date) set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
+-- 9. The register's field as configuration
+-- ---------------------------------------------------------------------------------------------
+-- As 0009j (168), with debt_status as a field and among an asset register's device fields (each list's new entry last).
+-- Its constraints are swapped last, beside the grants, so connection_field's lock is held for the commit alone
+alter table cma.connection_field drop constraint if exists connection_field_field_check;
+alter table cma.connection_field add constraint connection_field_field_check
+  check (field = any (array['market', 'language', 'country', 'currency', 'store', 'amount', 'source_channel', 'category', 'ref', 'created_at',
+                            'reason', 'serial', 'model', 'status', 'warehouse_ref', 'customer_ref', 'subscription_ref', 'order_ref',
+                            'first_shipped_on', 'stock_received_on', 'last_shipped_on', 'warranty_until', 'end_of_life_on', 'expires_on',
+                            'segment', 'pledge_ref', 'debt_status']));
+alter table cma.connection_field drop constraint if exists connection_field_entity_field_check;
+alter table cma.connection_field add constraint connection_field_entity_field_check
+  check (case when entity = 'contact' then field = any (array['country', 'language', 'currency', 'store', 'ref', 'created_at', 'segment'])
+              when entity = 'device' then field = any (array['serial', 'model', 'status', 'country', 'warehouse_ref', 'customer_ref',
+                                                             'subscription_ref', 'order_ref', 'first_shipped_on', 'stock_received_on',
+                                                             'last_shipped_on', 'warranty_until', 'end_of_life_on', 'ref', 'pledge_ref',
+                                                             'language', 'debt_status'])
+              when entity = 'device_component' then field = any (array['serial', 'expires_on'])
+              when field = 'reason' then entity in ('deal', 'ticket')
+              else field = any (array['market', 'language', 'currency', 'amount', 'source_channel', 'category']) end);
+
+-- ---------------------------------------------------------------------------------------------
 -- 10. Grants: the application only
 -- ---------------------------------------------------------------------------------------------
 do $$
@@ -2167,7 +2179,7 @@ revoke execute on function cma.device_import_staging_insert() from public;
 -- 11. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zl', 'Debt status on devices (brief 0009zc): the catalog cma.device_debt_status (key, name, pauses_maintenance, sort order) and cma.device_debt_status_alias with cma.set_device_debt_status, cma.set_device_debt_status_alias and cma.device_debt_status_key_of; cma.device.debt_status_key (null without one or when unmapped; raw keeps the label); the load''s row types, the staging and the load (cma.device_rows_apply''s answer gains unmapped_debt_status) with debt_status; connection_field takes debt_status; cma.maintenance_items_of gains debt_status_key and maintenance_paused (every item kept) and the Maintenance report''s new forms take a debt status filter (null, unpaused, none, any or a key; 112''s and 116''s forms kept); data quality device_debt_status_unmapped (305, fixed in the asset register); the installed base''s measure under_debt_status, dim debt_status and set [market, model, debt_status], its labels and records'' filter, definition version 0009zl')
+values ('0009zl', 'Debt status on devices (the brief named it 0009zc, 206''s addition): the catalog cma.device_debt_status (key, name, pauses_maintenance, sort order) and cma.device_debt_status_alias with cma.set_device_debt_status, cma.set_device_debt_status_alias and cma.device_debt_status_key_of; cma.device.debt_status_key (null without one or when unmapped; raw keeps the label); the load''s row types, the staging and the load (cma.device_rows_apply''s answer gains unmapped_debt_status) with debt_status; connection_field takes debt_status; cma.maintenance_items_of gains debt_status_key and maintenance_paused (every item kept) and the Maintenance report''s new forms take a debt status filter (null, unpaused, none, any or a key; 112''s and 116''s forms kept); data quality device_debt_status_unmapped (305, fixed in the asset register); the installed base''s measure under_debt_status, dim debt_status and set [market, model, debt_status], its labels and records'' filter, definition version 0009zl')
 on conflict (version) do nothing;
 
 commit;

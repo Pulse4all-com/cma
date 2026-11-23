@@ -2,8 +2,8 @@
 
 /**
  * The filters of Reports → Maintenance (addition 0008zi): the horizon's first month, the market (K), the model (D) and
- * since addition 0009zl the debt status (B: Without a debt status, the default, leaves out every device whose maintenance
- * is paused; All devices; With a debt status; each debt status of the catalog in its order). Choosing keeps the horizon's
+ * since addition 0009zl the debt status (B: Maintenance not paused, the default, leaves out every device whose maintenance
+ * is paused; All devices; Without a debt status; With a debt status; each debt status of the catalog in its order). Choosing keeps the horizon's
  * length, the scope and the view and loads the page with the filter; an open device list closes. The address keys are
  * from, market, model and debt (left out for the default, all for every device).
  */
@@ -15,7 +15,7 @@ const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 f
 
 export interface MaintenanceFilterCopy {
   from: string; marketFilter: string; allMarkets: string; modelFilter: string; allModels: string; unknownMarket: string; unknownModel: string;
-  debtFilter: string; debtUnpaused: string; debtAll: string; debtAny: string;
+  debtFilter: string; debtUnpaused: string; debtNone: string; debtAll: string; debtAny: string;
 }
 
 /** The debt filter's value in the address and the select: unpaused (the default, left out of the address), all, any or a key */
@@ -39,7 +39,7 @@ export function MaintenanceFilters({ months, markets, models, fromMonth, current
   copy: MaintenanceFilterCopy;
 }) {
   const [pending, shown, choose] = usePendingChoice({ from: fromMonth, market, model, debt: debt ?? "all" });
-  const debtList = shown.debt && !["all", DEBT_DEFAULT, "any"].includes(shown.debt) && !debtStatuses.some((d) => d.key === shown.debt)
+  const debtList = shown.debt && !["all", DEBT_DEFAULT, "none", "any"].includes(shown.debt) && !debtStatuses.some((d) => d.key === shown.debt)
     ? [...debtStatuses, { key: shown.debt, name: shown.debt }] : debtStatuses;
   const marketList = market && !markets.includes(market) ? [...markets, market] : markets;
   const modelList = model && !models.some((m) => m.key === model) ? [...models, { key: model, name: null }] : models;
@@ -84,6 +84,7 @@ export function MaintenanceFilters({ months, markets, models, fromMonth, current
           onChange={(e) => go({ ...shown, debt: e.target.value })}>
           <option value="all">{copy.debtAll}</option>
           <option value={DEBT_DEFAULT}>{copy.debtUnpaused}</option>
+          <option value="none">{copy.debtNone}</option>
           <option value="any">{copy.debtAny}</option>
           {debtList.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
         </select>

@@ -374,7 +374,7 @@ export function maintenanceReport(devices: readonly MaintenanceDevice[], cat: Ma
     markets: [...new Set(tracked.map((d) => d.market ?? "unknown"))].sort(order.market),
     models: [...new Set(tracked.map((d) => d.model ?? "unknown"))].sort(order.model)
       .map((key) => ({ key, name: cat.models.find((m) => m.key === key)?.name ?? null })),
-    pausedDevices: inScope.filter((d) => debtOf(d, cat, flags(d).isInField).paused).length,
+    maintenancePausedDevices: inScope.filter((d) => debtOf(d, cat, flags(d).isInField).paused).length,
     debtStatuses: [...(cat.debtStatuses ?? [])].sort((x, y) => x.sortOrder - y.sortOrder || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0) || (x.key < y.key ? -1 : 1))
       .map((x) => ({ key: x.key, name: x.name, pausesMaintenance: x.pausesMaintenance })),
   };

@@ -507,10 +507,10 @@ const allowedZ = allowedTypesOf(mZ);
 const iRow = rowOf(recordOf("recFixture0009aaa"), mZ, { dateFormat: "dmy" });
 const iRowNone = rowOf(recordOf("recFixture0001aaa"), mZ, { dateFormat: "dmy" });
 const iText = rowOf({ id: "recText", fields: { [idOf("debt_status")]: " Check first " } }, mZ, { dateFormat: "dmy" });
-expect("I1 the mapping takes debt_status, a single select or text; a row carries the label as written, none as null; unmapped, the key is not in the row",
+expect("I1 the mapping takes debt_status, a single select only; a row carries the label as written, none as null; unmapped, the key is not in the row",
   [Object.keys(mZ.columns).length, fieldNames(mZ).length, allowedZ.get(idOf("debt_status")), iRow.row.debt_status, iRowNone.row.debt_status,
     Object.hasOwn(iRowNone.row, "debt_status"), iText.row.debt_status, Object.hasOwn(h2.row, "debt_status")],
-  [16, 23, ["singleselect", "singlelinetext", "multilinetext"], "In debt collection", null, true, "Check first", false],
+  [16, 23, ["singleselect"], "In debt collection", null, true, "Check first", false],
   [15, 22, [], null, "", false, " Check first ", true]);
 const storeZ = memStore(configOf({}, typed(FIELDS_0009ZL)));
 await airtable.reconcile({ connection: CONN, store: storeZ, budget, object: "device", counts: counts0() });

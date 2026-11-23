@@ -24,7 +24,8 @@
 -- until prod's runs set it, and its answer names each step's milliseconds; since addition 0009zg the source figures' due
 -- check, part a, and their comparison of today under Data quality, outside its set, both skip before
 -- 214_source_figures.sql; since addition 0009zl Maintenance's read is the page's form with the debt status filter, its
--- default unpaused, which skips before 224_device_debt_status.sql). Prod is the proof; dev's shared core is for
+-- default unpaused, and its device list, the installed base's records under a debt status filter and its measure
+-- under_debt_status are timed, each skipping before 224_device_debt_status.sql). Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -438,6 +439,12 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'forms {P}', 'forms whole period', $q$select * from cma.forms_report('{f}', '{t}', 'week', null, null, null) where period = 'current' and group_key is null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null, 'unpaused')$q$, 'overview', array['reports.view', 'performance.team']),
+-- since addition 0009zl: the device list of every bucket under the page's default filter, and the installed base's
+-- records under a debt status filter and the measure under_debt_status (each a list of its own request)
+('b', 'maintenance now', 'maintenance list all buckets', $q$select * from cma.maintenance_rows('{month}', 12, 'all', null, null, null, 'unpaused', 'exchanges', 500)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'records with a debt status page of 50', $q$select cma.flash_rows('installed_base', '{"debt_status": "any"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'records without a debt status page of 50', $q$select cma.flash_rows('installed_base', '{"debt_status": "none"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'under a debt status page of 50', $q$select cma.flash_rows('installed_base', '{"measure": "under_debt_status"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 -- Customers → Active (addition 0009l, decisions D13, D15 and D16): the page's four reads, each its own transaction,
 -- on one page here so their sum is held against the overview budget (the one live read they replace took 1.4 to 2.0 s at
 -- three times prod's volume): above and below the fold from their stored documents (class agent, 50 ms: a key lookup),
@@ -491,6 +498,12 @@ where page = 'data quality' and name = 'source figures compared today';
 -- form (42883)
 update pg_temp.reads_0131 set skip_state = '42883', skip_why = 'addition 0009zl has not run'
 where page = 'maintenance now' and name = 'maintenance 12 months';
+-- the device list is a read of its own request; the records under a debt status filter or its measure are refused (CMA04)
+-- by a database without 224
+update pg_temp.reads_0131 set in_set = false, skip_state = '42883', skip_why = 'addition 0009zl has not run'
+where page = 'maintenance now' and name = 'maintenance list all buckets';
+update pg_temp.reads_0131 set skip_state = 'CMA04', skip_why = 'addition 0009zl has not run'
+where page = 'installed base' and name in ('records with a debt status page of 50', 'records without a debt status page of 50', 'under a debt status page of 50');
 -- Customers → Active: the set is the page's four reads; what is computed without a stored document, the filtered list
 -- and the file are reads of other requests
 update pg_temp.reads_0131 set in_set = false

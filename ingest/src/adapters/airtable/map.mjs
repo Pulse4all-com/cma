@@ -8,10 +8,10 @@
  *                             subscription_ref, order_ref, first_shipped_on, stock_received_on, last_shipped_on,
  *                             warranty_until, end_of_life_on, since addition 0009j pledge_ref and language, and since
  *                             0009zl debt_status) → the Airtable field that feeds it. pledge_ref (the loan a device
- *                             secures; Pulse4all's maatje_id), language and debt_status (the register's debt status
- *                             label; Pulse4all's debt_status) take a single select (its option name) or a text field
- *                             only: any other type fails the read with field_type_changed (FIELD_TYPES, read.mjs
- *                             checkFields)
+ *                             secures; Pulse4all's maatje_id) and language take a single select (its option name) or
+ *                             a text field only, debt_status (the register's debt status label; Pulse4all's
+ *                             debt_status) a single select only: any other type fails the read with field_type_changed
+ *                             (FIELD_TYPES, read.mjs checkFields)
  *   entity device_component   field serial or expires_on, ref_system the component kind → its field
  *   entity device, field ref  ref_system the id's name (ns_internal_id) → the field holding the named id
  *
@@ -46,7 +46,8 @@ export const DEVICE_COLUMNS = ["serial", "model", "status", "country", "warehous
 export const FIELD_TYPES = {
   pledge_ref: ["singleselect", "singlelinetext", "multilinetext"],
   language: ["singleselect", "singlelinetext", "multilinetext"],
-  debt_status: ["singleselect", "singlelinetext", "multilinetext"],
+  // a single select only (addition 0009zl): a typed text field could carry a person's note about a debt, never read
+  debt_status: ["singleselect"],
 };
 export const DATE_COLUMNS = ["first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on"];
 /** Columns a row holds only while mapped (addition 0009j; debt_status 0009zl); every other column is always in a row */

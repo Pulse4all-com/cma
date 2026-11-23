@@ -6,9 +6,9 @@ import { Shell } from "@/components/Shell";
 import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import { HeaderHint } from "@/components/HeaderHint";
 import { HintLabel } from "@/components/HintLabel";
-import { data, dataIsMock } from "@/lib/data";
+import { CmaDbError, data, dataIsMock } from "@/lib/data";
 import {
-  fmtMonth, fromMonthChoices, MAINTENANCE_DEBT_DEFAULT, MAINTENANCE_LIST_ROWS, maintenanceQuery, monthOf, parseBucket, parseMaintenanceFilter, parseView,
+  fmtMonth, fromMonthChoices, MAINTENANCE_DEBT_DEFAULT, MAINTENANCE_DEBT_VALUES, MAINTENANCE_LIST_ROWS, maintenanceQuery, monthOf, parseBucket, parseMaintenanceFilter, parseView,
 } from "@/lib/maintenance";
 import { holdsAny } from "@/lib/nav";
 import { fmtCount, REPORT_PERMISSIONS } from "@/lib/reports";
@@ -48,9 +48,19 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
 
   const sp = await searchParams;
   const currentMonth = monthOf(dateKeyInZone(new Date(), me.timeZone));
-  const { filter, problem } = parseMaintenanceFilter(sp, currentMonth);
+  const parsed = parseMaintenanceFilter(sp, currentMonth);
   const view = parseView(sp.view) ?? "exchanges";
-  const report = await data().getMaintenance(me, filter);
+  // a debt status the tenant's catalog does not hold (the database's CMA04): the default filter, said as an ignored filter
+  // (addition 0009zl), as any other filter out of line
+  const unknownDebt = (e: unknown) => e instanceof CmaDbError && e.sqlState === "CMA04" && !!parsed.filter.debt
+    && !MAINTENANCE_DEBT_VALUES.includes(parsed.filter.debt);
+  const read = await data().getMaintenance(me, parsed.filter).then((report) => ({ report, filter: parsed.filter, problem: parsed.problem }),
+    async (e: unknown) => {
+      if (!unknownDebt(e)) throw e;
+      const fallback = { ...parsed.filter, debt: MAINTENANCE_DEBT_DEFAULT };
+      return { report: await data().getMaintenance(me, fallback), filter: fallback, problem: true };
+    });
+  const { report, filter, problem } = read;
   const bucket = parseBucket(sp.bucket, report.buckets);
   const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
   const cellMarket = /^([A-Z]{2}|unknown)$/.test(one("cellMarket") ?? "") ? one("cellMarket")! : null;
@@ -68,7 +78,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
     ...(filter.scope ? { scope: filter.scope } : {}), debt: filter.debt ?? "all",
   });
   // the devices the default filter leaves out (0009zl): the line under the counts, with a link that shows them
-  const leftOut = filter.debt === MAINTENANCE_DEBT_DEFAULT && report.pausedDevices > 0;
+  const leftOut = filter.debt === MAINTENANCE_DEBT_DEFAULT && report.maintenancePausedDevices > 0;
   const showsPaused = filter.debt === "any" || (filter.debt !== null && filter.debt !== undefined
     && report.debtStatuses.some((d) => d.key === filter.debt && d.pausesMaintenance));
   const cellModelName = cellModel === "unknown" ? t.unknownModel : report.models.find((m) => m.key === cellModel)?.name ?? cellModel;
@@ -93,7 +103,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
           debt={filter.debt ?? null} debtStatuses={report.debtStatuses}
           query={Object.fromEntries(Object.entries(withView).filter(([k]) => k !== "from" && k !== "market" && k !== "model" && k !== "debt"))}
           copy={{ from: t.from, marketFilter: t.marketFilter, allMarkets: t.allMarkets, modelFilter: t.modelFilter, allModels: t.allModels,
-            unknownMarket: copy.reports.unknownMarket, unknownModel: t.unknownModel, debtFilter: t.debtFilter, debtUnpaused: t.debtUnpaused,
+            unknownMarket: copy.reports.unknownMarket, unknownModel: t.unknownModel, debtFilter: t.debtFilter, debtUnpaused: t.debtUnpaused, debtNone: t.debtNone,
             debtAll: t.debtAll, debtAny: t.debtAny }} />
         <MaintenanceSwitches months={filter.months} scope={filter.scope} view={view} query={withView} copy={copy} />
       </div>
@@ -131,7 +141,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
           </p>
           {leftOut ? (
             <p className="-mt-2 mb-4 text-small text-p4a-muted" data-testid="maintenance-left-out">
-              {report.pausedDevices === 1 ? t.leftOutOne : t.leftOut.replace("{n}", n(report.pausedDevices))}{" · "}
+              {report.maintenancePausedDevices === 1 ? t.leftOutOne : t.leftOut.replace("{n}", n(report.maintenancePausedDevices))}{" · "}
               <Link href={{ pathname: "/reports/maintenance", query: { ...withView, debt: "any" } }} className="font-semibold text-p4a-deepblue underline">
                 {t.leftOutLink}
               </Link>

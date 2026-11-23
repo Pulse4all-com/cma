@@ -27,7 +27,7 @@
 --   A5  cma.maintenance_items_of: every item kept, maintenance_paused only for a device in the field under a status that
 --       pauses (one in stock under it, or under a status that does not pause, is not); its other columns 116's row for row
 --   A6  the Maintenance reads' filter: null as 116's forms (cells, unknown, devices); unpaused leaving the paused device
---       out with paused_devices 1; none, any and a key; a row marked paused; the catalog in its order
+--       out with maintenance_paused_devices 1; none, any and a key; a row marked paused; the catalog in its order
 --   A7  the public reads: the page and the list with the filter as the admin; an unknown filter CMA04; the agent CMA06;
 --       112's forms still answer as before
 --   A8  the installed base's take: under_debt_status counts devices in the field under a debt status only; the set
@@ -37,7 +37,9 @@
 --       the Maintenance reads with the default filter as 116's
 --   A11 the setters: the upserts, the default flag and order, an alias removed; every refusal (CMA04, CMA02, CMA06)
 --   A12 tenant separation: a tenant sees none of another's debt statuses or aliases
--- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict says PROVOKED, NOT A PASS.
+-- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict says PROVOKED, NOT A PASS. The
+-- row-for-row comparisons (A5, A6, A10) are provoked by a deliberate difference on the kept definitions' side (a row left
+-- out, another horizon), so each fails on its own, never by the switch alone.
 -- =============================================================================================
 
 do $$
@@ -324,7 +326,8 @@ begin
      or (select pronargdefaults from pg_proc where oid = 'cma.maintenance_rows(date,integer,text,text,text,text,text,text,integer)'::regprocedure) <> 0 then
     v_bad := v_bad || 'a new public form with a default; ';
   end if;
-  if (select array_length(proallargtypes, 1) from pg_proc where oid = 'cma.maintenance_due_of(date,integer)'::regprocedure) <> 2 + 17 then
+  if (select count(*) from information_schema.routines r join information_schema.columns c on false where false) <> 0
+     or (select array_length(proallargtypes, 1) from pg_proc where oid = 'cma.maintenance_due_of(date,integer)'::regprocedure) <> 2 + 17 then
     v_bad := v_bad || 'maintenance_due_of''s columns; ';
   end if;
   if v_bad <> '' or v_provoke then
@@ -457,15 +460,18 @@ begin
     v_txt := (select pg_temp.v0009zl_set(array_agg(to_jsonb(i) - 'debt_status_key' - 'maintenance_paused'))
               from cma.maintenance_items_of(v_t, '2026-11-23') i);
     if v_bad is distinct from 'rec-1:pads:in_debt_collection:true rec-2:pads:check_first:false rec-3:pads:-:false rec-4:pads:in_debt_collection:false rec-5:pads:-:false rec-6:pads:-:false'
-       or v_txt is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(i))) from pg_temp.v0009zl_items_0008zk(v_t, '2026-11-23') i)
-       or v_provoke then
-      raise exception 'FAIL A5: %', v_bad;
+       -- provoked: 116's side without rec-1's item, a deliberate difference the comparison must catch
+       or v_txt is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(i))) from pg_temp.v0009zl_items_0008zk(v_t, '2026-11-23') i
+                                  where not (v_provoke and i.source_id = 'rec-1')) then
+      raise exception 'FAIL A5: % (or the comparison with 116''s)', v_bad;
     end if;
     v_rows := v_rows || array['20', 'A5 every item kept; paused only in the field under a status that pauses; the other columns 116''s row for row', 'PASS', v_bad];
 
     -- A6. the filter: null as 116's forms; unpaused, none, any, a key; a row marked paused; the catalog's order
     j := cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, null, '2026-11-23');
-    if j - 'paused_devices' - 'debt' - 'debt_statuses' is distinct from cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, '2026-11-23')
+    -- provoked: 116's page of a horizon of 6 months, a deliberate difference the comparison must catch
+    if j - 'maintenance_paused_devices' - 'debt' - 'debt_statuses'
+       is distinct from cma.maintenance_page_of(v_t, '2026-11-01', case when v_provoke then 6 else 12 end, null, null, null, '2026-11-23')
        or (select pg_temp.v0009zl_set(array_agg(to_jsonb(r) - 'debt_status_key' - 'maintenance_paused'))
            from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, null, 'exchanges', 500, '2026-11-23') r)
           is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(r)))
@@ -475,7 +481,7 @@ begin
     v_bad := '';
     foreach v_d in array array['unpaused', 'none', 'any', 'in_debt_collection', 'check_first'] loop
       j := cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, v_d, '2026-11-23');
-      v_bad := v_bad || v_d || '=' || (j ->> 'devices') || '/' || (j ->> 'paused_devices') || '/'
+      v_bad := v_bad || v_d || '=' || (j ->> 'devices') || '/' || (j ->> 'maintenance_paused_devices') || '/'
                || (select string_agg(r.source_id || case when r.maintenance_paused then '!' else '' end, ',' order by r.source_id collate "C")
                    from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'past_due', null, null, null, v_d, 'components', 500, '2026-11-23') r) || ' ';
     end loop;
@@ -491,7 +497,7 @@ begin
     perform pg_temp.v0009zl_as(x, 'admin');
     v_d := date_trunc('month', cma.tenant_today_of(v_t))::date::text;
     j := cma.maintenance_page(v_d::date, 12, null, null, null, 'unpaused');
-    v_bad := (j ->> 'devices') || '/' || (j ->> 'paused_devices') || '/' || (j ->> 'debt')
+    v_bad := (j ->> 'devices') || '/' || (j ->> 'maintenance_paused_devices') || '/' || (j ->> 'debt')
              || ' ' || (select count(*) from cma.maintenance_rows(v_d::date, 12, 'all', null, null, null, 'in_debt_collection', 'components', 500))
              || ' ' || (cma.maintenance_page(v_d::date) ->> 'devices')
              || ' ' || pg_temp.v0009zl_code(format('select cma.maintenance_page(%L, 12, null, null, null, ''paused'')', v_d))
@@ -572,8 +578,10 @@ begin
              || ' ' || (x -> 'load' ->> 'unmapped_debt_status');
     if (select pg_temp.v0009zl_set(array_agg(jsonb_build_object('d', c.dims, 'm', c.measures - 'under_debt_status')))
         from cma.flash_compute_of(v_t, 'installed_base') c where not (c.dims ? 'debt_status'))
-       is distinct from (select pg_temp.v0009zl_set(array_agg(jsonb_build_object('d', o.dims, 'm', o.measures))) from pg_temp.v0009zl_ib_0009p(v_t) o)
-       or cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, 'unpaused', '2026-11-23') - 'paused_devices' - 'debt' - 'debt_statuses'
+       -- provoked: 180's side without its totals row, a deliberate difference the comparison must catch
+       is distinct from (select pg_temp.v0009zl_set(array_agg(jsonb_build_object('d', o.dims, 'm', o.measures))) from pg_temp.v0009zl_ib_0009p(v_t) o
+                         where not (v_provoke and o.dims = '{}'::jsonb))
+       or cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, 'unpaused', '2026-11-23') - 'maintenance_paused_devices' - 'debt' - 'debt_statuses'
           is distinct from cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, '2026-11-23')
        or (select pg_temp.v0009zl_set(array_agg(to_jsonb(r) - 'debt_status_key' - 'maintenance_paused'))
            from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, 'unpaused', 'components', 500, '2026-11-23') r)
@@ -581,7 +589,7 @@ begin
                             from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, 'components', 500, '2026-11-23') r)
        or (select pg_temp.v0009zl_set(array_agg(to_jsonb(i) - 'debt_status_key' - 'maintenance_paused')) from cma.maintenance_items_of(v_t, '2026-11-23') i)
           is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(i))) from pg_temp.v0009zl_items_0008zk(v_t, '2026-11-23') i)
-       or v_bad is distinct from 'none 0 4' or v_provoke then
+       or v_bad is distinct from 'none 0 4' then
       raise exception 'FAIL A10: % (the comparisons or the counts)', v_bad;
     end if;
     v_rows := v_rows || array['30', 'A10 a tenant without debt statuses: the installed base 180''s row for row, the new set none alone; Maintenance''s default 116''s', 'PASS',

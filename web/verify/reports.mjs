@@ -1775,7 +1775,7 @@ expect("maintenance: the debt status filter's address, the mirror's pause (in th
    maintenanceQuery(mtFilter({ debt: null }), "2026-10-01").debt ?? "-", maintenanceQuery(mtFilter(), "2026-10-01").debt ?? "-",
    mtDebtItems.filter((i) => i.paused).map((i) => i.sourceId).filter((v, k, a) => a.indexOf(v) === k).join(","),
    mtDebtItems.length === maintenanceItems(MT_DEVICES, MT_CAT, MT_TODAY).length,
-   [mtDebtPage("unpaused").devices, mtDebtPage(null).devices, mtDebtPage("any").devices, mtDebtPage("in_debt").devices, mtDebtPage("unpaused").pausedDevices],
+   [mtDebtPage("unpaused").devices, mtDebtPage(null).devices, mtDebtPage("any").devices, mtDebtPage("in_debt").devices, mtDebtPage("unpaused").maintenancePausedDevices],
    mtDebtPage(null).debtStatuses.map((d) => d.key).join(",")],
   [JSON.stringify([["unpaused", false], [null, false], ["unpaused", false], ["none", false], ["any", false], ["in_debt", false], ["unpaused", true], ["unpaused", true]]),
    "all", "-", MT_DEVICES[0].sourceId, true,

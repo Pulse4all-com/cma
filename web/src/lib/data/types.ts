@@ -2681,7 +2681,7 @@ export interface MaintenanceReport {
   /** The models of the tracked devices with their names, for the filter, unknown last */
   models: { key: string; name: string | null }[];
   /** Tracked devices of the scope, market and model whose maintenance is paused (addition 0009zl), whatever the debt filter */
-  pausedDevices: number;
+  maintenancePausedDevices: number;
   /** The tenant's debt statuses in their sort order, for the filter (addition 0009zl) */
   debtStatuses: { key: string; name: string; pausesMaintenance: boolean }[];
 }

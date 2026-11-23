@@ -1733,14 +1733,15 @@ const en = {
     noSerial: "No serial number",
     // addition 0009zl: the debt status filter (default: without a debt status that pauses maintenance)
     debtFilter: "Debt status",
-    debtUnpaused: "Without a debt status",
+    debtUnpaused: "Maintenance not paused",
+    debtNone: "Without a debt status",
     debtAll: "All devices",
     debtAny: "With a debt status",
     leftOut: "{n} devices under a debt status are left out",
     leftOutOne: "1 device under a debt status is left out",
     leftOutLink: "Show them",
-    paused: "Paused",
-    pausedNote: "Maintenance is paused for devices in the field under a debt status that pauses it, until the register empties the field or the device comes back. Their items stay in the forecast.",
+    paused: "Maintenance paused",
+    pausedNote: "Maintenance is paused for a device in the field under a debt status that pauses it, until the register clears the debt status or the device comes back. Its items stay in the forecast.",
   },
 
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys as placeholders, no figures */
@@ -6072,14 +6073,15 @@ const nl = {
     openContact: "Open het contact in de klantregistratie",
     noSerial: "Geen serienummer",
     debtFilter: "Schuldstatus",
-    debtUnpaused: "Zonder schuldstatus",
+    debtUnpaused: "Onderhoud niet gepauzeerd",
+    debtNone: "Zonder schuldstatus",
     debtAll: "Alle apparaten",
     debtAny: "Met een schuldstatus",
     leftOut: "{n} apparaten met een schuldstatus blijven buiten beschouwing",
     leftOutOne: "1 apparaat met een schuldstatus blijft buiten beschouwing",
     leftOutLink: "Toon ze",
-    paused: "Gepauzeerd",
-    pausedNote: "Het onderhoud is gepauzeerd voor apparaten in het veld met een schuldstatus die het pauzeert, tot het register het veld leegmaakt of het apparaat terugkomt. Hun onderdelen blijven in de voorspelling.",
+    paused: "Onderhoud gepauzeerd",
+    pausedNote: "Het onderhoud is gepauzeerd voor een apparaat in het veld met een schuldstatus die het pauzeert, tot het register de schuldstatus wist of het apparaat terugkomt. Zijn onderdelen blijven in de voorspelling.",
   },
 
   campaigns: {

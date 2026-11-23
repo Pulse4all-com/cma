@@ -1062,7 +1062,7 @@ type MaintenancePageDb = {
   unknown: { market: string; model: string; components: Record<string, number>; items: number }[]; unknown_items: number; devices: number;
   filter_markets: string[]; filter_models: { key: string; name: string | null }[];
   // addition 0009zl
-  paused_devices: number; debt_statuses: { key: string; name: string; pauses_maintenance: boolean }[];
+  maintenance_paused_devices: number; debt_statuses: { key: string; name: string; pauses_maintenance: boolean }[];
 };
 type MaintenanceRowDb = {
   bucket: string; device_id: string; connection_id: string; source_id: string; serial: string | null; model_key: string; model_name: string | null;
@@ -2866,7 +2866,7 @@ export const postgresData: CmaData = {
         cells: j.cells.map((c) => ({ bucket: c.bucket, market: c.market, model: c.model, components: c.components, componentItems: c.component_items,
           endOfLife: c.end_of_life, exchanges: c.exchanges })),
         unknown: j.unknown, unknownItems: j.unknown_items, devices: j.devices, markets: j.filter_markets, models: j.filter_models,
-        pausedDevices: Number(j.paused_devices ?? 0),
+        maintenancePausedDevices: Number(j.maintenance_paused_devices ?? 0),
         debtStatuses: (j.debt_statuses ?? []).map((d) => ({ key: d.key, name: d.name, pausesMaintenance: d.pauses_maintenance })),
       };
     });
