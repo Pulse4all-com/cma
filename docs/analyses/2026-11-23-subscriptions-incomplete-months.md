@@ -1,6 +1,15 @@
 # Customers → Subscriptions: months whose source is incomplete (options, not built)
 
-Prepared on 23 November 2026 for Martin, on PR #308 (addition 0009zh, brief B39d), while the merge is held. Nothing here is built. The choice waits for the cause that the #309 session is looking for. Labels: **Studio** (the instance named), **File** (a repository path).
+Prepared on 23 November 2026 for Martin, on PR #308 (addition 0009zh, brief B39d), while the merge is held. Labels: **Studio** (the instance named), **File** (a repository path).
+
+## Decision (Martin, 23 November 2026): Step 0
+
+The cause is known (the #309 session): the subscription app changed its event shape on 28 January 2026, and the adapter dropped every move in the old shape. The app still holds those events, so the route is Step 0:
+- a new PR reads the old shape;
+- it backfills `subscription_event` with `--again`;
+- it recomputes the facts.
+
+Its acceptance is PROD_RUNBOOK 19.18 reading near 1 before February 2026. Options A, B and C are not built. #308 stays on hold until then, and is merged as it is: no mark, and no later start on the page. The options below are kept as prepared.
 
 ## What is known
 
