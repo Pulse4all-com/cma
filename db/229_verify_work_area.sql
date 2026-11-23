@@ -50,6 +50,11 @@
 -- (a compare of no rows reads FAIL under the switch).
 -- Collation: every ordering that feeds a compared text says collate "C".
 -- Expected verdict: "PASS | 229_verify_work_area: <n> PASS, 0 FAIL, <k> skip".
+-- Edited by addition 0009zo (230_hours_market.sql, 23 November 2026): S3 expects work_area after the previous columns and,
+-- where 0009zo is recorded, hours_market_code after it on team_status_time, team_now and export_status_changes; R1 sums
+-- the new team_status_time over its seventeen earlier columns before the comparison, since 0009zo splits a status's row
+-- per hours market (the sums are the previous definition's; its new side sorts in the previous definition's own order,
+-- the database's collation, as the old side does); nothing else changed. Run it after 230.
 -- =============================================================================================
 
 do $$
@@ -326,7 +331,9 @@ begin
     from pg_proc p
     join lateral unnest(p.proargnames, p.proargmodes) with ordinality as a(attname, attmode, n) on true
     where p.oid = f and a.attmode = 't';
-    if v_cols is distinct from pg_temp.v0009zn_cols(v_read) || ', work_area' then
+    if v_cols is distinct from pg_temp.v0009zn_cols(v_read) || ', work_area'
+         || (case when v_read <> 'work_statuses_all' and exists (select 1 from cma.schema_migration where version = '0009zo')
+                  then ', hours_market_code' else '' end) then
       v_bad := v_bad || v_read || ' columns [' || coalesce(v_cols, '') || ']; ';
     end if;
     if (select p.provolatile from pg_proc p where p.oid = f) <> 's' then v_bad := v_bad || v_read || ' not stable; '; end if;
@@ -635,7 +642,13 @@ begin
     perform set_config('app.tenant_id', t.id::text, true);
     for c in select * from (values
         (21, 'R1', 'team_status_time', 'performance.team',
-         format('select %s from cma.team_status_time(%L::date, %L::date)', pg_temp.v0009zn_cols('team_status_time'), v_from, v_to),
+         -- summed over the earlier columns (0009zo splits a status's row per hours market), in the previous order
+         format('select user_id, display_name, organisation_key, organisation_name, business_date, timezone, status_key, status_name, '
+             || 'sort_order, status_active, is_working, is_productive, is_paid, is_billable, sum(seconds)::bigint as seconds, '
+             || 'sum(stretches)::integer as stretches, bool_or(is_capped) as is_capped from cma.team_status_time(%L::date, %L::date) '
+             || 'group by user_id, display_name, organisation_key, organisation_name, business_date, timezone, status_key, status_name, '
+             || 'sort_order, status_active, is_working, is_productive, is_paid, is_billable '
+             || 'order by business_date, display_name, user_id, sort_order, status_key', v_from, v_to),
          format('select * from pg_temp.old_team_status_time(%L::date, %L::date)', v_from, v_to), 'seventeen'),
         (22, 'R2', 'team_now', 'monitoring.live',
          format('select %s from cma.team_now()', pg_temp.v0009zn_cols('team_now')),

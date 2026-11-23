@@ -4,7 +4,7 @@
  * stripping. Nothing here knows a status key, a team key or a setting value: it shapes what the
  * tenant configured and explains the database's refusals.
  */
-import type { ConfigStatus, CoverageTargetRow, SkillLevel, TenantSetting, WorkArea } from "@/lib/data/types";
+import type { ConfigStatus, CoverageTargetRow, MarketConfig, SkillLevel, TenantSetting, WorkArea } from "@/lib/data/types";
 import { exportSettingsFrom, formatDate, formatDuration, toCsv } from "./csv.ts";
 
 /** Flag changes on a status with time behind it are refused by the database; the form says so first */
@@ -130,4 +130,36 @@ export function exportPreview(settings: TenantSetting[], labels: { date: string;
   const lines = csv.replace(/\r\n$/, "").split("\r\n");
   const bom = lines[0]?.startsWith("\uFEFF");
   return [(bom ? labels.bom : labels.noBom), ...lines.map((l) => l.replace(/^\uFEFF/, "").replace(/\t/g, " ⇥ "))];
+}
+
+// ---- Hours markets (addition 0009zo, D1) -----------------------------------------------------------
+
+type MarketMapping = Pick<MarketConfig, "code" | "hoursMarketCode" | "isActive">;
+
+/** The hours markets a market may book under, besides itself: the tenant's other active markets that map to themselves */
+export function hoursMarketChoices<T extends MarketMapping>(markets: readonly T[], code: string): T[] {
+  return markets.filter((m) => m.code !== code && m.hoursMarketCode === m.code && m.isActive);
+}
+
+export type HoursMarketProblem = "unknown" | "notHoursMarket" | "inactive" | "bookedUnder" | "stillBookedUnder";
+
+/**
+ * Why the database would refuse market `code` booking under `target` (its own code: itself) while `active`, or null:
+ * the rules of cma.market_hours_market_rules that the screen can see. A target must exist (unknown), map to itself
+ * (notHoursMarket) and be active (inactive); a market that others book under keeps booking under itself (bookedUnder)
+ * and stays active while an active market books under it (stillBookedUnder). A person's Default market is the
+ * database's answer alone (409)
+ */
+export function hoursMarketProblem(markets: readonly MarketMapping[], code: string, target: string, active: boolean): HoursMarketProblem | null {
+  const others = markets.filter((m) => m.code !== code);
+  if (target !== code) {
+    const t = others.find((m) => m.code === target);
+    if (!t) return "unknown";
+    if (t.hoursMarketCode !== t.code) return "notHoursMarket";
+    if (!t.isActive) return "inactive";
+    if (others.some((m) => m.hoursMarketCode === code)) return "bookedUnder";
+    return null;
+  }
+  if (!active && others.some((m) => m.hoursMarketCode === code && m.isActive)) return "stillBookedUnder";
+  return null;
 }

@@ -18,7 +18,7 @@
  */
 import {
   exportPreview, flagsFrozen, levelsText, parseLevels, parseMarkets, parseMinutes, parseTarget, parseWorkArea, retireProblem, statusFormProblem, targetAt, visibleStatuses,
-  WORK_AREAS, workAreaAllowed,
+  WORK_AREAS, workAreaAllowed, hoursMarketChoices, hoursMarketProblem,
 } from "../src/lib/configuration.ts";
 import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
@@ -300,6 +300,21 @@ expect("history start: the field saves through commitDate on Enter and blur, key
     /historyMin: isDate\(valueOf\("intake\.start_date"\)\) \? valueOf\("intake\.start_date"\) : null, historyMax: dateKeyInZone\(new Date\(\), me\.timeZone\)/.test(sourcePageSrc),
     /reviews\.history_start_date", value: e\.target\.value/.test(sourceConfigSrc)],
   [true, true, true, true, true, false], [false, false, false, false, false, true]);
+
+// ---- Hours markets (addition 0009zo, D1): the rules of cma.market_hours_market_rules the Markets screen says first ----
+const hm = (code, hoursMarketCode = code, isActive = true) => ({ code, hoursMarketCode, isActive });
+const mapping = [hm("NL"), hm("DE"), hm("BE", "NL"), hm("AT", "DE"), hm("FR"), hm("ES", "ES", false)];
+expect("hours markets: a market books under another active one that maps to itself",
+  [hoursMarketProblem(mapping, "FR", "NL", true), hoursMarketProblem(mapping, "FR", "FR", true)], [null, null], ["bookedUnder", "inactive"]);
+expect("hours markets: an hours market that does not map to itself is refused",
+  [hoursMarketProblem(mapping, "FR", "BE", true), hoursMarketProblem(mapping, "FR", "AT", true)], ["notHoursMarket", "notHoursMarket"], [null, null]);
+expect("hours markets: an inactive or unknown target is refused",
+  [hoursMarketProblem(mapping, "FR", "ES", true), hoursMarketProblem(mapping, "FR", "XX", true)], ["inactive", "unknown"], [null, null]);
+expect("hours markets: one that others book under keeps itself, and stays active",
+  [hoursMarketProblem(mapping, "NL", "DE", true), hoursMarketProblem(mapping, "NL", "NL", false), hoursMarketProblem(mapping, "FR", "FR", false)],
+  ["bookedUnder", "stillBookedUnder", null], [null, null, "stillBookedUnder"]);
+expect("hours markets: the choices are the other active hours markets",
+  hoursMarketChoices(mapping, "FR").map((m) => m.code), ["NL", "DE"], ["NL", "DE", "BE", "AT", "ES"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

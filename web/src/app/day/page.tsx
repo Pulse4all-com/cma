@@ -23,9 +23,10 @@ export default async function MyDayPage() {
   if (!me.permissions.includes("workday.own")) redirect(firstPage(me, copy) ?? "/no-access");
 
   const today = dateKeyInZone(new Date(), me.timeZone);
-  const [workday, statuses] = await Promise.all([
+  // The statuses and the tenant's active hours markets in one statement (addition 0009zo): no round trip more
+  const [workday, { statuses, hoursMarkets }] = await Promise.all([
     data().getWorkday(me, today),
-    data().listStatuses(me),
+    data().listMyDayChoices(me),
   ]);
   const defaultStatus = statuses.find((s) => s.isDefault);
 
@@ -40,6 +41,7 @@ export default async function MyDayPage() {
           <WorkdayPanel
             workday={workday}
             statuses={statuses}
+            hoursMarkets={hoursMarkets}
             startedLabel={fmtTime(workday.startedAt, me.timeZone, me.locale)}
             statusSinceLabel={workday.statusSince ? fmtTime(workday.statusSince, me.timeZone, me.locale) : null}
             endedLabel={workday.endedAt ? fmtTime(workday.endedAt, me.timeZone, me.locale) : null}

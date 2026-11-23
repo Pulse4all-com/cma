@@ -24,14 +24,20 @@
  * and a second line says since when the person is back. While the tenant lets people clock in again
  * and the window is still open, End workday says until when that can happen; an ended day that can
  * take another session says so, and the page shows the Clock in card again below it.
+ *
+ * Hours market (addition 0009zo, D3): a select next to the status buttons lists the tenant's active hours markets and
+ * shows the current one beside the current status; M moves the focus to it. Picking a market books a status event with
+ * the same status under the new market (POST /api/v1/me/status with the market alone), so the time from that moment
+ * counts for it; every later status change keeps it until the person picks another. Time without a market shows as No
+ * market. A tenant without hours markets shows no select.
  */
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { WorkStatus, Workday } from "@/lib/data";
+import type { HoursMarket, WorkStatus, Workday } from "@/lib/data";
 import type { Copy } from "@/lib/copy";
 import { agentGroupOf, GROUP_BG } from "@/lib/dashboard";
-import { Badge, Button, Card } from "./primitives";
+import { Badge, Button, Card, Keycap } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { workedSeconds } from "@/lib/live";
 
@@ -61,6 +67,7 @@ function hms(s: number): string {
 export function WorkdayPanel({
   workday,
   statuses,
+  hoursMarkets = [],
   startedLabel,
   statusSinceLabel,
   endedLabel,
@@ -71,6 +78,8 @@ export function WorkdayPanel({
   workday: Workday;
   /** The tenant's active statuses, in the tenant's order */
   statuses: WorkStatus[];
+  /** The tenant's active hours markets, in the markets' order (addition 0009zo); none: no select */
+  hoursMarkets?: HoursMarket[];
   /** Pre-formatted in the user's zone and locale on the server */
   startedLabel: string;
   statusSinceLabel: string | null;
@@ -91,6 +100,13 @@ export function WorkdayPanel({
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   /** The name of the status just set, for the live region */
   const [announced, setAnnounced] = useState<string | null>(null);
+  /** The hours market whose change is in flight (addition 0009zo): the select is busy meanwhile */
+  const [pendingMarket, setPendingMarket] = useState<string | null>(null);
+  const [marketFailed, setMarketFailed] = useState(false);
+  /** The market just set, for the live region */
+  const [announcedMarket, setAnnouncedMarket] = useState<string | null>(null);
+  /** The market as picked, shown at once while the change and the refresh are in flight; the server's value after */
+  const [shownMarket, showMarket] = useOptimistic(workday.hoursMarket);
   /** The status whose button gets the focus back once the change has landed */
   const refocus = useRef<string | null>(null);
   const working = workday.status === "working";
@@ -160,6 +176,27 @@ export function WorkdayPanel({
     });
   }
 
+  function changeMarket(code: string) {
+    if (pendingKey !== null || pendingMarket !== null || !code || code === shownMarket) return;
+    setMarketFailed(false);
+    setStatusFailed(false);
+    setPendingMarket(code);
+    startTransition(async () => {
+      showMarket(code);
+      // The market alone: the database books the status in force again under it (D3)
+      const res = await fetch("/api/v1/me/status", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-cma-request": "1" },
+        body: JSON.stringify({ hoursMarket: code }),
+      }).catch(() => null);
+      if (!res?.ok) setMarketFailed(true);
+      else setAnnouncedMarket(hoursMarkets.find((m) => m.code === code)?.name ?? code);
+      // Also after a refusal: the day may have ended in another tab, or the market gone inactive
+      router.refresh();
+      setPendingMarket(null);
+    });
+  }
+
   function confirmEnd() {
     setStatusFailed(false);
     startTransition(async () => {
@@ -199,6 +236,11 @@ export function WorkdayPanel({
             {current?.name ?? workday.statusName ?? copy.myDay.working}
           </span>
         </Badge>
+        {hoursMarkets.length > 0 ? (
+          <Badge tone="neutral">
+            <span data-testid="current-hours-market">{shownMarket ?? copy.myDay.noMarket}</span>
+          </Badge>
+        ) : null}
         {statusSinceLabel ? (
           <span className="text-small text-p4a-muted">
             {copy.myDay.workingSince} <span className="tabular text-p4a-body">{statusSinceLabel}</span>
@@ -260,6 +302,41 @@ export function WorkdayPanel({
             {copy.myDay.statusFailed}
           </p>
         ) : null}
+        {hoursMarkets.length > 0 ? (
+          <label className="mt-4 flex max-w-sm flex-col gap-2 text-small font-semibold text-p4a-body" aria-busy={pendingMarket !== null || undefined}>
+            <span className="flex items-center gap-2">
+              {copy.myDay.hoursMarket} <Keycap>M</Keycap>
+            </span>
+            <select
+              value={shownMarket ?? ""}
+              data-shortcut="m"
+              data-testid="hours-market-select"
+              disabled={pendingMarket !== null}
+              onChange={(e) => changeMarket(e.target.value)}
+              className="h-10 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
+            >
+              {shownMarket === null ? <option value="" disabled>{copy.myDay.noMarket}</option> : null}
+              {shownMarket !== null && !hoursMarkets.some((m) => m.code === shownMarket) ? (
+                // A market no longer offered: shown as booked, not choosable
+                <option value={shownMarket} disabled>{shownMarket}</option>
+              ) : null}
+              {hoursMarkets.map((m) => (
+                <option key={m.code} value={m.code}>
+                  {m.code} · {m.name}
+                </option>
+              ))}
+            </select>
+            <span className="font-normal text-caption text-p4a-grey">{copy.myDay.hoursMarketHint}</span>
+          </label>
+        ) : null}
+        {marketFailed ? (
+          <p role="alert" className="mt-2 text-small text-p4a-body">
+            {copy.myDay.marketFailed}
+          </p>
+        ) : null}
+        <p role="status" aria-live="polite" className="sr-only" data-testid="market-announcement">
+          {announcedMarket ? copy.myDay.marketChanged.replace("{market}", announcedMarket) : ""}
+        </p>
         {/* Always in the DOM, so assistive tech notices the text when it changes */}
         <p role="status" aria-live="polite" className="sr-only" data-testid="status-announcement">
           {announced ? copy.myDay.statusChanged.replace("{status}", announced) : ""}

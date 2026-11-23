@@ -8,6 +8,10 @@
  * lib/sources. A market with hours of its own uses only those, so giving a market its own hours starts
  * from the default row, and "Use the default" clears them; each a whole week in one transaction.
  *
+ * Hours market (addition 0009zo, D1): each market books its time under an hours market, itself by default; the dialog
+ * offers Itself and the tenant's other active hours markets. The database holds the rules (an hours market maps to itself,
+ * one that others book under or that is a person's Default market keeps doing so), and a refusal says why.
+ *
  * Keyboard: A adds a market, I adds an alias, H adds a holiday; a market's week opens in a dialog;
  * Ctrl+Enter saves a dialog, Esc closes it.
  */
@@ -15,6 +19,7 @@ import { useRef, useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { MarketConfig, MarketsConfig as MarketsData, SkillInfo } from "@/lib/data";
 import { effectiveHours, marketFormProblem, normalizeAlias, parseDay, parseOfficeHours, type MarketForm } from "@/lib/sources";
+import { hoursMarketChoices, hoursMarketProblem } from "@/lib/configuration";
 import { HeaderHint } from "../HeaderHint";
 import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card } from "../primitives";
@@ -22,12 +27,14 @@ import { FlagField, FormDialog, SaveNote, field, label, send, td, th, useSave } 
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 
-type Form = MarketForm & { sortOrder: number; active: boolean };
+type Form = MarketForm & { sortOrder: number; active: boolean; hoursMarketCode: string };
 
 function formOf(m: MarketConfig | null): Form {
   return m
-    ? { code: m.code, name: m.name, timeZone: m.timeZone, languageCode: m.languageCode, currency: m.currency, languageSkillKey: m.languageSkillKey, minLanguageLevel: m.minLanguageLevel, sortOrder: m.sortOrder, active: m.isActive }
-    : { code: "", name: "", timeZone: "", languageCode: "", currency: "", languageSkillKey: null, minLanguageLevel: null, sortOrder: 100, active: true };
+    ? { code: m.code, name: m.name, timeZone: m.timeZone, languageCode: m.languageCode, currency: m.currency, languageSkillKey: m.languageSkillKey, minLanguageLevel: m.minLanguageLevel, sortOrder: m.sortOrder, active: m.isActive,
+        // "" is itself: the market is its own hours market
+        hoursMarketCode: m.hoursMarketCode === m.code ? "" : m.hoursMarketCode }
+    : { code: "", name: "", timeZone: "", languageCode: "", currency: "", languageSkillKey: null, minLanguageLevel: null, sortOrder: 100, active: true, hoursMarketCode: "" };
 }
 
 export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skills: SkillInfo[]; copy: Pick<Copy, "configMarkets" | "configuration"> & { hints: Pick<Copy["hints"], "about"> } }) {
@@ -72,7 +79,15 @@ export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skill
       setMarketProblem(t.codeProblem);
       return;
     }
-    if (await save(() => send("PUT", "/api/v1/configuration/markets", f))) setMarketEdit(null);
+    // The hours market: its own code for itself (addition 0009zo). The rules the screen can see are said first; a
+    // refusal of the database (409, a person's Default market) names why, the rest as any save
+    const body = { ...f, hoursMarketCode: f.hoursMarketCode || f.code };
+    const mapping = hoursMarketProblem(data.markets, f.code, body.hoursMarketCode, f.active);
+    if (mapping) {
+      setMarketProblem(mapping === "bookedUnder" || mapping === "stillBookedUnder" ? t.hoursMarketConflict : t.hoursMarketProblem);
+      return;
+    }
+    if (await save(() => send("PUT", "/api/v1/configuration/markets", body), t.hoursMarketConflict)) setMarketEdit(null);
   }
 
   async function saveAlias() {
@@ -134,6 +149,7 @@ export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skill
               <th className={th}>{t.zoneLanguageCurrency}</th>
               <th className={th}><HintLabel label={t.languageSkill}>{hint(t.languageSkill, t.hintLanguageSkill)}</HintLabel></th>
               <th className={th}><HintLabel label={t.aliases}>{hint(t.aliases, t.hintAliases)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.hoursMarket}>{hint(t.hoursMarket, t.hoursMarketHint)}</HintLabel></th>
               <th className={th}>{t.status}</th>
               <th className={th}></th>
             </tr>
@@ -157,6 +173,7 @@ export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skill
                     ))}
                   </div>
                 </td>
+                <td className={`${td} text-small`} data-testid="market-hours-market">{m.hoursMarketCode === m.code ? t.hoursMarketSelf : m.hoursMarketCode}</td>
                 <td className={td}>{m.isActive ? <Badge tone="success">{t.active}</Badge> : <Badge tone="neutral">{t.inactive}</Badge>}</td>
                 <td className={`${td} text-right`}><Button variant="outlined" size="sm" onClick={() => openMarket(m)}>{c.edit}</Button></td>
               </tr>
@@ -286,6 +303,16 @@ export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skill
               <span className="font-normal text-caption text-p4a-muted">{t.hintMinLevel}</span>
             </label>
           </div>
+          <label className={label}>
+            {t.hoursMarket}
+            <select className={field} value={form.hoursMarketCode} data-testid="market-hours-market-select" onChange={(e) => setForm({ ...form, hoursMarketCode: e.target.value })}>
+              <option value="">{t.hoursMarketSelf}</option>
+              {hoursMarketChoices(data.markets, form.code).map((x) => (
+                <option key={x.code} value={x.code}>{x.code} · {x.name}</option>
+              ))}
+            </select>
+            <span className="font-normal text-caption text-p4a-muted">{t.hoursMarketHint}</span>
+          </label>
           <FlagField name={t.activeLabel} checked={form.active} onChange={(v) => setForm({ ...form, active: v })} />
           {marketProblem ? <p className="text-small text-p4a-error">{marketProblem}</p> : null}
           <SaveNote state={state} c={c} />

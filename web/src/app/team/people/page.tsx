@@ -39,8 +39,9 @@ export default async function PeoplePage() {
   }
 
   // One transaction per read; the directory's own permission check decides who is listed
-  const [people, roles, teams, skills, organisations, linked, invitations] = await Promise.all([
-    data().listDirectory(me),
+  // The directory and the tenant's hours markets in one transaction (addition 0009zo): Default market's choices
+  const [{ people, hoursMarkets }, roles, teams, skills, organisations, linked, invitations] = await Promise.all([
+    data().getPeopleDirectory(me),
     data().listRoles(me),
     data().listTeams(me),
     data().listSkills(me),
@@ -73,6 +74,7 @@ export default async function PeoplePage() {
           // The sign-in provider the app runs with: google behind IAP, mock in dev (a data value, as stored)
           defaultLoginSystem={config.authMode === "iap" ? "google" : "mock"}
           linked={linked}
+          hoursMarkets={hoursMarkets}
           invite={invite}
           copy={{ ...pickCopy(copy, "invitations", "team"), hints: pickHints(copy, "about") }}
         />

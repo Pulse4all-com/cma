@@ -39,6 +39,7 @@ const labels = {
   corrected: "Corrected afterwards", status: "Status", from: "From", to: "To", duration: "Duration", working: "Working",
   enteredBy: "Entered by", sourceUser: "Person", sourceSystem: "System", sourceCorrection: "Correction", sourceImport: "Import",
   yes: "Yes", no: "No", workArea: "Work area", workAreaSales: "Sales", workAreaOperations: "Operations",
+  hoursMarket: "Hours market", noMarket: "No market",
 };
 
 // ---- settings -----------------------------------------------------------------------------------
@@ -77,38 +78,42 @@ const hours = hoursCsv([{
   userId: "u1", displayName: "=Ana Ferrer", organisationName: "Newco", date: "2026-10-05", timeZone: "Europe/Madrid",
   status: "ended", startedAt: "2026-10-05T06:50:00Z", endedAt: "2026-10-05T15:30:00Z",
   workedSeconds: 28_800, productiveSeconds: 28_800, paidSeconds: 30_600, billableSeconds: 30_600,
-  isCapped: false, needsCorrection: false, hasCorrection: true,
+  isCapped: false, needsCorrection: false, hasCorrection: true, hoursMarkets: ["DE", "NL", null],
 }], DUTCH, labels).split("\r\n");
-expect("hours file in the Dutch format", hours[1],
-  "05-10-2026;'=Ana Ferrer;Newco;Europe/Madrid;08:50;17:30;8,00;8,50;8,50;No;Yes",
-  "2026-10-05,=Ana Ferrer,Newco,Europe/Madrid,06:50,15:30,8.00,8.50,8.50,No,Yes");
+// The day's hours markets (addition 0009zo): the last column, in order, time without one as No market
+expect("hours file in the Dutch format, the day's hours markets last", hours[1],
+  "05-10-2026;'=Ana Ferrer;Newco;Europe/Madrid;08:50;17:30;8,00;8,50;8,50;No;Yes;DE + NL + No market",
+  "2026-10-05,=Ana Ferrer,Newco,Europe/Madrid,06:50,15:30,8.00,8.50,8.50,No,Yes,DE + NL");
+expect("the hours file's header ends with the hours market", hours[0].split(";").at(-1), "Hours market", "Corrected afterwards");
 
 const commaBoth = hoursCsv([{
   userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-10-05", timeZone: "UTC",
   status: "ended", startedAt: "2026-10-05T08:00:00Z", endedAt: "2026-10-05T16:00:00Z",
   workedSeconds: 27_000, productiveSeconds: 0, paidSeconds: 27_000, billableSeconds: 0,
-  isCapped: false, needsCorrection: false, hasCorrection: false,
+  isCapped: false, needsCorrection: false, hasCorrection: false, hoursMarkets: ["NL"],
 }], { ...DUTCH, separator: "comma" }, labels).split("\r\n")[1];
 expect("a decimal comma with a comma separator stays one cell", commaBoth,
-  '05-10-2026,Ana,Newco,UTC,08:00,16:00,"7,50","7,50","0,00",No,No', "05-10-2026,Ana,Newco,UTC,08:00,16:00,7,50,7,50,0,00,No,No");
+  '05-10-2026,Ana,Newco,UTC,08:00,16:00,"7,50","7,50","0,00",No,No,NL', "05-10-2026,Ana,Newco,UTC,08:00,16:00,7,50,7,50,0,00,No,No,NL");
 
 const status = statusChangesCsv([{
   userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-10-05", timeZone: "Europe/Madrid",
   statusKey: "break", statusName: "Break", isWorking: false, isProductive: false, isPaid: true, isBillable: false, workArea: null,
-  from: "2026-10-05T09:00:00Z", to: null, isOpen: true, isCapped: true, seconds: 900, source: "correction",
+  from: "2026-10-05T09:00:00Z", to: null, isOpen: true, isCapped: true, seconds: 900, source: "correction", hoursMarket: null,
 }], DUTCH, labels).split("\r\n");
-expect("an open stretch has no end and names its source", status[1],
-  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;;0,25;No;Yes;No;Correction;Yes;",
-  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;correction;Yes;");
-expect("the header is the caller's labels, the work area last", [status[0].replace("\uFEFF", "").split(";").length, status[0].split(";").at(-1)],
-  [14, "Work area"], [13, "Not clocked out"]);
+expect("an open stretch has no end and names its source; time without an hours market reads No market", status[1],
+  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;;0,25;No;Yes;No;Correction;Yes;;No market",
+  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;correction;Yes;;");
+expect("the header is the caller's labels, the work area then the hours market last",
+  [status[0].replace("\uFEFF", "").split(";").length, status[0].split(";").at(-2), status[0].split(";").at(-1)],
+  [15, "Work area", "Hours market"], [14, "Not clocked out", "Work area"]);
 // The work area (addition 0009zn): the status's label for it in the last column, empty without one
 const areaRow = statusChangesCsv([{
   userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-10-05", timeZone: "UTC",
   statusKey: "zz", statusName: "Available", isWorking: true, isProductive: true, isPaid: true, isBillable: true, workArea: "operations",
-  from: "2026-10-05T09:00:00Z", to: "2026-10-05T10:00:00Z", isOpen: false, isCapped: false, seconds: 3600, source: "user",
+  from: "2026-10-05T09:00:00Z", to: "2026-10-05T10:00:00Z", isOpen: false, isCapped: false, seconds: 3600, source: "user", hoursMarket: "DE",
 }], DUTCH, labels).split("\r\n")[1];
-expect("a status's work area is its label in the last column", areaRow.split(";").at(-1), "Operations", "operations");
+expect("a status's work area is its label, the stretch's hours market its code", [areaRow.split(";").at(-2), areaRow.split(";").at(-1)],
+  ["Operations", "DE"], ["operations", "No market"]);
 
 // An imported day (addition 0008d): the session as a working stretch, the gap in the gap status,
 // both entered by the import, in the day's own zone
@@ -121,8 +126,8 @@ const imported = statusChangesCsv([
     from: "2026-03-06T09:00:00Z", to: "2026-03-06T09:15:00Z", isOpen: false, isCapped: false, seconds: 900, source: "import" },
 ], DUTCH, labels).split("\r\n");
 expect("an imported stretch and its gap name the import", [imported[1], imported[2]],
-  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;Import;No;",
-   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;Import;No;"],
+  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;Import;No;;No market",
+   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;Import;No;;No market"],
   ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;;No;",
    "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;;No;"]);
 

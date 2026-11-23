@@ -25,6 +25,14 @@ export type LiveGroup = Group | "clockedOut" | "notClockedIn";
 /** Tile and row order: at work first, then the pauses, then the people who are not on the clock */
 export const LIVE_GROUPS: readonly LiveGroup[] = [...GROUPS, "clockedOut", "notClockedIn"];
 
+/**
+ * The Live board's Hours market cell (addition 0009zo, D6): the market the person's current status was booked under,
+ * null for time without one (No market), undefined without an open day (the cell stays empty: no day, or ended)
+ */
+export function liveHoursMarketOf(p: TeamNowPerson): string | null | undefined {
+  return p.day && p.day.status === "working" ? p.day.hoursMarket ?? null : undefined;
+}
+
 export function liveGroupOf(p: TeamNowPerson): LiveGroup {
   if (!p.day) return "notClockedIn";
   if (p.day.status === "ended" || !p.status) return "clockedOut";

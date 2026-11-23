@@ -224,7 +224,7 @@ export function LiveBoard({
       {shown.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.empty}</p>
       ) : (
-        // At 1280 px the nine columns can be wider than the main area: the table scrolls inside its own
+        // At 1280 px the ten columns can be wider than the main area: the table scrolls inside its own
         // box, never the page (as the report tables, addition 0008i)
         <div className="overflow-x-auto" data-testid="live-people-scroll" role="region" aria-label={t.title} tabIndex={0}>
         <table className="w-full border-collapse text-body leading-table">
@@ -235,6 +235,7 @@ export function LiveBoard({
               <th className={th}>{t.team}</th>
               <th className={th}>{t.shift}</th>
               <th className={th}>{t.status}</th>
+              <th className={th}>{t.hoursMarket}</th>
               <th className={`${th} text-right`}>{t.since}</th>
               <th className={`${th} text-right`}>{t.clockedInAt}</th>
               <th className={`${th} text-right`}>{t.clockedOut}</th>
@@ -263,6 +264,9 @@ export function LiveBoard({
                     {r.statusName ?? label(r.group).label}
                     {r.statusName && !r.statusActive ? <Badge tone="neutral">{t.inactive}</Badge> : null}
                   </span>
+                </td>
+                <td className="whitespace-nowrap px-3" data-testid="live-hours-market">
+                  {r.hoursMarket === undefined ? "" : r.hoursMarket ?? <span className="text-p4a-muted">{t.noMarket}</span>}
                 </td>
                 <td className="tabular whitespace-nowrap px-3 text-right"><Since at={r.statusSince} /></td>
                 <td className="tabular whitespace-nowrap px-3 text-right">

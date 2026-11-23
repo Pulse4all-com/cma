@@ -293,7 +293,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- agent pages
 ('a', 'welcome agent', 'own day today', $q$select s.business_date, s.status, s.started_at, s.ended_at, ws.key, ws.name, coalesce(c.closed_seconds, 0)::int, c.running_since, c.status_since,
    cma.business_day_end(s.business_date, s.timezone), coalesce(se.sessions, 0)::int, se.session_started_at,
-   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)), cma.workday_can_clock_in_again(s.workday_id)
+   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)), cma.workday_can_clock_in_again(s.workday_id),
+   cma.workday_hours_market(s.workday_id)
    from cma.workday_summary s left join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
    left join lateral (select sum(i.seconds) filter (where iws.is_working and (not i.is_open or i.is_capped)) as closed_seconds,
      max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped) as running_since,
@@ -302,6 +303,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start') se on true
    where s.user_id = cma.current_user_id() and s.business_date = cma.business_date(now(), cma.user_timezone(cma.current_user_id()))$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, work_area, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+-- My day's choices (addition 0009zo): the statuses with the active hours markets in the same statement
+('a', 'my day', 'statuses and hours markets', $q$select key, name, is_working, is_productive, work_area, is_default,
+   (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json) from cma.hours_markets() h where h.status = 'active') as hours_markets
+   from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
@@ -324,6 +329,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'live board', 'tenant settings', $q$select * from cma.tenant_settings()$q$, 'agent', array['monitoring.live']),
 -- Team, Roster, Follow-up
 ('a', 'team people', 'directory', $q$select * from cma.directory()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
+('a', 'team people', 'hours markets', $q$select code, name, status from cma.hours_markets()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'teams', $q$select * from cma.teams()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'skills', $q$select * from cma.skills()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'organisations', $q$select * from cma.organisations()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),

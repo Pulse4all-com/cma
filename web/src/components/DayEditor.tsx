@@ -14,11 +14,15 @@
  * the rows opens a confirmation with a required reason (it starts from the editor's Reason field) and POSTs /api/v1/team/days/{userId}/{date}/remove; every
  * effective event of the day is voided in one correction, and the day leaves Team hours. Disabled on an open day.
  *
+ * Hours market (addition 0009zo, D5): each start or status row has a Market column with the tenant's hours markets (an
+ * inactive one marked, still choosable for a past day) and No market; a changed market replaces the row's event like any
+ * change, with the edit's reason. A new row takes the market of the row before it.
+ *
  * Keyboard: Tab through the rows, Ctrl+Enter saves, Esc closes (twice with unsaved changes).
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { DateKey, TeamDayDetail, TeamPerson, TimeEvent, WorkStatus } from "@/lib/data";
+import type { DateKey, HoursMarket, TeamDayDetail, TeamPerson, TimeEvent, WorkStatus } from "@/lib/data";
 import {
   check, localParts, normalizeTime, removeDayState, removeProblemOf, rowsFromEvents,
   type DayProblem, type EditorRow, type RemoveProblem, type RowProblem,
@@ -83,6 +87,8 @@ export function DayEditor({
   const [date, setDate] = useState<DateKey>(target.mode === "correct" ? target.date : today);
   const [pickUser, setPickUser] = useState("");
   const [events, setEvents] = useState<TimeEvent[]>([]);
+  /** The tenant's hours markets, from the day's read (addition 0009zo) */
+  const [hoursMarkets, setHoursMarkets] = useState<HoursMarket[]>([]);
   const [existed, setExisted] = useState(false);
   const [original, setOriginal] = useState<EditorRow[]>([]);
   const [rows, setRows] = useState<EditorRow[]>([]);
@@ -115,6 +121,7 @@ export function DayEditor({
         const detail = ((await res.json()) as { data: TeamDayDetail }).data;
         const start = rowsFromEvents(detail.events, w.timeZone);
         setEvents(detail.events);
+        setHoursMarkets(detail.hoursMarkets ?? []);
         setExisted(detail.day !== null);
         setDayOpen(detail.day?.status === "open");
         const opened = start.length ? start : [newRow(null)];
@@ -132,7 +139,7 @@ export function DayEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function newRow(after: string | null): EditorRow {
+  function newRow(after: string | null, hoursMarket: string | null = null): EditorRow {
     return {
       id: crypto.randomUUID(),
       eventId: null,
@@ -140,6 +147,7 @@ export function DayEditor({
       statusKey: defaultStatus?.key ?? null,
       time: after ? addMinute(after) : "",
       offset: null,
+      hoursMarket,
     };
   }
 
@@ -165,7 +173,9 @@ export function DayEditor({
     setRows((rs) => {
       const live = rs.filter((r) => !r.end && /^\d{2}:\d{2}$/.test(r.time));
       const last = live.reduce<string | null>((m, r) => (m === null || r.time > m ? r.time : m), null);
-      const row = newRow(last);
+      // The market in force at that point: the latest such row's (a status change keeps the market, D3)
+      const lastRow = live.filter((r) => r.time === last).at(-1);
+      const row = newRow(last, lastRow?.hoursMarket ?? null);
       // Into the last session: before its clock-out when the day ends with one (the latest clock-out lies
       // after the latest other row), else at the end, where an open last session goes on
       const ends = rs.map((r, i) => ({ r, i })).filter(({ r }) => r.end);
@@ -335,6 +345,7 @@ export function DayEditor({
                 <th className="h-10 w-28 px-3 font-semibold" aria-label={t.startLabel} />
                 <th className="h-10 px-3 font-semibold">{t.time}</th>
                 <th className="h-10 px-3 font-semibold">{t.status}</th>
+                <th className="h-10 px-3 font-semibold">{t.hoursMarket}</th>
                 <th className="h-10 px-3" aria-label={t.remove} />
               </tr>
             </thead>
@@ -386,7 +397,7 @@ export function DayEditor({
                         value={r.end ? "end" : r.statusKey ? `s:${r.statusKey}` : ""}
                         onChange={(e) =>
                           update(r.id, e.target.value === "end"
-                            ? { end: true, statusKey: null }
+                            ? { end: true, statusKey: null, hoursMarket: null }
                             : { end: false, statusKey: e.target.value.slice(2) })
                         }
                         className={`${field} min-w-48`}
@@ -404,6 +415,28 @@ export function DayEditor({
                         ))}
                         <option value="end">{t.clockedOut}</option>
                       </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      {r.end ? null : (
+                        <select
+                          aria-label={t.hoursMarket}
+                          value={r.hoursMarket ?? ""}
+                          onChange={(e) => update(r.id, { hoursMarket: e.target.value || null })}
+                          className={`${field} min-w-36`}
+                          data-testid="day-editor-market"
+                        >
+                          <option value="">{t.noMarket}</option>
+                          {r.hoursMarket && !hoursMarkets.some((m) => m.code === r.hoursMarket) ? (
+                            // A market that is no hours market any more: shown as booked, not choosable
+                            <option value={r.hoursMarket} disabled>{r.hoursMarket}</option>
+                          ) : null}
+                          {hoursMarkets.map((m) => (
+                            <option key={m.code} value={m.code}>
+                              {m.code} · {m.name}{m.isActive ? "" : ` · ${t.inactiveMarket}`}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Button variant="text" size="sm" onClick={() => { setArmed(false); setRows((rs) => rs.filter((x) => x.id !== r.id)); }}>
@@ -468,7 +501,7 @@ export function DayEditor({
                 {events.map((e) => (
                   <li key={e.id} className={e.isEffective ? "" : "text-p4a-muted"}>
                     <span className={`tabular ${e.isEffective || e.kind === "void" ? "" : "line-through"}`}>
-                      {e.kind === "void" ? "" : `${localParts(e.at, who.timeZone).time} · ${e.kind === "end" ? t.clockedOut : e.statusName ?? ""}`}
+                      {e.kind === "void" ? "" : `${localParts(e.at, who.timeZone).time} · ${e.kind === "end" ? t.clockedOut : `${e.statusName ?? ""} · ${e.hoursMarket ?? t.noMarket}`}`}
                     </span>
                     {e.kind === "void" ? t.cancelledRow : null}
                     {" · "}
