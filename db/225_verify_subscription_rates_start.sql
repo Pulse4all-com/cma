@@ -16,10 +16,10 @@
 --      210's and the tenant's floor; A4 the inputs key equals 210's for every tenant without the setting; A5 the stored take
 --      follows each tenant's floor (no store's start and no complete month before it), or the take is older than the
 --      setting (waiting for the facts' next refresh)
---   B  on the dev seed's subscriptions tenant: B1 the setting's form (2026-13, 2026-6, June, 2026-06-01 refused CMA04;
+--   B  on the dev seed's subscriptions tenant: B1 the setting's form (2026-13, 2026-6, June, 2026-06-01, 1999-12 refused CMA04;
 --      empty and 2026-06 taken); B2 with a floor one month after the earliest store's start, computed again: each store's
 --      start the later of its own and the floor, no complete month before it, the inputs key changed; B3 the page as the
---      manager: no rate and no movement before the floor, the months from it as before, its document naming the floor,
+--      manager: no rate and no movement before the floor, the months from it as before (counts and amounts), its document naming the floor,
 --      Customers → Active's card on a month from it; B4 renewal survival and the renewal outcomes as before; the floor
 --      emptied again gives 210's starts
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
@@ -231,10 +231,11 @@ begin
              || ' ' || pg_temp.v0009zl_state(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.rates_start_month'', ''2026-6'')', v_t))
              || ' ' || pg_temp.v0009zl_state(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.rates_start_month'', ''June'')', v_t))
              || ' ' || pg_temp.v0009zl_state(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.rates_start_month'', ''2026-06-01'')', v_t))
+             || ' ' || pg_temp.v0009zl_state(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.rates_start_month'', ''1999-12'')', v_t))
              || ' ' || pg_temp.v0009zl_state(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.rates_start_month'', '''') on conflict (tenant_id, key) do update set value = excluded.value', v_t))
              || ' ' || pg_temp.v0009zl_state(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''subscriptions.rates_start_month'', ''2026-06'') on conflict (tenant_id, key) do update set value = excluded.value', v_t));
-    v_rows := v_rows || array['11', 'B1 the setting''s form: 2026-13, 2026-6, June and 2026-06-01 refused (CMA04); empty and 2026-06 taken',
-      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 ok ok' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['11', 'B1 the setting''s form: 2026-13, 2026-6, June, 2026-06-01 and 1999-12 refused (CMA04); empty and 2026-06 taken',
+      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 ok ok' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B2. a floor one month after the earliest store's start, the facts computed again
     v_floor := (select (min(value::date) + interval '1 month')::date from jsonb_each_text(v_starts0));
@@ -263,7 +264,8 @@ begin
            || (select count(*) from jsonb_array_elements(v_j -> 'months') m where (m ->> 'month')::date < v_floor
                  and (m -> 'counts' is distinct from 'null'::jsonb or m -> 'complete' is distinct from 'null'::jsonb)) || ' months with movements before it, '
            || (select count(*) from jsonb_array_elements(v_j -> 'months') m join jsonb_array_elements(v_months0) m0 on m0 ->> 'month' = m ->> 'month'
-               where (m ->> 'month')::date >= v_floor and m -> 'counts' is distinct from m0 -> 'counts') || ' months from it changed; floor '
+               where (m ->> 'month')::date >= v_floor and (m -> 'counts' is distinct from m0 -> 'counts' or m -> 'amounts' is distinct from m0 -> 'amounts'))
+           || ' months from it changed; floor '
            || coalesce(v_j ->> 'rates_start_month', 'none') || '; card '
            || case when v_card is null or v_card -> 'month' is null or v_card = 'null'::jsonb then 'none' when (v_card ->> 'month')::date >= v_floor then 'from the floor' else 'before the floor' end
       into v_txt;

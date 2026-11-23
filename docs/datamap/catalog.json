@@ -288,7 +288,7 @@
         },
         {
           "name": "subscription_store_start",
-          "what": "Per subscriptions connection (store) with an event: the month of its first event, its migrated events per month, the last month that holds at least subscriptions.migration_bulk_min_pct (default 5) of them, the later months below that share (stragglers, reported, never moving the start) and the month its Churn rate and Failed rate start: the month after that last migration month, else the first complete month after its first event (0009ze)",
+          "what": "Per subscriptions connection (store) with an event: the month of its first event, its migrated events per month, the last month that holds at least subscriptions.migration_bulk_min_pct (default 5) of them, the later months below that share (stragglers, reported, never moving the start) and the month its Churn rate and Failed rate start: the month after that last migration month, else the first complete month after its first event (0009ze), and not before the tenant's subscriptions.rates_start_month when that is set (0009zl)",
           "how": "Written again in full by cma.subscription_facts_refresh() in the minute job refresh_active_customers (step 2), from the subscription app's events (cma.subscription_event) through cma.subscription_rate_start_of; the application only reads it"
         },
         {

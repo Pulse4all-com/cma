@@ -14,7 +14,9 @@
 --                                              empty), 217
 --   cma.subscriptions_page_of                  217 (through cma.subscriptions_page and cma.subscription_file_record)
 -- grep -lw 'cma\.<function>' db/*verify*.sql for each. Prod: this script and 225 (its block B refuses prod's data, as
--- 211's and 217's do), and 213 (block A, edited); then the setting seeded as Martin decided (db/02_seed_pulse4all.sql,
+-- 211's and 217's do), then 213 (block A, edited), 211 and 217 (their block A reads the re-created functions' rights and
+-- settings; block B refused) and 179 and 215 (they read cma.check_tenant_setting; 179's E5 reads FAIL on its old copy's
+-- gap until #309); then the setting seeded as Martin decided (db/02_seed_pulse4all.sql,
 -- PROD_RUNBOOK 22.4c), which the facts' next refresh takes; then 225 again (A5 reads the floor in the stored take).
 --
 -- Why (Martin, 23 November 2026): the subscription app's events before 28 January 2026 reached the CMA late or not at all
@@ -37,7 +39,11 @@
 --   cma.subscription_facts_inputs_key_of(uuid,date)    210: the setting in the digest when it is set, so setting it
 --                                              computes the facts again at the minute job's next run
 --   cma.subscriptions_page_of(…)               216: the months' movements from the floor on (months before it hold none),
---                                              and the floor in the page's document (rates_start_month)
+--                                              and the floor in the page's document (rates_start_month). A store's own
+--                                              later start floors its rates, as before, not its movements (216 never
+--                                              floored the movements per store): Martin to confirm this reading of
+--                                              "still applies on top"
+-- Comments: cma.subscription_store_start and cma_read.subscription_store_start say rate_start_month holds the floor
 -- No table, view or column changes; no stored row changes here (the facts change at their next refresh once the setting
 -- is set). No index.
 --
@@ -373,8 +379,8 @@ begin
         and (case when length(new.value) > 4 then true else new.value::integer not between 1 and 1440 end) then
     raise exception 'Setting % takes a whole number of minutes from 1 to 1440', new.key using errcode = 'CMA04';
   -- the month the Churn rate, the Failed rate and the movements start for every store (0009zl), or nothing (no floor)
-  elsif new.key = 'subscriptions.rates_start_month' and new.value <> '' and new.value !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then
-    raise exception 'Setting % takes a month as YYYY-MM, such as 2026-06, or nothing (no floor)', new.key using errcode = 'CMA04';
+  elsif new.key = 'subscriptions.rates_start_month' and new.value <> '' and new.value !~ '^(20[0-9]{2}|2100)-(0[1-9]|1[0-2])$' then
+    raise exception 'Setting % takes a month from 2000-01 to 2100-12 as YYYY-MM, such as 2026-06, or nothing (no floor)', new.key using errcode = 'CMA04';
   -- the subscription app's own figures (0009zg): a gap's tolerance, in percent of the source's value and in the figure's unit
   elsif new.key = 'source_figures.tolerance_pct'
         and (case when length(new.value) > 3 then true else new.value::integer not between 0 and 100 end) then
@@ -442,6 +448,12 @@ as $$
   left join lb on lb.connection_id = fe.connection_id
 $$;
 alter function cma.subscription_rate_start_of(uuid, timestamptz) set jit = off;
+
+-- The store starts' table and its reader say what rate_start_month now holds
+comment on table cma.subscription_store_start is
+  'Per subscriptions connection (store) with an event (addition 0009ze): the month of its first event, its migrated events per month (YYYY-MM: count), the last month that holds at least subscriptions.migration_bulk_min_pct of them, the later months below that share (stragglers, reported, never moving the start) and the month its Churn rate and Failed rate start: the month after that last migration month, else the first complete month after its first event, and since 0009zl not before the tenant''s subscriptions.rates_start_month when that is set';
+comment on view cma_read.subscription_store_start is
+  'Per store of every tenant the reader sees (addition 0009ze): its migrated events per month, the last month of its migration, its stragglers and the month its Churn rate and Failed rate start (since 0009zl not before the tenant''s subscriptions.rates_start_month when that is set). Counts and months only';
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. The facts' inputs: the floor, when it is set
@@ -595,7 +607,7 @@ begin
   with m as materialized (
     select x.connection_id, x.market, x.month, x.kind, x.currency, x.subscriptions, x.amount, x.complete
     from cma.subscription_month_take x
-    where x.tenant_id = p_tenant_id and x.month between p_from and p_to and (v_floor is null or x.month >= v_floor)
+    where x.tenant_id = p_tenant_id and x.month between greatest(p_from, coalesce(v_floor, p_from)) and p_to
       and (p_market is null or x.market = p_market) and (p_store is null or x.connection_id = p_store)
   ), last_complete as (
     select max(x.month) as month

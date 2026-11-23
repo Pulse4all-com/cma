@@ -3828,16 +3828,16 @@ having count(distinct f.dims ->> 'status') filter (where f.dims ->> 'status' = a
 Expected: 0 rows. A row is a store whose total line will not show; say so before the browser step, and fix the cause (a holding status the adapter does not read, or a store not yet read) rather than the page. A store with no figure of today or yesterday at all is not counted here: the page leaves it out and names how many stores it covers.
 
 ## 22.4c Terminal and Studio: the rates' start month in prod (addition 0009zl)
-After 22.4 and before the merge: main's web calls none of the functions it re-creates.
+After 22.4 and before the merge. With the setting empty, every answer and the facts' digest stay as they are, so main's web and the minute job (which call `cma.check_tenant_setting`, the store starts and the inputs key) see no change. Seeding it changes the stored take at the facts' next refresh: from then on the rates of `cma_read.subscription_churn_month` and the Churn rate card start at June 2026, on main's web as well.
 
 **Terminal**
 ```bash
-run_migration prod 224_subscription_rates_start.sql 225_verify_subscription_rates_start.sql 0009zl-prod-$(date +%F) 213_verify_subscription_facts_speed.sql
+run_migration prod 224_subscription_rates_start.sql 225_verify_subscription_rates_start.sql 0009zl-prod-$(date +%F) 213_verify_subscription_facts_speed.sql 211_verify_subscription_facts.sql 217_verify_subscriptions_page.sql 179_verify_job_reads.sql 215_verify_source_figures.sql
 ```
 Expected:
 - 224 `COMMIT`.
 - 225 in prod: A1 to A5 `PASS` (A5 `no tenant with a floor`), B `REFUSED`, verdict `PASS, A ONLY | 225_verify_subscription_rates_start: 5 PASS, 0 FAIL`.
-- 213 as on its last prod run (block A `PASS`, B refused).
+- 213 as on its last prod run (block A `PASS`, B refused); 211 and 217 `REFUSED` with block A `PASS`, as on their prod runs (no dev seed); 215 `REFUSED` with A1 to A5 `PASS`, as 19.4; 179 as on its last prod run: E5 `FAIL` on its old copy's gap until #309's edit, every other row ok.
 
 Then the setting seeded: 22.2b's Studio block on **cma-prod-pg**. Expected: `2026-06`. Wait until the facts were computed after it (the minute job, within 15 minutes):
 
@@ -3862,7 +3862,7 @@ The PR changes files under `web/**` outside `web/verify/**`, so the merge starts
 
 Then compare each tile's source line (Total subscriptions, Paused and the amounts) with Reports → Data quality's Source figure gaps: the "Source figure gaps: {n}" of a tile is a count among the figures Data quality lists, which also lists canceled and the flows, so a tile's n is never above the matching findings and the link opens that check for `reports.view` or `tenant.configure` (plain text for `performance.team`).
 
-Expected: the six tiles, with "Subscription app: {n} on {date}" under Total subscriptions, Paused and each amount once the first day's figures exist, the movements from June 2026, the rates from June 2026 or a store's later start month ("For every store, the rates and the movements start in June 2026 at the earliest (Configuration)." under "Where each store's rates start"), Renewal survival, the mix and the list; Changes in the period and Who ended them as Pending parts; no name or email address anywhere. Customers → Active's Churn rate card shows the last complete month's Churn rate and Failed rate of the market filter, and under a segment or channel filter says the rate is per market.
+Expected: the six tiles, with "Subscription app: {n} on {date}" under Total subscriptions, Paused and each amount once the first day's figures exist, the movements from June 2026, the rates from June 2026 or a store's later start month ("For every store, the rates and the movements start in June 2026 at the earliest." under "Where each store's rates start"), Renewal survival, the mix and the list; Changes in the period and Who ended them as Pending parts; no name or email address anywhere. Customers → Active's Churn rate card shows the last complete month's Churn rate and Failed rate of the market filter, and under a segment or channel filter says the rate is per market.
 
 ## 22.7 Terminal: the times and the page verifiers on the merged build
 20.8's block (`cma_db prod`, then `131_time_all.sql` with `psql`, the file `0009zh-prod-$(date +%F)-131.txt` in `~/cma-audit`).
