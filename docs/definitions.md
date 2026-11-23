@@ -3510,7 +3510,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area (what an agent does comes from HubSpot, so My day has no activity choice) |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #PR, addition 0009zo) |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
 | Used by | No catalog key: no metric reads it. Pages: My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
 | As built today | `230` (columns, foreign keys to a market of the same tenant, the kind check on `time_event`, triggers for the mapping rules serialised per tenant, the functions and reads) and `231` (verify); the rules hold in the tables, so a direct write cannot break them. `cma.open_workday` keeps its one-argument signature (an explicit market at clock-in is a market change right after). The capture is built; the billing statement is not (backlog CMA-137). Matches the definition |
 
@@ -3529,7 +3529,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Home market" or "country of the person" for it: a person's zone and employer are other fields, and Market keeps its meaning, the country |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #PR, addition 0009zo) |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
 | Used by | No catalog key. People, clock-in (Welcome, My day); `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`, `POST /api/v1/me/day/start` |
 | As built today | `230`: a trigger checks an active hours market when the column is set or changed, a market that a person's Default market names keeps mapping to itself (the conflict a market change answers with 409), `cma.clock_in_hours_market(person)` applies the rule at every start event. Matches the definition |
 
@@ -3548,7 +3548,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Unknown market", "Other" or "None" for it; an empty cell where a label is shown; a stretch without a market is never left out of a sum |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #PR, addition 0009zo) |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
 | Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
 | As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
 
