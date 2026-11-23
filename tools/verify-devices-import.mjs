@@ -81,7 +81,7 @@ expect("the loan reference and the language's label staged; spv_id never",
   [rows.slice(0, 4).map((r) => [r[col("pledge_ref")], r[col("language")]]), /FIN1|FIN2|FREE/.test(sample.out ?? "")],
   [[["2", "English"], ["6", "English"], ["2", "English"], ["", "English"]], false],
   [[], true]);
-// addition 0009zl: the debt status's label as the register writes it, empty without one
+// addition 0009zm: the debt status's label as the register writes it, empty without one
 expect("the debt status's label staged as written, empty without one",
   rows.slice(0, 4).map((r) => r[col("debt_status")]),
   ["In debt collection", "", "Check first", ""],

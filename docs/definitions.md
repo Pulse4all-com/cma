@@ -960,9 +960,9 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Equivalent in the source system | The register's field `debt_status` |
 | Not to use | "Payment status", "dunning", "in arrears", "Paused" alone; Juo's Payment state and NetSuite's dunning stage stay their own terms |
 | Status | Proposed for Kira |
-| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
 | Used by | `flash.installed_base.under_debt_status`, `maintenance.paused_devices`, `data_quality.device_debt_status_unmapped`; Reports → Maintenance, Reports → Installed base, Flash's Installed base tab, Reports → Data quality |
-| As built today | `224` (addition 0009zl); the statuses and aliases are set in Studio (docs/import/devices.md, Debt status), none is seeded. Matches the definition |
+| As built today | `226` (addition 0009zm); the statuses and aliases are set in Studio (docs/import/devices.md, Debt status), none is seeded. Matches the definition |
 
 ### Pauses maintenance
 
@@ -979,9 +979,9 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Equivalent in the source system | None |
 | Not to use | "Suspended" or "blocked" for the pause |
 | Status | Proposed for Kira |
-| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
 | Used by | `maintenance.paused_devices`; Reports → Maintenance |
-| As built today | `cma.maintenance_items_of` (`224`). Matches the definition |
+| As built today | `cma.maintenance_items_of` (`226`). Matches the definition |
 
 ### Maintenance paused
 
@@ -998,9 +998,9 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Equivalent in the source system | None |
 | Not to use | "Paused" alone; Juo's paused (a subscription's status) and Flash's Paused subscriptions and Paused customers are other terms |
 | Status | Proposed for Kira |
-| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
 | Used by | `maintenance.paused_devices`; Reports → Maintenance |
-| As built today | `224` and `web/src/lib/maintenance.ts`. Matches the definition |
+| As built today | `226` and `web/src/lib/maintenance.ts`. Matches the definition |
 
 ### Maintenance's Debt status filter
 
@@ -1017,9 +1017,9 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Equivalent in the source system | None |
 | Not to use | "Without a debt status" for Maintenance's default, which is Maintenance not paused; "Unpaused" or "Not paused" alone (the subscription app's paused is another term) |
 | Status | Proposed for Kira; the default's name Maintenance not paused, and Without a debt status as its own value on both pages, accepted by Martin on 23 Nov 2026 |
-| Decided | docs/decisions.md, 23 Nov 2026, "Maintenance's Debt status selector ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Decided | docs/decisions.md, 23 Nov 2026, "Maintenance's Debt status selector ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
 | Used by | `maintenance.paused_devices`, `flash.installed_base.under_debt_status`; Reports → Maintenance, Reports → Installed base |
-| As built today | `maintenance_debt_matches` (`224`) and `web/src/components/MaintenanceFilters.tsx`. Matches the definition |
+| As built today | `maintenance_debt_matches` (`226`) and `web/src/components/MaintenanceFilters.tsx`. Matches the definition |
 
 ### Under a debt status
 
@@ -1032,13 +1032,13 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Counts / does not count | A device in stock is never counted, whatever its label; an unmapped label counts as without a debt status |
 | Unit and display | A count: a tile on the Installed base and on Flash's Installed base tab, and a breakdown by debt status |
 | Time rule | As of the take, or live |
-| Scope | The Installed base, in every set; its definition version is `0009zl` |
+| Scope | The Installed base, in every set; its definition version is `0009zm` |
 | Equivalent in the source system | None |
 | Not to use | "Paused" for this count |
 | Status | Proposed for Kira |
-| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
 | Used by | `flash.installed_base.under_debt_status`; Reports → Installed base, Flash |
-| As built today | `224` (`cma.flash_overviews`, `cma.flash_compute_of`). Matches the definition |
+| As built today | `226` (`cma.flash_overviews`, `cma.flash_compute_of`). Matches the definition |
 
 ### device_debt_status_unmapped
 
@@ -1055,9 +1055,9 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Equivalent in the source system | None |
 | Not to use | "Unknown" for a label that is empty |
 | Status | Proposed for Kira |
-| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
 | Used by | `data_quality.device_debt_status_unmapped`; Reports → Data quality |
-| As built today | `224`; fixed in the asset register (an alias in the CMA's catalog, or the label in the register). Matches the definition |
+| As built today | `226`; fixed in the asset register (an alias in the CMA's catalog, or the label in the register). Matches the definition |
 
 ## Subscription terms
 

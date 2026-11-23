@@ -23,7 +23,7 @@ import { resolve } from "../../access";
  * month of a forward horizon (from a month, 6, 12 or 24 months; H), per market and model, in planned exchanges (a
  * device's items within the bundling window counted once, in the month of the earliest action date) or in components
  * (G); filtered by market (K), model (D), scope (S: every tracked device, in the field, in stock) and since addition
- * 0009zl the debt status (B; by default the devices whose maintenance is paused, in the field under a debt status that
+ * 0009zm the debt status (B; by default the devices whose maintenance is paused, in the field under a debt status that
  * pauses it, are left out, and a line says how many, with a link that shows them; their items stay in the forecast and a
  * row of one is marked Paused). A figure opens its device list below; the due items without a due date are a note with a
  * link to Data quality. Team figures only: no figure per person exists. Shown to people holding reports.view or
@@ -51,7 +51,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
   const parsed = parseMaintenanceFilter(sp, currentMonth);
   const view = parseView(sp.view) ?? "exchanges";
   // a debt status the tenant's catalog does not hold (the database's CMA04): the default filter, said as an ignored filter
-  // (addition 0009zl), as any other filter out of line
+  // (addition 0009zm), as any other filter out of line
   const unknownDebt = (e: unknown) => e instanceof CmaDbError && e.sqlState === "CMA04" && !!parsed.filter.debt
     && !MAINTENANCE_DEBT_VALUES.includes(parsed.filter.debt);
   const read = await data().getMaintenance(me, parsed.filter).then((report) => ({ report, filter: parsed.filter, problem: parsed.problem }),
@@ -77,7 +77,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
     ...(listFilter.market ? { market: listFilter.market } : {}), ...(listFilter.model ? { model: listFilter.model } : {}),
     ...(filter.scope ? { scope: filter.scope } : {}), debt: filter.debt ?? "all",
   });
-  // the devices the default filter leaves out (0009zl): the line under the counts, with a link that shows them
+  // the devices the default filter leaves out (0009zm): the line under the counts, with a link that shows them
   const leftOut = filter.debt === MAINTENANCE_DEBT_DEFAULT && report.maintenancePausedDevices > 0;
   const showsPaused = filter.debt === "any" || (filter.debt !== null && filter.debt !== undefined
     && report.debtStatuses.some((d) => d.key === filter.debt && d.pausesMaintenance));

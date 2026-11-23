@@ -198,7 +198,7 @@ export function MaintenanceDeviceList({ list, report, copy, locale }: { list: Ma
             <td className="h-10 whitespace-nowrap px-2">{marketName(r.market, copy)}</td>
             <td className="h-10 whitespace-nowrap px-2">
               {text(r.deviceStatusName ?? r.deviceStatus)}
-              {/* a device under a debt status that pauses its maintenance (addition 0009zl): its items stay, marked */}
+              {/* a device under a debt status that pauses its maintenance (addition 0009zm): its items stay, marked */}
               {r.maintenancePaused ? <span className="ml-2" data-testid="maintenance-paused"><Badge tone="warning">{t.paused}</Badge></span> : null}
             </td>
             <td className="h-10 whitespace-nowrap px-2">{r.components.map((c) => kindName.get(c) ?? c).join(", ")}</td>

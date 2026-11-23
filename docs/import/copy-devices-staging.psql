@@ -6,7 +6,7 @@
 -- holds tenant.configure (the database checks it on every row). Nothing is loaded yet: the load is the next step.
 -- Since addition 0009j the file carries pledge_ref and language after end_of_life_on (tools/devices-to-staging.mjs of
 -- the same change): a file the tool wrote before it has two columns fewer, so convert the export again. Since addition
--- 0009zl it carries debt_status after language: a file of the tool before that has one column fewer; convert it again.
+-- 0009zm it carries debt_status after language: a file of the tool before that has one column fewer; convert it again.
 \set ON_ERROR_STOP on
 begin;
 set local role cma_app;

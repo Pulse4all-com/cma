@@ -25512,7 +25512,7 @@ count(device) where device_status.is_tracked and is_in_field and source_deleted_
 
 **Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
 
-**Computed in** `cma.maintenance_page` (0009zl); `cma.maintenance_page_of` (0009zl); `cma.maintenance_items_of` (0009zl); `maintenanceReport` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+**Computed in** `cma.maintenance_page` (0009zm); `cma.maintenance_page_of` (0009zm); `cma.maintenance_items_of` (0009zm); `maintenanceReport` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -25522,7 +25522,7 @@ join cma.device_debt_status dd on dd.tenant_id = dv.tenant_id and dd.key = dv.de
 where dv.tenant_id = :tenant_id and dv.source_deleted_at is null
 ```
 
-**Fixture check** Not run against dev or prod here; db/225_verify_device_debt_status.sql A6 and A7 check the count and the filter on a throwaway tenant, web/verify/reports.mjs the mock's mirror. Martin runs the query in Studio after the statuses are set.
+**Fixture check** Not run against dev or prod here; db/227_verify_device_debt_status.sql A6 and A7 check the count and the filter on a throwaway tenant, web/verify/reports.mjs the mock's mirror. Martin runs the query in Studio after the statuses are set.
 
 **Data prerequisites**
 
@@ -25531,7 +25531,7 @@ where dv.tenant_id = :tenant_id and dv.source_deleted_at is null
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - The tenant's debt statuses and their aliases set (docs/import/devices.md, Debt status) (data quality check `device_debt_status_unmapped`)
 
-**Documented in** features.md 5 (Reports -> Maintenance); data-model/0009.md, 0009zl; decisions.md, 23 Nov 2026 (every debt status pauses maintenance; the pause a default filter)
+**Documented in** features.md 5 (Reports -> Maintenance); data-model/0008.md, 0009zm; decisions.md, 23 Nov 2026 (every debt status pauses maintenance; the pause a default filter)
 
 **Notes**
 
@@ -33611,7 +33611,7 @@ count of device rows (not gone) with debt_status_key null and a debt_status key 
 
 **Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
 
-**Computed in** `cma.data_quality` (0009zg); `cma.data_quality_of` (0009zl); `cma.data_quality_assets_checks` (0009zl); `getDataQuality` in src/lib/data/postgres.ts
+**Computed in** `cma.data_quality` (0009zg); `cma.data_quality_of` (0009zm); `cma.data_quality_assets_checks` (0009zm); `getDataQuality` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -33619,9 +33619,9 @@ count of device rows (not gone) with debt_status_key null and a debt_status key 
 select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and debt_status_key is null and raw ? 'debt_status'
 ```
 
-**Fixture check** Not run against dev or prod here; db/225_verify_device_debt_status.sql A1 and A4 check the label, the count and the finding's market on a throwaway tenant (14 PASS locally, 23 November 2026). Martin runs the query in Studio after the first load with the field mapped.
+**Fixture check** Not run against dev or prod here; db/227_verify_device_debt_status.sql A1 and A4 check the label, the count and the finding's market on a throwaway tenant (14 PASS locally, 23 November 2026). Martin runs the query in Studio after the first load with the field mapped.
 
-**Documented in** kpis.md paragraph 11 (Data first); features.md paragraph 5 (Data -> Data quality); data-model/0009.md, 0009zl; docs/import/devices.md, Debt status
+**Documented in** kpis.md paragraph 11 (Data first); features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0009zm; docs/import/devices.md, Debt status
 
 **Notes**
 
@@ -35342,7 +35342,7 @@ count(*) where the device status's is_in_field and debt_status_key is not null (
 
 **Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
 
-**Computed in** `cma.flash_compute_of` (0009zl); `cma.flash_overviews` (0009zl); `cma.flash_overview` (0008zn); `default (InstalledBasePage)` in src/app/reports/installed-base/page.tsx; `FlashPage` in src/app/reports/flash/page.tsx
+**Computed in** `cma.flash_compute_of` (0009zm); `cma.flash_overviews` (0009zm); `cma.flash_overview` (0008zn); `default (InstalledBasePage)` in src/app/reports/installed-base/page.tsx; `FlashPage` in src/app/reports/flash/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -35351,18 +35351,18 @@ select count(*) from cma.device dv join cma.device_status st on st.tenant_id = d
 where dv.tenant_id = :tenant_id and dv.source_deleted_at is null and dv.debt_status_key is not null
 ```
 
-**Fixture check** Not run against dev or prod here: db/225_verify_device_debt_status.sql A8 checks the measure, the set and the labels on a throwaway tenant (in the field only, the set adding up to each market's row) and A10 that a tenant without debt statuses keeps 180's figures; 14 PASS locally on PostgreSQL 16, 23 November 2026. Martin runs 225 and the query in Studio after the migration.
+**Fixture check** Not run against dev or prod here: db/227_verify_device_debt_status.sql A8 checks the measure, the set and the labels on a throwaway tenant (in the field only, the set adding up to each market's row) and A10 that a tenant without debt statuses keeps 180's figures; 14 PASS locally on PostgreSQL 16, 23 November 2026. Martin runs 227 and the query in Studio after the migration.
 
 **Data prerequisites**
 
 - The register's debt_status field mapped (cma.set_connection_field, device, debt_status) and read by a full snapshot
 - Every debt status label of the register an alias of a debt status (data quality check `device_debt_status_unmapped`)
 
-**Documented in** features.md, Assets → Installed base; data-model/0009.md, 0009zl; definitions.md, Asset terms (Debt status, Under a debt status); docs/import/devices.md, Debt status
+**Documented in** features.md, Assets → Installed base; data-model/0008.md, 0009zm; definitions.md, Asset terms (Debt status, Under a debt status); docs/import/devices.md, Debt status
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Asset terms, Debt status and Under a debt status; for Kira to confirm). The installed base's definition version is 0009zl from this measure on, so the watch compares no installed base across it. Not a payment state: the subscription app's Payment state and NetSuite's own terms stay apart (docs/open-decisions.md holds the cross-check).
+Definition status: Proposed (docs/definitions.md, Asset terms, Debt status and Under a debt status; for Kira to confirm). The installed base's definition version is 0009zm from this measure on, so the watch compares no installed base across it. Not a payment state: the subscription app's Payment state and NetSuite's own terms stay apart (docs/open-decisions.md holds the cross-check).
 
 #### `flash.churn.churned`
 

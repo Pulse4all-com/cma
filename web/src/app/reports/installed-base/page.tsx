@@ -24,7 +24,7 @@ import { resolve } from "../../access";
  * Assets → Installed base, the "now" view (addition 0009f; Martin, 8 November 2026, D1 to D7; a page of the Assets
  * group since 0008zw). No As of: Flash's Installed base tab keeps the history. The default view loads the stored current
  * take's figures alone (0009e: one document read, shown with Refreshed at, live when the take may not be read): the
- * filters (Market K, Model D, Operational status S, Debt status B since 0009zl), the tiles of today, In the field per model as a donut and per market
+ * filters (Market K, Model D, Operational status S, Debt status B since 0009zm), the tiles of today, In the field per model as a donut and per market
  * stacked per model. The records, the two breakdowns, the work lists (Devices past due; In the field without a linked
  * subscription) and the serial search load only when asked, as address state (panel=, serial=), one at a time, each a
  * server-rendered segment under a skeleton sized like its content; a list's read starts with the document's and streams
@@ -74,7 +74,7 @@ export default async function InstalledBasePage({ searchParams }: PageProps<"/re
   // the donut: In the field per model from the set that carries the model with every measure (the split's rule, 0008zy),
   // of the market shown; the page filters narrow it too, and a Model filter leaves that model alone (one slice, not the
   // register's other models at 0)
-  // under a Debt status filter the one set holding the model and the debt status (0009zl): modelSplitSetOf
+  // under a Debt status filter the one set holding the model and the debt status (0009zm): modelSplitSetOf
   const splitSet = modelSplitSetOf(def, st.pageFilters);
   const split = (splitOf(def, narrowed.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder), splitSet) ?? [])
     .filter((x) => !st.pageFilters.model || x.key === st.pageFilters.model);

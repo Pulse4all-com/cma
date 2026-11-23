@@ -2636,7 +2636,7 @@ function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog
       { key: "stolen_missing", name: "Stolen/Missing", isInField: false, isInStock: false, isTracked: false }],
     markets: seedIntakeConfig(me).markets.map((m) => ({ code: m.code, sortOrder: m.sortOrder })),
     windowDays: 90,
-    // addition 0009zl: two debt statuses, both pausing maintenance (test labels)
+    // addition 0009zm: two debt statuses, both pausing maintenance (test labels)
     debtStatuses: [{ key: "in_debt_collection", name: "In debt collection (test)", pausesMaintenance: true, sortOrder: 10 },
       { key: "check_first", name: "Check first (test)", pausesMaintenance: true, sortOrder: 40 }],
   };

@@ -1061,7 +1061,7 @@ type MaintenancePageDb = {
   cells: { bucket: string; market: string; model: string; components: Record<string, number>; component_items: number; end_of_life: number; exchanges: number }[];
   unknown: { market: string; model: string; components: Record<string, number>; items: number }[]; unknown_items: number; devices: number;
   filter_markets: string[]; filter_models: { key: string; name: string | null }[];
-  // addition 0009zl
+  // addition 0009zm
   maintenance_paused_devices: number; debt_statuses: { key: string; name: string; pauses_maintenance: boolean }[];
 };
 type MaintenanceRowDb = {
@@ -2857,7 +2857,7 @@ export const postgresData: CmaData = {
   async getMaintenance(me, filter): Promise<MaintenanceReport> {
     return withTenant(ctx(me), async (q) => {
       // the function checks the permission, the horizon (the tenant's current month or later, 1 to 24 months) and the filters first (addition 0008zi);
-      // the debt status filter, the sixth argument, since 0009zl (CMA04 for a value that is no filter and no debt status of the catalog)
+      // the debt status filter, the sixth argument, since 0009zm (CMA04 for a value that is no filter and no debt status of the catalog)
       const j = one((await q.query<{ j: MaintenancePageDb }>(`select cma.maintenance_page($1::date, $2, $3, $4, $5, $6) as j`,
         [filter.fromMonth, filter.months, filter.market, filter.model, filter.scope, filter.debt ?? null])).rows, "maintenance_page").j;
       return {

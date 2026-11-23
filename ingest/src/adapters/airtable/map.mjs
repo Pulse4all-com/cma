@@ -7,7 +7,7 @@
  *   entity device             field = a staging column (serial, model, status, country, warehouse_ref, customer_ref,
  *                             subscription_ref, order_ref, first_shipped_on, stock_received_on, last_shipped_on,
  *                             warranty_until, end_of_life_on, since addition 0009j pledge_ref and language, and since
- *                             0009zl debt_status) → the Airtable field that feeds it. pledge_ref (the loan a device
+ *                             0009zm debt_status) → the Airtable field that feeds it. pledge_ref (the loan a device
  *                             secures; Pulse4all's maatje_id) and language take a single select (its option name) or
  *                             a text field only, debt_status (the register's debt status label; Pulse4all's
  *                             debt_status) a single select only: any other type fails the read with field_type_changed
@@ -19,7 +19,7 @@
  * the database. The record id is the API's record.id. No mapping means no read (mapping_not_set). A mapped field the
  * API leaves out of a record (Airtable leaves empty fields out; a single select's empty option) is empty: its column is
  * null in the row, never left out, so the load writes it empty rather than keeping the device's earlier value. The two
- * columns of addition 0009j (pledge_ref, language) and 0009zl's debt_status are in a row only while mapped
+ * columns of addition 0009j (pledge_ref, language) and 0009zm's debt_status are in a row only while mapped
  * (OPTIONAL_COLUMNS): the database reads a key a chunk leaves out as empty, so the row is the same to it, and a database
  * before the addition, which knows not the key, still takes the rows of a register that does not map it. A mapped component kind whose fields
  * are all empty is sent as an empty object, so the load closes the device's current one (the register emptied it); a
@@ -40,17 +40,17 @@ export const OBJECT_TYPE = "device";
 export const DEVICE_COLUMNS = ["serial", "model", "status", "country", "warehouse_ref", "customer_ref", "subscription_ref", "order_ref",
   "first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on", "pledge_ref", "language", "debt_status"];
 /**
- * The Airtable field types a column takes, lower case as the schema check compares them (addition 0009j; debt_status 0009zl): a single
+ * The Airtable field types a column takes, lower case as the schema check compares them (addition 0009j; debt_status 0009zm): a single
  * select's option name or text. A column not named here takes the type the connection first recorded for its field
  */
 export const FIELD_TYPES = {
   pledge_ref: ["singleselect", "singlelinetext", "multilinetext"],
   language: ["singleselect", "singlelinetext", "multilinetext"],
-  // a single select only (addition 0009zl): a typed text field could carry a person's note about a debt, never read
+  // a single select only (addition 0009zm): a typed text field could carry a person's note about a debt, never read
   debt_status: ["singleselect"],
 };
 export const DATE_COLUMNS = ["first_shipped_on", "stock_received_on", "last_shipped_on", "warranty_until", "end_of_life_on"];
-/** Columns a row holds only while mapped (addition 0009j; debt_status 0009zl); every other column is always in a row */
+/** Columns a row holds only while mapped (addition 0009j; debt_status 0009zm); every other column is always in a row */
 export const OPTIONAL_COLUMNS = ["pledge_ref", "language", "debt_status"];
 const KIND = /^[a-z0-9]+(_[a-z0-9]+)*$/;
 const NAME = /^[a-z][a-z0-9_]{0,39}$/;

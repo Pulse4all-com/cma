@@ -205,7 +205,7 @@ Expected: the counts and the phase times. `rows` = step 6's `n`; on the first lo
 records), `updated` (changed ones), `unchanged`, `missing_now` (devices the register no longer holds),
 `components_replaced` (a pads or battery serial that changed), `components_closed` (a kind the register emptied, its
 component closed with no new row; a replaced component counts in `components_replaced` only); `unmapped_model`, `unmapped_status` and
-`unmapped_market` and, since addition 0009zl, `unmapped_debt_status` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
+`unmapped_market` and, since addition 0009zm, `unmapped_debt_status` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
 without ES and IT: dev and prod hold both since 27 October 2026; a market added later needs seed `02` again for its
 alias; `unmapped_debt_status` is 0 once the debt statuses and aliases are set, Debt status below), `customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
 `CMA04`, `CMA06`) writes nothing and says why, naming the export's line. `true` is a full snapshot: every record of
@@ -308,7 +308,7 @@ The on-screen check of Reports → Maintenance, its grid, a figure's device list
 `cma-web` after the merge, with prod's image (docs/RUNBOOK.md, 4. Try a new image in dev first), as the test user
 `admin`.
 
-## Debt status (addition 0009zl)
+## Debt status (addition 0009zm)
 
 The register's field `debt_status` (Airtable 2.0, Installed Base; a single select) says that a device's maintenance
 waits on a debt: In debt collection, Write off + restart, To be submitted or Check first. All four pause maintenance
@@ -319,7 +319,7 @@ paused devices out by default. The CMA reads the field and never writes it.
 - The staging file gains `debt_status` after `language` (the label as the register writes it, empty without one). A
   staging file the tool wrote before this change must be converted again, as `docs/import/copy-devices-staging.psql`
   says.
-- The order matters: set the statuses and aliases first (the block below, run by Martin after `224`), then map the
+- The order matters: set the statuses and aliases first (the block below, run by Martin after `226`), then map the
   Airtable field as a single select (a typed text is never read, as it could carry a person's note). Otherwise every
   labelled device is an unmapped finding (`device_debt_status_unmapped`) and none is paused.
 
@@ -350,7 +350,7 @@ The Airtable mapping is one line, with the field's id from the dry run's list as
 ```sql
 select cma.set_connection_field('<assets connection_id>', 'device', 'debt_status', '', '<fld id of debt_status>');
 ```
-Verified locally on PostgreSQL 16, 23 November 2026: `225` 14 PASS (provoked 0 PASS, 14 FAIL), `tools/verify-devices-import`
+Verified locally on PostgreSQL 16, 23 November 2026: `227` 14 PASS (provoked 0 PASS, 14 FAIL), `tools/verify-devices-import`
 15 PASS, the ingest's `verify/assets-mapping` 60 PASS and `verify/assets-flow` 42 PASS.
 
 ## A later snapshot

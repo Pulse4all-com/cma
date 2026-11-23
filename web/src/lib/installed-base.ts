@@ -19,7 +19,7 @@ export const INSTALLED_BASE_PAGE_ROWS = 50;
 /** The columns the page's lists leave out (D5: References, Missing references and Subscription linked); their files keep them */
 export const INSTALLED_BASE_HIDDEN_COLUMNS: readonly string[] = ["refs", "missing_refs", "link"];
 /**
- * The dims the page narrows the whole document by (D3): the model, the operational status and, since addition 0009zl, the
+ * The dims the page narrows the whole document by (D3): the model, the operational status and, since addition 0009zm, the
  * debt status; the market is the page's own (K)
  */
 export const INSTALLED_BASE_PAGE_FILTERS: readonly string[] = ["model", "status", "debt_status"];
@@ -29,7 +29,7 @@ export const DONUT_MAX_SLICES = 5;
 export const OTHER_KEY = "-other";
 
 /**
- * The panels (D4), one open at a time: the three breakdowns from the take (the debt status's since addition 0009zl), the
+ * The panels (D4), one open at a time: the three breakdowns from the take (the debt status's since addition 0009zm), the
  * three lists read on demand
  */
 export type InstalledBasePanel = "breakdown" | "subscription" | "debt" | "records" | "past_due" | "unlinked";
@@ -73,7 +73,7 @@ export function panelSet(panel: InstalledBasePanel, def: FlashOverviewDef): read
 }
 
 /**
- * The Debt status selector's choices (addition 0009zl): Without a debt status (none), With a debt status (any), then each
+ * The Debt status selector's choices (addition 0009zm): Without a debt status (none), With a debt status (any), then each
  * debt status of the tenant's catalog in its sort order (the document's labels debt_status and debt_status_order), by name
  * where two share an order; a status a row holds that the catalog no longer names follows, as its key
  */
@@ -94,7 +94,7 @@ export function debtChoicesOf(labels: Readonly<Record<string, Readonly<Record<st
 
 /**
  * The set the donut and the per-market stacks read In the field per model from: the headline split's set, or under a Debt
- * status filter the set [market, model, debt_status], the one set holding both the model and the debt status (0009zl)
+ * status filter the set [market, model, debt_status], the one set holding both the model and the debt status (0009zm)
  */
 export function modelSplitSetOf(def: FlashOverviewDef, pageFilters: Readonly<Record<string, string>>): readonly string[] {
   const own = FLASH_SPLITS[def.key]?.set ?? [];

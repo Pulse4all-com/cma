@@ -247,8 +247,8 @@ begin
          where table_schema = 'cma' and table_name = 'device_import_row' and column_name in ('pledge_ref', 'language')) is distinct from 'pledge_ref:text,language:text'
      or (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
          where table_schema = 'cma' and table_name = 'device_import_staging')
-         -- 0009zl (224) adds debt_status at the end
-         not like '%,external_refs,pledge_ref,language' || (case when exists (select 1 from cma.schema_migration where version = '0009zl') then ',debt_status' else '' end) then
+         -- 0009zm (226) adds debt_status at the end
+         not like '%,external_refs,pledge_ref,language' || (case when exists (select 1 from cma.schema_migration where version = '0009zm') then ',debt_status' else '' end) then
     v_bad := v_bad || 'columns; ';
   end if;
   if (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'cma.device'::regclass and conname = 'device_pledge_ref_check')

@@ -80,7 +80,7 @@ const FIELDS = [
 ];
 // addition 0009j: the loan reference and the language mapped too (section H)
 const FIELDS_0009J = [...FIELDS, field("device", "pledge_ref", null, "maatje_id"), field("device", "language", null, "language")];
-// addition 0009zl: the debt status mapped too (section I)
+// addition 0009zm: the debt status mapped too (section I)
 const FIELDS_0009ZL = [...FIELDS_0009J, field("device", "debt_status", null, "debt_status")];
 // the types as the first read recorded them (the fixture's, before any switch changes the schema)
 const TYPES = new Map(source.fields.map((f) => [f.id, f.type.toLowerCase()]));
@@ -456,7 +456,7 @@ const block = mappingBlock({ connection: CONN.connectionId, map: exampleMap, fie
 const generated = block.lines.map((l) => /cma\.set_connection_field\('[^']+', '([a-z_]+)', '([a-z_]+)', '([a-z_]*)', '(fld[A-Za-z0-9]{14})'\)/.exec(l)?.slice(1).join("/")).sort();
 const wanted = FIELDS_0009ZL.map((f) => [f.entity, f.field, f.refSystem ?? "", f.property].join("/")).sort();
 const renamedMap = { ...exampleMap, columns: { ...exampleMap.columns, serial: "aed_serial_number" } };
-expect("F5 the mapping step generated from the dry run's list and the map file: the 23 fields by id (maatje_id and language since 0009j, debt_status since 0009zl), as the adapter maps them; a header the table lacks named",
+expect("F5 the mapping step generated from the dry run's list and the map file: the 23 fields by id (maatje_id and language since 0009j, debt_status since 0009zm), as the adapter maps them; a header the table lacks named",
   [block.mapped, JSON.stringify(generated) === JSON.stringify(wanted), block.missing, mappingBlock({ connection: CONN.connectionId, map: renamedMap, fields: dry.tableFieldList }).missing,
     studioBlock(CONN.connectionId, block.lines).split("\n").length, block.lines[0].endsWith("-- aed_sn (singleLineText)")],
   [23, true, [], ["aed_serial_number"], 30, true], [22, false, ["x"], [], 0, false]);
@@ -501,7 +501,7 @@ expect("H4 a full read sends both keys on every row: the loan as its option name
     sent9.filter((r) => r.pledge_ref === null).length, sent9.some((r) => Object.values(r).includes("FIN-FIXTURE-1"))],
   [201, true, "4", "Nederlands", 51, false], [200, false, null, null, 0, true]);
 
-// ---- I. The debt status (addition 0009zl) ------------------------------------------------------------------------------
+// ---- I. The debt status (addition 0009zm) ------------------------------------------------------------------------------
 const mZ = mappingOf(configOf({}, FIELDS_0009ZL));
 const allowedZ = allowedTypesOf(mZ);
 const iRow = rowOf(recordOf("recFixture0009aaa"), mZ, { dateFormat: "dmy" });

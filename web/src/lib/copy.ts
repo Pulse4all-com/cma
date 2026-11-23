@@ -1731,7 +1731,7 @@ const en = {
     component_device: "Device, end of life",
     openContact: "Open the contact in the customer records",
     noSerial: "No serial number",
-    // addition 0009zl: the debt status filter (default: without a debt status that pauses maintenance)
+    // addition 0009zm: the debt status filter (default: without a debt status that pauses maintenance)
     debtFilter: "Debt status",
     debtUnpaused: "Maintenance not paused",
     debtNone: "Without a debt status",
@@ -4086,7 +4086,7 @@ const en = {
     m_devices_on_holding: "Devices on holding subscriptions",
     m_devices_per_holding_subscription: "Devices per holding subscription",
     m_in_field_on_holding: "In the field on a holding subscription",
-    // addition 0009zl: the register's debt status
+    // addition 0009zm: the register's debt status
     m_under_debt_status: "Under a debt status",
     d_debt_status: "Debt status",
     noDebtStatus: "Without a debt status",

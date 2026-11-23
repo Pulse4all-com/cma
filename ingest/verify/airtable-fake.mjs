@@ -41,7 +41,7 @@ export function assetsSource(nowMs = Date.now()) {
     // addition 0009j: the loan a device secures (a single select of loan numbers), its language (a single select), and
     // the register's own SPV label, which is never read
     ["maatje_id", "singleSelect"], ["language", "singleSelect"], ["spv_id", "singleSelect"],
-    // addition 0009zl: the register's debt status (a single select; empty on most devices)
+    // addition 0009zm: the register's debt status (a single select; empty on most devices)
     ["debt_status", "singleSelect"],
   ].map(([name, type], i) => ({ id: `fldFixture${String(i).padStart(7, "0")}`, name, type }));
   const ago = (minutes) => new Date(nowMs - minutes * 60_000).toISOString();

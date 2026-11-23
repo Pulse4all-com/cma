@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 225_verify_device_debt_status.sql: verifies addition 0009zl, the debt status on devices
+-- 227_verify_device_debt_status.sql: verifies addition 0009zm, the debt status on devices
 -- =============================================================================================
 -- Universal: no seed is assumed. Block S checks the addition, the tables, the grants and the functions' rights; blocks A1
 -- to A12 each work on throwaway tenants (Europe/Amsterdam) inside a subtransaction that is always rolled back, so nothing
@@ -9,9 +9,9 @@
 -- Cloud SQL Studio shows no notices: a check that fails raises "FAIL …" and stops its block; every check that passed
 -- writes one row, and the last row is the verdict: "PASS | 14 PASS, 0 FAIL" (provoked: "PROVOKED, NOT A PASS"). A block
 -- that stopped counts its checks as FAIL; the verdict is reached only when the client goes on after an error (psql
--- -v ON_ERROR_STOP=0, as the provoked run does). Run as your own IAM login after 224_device_debt_status.sql; then the
+-- -v ON_ERROR_STOP=0, as the provoked run does). Run as your own IAM login after 226_device_debt_status.sql; then the
 -- verifies its header names.
---   S1  0009zl recorded after 0009zk; the two tables with row-level security, the tenant policy and the audit trigger; the
+--   S1  0009zm recorded after 0009zk; the two tables with row-level security, the tenant policy and the audit trigger; the
 --       application reads and writes both but deletes no debt status; the readers see neither; cma.device.debt_status_key
 --       with its foreign key and partial index; the staging's and the row types' debt_status; connection_field's checks
 --   S2  every new or remade function the application's only and in the caller's rights; JIT off where it was; the
@@ -31,7 +31,7 @@
 --   A7  the public reads: the page and the list with the filter as the admin; an unknown filter CMA04; the agent CMA06;
 --       112's forms still answer as before
 --   A8  the installed base's take: under_debt_status counts devices in the field under a debt status only; the set
---       [market, model, debt_status] adds up to the totals; the labels and their order; the definition version 0009zl
+--       [market, model, debt_status] adds up to the totals; the labels and their order; the definition version 0009zm
 --   A9  the records: the filter debt_status (a key, none, any), the measure under_debt_status, each row's debt status
 --   A10 a tenant without debt statuses: the installed base 180's row for row (the new set none alone, under_debt_status 0),
 --       the Maintenance reads with the default filter as 116's
@@ -52,11 +52,11 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);   -- 'true' to make every block fail
 
-drop table if exists pg_temp.verify_0009zl;
-create temp table verify_0009zl (ord int, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0009zm;
+create temp table verify_0009zm (ord int, check_name text, result text, detail text);
 
 -- A statement's SQLSTATE, or ok
-create or replace function pg_temp.v0009zl_code(p_sql text)
+create or replace function pg_temp.v0009zm_code(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -69,7 +69,7 @@ end
 $$;
 
 -- The acting context: the application (or the owner), the tenant, a person
-create or replace function pg_temp.v0009zl_as(x jsonb, p_who text, p_role text default 'cma_app')
+create or replace function pg_temp.v0009zm_as(x jsonb, p_who text, p_role text default 'cma_app')
 returns void
 language sql
 as $$
@@ -78,7 +78,7 @@ as $$
 $$;
 
 -- 116's cma.maintenance_items_of, kept for the comparison (A5, A10)
-create or replace function pg_temp.v0009zl_items_0008zk(p_tenant_id uuid, p_today date)
+create or replace function pg_temp.v0009zm_items_0008zk(p_tenant_id uuid, p_today date)
 returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
                is_in_field boolean, is_in_stock boolean, component_key text, component_order integer, due_on date, basis text,
                action_on date, past_due boolean, exchange_key text, exchange_on date)
@@ -141,7 +141,7 @@ as $$
 $$;
 
 -- 180's installed base (cma.flash_compute_of's branch), kept for the comparison (A10)
-create or replace function pg_temp.v0009zl_ib_0009p(p_tenant_id uuid)
+create or replace function pg_temp.v0009zm_ib_0009p(p_tenant_id uuid)
 returns table (dims jsonb, measures jsonb)
 language sql stable
 as $$
@@ -160,7 +160,7 @@ as $$
 $$;
 
 -- A set of rows as one text, to compare two reads (collate "C": Cloud SQL orders text under en_US)
-create or replace function pg_temp.v0009zl_set(p_rows jsonb[])
+create or replace function pg_temp.v0009zm_set(p_rows jsonb[])
 returns text
 language sql immutable
 as $$
@@ -174,7 +174,7 @@ $$;
 --   rec-1 field GB ' in DEBT collection '   rec-2 field GB 'Check first'   rec-3 field NL 'Payment plan' (no alias)
 --   rec-4 stock GB 'In debt collection'     rec-5 field GB '' (none)       rec-6 field GB 'x@y.example' (an @)
 -- Its ids and the load's answer as jsonb (the role and the acting person left as the admin's)
-create or replace function pg_temp.v0009zl_tenant(p_slug text, p_statuses boolean)
+create or replace function pg_temp.v0009zm_tenant(p_slug text, p_statuses boolean)
 returns jsonb
 language plpgsql
 as $$
@@ -184,10 +184,10 @@ declare
   v    jsonb;
   r    record;
 begin
-  v_t := cma.create_tenant(p_slug, 'Verify 0009zl', 'Europe/Amsterdam');
+  v_t := cma.create_tenant(p_slug, 'Verify 0009zm', 'Europe/Amsterdam');
   v := jsonb_build_object('t', v_t);
   for r in select * from (values ('admin', 'admin'), ('agent', 'agent')) as x(name, role_key) loop
-    insert into cma.app_user (tenant_id, email, display_name) values (v_t, format('verify-0009zl-%s@example.invalid', r.name), r.name) returning id into v_id;
+    insert into cma.app_user (tenant_id, email, display_name) values (v_t, format('verify-0009zm-%s@example.invalid', r.name), r.name) returning id into v_id;
     insert into cma.user_role (tenant_id, user_id, role_id) select v_t, v_id, ar.id from cma.app_role ar where ar.tenant_id = v_t and ar.key = r.role_key;
     v := v || jsonb_build_object(r.name, v_id);
   end loop;
@@ -211,20 +211,20 @@ begin
     insert into cma.device_debt_status_alias (tenant_id, alias, key) values
       (v_t, 'in debt collection', 'in_debt_collection'), (v_t, 'check first', 'check_first');
   end if;
-  perform pg_temp.v0009zl_as(v, 'admin');
+  perform pg_temp.v0009zm_as(v, 'admin');
   insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, components, debt_status) values
-    ('v0009zl-load', 2, 'rec-1', 'SN-D1', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-1", "expires_on": "2026-06-01"}}', ' in DEBT collection '),
-    ('v0009zl-load', 3, 'rec-2', 'SN-D2', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-2", "expires_on": "2026-06-01"}}', 'Check first'),
-    ('v0009zl-load', 4, 'rec-3', 'SN-D3', 'hs1', 'field', 'NL', '{"pads": {"serial": "P-3", "expires_on": "2026-06-01"}}', 'Payment plan'),
-    ('v0009zl-load', 5, 'rec-4', 'SN-D4', 'hs1', 'stock', 'GB', '{"pads": {"serial": "P-4", "expires_on": "2026-06-01"}}', 'In debt collection'),
-    ('v0009zl-load', 6, 'rec-5', 'SN-D5', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-5", "expires_on": "2026-06-01"}}', ''),
-    ('v0009zl-load', 7, 'rec-6', 'SN-D6', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-6", "expires_on": "2026-06-01"}}', 'x@y.example');
-  return v || jsonb_build_object('load', cma.load_device_snapshot('v0009zl-load', (v ->> 'register')::uuid, true));
+    ('v0009zm-load', 2, 'rec-1', 'SN-D1', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-1", "expires_on": "2026-06-01"}}', ' in DEBT collection '),
+    ('v0009zm-load', 3, 'rec-2', 'SN-D2', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-2", "expires_on": "2026-06-01"}}', 'Check first'),
+    ('v0009zm-load', 4, 'rec-3', 'SN-D3', 'hs1', 'field', 'NL', '{"pads": {"serial": "P-3", "expires_on": "2026-06-01"}}', 'Payment plan'),
+    ('v0009zm-load', 5, 'rec-4', 'SN-D4', 'hs1', 'stock', 'GB', '{"pads": {"serial": "P-4", "expires_on": "2026-06-01"}}', 'In debt collection'),
+    ('v0009zm-load', 6, 'rec-5', 'SN-D5', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-5", "expires_on": "2026-06-01"}}', ''),
+    ('v0009zm-load', 7, 'rec-6', 'SN-D6', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-6", "expires_on": "2026-06-01"}}', 'x@y.example');
+  return v || jsonb_build_object('load', cma.load_device_snapshot('v0009zm-load', (v ->> 'register')::uuid, true));
 end
 $$;
 
 -- The devices' keys and raw labels as one text (the owner's read)
-create or replace function pg_temp.v0009zl_keys(x jsonb)
+create or replace function pg_temp.v0009zm_keys(x jsonb)
 returns text
 language sql
 as $$
@@ -239,9 +239,9 @@ declare
   v_bad     text := '';
   v_tab     text;
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009zl') or v_provoke
+  if not exists (select 1 from cma.schema_migration where version = '0009zm') or v_provoke
      or not exists (select 1 from cma.schema_migration where version = '0009zk') then
-    raise exception 'FAIL S1: addition 0009zl not recorded after 0009zk';
+    raise exception 'FAIL S1: addition 0009zm not recorded after 0009zk';
   end if;
   foreach v_tab in array array['device_debt_status', 'device_debt_status_alias'] loop
     if to_regclass('cma.' || v_tab) is null then
@@ -282,7 +282,7 @@ begin
   if v_bad <> '' then
     raise exception 'FAIL S1: %', v_bad;
   end if;
-  insert into verify_0009zl values (1, 'S1 0009zl after 0009zk; two tables with RLS and audit, no delete of a status; the device''s key; staging, types, mapping', 'PASS',
+  insert into verify_0009zm values (1, 'S1 0009zm after 0009zk; two tables with RLS and audit, no delete of a status; the device''s key; staging, types, mapping', 'PASS',
     'device_debt_status, device_debt_status_alias; device_debt_status_fkey, device_debt_status_idx; staging ends with debt_status');
 end
 $$;
@@ -332,7 +332,7 @@ begin
   if v_bad <> '' or v_provoke then
     raise exception 'FAIL S2: %', coalesce(nullif(v_bad, ''), 'provoked');
   end if;
-  insert into verify_0009zl values (2, 'S2 every function the application''s, the caller''s rights; JIT off kept; 112''s and 116''s forms kept; maintenance_due_of 17 columns', 'PASS',
+  insert into verify_0009zm values (2, 'S2 every function the application''s, the caller''s rights; JIT off kept; 112''s and 116''s forms kept; maintenance_due_of 17 columns', 'PASS',
     '29 functions; data_quality_of, flash_compute_of, flash_rows_of jit = off; the new public forms without defaults');
 end
 $$;
@@ -347,14 +347,14 @@ declare
   v_bad     text;
 begin
   begin
-    x := pg_temp.v0009zl_tenant('verify-0009zl-a1', true);
+    x := pg_temp.v0009zm_tenant('verify-0009zm-a1', true);
     perform set_config('role', 'cma_owner', true);
     -- A1. mapped, unmapped and counted, empty, an @ never stored
-    v_bad := pg_temp.v0009zl_keys(x);
+    v_bad := pg_temp.v0009zm_keys(x);
     if v_bad is distinct from 'rec-1=in_debt_collection/in DEBT collection rec-2=check_first/Check first rec-3=-/Payment plan rec-4=in_debt_collection/In debt collection rec-5=-/- rec-6=-/-'
        or (x -> 'load' ->> 'inserted')::int <> 6 or (x -> 'load' ->> 'unmapped_debt_status')::int <> 1
        or (select (r.counts ->> 'unmapped_debt_status')::int from cma.sync_run r
-           where r.tenant_id = (x ->> 't')::uuid and r.job = 'assets_import' and r.stream = 'v0009zl-load') is distinct from 1
+           where r.tenant_id = (x ->> 't')::uuid and r.job = 'assets_import' and r.stream = 'v0009zm-load') is distinct from 1
        or v_provoke then
       raise exception 'FAIL A1: % (%)', v_bad, x -> 'load';
     end if;
@@ -362,9 +362,9 @@ begin
       v_bad || '; inserted 6, unmapped_debt_status 1 (the answer and the run''s counts)'];
 
     -- A2. an unchanged rerun; an emptied field clears the key; an alias added later maps the label
-    perform pg_temp.v0009zl_as(x, 'admin');
+    perform pg_temp.v0009zm_as(x, 'admin');
     insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, components, debt_status)
-    select 'v0009zl-rerun', s.source_row, s.source_id, s.serial, s.model, s.status, s.country, s.components, s.debt_status
+    select 'v0009zm-rerun', s.source_row, s.source_id, s.serial, s.model, s.status, s.country, s.components, s.debt_status
     from (values (2, 'rec-1', 'SN-D1', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-1", "expires_on": "2026-06-01"}}', ' in DEBT collection '),
                  (3, 'rec-2', 'SN-D2', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-2", "expires_on": "2026-06-01"}}', 'Check first'),
                  (4, 'rec-3', 'SN-D3', 'hs1', 'field', 'NL', '{"pads": {"serial": "P-3", "expires_on": "2026-06-01"}}', 'Payment plan'),
@@ -372,23 +372,23 @@ begin
                  (6, 'rec-5', 'SN-D5', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-5", "expires_on": "2026-06-01"}}', ''),
                  (7, 'rec-6', 'SN-D6', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-6", "expires_on": "2026-06-01"}}', 'x@y.example'))
          as s(source_row, source_id, serial, model, status, country, components, debt_status);
-    j := cma.load_device_snapshot('v0009zl-rerun', (x ->> 'register')::uuid, true);
+    j := cma.load_device_snapshot('v0009zm-rerun', (x ->> 'register')::uuid, true);
     if (j ->> 'unchanged')::int <> 6 or (j ->> 'updated')::int <> 0 then
       raise exception 'FAIL A2: the rerun %', j;
     end if;
     insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, components, debt_status) values
-      ('v0009zl-empty', 2, 'rec-1', 'SN-D1', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-1", "expires_on": "2026-06-01"}}', '');
-    j := cma.load_device_snapshot('v0009zl-empty', (x ->> 'register')::uuid, false);
+      ('v0009zm-empty', 2, 'rec-1', 'SN-D1', 'hs1', 'field', 'GB', '{"pads": {"serial": "P-1", "expires_on": "2026-06-01"}}', '');
+    j := cma.load_device_snapshot('v0009zm-empty', (x ->> 'register')::uuid, false);
     if (j ->> 'updated')::int <> 1 then
       raise exception 'FAIL A2: the emptied field %', j;
     end if;
     perform cma.set_device_debt_status('to_be_submitted', 'To be submitted', true, 30);
     perform cma.set_device_debt_status_alias(' Payment PLAN ', 'to_be_submitted');
     insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, components, debt_status) values
-      ('v0009zl-alias', 4, 'rec-3', 'SN-D3', 'hs1', 'field', 'NL', '{"pads": {"serial": "P-3", "expires_on": "2026-06-01"}}', 'Payment plan');
-    j := cma.load_device_snapshot('v0009zl-alias', (x ->> 'register')::uuid, false);
+      ('v0009zm-alias', 4, 'rec-3', 'SN-D3', 'hs1', 'field', 'NL', '{"pads": {"serial": "P-3", "expires_on": "2026-06-01"}}', 'Payment plan');
+    j := cma.load_device_snapshot('v0009zm-alias', (x ->> 'register')::uuid, false);
     perform set_config('role', 'cma_owner', true);
-    v_bad := pg_temp.v0009zl_keys(x);
+    v_bad := pg_temp.v0009zm_keys(x);
     if v_bad is distinct from 'rec-1=-/- rec-2=check_first/Check first rec-3=to_be_submitted/Payment plan rec-4=in_debt_collection/In debt collection rec-5=-/- rec-6=-/-'
        or (j ->> 'updated')::int <> 1 or (j ->> 'unmapped_debt_status')::int <> 0 then
       raise exception 'FAIL A2: % (%)', v_bad, j;
@@ -397,19 +397,19 @@ begin
       'rerun 6 unchanged; then ' || v_bad];
 
     -- A3. the chunk path as the Ingest user; the field mapped on an asset register only
-    perform pg_temp.v0009zl_as(x, 'ingest');
+    perform pg_temp.v0009zm_as(x, 'ingest');
     j := cma.ingest_load_device_chunk((x ->> 'register2')::uuid,
       '[{"source_row": 2, "source_id": "rec-c1", "serial": "SN-C1", "model": "hs1", "status": "field", "country": "GB", "debt_status": "Check FIRST"},
         {"source_row": 3, "source_id": "rec-c2", "serial": "SN-C2", "model": "hs1", "status": "field", "country": "GB"}]'::jsonb);
     perform set_config('role', 'cma_owner', true);
     select string_agg(dv.source_id || '=' || coalesce(dv.debt_status_key, '-'), ' ' order by dv.source_id collate "C") into v_bad
     from cma.device dv where dv.tenant_id = (x ->> 't')::uuid and dv.connection_id = (x ->> 'register2')::uuid;
-    perform pg_temp.v0009zl_as(x, 'ingest');
-    v_bad := v_bad || ' ' || pg_temp.v0009zl_code(format('select cma.ingest_load_device_chunk(%L, %L::jsonb)', x ->> 'register2',
+    perform pg_temp.v0009zm_as(x, 'ingest');
+    v_bad := v_bad || ' ' || pg_temp.v0009zm_code(format('select cma.ingest_load_device_chunk(%L, %L::jsonb)', x ->> 'register2',
                                 jsonb_build_array(jsonb_build_object('source_row', 2, 'source_id', 'rec-c3', 'debt_status', repeat('x', 501)))));
-    perform pg_temp.v0009zl_as(x, 'admin');
-    v_bad := v_bad || ' ' || pg_temp.v0009zl_code(format('select cma.set_connection_field(%L, ''device'', ''debt_status'', '''', ''debt_status'', 1::smallint)', x ->> 'register'))
-             || ' ' || pg_temp.v0009zl_code(format('select cma.set_connection_field(%L, ''device'', ''debt_status'', '''', ''debt_status'', 1::smallint)', x ->> 'crm'));
+    perform pg_temp.v0009zm_as(x, 'admin');
+    v_bad := v_bad || ' ' || pg_temp.v0009zm_code(format('select cma.set_connection_field(%L, ''device'', ''debt_status'', '''', ''debt_status'', 1::smallint)', x ->> 'register'))
+             || ' ' || pg_temp.v0009zm_code(format('select cma.set_connection_field(%L, ''device'', ''debt_status'', '''', ''debt_status'', 1::smallint)', x ->> 'crm'));
     if v_bad is distinct from 'rec-c1=check_first rec-c2=- CMA04 ok CMA04' or (j ->> 'inserted')::int <> 2 then
       raise exception 'FAIL A3: % (%)', v_bad, j;
     end if;
@@ -431,7 +431,7 @@ begin
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
   end;
-  insert into verify_0009zl select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
+  insert into verify_0009zm select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
 end
 $$;
@@ -449,18 +449,18 @@ declare
   v_d       text;
 begin
   begin
-    x := pg_temp.v0009zl_tenant('verify-0009zl-a5', true);
+    x := pg_temp.v0009zm_tenant('verify-0009zm-a5', true);
     v_t := (x ->> 't')::uuid;
     perform set_config('role', 'cma_owner', true);
     -- A5. every item kept; paused only in the field under a pausing status; the other columns 116's
     v_bad := (select string_agg(i.source_id || ':' || i.component_key || ':' || coalesce(i.debt_status_key, '-') || ':' || i.maintenance_paused, ' '
                                 order by i.source_id collate "C", i.component_key collate "C")
               from cma.maintenance_items_of(v_t, '2026-11-23') i);
-    v_txt := (select pg_temp.v0009zl_set(array_agg(to_jsonb(i) - 'debt_status_key' - 'maintenance_paused'))
+    v_txt := (select pg_temp.v0009zm_set(array_agg(to_jsonb(i) - 'debt_status_key' - 'maintenance_paused'))
               from cma.maintenance_items_of(v_t, '2026-11-23') i);
     if v_bad is distinct from 'rec-1:pads:in_debt_collection:true rec-2:pads:check_first:false rec-3:pads:-:false rec-4:pads:in_debt_collection:false rec-5:pads:-:false rec-6:pads:-:false'
        -- provoked: 116's side without rec-1's item, a deliberate difference the comparison must catch
-       or v_txt is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(i))) from pg_temp.v0009zl_items_0008zk(v_t, '2026-11-23') i
+       or v_txt is distinct from (select pg_temp.v0009zm_set(array_agg(to_jsonb(i))) from pg_temp.v0009zm_items_0008zk(v_t, '2026-11-23') i
                                   where not (v_provoke and i.source_id = 'rec-1')) then
       raise exception 'FAIL A5: % (or the comparison with 116''s)', v_bad;
     end if;
@@ -471,9 +471,9 @@ begin
     -- provoked: 116's page of a horizon of 6 months, a deliberate difference the comparison must catch
     if j - 'maintenance_paused_devices' - 'debt' - 'debt_statuses'
        is distinct from cma.maintenance_page_of(v_t, '2026-11-01', case when v_provoke then 6 else 12 end, null, null, null, '2026-11-23')
-       or (select pg_temp.v0009zl_set(array_agg(to_jsonb(r) - 'debt_status_key' - 'maintenance_paused'))
+       or (select pg_temp.v0009zm_set(array_agg(to_jsonb(r) - 'debt_status_key' - 'maintenance_paused'))
            from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, null, 'exchanges', 500, '2026-11-23') r)
-          is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(r)))
+          is distinct from (select pg_temp.v0009zm_set(array_agg(to_jsonb(r)))
                             from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, 'exchanges', 500, '2026-11-23') r) then
       raise exception 'FAIL A6: null is not 116''s';
     end if;
@@ -493,17 +493,17 @@ begin
     v_rows := v_rows || array['21', 'A6 the Maintenance filter: null as 116''s; unpaused, none, any, a key (devices/paused_devices/rows, ! paused); the catalog''s order', 'PASS', v_bad];
 
     -- A7. the public reads (the tenant's today), as the admin; refusals; 112's forms as before
-    perform pg_temp.v0009zl_as(x, 'admin');
+    perform pg_temp.v0009zm_as(x, 'admin');
     v_d := date_trunc('month', cma.tenant_today_of(v_t))::date::text;
     j := cma.maintenance_page(v_d::date, 12, null, null, null, 'unpaused');
     v_bad := (j ->> 'devices') || '/' || (j ->> 'maintenance_paused_devices') || '/' || (j ->> 'debt')
              || ' ' || (select count(*) from cma.maintenance_rows(v_d::date, 12, 'all', null, null, null, 'in_debt_collection', 'components', 500))
              || ' ' || (cma.maintenance_page(v_d::date) ->> 'devices')
-             || ' ' || pg_temp.v0009zl_code(format('select cma.maintenance_page(%L, 12, null, null, null, ''paused'')', v_d))
-             || ' ' || pg_temp.v0009zl_code(format('select * from cma.maintenance_rows(%L, 12, ''all'', null, null, null, ''In debt collection'', ''exchanges'', 10)', v_d));
-    perform pg_temp.v0009zl_as(x, 'agent');
-    v_bad := v_bad || ' ' || pg_temp.v0009zl_code(format('select cma.maintenance_page(%L, 12, null, null, null, ''unpaused'')', v_d))
-             || ' ' || pg_temp.v0009zl_code(format('select * from cma.maintenance_rows(%L, 12, ''all'', null, null, null, null, ''exchanges'', 10)', v_d));
+             || ' ' || pg_temp.v0009zm_code(format('select cma.maintenance_page(%L, 12, null, null, null, ''paused'')', v_d))
+             || ' ' || pg_temp.v0009zm_code(format('select * from cma.maintenance_rows(%L, 12, ''all'', null, null, null, ''In debt collection'', ''exchanges'', 10)', v_d));
+    perform pg_temp.v0009zm_as(x, 'agent');
+    v_bad := v_bad || ' ' || pg_temp.v0009zm_code(format('select cma.maintenance_page(%L, 12, null, null, null, ''unpaused'')', v_d))
+             || ' ' || pg_temp.v0009zm_code(format('select * from cma.maintenance_rows(%L, 12, ''all'', null, null, null, null, ''exchanges'', 10)', v_d));
     perform set_config('role', 'cma_owner', true);
     if v_bad is distinct from '5/1/unpaused 2 6 CMA04 CMA04 CMA06 CMA06' then
       raise exception 'FAIL A7: %', v_bad;
@@ -529,13 +529,13 @@ begin
       v_bad := v_bad || ' the set does not add up';
     end if;
     if v_bad is distinct from 'GB/hs1/check_first:1,1,1 GB/hs1/in_debt_collection:2,1,1 GB/hs1/none:2,2,0 NL/hs1/none:1,1,0 | 2 GB:2,NL:0 | '
-                              || '{"check_first": "Check first", "in_debt_collection": "In debt collection"} {"check_first": "20", "in_debt_collection": "10"} 0009zl 0009ze' then
+                              || '{"check_first": "Check first", "in_debt_collection": "In debt collection"} {"check_first": "20", "in_debt_collection": "10"} 0009zm 0009ze' then
       raise exception 'FAIL A8: %', v_bad;
     end if;
-    v_rows := v_rows || array['23', 'A8 the take: under_debt_status in the field only, the set [market, model, debt_status] adding up; labels, order, version 0009zl', 'PASS', v_bad];
+    v_rows := v_rows || array['23', 'A8 the take: under_debt_status in the field only, the set [market, model, debt_status] adding up; labels, order, version 0009zm', 'PASS', v_bad];
 
     -- A9. the records: the filter, the measure, each row's debt status (as the admin)
-    perform pg_temp.v0009zl_as(x, 'admin');
+    perform pg_temp.v0009zm_as(x, 'admin');
     v_bad := '';
     foreach v_d in array array['{"debt_status": "in_debt_collection"}', '{"debt_status": "none"}', '{"debt_status": "any"}',
                                '{"measure": "under_debt_status"}', '{"debt_status": "check_first", "measure": "in_field"}'] loop
@@ -552,7 +552,7 @@ begin
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
   end;
-  insert into verify_0009zl select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
+  insert into verify_0009zm select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
 end
 $$;
@@ -569,25 +569,25 @@ declare
 begin
   begin
     -- A10. without debt statuses: the installed base 180's, the new set none alone; Maintenance's default as 116's
-    x := pg_temp.v0009zl_tenant('verify-0009zl-a10', false);
+    x := pg_temp.v0009zm_tenant('verify-0009zm-a10', false);
     v_t := (x ->> 't')::uuid;
     perform set_config('role', 'cma_owner', true);
     v_bad := (select string_agg(distinct c.dims ->> 'debt_status', ',') from cma.flash_compute_of(v_t, 'installed_base') c where c.dims ? 'debt_status')
              || ' ' || (select sum((c.measures ->> 'under_debt_status')::int) from cma.flash_compute_of(v_t, 'installed_base') c)
              || ' ' || (x -> 'load' ->> 'unmapped_debt_status');
-    if (select pg_temp.v0009zl_set(array_agg(jsonb_build_object('d', c.dims, 'm', c.measures - 'under_debt_status')))
+    if (select pg_temp.v0009zm_set(array_agg(jsonb_build_object('d', c.dims, 'm', c.measures - 'under_debt_status')))
         from cma.flash_compute_of(v_t, 'installed_base') c where not (c.dims ? 'debt_status'))
        -- provoked: 180's side without its totals row, a deliberate difference the comparison must catch
-       is distinct from (select pg_temp.v0009zl_set(array_agg(jsonb_build_object('d', o.dims, 'm', o.measures))) from pg_temp.v0009zl_ib_0009p(v_t) o
+       is distinct from (select pg_temp.v0009zm_set(array_agg(jsonb_build_object('d', o.dims, 'm', o.measures))) from pg_temp.v0009zm_ib_0009p(v_t) o
                          where not (v_provoke and o.dims = '{}'::jsonb))
        or cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, 'unpaused', '2026-11-23') - 'maintenance_paused_devices' - 'debt' - 'debt_statuses'
           is distinct from cma.maintenance_page_of(v_t, '2026-11-01', 12, null, null, null, '2026-11-23')
-       or (select pg_temp.v0009zl_set(array_agg(to_jsonb(r) - 'debt_status_key' - 'maintenance_paused'))
+       or (select pg_temp.v0009zm_set(array_agg(to_jsonb(r) - 'debt_status_key' - 'maintenance_paused'))
            from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, 'unpaused', 'components', 500, '2026-11-23') r)
-          is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(r)))
+          is distinct from (select pg_temp.v0009zm_set(array_agg(to_jsonb(r)))
                             from cma.maintenance_rows_of(v_t, '2026-11-01', 12, 'all', null, null, null, 'components', 500, '2026-11-23') r)
-       or (select pg_temp.v0009zl_set(array_agg(to_jsonb(i) - 'debt_status_key' - 'maintenance_paused')) from cma.maintenance_items_of(v_t, '2026-11-23') i)
-          is distinct from (select pg_temp.v0009zl_set(array_agg(to_jsonb(i))) from pg_temp.v0009zl_items_0008zk(v_t, '2026-11-23') i)
+       or (select pg_temp.v0009zm_set(array_agg(to_jsonb(i) - 'debt_status_key' - 'maintenance_paused')) from cma.maintenance_items_of(v_t, '2026-11-23') i)
+          is distinct from (select pg_temp.v0009zm_set(array_agg(to_jsonb(i))) from pg_temp.v0009zm_items_0008zk(v_t, '2026-11-23') i)
        or v_bad is distinct from 'none 0 4' then
       raise exception 'FAIL A10: % (the comparisons or the counts)', v_bad;
     end if;
@@ -595,7 +595,7 @@ begin
       v_bad || ' (debt_status values, under_debt_status summed, unmapped labels counted)'];
 
     -- A11. the setters
-    perform pg_temp.v0009zl_as(x, 'admin');
+    perform pg_temp.v0009zm_as(x, 'admin');
     -- each read in a statement of its own (a statement's snapshot does not see the writes of the calls within it)
     v_bad := cma.set_device_debt_status(' Write_Off_Restart ', ' Write off + restart ', null, null);
     v_bad := v_bad || ' ' || (select s.pauses_maintenance || ':' || s.sort_order from cma.device_debt_status s where s.key = 'write_off_restart');
@@ -605,16 +605,16 @@ begin
     v_bad := v_bad || ' ' || cma.set_device_debt_status_alias('write off + restart', '');
     v_bad := v_bad || ' ' || coalesce(cma.device_debt_status_key_of(v_t, 'write off + restart'), '-')
              || ' ' || (select s.name || ':' || s.pauses_maintenance || ':' || s.sort_order from cma.device_debt_status s where s.key = 'write_off_restart')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status(''none'', ''None'', true, 1)')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status(''bad key'', ''Bad'', true, 1)')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status(''ok_key'', '' '', true, 1)')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status(''ok_key'', ''a@b'', true, 1)')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status_alias(''Some label'', ''nope'')')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status_alias('' '', ''write_off_restart'')')
-             || ' ' || pg_temp.v0009zl_code('delete from cma.device_debt_status');
-    perform pg_temp.v0009zl_as(x, 'agent');
-    v_bad := v_bad || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status(''ok_key'', ''Ok'', true, 1)')
-             || ' ' || pg_temp.v0009zl_code('select cma.set_device_debt_status_alias(''label'', '''')');
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status(''none'', ''None'', true, 1)')
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status(''bad key'', ''Bad'', true, 1)')
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status(''ok_key'', '' '', true, 1)')
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status(''ok_key'', ''a@b'', true, 1)')
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status_alias(''Some label'', ''nope'')')
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status_alias('' '', ''write_off_restart'')')
+             || ' ' || pg_temp.v0009zm_code('delete from cma.device_debt_status');
+    perform pg_temp.v0009zm_as(x, 'agent');
+    v_bad := v_bad || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status(''ok_key'', ''Ok'', true, 1)')
+             || ' ' || pg_temp.v0009zm_code('select cma.set_device_debt_status_alias(''label'', '''')');
     perform set_config('role', 'cma_owner', true);
     if v_bad is distinct from 'write_off_restart true:100 write_off_restart write off + restart write_off_restart write off + restart - Write off + restart:false:40 '
                               || 'CMA04 CMA04 CMA04 CMA04 CMA02 CMA04 42501 CMA06 CMA06' then
@@ -623,11 +623,11 @@ begin
     v_rows := v_rows || array['31', 'A11 the setters: upserts, the default flag and order, an alias removed; CMA04, CMA02, no delete for the application, CMA06', 'PASS', v_bad];
 
     -- A12. tenant separation: tenant two sees none of tenant one's statuses or aliases
-    y := pg_temp.v0009zl_tenant('verify-0009zl-a12', true);
-    perform pg_temp.v0009zl_as(x, 'admin');
+    y := pg_temp.v0009zm_tenant('verify-0009zm-a12', true);
+    perform pg_temp.v0009zm_as(x, 'admin');
     v_bad := (select count(*) from cma.device_debt_status)::text || '/' || (select count(*) from cma.device_debt_status_alias)
              || ' ' || coalesce(cma.device_debt_status_key_of((x ->> 't')::uuid, 'in debt collection'), '-');
-    perform pg_temp.v0009zl_as(y, 'admin');
+    perform pg_temp.v0009zm_as(y, 'admin');
     v_bad := v_bad || ' ' || (select count(*) from cma.device_debt_status)::text || '/' || (select count(*) from cma.device_debt_status_alias)
              || ' ' || (select string_agg(s.key, ',' order by s.key collate "C") from cma.device_debt_status s);
     perform set_config('role', 'cma_owner', true);
@@ -638,28 +638,28 @@ begin
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception when sqlstate 'CMAOK' then null;
   end;
-  insert into verify_0009zl select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
+  insert into verify_0009zm select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
 end
 $$;
 
 -- Verdict: one row per check that passed, then the verdict (14 checks; a block that stopped counts its checks as FAIL)
 select check_name, result, detail
-from (select ord, check_name, result, detail from verify_0009zl
+from (select ord, check_name, result, detail from verify_0009zm
       union all
       select 999, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009zl where result = 'PASS') = 14 then 'PASS'
+                  when (select count(*) from verify_0009zm where result = 'PASS') = 14 then 'PASS'
                   else 'FAIL' end,
-             format('%s PASS, %s FAIL', (select count(*) from verify_0009zl where result = 'PASS'),
-                                        14 - (select count(*) from verify_0009zl where result = 'PASS'))) x
+             format('%s PASS, %s FAIL', (select count(*) from verify_0009zm where result = 'PASS'),
+                                        14 - (select count(*) from verify_0009zm where result = 'PASS'))) x
 order by ord;
-drop function if exists pg_temp.v0009zl_keys(jsonb);
-drop function if exists pg_temp.v0009zl_tenant(text, boolean);
-drop function if exists pg_temp.v0009zl_set(jsonb[]);
-drop function if exists pg_temp.v0009zl_ib_0009p(uuid);
-drop function if exists pg_temp.v0009zl_items_0008zk(uuid, date);
-drop function if exists pg_temp.v0009zl_as(jsonb, text, text);
-drop function if exists pg_temp.v0009zl_code(text);
-drop table if exists pg_temp.verify_0009zl;
+drop function if exists pg_temp.v0009zm_keys(jsonb);
+drop function if exists pg_temp.v0009zm_tenant(text, boolean);
+drop function if exists pg_temp.v0009zm_set(jsonb[]);
+drop function if exists pg_temp.v0009zm_ib_0009p(uuid);
+drop function if exists pg_temp.v0009zm_items_0008zk(uuid, date);
+drop function if exists pg_temp.v0009zm_as(jsonb, text, text);
+drop function if exists pg_temp.v0009zm_code(text);
+drop table if exists pg_temp.verify_0009zm;
 reset role;

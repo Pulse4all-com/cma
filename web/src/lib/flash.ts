@@ -66,7 +66,7 @@ export const FLASH_OVERVIEWS: readonly FlashOverviewDef[] = [
     defaultDescending: false },
   { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link", "subscription_status", "debt_status"],
     // the subscription-status set holds the model since 0008zy, so it follows a Model filter; the debt status (a key, none
-    // without one) beside the model since 0009zl
+    // without one) beside the model since 0009zm
     sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"], ["market", "model", "debt_status"]],
     measures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding", "under_debt_status"],
     countMeasures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding", "under_debt_status"], amountMeasures: [], ratioMeasures: [],
@@ -470,7 +470,7 @@ export const FLASH_LIST_COLUMNS: Record<FlashKey, readonly { key: string; kind: 
     { key: "refs", kind: "refs" }, { key: "missing_refs", kind: "list" }, { key: "customer_id", kind: "text" }, { key: "subscription_id", kind: "text" },
     { key: "link", kind: "text" }, { key: "subscription_status", kind: "text" }, { key: "subscription_payment_state", kind: "text" },
     { key: "past_due_items", kind: "number" }, { key: "items_due_3m", kind: "number" }, { key: "next_due_on", kind: "date" },
-    // since 0009zl: the device's debt status (its key; empty without one)
+    // since 0009zm: the device's debt status (its key; empty without one)
     { key: "debt_status", kind: "text" },
   ],
   churn: [
@@ -986,7 +986,7 @@ export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], mar
   const own = FLASH_SPLITS[def.key];
   if (!own) return null;
   // another set holding the split's dim and measure (the installed base's [market, model, debt_status] under a Debt
-  // status filter, addition 0009zl), else the split's own
+  // status filter, addition 0009zm), else the split's own
   const split = set ? { ...own, set } : own;
   const sums = new Map<string, number>();
   let any = false;
@@ -1081,7 +1081,7 @@ export const FLASH_DOCUMENT_FILTERS: Partial<Record<FlashKey, string>> = { insta
 export const FLASH_NARROW_DIMS: Partial<Record<FlashKey, readonly string[]>> = { installed_base: ["model", "status", "debt_status"] };
 
 /**
- * A page filter's value that stands for several of a dim's values (addition 0009zl): the installed base's debt status
+ * A page filter's value that stands for several of a dim's values (addition 0009zm): the installed base's debt status
  * any (every debt status, not none). The database's records take the same value (cma.flash_rows_of)
  */
 export const FLASH_ANY_VALUE = "any";

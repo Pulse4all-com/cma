@@ -67,7 +67,7 @@ const fromSql = tuples.map((t) => ({ key: t[1], kind: t[3], source: t[5] ?? null
   countMeasures: arr(t[9]), headline: t[10], sorts: arr(t[11]) }));
 const fromTs = FLASH_OVERVIEWS.map((o) => ({ key: o.key, kind: o.kind, source: o.source, dims: [...o.dims], sets: o.sets.map((s) => [...s]),
   measures: [...o.measures], countMeasures: [...o.countMeasures], headline: o.headline, sorts: [...o.sorts] }));
-expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "224_device_debt_status.sql"], [0, ""]);
+expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "226_device_debt_status.sql"], [0, ""]);
 expect("the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts",
   JSON.stringify(fromTs) === JSON.stringify(fromSql), true, false);
 expect("the keys 1 to 9, 0 and Q in the page's order, each once",
@@ -204,7 +204,7 @@ const noStatus = wanted.filter((k) => {
   const m = /^Definition status: (Decided|Proposed|Pending|Retired)/.exec(String(byKey.get(k)?.notes ?? ""));
   return byKey.has(k) && (!m || m[1] !== FLASH_DEFINITION_STATUS[k.split(".")[1]]);
 });
-// 39 since 0009zl: the installed base's under_debt_status
+// 39 since 0009zm: the installed base's under_debt_status
 expect("every Flash measure has a metric catalog entry whose definition status is the one the page shows",
   [wanted.length, missing, noStatus, wanted.every((k) => byKey.get(k)?.page === "/reports/flash")], [39, [], [], true], [0, ["x"], ["x"], false]);
 
@@ -916,7 +916,7 @@ const zzList = defOf("flash_rows");
 const zzSources = defOf("flash_sources_of");
 const time131 = readFileSync(path.join(dbDir, "131_time_all.sql"), "utf8");
 expect("the database's list (148): the installed base's devices filtered and paged before the payment state of the page's subscriptions; one source's set-up; 131's CMA02 a skip, the page's set the document",
-  // since 0009zl (224) cma.flash_rows_of is 224's (the debt status's filter, measure and column)
+  // since 0009zm (226) cma.flash_rows_of is 226's (the debt status's filter, measure and column)
   [[zzRows.file, zzList.file, zzSources.file], /v_base := 'cma\.flash_devices_of\(\$2, \$7\)';/.test(zzRows.text.slice(0, 9000)),
     /cma\.subscription_payment_state_of\(\$2, array\(select y\.subscription_id from p y where y\.subscription_id is not null\)\) ps/.test(zzRows.text.slice(0, 9000)),
     /n as \(select x\.\*%s, row_number\(\) over \(order by %s\) as ord from %s\)/.test(zzRows.text.slice(0, zzRows.text.indexOf('\n$$;'))),
@@ -926,7 +926,7 @@ expect("the database's list (148): the installed base's devices filtered and pag
       && /update pg_temp\.reads_0131 set in_set = false\s*where page in \('installed base', 'installed base as of month end'\) and cls = 'list';/.test(time131)
       && /v_skipped := not v_provoke and v_err is not null and v_err = rd\.skip_state;/.test(time131)],
   // cma.flash_sources_of: 148's set-up, its last read per connection since 0009x (196)
-  [["224_device_debt_status.sql", "160_installed_base_now.sql", "196_sync_run_reads.sql"], true, true, true, true, true],
+  [["226_device_debt_status.sql", "160_installed_base_now.sql", "196_sync_run_reads.sql"], true, true, true, true, true],
   [[], false, false, false, false, false]);
 
 // ---- Since addition 0009f: Assets → Installed base as the "now" view ----------------------------------------------------
@@ -971,7 +971,7 @@ expect("narrowDocument: a status filter sums the set that holds the status (the 
   [byStatus.totals, rowsOfSet(byStatus.rows, ["market"]).map((r) => `${r.dims.market}:${r.measures.devices}`), byStatus.unavailableSets, byStatus.unavailableMeasures,
     both.totals?.devices, both.totals?.in_stock, rowsOfSet(both.rows, ["market"]).length, none.totals?.devices, none.rows.length, none.unavailableSets,
     JSON.stringify(narrowDocument(ibDef0009f, totalsZf, rowsZf, { model: "ma" })) === JSON.stringify(filterDocument(ibDef0009f, totalsZf, rowsZf, "model", "ma"))],
-  // since 0009zl the debt status's set lacks the status too
+  // since 0009zm the debt status's set lacks the status too
   [{ devices: 11, in_field: 11, in_stock: 0, components_past_due: 3, items_due_3m: 1, in_field_on_holding: 8 }, ["GB:7", "NL:4"],
     ["market+model+subscription_status", "market+model+debt_status"], [], 3, 3, 1, 14, 9, [], true],
   [null, [], [], ["devices"], 0, 0, 0, 0, 0, ["x"], false]);
@@ -979,7 +979,7 @@ expect("pageFiltersOf: the narrowing dims of the address alone (the model and th
   [pageFiltersOf(ibDef0009f, { market: "GB", model: "ma", status: "field", serial: "x", warehouse: "w1" }, FLASH_NARROW_DIMS.installed_base),
     Object.keys(FLASH_NARROW_DIMS), [...ibLib.INSTALLED_BASE_PAGE_FILTERS]],
   [{ model: "ma", status: "field" }, ["installed_base"], ["model", "status", "debt_status"]], [{}, [], []]);
-// the debt status (addition 0009zl): a key, none and any narrow from the set [market, model, debt_status] (any every
+// the debt status (addition 0009zm): a key, none and any narrow from the set [market, model, debt_status] (any every
 // value but none); the donut reads the same set under the filter; the selector's choices in the catalog's order
 const rowsZl = [
   mRow({}, 14, 11, 3, 3, 1, 8), mRow({ market: "GB" }, 10, 7, 3, 2, 1, 5), mRow({ market: "NL" }, 4, 4, 0, 1, 0, 3),

@@ -649,7 +649,7 @@ as $$
   select coalesce((select string_agg(x, ',' order by x collate "C") from unnest(p_ids) x), '')
 $$;
 
--- A list's answer without each row's debt_status (0009zl, 224: the installed base's rows carry it, which 148's never did;
+-- A list's answer without each row's debt_status (0009zm, 224: the installed base's rows carry it, which 148's never did;
 -- edited by that change), so A4 compares every other value with 148's
 create or replace function pg_temp.v0009f_no_debt(p_list jsonb)
 returns jsonb

@@ -5,7 +5,7 @@ import type { MaintenanceFilter, MaintenanceView } from "@/lib/data";
 /**
  * The query of the Maintenance routes (addition 0008zi): ?from (the first day of a month, YYYY-MM-01; the database
  * refuses one before the tenant's current month), &months (1 to 24; 12 when left out), &market (a market code or
- * unknown), &model (a model's key or unknown), &scope (field or stock) and since addition 0009zl &debt (all or left out:
+ * unknown), &model (a model's key or unknown), &scope (field or stock) and since addition 0009zm &debt (all or left out:
  * every device, as before; unpaused, the page's default: no debt status that pauses maintenance; none; any; or a debt
  * status's key, which the database checks against the tenant's catalog), each optional but from. Anything the database
  * would refuse for its form is a 400 here first.

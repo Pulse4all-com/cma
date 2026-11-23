@@ -1704,7 +1704,7 @@ expect("maintenance: a replacement restarts the rule from the day it was first s
     .map((i) => `${i.sourceId}:${i.component}:${i.basis}:${i.dueOn}:${i.pastDue}`).sort().join(" "),
   "rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2028-11-12:false",
   "rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2025-01-10:true");
-// the page's default debt status filter since addition 0009zl (unpaused); the fixture's devices carry no debt status
+// the page's default debt status filter since addition 0009zm (unpaused); the fixture's devices carry no debt status
 const mtFilter = (o = {}) => ({ fromMonth: "2026-10-01", months: 12, market: null, model: null, scope: null, debt: "unpaused", ...o });
 const mtMonth = (b) => /^\d/.test(b) ? b.slice(0, 7) : b;
 const mtCells = (r) => r.cells.length === 0 ? "-" : r.cells.map((c) => `${mtMonth(c.bucket)}/${c.market}/${c.model}/`
@@ -1761,7 +1761,7 @@ expect("maintenance: the address, the buckets, months as Postgres adds them, the
    '{"months":"24","scope":"stock"}', 13, "past_due", "2027-09-01", null, "unknown", [true, false, false, true, true], "2024-02-29", "2029-08-10", "components",
    "Nov 2026", "mrt 2026"],
   ["", "", "", "", 12, null, null, "2027-10-01", null, [false, false, false, false, false], "2024-03-02", "2029-08-11", "exchanges", "November 2026", "maart 2026"]);
-// the debt status filter (addition 0009zl): the address (left out the default, all every device, a key, an invalid value
+// the debt status filter (addition 0009zm): the address (left out the default, all every device, a key, an invalid value
 // reported); the mirror pauses a device in the field under a pausing status only, leaves it out by default and keeps its
 // items for every other filter; the API takes all or left out as every device
 const mtDebtCat = { ...MT_CAT, debtStatuses: [{ key: "in_debt", name: "In debt", pausesMaintenance: true, sortOrder: 10 },
@@ -1788,7 +1788,7 @@ const mtRoutes = [src("../src/app/api/v1/reports/maintenance/route.ts"), src("..
   src("../src/app/api/v1/reports/maintenance/export/route.ts")];
 const mtApi = src("../src/lib/api/maintenance.ts");
 expect("maintenance routes: reports.view or performance.team, the reads with their parameters, the file's defaults",
-  // since 0009zl the forms with the debt status filter: the page's sixth argument, the list's seventh
+  // since 0009zm the forms with the debt status filter: the page's sixth argument, the list's seventh
   [mtRoutes.every((r) => r.includes("requireAnyPermission(me, REPORT_PERMISSIONS);")), pgLayer.includes("cma.maintenance_page($1::date, $2, $3, $4, $5, $6)"),
    pgLayer.includes("cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8, $9)"), pgLayer.includes("cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id)"),
    mtRoutes[2].includes("{ file: true }") && mtApi.includes('(o.file ? "all" : null)') && mtApi.includes("o.file ? MAINTENANCE_FILE_ROWS : MAINTENANCE_LIST_ROWS"),

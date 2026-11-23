@@ -18,7 +18,7 @@
  *   planned exchange per device in action-date order, an item joins the exchange before it while its action date lies
  *                    within assets.bundle_window_days of that exchange's first action date; counted once, in the month of
  *                    that first action date
- *   paused           (addition 0009zl) a device in the field under a debt status that pauses maintenance: its items stay
+ *   paused           (addition 0009zm) a device in the field under a debt status that pauses maintenance: its items stay
  *                    in the forecast; the page's default filter (unpaused) leaves them out
  * Team figures only: no figure per person exists. Ids, codes, counts and dates only: never a customer's name.
  */
@@ -89,13 +89,13 @@ export function parseScope(value: string | string[] | undefined | null): Mainten
   return (MAINTENANCE_SCOPES as readonly string[]).includes(v) ? (v as MaintenanceScope) : "invalid";
 }
 
-/** The page's default debt status filter (addition 0009zl): no debt status that pauses maintenance */
+/** The page's default debt status filter (addition 0009zm): no debt status that pauses maintenance */
 export const MAINTENANCE_DEBT_DEFAULT = "unpaused";
 /** The debt status filter's own values beside a debt status's key; all (every device) is the address's word for none */
 export const MAINTENANCE_DEBT_VALUES: readonly string[] = ["unpaused", "none", "any"];
 
 /**
- * The debt status filter from the address (addition 0009zl): left out or empty the default (unpaused), all every device
+ * The debt status filter from the address (addition 0009zm): left out or empty the default (unpaused), all every device
  * (null), unpaused, none, any or a debt status's key; anything else invalid
  */
 export function parseDebt(value: string | string[] | undefined | null): string | null | "invalid" {
@@ -206,7 +206,7 @@ export interface MaintenanceDevice {
   components: { kind: string; serial: string | null; expiresOn: DateKey | null; replacementSeenOn?: DateKey | null }[];
   /** The CRM contact of the customer reference's commerce customer (0008h), when there is exactly one */
   crmContactId: string | null;
-  /** The debt status's key (addition 0009zl), null or left out without one */
+  /** The debt status's key (addition 0009zm), null or left out without one */
   debtStatus?: string | null;
 }
 
@@ -218,7 +218,7 @@ export interface MaintenanceCatalog {
   statuses: { key: string; name: string; isInField: boolean; isInStock: boolean; isTracked: boolean }[];
   markets: { code: string; sortOrder: number }[];
   windowDays: number;
-  /** The debt statuses (addition 0009zl); left out: none */
+  /** The debt statuses (addition 0009zm); left out: none */
   debtStatuses?: { key: string; name: string; pausesMaintenance: boolean; sortOrder: number }[];
 }
 
@@ -240,7 +240,7 @@ export interface DueItem {
   pastDue: boolean;
   exchangeKey: string | null;
   exchangeOn: DateKey | null;
-  /** The device's debt status's key, and whether its maintenance is paused (addition 0009zl) */
+  /** The device's debt status's key, and whether its maintenance is paused (addition 0009zm) */
   debtStatus: string | null;
   paused: boolean;
 }

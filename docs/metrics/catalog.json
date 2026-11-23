@@ -48729,15 +48729,15 @@
         "sql": [
           {
             "object": "cma.maintenance_page",
-            "migration": "0009zl"
+            "migration": "0009zm"
           },
           {
             "object": "cma.maintenance_page_of",
-            "migration": "0009zl"
+            "migration": "0009zm"
           },
           {
             "object": "cma.maintenance_items_of",
-            "migration": "0009zl"
+            "migration": "0009zm"
           }
         ],
         "ts": [
@@ -48752,7 +48752,7 @@
         ]
       },
       "verify_sql": "select count(*) from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked and st.is_in_field\njoin cma.device_debt_status dd on dd.tenant_id = dv.tenant_id and dd.key = dv.debt_status_key and dd.pauses_maintenance\nwhere dv.tenant_id = :tenant_id and dv.source_deleted_at is null",
-      "fixture_check": "Not run against dev or prod here; db/225_verify_device_debt_status.sql A6 and A7 check the count and the filter on a throwaway tenant, web/verify/reports.mjs the mock's mirror. Martin runs the query in Studio after the statuses are set.",
+      "fixture_check": "Not run against dev or prod here; db/227_verify_device_debt_status.sql A6 and A7 check the count and the filter on a throwaway tenant, web/verify/reports.mjs the mock's mirror. Martin runs the query in Studio after the statuses are set.",
       "prerequisites": [
         {
           "item": "The asset register's export loaded (docs/import/devices.md) into an assets connection",
@@ -48773,7 +48773,7 @@
       ],
       "docs": [
         "features.md 5 (Reports -> Maintenance)",
-        "data-model/0009.md, 0009zl",
+        "data-model/0008.md, 0009zm",
         "decisions.md, 23 Nov 2026 (every debt status pauses maintenance; the pause a default filter)"
       ],
       "status": [
@@ -66642,11 +66642,11 @@
           },
           {
             "object": "cma.data_quality_of",
-            "migration": "0009zl"
+            "migration": "0009zm"
           },
           {
             "object": "cma.data_quality_assets_checks",
-            "migration": "0009zl"
+            "migration": "0009zm"
           }
         ],
         "ts": [
@@ -66657,12 +66657,12 @@
         ]
       },
       "verify_sql": "select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and debt_status_key is null and raw ? 'debt_status'",
-      "fixture_check": "Not run against dev or prod here; db/225_verify_device_debt_status.sql A1 and A4 check the label, the count and the finding's market on a throwaway tenant (14 PASS locally, 23 November 2026). Martin runs the query in Studio after the first load with the field mapped.",
+      "fixture_check": "Not run against dev or prod here; db/227_verify_device_debt_status.sql A1 and A4 check the label, the count and the finding's market on a throwaway tenant (14 PASS locally, 23 November 2026). Martin runs the query in Studio after the first load with the field mapped.",
       "prerequisites": [],
       "docs": [
         "kpis.md paragraph 11 (Data first)",
         "features.md paragraph 5 (Data -> Data quality)",
-        "data-model/0009.md, 0009zl",
+        "data-model/0008.md, 0009zm",
         "docs/import/devices.md, Debt status"
       ],
       "status": [
@@ -87400,11 +87400,11 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0009zl"
+            "migration": "0009zm"
           },
           {
             "object": "cma.flash_overviews",
-            "migration": "0009zl"
+            "migration": "0009zm"
           },
           {
             "object": "cma.flash_overview",
@@ -87423,7 +87423,7 @@
         ]
       },
       "verify_sql": "select count(*) from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_in_field\nwhere dv.tenant_id = :tenant_id and dv.source_deleted_at is null and dv.debt_status_key is not null",
-      "fixture_check": "Not run against dev or prod here: db/225_verify_device_debt_status.sql A8 checks the measure, the set and the labels on a throwaway tenant (in the field only, the set adding up to each market's row) and A10 that a tenant without debt statuses keeps 180's figures; 14 PASS locally on PostgreSQL 16, 23 November 2026. Martin runs 225 and the query in Studio after the migration.",
+      "fixture_check": "Not run against dev or prod here: db/227_verify_device_debt_status.sql A8 checks the measure, the set and the labels on a throwaway tenant (in the field only, the set adding up to each market's row) and A10 that a tenant without debt statuses keeps 180's figures; 14 PASS locally on PostgreSQL 16, 23 November 2026. Martin runs 227 and the query in Studio after the migration.",
       "prerequisites": [
         {
           "item": "The register's debt_status field mapped (cma.set_connection_field, device, debt_status) and read by a full snapshot",
@@ -87436,14 +87436,14 @@
       ],
       "docs": [
         "features.md, Assets \u2192 Installed base",
-        "data-model/0009.md, 0009zl",
+        "data-model/0008.md, 0009zm",
         "definitions.md, Asset terms (Debt status, Under a debt status)",
         "docs/import/devices.md, Debt status"
       ],
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Definition status: Proposed (docs/definitions.md, Asset terms, Debt status and Under a debt status; for Kira to confirm). The installed base's definition version is 0009zl from this measure on, so the watch compares no installed base across it. Not a payment state: the subscription app's Payment state and NetSuite's own terms stay apart (docs/open-decisions.md holds the cross-check)."
+      "notes": "Definition status: Proposed (docs/definitions.md, Asset terms, Debt status and Under a debt status; for Kira to confirm). The installed base's definition version is 0009zm from this measure on, so the watch compares no installed base across it. Not a payment state: the subscription app's Payment state and NetSuite's own terms stay apart (docs/open-decisions.md holds the cross-check)."
     },
     {
       "key": "flash.churn.churned",

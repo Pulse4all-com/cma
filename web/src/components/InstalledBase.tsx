@@ -245,7 +245,7 @@ export function BreakdownPanel({ panel, def, doc, rows, unavailable, query, file
     return <Card title={title}><p className="text-body text-p4a-muted" data-testid={`ib-set-unavailable-${panel}`}>{copy.installedBase.filterUnavailableSet}</p></Card>;
   }
   // the chart: the leading dim after the market (the status, the subscription status), the devices per value; the debt
-  // status's breakdown (0009zl) charts the debt status, its table per market and model
+  // status's breakdown (0009zm) charts the debt status, its table per market and model
   const dim = panel === "debt" ? "debt_status" : set.find((d) => d !== "market") ?? set[0]!;
   const measure = "devices";
   const chart = breakdownChart(rows, set, dim, measure);
