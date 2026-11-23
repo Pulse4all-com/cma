@@ -895,7 +895,7 @@
     },
     {
       "name": "subscription_churn_month",
-      "what": "The Churn rate and the Failed rate per tenant, market and complete month: the subscriptions churned and moved to failed in the month over the Total subscriptions at the previous month end, from each store's start month (see subscription_store_start); a share of 1 is 100 %; counts and shares only. A plain read of cma.subscription_month_take (0009ze)"
+      "what": "The Churn rate and the Failed rate per tenant, market and complete month: the subscriptions churned and moved to failed in the month over the Total subscriptions at the previous month end, from each store's start month (see subscription_store_start; not before the tenant's subscriptions.rates_start_month when that is set, 0009zl); a share of 1 is 100 %; counts and shares only. A plain read of cma.subscription_month_take (0009ze)"
     },
     {
       "name": "subscription_survival",

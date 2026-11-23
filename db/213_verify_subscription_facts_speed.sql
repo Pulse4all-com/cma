@@ -851,7 +851,7 @@ begin
     v_txt := v_txt || case when v_txt = '' then '' else ' ' end || t.slug || ':' || cardinality(v_parts) || ' parts, 2 digests';
   end loop;
   perform set_config('app.tenant_id', '', true);
-  insert into verify_0009zf values (3, 'A3 the inputs'' markers: each of the seventeen parts 210''s text, Customers → Active''s digest and the facts'' digest 210''s, every tenant',
+  insert into verify_0009zf values (3, 'A3 the inputs'' markers: each of the seventeen parts 210''s text, Customers → Active''s digest and the facts'' digest 210''s (with 224''s floor part when a tenant sets one), every tenant',
     case when v_bad = '' and v_txt <> '' and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_bad = '' then 'equal: ' || v_txt else 'differing:' || v_bad end);
 

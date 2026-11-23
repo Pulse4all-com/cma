@@ -15,8 +15,8 @@
 --   cma.subscriptions_page_of                  217 (through cma.subscriptions_page and cma.subscription_file_record)
 -- grep -lw 'cma\.<function>' db/*verify*.sql for each. Prod: this script and 225 (its block B refuses prod's data, as
 -- 211's and 217's do), then 213 (block A, edited), 211 and 217 (their block A reads the re-created functions' rights and
--- settings; block B refused) and 179 and 215 (they read cma.check_tenant_setting; 179's E5 reads FAIL on its old copy's
--- gap until #309); then the setting seeded as Martin decided (db/02_seed_pulse4all.sql,
+-- settings; block B refused) and 123, 137, 179 and 215 (they read cma.check_tenant_setting; 179's E5 reads FAIL on its old
+-- copy's gap until #309); after the setting is seeded and the facts computed again, 225 and 213 once more; then the setting seeded as Martin decided (db/02_seed_pulse4all.sql,
 -- PROD_RUNBOOK 22.4c), which the facts' next refresh takes; then 225 again (A5 reads the floor in the stored take).
 --
 -- Why (Martin, 23 November 2026): the subscription app's events before 28 January 2026 reached the CMA late or not at all
@@ -39,7 +39,9 @@
 --   cma.subscription_facts_inputs_key_of(uuid,date)    210: the setting in the digest when it is set, so setting it
 --                                              computes the facts again at the minute job's next run
 --   cma.subscriptions_page_of(…)               216: the months' movements from the floor on (months before it hold none),
---                                              and the floor in the page's document (rates_start_month). A store's own
+--                                              and the floor in the page's document (rates_start_month); the tiles' last
+--                                              complete month from it too, so a take computed before the floor was set
+--                                              shows no earlier month until its next refresh. A store's own
 --                                              later start floors its rates, as before, not its movements (216 never
 --                                              floored the movements per store): Martin to confirm this reading of
 --                                              "still applies on top"
@@ -612,7 +614,7 @@ begin
   ), last_complete as (
     select max(x.month) as month
     from cma.subscription_month_take x
-    where x.tenant_id = p_tenant_id and x.currency = '' and x.complete and x.month <= p_to
+    where x.tenant_id = p_tenant_id and x.currency = '' and x.complete and x.month <= p_to and x.month >= coalesce(v_floor, x.month)
       and (p_market is null or x.market = p_market) and (p_store is null or x.connection_id = p_store)
   ), lc as (
     select l.month,

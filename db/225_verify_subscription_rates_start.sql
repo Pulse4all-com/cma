@@ -147,19 +147,29 @@ begin
   -- A3. a store's start against 210's with the floor, every tenant
   with t as (select x.id from cma.tenant x),
   n as (select t.id as tenant_id, r.* from t cross join lateral cma.subscription_rate_start_of(t.id, v_now) r),
-  o as (select t.id as tenant_id, r.connection_id, r.first_event_month, r.migration_months, r.last_migration_month, r.straggler_months,
-               r.stragglers, greatest(r.rate_start_month, pg_temp.v0009zl_floor(t.id)) as rate_start_month
-        from t cross join lateral pg_temp.v0009zl_start_old(t.id, v_now) r),
+  o0 as (select t.id as tenant_id, r.connection_id, r.first_event_month, r.migration_months, r.last_migration_month, r.straggler_months,
+                r.stragglers, greatest(r.rate_start_month, pg_temp.v0009zl_floor(t.id)) as rate_start_month
+         from t cross join lateral pg_temp.v0009zl_start_old(t.id, v_now) r),
+  -- provoked, one store of 210's side starts a month later, so the comparison itself must find it
+  o as (select o0.tenant_id, o0.connection_id, o0.first_event_month, o0.migration_months, o0.last_migration_month, o0.straggler_months,
+               o0.stragglers,
+               case when v_provoke and (o0.tenant_id, o0.connection_id) = (select x.tenant_id, x.connection_id from o0 x order by x.tenant_id, x.connection_id limit 1)
+                    then (o0.rate_start_month + interval '1 month')::date else o0.rate_start_month end as rate_start_month
+        from o0),
   d as ((select * from n except all select * from o) union all (select * from o except all select * from n))
   select (select count(*) from n) || ' stores, ' || (select count(*) from d) || ' differ; '
          || (select count(*) from cma.tenant x where pg_temp.v0009zl_floor(x.id) is not null) || ' tenants with a floor'
   into v_txt;
+  -- a database with subscription events has stores to compare
   insert into verify_0009zl values (3, 'A3 every tenant''s store starts equal 210''s, each the later of 210''s and the tenant''s floor',
-    case when v_txt like '% stores, 0 differ; %' and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
+    case when v_txt like '% stores, 0 differ; %'
+              and (v_txt not like '0 stores,%' or not exists (select 1 from cma.subscription_event e limit 1)) and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
 
   -- A4. the inputs key: 210's for every tenant without the setting
+  -- provoked, 210's key gains a character, so the comparison itself must find every tenant
   select count(*) || ' tenants without a floor, ' || count(*) filter (where cma.subscription_facts_inputs_key_of(x.id, current_date)
-                                                                    is distinct from pg_temp.v0009zl_key_old(x.id, current_date)) || ' with another key'
+                                                                    is distinct from pg_temp.v0009zl_key_old(x.id, current_date)
+                                                                                     || case when v_provoke then 'x' else '' end) || ' with another key'
   into v_txt
   from cma.tenant x where pg_temp.v0009zl_floor(x.id) is null;
   insert into verify_0009zl values (4, 'A4 the facts'' inputs key equals 210''s for every tenant without the setting',

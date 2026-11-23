@@ -3832,12 +3832,12 @@ After 22.4 and before the merge. With the setting empty, every answer and the fa
 
 **Terminal**
 ```bash
-run_migration prod 224_subscription_rates_start.sql 225_verify_subscription_rates_start.sql 0009zl-prod-$(date +%F) 213_verify_subscription_facts_speed.sql 211_verify_subscription_facts.sql 217_verify_subscriptions_page.sql 179_verify_job_reads.sql 215_verify_source_figures.sql
+run_migration prod 224_subscription_rates_start.sql 225_verify_subscription_rates_start.sql 0009zl-prod-$(date +%F) 213_verify_subscription_facts_speed.sql 211_verify_subscription_facts.sql 217_verify_subscriptions_page.sql 123_verify_flash.sql 137_verify_flash_insights.sql 179_verify_job_reads.sql 215_verify_source_figures.sql
 ```
 Expected:
 - 224 `COMMIT`.
 - 225 in prod: A1 to A5 `PASS` (A5 `no tenant with a floor`), B `REFUSED`, verdict `PASS, A ONLY | 225_verify_subscription_rates_start: 5 PASS, 0 FAIL`.
-- 213 as on its last prod run (block A `PASS`, B refused); 211 and 217 `REFUSED` with block A `PASS`, as on their prod runs (no dev seed); 215 `REFUSED` with A1 to A5 `PASS`, as 19.4; 179 as on its last prod run: E5 `FAIL` on its old copy's gap until #309's edit, every other row ok.
+- 213 as on its last prod run (block A `PASS`, B refused); 211 and 217 `REFUSED` with block A `PASS`, as on their prod runs (no dev seed); 123 and 137 as on 21 November (`records/0009zg-prod-2026-11-21`); 215 `REFUSED` with A1 to A5 `PASS`, as 19.4; 179 as on its last prod run: E5 `FAIL` on its old copy's gap until #309's edit, every other row ok.
 
 Then the setting seeded: 22.2b's Studio block on **cma-prod-pg**. Expected: `2026-06`. Wait until the facts were computed after it (the minute job, within 15 minutes):
 
@@ -3850,7 +3850,13 @@ from cma.subscription_take_state x
 where x.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
 reset role;
 ```
-Expected: `computed_after` true, and every store's start `2026-06` or later. `false`: wait 15 minutes and run it again. Then `225` again from the Terminal: A5 `pulse4all-subscriptions 2026-06: 0 starts and 0 complete rows before it`, verdict `PASS, A ONLY`.
+Expected: `computed_after` true, and every store's start `2026-06` or later. `false`: wait 15 minutes and run it again. Then `225` and `213` again from the Terminal:
+
+**Terminal**
+```bash
+cd ~/cma && cma_db prod && for f in 225_verify_subscription_rates_start 213_verify_subscription_facts_speed; do psql "$PGCONN" -f db/$f.sql 2>&1 | grep -E ' A5 | A3 |verdict' | sed -E 's/ {3,}/  /g' | cut -c1-300; done
+```
+Expected: 225's A5 `pulse4all-subscriptions 2026-06: 0 starts and 0 complete rows before it` and verdict `PASS, A ONLY`; 213's A3 `PASS` (its digest holds the floor part now) and its verdict as on its last prod run. A5 `FAIL` once, right after the seed, can be a refresh that started before the setting was saved and finished after it: wait for the next refresh and run it again.
 
 #308 still waits for #311's acceptance (PROD_RUNBOOK 23.9, 19.18 after the backfill): the months from June 2026 also hold moves `cma.subscription_moves_of` infers until the backfill.
 
