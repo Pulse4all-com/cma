@@ -1007,17 +1007,17 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Field | Value |
 |---|---|
 | Term | Debt status filter (Reports → Maintenance; nl: Schuldstatus) |
-| Key | The address key `debt` and the API parameter `debt`: `unpaused`, `none`, `any`, `all`, or a debt status's key; `cma.maintenance_debt_matches`. Installed base's selector: `none`, `any` or a key (`f_debt_status`, the address key `debt_status`) |
-| Definition | Maintenance: All devices (`all`), Maintenance not paused (`unpaused`, the default: no debt status that pauses maintenance), Without a debt status (`none`), With a debt status (`any`), or one status. Installed base: Without a debt status (`none`), With a debt status (`any`) or one status; there is no unpaused value. |
+| Key | The address key `debt` and the API parameter `debt`: `unpaused`, `none`, `any`, `all`, or a debt status's key; `cma.maintenance_debt_matches`. Installed base's selector: `none`, `any` or a key (the address key `f_debt_status` on the dim `debt_status`) |
+| Definition | Maintenance: All devices (`all`), **Maintenance not paused** (`unpaused`, the default), **Without a debt status** (`none`), With a debt status (`any`), or one status. Installed base: Without a debt status (`none`), With a debt status (`any`) or one status; there is no Maintenance not paused there. **Maintenance not paused** keeps every device that is not Maintenance paused: one without a debt status, one under a debt status that does not pause maintenance, and one under a debt status whose device status is not in the field (in stock, say). **Without a debt status** keeps only the devices without a debt status (`cma.device.debt_status_key` null, an unmapped label included), on both pages in the same meaning. While every debt status pauses maintenance and the register gives labels to devices in the field only, the two hold the same devices; they part as soon as either stops being true. |
 | Source | The address or the API's `debt`; checked against the tenant's catalog by `cma.assert_maintenance_debt` (CMA04); the API leaves out `debt` for every device, as before |
-| Counts / does not count | Maintenance not paused leaves out only devices that are Maintenance paused; Without a debt status also leaves out a device under a status that pauses nothing |
+| Counts / does not count | Maintenance not paused leaves out only the devices that are Maintenance paused (the line "{n} devices under a debt status are left out" counts them); Without a debt status leaves out every device with a debt status, also one under a status that pauses nothing and one in stock that keeps its label |
 | Unit and display | A selector with the keycap B on Maintenance |
 | Time rule | As of the latest read |
 | Scope | Reports → Maintenance and its API; the Installed base and Flash's Installed base tab for the other selector |
 | Equivalent in the source system | None |
-| Not to use | "Without a debt status" for Maintenance's default, which is Maintenance not paused |
-| Status | Proposed for Kira; the name of Maintenance's default needs Martin's confirmation |
-| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
+| Not to use | "Without a debt status" for Maintenance's default, which is Maintenance not paused; "Unpaused" or "Not paused" alone (the subscription app's paused is another term) |
+| Status | Proposed for Kira; the default's name Maintenance not paused, and Without a debt status as its own value on both pages, accepted by Martin on 23 Nov 2026 |
+| Decided | docs/decisions.md, 23 Nov 2026, "Maintenance's Debt status selector ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zl; Martin; this PR) |
 | Used by | `maintenance.paused_devices`, `flash.installed_base.under_debt_status`; Reports → Maintenance, Reports → Installed base |
 | As built today | `maintenance_debt_matches` (`224`) and `web/src/components/MaintenanceFilters.tsx`. Matches the definition |
 
