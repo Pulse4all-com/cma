@@ -157,6 +157,19 @@ expect("B5 an update with a status: status_changed from ACTIVE to FAILED; an upd
   [changed.item.eventType, changed.item.statusFrom, changed.item.statusTo, map.eventItem(eventsOf(203)[1]).skip,
     map.eventItem({ ...eventsOf(203)[0], data: { input: { status: "ACTIVE" }, status: "ACTIVE" } }).skip, JSON.stringify(changed.item).includes("input")],
   ["status_changed", "active", "failed", "type", "type", false], ["changed", null, null, undefined, undefined, true]);
+// the legacy shape Juo wrote before 28 January 2026: the new value at the top level, no input (addition 0009zk)
+const legacy = (data) => map.eventItem({ ...eventsOf(203)[0], data });
+const legacyCancel = legacy({ status: "CANCELLED" });
+expect("B5b the legacy shape (before 28 January 2026): an update with a top-level status and no input is status_changed into it, status_from unknown; with other fields beside it the same; without a status, or a status that is no status, skipped; the new shape unchanged",
+  [legacyCancel.item?.eventType, legacyCancel.item?.statusFrom, legacyCancel.item?.statusTo, legacyCancel.item?.raw.status, legacyCancel.item?.raw.previousStatus,
+    legacy({ status: "ACTIVE", nextBillingDate: "2026-01-20T10:00:00.000Z" }).item?.statusTo, legacy({ status: "PAUSED" }).item?.statusTo, legacy({ status: "FAILED" }).item?.statusTo,
+    legacy({ status: "EXPIRED" }).item?.statusTo, legacy({ nextBillingDate: "2026-01-20T10:00:00.000Z" }).skip, legacy({ currentCycle: 4 }).skip, legacy({ status: "SOMETHING" }).skip,
+    legacy({ customAttributes: [{ key: "cancellation_reason", value: "Invented reason" }] }).skip,
+    map.eventItem({ ...eventsOf(203)[0], data: { input: { nextBillingDate: "2026-01-20T10:00:00.000Z" }, nextBillingDate: "2026-01-19T10:00:00.000Z" } }).skip,
+    map.eventItem({ ...eventsOf(203)[0], data: { input: { status: "CANCELLED" }, status: "FAILED" } }).item?.statusFrom,
+    JSON.stringify(legacy({ status: "CANCELLED", customAttributes: [{ key: "cancellation_reason", value: "Invented reason" }] })).includes("Invented")],
+  ["status_changed", undefined, "canceled", "canceled", undefined, "active", "paused", "failed", "expired", "type", "type", "type", "type", "type", "failed", false],
+  ["skip", "active", null, null, "active", null, null, null, null, undefined, undefined, undefined, undefined, undefined, null, true]);
 const paused = map.eventItem(eventsOf(204)[0]);
 expect("B6 the actor: a staff actor's id kept (its name never), bulk-action as bulk, api, system; a customer's id not kept",
   [paused.item.actorType, paused.item.actorSourceId, map.eventItem(eventsOf(209)[0]).item.actorType, map.eventItem(eventsOf(209)[1]).item.actorType,
