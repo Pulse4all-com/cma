@@ -39416,6 +39416,12 @@ churned / start over subscription_month_take rows with currency '' and complete 
 
 **Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
 
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `subscriptions.rates_start_month` |  | 2026-06 |
+
 **Who may see it** `reports.view` or `performance.team`
 
 **Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
@@ -39960,6 +39966,7 @@ churned / start over subscription_month_take rows with currency '' and complete,
 |---|---|---|
 | `flash.ended_subscription_statuses` | canceled,expired | canceled,expired |
 | `subscriptions.migration_bulk_min_pct` | 5 | 5 |
+| `subscriptions.rates_start_month` |  | 2026-06 |
 
 **Who may see it** `reports.view` or `performance.team`
 
@@ -40015,6 +40022,12 @@ moved_to_failed / start over the same rows as subscriptions.churn_rate
 **Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
 
 **Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `subscriptions.rates_start_month` |  | 2026-06 |
 
 **Who may see it** `reports.view` or `performance.team`
 
@@ -40129,6 +40142,12 @@ sum(subscription_month_take.subscriptions) per month and kind (currency ''); amo
 **Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
 
 **Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `subscriptions.rates_start_month` |  | 2026-06 |
 
 **Who may see it** `reports.view` or `performance.team`
 

@@ -2568,6 +2568,8 @@ export interface SubscriptionsPage {
   months: SubscriptionsMonth[];
   rates: SubscriptionsRateRow[];
   storeStarts: SubscriptionsStoreStart[];
+  /** subscriptions.rates_start_month as its first day: the rates and the movements start there for every store; null: no floor */
+  ratesStartMonth: DateKey | null;
   survival: { groups: SubscriptionsSurvivalGroup[]; migratedLeftOut: number } | null;
   mix: SubscriptionsMix | null;
   list: SubscriptionRowsPage | null;

@@ -3747,6 +3747,44 @@ run_migration dev 216_subscriptions_page.sql 217_verify_subscriptions_page.sql 0
 ```
 Expected: 216 ends with `COMMIT`; 217's last row `verdict | PASS | 217_verify_subscriptions_page: 13 PASS, 0 FAIL` and, provoked, `PROVOKED, NOT A PASS | … 0 PASS, 13 FAIL`. No other verify reads what 216 adds, so none is rerun.
 
+## 22.2b Terminal and Studio: the rates' start month in dev (addition 0009zl)
+`224` adds the setting `subscriptions.rates_start_month` (YYYY-MM, empty by default: no floor). It re-creates the store starts, the facts' inputs key and the page so that Customers → Subscriptions' Churn rate, Failed rate and movements, and Customers → Active's Churn rate card start at that month for every store; a store's own later start still applies, and renewal survival is not floored (Martin, 23 November 2026). It edits `213` (its digest check holds the floor part) and `217` (its block B sets no floor), and reruns the verifies that read what it re-creates.
+
+**Terminal**
+```bash
+run_migration dev 224_subscription_rates_start.sql 225_verify_subscription_rates_start.sql 0009zl-dev-$(date +%F) 211_verify_subscription_facts.sql 213_verify_subscription_facts_speed.sql 217_verify_subscriptions_page.sql 73_verify_follow_up.sql 101_verify_definitions_calls.sql 113_verify_assets.sql 121_verify_lead_cohorts.sql 123_verify_flash.sql 137_verify_flash_insights.sql 179_verify_job_reads.sql 215_verify_source_figures.sql
+```
+Expected:
+- 224 ends with `COMMIT`.
+- 225's last row reads `verdict | PASS | 225_verify_subscription_rates_start: 9 PASS, 0 FAIL`; provoked, `PROVOKED, NOT A PASS | … 0 PASS, 9 FAIL`. A5 reads `no tenant with a floor`.
+- 211 `23 PASS`, 213 `10 PASS, 0 FAIL, 2 info`, 217 `13 PASS`.
+- The settings' readers as on their last dev run. 179 as after #309's E5 fix (before it, E5's old copy fails on the checks added since 160, as in prod on 21 November).
+- `records clean`.
+
+Then the setting seeded, as `db/02_seed_pulse4all.sql`'s last section. One Run, as your own IAM login:
+
+**Studio** (cma-dev-pg)
+```sql
+set role cma_owner;
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'subscriptions.rates_start_month') then
+    raise notice 'The rates'' start month does not exist yet (addition 0009zl): rerun this seed after 224_subscription_rates_start.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'subscriptions.rates_start_month', '2026-06')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+select value from cma.tenant_setting
+where key = 'subscriptions.rates_start_month' and tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+reset role;
+```
+Expected: `2026-06`. The minute job computes the facts again within `subscriptions.take_refresh_minutes` (the setting is in their inputs); then `225` again reads A5 `pulse4all-subscriptions 2026-06: 0 starts and 0 complete rows before it`.
+
 ## 22.3 Terminal: the data map on the branch
 No table, view or column changes, so `docs/datamap/schema.json` is not refreshed.
 
@@ -3789,6 +3827,33 @@ having count(distinct f.dims ->> 'status') filter (where f.dims ->> 'status' = a
 ```
 Expected: 0 rows. A row is a store whose total line will not show; say so before the browser step, and fix the cause (a holding status the adapter does not read, or a store not yet read) rather than the page. A store with no figure of today or yesterday at all is not counted here: the page leaves it out and names how many stores it covers.
 
+## 22.4c Terminal and Studio: the rates' start month in prod (addition 0009zl)
+After 22.4 and before the merge: main's web calls none of the functions it re-creates.
+
+**Terminal**
+```bash
+run_migration prod 224_subscription_rates_start.sql 225_verify_subscription_rates_start.sql 0009zl-prod-$(date +%F) 213_verify_subscription_facts_speed.sql
+```
+Expected:
+- 224 `COMMIT`.
+- 225 in prod: A1 to A5 `PASS` (A5 `no tenant with a floor`), B `REFUSED`, verdict `PASS, A ONLY | 225_verify_subscription_rates_start: 5 PASS, 0 FAIL`.
+- 213 as on its last prod run (block A `PASS`, B refused).
+
+Then the setting seeded: 22.2b's Studio block on **cma-prod-pg**. Expected: `2026-06`. Wait until the facts were computed after it (the minute job, within 15 minutes):
+
+**Studio** (cma-prod-pg)
+```sql
+set role cma_owner;
+select x.computed_at > (select s.updated_at from cma.tenant_setting s where s.tenant_id = x.tenant_id and s.key = 'subscriptions.rates_start_month') as computed_after,
+       (select string_agg(to_char(ss.rate_start_month, 'YYYY-MM'), ' ' order by ss.market collate "C", ss.rate_start_month) from cma.subscription_store_start ss where ss.tenant_id = x.tenant_id) as rate_starts
+from cma.subscription_take_state x
+where x.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+reset role;
+```
+Expected: `computed_after` true, and every store's start `2026-06` or later. `false`: wait 15 minutes and run it again. Then `225` again from the Terminal: A5 `pulse4all-subscriptions 2026-06: 0 starts and 0 complete rows before it`, verdict `PASS, A ONLY`.
+
+#308 still waits for #311's acceptance (PROD_RUNBOOK 23.9, 19.18 after the backfill): the months from June 2026 also hold moves `cma.subscription_moves_of` infers until the backfill.
+
 ## 22.5 The merge deploys prod
 The PR changes files under `web/**` outside `web/verify/**`, so the merge starts Cloud Build `cma-web-main` and deploys `cma-web`. No ingest deploy, no `cloudbuild.yaml` and no environment change.
 
@@ -3797,7 +3862,7 @@ The PR changes files under `web/**` outside `web/verify/**`, so the merge starts
 
 Then compare each tile's source line (Total subscriptions, Paused and the amounts) with Reports → Data quality's Source figure gaps: the "Source figure gaps: {n}" of a tile is a count among the figures Data quality lists, which also lists canceled and the flows, so a tile's n is never above the matching findings and the link opens that check for `reports.view` or `tenant.configure` (plain text for `performance.team`).
 
-Expected: the six tiles, with "Subscription app: {n} on {date}" under Total subscriptions, Paused and each amount once the first day's figures exist, the movements, the rates from each store's start month, Renewal survival, the mix and the list; Changes in the period and Who ended them as Pending parts; no name or email address anywhere. Customers → Active's Churn rate card shows the last complete month's Churn rate and Failed rate of the market filter, and under a segment or channel filter says the rate is per market.
+Expected: the six tiles, with "Subscription app: {n} on {date}" under Total subscriptions, Paused and each amount once the first day's figures exist, the movements from June 2026, the rates from June 2026 or a store's later start month ("For every store, the rates and the movements start in June 2026 at the earliest (Configuration)." under "Where each store's rates start"), Renewal survival, the mix and the list; Changes in the period and Who ended them as Pending parts; no name or email address anywhere. Customers → Active's Churn rate card shows the last complete month's Churn rate and Failed rate of the market filter, and under a segment or channel filter says the rate is per market.
 
 ## 22.7 Terminal: the times and the page verifiers on the merged build
 20.8's block (`cma_db prod`, then `131_time_all.sql` with `psql`, the file `0009zh-prod-$(date +%F)-131.txt` in `~/cma-audit`).

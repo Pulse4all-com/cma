@@ -23,6 +23,7 @@
 import { readFileSync } from "node:fs";
 import {
   addMonths, monthsBetween, parseSubscriptionsFilter, rateOf, ratesOf, subscriptionsFileName, subscriptionsQuery, survivalShare, currentMonthIn,
+  subscriptionsPageFromDb,
   SUBSCRIPTIONS_ADDRESS, SUBSCRIPTIONS_FILE_COLUMNS, SUBSCRIPTIONS_MONTHS_COLUMNS, SUBSCRIPTIONS_MEASURES, SUBSCRIPTIONS_DEFAULT_MONTHS,
 } from "../src/lib/subscriptions.ts";
 import { copy, subscriptionsCopy } from "../src/lib/copy.ts";
@@ -155,6 +156,16 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
 }
 
 // ---- R. Rates -------------------------------------------------------------------------------------------------------------
+{
+  // the floor of the rates and the movements (subscriptions.rates_start_month, addition 0009zl): read from the page's document
+  const q = { from: "2026-01-01", to: "2026-11-01", filter: { market: null, store: null, proposition: null, interval: null } };
+  const doc = (extra) => ({ set_up: true, history: true, today: "2026-11-23", month: "2026-11-01", time_zone: "Europe/Amsterdam", ...extra });
+  expect("R0 the rates' start month read from the page's document (its first day), none without it; the page's words name it in en and nl",
+    [subscriptionsPageFromDb(doc({ rates_start_month: "2026-06-01" }), q).ratesStartMonth, subscriptionsPageFromDb(doc({}), q).ratesStartMonth,
+      subscriptionsPageFromDb(doc({ rates_start_month: null }), q).ratesStartMonth,
+      subscriptionsCopy.en.ratesFloorLine.includes("{start}"), subscriptionsCopy.nl.ratesFloorLine.includes("{start}")],
+    ["2026-06-01", null, null, true, true], ["2026-05-01", "x", "x", false, false]);
+}
 expect("R1 a share of a base, null without one; the two rates of a month's parts; a survival cell only when mature",
   [rateOf(3, 120), rateOf(1, 0), rateOf(1, null), ratesOf({ base: 200, churned: 5, movedToFailed: 2 }), ratesOf(null),
     survivalShare(10, { eligible: 10, survived: 7 }), survivalShare(10, { eligible: 9, survived: 7 }), survivalShare(0, { eligible: 0, survived: 0 })],

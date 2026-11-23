@@ -97321,7 +97321,12 @@
       ],
       "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.",
       "comparison": null,
-      "settings": [],
+      "settings": [
+        {
+          "key": "subscriptions.rates_start_month",
+          "default": ""
+        }
+      ],
       "permissions": {
         "anyOf": [
           "reports.view",
@@ -98345,6 +98350,10 @@
         {
           "key": "subscriptions.migration_bulk_min_pct",
           "default": "5"
+        },
+        {
+          "key": "subscriptions.rates_start_month",
+          "default": ""
         }
       ],
       "permissions": {
@@ -98451,7 +98460,12 @@
       ],
       "time": "Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.",
       "comparison": "None on the tiles; the months stand side by side.",
-      "settings": [],
+      "settings": [
+        {
+          "key": "subscriptions.rates_start_month",
+          "default": ""
+        }
+      ],
       "permissions": {
         "anyOf": [
           "reports.view",
@@ -98645,7 +98659,12 @@
       ],
       "time": "Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.",
       "comparison": "None on the tiles; the months stand side by side.",
-      "settings": [],
+      "settings": [
+        {
+          "key": "subscriptions.rates_start_month",
+          "default": ""
+        }
+      ],
       "permissions": {
         "anyOf": [
           "reports.view",

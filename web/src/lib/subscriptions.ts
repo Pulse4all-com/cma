@@ -245,7 +245,7 @@ export function subscriptionsPageFromDb(j: J, query: { from: DateKey; to: DateKe
   if (j.set_up === false) {
     return {
       setUp: false, history: false, take: null, timeZone: "", today: "", month: "", from: query.from, to: query.to, filter: query.filter, settings: EMPTY_SETTINGS,
-      filters: { markets: [], stores: [], propositions: [], intervals: [...SUBSCRIPTIONS_INTERVALS] }, tiles: null, months: [], rates: [], storeStarts: [],
+      filters: { markets: [], stores: [], propositions: [], intervals: [...SUBSCRIPTIONS_INTERVALS] }, tiles: null, months: [], rates: [], storeStarts: [], ratesStartMonth: null,
       survival: null, mix: null, list: null,
     };
   }
@@ -288,6 +288,7 @@ export function subscriptionsPageFromDb(j: J, query: { from: DateKey; to: DateKe
     rates: arr(j.rates).map((r) => ({ market: String(r.market), month: String(r.month).slice(0, 10), ...partsOf(r)! })),
     storeStarts: arr(j.store_starts).map((s) => ({ connectionId: String(s.connection_id), handle: str(s.handle), market: String(s.market),
       firstEventMonth: String(s.first_event_month).slice(0, 10), rateStartMonth: String(s.rate_start_month).slice(0, 10), stragglers: num(s.stragglers) })),
+    ratesStartMonth: typeof j.rates_start_month === "string" ? j.rates_start_month.slice(0, 10) : null,
     survival: survival ? {
       groups: arr(survival.groups).map((g) => ({ interval: String(g.interval) as SubscriptionsInterval,
         cohorts: arr(g.cohorts).map((c) => ({ cohort: String(c.cohort).slice(0, 10), started: num(c.started),

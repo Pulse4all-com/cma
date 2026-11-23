@@ -274,7 +274,7 @@ export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery):
     return {
       setUp: false, history: false, take: null, timeZone: "", today: "", month: "", from: q.from, to: q.to, filter,
       settings: { holding: [], active: [], ended: [], deviceBands: [], ageBands: [], fx: null, propositions: [], historyMonths: 60 },
-      filters: { markets: [], stores: [], propositions: [], intervals: [...SUBSCRIPTIONS_INTERVALS] }, tiles: null, months: [], rates: [], storeStarts: [],
+      filters: { markets: [], stores: [], propositions: [], intervals: [...SUBSCRIPTIONS_INTERVALS] }, tiles: null, months: [], rates: [], storeStarts: [], ratesStartMonth: null,
       survival: null, mix: null, list: null,
     };
   }
@@ -353,6 +353,7 @@ export function mockSubscriptionsPage(me: Principal, q: SubscriptionsPageQuery):
     })),
     storeStarts: stores.map((s) => ({ connectionId: s.connectionId, handle: s.handle, market: s.market, firstEventMonth: addMonths(b.month, -s.back),
       rateStartMonth: addMonths(b.month, -s.back + 1), stragglers: 0 })),
+    ratesStartMonth: null,
     survival: { groups, migratedLeftOut: t.filter((s) => s.migrated).length },
     mix: {
       proposition: mix((s) => (s.propositions.length ? s.propositions : ["none"])).sort(byCount),

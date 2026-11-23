@@ -8,7 +8,8 @@
 -- some of the take's rows propositions, models and unknown device units as the owner (the seed maps no variant), and
 -- reads the page as the seed's manager (cma_app, row-level security on). Every check writes one row, PASS or FAIL, and
 -- the last row is the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM login after
--- 216_subscriptions_page.sql, in dev. No row carries a name, an address, an email or a phone number.
+-- 216_subscriptions_page.sql, in dev. No row carries a name, an address, an email or a phone number. Edited by 0009zl
+-- (224): block B sets no floor of the rates (subscriptions.rates_start_month), which 225 checks.
 --   A  the addition row after 0009zg; the ten functions the application's (not public's), invoker's rights, JIT off
 --   B  for every filter (none, each market, each store, a proposition, none, each interval group, a market with an
 --      interval, a store with a proposition): the tiles against the take; the months against the month take (and the
@@ -98,6 +99,9 @@ begin
     select t.id, t.timezone into v_t, v_zone from cma.tenant t where t.slug = 'pulse4all-subscriptions';
     select t.id into v_inv from cma.tenant t where t.slug = 'pulse4all-invest';
     perform set_config('app.tenant_id', v_t::text, true);
+    -- no floor of the rates in this block (subscriptions.rates_start_month, 0009zl; rolled back with it): the months are
+    -- compared with the month take whole, and 225 checks the floor
+    delete from cma.tenant_setting s where s.tenant_id = v_t and s.key = 'subscriptions.rates_start_month';
     select u.id into v_mgr from cma.app_user u join cma.user_role ur on ur.tenant_id = u.tenant_id and ur.user_id = u.id
       join cma.app_role r on r.tenant_id = u.tenant_id and r.id = ur.role_id
       where u.tenant_id = v_t and u.status = 'active' and u.kind = 'person' and r.key = 'manager' order by u.created_at, u.id limit 1;

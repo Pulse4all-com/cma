@@ -356,6 +356,11 @@ export function Rates({ page, t, locale }: { page: SubscriptionsPage; t: T; loca
       {page.storeStarts.length > 0 ? (
         <div data-testid="subscriptions-store-starts">
           <h3 className="mb-2 text-body font-semibold text-p4a-heading">{t.rateStarts}</h3>
+          {page.ratesStartMonth ? (
+            <p className="mb-1 text-small text-p4a-muted" data-testid="subscriptions-rates-floor">
+              {t.ratesFloorLine.replace("{start}", monthName(page.ratesStartMonth, locale))}
+            </p>
+          ) : null}
           <ul className="flex flex-col gap-1 text-small text-p4a-muted">
             {page.storeStarts.map((s) => (
               <li key={s.connectionId}>

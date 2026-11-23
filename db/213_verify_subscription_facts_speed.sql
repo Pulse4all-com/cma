@@ -3,7 +3,8 @@
 -- prod (brief B39 continued, the follow-up of Part B39c)
 -- =============================================================================================
 -- 212 changes no answer, so this script keeps 210's definitions of the four functions 212 re-creates (below, as
--- temporary functions, 210's text) and compares each with 212's, row for row.
+-- temporary functions, 210's text) and compares each with 212's, row for row. Edited by 0009zl (224): the facts' digest
+-- it compares holds the floor of the rates (subscriptions.rates_start_month) when a tenant sets it, as 224's does.
 --   A  reads only, on every tenant of the database, so it runs in prod too: the addition row after 0009ze and the index
 --      212 expects; the functions' settings (no parallel workers on the markers, jit off on the others) and rights; each
 --      part of the inputs' markers and both digests equal to 210's; the payment state of every subscription, in both
@@ -841,7 +842,9 @@ begin
                    array_to_string(pg_temp.v0009zf_markers_210(t.id, v_facts), '|'),
                    cma.setting_of(t.id, 'flash.ended_subscription_statuses'), cma.setting_of(t.id, 'flash.device_holding_statuses'),
                    cma.setting_of(t.id, 'subscriptions.propositions'), cma.setting_of(t.id, 'subscriptions.migration_bulk_min_pct'),
-                   v_today::text)))::integer;
+                   v_today::text,
+                   -- edited by 0009zl (224): the floor of the rates, only when it is set, as 224's digest holds it
+                   nullif(cma.setting_of(t.id, 'subscriptions.rates_start_month'), ''))))::integer;
       exit when n_diff = 0;
     end loop;
     if n_diff > 0 then v_bad := v_bad || ' ' || t.slug || ':digests'; end if;
