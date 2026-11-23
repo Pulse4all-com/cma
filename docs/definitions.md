@@ -3292,7 +3292,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 |---|---|
 | Term | Status group (nl: Groep), the group a work status belongs to, with its colour |
 | Key | TypeScript `Group` and `AgentGroup` in `web/src/lib/dashboard.ts` (`groupOf`, `agentGroupOf`); copy keys `dashboard.groupSales`, `groupOperations`, `groupProductive`, `groupOtherWork`, `groupPaidPause`, `groupUnpaidPause` and their hints |
-| Definition | Derived from a status's flags and Work area, never from its key or name: working and productive with work area Sales is Sales (Leaf Green); with work area Operations is Operations (Deep Blue); without a work area is Productive (Leaf Green); working and not productive is Other work (Inkt); not working and paid is Paid pause (Light Blue); not working and unpaid is Unpaid pause (Soft Rose). |
+| Definition | Derived from a status's flags and Work area, never from its key or name: working and productive with work area Sales is Sales (Leaf Green); with work area Operations is Operations (Deep Blue); without a work area is Productive, labelled Other productive when any of the tenant's statuses has a work area (Leaf Green); working and not productive is Other work (Inkt); not working and paid is Paid pause (Light Blue); not working and unpaid is Unpaid pause (Soft Rose). |
 | Source | `cma.work_status` flags and `work_area`, read through `cma.team_status_time`, `cma.team_now` and `cma.export_status_changes` |
 | Counts / does not count | The order, bottom to top in a stack and first to last in a legend, on the Live board's tiles and rows: Sales, Operations, Productive, Other work, Paid pause, Unpaid pause, then Clocked out and Not clocked in on the Live board. A Live tile for Sales or Operations appears only when an active status has that work area; the Dashboard legend shows Sales and Operations only with time in the period. On My day the agent sees Sales, Operations, Productive and Other work, and the two pauses as one group (whether a pause is paid is not agent information, 7 October 2026) |
 | Unit and display | A colour with its label or title, never the colour alone; white text is allowed on Inkt and Deep Blue |
@@ -3347,20 +3347,39 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 
 | Field | Value |
 |---|---|
-| Term | Productive (nl: Productief), the status group of working and productive statuses without a work area |
-| Key | Group id `productive`; copy key `dashboard.groupProductive` and its hint "Working and productive statuses without a work area" (nl "Werkende en productieve statussen zonder werkgebied") |
-| Definition | The group of statuses that are working and productive and carry no Work area: Leaf Green, third in the group order (for example Invest's statuses). |
+| Term | Productive (nl: Productief), the status group of working and productive statuses in a tenant where no status has a work area |
+| Key | Group id `productive`; copy key `dashboard.groupProductive` and its hint "Working and productive statuses" (nl "Werkende en productieve statussen"); the label rule `productiveGroupName` in `web/src/lib/dashboard.ts` |
+| Definition | The group of statuses that are working and productive, in a tenant where no status, active or retired, carries a Work area (for example Invest's statuses): Leaf Green, third in the group order. Where any status of the tenant has a work area, the same group (working, productive, no work area) is Other productive. |
 | Source | `cma.work_status` flags and `work_area` |
 | Counts / does not count | Counts the time of those statuses only. Does not count Sales or Operations time: the Productive tile and figure of the Dashboard (`copy.dashboard.productive`, `dashboard.time.productive_share`, the flag `is_productive`) count all working and productive time, work areas included, and are unchanged |
 | Unit and display | Hours and minutes in the legend and charts |
 | Time rule | None |
 | Scope | As Status group |
 | Equivalent in the source system | None |
-| Not to use | "Productive" for Sales or Operations time inside the group; the group's name for the Dashboard's Productive figure |
+| Not to use | "Productive" for Sales or Operations time inside the group; "Productive" as the group's label in a tenant with a work area (that group is Other productive); the group's name for the Dashboard's Productive figure |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …", "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" and "Definitions: Other productive" (this PR, addition 0009zn) |
 | Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
 | As built today | Matches the definition |
+
+### Other productive (status group)
+
+| Field | Value |
+|---|---|
+| Term | Other productive (nl: Overig productief), the label of the status group of working and productive statuses without a work area, in a tenant where any status has a work area |
+| Key | Group id `productive` (one group, two labels by tenant); copy keys `dashboard.groupOtherProductive` and `dashboard.groupOtherProductiveHint` ("Working and productive statuses without a work area", nl "Werkende en productieve statussen zonder werkgebied"); the label rule `productiveGroupName` in `web/src/lib/dashboard.ts` |
+| Definition | The group of statuses that are working and productive and carry no Work area, named Other productive when at least one of the tenant's statuses, active or retired, has a work area, so that it reads beside Sales and Operations: Leaf Green, third in the group order. In a tenant without any work area the same group is Productive. |
+| Source | `cma.work_status` flags and `work_area`; whether any status has a work area is read in the same statement as the Dashboard's time (`cma.team_status_time`) and the Live board's status flags (`tenantHasWorkArea`) |
+| Counts / does not count | Counts the time of working, productive statuses without a work area only. Does not count Sales or Operations time. Not the Dashboard's Productive tile and figure (`copy.dashboard.productive`, `dashboard.time.productive_share`), which keep their meaning: all working and productive time, work areas included |
+| Unit and display | Hours and minutes in the legend and charts; a count on the Live board's tile |
+| Time rule | None; the tenant's statuses as they are now |
+| Scope | As Status group: Reports → Dashboard and the Live board, where groups carry labels |
+| Equivalent in the source system | None |
+| Not to use | "Productive" for this group in a tenant with a work area; "Other work" (working, not productive) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Definitions: Other productive" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board; `GET /api/v1/team/status-time` and `GET /api/v1/team/now` (`tenantHasWorkArea`) |
+| As built today | `web/src/lib/dashboard.ts` (`productiveGroupName`, `hasWorkArea`), `web/src/components/DashboardCharts.tsx` (`groupLabels`); verified by `verify:dashboard`. Matches the definition |
 
 ## Retired words
 

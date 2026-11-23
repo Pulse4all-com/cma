@@ -167,6 +167,7 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
           teams={teamsOf(rows, data.memberships)}
           copy={copy}
           locale={viewer.locale}
+          tenantHasWorkArea={data.now.tenantHasWorkArea}
         />
       )}
 

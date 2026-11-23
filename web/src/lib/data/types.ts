@@ -306,6 +306,11 @@ export interface StatusTimeRow {
 
 export interface TeamStatusTime extends HoursRange {
   rows: StatusTimeRow[];
+  /**
+   * Whether any status of the tenant, active or retired, has a work area: the group of working, productive statuses
+   * without one is then labelled Other productive, else Productive (Martin, 23 November 2026)
+   */
+  tenantHasWorkArea: boolean;
 }
 
 /** An export read with the tenant's settings, from one transaction */
@@ -359,6 +364,8 @@ export interface TeamNow {
    * Paid pause tile). Keys and names stay out: nothing on the board branches on them.
    */
   statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean; workArea: WorkArea | null }[];
+  /** Whether any status of the tenant, active or retired, has a work area (the label of Other productive) */
+  tenantHasWorkArea: boolean;
 }
 
 /**

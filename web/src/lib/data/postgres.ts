@@ -629,11 +629,20 @@ function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
 // Addition 0003c: the permission (performance.team) is checked inside the function, in the same
 // transaction as the read
 async function readTeamStatusTime(q: Querier, range: HoursRange, userId: string | null): Promise<TeamStatusTime> {
-  const r = await q.query<StatusTimeDbRow>(
-    `select * from cma.team_status_time($1::date, $2::date, $3::uuid)`,
+  // In the same statement, whether any of the tenant's statuses has a work area (the label of Other productive): the one
+  // row of h always answers it, with the period's rows beside it, or with nulls when the period has none
+  const r = await q.query<Partial<StatusTimeDbRow> & { tenant_has_work_area: boolean }>(
+    `select t.*, h.tenant_has_work_area
+       from (select coalesce(bool_or(w.work_area is not null), false) as tenant_has_work_area
+               from cma.work_status w where w.tenant_id = cma.current_tenant_id()) h
+       left join cma.team_status_time($1::date, $2::date, $3::uuid) t on true`,
     [range.from, range.to, userId],
   );
-  return { ...range, rows: r.rows.map(toStatusTimeRow) };
+  return {
+    ...range,
+    rows: r.rows.filter((x) => x.user_id != null).map((x) => toStatusTimeRow(x as StatusTimeDbRow)),
+    tenantHasWorkArea: r.rows[0]?.tenant_has_work_area === true,
+  };
 }
 
 function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
@@ -1567,12 +1576,16 @@ async function readTeamNow(q: Querier): Promise<TeamNow> {
        from cma.team_now() n${SESSIONS_JOIN("n.workday_id")}`,
   );
   // team_now() checked monitoring.live (CMA06), so the plain read of the status flags runs only after that check passed
-  const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean; work_area: WorkArea | null }>(
-    `select is_working, is_productive, is_paid, work_area from cma.work_status where status = 'active' order by sort_order, key`,
+  // and whether any status, active or retired, has a work area (the label of Other productive), in the same statement
+  const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean; work_area: WorkArea | null; tenant_has_work_area: boolean }>(
+    `select is_working, is_productive, is_paid, work_area,
+            (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a) as tenant_has_work_area
+       from cma.work_status where status = 'active' order by sort_order, key`,
   );
   return {
     people: r.rows.map(toTeamNowPerson),
     statusFlags: flags.rows.map((f) => ({ isWorking: f.is_working, isProductive: f.is_productive, isPaid: f.is_paid, workArea: f.work_area })),
+    tenantHasWorkArea: flags.rows[0]?.tenant_has_work_area === true,
   };
 }
 

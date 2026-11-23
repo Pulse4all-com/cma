@@ -93,6 +93,7 @@ export function LiveBoard({
   teams,
   copy,
   locale,
+  tenantHasWorkArea,
 }: {
   rows: BoardRow[];
   tiles: Tile[];
@@ -102,13 +103,15 @@ export function LiveBoard({
   copy: Pick<Copy, "live" | "dashboard"> & { hints: Pick<Copy["hints"], "about"> };
   /** The labels' language, so a long word breaks where the language breaks it */
   locale: Locale;
+  /** Whether any status of the tenant has a work area: the productive group is then Other productive */
+  tenantHasWorkArea: boolean;
 }) {
   const t = copy.live;
   const [group, setGroup] = useState<LiveGroup | "">("");
   const [employer, setEmployer] = useState("");
   const [team, setTeam] = useState("");
 
-  const labels = groupLabels(copy);
+  const labels = groupLabels(copy, tenantHasWorkArea);
   const flagLabel = (f: Adherence): string =>
     f === "late" ? t.late : f === "leftEarly" ? t.leftEarly : f === "expected" ? t.expected : f === "absent" ? t.absent : f === "unplanned" ? t.unplanned : t.onTime;
   const label = (g: LiveGroup): { label: string; hint: string } =>

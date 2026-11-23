@@ -737,7 +737,7 @@ The Needs attention block is shown to monitoring.live, performance.team or workd
 
 **Status** on /live/board · Status (Status)
 
-Which of eight groups each person on the board is in right now: Sales, Operations, Productive (working and productive without a work area), Other work, Paid pause, Unpaid pause (from the current status's flags and work area, the same rule as the Dashboard), Clocked out (today's day ended) or Not clocked in (no day today). Shown as the row's colour dot and used for the tiles, the row order and the group filter.
+Which of eight groups each person on the board is in right now: Sales, Operations, Productive (working and productive without a work area; labelled Other productive when any of the tenant's statuses has a work area), Other work, Paid pause, Unpaid pause (from the current status's flags and work area, the same rule as the Dashboard), Clocked out (today's day ended) or Not clocked in (no day today). Shown as the row's colour dot and used for the tiles, the row order and the group filter.
 
 **Formula as computed**
 
@@ -2957,7 +2957,7 @@ A withdrawn imported day has no effective start and so no stretch: it counts for
 
 **Groups** on /reports/dashboard · Groups (legend) (Groepen)
 
-The period's time per group: Sales, Operations, Productive (without a work area), Other work, Paid pause, Unpaid pause — the legend above the charts; Sales and Operations show only with time in the period.
+The period's time per group: Sales, Operations, Productive (without a work area; labelled Other productive when any of the tenant's statuses has a work area), Other work, Paid pause, Unpaid pause — the legend above the charts; Sales and Operations show only with time in the period.
 
 **Formula as computed**
 

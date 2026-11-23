@@ -3433,7 +3433,7 @@ export const mockData: CmaData = {
     const rows = [...sums.values()].sort((a, b) =>
       a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId) ||
       a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey));
-    return { ...range, rows };
+    return { ...range, rows, tenantHasWorkArea: MOCK_STATUSES.some((x) => x.workArea !== null) };
   },
 
   /**
@@ -3513,6 +3513,7 @@ export const mockData: CmaData = {
     return {
       people,
       statusFlags: MOCK_STATUSES.map((x) => ({ isWorking: x.isWorking, isProductive: x.isProductive, isPaid: MOCK_PAID.has(x.key), workArea: x.workArea })),
+      tenantHasWorkArea: MOCK_STATUSES.some((x) => x.workArea !== null),
     };
   },
 

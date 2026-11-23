@@ -76,6 +76,21 @@ export const GROUP_FILL: Record<Group, string> = {
 
 export type GroupSeconds = Record<Group, number>;
 
+/**
+ * The name of the group of working, productive statuses without a work area (Martin, 23 November 2026): Other
+ * productive when any of the tenant's statuses, active or retired, has a work area, so the word Productive keeps one
+ * meaning beside Sales and Operations; Productive when none has (Invest). The Productive tile keeps its own meaning, all
+ * working, productive time, and is not named here
+ */
+export function productiveGroupName(tenantHasWorkArea: boolean): "productive" | "otherProductive" {
+  return tenantHasWorkArea ? "otherProductive" : "productive";
+}
+
+/** Whether any of the statuses has a work area: the input of productiveGroupName where a screen holds the statuses */
+export function hasWorkArea(statuses: readonly { workArea: WorkArea | null }[]): boolean {
+  return statuses.some((s) => s.workArea !== null);
+}
+
 /** The groups a work area makes: they exist only where a tenant configured one (decision of 23 November 2026, D6) */
 export const WORK_AREA_GROUPS: readonly Group[] = ["sales", "operations"];
 

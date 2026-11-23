@@ -1057,7 +1057,7 @@
         "en": "Status",
         "nl": "Status"
       },
-      "definition": "Which of eight groups each person on the board is in right now: Sales, Operations, Productive (working and productive without a work area), Other work, Paid pause, Unpaid pause (from the current status's flags and work area, the same rule as the Dashboard), Clocked out (today's day ended) or Not clocked in (no day today). Shown as the row's colour dot and used for the tiles, the row order and the group filter.",
+      "definition": "Which of eight groups each person on the board is in right now: Sales, Operations, Productive (working and productive without a work area; labelled Other productive when any of the tenant's statuses has a work area), Other work, Paid pause, Unpaid pause (from the current status's flags and work area, the same rule as the Dashboard), Clocked out (today's day ended) or Not clocked in (no day today). Shown as the row's colour dot and used for the tiles, the row order and the group filter.",
       "formula": "liveGroupOf(person): no day -> notClockedIn; day.status = 'ended' or no current status -> clockedOut; else groupOf(flags): isWorking ? (isProductive ? (workArea = sales ? sales : workArea = operations ? operations : productive) : otherWork) : (isPaid ? paidPause : unpaidPause). Flags come from cma.team_now() (the day's current status as stored); rows sorted by group in LIVE_GROUPS order, then name, then id (no ranking).",
       "unit": "flag",
       "grain": [
@@ -5273,7 +5273,7 @@
         "en": "Groups (legend)",
         "nl": "Groepen"
       },
-      "definition": "The period's time per group: Sales, Operations, Productive (without a work area), Other work, Paid pause, Unpaid pause — the legend above the charts; Sales and Operations show only with time in the period.",
+      "definition": "The period's time per group: Sales, Operations, Productive (without a work area; labelled Other productive when any of the tenant's statuses has a work area), Other work, Paid pause, Unpaid pause — the legend above the charts; Sales and Operations show only with time in the period.",
       "formula": "groupOf(flags): is_working && is_productive → sales or operations by the status's current work_area, else productive; is_working → otherWork; is_paid → paidPause; else unpaidPause. Seconds summed per group over the rows; shown as Xh YYm (floored minutes of each group's second total).",
       "unit": "minutes",
       "grain": [

@@ -9,12 +9,13 @@
  * tenant's status order with inactive statuses kept, every day of the period on the axis (across a
  * month end), people by name, the hours axis, and that every group colour is a palette token. Since addition 0009zn
  * (23 November 2026) also the work area: every flag and work-area combination, D3's order, the colours of D2, the
- * legend's groups, and that a work area changes no figure.
+ * legend's groups, and that a work area changes no figure; the productive group's name, Other productive beside a work area and
+ * Productive without one (both cases).
  */
 import { readFileSync } from "node:fs";
 import {
-  GROUP_BG, GROUP_FILL, GROUPS, agentGroupOf, byDay, byPerson, byStatus, groupOf, groupTotal, hoursAxis, legendGroups, peopleOf,
-  share, summarise,
+  GROUP_BG, GROUP_FILL, GROUPS, agentGroupOf, byDay, byPerson, byStatus, groupOf, groupTotal, hasWorkArea, hoursAxis, legendGroups, peopleOf,
+  productiveGroupName, share, summarise,
 } from "../src/lib/dashboard.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -99,6 +100,20 @@ expect("the colours of D2",
    ["productive", "bg-p4a-green", "fill-p4a-green"], ["otherWork", "bg-p4a-deepblue", "fill-p4a-deepblue"],
    ["paidPause", "bg-p4a-lightblue", "fill-p4a-lightblue"], ["unpaidPause", "bg-p4a-rose", "fill-p4a-rose"]]);
 expect("the agent's pause keeps Light Blue", GROUP_BG.pause, "bg-p4a-lightblue", "bg-p4a-rose");
+
+// ---- the productive group's name (Martin, 23 November 2026): Other productive beside a work area, else Productive ------
+// Both cases: a tenant with a status in a work area (active or retired) and one without any (Invest's universal ladder)
+const withArea = [{ workArea: null }, { workArea: "sales" }];
+const retiredArea = [{ workArea: null, isActive: true }, { workArea: "operations", isActive: false }];
+const withoutArea = [{ workArea: null }, { workArea: null }];
+expect("a tenant with a work area names the group Other productive, a retired status's included",
+  [productiveGroupName(hasWorkArea(withArea)), productiveGroupName(hasWorkArea(retiredArea))],
+  ["otherProductive", "otherProductive"], ["productive", "productive"]);
+expect("a tenant without any work area keeps Productive", [productiveGroupName(hasWorkArea(withoutArea)), productiveGroupName(hasWorkArea([]))],
+  ["productive", "productive"], ["otherProductive", "otherProductive"]);
+expect("the name changes the label only: the same rows give the same group key and figures either way",
+  [groupOf({ ...S.work, workArea: null }), summarise(rows).productiveSeconds === summarise(rows).groups.productive + summarise(rows).groups.sales + summarise(rows).groups.operations],
+  ["productive", true], ["otherProductive", false]);
 
 // ---- summary: minutes as Team hours adds them --------------------------------------------------
 const sum = summarise(rows);
