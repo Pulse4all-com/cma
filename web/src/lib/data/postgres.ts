@@ -1075,12 +1075,15 @@ type MaintenancePageDb = {
   cells: { bucket: string; market: string; model: string; components: Record<string, number>; component_items: number; end_of_life: number; exchanges: number }[];
   unknown: { market: string; model: string; components: Record<string, number>; items: number }[]; unknown_items: number; devices: number;
   filter_markets: string[]; filter_models: { key: string; name: string | null }[];
+  // addition 0009zm
+  maintenance_paused_devices: number; debt_statuses: { key: string; name: string; pauses_maintenance: boolean }[];
 };
 type MaintenanceRowDb = {
   bucket: string; device_id: string; connection_id: string; source_id: string; serial: string | null; model_key: string; model_name: string | null;
   market: string; device_status_key: string | null; device_status_name: string | null; components: string[]; due_on: Date | string | null;
   bases: string[]; action_on: Date | string | null; exchange_on: Date | string | null; customer_ref: string | null; subscription_ref: string | null;
   crm_connection_id: string | null; crm_contact_source_id: string | null; total_rows: string | number; contact_url: string | null;
+  debt_status_key: string | null; maintenance_paused: boolean;
 };
 /** A date column as YYYY-MM-DD (pg returns a date as a local Date, so it is read back in local time) */
 function dateKeyOf(v: Date | string | null): string | null {
@@ -1094,6 +1097,7 @@ function toMaintenanceRow(x: MaintenanceRowDb): MaintenanceRow {
     deviceStatus: x.device_status_key, deviceStatusName: x.device_status_name, components: x.components, dueOn: dateKeyOf(x.due_on),
     bases: x.bases as MaintenanceBasis[], actionOn: dateKeyOf(x.action_on), exchangeOn: dateKeyOf(x.exchange_on), customerRef: x.customer_ref,
     subscriptionRef: x.subscription_ref, crmContactId: x.crm_contact_source_id, contactUrl: x.contact_url,
+    debtStatus: x.debt_status_key, maintenancePaused: x.maintenance_paused,
   };
 }
 type ReviewsPageDb = {
@@ -2874,15 +2878,18 @@ export const postgresData: CmaData = {
 
   async getMaintenance(me, filter): Promise<MaintenanceReport> {
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the horizon (the tenant's current month or later, 1 to 24 months) and the filters first (addition 0008zi)
-      const j = one((await q.query<{ j: MaintenancePageDb }>(`select cma.maintenance_page($1::date, $2, $3, $4, $5) as j`,
-        [filter.fromMonth, filter.months, filter.market, filter.model, filter.scope])).rows, "maintenance_page").j;
+      // the function checks the permission, the horizon (the tenant's current month or later, 1 to 24 months) and the filters first (addition 0008zi);
+      // the debt status filter, the sixth argument, since 0009zm (CMA04 for a value that is no filter and no debt status of the catalog)
+      const j = one((await q.query<{ j: MaintenancePageDb }>(`select cma.maintenance_page($1::date, $2, $3, $4, $5, $6) as j`,
+        [filter.fromMonth, filter.months, filter.market, filter.model, filter.scope, filter.debt ?? null])).rows, "maintenance_page").j;
       return {
         filter, currentMonth: j.current_month, bundleWindowDays: j.bundle_window_days, isSetUp: j.is_set_up, buckets: j.buckets,
         componentKinds: j.component_kinds,
         cells: j.cells.map((c) => ({ bucket: c.bucket, market: c.market, model: c.model, components: c.components, componentItems: c.component_items,
           endOfLife: c.end_of_life, exchanges: c.exchanges })),
         unknown: j.unknown, unknownItems: j.unknown_items, devices: j.devices, markets: j.filter_markets, models: j.filter_models,
+        maintenancePausedDevices: Number(j.maintenance_paused_devices ?? 0),
+        debtStatuses: (j.debt_statuses ?? []).map((d) => ({ key: d.key, name: d.name, pausesMaintenance: d.pauses_maintenance })),
       };
     });
   },
@@ -2894,8 +2901,8 @@ export const postgresData: CmaData = {
       // register gets no link: the Workspace links to the CRM and the telephony system only
       const r = await q.query<MaintenanceRowDb>(
         `select r.*, cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id) as contact_url
-         from cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8) r`,
-        [filter.fromMonth, filter.months, bucket, filter.market, filter.model, filter.scope, view, limit]);
+         from cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8, $9) r`,
+        [filter.fromMonth, filter.months, bucket, filter.market, filter.model, filter.scope, filter.debt ?? null, view, limit]);
       return { total: Number(r.rows[0]?.total_rows ?? 0), rows: r.rows.map(toMaintenanceRow) };
     });
   },

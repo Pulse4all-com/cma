@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-648 figures. Statuses: verified 454 · discrepancy 18 · ambiguous 35 · prerequisite_missing 148 · cadence_unconfirmed 74.
+651 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 150 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -25477,6 +25477,66 @@ where dv.tenant_id = :tenant_id and dv.source_deleted_at is null
 
 The line also states the bundling window in days (assets.bundle_window_days).
 
+#### `maintenance.paused_devices`
+
+**{n} devices under a debt status are left out** on /reports/maintenance · Devices under a debt status left out (Apparaten met een schuldstatus buiten beschouwing)
+
+The line under the devices line while the Debt status filter is Without a debt status (the default): tracked devices of the scope, market and model in a device status in the field under a debt status that pauses maintenance. Their due items stay in the forecast; the line's link shows them (With a debt status).
+
+**Formula as computed**
+
+```
+count(device) where device_status.is_tracked and is_in_field and source_deleted_at is null and device_debt_status.pauses_maintenance, after the scope, market and model filters (never the debt filter)
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.device_debt_status` | key, name, pauses_maintenance, sort_order | CMA | Studio (tenant configuration: cma.set_device_debt_status, docs/import/devices.md); no seed | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+- debt status: the page's default (unpaused) leaves these devices out of every figure; the count itself ignores the debt filter
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0009zm); `cma.maintenance_page_of` (0009zm); `cma.maintenance_items_of` (0009zm); `maintenanceReport` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked and st.is_in_field
+join cma.device_debt_status dd on dd.tenant_id = dv.tenant_id and dd.key = dv.debt_status_key and dd.pauses_maintenance
+where dv.tenant_id = :tenant_id and dv.source_deleted_at is null
+```
+
+**Fixture check** Not run against dev or prod here; db/227_verify_device_debt_status.sql A6 and A7 check the count and the filter on a throwaway tenant, web/verify/reports.mjs the mock's mirror. Martin runs the query in Studio after the statuses are set.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- The tenant's debt statuses and their aliases set (docs/import/devices.md, Debt status) (data quality check `device_debt_status_unmapped`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); data-model/0008.md, 0009zm; decisions.md, 23 Nov 2026 (every debt status pauses maintenance; the pause a default filter)
+
+**Notes**
+
+Shown only above 0 and only with the default filter.
+
 #### `maintenance.list.shown`
 
 **{shown} of {total} devices** on /reports/maintenance · Device list rows shown of total ({shown} van {total} apparaten)
@@ -33520,6 +33580,53 @@ select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_
 
 Sort 260; shown once the tenant has an asset register set up, or while it finds something.
 
+#### `data_quality.device_debt_status_unmapped`
+
+**Devices with an unknown debt status** on /reports/data-quality · Devices with an unknown debt status (Apparaten met een onbekende schuldstatus)
+
+Devices whose register gives a debt status label that no alias of the tenant's debt statuses maps; the value is the label. Such a device counts as without a debt status (its maintenance is not paused) until the alias exists and the next load reads it. An empty field is never a finding.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) with debt_status_key null and a debt_status key in raw
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, debt_status_key, raw, market, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.device_debt_status_alias` | alias, key | CMA | Studio (tenant configuration: cma.set_device_debt_status_alias, docs/import/devices.md); no seed | on change |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0009zg); `cma.data_quality_of` (0009zm); `cma.data_quality_assets_checks` (0009zm); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and debt_status_key is null and raw ? 'debt_status'
+```
+
+**Fixture check** Not run against dev or prod here; db/227_verify_device_debt_status.sql A1 and A4 check the label, the count and the finding's market on a throwaway tenant (14 PASS locally, 23 November 2026). Martin runs the query in Studio after the first load with the field mapped.
+
+**Documented in** kpis.md paragraph 11 (Data first); features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0009zm; docs/import/devices.md, Debt status
+
+**Notes**
+
+Sort 305 (after the asset register's checks at 230 to 300); shown once the tenant has an asset register set up, or while it finds something. Fixed in the asset register (an alias in the CMA's catalog, or the label in the register).
+
 #### `data_quality.device_market_unmapped`
 
 **Devices with an unknown country** on /reports/data-quality · Devices with an unknown country (Apparaten met een onbekend land)
@@ -35197,6 +35304,65 @@ count(*) where the device status's is_in_field and the linked subscription's sta
 **Notes**
 
 Definition status: Proposed (docs/definitions.md, Flash overview measures and Device-holding status; for Kira to confirm). No verify_sql: the base set is the one query behind the figure and its list, and 137 recomputes it from a fixture. A source not set up shows 'not set up' in place of figures, never zero. The watch's jump compares it (a count measure).
+
+#### `flash.installed_base.under_debt_status`
+
+**Under a debt status** on /reports/flash · Under a debt status (Met een schuldstatus)
+
+Of the devices in the field, those the asset register gives a debt status (cma.device.debt_status_key, mapped from the register's label through cma.device_debt_status_alias; docs/definitions.md, Asset terms, Debt status). A device in stock is never counted, whatever its label; an unmapped label counts as no debt status and is a data-quality finding (device_debt_status_unmapped). Whether the status pauses maintenance does not matter here. Shown on Assets → Installed base (/reports/installed-base) and Flash's Installed base tab, the same read.
+
+**Formula as computed**
+
+```
+count(*) where the device status's is_in_field and debt_status_key is not null (cma.flash_compute_of, the device row by its primary key beside cma.flash_devices_of). Grouping sets: the totals, per market, the breakdown, [market, model, subscription_status] and [market, model, debt_status] (debt_status a key, or none), where every measure adds up over the debt statuses; one code path live, in the current take and in the snapshot.
+```
+
+**Unit** count · **Grain** now, per_market, per_model, per_status · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | source_id, debt_status_key, raw, market, source_deleted_at | Airtable | the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md | Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback |
+| `cma.device_status` | key, is_in_field, is_in_stock, is_tracked | CMA | seed 02, then Studio (tenant configuration) | on change |
+| `cma.device_debt_status` | key, name, pauses_maintenance, sort_order | CMA | Studio (tenant configuration: cma.set_device_debt_status, docs/import/devices.md); no seed | on change |
+| `cma.flash_snapshot` | snapshot_date, overview, dims, measures, definition_version | CMA | Cloud Scheduler cma-snapshot-flash-minutely → Cloud Run job cma-snapshot-flash → cma.flash_snapshot_take (0008zn) | daily per tenant after flash.snapshot_local_time; the job runs every minute |
+
+**Filters**
+
+- tenant: RLS on every table plus cma.current_tenant_id() (withTenant)
+- the market filter (a catalog market's code, or unknown)
+- a source not set up gives no figure (never zero)
+
+**Time** Stock: as of the instant read (now), or as stored by the snapshot of a business date (the take after the date ended in the tenant's zone).
+
+**Previous period** The landing compares a stock figure with the latest snapshot before, a flow with the same number of dates before the period when each has a snapshot; nothing to compare before the first snapshot.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (one read per view; the overview's figures from the stored current take cma.flash_current_take, refreshed every few minutes by the job cma-snapshot-flash (flash.current_refresh_minutes, 5 by default) and shown with Refreshed at; read live when the take is missing, older than three times that setting or older than a migration; a live card's headline its own read, cma.flash_headline). The snapshot daily per tenant after flash.snapshot_local_time (job cma-snapshot-flash, every minute).
+
+**Computed in** `cma.flash_compute_of` (0009zm); `cma.flash_overviews` (0009zm); `cma.flash_overview` (0008zn); `default (InstalledBasePage)` in src/app/reports/installed-base/page.tsx; `FlashPage` in src/app/reports/flash/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_in_field
+where dv.tenant_id = :tenant_id and dv.source_deleted_at is null and dv.debt_status_key is not null
+```
+
+**Fixture check** Not run against dev or prod here: db/227_verify_device_debt_status.sql A8 checks the measure, the set and the labels on a throwaway tenant (in the field only, the set adding up to each market's row) and A10 that a tenant without debt statuses keeps 180's figures; 14 PASS locally on PostgreSQL 16, 23 November 2026. Martin runs 227 and the query in Studio after the migration.
+
+**Data prerequisites**
+
+- The register's debt_status field mapped (cma.set_connection_field, device, debt_status) and read by a full snapshot
+- Every debt status label of the register an alias of a debt status (data quality check `device_debt_status_unmapped`)
+
+**Documented in** features.md, Assets → Installed base; data-model/0008.md, 0009zm; definitions.md, Asset terms (Debt status, Under a debt status); docs/import/devices.md, Debt status
+
+**Notes**
+
+Definition status: Proposed (docs/definitions.md, Asset terms, Debt status and Under a debt status; for Kira to confirm). The installed base's definition version is 0009zm from this measure on, so the watch compares no installed base across it. Not a payment state: the subscription app's Payment state and NetSuite's own terms stay apart (docs/open-decisions.md holds the cross-check).
 
 #### `flash.churn.churned`
 

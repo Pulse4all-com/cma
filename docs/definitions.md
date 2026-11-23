@@ -945,6 +945,120 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Used by | `no_language`; Assets → Pledge lists |
 | As built today | `cma.device.language` and the alias table (`168`); the 0009f D3 data prerequisite is met for the import. Matches the definition |
 
+### Debt status
+
+| Field | Value |
+|---|---|
+| Term | Debt status (device; nl: Schuldstatus) |
+| Key | SQL `cma.device.debt_status_key`, `cma.device_debt_status`, `cma.device_debt_status_alias`; the Installed base's dim `debt_status` (a debt status's key, or `none`); the device import's staging column `debt_status` |
+| Definition | The asset register's word for a device whose maintenance waits on a debt: one of the tenant's debt statuses (In debt collection, Write off + restart, To be submitted, Check first for Pulse4all Subscriptions), or none. It is not a payment state. |
+| Source | The register's `debt_status` field (Airtable 2.0, Installed Base; a single select), matched lower-cased and trimmed against the tenant's aliases (`cma.set_device_debt_status_alias`, `tenant.configure`) like models and statuses; the register owns it, the CMA only reads it, and the label stays in `raw` |
+| Counts / does not count | An empty field is no debt status; a label no alias maps leaves the key empty and is counted in the load's answer as `unmapped_debt_status` (not in the ingest's run counts) and in the finding `device_debt_status_unmapped`. A device not in the field with a label keeps its key but is not counted as Under a debt status |
+| Unit and display | The status's name in Reports → Maintenance (the selector and a device's row) and in the Installed base (selector, breakdown, records and files); ids and statuses only, no amount and no name |
+| Time rule | As of the latest read of the register |
+| Scope | Devices; the processing purpose is the tenant's maintenance planning and installed base, shown per device next to the customer reference to `reports.view` or `performance.team`, pseudonymised and financial |
+| Equivalent in the source system | The register's field `debt_status` |
+| Not to use | "Payment status", "dunning", "in arrears", "Paused" alone; Juo's Payment state and NetSuite's dunning stage stay their own terms |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `flash.installed_base.under_debt_status`, `maintenance.paused_devices`, `data_quality.device_debt_status_unmapped`; Reports → Maintenance, Reports → Installed base, Flash's Installed base tab, Reports → Data quality |
+| As built today | `226` (addition 0009zm); the statuses and aliases are set in Studio (docs/import/devices.md, Debt status), none is seeded. Matches the definition |
+
+### Pauses maintenance
+
+| Field | Value |
+|---|---|
+| Term | Pauses maintenance (a debt status's setting) |
+| Key | `pauses_maintenance`; SQL `cma.device_debt_status.pauses_maintenance` (default true), `cma.set_device_debt_status` |
+| Definition | Whether a device under this debt status gets no maintenance until the register empties the field or the device comes back. All four of Pulse4all Subscriptions' labels do. |
+| Source | Tenant configuration (Studio), not the register |
+| Counts / does not count | A debt status that does not pause maintenance still counts as Under a debt status; it leaves no device out of Maintenance's default |
+| Unit and display | A flag; not shown on a page |
+| Time rule | As of the latest read |
+| Scope | Devices in the field |
+| Equivalent in the source system | None |
+| Not to use | "Suspended" or "blocked" for the pause |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `maintenance.paused_devices`; Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`226`). Matches the definition |
+
+### Maintenance paused
+
+| Field | Value |
+|---|---|
+| Term | Maintenance paused (device; nl: Onderhoud gepauzeerd) |
+| Key | `maintenance_paused` (SQL, a row's field), `maintenancePaused` and `maintenancePausedDevices` (API); the page answer's `maintenance_paused_devices`; the metric `maintenance.paused_devices` |
+| Definition | A device is Maintenance paused when its debt status pauses maintenance and its device status is in the field; a device that comes back leaves the pause. Its items stay in the forecast; Maintenance's default filter leaves them out. |
+| Source | `cma.maintenance_items_of` from `cma.device.debt_status_key`, `cma.device_debt_status.pauses_maintenance` and the device status's `is_in_field` |
+| Counts / does not count | The count of tracked devices of the scope, market and model that are paused ignores the debt filter; a device in stock is never paused |
+| Unit and display | The mark "Maintenance paused" on a device's row, and the line "{n} devices under a debt status are left out" under the counts while the default filter holds |
+| Time rule | As of the latest read of the register |
+| Scope | Reports → Maintenance; the forecast's figures keep every item |
+| Equivalent in the source system | None |
+| Not to use | "Paused" alone; Juo's paused (a subscription's status) and Flash's Paused subscriptions and Paused customers are other terms |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `maintenance.paused_devices`; Reports → Maintenance |
+| As built today | `226` and `web/src/lib/maintenance.ts`. Matches the definition |
+
+### Maintenance's Debt status filter
+
+| Field | Value |
+|---|---|
+| Term | Debt status filter (Reports → Maintenance; nl: Schuldstatus) |
+| Key | The address key `debt` and the API parameter `debt`: `unpaused`, `none`, `any`, `all`, or a debt status's key; `cma.maintenance_debt_matches`. Installed base's selector: `none`, `any` or a key (the address key `f_debt_status` on the dim `debt_status`) |
+| Definition | Maintenance: All devices (`all`), **Maintenance not paused** (`unpaused`, the default), **Without a debt status** (`none`), With a debt status (`any`), or one status. Installed base: Without a debt status (`none`), With a debt status (`any`) or one status; there is no Maintenance not paused there. **Maintenance not paused** keeps every device that is not Maintenance paused: one without a debt status, one under a debt status that does not pause maintenance, and one under a debt status whose device status is not in the field (in stock, say). **Without a debt status** keeps only the devices without a debt status (`cma.device.debt_status_key` null, an unmapped label included), on both pages in the same meaning. While every debt status pauses maintenance and the register gives labels to devices in the field only, the two hold the same devices; they part as soon as either stops being true. |
+| Source | The address or the API's `debt`; checked against the tenant's catalog by `cma.assert_maintenance_debt` (CMA04); the API leaves out `debt` for every device, as before |
+| Counts / does not count | Maintenance not paused leaves out only the devices that are Maintenance paused (the line "{n} devices under a debt status are left out" counts them); Without a debt status leaves out every device with a debt status, also one under a status that pauses nothing and one in stock that keeps its label |
+| Unit and display | A selector with the keycap B on Maintenance |
+| Time rule | As of the latest read |
+| Scope | Reports → Maintenance and its API; the Installed base and Flash's Installed base tab for the other selector |
+| Equivalent in the source system | None |
+| Not to use | "Without a debt status" for Maintenance's default, which is Maintenance not paused; "Unpaused" or "Not paused" alone (the subscription app's paused is another term) |
+| Status | Proposed for Kira; the default's name Maintenance not paused, and Without a debt status as its own value on both pages, accepted by Martin on 23 Nov 2026 |
+| Decided | docs/decisions.md, 23 Nov 2026, "Maintenance's Debt status selector ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `maintenance.paused_devices`, `flash.installed_base.under_debt_status`; Reports → Maintenance, Reports → Installed base |
+| As built today | `maintenance_debt_matches` (`226`) and `web/src/components/MaintenanceFilters.tsx`. Matches the definition |
+
+### Under a debt status
+
+| Field | Value |
+|---|---|
+| Term | Under a debt status (Installed base; nl: Met een schuldstatus) |
+| Key | `flash.installed_base.under_debt_status`; the measure `under_debt_status` |
+| Definition | The devices in the field that have a debt status, whatever it pauses. |
+| Source | `cma.device.debt_status_key` and the device status's `is_in_field`, in `cma.flash_compute_of` |
+| Counts / does not count | A device in stock is never counted, whatever its label; an unmapped label counts as without a debt status |
+| Unit and display | A count: a tile on the Installed base and on Flash's Installed base tab, and a breakdown by debt status |
+| Time rule | As of the take, or live |
+| Scope | The Installed base, in every set; its definition version is `0009zm` |
+| Equivalent in the source system | None |
+| Not to use | "Paused" for this count |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `flash.installed_base.under_debt_status`; Reports → Installed base, Flash |
+| As built today | `226` (`cma.flash_overviews`, `cma.flash_compute_of`). Matches the definition |
+
+### device_debt_status_unmapped
+
+| Field | Value |
+|---|---|
+| Term | Devices with an unknown debt status (the finding `device_debt_status_unmapped`) |
+| Key | `device_debt_status_unmapped`; Data quality sort 305 |
+| Definition | A device whose register gives a debt status label that no alias maps; the value is the label. |
+| Source | `cma.data_quality_assets_checks`; `cma.device.raw` and `cma.device.debt_status_key` |
+| Counts / does not count | An empty field is never a finding; such a device counts as without a debt status until the alias exists and the next load reads it |
+| Unit and display | A count and a list on Reports → Data quality |
+| Time rule | As of the latest read |
+| Scope | Tenants with an asset register set up |
+| Equivalent in the source system | None |
+| Not to use | "Unknown" for a label that is empty |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `data_quality.device_debt_status_unmapped`; Reports → Data quality |
+| As built today | `226`; fixed in the asset register (an alias in the CMA's catalog, or the label in the register). Matches the definition |
+
 ## Subscription terms
 
 Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth). The mirror also holds each subscription's lines (Subscription line), the store's catalog (Product variant), the billing events (Billing event, with Chargeback, Return code, Refund and Invoice renewal), more event types (Subscription event types) and the CMA's own Observed subscription changes, proposed with addition 0009za (18 November 2026, brief B39 Part A) for Kira to confirm. Placeholder store, a store's connection kept switched off until the store sells, is Decided (20 November 2026, Martin).

@@ -572,7 +572,10 @@ begin
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     v_rows := v_rows || array['14', 'A4 two tenants never see each other''s take: each reads its own rows and figures; the definer''s take holds the tenant''s own devices; another tenant''s refresh refused',
-      case when v_bad = '' and v_txt ~ '^([0-9]+)=\1 14 CMA06 \| 4=4 7777$' and not v_provoke then 'ok' else 'FAIL' end, coalesce(nullif(v_bad, ''), v_txt)];
+      -- since 226 (0009zm; edited by that change) tenant two's take holds one row more: the set [market, model, debt_status]
+      case when v_bad = '' and v_txt ~ ('^([0-9]+)=\1 14 CMA06 \| '
+                                        || (case when exists (select 1 from cma.schema_migration where version = '0009zm') then '5=5' else '4=4' end) || ' 7777$')
+                and not v_provoke then 'ok' else 'FAIL' end, coalesce(nullif(v_bad, ''), v_txt)];
 
     -- A5. the application cannot write the table nor run the writer
     perform set_config('role', 'cma_app', true);

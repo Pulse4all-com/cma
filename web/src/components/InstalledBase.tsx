@@ -61,7 +61,7 @@ export function SerialSearch({ st, copy }: { st: InstalledBaseState; copy: Copy 
 export function PanelTabs({ st, copy }: { st: InstalledBaseState; copy: Copy }) {
   const t = copy.installedBase;
   const names: Record<InstalledBasePanel, string> = {
-    breakdown: t.panelBreakdown, subscription: t.panelSubscription, records: t.panelRecords, past_due: t.panelPastDue, unlinked: t.panelUnlinked,
+    breakdown: t.panelBreakdown, subscription: t.panelSubscription, debt: t.panelDebt, records: t.panelRecords, past_due: t.panelPastDue, unlinked: t.panelUnlinked,
   };
   // a serial search shows its results in place of a panel: no panel is marked open
   const open = st.serial ? null : st.panel;
@@ -225,6 +225,7 @@ export function dimName(def: FlashOverviewDef, dim: string, key: string, labels:
   if (dim === "model") return modelLabel(key, labels, copy);
   if (dim === "subscription_status") return key === "not_found" ? t.notFound : key === "none" ? t.noLink : key;
   if (dim === "status" && key === "unknown") return copy.installedBase.unknownStatus;
+  if (dim === "debt_status" && key === "none") return t.noDebtStatus;
   return labels[dim]?.[key] ?? key;
 }
 
@@ -243,8 +244,9 @@ export function BreakdownPanel({ panel, def, doc, rows, unavailable, query, file
   if (unavailable) {
     return <Card title={title}><p className="text-body text-p4a-muted" data-testid={`ib-set-unavailable-${panel}`}>{copy.installedBase.filterUnavailableSet}</p></Card>;
   }
-  // the chart: the leading dim after the market (the status, the subscription status), the devices per value
-  const dim = set.find((d) => d !== "market") ?? set[0]!;
+  // the chart: the leading dim after the market (the status, the subscription status), the devices per value; the debt
+  // status's breakdown (0009zm) charts the debt status, its table per market and model
+  const dim = panel === "debt" ? "debt_status" : set.find((d) => d !== "market") ?? set[0]!;
   const measure = "devices";
   const chart = breakdownChart(rows, set, dim, measure);
   const chartTitle = copy.installedBase.chartTitle.replace("{measure}", String(t[`m_${measure}` as keyof typeof t])).replace("{dim}", String(t[`d_${dim}` as keyof typeof t] ?? dim));
@@ -358,8 +360,8 @@ export function breakdownFileQuery(st: InstalledBaseState): URLSearchParams {
 }
 
 /** The stacks per market from the document's rows, in the donut's colours */
-export function stacksOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], slices: readonly Slice[]): MarketStack[] {
-  const set = def.sets.find((s) => s.includes("model") && s.includes("status")) ?? [];
+export function stacksOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], slices: readonly Slice[], set?: readonly string[]): MarketStack[] {
+  set ??= def.sets.find((s) => s.includes("model") && s.includes("status")) ?? [];
   return marketStacks(rows, set, def.headline, slices);
 }
 

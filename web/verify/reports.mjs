@@ -1704,7 +1704,8 @@ expect("maintenance: a replacement restarts the rule from the day it was first s
     .map((i) => `${i.sourceId}:${i.component}:${i.basis}:${i.dueOn}:${i.pastDue}`).sort().join(" "),
   "rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2028-11-12:false",
   "rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2025-01-10:true");
-const mtFilter = (o = {}) => ({ fromMonth: "2026-10-01", months: 12, market: null, model: null, scope: null, ...o });
+// the page's default debt status filter since addition 0009zm (unpaused); the fixture's devices carry no debt status
+const mtFilter = (o = {}) => ({ fromMonth: "2026-10-01", months: 12, market: null, model: null, scope: null, debt: "unpaused", ...o });
 const mtMonth = (b) => /^\d/.test(b) ? b.slice(0, 7) : b;
 const mtCells = (r) => r.cells.length === 0 ? "-" : r.cells.map((c) => `${mtMonth(c.bucket)}/${c.market}/${c.model}/`
   + `${Object.keys(c.components).sort().map((k) => `${k}:${c.components[k]}`).join("+") || "-"}/${c.endOfLife}/${c.exchanges}`).join(" ");
@@ -1754,12 +1755,32 @@ expect("maintenance: the address, the buckets, months as Postgres adds them, the
    parseBucket("past_due", mtAll.buckets), parseBucket("2027-09-01", mtAll.buckets), parseBucket("2027-10-01", mtAll.buckets), parseBucket("unknown", mtAll.buckets),
    [null, "all", "2026-11-01", "2026-11-15", "x"].map(bucketProblem), mtAddMonths("2024-01-31", 1), mtAddMonths("2025-02-10", 54), nextView("exchanges"),
    fmtMonth("2026-11-01", "en"), fmtMonth("2026-03-01", "nl")],
-  ['{"filter":{"fromMonth":"2026-10-01","months":12,"market":null,"model":null,"scope":null},"problem":false}',
-   '{"filter":{"fromMonth":"2026-12-01","months":24,"market":"NL","model":"hs1","scope":"field"},"problem":false}',
-   '{"filter":{"fromMonth":"2026-10-01","months":12,"market":null,"model":null,"scope":null},"problem":true}',
+  ['{"filter":{"fromMonth":"2026-10-01","months":12,"market":null,"model":null,"scope":null,"debt":"unpaused"},"problem":false}',
+   '{"filter":{"fromMonth":"2026-12-01","months":24,"market":"NL","model":"hs1","scope":"field","debt":"unpaused"},"problem":false}',
+   '{"filter":{"fromMonth":"2026-10-01","months":12,"market":null,"model":null,"scope":null,"debt":"unpaused"},"problem":true}',
    '{"months":"24","scope":"stock"}', 13, "past_due", "2027-09-01", null, "unknown", [true, false, false, true, true], "2024-02-29", "2029-08-10", "components",
    "Nov 2026", "mrt 2026"],
   ["", "", "", "", 12, null, null, "2027-10-01", null, [false, false, false, false, false], "2024-03-02", "2029-08-11", "exchanges", "November 2026", "maart 2026"]);
+// the debt status filter (addition 0009zm): the address (left out the default, all every device, a key, an invalid value
+// reported); the mirror pauses a device in the field under a pausing status only, leaves it out by default and keeps its
+// items for every other filter; the API takes all or left out as every device
+const mtDebtCat = { ...MT_CAT, debtStatuses: [{ key: "in_debt", name: "In debt", pausesMaintenance: true, sortOrder: 10 },
+  { key: "look", name: "Look first", pausesMaintenance: false, sortOrder: 5 }] };
+const mtFieldStatus = MT_CAT.statuses.find((x) => x.isInField && x.isTracked)?.key;
+const mtDebtDevices = MT_DEVICES.map((d, i) => (i === 0 ? { ...d, status: mtFieldStatus, debtStatus: "in_debt" } : i === 1 ? { ...d, debtStatus: "look" } : d));
+const mtDebtPage = (debt) => maintenanceReport(mtDebtDevices, mtDebtCat, mtFilter({ debt }), MT_TODAY, true);
+const mtDebtItems = maintenanceItems(mtDebtDevices, mtDebtCat, MT_TODAY);
+expect("maintenance: the debt status filter's address, the mirror's pause (in the field under a pausing status), the counts and the catalog's order",
+  [JSON.stringify(["", "all", "unpaused", "none", "any", "in_debt", "In Debt", "x y"].map((v) => parseMaintenanceFilter({ debt: v }, "2026-10-01")).map((r) => [r.filter.debt, r.problem])),
+   maintenanceQuery(mtFilter({ debt: null }), "2026-10-01").debt ?? "-", maintenanceQuery(mtFilter(), "2026-10-01").debt ?? "-",
+   mtDebtItems.filter((i) => i.paused).map((i) => i.sourceId).filter((v, k, a) => a.indexOf(v) === k).join(","),
+   mtDebtItems.length === maintenanceItems(MT_DEVICES, MT_CAT, MT_TODAY).length,
+   [mtDebtPage("unpaused").devices, mtDebtPage(null).devices, mtDebtPage("any").devices, mtDebtPage("in_debt").devices, mtDebtPage("unpaused").maintenancePausedDevices],
+   mtDebtPage(null).debtStatuses.map((d) => d.key).join(",")],
+  [JSON.stringify([["unpaused", false], [null, false], ["unpaused", false], ["none", false], ["any", false], ["in_debt", false], ["unpaused", true], ["unpaused", true]]),
+   "all", "-", MT_DEVICES[0].sourceId, true,
+   [mtPage().devices - 1, mtPage().devices, 2, 1, 1], "look,in_debt"],
+  ["", "-", "all", "", false, [0, 0, 0, 0, 0], "in_debt,look"]);
 // the routes and the data layer, from their source: the report's permissions, the reads with their parameters, the
 // file's default bucket and size; no name, email, phone or address in the type, the mirror, the parts, the page or the file
 const mtPage0 = src("../src/app/reports/maintenance/page.tsx");
@@ -1767,8 +1788,9 @@ const mtRoutes = [src("../src/app/api/v1/reports/maintenance/route.ts"), src("..
   src("../src/app/api/v1/reports/maintenance/export/route.ts")];
 const mtApi = src("../src/lib/api/maintenance.ts");
 expect("maintenance routes: reports.view or performance.team, the reads with their parameters, the file's defaults",
-  [mtRoutes.every((r) => r.includes("requireAnyPermission(me, REPORT_PERMISSIONS);")), pgLayer.includes("cma.maintenance_page($1::date, $2, $3, $4, $5)"),
-   pgLayer.includes("cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8)"), pgLayer.includes("cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id)"),
+  // since 0009zm the forms with the debt status filter: the page's sixth argument, the list's seventh
+  [mtRoutes.every((r) => r.includes("requireAnyPermission(me, REPORT_PERMISSIONS);")), pgLayer.includes("cma.maintenance_page($1::date, $2, $3, $4, $5, $6)"),
+   pgLayer.includes("cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8, $9)"), pgLayer.includes("cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id)"),
    mtRoutes[2].includes("{ file: true }") && mtApi.includes('(o.file ? "all" : null)') && mtApi.includes("o.file ? MAINTENANCE_FILE_ROWS : MAINTENANCE_LIST_ROWS"),
    mtPage0.includes("holdsAny(me, REPORT_PERMISSIONS)")],
   [true, true, true, true, true, true], [false, true, true, true, true, true]);

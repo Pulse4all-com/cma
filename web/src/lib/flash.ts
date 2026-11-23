@@ -64,11 +64,12 @@ export const FLASH_OVERVIEWS: readonly FlashOverviewDef[] = [
     headline: "holding_subscriptions",
     sorts: ["subscription_id", "store", "market", "status", "payment_state", "amount_per_cycle", "next_billing_at", "retry_since", "devices"],
     defaultDescending: false },
-  { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link", "subscription_status"],
-    // the subscription-status set holds the model since 0008zy, so it follows a Model filter
-    sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"]],
-    measures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding"],
-    countMeasures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding"], amountMeasures: [], ratioMeasures: [],
+  { key: "installed_base", shortcut: "3", kind: "stock", source: "assets", dims: ["market", "status", "model", "warehouse", "link", "subscription_status", "debt_status"],
+    // the subscription-status set holds the model since 0008zy, so it follows a Model filter; the debt status (a key, none
+    // without one) beside the model since 0009zm
+    sets: [[], ["market"], ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"], ["market", "model", "debt_status"]],
+    measures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding", "under_debt_status"],
+    countMeasures: ["devices", "in_field", "in_stock", "components_past_due", "items_due_3m", "in_field_on_holding", "under_debt_status"], amountMeasures: [], ratioMeasures: [],
     headline: "in_field", sorts: ["serial", "model", "market", "status", "warehouse", "past_due_items", "next_due_on"], defaultDescending: false },
   { key: "churn", shortcut: "4", kind: "flow", source: "subscriptions", dims: ["market", "store", "reason"],
     sets: [[], ["market"], ["market", "store", "reason"]], measures: ["churned"], countMeasures: ["churned"], amountMeasures: [], ratioMeasures: [],
@@ -469,6 +470,8 @@ export const FLASH_LIST_COLUMNS: Record<FlashKey, readonly { key: string; kind: 
     { key: "refs", kind: "refs" }, { key: "missing_refs", kind: "list" }, { key: "customer_id", kind: "text" }, { key: "subscription_id", kind: "text" },
     { key: "link", kind: "text" }, { key: "subscription_status", kind: "text" }, { key: "subscription_payment_state", kind: "text" },
     { key: "past_due_items", kind: "number" }, { key: "items_due_3m", kind: "number" }, { key: "next_due_on", kind: "date" },
+    // since 0009zm: the device's debt status (its key; empty without one)
+    { key: "debt_status", kind: "text" },
   ],
   churn: [
     { key: "subscription_id", kind: "text" }, { key: "store", kind: "text" }, { key: "market", kind: "text" }, { key: "customer_id", kind: "text" },
@@ -691,7 +694,7 @@ export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma">, readonly 
   assets: ["device_serial_missing", "device_serial_duplicate", "device_model_unmapped", "device_status_unmapped", "device_market_unmapped",
     "device_customer_ref_invalid", "component_due_unknown", "field_device_without_subscription_ref", "device_required_ref_missing",
     "active_subscription_without_device", "device_subscription_ref_unknown", "field_device_on_ended_subscription", "field_device_on_non_holding_subscription",
-    "subscription_device_units_mismatch"],
+    "subscription_device_units_mismatch", "device_debt_status_unmapped"],
   // since 0009zg: the subscription app's own figures against the Workspace's (a missed read or a rule of that source)
   subscriptions: ["source_figure_gap"],
 };
@@ -978,9 +981,13 @@ export function splitOrderOf(def: FlashOverviewDef, settings: Pick<FlashStatusSe
  * holds with a figure above 0, by name. None for an overview without a split, and none when the rows hold no row of the
  * set at all (a snapshot taken before the split was stored), so zeros never stand in for a split that was not stored
  */
-export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], market: string | null, order: readonly string[]): FlashSplitItem[] | null {
-  const split = FLASH_SPLITS[def.key];
-  if (!split) return null;
+export function splitOf(def: FlashOverviewDef, rows: readonly FlashDocRow[], market: string | null, order: readonly string[],
+  set?: readonly string[]): FlashSplitItem[] | null {
+  const own = FLASH_SPLITS[def.key];
+  if (!own) return null;
+  // another set holding the split's dim and measure (the installed base's [market, model, debt_status] under a Debt
+  // status filter, addition 0009zm), else the split's own
+  const split = set ? { ...own, set } : own;
   const sums = new Map<string, number>();
   let any = false;
   for (const r of rows) {
@@ -1071,7 +1078,21 @@ export const FLASH_DOCUMENT_FILTERS: Partial<Record<FlashKey, string>> = { insta
  * 0009f): the installed base's model and operational status, the "now" view's page filters (lib/installed-base). Reports →
  * Flash's own tab keeps FLASH_DOCUMENT_FILTERS (the model alone)
  */
-export const FLASH_NARROW_DIMS: Partial<Record<FlashKey, readonly string[]>> = { installed_base: ["model", "status"] };
+export const FLASH_NARROW_DIMS: Partial<Record<FlashKey, readonly string[]>> = { installed_base: ["model", "status", "debt_status"] };
+
+/**
+ * A page filter's value that stands for several of a dim's values (addition 0009zm): the installed base's debt status
+ * any (every debt status, not none). The database's records take the same value (cma.flash_rows_of)
+ */
+export const FLASH_ANY_VALUE = "any";
+/** The value a dim holds where a record has none of it (the installed base's debt status: none) */
+export const FLASH_NONE_VALUE = "none";
+
+/** Whether a row's value of a dim matches a page filter's value: equal, or any of the debt status but none */
+export function dimMatches(dim: string, filter: string, value: unknown): boolean {
+  if (dim === "debt_status" && filter === FLASH_ANY_VALUE) return typeof value === "string" && value !== FLASH_NONE_VALUE;
+  return value === filter;
+}
 
 /** The page filter of an overview from its list filters: the dim and its value, or none */
 export function documentFilterOf(def: FlashOverviewDef, filters: Readonly<Record<string, string>>): { dim: string; value: string } | null {
@@ -1122,7 +1143,7 @@ export function narrowDocument(def: FlashOverviewDef, totals: Readonly<Record<st
   }
   const withDims = def.sets.filter((set) => dims.every((d) => set.includes(d)));
   const sourceOf = (m: string) => withDims.find((set) => rows.some((r) => exactly(r, set) && typeof r.measures[m] === "number"));
-  const kept = rows.filter((r) => withDims.some((set) => exactly(r, set)) && dims.every((d) => r.dims[d] === filters[d]));
+  const kept = rows.filter((r) => withDims.some((set) => exactly(r, set)) && dims.every((d) => dimMatches(d, filters[d]!, r.dims[d])));
   const measures = def.measures.filter((m) => totals === null || m in totals);
   const unavailableMeasures = measures.filter((m) => sourceOf(m) === undefined || measureKind(def, m) !== "count");
   const summed = measures.filter((m) => !unavailableMeasures.includes(m));

@@ -2641,6 +2641,9 @@ function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog
       { key: "stolen_missing", name: "Stolen/Missing", isInField: false, isInStock: false, isTracked: false }],
     markets: seedIntakeConfig(me).markets.map((m) => ({ code: m.code, sortOrder: m.sortOrder })),
     windowDays: 90,
+    // addition 0009zm: two debt statuses, both pausing maintenance (test labels)
+    debtStatuses: [{ key: "in_debt_collection", name: "In debt collection (test)", pausesMaintenance: true, sortOrder: 10 },
+      { key: "check_first", name: "Check first (test)", pausesMaintenance: true, sortOrder: 40 }],
   };
   if (me.tenantId === MOCK_TENANT_2) return { devices: [], catalog };
   const today = mockToday(me);
@@ -2662,6 +2665,8 @@ function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog
       components: withComponents ? [{ kind: "pads", serial: `TEST-PAD-${n}`, expiresOn: addDays(today, padsIn) },
         { kind: "battery", serial: `TEST-BAT-${n}`, expiresOn: addDays(today, batteryIn) }] : [],
       crmContactId: status === "active_customer" && n % 2 === 0 ? `9000${n}` : null,
+      // every eighth device under a debt status (one in storage keeps its label and is not paused); n 23 to be checked first
+      debtStatus: n === 23 ? "check_first" : n % 8 === 0 ? "in_debt_collection" : null,
     };
   });
   return { devices, catalog };

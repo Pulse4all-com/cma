@@ -1,11 +1,13 @@
 import { ApiError } from "@/lib/api/respond";
-import { bucketProblem, MAINTENANCE_DEFAULT_HORIZON, MAINTENANCE_FILE_ROWS, MAINTENANCE_LIST_ROWS, parseScope, parseView } from "@/lib/maintenance";
+import { bucketProblem, MAINTENANCE_DEFAULT_HORIZON, MAINTENANCE_DEBT_VALUES, MAINTENANCE_FILE_ROWS, MAINTENANCE_LIST_ROWS, parseScope, parseView } from "@/lib/maintenance";
 import type { MaintenanceFilter, MaintenanceView } from "@/lib/data";
 
 /**
  * The query of the Maintenance routes (addition 0008zi): ?from (the first day of a month, YYYY-MM-01; the database
  * refuses one before the tenant's current month), &months (1 to 24; 12 when left out), &market (a market code or
- * unknown), &model (a model's key or unknown) and &scope (field or stock), each optional but from. Anything the database
+ * unknown), &model (a model's key or unknown), &scope (field or stock) and since addition 0009zm &debt (all or left out:
+ * every device, as before; unpaused, the page's default: no debt status that pauses maintenance; none; any; or a debt
+ * status's key, which the database checks against the tenant's catalog), each optional but from. Anything the database
  * would refuse for its form is a 400 here first.
  */
 export function maintenanceParams(sp: URLSearchParams): MaintenanceFilter {
@@ -26,7 +28,13 @@ export function maintenanceParams(sp: URLSearchParams): MaintenanceFilter {
   }
   const scope = parseScope(sp.get("scope"));
   if (scope === "invalid") throw new ApiError(400, "invalid_scope", "scope must be field or stock");
-  return { fromMonth: from, months, market, model, scope };
+  const debtText = sp.get("debt");
+  if (debtText !== null && debtText !== "all" && !MAINTENANCE_DEBT_VALUES.includes(debtText)
+      && !(/^[a-z0-9]+(_[a-z0-9]+)*$/.test(debtText) && debtText.length <= 40)) {
+    throw new ApiError(400, "invalid_debt", "debt must be all, unpaused, none, any or a debt status's key");
+  }
+  const debt = debtText === null || debtText === "all" ? null : debtText;
+  return { fromMonth: from, months, market, model, scope, debt };
 }
 
 /**
