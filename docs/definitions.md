@@ -1250,7 +1250,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Equivalent in the source system | None |
 | Not to use | "Cut-off" or "go-live date" for it |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Customers → Subscriptions's churn rate, failed rate and movements, and Customers → Active's Churn rate card, start at 1 June 2026 for every store, …" and "Definitions: Rates start month …" (addition 0009zl, PR #308); the reading that a store's own later start floors its rates and not its movements is for Martin to confirm |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Customers → Subscriptions's churn rate, failed rate and movements, and Customers → Active's Churn rate card, start at 1 June 2026 for every store, …" and "Definitions: Rates start month …" (addition 0009zl, PR #308); a store's own later start floors its rates and not its movements (decided, Martin, 23 November 2026) |
 | Used by | `cma.check_tenant_setting()`, `cma.subscription_rate_start_of`, `cma.subscription_store_start`, `cma_read.subscription_store_start`, `cma_read.subscription_churn_month`, `cma.subscriptions_page`, `cma.subscriptions_churn_card`; Churn rate, Failed rate, Recurring amount movement; Customers → Subscriptions, Customers → Active (the Churn rate card); catalog `subscriptions.rates_start_month` |
 | As built today | `224`: the setting in the catalog and checked by `cma.check_tenant_setting()`; the store's start is the later of its own and the floor; `225` proves it, and the seed sets 2026-06 for the subscriptions tenant (prod: after the migration, PROD_RUNBOOK 22.2b). Matches the definition |
 

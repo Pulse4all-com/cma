@@ -43,8 +43,8 @@
 --                                              complete month from it too, so a take computed before the floor was set
 --                                              shows no earlier month until its next refresh. A store's own
 --                                              later start floors its rates, as before, not its movements (216 never
---                                              floored the movements per store): Martin to confirm this reading of
---                                              "still applies on top"
+--                                              floored the movements per store), as Martin decided on 23 November
+--                                              2026 ("still applies on top": rates only)
 -- Comments: cma.subscription_store_start and cma_read.subscription_store_start say rate_start_month holds the floor
 -- No table, view or column changes; no stored row changes here (the facts change at their next refresh once the setting
 -- is set). No index.
