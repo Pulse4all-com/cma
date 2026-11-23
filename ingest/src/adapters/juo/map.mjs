@@ -50,7 +50,11 @@
  *   subscription:reactivated                      reactivated    data.previousStatus → active
  *   subscription:updated with a status change     status_changed data.status → data.input.status (for example ACTIVE → FAILED,
  *                                                                the system's move to failed); an update without a
- *                                                                status, or with the same one, is no event of the CMA
+ *                                                                status, or with the same one, is no event of the CMA.
+ *                                                                Before 28 January 2026 Juo wrote every update in its
+ *                                                                legacy shape, the new value at the top level and no
+ *                                                                input: data.status → status_to, status_from unknown
+ *                                                                (addition 0009zk)
  *   subscription:purchased, :created              purchased, created  a purchase's data.orderId in raw (orderId) only, since
  *                                                                0009zc
  *   subscription:migrated                         migrated       data.currentCycle → cycleIndex, data.nextBillingDate →
@@ -409,8 +413,15 @@ export function eventItem(e) {
   let statusFrom = null;
   let statusTo = known.to;
   if (known.type === "status_changed") {
-    statusTo = statusOf(data.input && typeof data.input === "object" ? data.input.status : null);
-    statusFrom = statusOf(data.status);
+    if (data.input && typeof data.input === "object") {
+      // the shape Juo writes since 28 January 2026: the new value in input, the previous one at the top level
+      statusTo = statusOf(data.input.status);
+      statusFrom = statusOf(data.status);
+    } else {
+      // the legacy shape (every update before 28 January 2026): the new value at the top level, the previous one not
+      // given, so a move's status_from stays unknown (addition 0009zk)
+      statusTo = statusOf(data.status);
+    }
     if (!statusTo || statusTo === statusFrom) return { skip: "type" };
   } else if (known.to) {
     statusFrom = statusOf(data.previousStatus);
