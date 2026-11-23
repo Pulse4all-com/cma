@@ -1,0 +1,49 @@
+DO
+BEGIN
+SET
+SET
+DO
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+psql:db/214_source_figures.sql:506: NOTICE:  policy "tenant_app" for relation "source_figure" does not exist, skipping
+psql:db/214_source_figures.sql:506: NOTICE:  policy "tenant_readonly" for relation "source_figure" does not exist, skipping
+psql:db/214_source_figures.sql:506: NOTICE:  trigger "audit" for relation "source_figure" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+DROP TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE VIEW
+COMMENT
+CREATE VIEW
+DO
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+INSERT 0 1
+COMMIT
+RESET
