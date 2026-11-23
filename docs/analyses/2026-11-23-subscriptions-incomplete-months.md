@@ -1,5 +1,7 @@
 # Customers → Subscriptions: months whose source is incomplete (options, not built)
 
+> Update, 23 November 2026: Martin chose Option A with one tenant date for every store, `subscriptions.rates_start_month` = 2026-06, built in PR #308 (addition 0009zl, `224`/`225`); Step 0 below stands beside it. The analysis is otherwise unchanged.
+
 Prepared on 23 November 2026 for Martin, on PR #308 (addition 0009zh, brief B39d), while the merge is held. Labels: **Studio** (the instance named), **File** (a repository path).
 
 ## Decision (Martin, 23 November 2026): Step 0
