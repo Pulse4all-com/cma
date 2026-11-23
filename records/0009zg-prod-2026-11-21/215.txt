@@ -1,0 +1,31 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/215_verify_source_figures.sql:41: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+                                                                      check_name                                                                       | result  |                                                                                                                                                                     detail                                                                                                                                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------+---------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zg recorded, after 0009zf                                                                                                             | PASS    | 
+ A2 cma.source_figure: row-level security on, the application's grants, no audit trigger, unique per tenant, connection, figure, date and dims         | PASS    | true:truetruetrue:false:tenant_id,connection_id,figure_key,business_date,dims
+ A3 the six functions the application's and no one else's; JIT off on cma.data_quality_of and cma.flash_watch_of                                       | PASS    | jit=off jit=off
+ A4 the readers: cma_read.source_figure without raw, cma_read.dq_source_figure_gap; sync_run takes the job source_figures                              | PASS    | tenant_id,connection_id,figure_key,source_metric,business_date,dims,value,unit,currency,cma_value,cma_at,fetched_at,run_id | tenant_id,connection_id,object_type,object_id,value | true
+ A5 the seven figures with their kind, unit, dims and comparison; source_figure_gap at 400, fixed in subscriptions (the variant check still the CMA's) | PASS    | subscriptions_in_status:stock:count:status:true recurring_amount_active:stock:amount::true renewals:flow:count::true exits:flow:count:status:true purchases:flow:count::true pauses:flow:count::true renewal_survival:cohort:count:cohort_start+period:false | subscription_device_units_mismatch:390 source_figure_gap:400 | subscriptions cma
+ B a dev or local database (the dev seed's agent.two@example.com active)                                                                               | FAIL    | REFUSED: no dev seed, so this is no dev or local database; nothing ran
+ verdict                                                                                                                                               | REFUSED | 215_verify_source_figures: 5 PASS, 1 FAIL
+(7 rows)
+
+RESET
