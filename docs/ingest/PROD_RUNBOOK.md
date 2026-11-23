@@ -4023,7 +4023,7 @@ having count(*) filter (where not x.reported) > 0
 order by coalesce(st.market, 'unknown') collate "C", x.month, x.kind collate "C";
 reset role;
 ```
-Expected: the high months' moves mostly `inferred`, which confirms the cause. If they are mostly reported by events, the cause is elsewhere (for example a bulk action that moved them): name it in `records/0009zk-prod-<date>`. Keep the output for `records/0009zk-prod-<date>` and compare it with 23.10.
+Expected: the high months' moves mostly `inferred`, which confirms the cause. `inferred` may read a little low: a move dated at its last event's own time counts as reported. If they are mostly reported by events, the cause is elsewhere (for example a bulk action that moved them): name it in `records/0009zk-prod-<date>`. Keep the output for `records/0009zk-prod-<date>` and compare it with 23.10.
 
 ## 23.2 Terminal: 0009zk in dev
 **Terminal**
@@ -4106,21 +4106,25 @@ Then the moves the backfill stored without a previous status (Juo's legacy shape
 ```sql
 set statement_timeout = '300s';
 set role cma_owner;
-with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+with t as (select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'),
 st as materialized (select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
 ev as (
   select e.connection_id, e.subscription_source_id, e.occurred_at, e.source_id, e.status_from,
+         (e.occurred_at at time zone (select timezone from t))::date as day,
          case e.event_type when 'status_changed' then e.status_to when 'canceled' then 'canceled' when 'paused' then 'paused' else 'active' end as status_to
   from cma.subscription_event e
   where e.tenant_id = (select id from t) and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
     and (e.event_type <> 'status_changed' or e.status_to is not null)),
 l as (
   select ev.*, lag(ev.status_to) over (partition by ev.connection_id, ev.subscription_source_id
-                                       order by ev.occurred_at, (ev.status_from is null), ev.source_id collate "C") as previous
+                                       order by ev.occurred_at, (ev.status_from is null), ev.source_id collate "C") as previous,
+         lag(ev.day) over (partition by ev.connection_id, ev.subscription_source_id
+                           order by ev.occurred_at, (ev.status_from is null), ev.source_id collate "C") as previous_day
   from ev)
 select coalesce(st.market, 'unknown') as market,
        count(*) filter (where l.status_from is null) as unnamed_moves,
        count(*) filter (where l.status_from is null and l.previous = l.status_to) as repeats,
+       count(*) filter (where l.status_from is null and l.previous = l.status_to and l.previous_day < l.day) as repeats_other_day,
        (min(l.occurred_at) filter (where l.status_from is null))::date as first_day,
        (max(l.occurred_at) filter (where l.status_from is null))::date as last_day
 from l
@@ -4129,7 +4133,7 @@ group by 1
 order by coalesce(st.market, 'unknown') collate "C";
 reset role;
 ```
-Expected: `unnamed_moves` per store from its history start to 28 January 2026 (and the few canceled or paused reports Juo left without a previous status), `repeats` 0 or near it: Juo's legacy update carried the status only when it changed. A `repeats` count well above 0 is a finding: those readers then need the previous event's rule before #308 goes on.
+Expected: `unnamed_moves` per store from its history start to 28 January 2026 (and the few canceled or paused reports Juo left without a previous status), `repeats_other_day` 0 or near it: Juo's legacy update carried the status only when it changed. `repeats` may be higher where one move was reported twice on its day (a `canceled` or `paused` event and a `status_changed`); those do no harm, since the readers count a subscription once per date. A `repeats_other_day` count well above 0 is a finding: those readers then need the previous event's rule before #308 goes on.
 
 ## 23.7 Studio or Terminal: the facts' refresh
 The new events change the facts' inputs, so the minute job refreshes them within a few minutes (`cma-refresh-active-customers`). Then time the refresh as 20.8 does (Terminal, `131_time_all.sql` into `~/cma-audit/0009zk-prod-$(date +%F)-131.txt`). Expected: the row "subscription facts refresh" within its budget (10,000 ms). The events grow by the legacy moves, so note the time against 21.9's.
