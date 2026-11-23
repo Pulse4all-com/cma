@@ -326,8 +326,7 @@ begin
      or (select pronargdefaults from pg_proc where oid = 'cma.maintenance_rows(date,integer,text,text,text,text,text,text,integer)'::regprocedure) <> 0 then
     v_bad := v_bad || 'a new public form with a default; ';
   end if;
-  if (select count(*) from information_schema.routines r join information_schema.columns c on false where false) <> 0
-     or (select array_length(proallargtypes, 1) from pg_proc where oid = 'cma.maintenance_due_of(date,integer)'::regprocedure) <> 2 + 17 then
+  if (select array_length(proallargtypes, 1) from pg_proc where oid = 'cma.maintenance_due_of(date,integer)'::regprocedure) <> 2 + 17 then
     v_bad := v_bad || 'maintenance_due_of''s columns; ';
   end if;
   if v_bad <> '' or v_provoke then
