@@ -11,8 +11,9 @@
 -- 0009zi ran).
 --   A  A1 the addition after 0009ze; A2 the function the application's and no one else's, its JIT off, 210's filter on a
 --      named previous status gone; A3 its moves equal 210's on every tenant but for subscriptions whose first status event
---      names no previous status (before the backfill of the events: Juo's canceled and paused reports without one, if any)
---   B  on a throwaway tenant: a subscription canceled in 2025 by a legacy move (no previous status) and reactivated in
+--      names no previous status (before the backfill of the events: Juo's canceled and paused reports without one, if any);
+--      provoked, 210's side loses one move, which the comparison must find
+--   B  on a throwaway tenant: a subscription moved into canceled in 2025 by a legacy move (no previous status) and reactivated in
 --      March 2026 (from canceled) enters active and churns in 2025 (210: entered canceled, no churn); one whose moves are
 --      all legacy, and one whose events all name a previous status, move as under 210
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
@@ -100,6 +101,8 @@ as $$
 $$;
 
 
+alter function pg_temp.v0009zk_old(uuid, timestamptz) set jit = off;
+
 -- A. Structure, privileges and the answer against 210's
 do $$
 declare
@@ -127,7 +130,13 @@ begin
   -- A3. row for row against 210's on every tenant; a difference only where the first status event names no previous status
   with t as (select x.id from cma.tenant x),
   n as (select t.id as tenant_id, m.* from t cross join lateral cma.subscription_moves_of(t.id, v_now) m),
-  o as (select t.id as tenant_id, m.* from t cross join lateral pg_temp.v0009zk_old(t.id, v_now) m),
+  o0 as (select t.id as tenant_id, m.* from t cross join lateral pg_temp.v0009zk_old(t.id, v_now) m),
+  -- provoked, 210's side loses one move of a subscription whose first status event names a previous status, so the
+  -- comparison itself must find it
+  o as (select * from o0
+        where not v_provoke
+           or (o0.subscription_id, o0.at) is distinct from (select (x.subscription_id, x.at) from o0 x where x.kind is not null
+                                                             order by x.at, x.subscription_id limit 1)),
   d as ((select * from n except all select * from o) union all (select * from o except all select * from n)),
   unnamed as (
     -- the subscriptions whose first status event names no previous status
@@ -138,7 +147,8 @@ begin
       from cma.subscription_event e
       where e.tenant_id = s.tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
         and e.occurred_at <= v_now and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
-      order by e.occurred_at, e.source_id collate "C"
+        and (e.event_type <> 'status_changed' or e.status_to is not null)
+      order by e.occurred_at, (e.status_from is null), e.source_id collate "C"
       limit 1) f
     where f.status_from is null and s.source_deleted_at is null
   )
@@ -178,7 +188,7 @@ begin
     values (v_t, v_sub, 'verifysubs', 'l1', 'c-l1', 'active', 'month', 1, 30, 'GBP', '2025-01-01 10:00+00', '2026-03-01 10:00+00'),
            (v_t, v_sub, 'verifysubs', 'l2', 'c-l2', 'active', 'month', 1, 30, 'GBP', '2025-01-01 10:00+00', '2025-05-10 10:00+00'),
            (v_t, v_sub, 'verifysubs', 'n1', 'c-n1', 'active', 'month', 1, 30, 'GBP', '2025-01-01 10:00+00', '2026-04-01 10:00+00');
-    -- l1: a legacy cancellation in 2025 (no previous status), then a reactivation from canceled in 2026; l2: all legacy
+    -- l1: a legacy move into canceled in 2025 (no previous status), then a reactivation from canceled in 2026; l2: all legacy
     -- (into failed, back to active); n1: every event names its previous status (canceled, then reactivated)
     insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at, status_from, status_to)
     values (v_t, v_sub, 'verifysubs', 'l1-a', 'l1', 'status_changed', '2025-06-01 10:00+00', null, 'canceled'),
@@ -197,7 +207,7 @@ begin
           from cma.subscription s
           left join pg_temp.v0009zk_old(v_t, now()) m on m.subscription_id = s.id and m.kind is not null
           where s.tenant_id = v_t group by s.source_id) x;
-    v_rows := v_rows || array['11', 'B1 a legacy cancellation in 2025 then a reactivation from canceled in 2026: entry active, churned in 2025, reactivated in 2026 (210: entered canceled, no churn); all legacy, and all named, move as under 210',
+    v_rows := v_rows || array['11', 'B1 a legacy move into canceled in 2025 then a reactivation from canceled in 2026: entry active, churned in 2025, reactivated in 2026 (210: entered canceled, no churn); all legacy, and all named, move as under 210',
       case when v_txt = 'l1:new@2025-01,churned@2025-06,reactivated@2026-03 l2:new@2025-01,moved_to_failed@2025-05,reactivated@2025-05 n1:new@2025-01,churned@2025-07,reactivated@2026-04 old-l1:reactivated@2026-03 old-l2:new@2025-01,moved_to_failed@2025-05,reactivated@2025-05 old-n1:new@2025-01,churned@2025-07,reactivated@2026-04'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 

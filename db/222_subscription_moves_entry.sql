@@ -8,8 +8,9 @@
 -- 223_verify_subscription_moves_entry.sql there (normal, then provoked), then the verifies that read what this
 -- re-creates: 211_verify_subscription_facts.sql and 213_verify_subscription_facts_speed.sql (cma.subscription_moves_of,
 -- directly and through cma.subscription_facts_refresh_of; grep -lw 'cma\.subscription_moves_of' db/*verify*.sql), and,
--- where 0009zi ran, 219_verify_source_figure_moves.sql (its B2 reads the moves). Neither is edited: their events all name
--- a previous status. Prod: this script and 223 (its block B refuses prod's data, as 211's does). No page reads anything
+-- where 0009zi ran, 219_verify_source_figure_moves.sql (its B2 reads the moves), and where 0009zh ran,
+-- 217_verify_subscriptions_page.sql (it refreshes the facts and reads the movements). None is edited: their events all
+-- name a previous status. Prod: this script and 223 (its block B refuses prod's data, as 211's does). No page reads anything
 -- new; the facts' next refresh uses it (the minute job's step, when its inputs change: the backfill of the events that
 -- follows this in PROD_RUNBOOK phase 23 changes them).
 --
@@ -19,8 +20,8 @@
 -- addition), and the backfill of the events stores those moves with no previous status (Juo's legacy shape names none).
 -- 210's cma.subscription_moves_of takes a subscription's entry status from the first status event that names a previous
 -- status, so a subscription with a legacy move first and a new-shape move later would enter in the later move's previous
--- status: a subscription canceled in 2025 (legacy, no previous status) and reactivated in March 2026 (from canceled) would
--- enter canceled, and its 2025 cancellation would be no churn. 210's own comment says the rule meant: the status the first
+-- status: a subscription that moved into canceled in 2025 (legacy, no previous status) and reactivated in March 2026 (from canceled) would
+-- enter canceled, and its 2025 move into canceled would be no churn. 210's own comment says the rule meant: the status the first
 -- status event names as its previous one, else active. This makes the code say it.
 --
 -- What it re-creates
@@ -30,8 +31,9 @@
 -- Who reads it: cma.subscription_facts_refresh_of (212) for cma.subscription_month_take, so the movements, the Churn rate
 -- and the Failed rate (cma_read.subscription_churn_month), and 219's B2 where 0009zi ran. Where every subscription's first
 -- status event names a previous status (every event the CMA held before the backfill but the canceled and paused reports
--- whose previousStatus Juo left out), the answer is 210's; 223's A2 compares the two row for row on every tenant and names
--- the subscriptions that differ (counts only).
+-- whose previousStatus Juo left out), the answer is 210's; 223's A3 compares the two row for row on every tenant and names
+-- the subscriptions that differ (counts only). At one instant, a report that names a previous status goes first,
+-- as 210 preferred it.
 -- Cost: the same plan as 210's (one aggregate's filter loses a condition); no index.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
@@ -90,8 +92,9 @@ as $$
   ), first_ev as (
     select ev.id, min(ev.occurred_at) as first_at,
            -- 0009zk: the first status event's previous status, even when unknown (then active, below): an earlier
-           -- report without one (Juo's legacy shape) is no longer passed over for a later event's
-           (array_agg(ev.status_from order by ev.occurred_at, ev.source_id collate "C")
+           -- report without one (Juo's legacy shape) is no longer passed over for a later event's; at one instant a report
+           -- that names it first (a move into canceled reported as canceled and as status_changed)
+           (array_agg(ev.status_from order by ev.occurred_at, (ev.status_from is null), ev.source_id collate "C")
               filter (where ev.status_to is not null))[1] as first_from,
            bool_or(ev.event_type = 'migrated') as migrated
     from ev

@@ -134,7 +134,8 @@ export function juoStore({ handle, key, nowMs = Date.now(), prefix = "s" }) {
   event(202, "subscription:renewed", 60 * 20, { orderId: "6100000202", cycleIndex: 6 });
   event(203, "subscription:updated", 60 * 24 * 3, { input: { status: "FAILED" }, status: "ACTIVE" });
   event(203, "subscription:updated", 60 * 24 * 3 - 1, { nextBillingDate: ago(60) });
-  // the legacy shape Juo wrote before 28 January 2026 (addition 0009zk): the new status at the top level, no input
+  // the legacy shape Juo wrote before 28 January 2026 (addition 0009zk): the new status at the top level, no input (dated
+  // recently here: the shape is what is tested, not its date)
   event(206, "subscription:updated", 60 * 24 * 7, { status: "EXPIRED" });
   event(204, "subscription:paused", 60 * 24 * 4, { previousStatus: "ACTIVE" }, { type: "staff", id: "81100000001", name: "Invented Staff", source: null });
   event(205, "subscription:cancelled", 60 * 24 * 3, { previousStatus: "ACTIVE", reason: "Too expensive, mail me at person-0205@example.invalid" },
