@@ -139,14 +139,20 @@ export interface StatusChangeLabels {
   date: string; person: string; employer: string; timeZone: string; status: string; from: string; to: string;
   duration: string; working: string; paid: string; billable: string; enteredBy: string; notClockedOut: string;
   yes: string; no: string; sourceUser: string; sourceSystem: string; sourceCorrection: string; sourceImport: string;
+  /** The status's current work area (addition 0009zn): its own last column, empty without one */
+  workArea: string; workAreaSales: string; workAreaOperations: string;
 }
 
-/** One row per stretch in a status, from its change to the next; an open stretch has no end */
+/**
+ * One row per stretch in a status, from its change to the next; an open stretch has no end. The work area is the
+ * last column, so a file read by position keeps its earlier columns where they were
+ */
 export function statusChangesCsv(rows: StatusChangeRow[], s: ExportSettings, l: StatusChangeLabels): string {
   const yn = (b: boolean) => (b ? l.yes : l.no);
   const source = { user: l.sourceUser, system: l.sourceSystem, correction: l.sourceCorrection, import: l.sourceImport } as const;
+  const area = { sales: l.workAreaSales, operations: l.workAreaOperations } as const;
   return toCsv(
-    [l.date, l.person, l.employer, l.timeZone, l.status, l.from, l.to, l.duration, l.working, l.paid, l.billable, l.enteredBy, l.notClockedOut],
+    [l.date, l.person, l.employer, l.timeZone, l.status, l.from, l.to, l.duration, l.working, l.paid, l.billable, l.enteredBy, l.notClockedOut, l.workArea],
     rows.map((r) => [
       formatDate(r.date, s.dateFormat),
       safeText(r.displayName),
@@ -161,6 +167,7 @@ export function statusChangesCsv(rows: StatusChangeRow[], s: ExportSettings, l: 
       yn(r.isBillable),
       source[r.source],
       yn(r.isCapped),
+      r.workArea ? area[r.workArea] : "",
     ]),
     s,
   );

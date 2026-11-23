@@ -66,12 +66,12 @@ A visit opens nothing (decision 7 Oct 2026): rendering reads the day, only POST 
 
 **(current status name with its colour dot)** on / · Current status
 
-The work status the person is in right now, named from the tenant's own list, with the colour of its group (productive, other work, pause).
+The work status the person is in right now, named from the tenant's own list, with the colour of its group (Sales, Operations, productive, other work, pause).
 
 **Formula as computed**
 
 ```
-current_status_id = the status of the last effective start/status event of the day (workday_summary); name as stored. Colour group = agentGroupOf(flags): is_working && is_productive => productive (green), is_working => otherWork (deep blue), else pause (light blue); whether a pause is paid is never shown to agents.
+current_status_id = the status of the last effective start/status event of the day (workday_summary); name as stored. Colour group = agentGroupOf(flags): is_working && is_productive => sales (green) or operations (deep blue) by the status's current work_area, productive (green) without one, is_working => otherWork (Inkt), else pause (light blue); whether a pause is paid is never shown to agents.
 ```
 
 **Unit** text · **Grain** now · **Status** verified
@@ -737,12 +737,12 @@ The Needs attention block is shown to monitoring.live, performance.team or workd
 
 **Status** on /live/board · Status (Status)
 
-Which of six groups each person on the board is in right now: Productive, Other work, Paid pause, Unpaid pause (from the current status's flags, the same rule as the Dashboard), Clocked out (today's day ended) or Not clocked in (no day today). Shown as the row's colour dot and used for the tiles, the row order and the group filter.
+Which of eight groups each person on the board is in right now: Sales, Operations, Productive (working and productive without a work area; labelled Other productive when any of the tenant's statuses has a work area), Other work, Paid pause, Unpaid pause (from the current status's flags and work area, the same rule as the Dashboard), Clocked out (today's day ended) or Not clocked in (no day today). Shown as the row's colour dot and used for the tiles, the row order and the group filter.
 
 **Formula as computed**
 
 ```
-liveGroupOf(person): no day -> notClockedIn; day.status = 'ended' or no current status -> clockedOut; else groupOf(flags): isWorking ? (isProductive ? productive : otherWork) : (isPaid ? paidPause : unpaidPause). Flags come from cma.team_now() (the day's current status as stored); rows sorted by group in LIVE_GROUPS order, then name, then id (no ranking).
+liveGroupOf(person): no day -> notClockedIn; day.status = 'ended' or no current status -> clockedOut; else groupOf(flags): isWorking ? (isProductive ? (workArea = sales ? sales : workArea = operations ? operations : productive) : otherWork) : (isPaid ? paidPause : unpaidPause). Flags come from cma.team_now() (the day's current status as stored); rows sorted by group in LIVE_GROUPS order, then name, then id (no ranking).
 ```
 
 **Unit** flag · **Grain** now, per_person · **Status** verified
@@ -773,7 +773,7 @@ liveGroupOf(person): no day -> notClockedIn; day.status = 'ended' or no current 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with kept as (select u.id as user_id, (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))), day as (select k.user_id, w.id as workday_id, w.status as day_status from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date), cur as (select d.user_id, d.day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = d.workday_id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from day d) select c.user_id, case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id order by 1
+with kept as (select u.id as user_id, (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))), day as (select k.user_id, w.id as workday_id, w.status as day_status from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date), cur as (select d.user_id, d.day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = d.workday_id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from day d) select c.user_id, case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive and s.work_area = 'sales' then 'sales' when s.is_working and s.is_productive and s.work_area = 'operations' then 'operations' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id order by 1
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -788,7 +788,7 @@ The grouping never reads a status key or name (lib/live.ts header comment). An i
 
 **Productive / Other work / Paid pause / Unpaid pause** on /live/board · Productive / Other work / Paid pause / Unpaid pause (Productief / Ander werk / Betaalde pauze / Onbetaalde pauze)
 
-How many people are in each flag group right now. One tile per group that at least one ACTIVE status of the tenant belongs to (Pulse4all has no Paid pause tile); a tile is also a filter.
+How many people are in each flag group right now. One tile per group that at least one ACTIVE status of the tenant belongs to (a Sales or Operations tile only when an active status has that work area; Pulse4all has no Paid pause tile); a tile is also a filter.
 
 **Formula as computed**
 
@@ -825,7 +825,7 @@ count of liveRows whose liveGroupOf(person) = the tile's group, over ALL rows (b
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with kept as (select u.id as user_id, (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))), cur as (select k.user_id, w.status as day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = w.id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date) select case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp, count(*) from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id group by 1 order by 1
+with kept as (select u.id as user_id, (select coalesce(tz_u.timezone, tz_o.timezone, tz_t.timezone) from cma.app_user tz_u join cma.tenant tz_t on tz_t.id = tz_u.tenant_id left join cma.organisation tz_o on tz_o.tenant_id = tz_u.tenant_id and tz_o.id = tz_u.organisation_id where tz_u.tenant_id = :tenant_id and tz_u.id = u.id) as tz from cma.app_user u where u.tenant_id = :tenant_id and (exists (select 1 from cma.app_user tk_u where tk_u.tenant_id = :tenant_id and tk_u.id = u.id and tk_u.status = 'active') and exists (select 1 from cma.user_role tk_ur join cma.role_permission tk_rp on tk_rp.tenant_id = tk_ur.tenant_id and tk_rp.role_id = tk_ur.role_id where tk_ur.tenant_id = :tenant_id and tk_ur.user_id = u.id and tk_rp.permission_key = 'workday.own'))), cur as (select k.user_id, w.status as day_status, (select e.status_id from cma.time_event e where e.tenant_id = :tenant_id and e.workday_id = w.id and e.kind in ('start','status') and not exists (select 1 from cma.time_event v where v.tenant_id = :tenant_id and v.supersedes_event_id = e.id) order by e.occurred_at desc, e.recorded_at desc limit 1) as status_id from kept k left join cma.workday w on w.tenant_id = :tenant_id and w.user_id = k.user_id and w.business_date = (now() at time zone k.tz)::date) select case when c.day_status is null then 'notClockedIn' when c.day_status = 'ended' or c.status_id is null then 'clockedOut' when s.is_working and s.is_productive and s.work_area = 'sales' then 'sales' when s.is_working and s.is_productive and s.work_area = 'operations' then 'operations' when s.is_working and s.is_productive then 'productive' when s.is_working then 'otherWork' when s.is_paid then 'paidPause' else 'unpaidPause' end as grp, count(*) from cur c left join cma.work_status s on s.tenant_id = :tenant_id and s.id = c.status_id group by 1 order by 1
 ```
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
@@ -2957,12 +2957,12 @@ A withdrawn imported day has no effective start and so no stretch: it counts for
 
 **Groups** on /reports/dashboard · Groups (legend) (Groepen)
 
-The period's time per flag group: Productive, Other work, Paid pause, Unpaid pause — the legend above the charts.
+The period's time per group: Sales, Operations, Productive (without a work area; labelled Other productive when any of the tenant's statuses has a work area), Other work, Paid pause, Unpaid pause — the legend above the charts; Sales and Operations show only with time in the period.
 
 **Formula as computed**
 
 ```
-groupOf(flags): is_working && is_productive → productive; is_working → otherWork; is_paid → paidPause; else unpaidPause. Seconds summed per group over the rows; shown as Xh YYm (floored minutes of each group's second total).
+groupOf(flags): is_working && is_productive → sales or operations by the status's current work_area, else productive; is_working → otherWork; is_paid → paidPause; else unpaidPause. Seconds summed per group over the rows; shown as Xh YYm (floored minutes of each group's second total).
 ```
 
 **Unit** minutes · **Grain** period, per_group · **Status** verified
@@ -2998,7 +2998,7 @@ groupOf(flags): is_working && is_productive → productive; is_working → other
 with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
 eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
 iv as (select e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.business_date between :from and :to)
-select case when ws.is_working and ws.is_productive then 'productive' when ws.is_working then 'otherWork' when ws.is_paid then 'paidPause' else 'unpaidPause' end as grp,
+select case when ws.is_working and ws.is_productive and ws.work_area = 'sales' then 'sales' when ws.is_working and ws.is_productive and ws.work_area = 'operations' then 'operations' when ws.is_working and ws.is_productive then 'productive' when ws.is_working then 'otherWork' when ws.is_paid then 'paidPause' else 'unpaidPause' end as grp,
  sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at)))))::bigint as seconds
 from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by 1 order by 1
 ```
@@ -3114,7 +3114,7 @@ byDay(rows, from, min(to, today)): every date on the axis (a day without time in
 with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
 eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
 iv as (select w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.business_date between :from and :to)
-select iv.business_date, case when ws.is_working and ws.is_productive then 'productive' when ws.is_working then 'otherWork' when ws.is_paid then 'paidPause' else 'unpaidPause' end as grp, sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at)))))::bigint as seconds
+select iv.business_date, case when ws.is_working and ws.is_productive and ws.work_area = 'sales' then 'sales' when ws.is_working and ws.is_productive and ws.work_area = 'operations' then 'operations' when ws.is_working and ws.is_productive then 'productive' when ws.is_working then 'otherWork' when ws.is_paid then 'paidPause' else 'unpaidPause' end as grp, sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at)))))::bigint as seconds
 from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by 1, 2 order by 1, 2
 ```
 
@@ -40899,7 +40899,7 @@ The status the person is in now, as a badge with the group's colour dot; the sam
 **Formula as computed**
 
 ```
-statusKey/statusName from workday_summary.current_status_id (last effective start/status event); colour = agentGroupOf(is_working, is_productive). Falls back to the stored name without a dot for a retired status, then to the copy word 'Working'.
+statusKey/statusName from workday_summary.current_status_id (last effective start/status event); colour = agentGroupOf(is_working, is_productive, work_area). Falls back to the stored name without a dot for a retired status, then to the copy word 'Working'.
 ```
 
 **Unit** text · **Grain** now · **Status** verified

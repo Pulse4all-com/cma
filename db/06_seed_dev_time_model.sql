@@ -1,7 +1,7 @@
 -- CMA seed: dev test data for the time model (fictional). Dev only, never run in prod.
 -- Run as yourself (IAM login) after 05_time_model.sql. Safe to rerun.
 --
--- Three things for the dev web app:
+-- Four things for the dev web app (the fourth, work areas, since addition 0009zn):
 --   1. Login ids for the test users under system 'mock'. In dev the web app runs behind Cloud Run
 --      IAM (gcloud run services proxy), not IAP, so its identity is the mock identity with
 --      provider 'mock' and subject 'agent-one', 'agent-two', 'supervisor', 'manager', 'analyst',
@@ -13,6 +13,7 @@
 --   3. A short history written through the same functions the application uses: ended days, a
 --      pause, a forgotten clock-out fixed by the manager, and an open day from the day before
 --      yesterday that nobody ended. Written once; rerunning skips it.
+--   4. Work areas on the dev tenants' statuses, chosen by rule (section 4), so dev shows Sales and Operations.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
 do $$
@@ -102,5 +103,38 @@ begin
   perform cma.end_workday(w.id,             ((current_date - 1) + time '17:00') at time zone v_tz);
 
   raise notice 'time model fixture written';
+end
+$$;
+
+-- 4. Work areas (after addition 0009zn, 228_work_area.sql; Martin, 23 November 2026) -----------
+-- So dev shows Sales green and Operations Deep Blue in every hours view. Chosen by rule, naming no tenant and no status
+-- key (D1): in a tenant with two or more active working, productive statuses and no work area anywhere yet, the first in
+-- its order (sort order, then key) gets sales and the second operations; a tenant with one such status (the universal
+-- ladder) keeps none, so its time stays Productive. Rerun-safe: a tenant that has a work area is left as it is, so a
+-- change on Configuration → Statuses survives a rerun. Dev only: it does nothing where the dev seed's test person
+-- (03_seed_dev_test_data.sql) does not exist, and nothing before 228 has run.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'cma' and table_name = 'work_status' and column_name = 'work_area') then
+    raise notice 'cma.work_status.work_area does not exist yet (addition 0009zn): rerun this seed after 228_work_area.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.app_user where email = 'agent.two@example.com' and status = 'active') then
+    raise notice 'not the dev database (no dev seed person): work areas skipped';
+    return;
+  end if;
+  perform set_config('app.actor_label', 'seed:dev-time-model', true);   -- the audit trail names the process, as section 3
+  with candidate as (
+    select s.id, row_number() over (partition by s.tenant_id order by s.sort_order, s.key collate "C") as n,
+           count(*) over (partition by s.tenant_id) as of_n
+    from cma.work_status s
+    where s.status = 'active' and s.is_working and s.is_productive
+      and not exists (select 1 from cma.work_status a where a.tenant_id = s.tenant_id and a.work_area is not null)
+  )
+  update cma.work_status s
+     set work_area = case c.n when 1 then 'sales' else 'operations' end
+    from candidate c
+   where s.id = c.id and c.of_n >= 2 and c.n <= 2;
 end
 $$;

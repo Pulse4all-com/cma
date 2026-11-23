@@ -8,7 +8,7 @@ import type {
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
-  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
@@ -573,7 +573,7 @@ type ExportHoursDbRow = {
 type StatusChangeDbRow = {
   user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
   status_key: string; status_name: string; is_working: boolean; is_productive: boolean; is_paid: boolean;
-  is_billable: boolean; from_at: Date; to_at: Date | null; is_open: boolean; is_capped: boolean;
+  is_billable: boolean; work_area: WorkArea | null; from_at: Date; to_at: Date | null; is_open: boolean; is_capped: boolean;
   seconds: number; source: StatusChangeRow["source"];
 };
 
@@ -600,7 +600,7 @@ function toExportHoursRow(r: ExportHoursDbRow): ExportHoursRow {
 type StatusTimeDbRow = {
   user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
   status_key: string; status_name: string; sort_order: number; status_active: boolean; is_working: boolean;
-  is_productive: boolean; is_paid: boolean; is_billable: boolean; seconds: number; stretches: number; is_capped: boolean;
+  is_productive: boolean; is_paid: boolean; is_billable: boolean; work_area: WorkArea | null; seconds: number; stretches: number; is_capped: boolean;
 };
 
 function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
@@ -618,6 +618,8 @@ function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
     isProductive: r.is_productive,
     isPaid: r.is_paid,
     isBillable: r.is_billable,
+    // The status's current work area (addition 0009zn): group and colour only
+    workArea: r.work_area ?? null,
     seconds: r.seconds,
     stretches: r.stretches,
     isCapped: r.is_capped,
@@ -627,11 +629,20 @@ function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
 // Addition 0003c: the permission (performance.team) is checked inside the function, in the same
 // transaction as the read
 async function readTeamStatusTime(q: Querier, range: HoursRange, userId: string | null): Promise<TeamStatusTime> {
-  const r = await q.query<StatusTimeDbRow>(
-    `select * from cma.team_status_time($1::date, $2::date, $3::uuid)`,
+  // In the same statement, whether any of the tenant's statuses has a work area (the label of Other productive): the one
+  // row of h always answers it, with the period's rows beside it, or with nulls when the period has none
+  const r = await q.query<Partial<StatusTimeDbRow> & { tenant_has_work_area: boolean }>(
+    `select t.*, h.tenant_has_work_area
+       from (select coalesce(bool_or(w.work_area is not null), false) as tenant_has_work_area
+               from cma.work_status w where w.tenant_id = cma.current_tenant_id()) h
+       left join cma.team_status_time($1::date, $2::date, $3::uuid) t on true`,
     [range.from, range.to, userId],
   );
-  return { ...range, rows: r.rows.map(toStatusTimeRow) };
+  return {
+    ...range,
+    rows: r.rows.filter((x) => x.user_id != null).map((x) => toStatusTimeRow(x as StatusTimeDbRow)),
+    tenantHasWorkArea: r.rows[0]?.tenant_has_work_area === true,
+  };
 }
 
 function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
@@ -647,6 +658,7 @@ function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
     isProductive: r.is_productive,
     isPaid: r.is_paid,
     isBillable: r.is_billable,
+    workArea: r.work_area ?? null,
     from: r.from_at.toISOString(),
     to: r.to_at ? r.to_at.toISOString() : null,
     isOpen: r.is_open,
@@ -668,6 +680,7 @@ type TeamNowDbRow = {
   started_at: Date | null; ended_at: Date | null;
   status_key: string | null; status_name: string | null; status_active: boolean | null;
   is_working: boolean | null; is_productive: boolean | null; is_paid: boolean | null; is_billable: boolean | null;
+  work_area: WorkArea | null;
   status_since: Date | null; closed_seconds: number; running_since: Date | null;
   paid_closed_seconds: number; paid_running_since: Date | null; day_ends_at: Date;
   sessions: number; session_started_at: Date | null; clock_in_again: boolean; can_clock_in_again: boolean;
@@ -715,6 +728,7 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           isProductive: r.is_productive === true,
           isPaid: r.is_paid === true,
           isBillable: r.is_billable === true,
+          workArea: r.work_area ?? null,
         }
       : null;
   return {
@@ -1566,12 +1580,18 @@ async function readTeamNow(q: Querier): Promise<TeamNow> {
        from cma.team_now() n${SESSIONS_JOIN("n.workday_id")}`,
   );
   // team_now() checked monitoring.live (CMA06), so the plain read of the status flags runs only after that check passed
-  const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean }>(
-    `select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key`,
+  // and whether any status, active or retired, has a work area (the label of Other productive), in the same statement; a
+  // tenant always has an active working status (retire refuses the last one), so the first row carries it
+  const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean; work_area: WorkArea | null; tenant_has_work_area: boolean }>(
+    `select is_working, is_productive, is_paid, work_area,
+            (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a
+              where a.tenant_id = cma.current_tenant_id()) as tenant_has_work_area
+       from cma.work_status where status = 'active' order by sort_order, key`,
   );
   return {
     people: r.rows.map(toTeamNowPerson),
-    statusFlags: flags.rows.map((f) => ({ isWorking: f.is_working, isProductive: f.is_productive, isPaid: f.is_paid })),
+    statusFlags: flags.rows.map((f) => ({ isWorking: f.is_working, isProductive: f.is_productive, isPaid: f.is_paid, workArea: f.work_area })),
+    tenantHasWorkArea: flags.rows[0]?.tenant_has_work_area === true,
   };
 }
 
@@ -1788,15 +1808,16 @@ export const postgresData: CmaData = {
 
   async listStatuses(me: Principal): Promise<WorkStatus[]> {
     return withTenant(ctx(me), async (q) => {
-      // Pay and billing flags stay out: not agent information (decision of 6 October 2026)
-      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; is_default: boolean }>(
-        `select key, name, is_working, is_productive, is_default
+      // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
+      // status (addition 0009zn)
+      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean }>(
+        `select key, name, is_working, is_productive, work_area, is_default
            from cma.work_status
           where tenant_id = cma.current_tenant_id() and status = 'active'
           order by sort_order, key`,
       );
       return r.rows.map((s) => ({
-        key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, isDefault: s.is_default,
+        key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
       }));
     });
   },
@@ -2163,17 +2184,18 @@ export const postgresData: CmaData = {
   async listConfigStatuses(me): Promise<ConfigStatus[]> {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; is_paid: boolean; is_billable: boolean;
-                                 is_default: boolean; sort_order: number; status: string; usage_count: number }>(`select * from cma.work_statuses_all()`);
+                                 work_area: WorkArea | null; is_default: boolean; sort_order: number; status: string; usage_count: number }>(`select * from cma.work_statuses_all()`);
       return r.rows.map((x) => ({
         key: x.key, name: x.name, isWorking: x.is_working, isProductive: x.is_productive, isPaid: x.is_paid, isBillable: x.is_billable,
+        workArea: x.work_area ?? null,
         isDefault: x.is_default, sortOrder: x.sort_order, isActive: x.status === "active", usageCount: x.usage_count,
       }));
     });
   },
 
   async upsertConfigStatus(me, input): Promise<void> {
-    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_work_status($1, $2, $3, $4, $5, $6, $7)`,
-      [input.key, input.name, input.isWorking, input.isProductive, input.isPaid, input.isBillable, input.sortOrder]));
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_work_status($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [input.key, input.name, input.isWorking, input.isProductive, input.isPaid, input.isBillable, input.sortOrder, input.workArea]));
   },
 
   async setDefaultStatus(me, key): Promise<void> {

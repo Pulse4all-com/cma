@@ -7,12 +7,15 @@
  * Covers the groups from flags (never from a key or name), the agent's view without the pay flag,
  * worked and paid minutes added up per person per day exactly as Team hours does, totals, the
  * tenant's status order with inactive statuses kept, every day of the period on the axis (across a
- * month end), people by name, the hours axis, and that every group colour is a palette token.
+ * month end), people by name, the hours axis, and that every group colour is a palette token. Since addition 0009zn
+ * (23 November 2026) also the work area: every flag and work-area combination, D3's order, the colours of D2, the
+ * legend's groups, and that a work area changes no figure; the productive group's name, Other productive beside a work area and
+ * Productive without one (both cases).
  */
 import { readFileSync } from "node:fs";
 import {
-  GROUP_BG, GROUP_FILL, GROUPS, agentGroupOf, byDay, byPerson, byStatus, groupOf, groupTotal, hoursAxis, peopleOf,
-  share, summarise,
+  GROUP_BG, GROUP_FILL, GROUPS, agentGroupOf, byDay, byPerson, byStatus, groupOf, groupTotal, hasWorkArea, hoursAxis, legendGroups, peopleOf,
+  productiveGroupName, share, summarise,
 } from "../src/lib/dashboard.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -59,6 +62,59 @@ expect("agents see one pause colour, not the pay flag",
   [agentGroupOf(S.paidPause), agentGroupOf(S.unpaidPause), agentGroupOf(S.other)],
   ["pause", "pause", "otherWork"], ["paidPause", "unpaidPause", "otherWork"]);
 
+// ---- the work area (addition 0009zn): every combination of the three flags and the three work areas ------------
+// The database lets a work area stand only on a working, productive status; the rule still reads it nowhere else
+const combos = [];
+for (const isWorking of [true, false]) for (const isProductive of [true, false]) for (const isPaid of [true, false])
+  for (const workArea of [null, "sales", "operations"]) combos.push({ isWorking, isProductive, isPaid, workArea });
+const wanted = (c) => c.isWorking
+  ? (c.isProductive ? (c.workArea === "sales" ? "sales" : c.workArea === "operations" ? "operations" : "productive") : "otherWork")
+  : (c.isPaid ? "paidPause" : "unpaidPause");
+expect("all 24 flag and work-area combinations give their group",
+  combos.filter((c) => groupOf(c) !== wanted(c)).length, 0, 24);
+expect("working and productive: Sales, Operations, or Productive without a work area",
+  [groupOf({ ...S.work, workArea: "sales" }), groupOf({ ...S.work, workArea: "operations" }), groupOf({ ...S.work, workArea: null }), groupOf(S.work)],
+  ["sales", "operations", "productive", "productive"], ["productive", "productive", "sales", "operations"]);
+expect("a work area never moves other work or a pause",
+  [groupOf({ ...S.other, workArea: "sales" }), groupOf({ ...S.paidPause, workArea: "operations" }), groupOf({ ...S.unpaidPause, workArea: "sales" })],
+  ["otherWork", "paidPause", "unpaidPause"], ["sales", "operations", "sales"]);
+expect("a key or name never decides Sales or Operations",
+  [groupOf({ ...S.work, statusKey: "sales", statusName: "Available - Sales", workArea: "operations" }),
+   groupOf({ ...S.work, statusKey: "operations", statusName: "Available - Operations", workArea: null })],
+  ["operations", "productive"], ["sales", "operations"]);
+const agentWanted = (c) => (c.isWorking ? wanted(c) : "pause");
+expect("all 24 combinations on My day: the working groups, one pause",
+  combos.filter((c) => agentGroupOf(c) !== agentWanted(c)).length, 0, 24);
+expect("agents see Sales and Operations",
+  [agentGroupOf({ ...S.work, workArea: "sales" }), agentGroupOf({ ...S.work, workArea: "operations" }), agentGroupOf({ ...S.paidPause, workArea: "sales" })],
+  ["sales", "operations", "pause"], ["productive", "productive", "sales"]);
+expect("the order of D3: Sales, Operations, Productive, Other work, Paid pause, Unpaid pause", GROUPS,
+  ["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause"],
+  ["productive", "otherWork", "paidPause", "unpaidPause", "sales", "operations"]);
+expect("the colours of D2",
+  GROUPS.map((g) => [g, GROUP_BG[g], GROUP_FILL[g]]),
+  [["sales", "bg-p4a-green", "fill-p4a-green"], ["operations", "bg-p4a-deepblue", "fill-p4a-deepblue"],
+   ["productive", "bg-p4a-green", "fill-p4a-green"], ["otherWork", "bg-p4a-inkt", "fill-p4a-inkt"],
+   ["paidPause", "bg-p4a-lightblue", "fill-p4a-lightblue"], ["unpaidPause", "bg-p4a-rose", "fill-p4a-rose"]],
+  [["sales", "bg-p4a-green", "fill-p4a-green"], ["operations", "bg-p4a-green", "fill-p4a-green"],
+   ["productive", "bg-p4a-green", "fill-p4a-green"], ["otherWork", "bg-p4a-deepblue", "fill-p4a-deepblue"],
+   ["paidPause", "bg-p4a-lightblue", "fill-p4a-lightblue"], ["unpaidPause", "bg-p4a-rose", "fill-p4a-rose"]]);
+expect("the agent's pause keeps Light Blue", GROUP_BG.pause, "bg-p4a-lightblue", "bg-p4a-rose");
+
+// ---- the productive group's name (Martin, 23 November 2026): Other productive beside a work area, else Productive ------
+// Both cases: a tenant with a status in a work area (active or retired) and one without any (Invest's universal ladder)
+const withArea = [{ workArea: null }, { workArea: "sales" }];
+const retiredArea = [{ workArea: null, isActive: true }, { workArea: "operations", isActive: false }];
+const withoutArea = [{ workArea: null }, { workArea: null }];
+expect("a tenant with a work area names the group Other productive, a retired status's included",
+  [productiveGroupName(hasWorkArea(withArea)), productiveGroupName(hasWorkArea(retiredArea))],
+  ["otherProductive", "otherProductive"], ["productive", "productive"]);
+expect("a tenant without any work area keeps Productive", [productiveGroupName(hasWorkArea(withoutArea)), productiveGroupName(hasWorkArea([]))],
+  ["productive", "productive"], ["otherProductive", "otherProductive"]);
+expect("the name changes the label only: the same rows give the same group key and figures either way",
+  [groupOf({ ...S.work, workArea: null }), summarise(rows).productiveSeconds === summarise(rows).groups.productive + summarise(rows).groups.sales + summarise(rows).groups.operations],
+  ["productive", true], ["otherProductive", false]);
+
 // ---- summary: minutes as Team hours adds them --------------------------------------------------
 const sum = summarise(rows);
 expect("worked minutes are whole minutes per person per day, added",
@@ -72,6 +128,26 @@ expect("people, person-days and days not clocked out",
 expect("productive share of worked time", Math.round(share(sum.productiveSeconds, sum.workedSeconds) * 1000) / 1000,
   Math.round(((61 + 59 + 7200) / 7381) * 1000) / 1000, 1);
 expect("nothing to divide by is no share", share(5, 0), null, 0);
+
+// ---- a work area changes no figure (D4): the same rows with work areas give the same worked, paid and productive time
+{
+  const withAreas = rows.map((r, i) => (r.isWorking && r.isProductive ? { ...r, workArea: i % 2 ? "operations" : "sales" } : r));
+  const a = summarise(rows);
+  const b = summarise(withAreas);
+  const pa = byPerson(rows);
+  const pb = byPerson(withAreas);
+  expect("a work area changes no figure, only the groups",
+    [b.workedMinutes === a.workedMinutes, b.paidMinutes === a.paidMinutes, b.productiveSeconds === a.productiveSeconds, b.clockedSeconds === a.clockedSeconds,
+     pb.map((p) => [p.workedMinutes, p.paidMinutes, p.clockedSeconds]).join() === pa.map((p) => [p.workedMinutes, p.paidMinutes, p.clockedSeconds]).join(),
+     b.groups.productive, b.groups.sales + b.groups.operations === a.groups.productive],
+    [true, true, true, true, true, 0, true], [true, true, true, true, true, a.groups.productive, false]);
+  expect("the legend shows Sales and Operations only with time",
+    [legendGroups(a.groups), legendGroups(b.groups)],
+    [["productive", "otherWork", "paidPause", "unpaidPause"], ["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause"]],
+    [["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause"], ["productive", "otherWork", "paidPause", "unpaidPause"]]);
+  expect("per status keeps the status's group from its work area",
+    byStatus([row(A, "2026-10-30", { ...S.work, workArea: "operations" }, 60)]).map((x) => x.group), ["operations"], ["productive"]);
+}
 
 // ---- per status: the tenant's order, inactive kept ---------------------------------------------
 const statuses = byStatus(rows);
@@ -107,8 +183,8 @@ const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "ut
 const tokens = [...Object.values(GROUP_BG), ...Object.values(GROUP_FILL)].map((c) => c.replace(/^(bg|fill)-/, ""));
 expect("every group colour is a palette token",
   tokens.filter((t) => !css.includes(`--color-${t}:`)), [], ["p4a-red"]);
-expect("four groups, each with a fill and a background",
-  GROUPS.map((g) => !!GROUP_BG[g] && !!GROUP_FILL[g]), [true, true, true, true], [true, true, true]);
+expect("six groups, each with a fill and a background",
+  GROUPS.map((g) => !!GROUP_BG[g] && !!GROUP_FILL[g]), [true, true, true, true, true, true], [true, true, true, true]);
 
 // ---- the head start of the page's reads (12 November 2026): lib/head-start -------------------------------------------
 const { headStart, deadlineIn, DASHBOARD_HEAD_MS, DASHBOARD_PARTS } = await import("../src/lib/head-start.ts");

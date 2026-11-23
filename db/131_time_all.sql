@@ -68,6 +68,9 @@
 -- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
 -- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
+-- Since addition 0009zn (228_work_area.sql) the rows 'work status flags', 'statuses' and 'team status time' read work_area as
+-- the web does (the flags and the time read also whether any status has one, in the same statement), so this script runs
+-- after 228.
 -- A poll's row (class poll; since 16 November 2026, Martin's brief on 131's poll timings) is the median of
 -- verify.poll_runs runs after verify.poll_warmup untimed ones (5 after 6), not the best of two: a poll runs every few
 -- seconds on a connection the pool keeps, so it pays neither a session's first calls (its plans built, its functions'
@@ -277,7 +280,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.workday_can_clock_in_again(n.workday_id) as can_clock_in_again
    from cma.team_now() n left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at
    from cma.time_event_effective e where e.workday_id = n.workday_id and e.kind = 'start') se on true$q$, 'poll', array['monitoring.live']),
-('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
+('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid, work_area, (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a where a.tenant_id = cma.current_tenant_id()) as tenant_has_work_area from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'inbound today', $q$select * from cma.inbound_today()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks', $q$select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks summary', $q$select * from cma.missed_callbacks_summary()$q$, 'poll', array['monitoring.live']),
@@ -298,7 +301,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
      from cma.time_interval i join cma.work_status iws on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id where i.workday_id = s.workday_id) c on true
    left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start') se on true
    where s.user_id = cma.current_user_id() and s.business_date = cma.business_date(now(), cma.user_timezone(cma.current_user_id()))$q$, 'agent', array['workday.own']),
-('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, work_area, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
@@ -405,7 +408,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)
-('b', 'dashboard {P}', 'team status time', $q$select * from cma.team_status_time('{f}', '{t}', null)$q$, 'overview', array['performance.team']),
+('b', 'dashboard {P}', 'team status time', $q$select t.*, h.tenant_has_work_area from (select coalesce(bool_or(w.work_area is not null), false) as tenant_has_work_area from cma.work_status w where w.tenant_id = cma.current_tenant_id()) h left join cma.team_status_time('{f}', '{t}', null) t on true$q$, 'overview', array['performance.team']),
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'crm records per day', $q$select * from cma.crm_records_per_day('{f}', '{t}')$q$, 'overview', array['performance.team']),
 ('b', 'dashboard {P}', 'speed to lead rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),

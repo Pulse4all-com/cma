@@ -614,7 +614,7 @@
         },
         {
           "name": "work_status",
-          "what": "Statuses: working, productive, paid, billable",
+          "what": "Statuses: working, productive, paid, billable, and for a working and productive status an optional Work area (Sales or Operations)",
           "how": "Configuration"
         },
         {

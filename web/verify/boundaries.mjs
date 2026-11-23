@@ -16,7 +16,8 @@
  *   R4 src/lib/api/*.ts other than respond.ts import only respond, server-only, "@/lib/reports",
  *      "@/lib/sources", "@/lib/email" (addition 0008t), "@/lib/first-orders" (0008u), "@/lib/attempts" (0008y), "@/lib/funnel"
  *      (0008zb), "@/lib/maintenance" (0008zi), "@/lib/cohorts" (0008zm), "@/lib/flash" (0008zn), "@/lib/courtesy" (0009a),
- *      "@/lib/active" (0009l), "@/lib/fleet-management" (0009t) and types: they
+ *      "@/lib/active" (0009l), "@/lib/fleet-management" (0009t), "@/lib/configuration" (0009zn, the work area's rule) and
+ *      types: they
  *      validate, they do not read.
  *   R5 src/lib/data/mock.ts imports nothing from @/lib/db/*: the mock must not load the database driver.
  *   R6 no "use server" anywhere: every write goes through a route with the one CSRF guard (respond.ts).
@@ -69,7 +70,7 @@ export function check(files) {
         const rel = from.match(/^\.\/([A-Za-z-]+)\.ts$/)?.[1];
         if (rel === undefined || !PURE.includes(rel)) problems.push(`R3 ${at}: runtime import ${from}`);
       }
-      if (isApi && !/^(\.\/respond|@\/lib\/api\/respond|server-only|@\/lib\/reports|@\/lib\/sources|@\/lib\/email|@\/lib\/first-orders|@\/lib\/attempts|@\/lib\/funnel|@\/lib\/maintenance|@\/lib\/cohorts|@\/lib\/flash|@\/lib\/courtesy|@\/lib\/active|@\/lib\/fleet-management)$/.test(from)) problems.push(`R4 ${at}: imports ${from}`);
+      if (isApi && !/^(\.\/respond|@\/lib\/api\/respond|server-only|@\/lib\/reports|@\/lib\/sources|@\/lib\/email|@\/lib\/first-orders|@\/lib\/attempts|@\/lib\/funnel|@\/lib\/maintenance|@\/lib\/cohorts|@\/lib\/flash|@\/lib\/courtesy|@\/lib\/active|@\/lib\/fleet-management|@\/lib\/configuration)$/.test(from)) problems.push(`R4 ${at}: imports ${from}`);
       if (path === "lib/data/mock.ts" && /^@\/lib\/db(\/|$)/.test(from)) problems.push(`R5 ${at}: imports ${from}`);
     }
   }

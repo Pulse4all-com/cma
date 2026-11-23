@@ -1592,15 +1592,17 @@ const store = state.store;
  * (the default ladder of the seed). The screens never branch on these keys or names.
  */
 const MOCK_STATUSES: WorkStatus[] = [
-  { key: "available", name: "Available", isWorking: true, isProductive: true, isDefault: true },
-  { key: "training", name: "Training", isWorking: true, isProductive: false, isDefault: false },
-  { key: "meeting", name: "Meeting", isWorking: true, isProductive: false, isDefault: false },
-  { key: "break", name: "Break", isWorking: false, isProductive: false, isDefault: false },
-  { key: "lunch", name: "Lunch", isWorking: false, isProductive: false, isDefault: false },
+  // Work areas (addition 0009zn) so both working colours show: tenant configuration in the database, fixture here
+  { key: "available", name: "Available", isWorking: true, isProductive: true, workArea: "sales", isDefault: true },
+  { key: "back_office", name: "Back office", isWorking: true, isProductive: true, workArea: "operations", isDefault: false },
+  { key: "training", name: "Training", isWorking: true, isProductive: false, workArea: null, isDefault: false },
+  { key: "meeting", name: "Meeting", isWorking: true, isProductive: false, workArea: null, isDefault: false },
+  { key: "break", name: "Break", isWorking: false, isProductive: false, workArea: null, isDefault: false },
+  { key: "lunch", name: "Lunch", isWorking: false, isProductive: false, workArea: null, isDefault: false },
 ];
 const DEFAULT_STATUS = MOCK_STATUSES.find((s) => s.isDefault)!;
 /** Fixture pay flags (the seed's proposal: paid break, unpaid lunch); never shown to an agent */
-const MOCK_PAID = new Set(["available", "training", "meeting", "break"]);
+const MOCK_PAID = new Set(["available", "back_office", "training", "meeting", "break"]);
 
 function secondsBetween(a: Instant, b: Instant): number {
   return Math.max(0, Math.floor((Date.parse(b) - Date.parse(a)) / 1000));
@@ -1868,6 +1870,7 @@ function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusCh
       isProductive: !!status?.isProductive,
       isPaid: paid,
       isBillable: paid,
+      workArea: status?.workArea ?? null,
       from: e.at,
       to: next === null ? null : new Date(next).toISOString(),
       isOpen: next === null,
@@ -1927,6 +1930,8 @@ function seedTeam() {
       // Working time that is not productive, so every group of the Dashboard has something to show
       if ((weekday + n) % 3 === 0) plan.push(["status", at("15:30"), "meeting"], ["status", at("16:15"), "available"]);
       if (n === 2 && weekday % 4 === 1) plan.push(["status", at("09:30"), "training"], ["status", at("10:30"), "available"]);
+      // Productive time in the other work area (addition 0009zn), so Sales and Operations both show
+      if ((weekday + n) % 2 === 0) plan.push(["status", at("16:30"), "back_office"], ["status", at("17:00"), "available"]);
       const forgot = n === 3 && weekday === 2;  // Lucas: forgot to clock out
       // Ana: a split shift (0008zp), out at 13:00 and in again from 17:00 to 21:00; the gap counts nothing
       const split = n === 0 && weekday === 2;
@@ -3424,7 +3429,7 @@ export const mockData: CmaData = {
             userId: s.userId, displayName: s.displayName, organisationName: s.organisationName, date: s.date,
             timeZone: s.timeZone, statusKey: s.statusKey, statusName: s.statusName,
             sortOrder: (order < 0 ? MOCK_STATUSES.length : order) * 10 + 10, statusActive: true,
-            isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable,
+            isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable, workArea: s.workArea,
             seconds: s.seconds, stretches: 1, isCapped: s.isCapped,
           });
         }
@@ -3433,7 +3438,7 @@ export const mockData: CmaData = {
     const rows = [...sums.values()].sort((a, b) =>
       a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId) ||
       a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey));
-    return { ...range, rows };
+    return { ...range, rows, tenantHasWorkArea: MOCK_STATUSES.some((x) => x.workArea !== null) };
   },
 
   /**
@@ -3505,14 +3510,15 @@ export const mockData: CmaData = {
       };
       const status = !end && current
         ? { key: current.key, name: current.name, isActive: true, isWorking: current.isWorking,
-            isProductive: current.isProductive, isPaid: MOCK_PAID.has(current.key), isBillable: MOCK_PAID.has(current.key) }
+            isProductive: current.isProductive, isPaid: MOCK_PAID.has(current.key), isBillable: MOCK_PAID.has(current.key), workArea: current.workArea }
         : null;
       return { userId: p.userId, displayName: p.displayName, organisationKey: p.organisationName.toLowerCase(),
         organisationName: p.organisationName, timeZone: p.timeZone, date, day, status };
     });
     return {
       people,
-      statusFlags: MOCK_STATUSES.map((x) => ({ isWorking: x.isWorking, isProductive: x.isProductive, isPaid: MOCK_PAID.has(x.key) })),
+      statusFlags: MOCK_STATUSES.map((x) => ({ isWorking: x.isWorking, isProductive: x.isProductive, isPaid: MOCK_PAID.has(x.key), workArea: x.workArea })),
+      tenantHasWorkArea: MOCK_STATUSES.some((x) => x.workArea !== null),
     };
   },
 
@@ -3762,12 +3768,15 @@ export const mockData: CmaData = {
   async upsertConfigStatus(me, input) {
     assertConfigure(me);
     if (!/^[a-z0-9_]+$/.test(input.key)) throw new CmaDbError("CMA04", "bad key");
+    // The table's check (addition 0009zn): a work area only on a working, productive status
+    if (input.workArea !== null && !(input.isWorking && input.isProductive)) throw new CmaDbError("CMA04", "a work area needs a working, productive status");
     const c = seedConfig();
     const cur = c.statuses.find((x) => x.key === input.key);
     if (!cur) {
       c.statuses.push({ ...input, isDefault: false, isActive: true, usageCount: 0 });
       return;
     }
+    // The work area is not a flag: it is never frozen (decision of 23 November 2026, D4)
     const flagsChange = cur.isWorking !== input.isWorking || cur.isProductive !== input.isProductive || cur.isPaid !== input.isPaid || cur.isBillable !== input.isBillable;
     if (flagsChange && cur.usageCount > 0) throw new CmaDbError("CMA03", "flags frozen");
     if (cur.isDefault && !input.isWorking) throw new CmaDbError("CMA03", "default must work");

@@ -7,6 +7,7 @@ import type {
   RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput, SubscriptionVariantInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem, TAG_MEANINGS } from "@/lib/sources";
+import { parseWorkArea, workAreaAllowed } from "@/lib/configuration";
 
 /**
  * Parameter checks of the configuration routes (migration 0005a): shape and bounds only, so a bad
@@ -37,10 +38,19 @@ function order(b: Record<string, unknown>): number {
 }
 
 export function checkStatusInput(b: Record<string, unknown>): ConfigStatusInput {
+  const key = checkKey(b.key, /^[a-z0-9_]+$/);
+  const name = text(b, "name", 40);
+  const isWorking = flag(b, "isWorking");
+  const isProductive = flag(b, "isProductive");
+  // Absent or null is none (addition 0009zn); a work area only on a working, productive status, as the database checks
+  const workArea = parseWorkArea(b.workArea);
+  if (workArea === undefined) throw new ApiError(400, "invalid_work_area", "workArea must be sales, operations or null");
+  if (workArea !== null && !workAreaAllowed({ isWorking, isProductive })) {
+    throw new ApiError(400, "invalid_work_area", "only a working and productive status has a work area");
+  }
   return {
-    key: checkKey(b.key, /^[a-z0-9_]+$/),
-    name: text(b, "name", 40),
-    isWorking: flag(b, "isWorking"), isProductive: flag(b, "isProductive"), isPaid: flag(b, "isPaid"), isBillable: flag(b, "isBillable"),
+    key, name, isWorking, isProductive, isPaid: flag(b, "isPaid"), isBillable: flag(b, "isBillable"),
+    workArea,
     sortOrder: order(b),
   };
 }

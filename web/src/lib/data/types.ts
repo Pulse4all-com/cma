@@ -83,6 +83,13 @@ export interface Workday {
 }
 
 /**
+ * A status's work area (addition 0009zn, decision of 23 November 2026): tenant configuration on a working,
+ * productive status that splits the hours views' working groups into Sales and Operations. It changes the
+ * group and its colour only, never a figure. docs/definitions.md, Work area
+ */
+export type WorkArea = "sales" | "operations";
+
+/**
  * A status the caller can choose: the tenant's own list (work_status), in its order. Names are
  * tenant data, never copy, and no code branches on a key. Pay and billing flags stay out: the
  * screen needs to know whether the clock runs and, for the status colour, whether the work is
@@ -93,6 +100,8 @@ export interface WorkStatus {
   name: string;
   isWorking: boolean;
   isProductive: boolean;
+  /** For the status colour: Sales, Operations or none (null) */
+  workArea: WorkArea | null;
   isDefault: boolean;
 }
 
@@ -253,6 +262,8 @@ export interface StatusChangeRow {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** The status's current work area (Sales, Operations or none) */
+  workArea: WorkArea | null;
   from: Instant;
   /** null while the stretch is open, also when capped at the end of its business day */
   to: Instant | null;
@@ -284,6 +295,8 @@ export interface StatusTimeRow {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** The status's current work area, for its group and colour; never a figure */
+  workArea: WorkArea | null;
   seconds: number;
   /** How many stretches in this status that day */
   stretches: number;
@@ -293,6 +306,11 @@ export interface StatusTimeRow {
 
 export interface TeamStatusTime extends HoursRange {
   rows: StatusTimeRow[];
+  /**
+   * Whether any status of the tenant, active or retired, has a work area: the group of working, productive statuses
+   * without one is then labelled Other productive, else Productive (Martin, 23 November 2026)
+   */
+  tenantHasWorkArea: boolean;
 }
 
 /** An export read with the tenant's settings, from one transaction */
@@ -319,6 +337,8 @@ export interface TeamNowStatus {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** The status's work area, for its group and colour */
+  workArea: WorkArea | null;
 }
 
 export interface TeamNowPerson {
@@ -343,7 +363,9 @@ export interface TeamNow {
    * only for a group that at least one status belongs to (a tenant without paid pauses gets no
    * Paid pause tile). Keys and names stay out: nothing on the board branches on them.
    */
-  statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean }[];
+  statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean; workArea: WorkArea | null }[];
+  /** Whether any status of the tenant, active or retired, has a work area (the label of Other productive) */
+  tenantHasWorkArea: boolean;
 }
 
 /**
@@ -550,6 +572,8 @@ export interface ConfigStatus {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** Sales, Operations or none; only on a working, productive status, and never frozen by time booked on it */
+  workArea: WorkArea | null;
   isDefault: boolean;
   sortOrder: number;
   /** Retired statuses keep their history and cannot be chosen */
@@ -565,6 +589,7 @@ export interface ConfigStatusInput {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  workArea: WorkArea | null;
   sortOrder: number;
 }
 

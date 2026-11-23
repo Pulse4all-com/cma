@@ -292,8 +292,8 @@ export function WorkdayPanel({
 }
 
 /**
- * The status colour from its flags (lib/dashboard, the Dashboard's groups): productive, other work,
- * or a pause. Whether a pause is paid is not shown to agents. Always next to the name.
+ * The status colour from its flags and work area (lib/dashboard, the Dashboard's groups): Sales,
+ * Operations, productive, other work, or a pause. Whether a pause is paid is not shown to agents. Always next to the name.
  */
 function StatusDot({ status }: { status: WorkStatus }) {
   return <span aria-hidden="true" className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${GROUP_BG[agentGroupOf(status)]}`} />;

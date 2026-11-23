@@ -550,7 +550,7 @@ const statusFile = await download(MANAGER, `/api/v1/team/exports/status-changes?
 const statusLines = statusFile.text.replace(/^\uFEFF/, "").split("\r\n").filter(Boolean);
 expect("every day has at least one status stretch",
   [statusFile.status, statusLines[0]?.split(SEP).length, statusLines.length - 1 >= teamDays.length],
-  [200, 13, true], [200, 13, false]);
+  [200, 14, true], [200, 14, false]);
 
 const longStart = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
 expect("an export is bounded to 92 days",
@@ -874,7 +874,7 @@ await json(MANAGER, "POST", `/api/v1/roster/weeks/${wk}/publish`, { team: agentT
 
 expect("hours range is bounded to 92 days", (await get(AGENT, `/api/v1/me/hours?from=${longFrom}&to=${today}`)).status, 400, 200);
 
-// ---- configuration (migration 0005a), 24 checks --------------------------------------------------
+// ---- configuration (migration 0005a), 27 checks --------------------------------------------------
 // The admin configures (tenant.configure); the manager and the agent are refused by the database.
 // Every write is undone at the end, so the dev tenant's configuration is as the run found it.
 const cfg = "/api/v1/configuration";
@@ -903,6 +903,17 @@ const used = (statusesBefore.body?.data ?? []).find((x) => x.usageCount > 0 && x
 expect("the flags of a status with time behind it are frozen (409)",
   (await put(ADMIN, `${cfg}/statuses`, { ...used, isPaid: !used?.isPaid })).status, 409, 200);
 expect("the default cannot be retired (409)", (await put(ADMIN, `${cfg}/statuses/${theDefault?.key}/retired`)).status, 409, 200);
+// The work area (addition 0009zn): only on a working, productive status, one of two values, and not frozen by time behind it
+expect("a work area on a status that is not productive is a 400",
+  (await put(ADMIN, `${cfg}/statuses`, { ...verifyStatus, workArea: "sales" })).status, 400, 200);
+const productiveUsed = (statusesBefore.body?.data ?? []).find((x) => x.usageCount > 0 && x.isActive && x.isWorking && x.isProductive);
+expect("an unknown work area is a 400", (await put(ADMIN, `${cfg}/statuses`, { ...productiveUsed, workArea: "support" })).status, 400, 200);
+const otherArea = productiveUsed?.workArea === "sales" ? "operations" : "sales";
+const areaSet = await put(ADMIN, `${cfg}/statuses`, { ...productiveUsed, workArea: otherArea });
+const areaBack = await put(ADMIN, `${cfg}/statuses`, { ...productiveUsed });
+expect("a work area changes on a status with time behind it, and changes back",
+  [areaSet.status, (areaSet.body?.data ?? []).find((x) => x.key === productiveUsed?.key)?.workArea, (areaBack.body?.data ?? []).find((x) => x.key === productiveUsed?.key)?.workArea ?? null],
+  [200, otherArea, productiveUsed?.workArea ?? null], [409, productiveUsed?.workArea ?? null, otherArea]);
 const nowDefault = await put(ADMIN, `${cfg}/statuses/${verifyStatus.key}/default`);
 expect("the new status becomes the one default", (nowDefault.body?.data ?? []).filter((x) => x.isDefault).map((x) => x.key), [verifyStatus.key], [theDefault?.key]);
 await put(ADMIN, `${cfg}/statuses/${theDefault?.key}/default`);
@@ -970,6 +981,10 @@ expect("status list has exactly one default", statuses.filter((s) => s.isDefault
 expect("the status list shows no pay or billing flags",
   [statuses.length > 0, statuses.every((s) => !("isPaid" in s) && !("isBillable" in s) && typeof s.isProductive === "boolean")],
   [true, true], [true, false]);
+// The work area colours the status (addition 0009zn): Sales, Operations or none, and only on a productive working status
+expect("the status list carries each status's work area",
+  statuses.every((s) => "workArea" in s && (s.workArea === null || (["sales", "operations"].includes(s.workArea) && s.isWorking && s.isProductive))),
+  true, false);
 
 const before = (await get(AGENT, "/api/v1/me/day")).body?.data;
 const target = statuses.find((s) => s.key !== before?.statusKey);

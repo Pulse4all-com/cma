@@ -3381,6 +3381,120 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Used by | `live.paid_today_minutes`; copy keys `live.paidToday`, `live.paidTodayHint`; the Live board's Team panel; `GET /api/v1/team/now` and `GET /api/v1/live/board` (`day.clock.paidClosedSeconds`, `day.clock.paidRunningSince`, for `monitoring.live` only) |
 | As built today | `200` (`cma.team_now` dropped and created from `134` with `paid_closed_seconds` and `paid_running_since` last) and `201` (addition 0009z); `paidSeconds` and `paidTodayMinutes` in `web/src/lib/live.ts`. `WorkdayClock`'s `paidClosedSeconds` and `paidRunningSince` are optional and only the Live board's read fills them: `GET /api/v1/me/day`, My day and the own-day read never carry them, because whether a pause is paid is not shown to agents. The metric's verification query takes time kept for `:tenant_id` from base tables, has an optional `:organisation_key` and returns `paid_today_minutes` and `people_with_a_day`. Matches the definition |
 
+### Work area
+
+| Field | Value |
+|---|---|
+| Term | Work area (nl: Werkgebied), a setting of a work status |
+| Key | SQL `cma.work_status.work_area` and `cma_read.work_status.work_area` (last column), checks `work_status_work_area_ok` and `work_status_work_area_flags`; API `workArea` (`sales`, `operations` or null) on `GET /api/v1/me/statuses`, `GET` and `PUT /api/v1/configuration/statuses`, the team now and Live board payload (`status.workArea`, `statusFlags[].workArea`); the Work area column of the status-changes CSV; copy `configStatuses.workArea` and its options |
+| Definition | An optional label of a work status that splits its working and productive time into the groups Sales and Operations: `sales`, `operations` or none (null). Only a status that is working and productive can carry one. It is tenant configuration, set in Configuration → Statuses; no migration, seed or code names a tenant or a status key. |
+| Source | The CMA: `cma.work_status`, written by `cma.upsert_work_status` for `tenant.configure` |
+| Counts / does not count | Changes the group and the colour only, never a figure: worked, paid, billable and productive time read the flags alone. Not frozen when time is booked on the status (the four flags are); the change is audited like any status edit. Views show the status's current work area, history included |
+| Unit and display | Sales, Operations or None in the status dialog; the colour and group of the status everywhere the group colours show (the Status group term) |
+| Time rule | None: the current value, not the value when the time was booked |
+| Scope | Per tenant and status; every place that uses the group colours: Reports → Dashboard, the Live board, My day and the Welcome card |
+| Equivalent in the source system | None |
+| Not to use | "Work type" (the skills term), "department" or "team" for it; "Sales" or "Operations" as a status name in code or seed |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Used by | `live.people.group`, `live.tiles.group_count`, `dashboard.time.groups`, `welcome.clock.status`, `my_day.current_status`; Configuration → Statuses, Reports → Dashboard, the Live board, My day, Welcome; `GET /api/v1/me/statuses`, `/api/v1/configuration/statuses`, `/api/v1/team/now`, `/api/v1/live/board`, `/api/v1/team/exports/status-changes` |
+| As built today | `228` (column, checks, `cma.upsert_work_status` with `p_work_area` last, `work_statuses_all`, `team_status_time`, `team_now` and `export_status_changes` returning `work_area` last; `CMA04` for an unknown value or a work area on a status not working and productive) and `229` (verify); `web/src/lib/dashboard.ts` (`groupOf`, `agentGroupOf`). Matches the definition |
+
+### Status group
+
+| Field | Value |
+|---|---|
+| Term | Status group (nl: Groep), the group a work status belongs to, with its colour |
+| Key | TypeScript `Group` and `AgentGroup` in `web/src/lib/dashboard.ts` (`groupOf`, `agentGroupOf`); copy keys `dashboard.groupSales`, `groupOperations`, `groupProductive`, `groupOtherProductive`, `groupOtherWork`, `groupPaidPause`, `groupUnpaidPause` and their hints |
+| Definition | Derived from a status's flags and Work area, never from its key or name: working and productive with work area Sales is Sales (Leaf Green); with work area Operations is Operations (Deep Blue); without a work area is Productive, labelled Other productive when any of the tenant's statuses has a work area (Leaf Green); working and not productive is Other work (Inkt); not working and paid is Paid pause (Light Blue); not working and unpaid is Unpaid pause (Soft Rose). |
+| Source | `cma.work_status` flags and `work_area`, read through `cma.team_status_time`, `cma.team_now` and `cma.export_status_changes` |
+| Counts / does not count | The order, bottom to top in a stack and first to last in a legend, on the Live board's tiles and rows: Sales, Operations, Productive, Other work, Paid pause, Unpaid pause, then Clocked out and Not clocked in on the Live board. A Live tile for Sales or Operations appears only when an active status has that work area; the Dashboard legend shows Sales and Operations only with time in the period. On My day the agent sees Sales, Operations, Productive and Other work, and the two pauses as one group (whether a pause is paid is not agent information, 7 October 2026) |
+| Unit and display | A colour with its label or title, never the colour alone; white text is allowed on Inkt and Deep Blue |
+| Time rule | None; the status's current flags and work area |
+| Scope | Reports → Dashboard (Time per status, the day chart, Per person, legends and swatches), the Live board (tiles, rows, dots, group filter), My day and the Welcome card |
+| Equivalent in the source system | None |
+| Not to use | A group's name for a figure: Productive, as the group, is not the Dashboard's Productive tile or figure (all working and productive time, work areas included; `copy.dashboard.productive`, `dashboard.time.productive_share`); "Other work" in Deep Blue (it is Inkt since 23 November 2026) |
+| Status | Decided |
+| Decided | 7 October 2026 (Martin), amended 23 November 2026 (Martin); docs/decisions.md, 7 Oct 2026, "Four groups from flags with fixed palette colours …" and 23 Nov 2026, "A work status gets an optional Work area …" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`, `welcome.clock.status`, `my_day.current_status`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition. Deep Blue marks Operations by derivation: the style guide's agent-state colours name Deep Blue for On call, the CMA has no On call state, and Deep Blue already served a working group since 7 October 2026 (CLAUDE.md, Style; named in the PR) |
+
+### Sales (work area and status group)
+
+| Field | Value |
+|---|---|
+| Term | Sales (nl: Sales), a Work area value and the status group it makes; not the rail group Sales (nl Verkoop) |
+| Key | `work_area` value `sales`; group id `sales` in `web/src/lib/dashboard.ts`; copy keys `dashboard.groupSales`, `configStatuses.workAreaSales` |
+| Definition | The Work area of a working and productive status whose time is sales work, and the group of such statuses: Leaf Green, first in the group order. |
+| Source | `cma.work_status.work_area` |
+| Counts / does not count | Counts the time of statuses working, productive and with work area `sales`; all of it stays in worked, paid, billable and productive. Does not count a status without a work area (Productive) |
+| Unit and display | Hours and minutes in the legend and charts; hint "Working and productive, work area Sales" (nl "Werkend en productief, werkgebied Sales") |
+| Time rule | None |
+| Scope | As Status group |
+| Equivalent in the source system | None |
+| Not to use | The HubSpot sales pipeline; the rail group Sales (Sales → Speed to lead and the other pages) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition |
+
+### Operations (work area and status group)
+
+| Field | Value |
+|---|---|
+| Term | Operations (nl: Operations), a Work area value and the status group it makes |
+| Key | `work_area` value `operations`; group id `operations` in `web/src/lib/dashboard.ts`; copy keys `dashboard.groupOperations`, `configStatuses.workAreaOperations` |
+| Definition | The Work area of a working and productive status whose time is operations work, and the group of such statuses: Deep Blue, second in the group order. |
+| Source | `cma.work_status.work_area` |
+| Counts / does not count | Counts the time of statuses working, productive and with work area `operations`; all of it stays in worked, paid, billable and productive. Does not count a status without a work area (Productive) |
+| Unit and display | Hours and minutes in the legend and charts; hint "Working and productive, work area Operations" (nl "Werkend en productief, werkgebied Operations") |
+| Time rule | None |
+| Scope | As Status group |
+| Equivalent in the source system | None |
+| Not to use | "Back office" or a team name for it |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition |
+
+### Productive (status group)
+
+| Field | Value |
+|---|---|
+| Term | Productive (nl: Productief), the status group of working and productive statuses in a tenant where no status has a work area |
+| Key | Group id `productive`; copy key `dashboard.groupProductive` and its hint "Working and productive statuses" (nl "Werkende en productieve statussen"); the label rule `productiveGroupName` in `web/src/lib/dashboard.ts` |
+| Definition | The group of statuses that are working and productive, in a tenant where no status, active or retired, carries a Work area (for example Invest's statuses): Leaf Green, third in the group order. Where any status of the tenant has a work area, the same group (working, productive, no work area) is Other productive. |
+| Source | `cma.work_status` flags and `work_area` |
+| Counts / does not count | Counts the time of those statuses only. Does not count Sales or Operations time: the Productive tile and figure of the Dashboard (`copy.dashboard.productive`, `dashboard.time.productive_share`, the flag `is_productive`) count all working and productive time, work areas included, and are unchanged |
+| Unit and display | Hours and minutes in the legend and charts |
+| Time rule | None |
+| Scope | As Status group |
+| Equivalent in the source system | None |
+| Not to use | "Productive" for Sales or Operations time inside the group; "Productive" as the group's label in a tenant with a work area (that group is Other productive); the group's name for the Dashboard's Productive figure |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …", "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" and "Definitions: Other productive" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition |
+
+### Other productive (status group)
+
+| Field | Value |
+|---|---|
+| Term | Other productive (nl: Overig productief), the label of the status group of working and productive statuses without a work area, in a tenant where any status has a work area |
+| Key | Group id `productive` (one group, two labels by tenant); copy keys `dashboard.groupOtherProductive` and `dashboard.groupOtherProductiveHint` ("Working and productive statuses without a work area", nl "Werkende en productieve statussen zonder werkgebied"); the label rule `productiveGroupName` in `web/src/lib/dashboard.ts` |
+| Definition | The group of statuses that are working and productive and carry no Work area, named Other productive when at least one of the tenant's statuses, active or retired, has a work area, so that it reads beside Sales and Operations: Leaf Green, third in the group order. In a tenant without any work area the same group is Productive. |
+| Source | `cma.work_status` flags and `work_area`; whether any status has a work area is read in the same statement as the Dashboard's time (`cma.team_status_time`) and the Live board's status flags (`tenantHasWorkArea`) |
+| Counts / does not count | Counts the time of working, productive statuses without a work area only. Does not count Sales or Operations time. Not the Dashboard's Productive tile and figure (`copy.dashboard.productive`, `dashboard.time.productive_share`), which keep their meaning: all working and productive time, work areas included |
+| Unit and display | Hours and minutes in the legend and charts; a count on the Live board's tile |
+| Time rule | None; the tenant's statuses as they are now |
+| Scope | As Status group: Reports → Dashboard and the Live board, where groups carry labels |
+| Equivalent in the source system | None |
+| Not to use | "Productive" for this group in a tenant with a work area; "Other work" (working, not productive) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Definitions: Other productive" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board; `GET /api/v1/team/status-time` and `GET /api/v1/team/now` (`tenantHasWorkArea`) |
+| As built today | `web/src/lib/dashboard.ts` (`productiveGroupName`, `hasWorkArea`), `web/src/components/DashboardCharts.tsx` (`groupLabels`); verified by `verify:dashboard`. Matches the definition |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.

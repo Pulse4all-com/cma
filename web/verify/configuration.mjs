@@ -17,7 +17,8 @@
  * and the market order in words.
  */
 import {
-  exportPreview, flagsFrozen, levelsText, parseLevels, parseMarkets, parseMinutes, parseTarget, retireProblem, statusFormProblem, targetAt, visibleStatuses,
+  exportPreview, flagsFrozen, levelsText, parseLevels, parseMarkets, parseMinutes, parseTarget, parseWorkArea, retireProblem, statusFormProblem, targetAt, visibleStatuses,
+  WORK_AREAS, workAreaAllowed,
 } from "../src/lib/configuration.ts";
 import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
@@ -53,6 +54,24 @@ expect("a bad key is named", statusFormProblem({ key: "Bad Key", name: "x" }, tr
 expect("a duplicate key on add", statusFormProblem({ key: "a", name: "x" }, true, ["a"]), "duplicate", null);
 expect("the same key on edit is fine", statusFormProblem({ key: "a", name: "x" }, false, ["a"]), null, "duplicate");
 expect("an empty name is named", statusFormProblem({ key: "ok", name: "  " }, true, []), "name", null);
+// The work area (addition 0009zn): the table's check, sales or operations only on a working, productive status
+expect("a work area on a status that is not productive is refused",
+  [statusFormProblem({ key: "ok", name: "x", isWorking: true, isProductive: false, workArea: "sales" }, true, []),
+   statusFormProblem({ key: "ok", name: "x", isWorking: false, isProductive: true, workArea: "operations" }, true, []),
+   statusFormProblem({ key: "ok", name: "x", isWorking: false, isProductive: false, workArea: "sales" }, true, [])],
+  ["workArea", "workArea", "workArea"], [null, null, null]);
+expect("a work area on a working, productive status, or none anywhere, is fine",
+  [statusFormProblem({ key: "ok", name: "x", isWorking: true, isProductive: true, workArea: "operations" }, true, []),
+   statusFormProblem({ key: "ok", name: "x", isWorking: false, isProductive: false, workArea: null }, true, [])],
+  [null, null], ["workArea", "workArea"]);
+expect("only working and productive opens the work area",
+  [workAreaAllowed({ isWorking: true, isProductive: true }), workAreaAllowed({ isWorking: true, isProductive: false }), workAreaAllowed({ isWorking: false, isProductive: true })],
+  [true, false, false], [true, true, true]);
+expect("two work areas; none is null; anything else is unknown",
+  [WORK_AREAS, parseWorkArea("sales"), parseWorkArea(""), parseWorkArea(null), parseWorkArea(undefined), parseWorkArea("Sales") ?? "unknown", parseWorkArea("support") ?? "unknown"],
+  [["sales", "operations"], "sales", null, null, null, "unknown", "unknown"],
+  [["sales", "operations", "support"], "sales", "", null, null, "Sales", "support"]);
+expect("a work area is no flag: frozen flags leave it open", [flagsFrozen(all[0]), workAreaAllowed(all[0])], [true, true], [true, false]);
 expect("markets: lowercase, unique, sorted", parseMarkets("nl, be  DE nl"), ["be", "de", "nl"], ["nl", "be", "de"]);
 expect("markets: a bad token refuses", parseMarkets("nl, bel"), null, ["nl"]);
 expect("markets: empty is no markets", parseMarkets(" "), [], null);

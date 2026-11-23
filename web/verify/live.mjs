@@ -6,7 +6,8 @@
  *
  * Covers the group of a person from the current status's flags (never from a key or name) and
  * from the day's state (clocked out, not clocked in), the row order (group, then name, no
- * ranking), the tiles (a flag group only when an active status belongs to it, the two day states
+ * ranking), the tiles (a group only when an active status belongs to it, Sales and Operations by its work area since
+ * addition 0009zn, the two day states
  * always, counts before any filter), the filters, the employers, and the two figures that tick
  * (since, worked so far, which stops at the day's end since addition 0008b) from fixed instants,
  * and the window start read from a refused clock-in. Since addition 0008i (brief B15) also the inbound
@@ -57,7 +58,7 @@ function expect(name, actual, expected, provoked) {
 // Fixture: keys and names that would mislead any code reading them; the flags decide
 const T0 = "2026-10-07T06:00:00.000Z";
 const T1 = "2026-10-07T08:30:00.000Z";
-const status = (key, name, f) => ({ key, name, isActive: true, isBillable: f.isPaid, ...f });
+const status = (key, name, f) => ({ key, name, isActive: true, isBillable: f.isPaid, workArea: null, ...f });
 const S = {
   work: status("lunch", "Lunch", { isWorking: true, isProductive: true, isPaid: true }),
   other: status("available", "Available", { isWorking: true, isProductive: false, isPaid: true }),
@@ -89,9 +90,9 @@ expect("not working, paid is a paid pause", liveGroupOf(people[2]), "paidPause",
 expect("not working, unpaid is an unpaid pause", liveGroupOf(people[3]), "unpaidPause", "paidPause");
 expect("an ended day is clocked out, whatever its last status", liveGroupOf(people[4]), "clockedOut", "productive");
 expect("no day is not clocked in", liveGroupOf(people[5]), "notClockedIn", "clockedOut");
-expect("the order is work, pauses, then off the clock", LIVE_GROUPS,
-  ["productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"],
-  ["notClockedIn", "clockedOut", "unpaidPause", "paidPause", "otherWork", "productive"]);
+expect("the order is work, pauses, then off the clock (D3)", LIVE_GROUPS,
+  ["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"],
+  ["productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"]);
 
 // Rows: by group, then by name, never by any figure
 const rows = liveRows(people);
@@ -108,6 +109,32 @@ expect("no paid pause tile without a paid pause status", tiles(rows, [S.work, S.
   ["productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"]);
 expect("the day-state tiles exist even with no status at all", tiles(rows, []).map((x) => x.group),
   ["clockedOut", "notClockedIn"], []);
+
+// The work area (addition 0009zn): a person's group, the row order and a tile only when an active status has that work area (D6)
+const SA = {
+  sales: status("x_sales", "Operations", { isWorking: true, isProductive: true, isPaid: true, workArea: "sales" }),
+  operations: status("x_ops", "Sales", { isWorking: true, isProductive: true, isPaid: true, workArea: "operations" }),
+};
+const areaPeople = [
+  person("q1", "Cy", "Company", day("x_ops", T1, { closedSeconds: 0, runningSince: T1 }), SA.operations),
+  person("q2", "Bea", "Company", day("lunch", T1, { closedSeconds: 0, runningSince: T1 }), S.work),
+  person("q3", "Al", "Company", day("x_sales", T1, { closedSeconds: 0, runningSince: T1 }), SA.sales),
+];
+expect("a person's group follows the status's work area, not its key or name",
+  areaPeople.map(liveGroupOf), ["operations", "productive", "sales"], ["sales", "productive", "operations"]);
+expect("Sales first, then Operations, then Productive", liveRows(areaPeople).map((r) => r.person.displayName), ["Al", "Cy", "Bea"], ["Bea", "Cy", "Al"]);
+expect("no Sales or Operations tile without an active status in that work area",
+  tiles(liveRows(areaPeople), allFlags).map((x) => x.group),
+  ["productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"],
+  ["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"]);
+expect("a Sales tile with a Sales status, an Operations tile with an Operations status, each with its count",
+  [tiles(liveRows(areaPeople), [SA.sales, S.work]).map((x) => `${x.group}:${x.count}`),
+   tiles(liveRows(areaPeople), [...allFlags, SA.sales, SA.operations]).map((x) => `${x.group}:${x.count}`)],
+  [["sales:1", "productive:1", "clockedOut:0", "notClockedIn:0"],
+   ["sales:1", "operations:1", "productive:1", "otherWork:0", "paidPause:0", "unpaidPause:0", "clockedOut:0", "notClockedIn:0"]],
+  [["sales:1", "operations:1", "productive:1", "clockedOut:0", "notClockedIn:0"],
+   ["productive:3", "otherWork:0", "paidPause:0", "unpaidPause:0", "clockedOut:0", "notClockedIn:0"]]);
+expect("the group filter keeps Operations alone", filterRows(liveRows(areaPeople), { group: "operations", employer: "" }).map((r) => r.person.userId), ["q1"], ["q1", "q3"]);
 
 // Filters and employers
 expect("the group filter keeps that group", filterRows(rows, { group: "productive", employer: "" }).map((r) => r.person.userId),
