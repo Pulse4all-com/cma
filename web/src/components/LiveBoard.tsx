@@ -80,7 +80,7 @@ const TEAM_COLUMNS: Record<number, string> = {
   2: "grid-cols-[repeat(2,minmax(0,1fr))_minmax(9.5rem,auto)]", 3: "grid-cols-[repeat(3,minmax(0,1fr))_minmax(9.5rem,auto)]",
   4: "grid-cols-[repeat(4,minmax(0,1fr))_minmax(9.5rem,auto)]", 5: "grid-cols-[repeat(5,minmax(0,1fr))_minmax(9.5rem,auto)]",
   6: "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]",
-  // Sales and Operations (addition 0009zl): up to eight tiles when a tenant has both work areas
+  // Sales and Operations (addition 0009zn): up to eight tiles when a tenant has both work areas
   7: "grid-cols-[repeat(7,minmax(0,1fr))_minmax(9.5rem,auto)]", 8: "grid-cols-[repeat(8,minmax(0,1fr))_minmax(9.5rem,auto)]",
 };
 

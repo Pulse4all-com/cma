@@ -54,7 +54,7 @@ expect("a bad key is named", statusFormProblem({ key: "Bad Key", name: "x" }, tr
 expect("a duplicate key on add", statusFormProblem({ key: "a", name: "x" }, true, ["a"]), "duplicate", null);
 expect("the same key on edit is fine", statusFormProblem({ key: "a", name: "x" }, false, ["a"]), null, "duplicate");
 expect("an empty name is named", statusFormProblem({ key: "ok", name: "  " }, true, []), "name", null);
-// The work area (addition 0009zl): the table's check, sales or operations only on a working, productive status
+// The work area (addition 0009zn): the table's check, sales or operations only on a working, productive status
 expect("a work area on a status that is not productive is refused",
   [statusFormProblem({ key: "ok", name: "x", isWorking: true, isProductive: false, workArea: "sales" }, true, []),
    statusFormProblem({ key: "ok", name: "x", isWorking: false, isProductive: true, workArea: "operations" }, true, []),

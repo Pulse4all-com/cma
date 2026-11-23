@@ -9,6 +9,8 @@
 --     the application (cma_app, row-level security on), in a step that is always rolled back.
 -- Run as your own IAM login, after 200. Output: tenant slugs, counts, check names and the throwaway people's invented
 -- short names; no real person's name.
+-- Edited by addition 0009zn (228_work_area.sql, 23 November 2026): S2 expects work_area after the paid columns where 0009zn
+-- is recorded; nothing else changed.
 -- 20_verify_team_now.sql (A3) and 135_verify_hours_reads.sql (E6) are edited by 200 and run again after it, with
 -- 199_verify_roster_planned.sql (B6 reads team_now).
 --
@@ -230,9 +232,9 @@ begin
     from pg_proc p
     join lateral unnest(p.proargnames, p.proargmodes) with ordinality as a(attname, attmode, n) on true
     where p.oid = f and a.attmode = 't';
-    -- Adjusted 23 November 2026 (addition 0009zl, 224_work_area.sql): work_area follows the paid columns, last
+    -- Adjusted 23 November 2026 (addition 0009zn, 228_work_area.sql): work_area follows the paid columns, last
     v_want := pg_temp.v0009z_cols() || ', paid_closed_seconds, paid_running_since';
-    if exists (select 1 from cma.schema_migration where version = '0009zl') then
+    if exists (select 1 from cma.schema_migration where version = '0009zn') then
       v_want := v_want || ', work_area';
     end if;
     if v_cols is distinct from v_want then

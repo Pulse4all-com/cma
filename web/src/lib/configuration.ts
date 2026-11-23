@@ -27,7 +27,7 @@ export function visibleStatuses<T extends Pick<ConfigStatus, "isActive" | "sortO
     .sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
 }
 
-/** The work areas a status may carry (addition 0009zl; docs/definitions.md, Work area), in the select's order */
+/** The work areas a status may carry (addition 0009zn; docs/definitions.md, Work area), in the select's order */
 export const WORK_AREAS: readonly WorkArea[] = ["sales", "operations"];
 
 /** "sales", "operations" or none (null or ""); anything else is undefined, which the route refuses */

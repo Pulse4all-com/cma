@@ -66,8 +66,8 @@
 -- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
 -- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
--- Since addition 0009zl (224_work_area.sql) the rows 'work status flags' and 'statuses' read work_area as the web does, so
--- this script runs after 224.
+-- Since addition 0009zn (228_work_area.sql) the rows 'work status flags' and 'statuses' read work_area as the web does, so
+-- this script runs after 228.
 -- A poll's row (class poll; since 16 November 2026, Martin's brief on 131's poll timings) is the median of
 -- verify.poll_runs runs after verify.poll_warmup untimed ones (5 after 6), not the best of two: a poll runs every few
 -- seconds on a connection the pool keeps, so it pays neither a session's first calls (its plans built, its functions'

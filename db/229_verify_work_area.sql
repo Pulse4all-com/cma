@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 225_verify_work_area.sql: verifies addition 0009zl, a status's Work area (cma.work_status.work_area and the reads that
+-- 229_verify_work_area.sql: verifies addition 0009zn, a status's Work area (cma.work_status.work_area and the reads that
 -- answer it)
 -- =============================================================================================
 -- Universal: no seed is assumed, so it runs in dev and in prod. Two kinds of checks:
@@ -9,7 +9,7 @@
 --   on every active tenant (R): the new reads against the previous definitions (kept below: 15, 200, 13 and 26), every
 --     earlier column row for row and in order, as the application (cma_app, row-level security on), in a step that is
 --     always rolled back.
--- Run as your own IAM login, after 224. Output: tenant slugs, counts, check names, the throwaway people's invented short
+-- Run as your own IAM login, after 228. Output: tenant slugs, counts, check names, the throwaway people's invented short
 -- names and labels for the throwaway tenant's statuses; no real person's name and no status key.
 --
 -- The throwaway tenant's clock: its people live in the zone where it is between 09:00 and 12:00 now (Etc/GMT zones, whole
@@ -22,7 +22,7 @@
 --   a3   clock in 05:00 (default), still working
 --
 -- Checks
---   S1  the addition 0009zl is recorded once, after 0009zk
+--   S1  the addition 0009zn is recorded once, after 0009zk
 --   S2  cma.work_status.work_area: text, nullable, its two checks; cma_read.work_status ends with work_area and the
 --       readers may read it
 --   S3  the five functions: work_area as the last returned column after the previous ones; the 7-argument upsert gone, the
@@ -49,7 +49,7 @@
 -- that check alone fails. The R checks drop the old side's first row, so the comparison itself must find the difference
 -- (a compare of no rows reads FAIL under the switch).
 -- Collation: every ordering that feeds a compared text says collate "C".
--- Expected verdict: "PASS | 225_verify_work_area: <n> PASS, 0 FAIL, <k> skip".
+-- Expected verdict: "PASS | 229_verify_work_area: <n> PASS, 0 FAIL, <k> skip".
 -- =============================================================================================
 
 do $$
@@ -62,11 +62,11 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' for every check, or one check's id such as 'B2'
 
-drop table if exists pg_temp.verify_0009zl;
-create temporary table verify_0009zl (ord integer, check_name text, result text, detail text);
-grant select, insert on pg_temp.verify_0009zl to cma_app;
+drop table if exists pg_temp.verify_0009zn;
+create temporary table verify_0009zn (ord integer, check_name text, result text, detail text);
+grant select, insert on pg_temp.verify_0009zn to cma_app;
 
-create or replace function pg_temp.v0009zl_p(p_id text)
+create or replace function pg_temp.v0009zn_p(p_id text)
 returns boolean
 language sql stable
 as $$
@@ -74,14 +74,14 @@ as $$
 $$;
 
 -- One check's row: PASS when what was found equals what is expected; provoked, the expectation carries a deliberate difference
-create or replace function pg_temp.v0009zl_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
+create or replace function pg_temp.v0009zn_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
 returns void
 language plpgsql
 as $$
 declare
-  v_exp text := case when pg_temp.v0009zl_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
+  v_exp text := case when pg_temp.v0009zn_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
 begin
-  insert into pg_temp.verify_0009zl values (p_ord, p_id || ' ' || p_name,
+  insert into pg_temp.verify_0009zn values (p_ord, p_id || ' ' || p_name,
     case when p_found is not distinct from v_exp then 'PASS' else 'FAIL' end,
     case when p_found is not distinct from v_exp then left(coalesce(p_found, 'null'), 600)
          else left('found ' || coalesce(p_found, 'null') || ' | expected ' || coalesce(v_exp, 'null'), 2400) end);
@@ -90,7 +90,7 @@ $$;
 
 -- Two reads compared row for row and in order (201's comparison); provoked for the check, the old side loses its first
 -- row. Null when equal, otherwise what differs
-create or replace function pg_temp.v0009zl_diff(p_id text, p_new text, p_old text)
+create or replace function pg_temp.v0009zn_diff(p_id text, p_new text, p_old text)
 returns text
 language plpgsql
 as $$
@@ -98,12 +98,12 @@ declare
   v_old text := p_old;
   v_n_new bigint; v_n_old bigint; v_only_new bigint; v_only_old bigint; v_same boolean;
 begin
-  if pg_temp.v0009zl_p(p_id) then
+  if pg_temp.v0009zn_p(p_id) then
     v_old := format('select * from (%s) z offset 1', p_old);
   end if;
   execute format('select count(*) from (%s) a', p_new) into v_n_new;
   execute format('select count(*) from (%s) a', v_old) into v_n_old;
-  if pg_temp.v0009zl_p(p_id) and v_n_new = 0 then
+  if pg_temp.v0009zn_p(p_id) and v_n_new = 0 then
     return 'provoked, but the set is empty: nothing to differ (FAIL by the switch)';
   end if;
   execute format('select (select string_agg(a::text, ''|'' order by a.o) from (select row_number() over () as o, t from (%s) t) a) is not distinct from
@@ -116,10 +116,10 @@ begin
   return format('new %s rows, previous %s; only in new %s, only in previous %s; same order %s', v_n_new, v_n_old, v_only_new, v_only_old, v_same);
 end
 $$;
-grant execute on function pg_temp.v0009zl_diff(text, text, text) to cma_app;
+grant execute on function pg_temp.v0009zn_diff(text, text, text) to cma_app;
 
 -- The earlier columns of each read, as the previous definitions return them
-create or replace function pg_temp.v0009zl_cols(p_read text)
+create or replace function pg_temp.v0009zn_cols(p_read text)
 returns text
 language sql immutable
 as $$
@@ -288,17 +288,17 @@ declare
   f      regprocedure;
 begin
   -- S1
-  perform pg_temp.v0009zl_row(1, 'S1', 'the addition 0009zl recorded once, after 0009zk',
-    format('0009zk %s; 0009zl %s, after 0009zk %s, work area %s',
+  perform pg_temp.v0009zn_row(1, 'S1', 'the addition 0009zn recorded once, after 0009zk',
+    format('0009zk %s; 0009zn %s, after 0009zk %s, work area %s',
            (select count(*) from cma.schema_migration where version = '0009zk'),
-           (select count(*) from cma.schema_migration where version = '0009zl'),
+           (select count(*) from cma.schema_migration where version = '0009zn'),
            coalesce((select l.applied_at > k.applied_at from cma.schema_migration l, cma.schema_migration k
-                     where l.version = '0009zl' and k.version = '0009zk'), false),
-           coalesce((select m.description like 'Work area on statuses%' from cma.schema_migration m where m.version = '0009zl'), false)),
-    '0009zk 1; 0009zl 1, after 0009zk t, work area t');
+                     where l.version = '0009zn' and k.version = '0009zk'), false),
+           coalesce((select m.description like 'Work area on statuses%' from cma.schema_migration m where m.version = '0009zn'), false)),
+    '0009zk 1; 0009zn 1, after 0009zk t, work area t');
 
   -- S2
-  perform pg_temp.v0009zl_row(2, 'S2', 'work_status.work_area text and nullable, its two checks; cma_read.work_status ends with it, readable by the readers',
+  perform pg_temp.v0009zn_row(2, 'S2', 'work_status.work_area text and nullable, its two checks; cma_read.work_status ends with it, readable by the readers',
     format('column %s; area check %s; flags check %s; view last %s; readers %s',
       coalesce((select c.data_type || ' ' || c.is_nullable from information_schema.columns c
                 where c.table_schema = 'cma' and c.table_name = 'work_status' and c.column_name = 'work_area'), 'missing'),
@@ -326,7 +326,7 @@ begin
     from pg_proc p
     join lateral unnest(p.proargnames, p.proargmodes) with ordinality as a(attname, attmode, n) on true
     where p.oid = f and a.attmode = 't';
-    if v_cols is distinct from pg_temp.v0009zl_cols(v_read) || ', work_area' then
+    if v_cols is distinct from pg_temp.v0009zn_cols(v_read) || ', work_area' then
       v_bad := v_bad || v_read || ' columns [' || coalesce(v_cols, '') || ']; ';
     end if;
     if (select p.provolatile from pg_proc p where p.oid = f) <> 's' then v_bad := v_bad || v_read || ' not stable; '; end if;
@@ -354,7 +354,7 @@ begin
                where p.oid = f and a.grantee = 0) then v_bad := v_bad || v_fn || ' public''s; '; end if;
     if (select p.prosecdef from pg_proc p where p.oid = f) then v_bad := v_bad || v_fn || ' security definer; '; end if;
   end loop;
-  perform pg_temp.v0009zl_row(3, 'S3', 'the five functions: work_area last, the upsert''s new signature, owner, the application''s, the caller''s rights, stable, team_now jit off',
+  perform pg_temp.v0009zn_row(3, 'S3', 'the five functions: work_area last, the upsert''s new signature, owner, the application''s, the caller''s rights, stable, team_now jit off',
     coalesce(nullif(v_bad, ''), 'ok'), 'ok');
 end
 $$;
@@ -397,7 +397,7 @@ begin
   v_z := case when v_k = 0 then 'Etc/GMT' when v_k > 0 then 'Etc/GMT-' || v_k else 'Etc/GMT+' || (-v_k) end;
   v_d := cma.business_date(now(), v_z);
   begin
-    v_t := cma.create_tenant('verify-0009zl', 'Verify 0009zl', 'UTC');
+    v_t := cma.create_tenant('verify-0009zn', 'Verify 0009zn', 'UTC');
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'admin@example.invalid', 'admin', v_z) returning id into v_admin;
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'mgr@example.invalid', 'mgr', v_z) returning id into v_mgr;
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'sup@example.invalid', 'sup', v_z) returning id into v_sup;
@@ -453,15 +453,15 @@ begin
     -- B6, before: the figures without work_area
     perform set_config('app.user_id', v_perf::text, true);
     execute format('select string_agg(t::text, ''|'' order by t.business_date, t.display_name collate "C", t.user_id, t.sort_order, t.status_key collate "C")
-                    from (select %s from cma.team_status_time($1, $1)) t', pg_temp.v0009zl_cols('team_status_time')) into v_tst0 using v_d;
+                    from (select %s from cma.team_status_time($1, $1)) t', pg_temp.v0009zn_cols('team_status_time')) into v_tst0 using v_d;
     perform set_config('app.user_id', v_exp::text, true);
     execute format('select string_agg(t::text, ''|'' order by t.business_date, t.display_name collate "C", t.user_id, t.from_at)
-                    from (select %s from cma.export_status_changes($1, $1)) t', pg_temp.v0009zl_cols('export_status_changes')) into v_esc0 using v_d;
+                    from (select %s from cma.export_status_changes($1, $1)) t', pg_temp.v0009zn_cols('export_status_changes')) into v_esc0 using v_d;
     perform set_config('app.user_id', v_team::text, true);
     select string_agg(h::text, '|' order by h.user_id, h.business_date) into v_hrs0 from cma.team_hours(v_d, v_d) h;
     perform set_config('app.user_id', v_live::text, true);
     execute format('select string_agg(t::text, ''|'' order by t.display_name collate "C", t.user_id) from (select %s from cma.team_now()) t',
-                   pg_temp.v0009zl_cols('team_now')) into v_now0;
+                   pg_temp.v0009zn_cols('team_now')) into v_now0;
 
     -- B1: a work area only on a working, productive status
     perform set_config('app.user_id', v_conf::text, true);
@@ -539,7 +539,7 @@ begin
     -- B6, after: the same reads
     perform set_config('app.user_id', v_perf::text, true);
     execute format('select string_agg(t::text, ''|'' order by t.business_date, t.display_name collate "C", t.user_id, t.sort_order, t.status_key collate "C")
-                    from (select %s from cma.team_status_time($1, $1)) t', pg_temp.v0009zl_cols('team_status_time')) into v_tst1 using v_d;
+                    from (select %s from cma.team_status_time($1, $1)) t', pg_temp.v0009zn_cols('team_status_time')) into v_tst1 using v_d;
     -- B5: team_status_time answers the stored work area, per status (labels, not keys)
     select 'status time ' || string_agg(distinct (x.label || '=' || coalesce(x.work_area, '-')) collate "C", ', ' order by (x.label || '=' || coalesce(x.work_area, '-')) collate "C")
     into v_b5
@@ -548,7 +548,7 @@ begin
           from cma.team_status_time(v_d, v_d) t) x;
     perform set_config('app.user_id', v_exp::text, true);
     execute format('select string_agg(t::text, ''|'' order by t.business_date, t.display_name collate "C", t.user_id, t.from_at)
-                    from (select %s from cma.export_status_changes($1, $1)) t', pg_temp.v0009zl_cols('export_status_changes')) into v_esc1 using v_d;
+                    from (select %s from cma.export_status_changes($1, $1)) t', pg_temp.v0009zn_cols('export_status_changes')) into v_esc1 using v_d;
     select v_b5 || '; export ' || string_agg(distinct (x.label || '=' || coalesce(x.work_area, '-')) collate "C", ', ' order by (x.label || '=' || coalesce(x.work_area, '-')) collate "C")
     into v_b5
     from (select case t.status_key when v_work.key then 'default' when 'verify_ops' then 'ops' when v_other.key then 'other' when v_pause.key then 'pause' else t.status_key end as label,
@@ -558,7 +558,7 @@ begin
     select string_agg(h::text, '|' order by h.user_id, h.business_date) into v_hrs1 from cma.team_hours(v_d, v_d) h;
     perform set_config('app.user_id', v_live::text, true);
     execute format('select string_agg(t::text, ''|'' order by t.display_name collate "C", t.user_id) from (select %s from cma.team_now()) t',
-                   pg_temp.v0009zl_cols('team_now')) into v_now1;
+                   pg_temp.v0009zn_cols('team_now')) into v_now1;
     select v_b5 || '; team now ' || string_agg(n.display_name || '=' || coalesce(n.work_area, '-'), ', ' order by n.display_name collate "C")
     into v_b5
     from cma.team_now() n where n.user_id in (v_a1, v_a3);
@@ -593,25 +593,25 @@ begin
     when sqlstate 'CMAOK' then null;
     when others then v_err := sqlstate || ': ' || left(sqlerrm, 300);
       perform set_config('role', 'cma_owner', true);
-      insert into pg_temp.verify_0009zl values (10, 'B the throwaway tenant''s checks ran to their end', 'FAIL', coalesce(v_b0, '') || ' | ' || v_err);
+      insert into pg_temp.verify_0009zn values (10, 'B the throwaway tenant''s checks ran to their end', 'FAIL', coalesce(v_b0, '') || ' | ' || v_err);
   end;
   perform set_config('role', 'cma_owner', true);
   perform set_config('app.tenant_id', '', true);
   perform set_config('app.user_id', '', true);
 
-  perform pg_temp.v0009zl_row(11, 'B1', 'a work area on a status that is not working and productive is refused (upsert, flag change, table)',
+  perform pg_temp.v0009zn_row(11, 'B1', 'a work area on a status that is not working and productive is refused (upsert, flag change, table)',
     v_b1, 'not productive CMA04; flag change CMA04; table 23514');
-  perform pg_temp.v0009zl_row(12, 'B2', 'an unknown work area is refused (upsert, the label, table)',
+  perform pg_temp.v0009zn_row(12, 'B2', 'an unknown work area is refused (upsert, the label, table)',
     v_b2, 'support CMA04; Sales CMA04; table 23514');
-  perform pg_temp.v0009zl_row(13, 'B3', 'the upsert and the list without tenant.configure are refused',
+  perform pg_temp.v0009zn_row(13, 'B3', 'the upsert and the list without tenant.configure are refused',
     v_b3, 'agent upsert CMA06; agent list CMA06; manager upsert CMA06; manager list CMA06; ');
-  perform pg_temp.v0009zl_row(14, 'B4', 'not frozen by time, audited as the admin''s, flags still frozen, 7 arguments set none',
+  perform pg_temp.v0009zn_row(14, 'B4', 'not frozen by time, audited as the admin''s, flags still frozen, 7 arguments set none',
     v_b4, 'set with time behind it ok; flags CMA03; without p_work_area none; audited 1');
-  perform pg_temp.v0009zl_row(15, 'B5', 'the reads answer the stored work area',
+  perform pg_temp.v0009zn_row(15, 'B5', 'the reads answer the stored work area',
     v_b5, 'status time default=sales, ops=operations, other=-, pause=-; export default=sales, ops=operations, other=-, pause=-; '
        || 'team now a1=-, a3=sales; configuration default=sales, free=-, ops=operations, other=-, pause=-; '
        || 'readers'' view default=sales, ops=operations, other=-, pause=-');
-  perform pg_temp.v0009zl_row(16, 'B6', 'figures for the day are equal before and after the work areas are set',
+  perform pg_temp.v0009zn_row(16, 'B6', 'figures for the day are equal before and after the work areas are set',
     v_b6, 'status time equal; export equal; team hours equal; team now equal');
 end
 $$;
@@ -635,16 +635,16 @@ begin
     perform set_config('app.tenant_id', t.id::text, true);
     for c in select * from (values
         (21, 'R1', 'team_status_time', 'performance.team',
-         format('select %s from cma.team_status_time(%L::date, %L::date)', pg_temp.v0009zl_cols('team_status_time'), v_from, v_to),
+         format('select %s from cma.team_status_time(%L::date, %L::date)', pg_temp.v0009zn_cols('team_status_time'), v_from, v_to),
          format('select * from pg_temp.old_team_status_time(%L::date, %L::date)', v_from, v_to), 'seventeen'),
         (22, 'R2', 'team_now', 'monitoring.live',
-         format('select %s from cma.team_now()', pg_temp.v0009zl_cols('team_now')),
+         format('select %s from cma.team_now()', pg_temp.v0009zn_cols('team_now')),
          'select * from pg_temp.old_team_now()', 'twenty-two'),
         (23, 'R3', 'export_status_changes', 'workday.export',
-         format('select %s from cma.export_status_changes(%L::date, %L::date)', pg_temp.v0009zl_cols('export_status_changes'), v_from, v_to),
+         format('select %s from cma.export_status_changes(%L::date, %L::date)', pg_temp.v0009zn_cols('export_status_changes'), v_from, v_to),
          format('select * from pg_temp.old_export_status_changes(%L::date, %L::date)', v_from, v_to), 'eighteen'),
         (24, 'R4', 'work_statuses_all', 'tenant.configure',
-         format('select %s from cma.work_statuses_all()', pg_temp.v0009zl_cols('work_statuses_all')),
+         format('select %s from cma.work_statuses_all()', pg_temp.v0009zn_cols('work_statuses_all')),
          'select * from pg_temp.old_work_statuses_all()', 'ten')
       ) as x(ord, id, fn, perm, new_sql, old_sql, n_cols) loop
       v_who := null; v_r := null; v_err := null;
@@ -652,14 +652,14 @@ begin
       where u.tenant_id = t.id and u.status = 'active' and u.kind = 'person' and cma.has_permission(u.id, c.perm)
       order by u.created_at, u.id limit 1;
       if v_who is null then
-        insert into pg_temp.verify_0009zl values (c.ord, c.id || ' ' || t.slug || ': ' || c.fn,
-          case when pg_temp.v0009zl_p(c.id) then 'FAIL' else 'skip' end, 'no active person holds ' || c.perm || ': not compared');
+        insert into pg_temp.verify_0009zn values (c.ord, c.id || ' ' || t.slug || ': ' || c.fn,
+          case when pg_temp.v0009zn_p(c.id) then 'FAIL' else 'skip' end, 'no active person holds ' || c.perm || ': not compared');
         continue;
       end if;
       begin
         perform set_config('role', 'cma_app', true);
         perform set_config('app.user_id', v_who::text, true);
-        v_r := pg_temp.v0009zl_diff(c.id, c.new_sql, c.old_sql);
+        v_r := pg_temp.v0009zn_diff(c.id, c.new_sql, c.old_sql);
         if v_r is null then
           execute format('select ''equal, '' || count(*) || '' rows'' from (%s) z', c.new_sql) into v_r;
         end if;
@@ -670,13 +670,13 @@ begin
       end;
       perform set_config('role', 'cma_owner', true);
       perform set_config('app.user_id', '', true);
-      insert into pg_temp.verify_0009zl values (c.ord, c.id || ' ' || t.slug || ': ' || c.fn || '''s ' || c.n_cols || ' earlier columns equal the previous definition, row for row, in order',
+      insert into pg_temp.verify_0009zn values (c.ord, c.id || ' ' || t.slug || ': ' || c.fn || '''s ' || c.n_cols || ' earlier columns equal the previous definition, row for row, in order',
         case when v_err is null and v_r like 'equal, %' then 'PASS' else 'FAIL' end, coalesce(v_err, v_r));
     end loop;
   end loop;
   perform set_config('app.tenant_id', '', true);
   if not v_any then
-    insert into pg_temp.verify_0009zl values (20, 'R per tenant',
+    insert into pg_temp.verify_0009zn values (20, 'R per tenant',
       case when current_setting('verify.provoke') <> 'false' then 'FAIL' else 'skip' end, 'no active tenant');
   end if;
 end
@@ -686,21 +686,21 @@ drop function if exists pg_temp.old_work_statuses_all();
 drop function if exists pg_temp.old_export_status_changes(date, date, uuid);
 drop function if exists pg_temp.old_team_now();
 drop function if exists pg_temp.old_team_status_time(date, date, uuid);
-drop function if exists pg_temp.v0009zl_cols(text);
-drop function if exists pg_temp.v0009zl_diff(text, text, text);
-drop function if exists pg_temp.v0009zl_row(integer, text, text, text, text);
-drop function if exists pg_temp.v0009zl_p(text);
+drop function if exists pg_temp.v0009zn_cols(text);
+drop function if exists pg_temp.v0009zn_diff(text, text, text);
+drop function if exists pg_temp.v0009zn_row(integer, text, text, text, text);
+drop function if exists pg_temp.v0009zn_p(text);
 
 select check_name, result, detail
-from (select ord, check_name, result, detail from pg_temp.verify_0009zl
+from (select ord, check_name, result, detail from pg_temp.verify_0009zn
       union all
       select 1000000, 'verdict',
              case when current_setting('verify.provoke') <> 'false' then 'PROVOKED, NOT A PASS'
-                  when exists (select 1 from pg_temp.verify_0009zl where result = 'FAIL') then 'FAIL'
-                  when not exists (select 1 from pg_temp.verify_0009zl where result = 'PASS') then 'FAIL'
+                  when exists (select 1 from pg_temp.verify_0009zn where result = 'FAIL') then 'FAIL'
+                  when not exists (select 1 from pg_temp.verify_0009zn where result = 'PASS') then 'FAIL'
                   else 'PASS' end,
-             format('225_verify_work_area: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0009zl where result = 'PASS'),
-                    (select count(*) from pg_temp.verify_0009zl where result = 'FAIL'), (select count(*) from pg_temp.verify_0009zl where result = 'skip'))) x
+             format('229_verify_work_area: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0009zn where result = 'PASS'),
+                    (select count(*) from pg_temp.verify_0009zn where result = 'FAIL'), (select count(*) from pg_temp.verify_0009zn where result = 'skip'))) x
 order by ord, check_name collate "C";
-drop table if exists pg_temp.verify_0009zl;
+drop table if exists pg_temp.verify_0009zn;
 reset role;

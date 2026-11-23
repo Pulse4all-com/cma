@@ -7,7 +7,7 @@
  * Covers the group of a person from the current status's flags (never from a key or name) and
  * from the day's state (clocked out, not clocked in), the row order (group, then name, no
  * ranking), the tiles (a group only when an active status belongs to it, Sales and Operations by its work area since
- * addition 0009zl, the two day states
+ * addition 0009zn, the two day states
  * always, counts before any filter), the filters, the employers, and the two figures that tick
  * (since, worked so far, which stops at the day's end since addition 0008b) from fixed instants,
  * and the window start read from a refused clock-in. Since addition 0008i (brief B15) also the inbound
@@ -110,7 +110,7 @@ expect("no paid pause tile without a paid pause status", tiles(rows, [S.work, S.
 expect("the day-state tiles exist even with no status at all", tiles(rows, []).map((x) => x.group),
   ["clockedOut", "notClockedIn"], []);
 
-// The work area (addition 0009zl): a person's group, the row order and a tile only when an active status has that work area (D6)
+// The work area (addition 0009zn): a person's group, the row order and a tile only when an active status has that work area (D6)
 const SA = {
   sales: status("x_sales", "Operations", { isWorking: true, isProductive: true, isPaid: true, workArea: "sales" }),
   operations: status("x_ops", "Sales", { isWorking: true, isProductive: true, isPaid: true, workArea: "operations" }),

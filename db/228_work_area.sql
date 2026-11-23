@@ -1,21 +1,22 @@
 -- =============================================================================================
--- 224_work_area.sql: addition 0009zl, a status's Work area: Sales and Operations apart in every hours view
+-- 228_work_area.sql: addition 0009zn, a status's Work area: Sales and Operations apart in every hours view
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics, and no status key. Runs unchanged in every database, after
--- 222_subscription_moves_entry.sql (0009zk); it refuses to run before 0009zk is recorded. Rerunnable, forward-only, in one
+-- 222_subscription_moves_entry.sql (0009zk); it refuses to run before 0009zk is recorded. It needs neither #308's 0009zl
+-- (224/225) nor #312's 0009zm (226/227), and they need nothing of it. Rerunnable, forward-only, in one
 -- transaction with a lock timeout. Prod gets no work area from this script: a tenant sets one in Configuration → Statuses.
--- Run as your own IAM login: dev first, then 225_verify_work_area.sql there (normal, then provoked), then the verifies that
+-- Run as your own IAM login: dev first, then 229_verify_work_area.sql there (normal, then provoked), then the verifies that
 -- read what this changes (below), then 06_seed_dev_time_model.sql again in dev (its section 4 gives the dev tenants' statuses
 -- their work areas), then 131_time_all.sql part a ('team now', 'work status flags', 'statuses') and part b ('team status
--- time'); then prod, before the merge: this script, 225 and the same verifies (not 06). Main's web runs unchanged on it:
+-- time'); then prod, before the merge: this script, 229 and the same verifies (not 06). Main's web runs unchanged on it:
 -- its reads take n.* and select * and map the columns they know, and its 7-argument cma.upsert_work_status call reaches the
 -- new function through p_work_area's default (none), so the usual order holds (RUNBOOK 7: prod's migration just before
 -- the merge).
 --
 -- Why (Martin, 23 November 2026, brief "Work area on statuses: Sales green, Operations blue in every hours view"; Decision
--- log, 23 Nov 2026, D1 to D7, amending 7 Oct 2026): Available - Sales and Available - Operations carry the same flags, so
--- every hours view paints both Leaf Green. Colours come from a status's flags, never from its key or name (5 and 7 October
--- 2026), so a status gets an optional Work area that the views read beside the flags: working and productive with work area
+-- log, 23 Nov 2026, D1 to D7, amending 7 Oct 2026): a tenant's availability for sales and its availability for operations
+-- carry the same flags, so every hours view paints both Leaf Green. Colours come from a status's flags, never from its key
+-- or name (5 and 7 October 2026), so a status gets an optional Work area that the views read beside the flags: working and productive with work area
 -- sales is the group Sales (Leaf Green), with operations the group Operations (Deep Blue), without one Productive (Leaf
 -- Green). A work area changes grouping and colour only, never a figure (worked, paid, billable, productive); it is not frozen
 -- when time is booked on the status, and the change is audited like any status edit (cma.audit_log, through
@@ -41,7 +42,7 @@
 --   cma.export_status_changes(date,date,uuid)
 --                               13's definition with work_area as its last column (the status-changes CSV's last column)
 -- Each read keeps its rows, order and every earlier column: work_area is a column of the status row each already joins (no
--- new join, no new statement), and a status's group by gains a column functionally dependent on its id. 225 compares the
+-- new join, no new statement), and a status's group by gains a column functionally dependent on its id. 229 compares the
 -- earlier columns with the previous definitions, kept inside it, row for row (R), and proves equal figures before and after
 -- a work area is set (B6).
 --
@@ -83,7 +84,7 @@ set role cma_owner;
 do $$
 begin
   if not exists (select 1 from cma.schema_migration where version = '0009zk') then
-    raise exception 'addition 0009zk (222_subscription_moves_entry.sql) must run before 0009zl';
+    raise exception 'addition 0009zk (222_subscription_moves_entry.sql) must run before 0009zn';
   end if;
 end
 $$;
@@ -194,7 +195,7 @@ returns table (
   seconds            bigint,
   stretches          integer,
   is_capped          boolean,
-  work_area          text           -- the status's current work area (0009zl): its group and colour, never a figure
+  work_area          text           -- the status's current work area (0009zn): its group and colour, never a figure
 )
 language plpgsql stable
 as $$
@@ -256,7 +257,7 @@ returns table (
   running_since       timestamptz,   -- start of the open stretch when it is a working one
   paid_closed_seconds bigint,        -- paid seconds in the closed stretches (is_paid)
   paid_running_since  timestamptz,   -- start of the open stretch when it is a paid one
-  work_area           text           -- the current status's work area (0009zl), for its group and colour
+  work_area           text           -- the current status's work area (0009zn), for its group and colour
 )
 language plpgsql stable
 as $$
@@ -327,7 +328,7 @@ returns table (
   is_capped          boolean,
   seconds            bigint,
   source             text,
-  work_area          text           -- the status's current work area (0009zl)
+  work_area          text           -- the status's current work area (0009zn)
 )
 language plpgsql stable
 as $$
@@ -389,7 +390,7 @@ create or replace view cma_read.work_status as
 -- 6. The addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zl', 'Work area on statuses (Martin, 23 Nov 2026, D1 to D7): cma.work_status.work_area (sales, operations or null; only on a working, productive status; never frozen), cma_read.work_status.work_area last; work_statuses_all, team_status_time, team_now and export_status_changes answer it as their last column, every other column, row and order as before; upsert_work_status takes p_work_area last (default none) and drops its 7-argument signature; no figure changes')
+values ('0009zn', 'Work area on statuses (Martin, 23 Nov 2026, D1 to D7): cma.work_status.work_area (sales, operations or null; only on a working, productive status; never frozen), cma_read.work_status.work_area last; work_statuses_all, team_status_time, team_now and export_status_changes answer it as their last column, every other column, row and order as before; upsert_work_status takes p_work_area last (default none) and drops its 7-argument signature; no figure changes')
 on conflict (version) do nothing;
 
 commit;

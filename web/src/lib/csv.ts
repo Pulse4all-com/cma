@@ -139,7 +139,7 @@ export interface StatusChangeLabels {
   date: string; person: string; employer: string; timeZone: string; status: string; from: string; to: string;
   duration: string; working: string; paid: string; billable: string; enteredBy: string; notClockedOut: string;
   yes: string; no: string; sourceUser: string; sourceSystem: string; sourceCorrection: string; sourceImport: string;
-  /** The status's current work area (addition 0009zl): its own last column, empty without one */
+  /** The status's current work area (addition 0009zn): its own last column, empty without one */
   workArea: string; workAreaSales: string; workAreaOperations: string;
 }
 

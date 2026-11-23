@@ -3,7 +3,7 @@
 /**
  * Statuses: the tenant's work_status list with its four flags and work area, the default, retire
  * and reactivate. The work area (Sales, Operations or none) is open only on a working, productive
- * status and is never frozen: it colours the hours views and changes no figure (addition 0009zl). Every write goes through /api/v1/configuration/statuses; the database applies the
+ * status and is never frozen: it colours the hours views and changes no figure (addition 0009zn). Every write goes through /api/v1/configuration/statuses; the database applies the
  * rules (frozen flags on a status with time behind it, one working default, never the last
  * working status) and the form explains them first (lib/configuration). Keyboard: A adds, R
  * shows or hides retired statuses, Ctrl+Enter saves in the dialog, Esc closes.

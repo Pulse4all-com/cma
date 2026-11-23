@@ -618,7 +618,7 @@ function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
     isProductive: r.is_productive,
     isPaid: r.is_paid,
     isBillable: r.is_billable,
-    // The status's current work area (addition 0009zl): group and colour only
+    // The status's current work area (addition 0009zn): group and colour only
     workArea: r.work_area ?? null,
     seconds: r.seconds,
     stretches: r.stretches,
@@ -1790,7 +1790,7 @@ export const postgresData: CmaData = {
   async listStatuses(me: Principal): Promise<WorkStatus[]> {
     return withTenant(ctx(me), async (q) => {
       // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
-      // status (addition 0009zl)
+      // status (addition 0009zn)
       const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean }>(
         `select key, name, is_working, is_productive, work_area, is_default
            from cma.work_status

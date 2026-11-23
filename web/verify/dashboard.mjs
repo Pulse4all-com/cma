@@ -7,7 +7,7 @@
  * Covers the groups from flags (never from a key or name), the agent's view without the pay flag,
  * worked and paid minutes added up per person per day exactly as Team hours does, totals, the
  * tenant's status order with inactive statuses kept, every day of the period on the axis (across a
- * month end), people by name, the hours axis, and that every group colour is a palette token. Since addition 0009zl
+ * month end), people by name, the hours axis, and that every group colour is a palette token. Since addition 0009zn
  * (23 November 2026) also the work area: every flag and work-area combination, D3's order, the colours of D2, the
  * legend's groups, and that a work area changes no figure.
  */
@@ -61,7 +61,7 @@ expect("agents see one pause colour, not the pay flag",
   [agentGroupOf(S.paidPause), agentGroupOf(S.unpaidPause), agentGroupOf(S.other)],
   ["pause", "pause", "otherWork"], ["paidPause", "unpaidPause", "otherWork"]);
 
-// ---- the work area (addition 0009zl): every combination of the three flags and the three work areas ------------
+// ---- the work area (addition 0009zn): every combination of the three flags and the three work areas ------------
 // The database lets a work area stand only on a working, productive status; the rule still reads it nowhere else
 const combos = [];
 for (const isWorking of [true, false]) for (const isProductive of [true, false]) for (const isPaid of [true, false])

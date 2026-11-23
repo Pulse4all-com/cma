@@ -102,7 +102,7 @@ expect("an open stretch has no end and names its source", status[1],
   "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;correction;Yes;");
 expect("the header is the caller's labels, the work area last", [status[0].replace("\uFEFF", "").split(";").length, status[0].split(";").at(-1)],
   [14, "Work area"], [13, "Not clocked out"]);
-// The work area (addition 0009zl): the status's label for it in the last column, empty without one
+// The work area (addition 0009zn): the status's label for it in the last column, empty without one
 const areaRow = statusChangesCsv([{
   userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-10-05", timeZone: "UTC",
   statusKey: "zz", statusName: "Available", isWorking: true, isProductive: true, isPaid: true, isBillable: true, workArea: "operations",

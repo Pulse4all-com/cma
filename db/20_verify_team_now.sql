@@ -10,8 +10,8 @@
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- Edited by addition 0009z (200_live_paid_today.sql, 19 November 2026): A3 expects team_now's two paid columns,
 -- paid_closed_seconds and paid_running_since, last; nothing else changed.
--- Edited by addition 0009zl (224_work_area.sql, 23 November 2026): A3 expects work_area after the paid columns, last;
--- nothing else changed. Run it after 224.
+-- Edited by addition 0009zn (228_work_area.sql, 23 November 2026): A3 expects work_area after the paid columns, last;
+-- nothing else changed. Run it after 228.
 -- =============================================================================================
 
 do $$

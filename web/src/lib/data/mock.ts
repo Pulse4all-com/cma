@@ -1592,7 +1592,7 @@ const store = state.store;
  * (the default ladder of the seed). The screens never branch on these keys or names.
  */
 const MOCK_STATUSES: WorkStatus[] = [
-  // Work areas (addition 0009zl) so both working colours show: tenant configuration in the database, fixture here
+  // Work areas (addition 0009zn) so both working colours show: tenant configuration in the database, fixture here
   { key: "available", name: "Available", isWorking: true, isProductive: true, workArea: "sales", isDefault: true },
   { key: "back_office", name: "Back office", isWorking: true, isProductive: true, workArea: "operations", isDefault: false },
   { key: "training", name: "Training", isWorking: true, isProductive: false, workArea: null, isDefault: false },
@@ -1930,7 +1930,7 @@ function seedTeam() {
       // Working time that is not productive, so every group of the Dashboard has something to show
       if ((weekday + n) % 3 === 0) plan.push(["status", at("15:30"), "meeting"], ["status", at("16:15"), "available"]);
       if (n === 2 && weekday % 4 === 1) plan.push(["status", at("09:30"), "training"], ["status", at("10:30"), "available"]);
-      // Productive time in the other work area (addition 0009zl), so Sales and Operations both show
+      // Productive time in the other work area (addition 0009zn), so Sales and Operations both show
       if ((weekday + n) % 2 === 0) plan.push(["status", at("16:30"), "back_office"], ["status", at("17:00"), "available"]);
       const forgot = n === 3 && weekday === 2;  // Lucas: forgot to clock out
       // Ana: a split shift (0008zp), out at 13:00 and in again from 17:00 to 21:00; the gap counts nothing
@@ -3762,7 +3762,7 @@ export const mockData: CmaData = {
   async upsertConfigStatus(me, input) {
     assertConfigure(me);
     if (!/^[a-z0-9_]+$/.test(input.key)) throw new CmaDbError("CMA04", "bad key");
-    // The table's check (addition 0009zl): a work area only on a working, productive status
+    // The table's check (addition 0009zn): a work area only on a working, productive status
     if (input.workArea !== null && !(input.isWorking && input.isProductive)) throw new CmaDbError("CMA04", "a work area needs a working, productive status");
     const c = seedConfig();
     const cur = c.statuses.find((x) => x.key === input.key);

@@ -83,7 +83,7 @@ export interface Workday {
 }
 
 /**
- * A status's work area (addition 0009zl, decision of 23 November 2026): tenant configuration on a working,
+ * A status's work area (addition 0009zn, decision of 23 November 2026): tenant configuration on a working,
  * productive status that splits the hours views' working groups into Sales and Operations. It changes the
  * group and its colour only, never a figure. docs/definitions.md, Work area
  */

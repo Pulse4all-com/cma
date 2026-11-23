@@ -16,7 +16,7 @@
  *   R4 src/lib/api/*.ts other than respond.ts import only respond, server-only, "@/lib/reports",
  *      "@/lib/sources", "@/lib/email" (addition 0008t), "@/lib/first-orders" (0008u), "@/lib/attempts" (0008y), "@/lib/funnel"
  *      (0008zb), "@/lib/maintenance" (0008zi), "@/lib/cohorts" (0008zm), "@/lib/flash" (0008zn), "@/lib/courtesy" (0009a),
- *      "@/lib/active" (0009l), "@/lib/fleet-management" (0009t), "@/lib/configuration" (0009zl, the work area's rule) and
+ *      "@/lib/active" (0009l), "@/lib/fleet-management" (0009t), "@/lib/configuration" (0009zn, the work area's rule) and
  *      types: they
  *      validate, they do not read.
  *   R5 src/lib/data/mock.ts imports nothing from @/lib/db/*: the mock must not load the database driver.

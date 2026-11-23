@@ -42,7 +42,7 @@ export function checkStatusInput(b: Record<string, unknown>): ConfigStatusInput 
   const name = text(b, "name", 40);
   const isWorking = flag(b, "isWorking");
   const isProductive = flag(b, "isProductive");
-  // Absent or null is none (addition 0009zl); a work area only on a working, productive status, as the database checks
+  // Absent or null is none (addition 0009zn); a work area only on a working, productive status, as the database checks
   const workArea = parseWorkArea(b.workArea);
   if (workArea === undefined) throw new ApiError(400, "invalid_work_area", "workArea must be sales, operations or null");
   if (workArea !== null && !workAreaAllowed({ isWorking, isProductive })) {

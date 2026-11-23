@@ -903,7 +903,7 @@ const used = (statusesBefore.body?.data ?? []).find((x) => x.usageCount > 0 && x
 expect("the flags of a status with time behind it are frozen (409)",
   (await put(ADMIN, `${cfg}/statuses`, { ...used, isPaid: !used?.isPaid })).status, 409, 200);
 expect("the default cannot be retired (409)", (await put(ADMIN, `${cfg}/statuses/${theDefault?.key}/retired`)).status, 409, 200);
-// The work area (addition 0009zl): only on a working, productive status, one of two values, and not frozen by time behind it
+// The work area (addition 0009zn): only on a working, productive status, one of two values, and not frozen by time behind it
 expect("a work area on a status that is not productive is a 400",
   (await put(ADMIN, `${cfg}/statuses`, { ...verifyStatus, workArea: "sales" })).status, 400, 200);
 const productiveUsed = (statusesBefore.body?.data ?? []).find((x) => x.usageCount > 0 && x.isActive && x.isWorking && x.isProductive);
@@ -981,7 +981,7 @@ expect("status list has exactly one default", statuses.filter((s) => s.isDefault
 expect("the status list shows no pay or billing flags",
   [statuses.length > 0, statuses.every((s) => !("isPaid" in s) && !("isBillable" in s) && typeof s.isProductive === "boolean")],
   [true, true], [true, false]);
-// The work area colours the status (addition 0009zl): Sales, Operations or none, and only on a productive working status
+// The work area colours the status (addition 0009zn): Sales, Operations or none, and only on a productive working status
 expect("the status list carries each status's work area",
   statuses.every((s) => "workArea" in s && (s.workArea === null || (["sales", "operations"].includes(s.workArea) && s.isWorking && s.isProductive))),
   true, false);
