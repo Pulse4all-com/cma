@@ -243,8 +243,9 @@ begin
                      limit 1) n) d'
       into v_days using v_tenant, p_connection_id, v_zone, v_since;
     if v_days is not null then
-      -- the rows locked in key order first, as the write above orders its own, so two writes on one connection (the
-      -- hourly job and a month backfill) never wait on each other in a circle
+      -- the rows locked in key order first, as the write above orders its own; two writes on one connection (the hourly
+      -- job and a month backfill) whose written and late days overlap can still wait on each other, and Postgres then
+      -- ends one, which the next hourly run repeats
       perform 1
       from cma.source_figure f
       where f.tenant_id = v_tenant and f.connection_id = p_connection_id and f.figure_key in ('exits', 'pauses')
