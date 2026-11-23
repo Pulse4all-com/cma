@@ -5,7 +5,7 @@
 -- 222_subscription_moves_entry.sql (0009zk); it refuses to run before 0009zk is recorded. Rerunnable, forward-only, in one
 -- transaction with a lock timeout. Prod gets no work area from this script: a tenant sets one in Configuration → Statuses.
 -- Run as your own IAM login: dev first, then 225_verify_work_area.sql there (normal, then provoked), then the verifies that
--- read what this changes (below), then 06_seed_dev_time_model.sql again in dev (its section 5 gives the dev tenants' statuses
+-- read what this changes (below), then 06_seed_dev_time_model.sql again in dev (its section 4 gives the dev tenants' statuses
 -- their work areas), then 131_time_all.sql part a ('team now', 'work status flags', 'statuses') and part b ('team status
 -- time'); then prod, before the merge: this script, 225 and the same verifies (not 06). Main's web runs unchanged on it:
 -- its reads take n.* and select * and map the columns they know, and its 7-argument cma.upsert_work_status call reaches the
