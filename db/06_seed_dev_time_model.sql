@@ -123,6 +123,7 @@ begin
     raise notice 'not the dev database (no dev seed person): work areas skipped';
     return;
   end if;
+  perform set_config('app.actor_label', 'seed:dev-time-model', true);   -- the audit trail names the process, as section 3
   with candidate as (
     select s.id, row_number() over (partition by s.tenant_id order by s.sort_order, s.key collate "C") as n,
            count(*) over (partition by s.tenant_id) as of_n
