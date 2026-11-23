@@ -165,14 +165,20 @@ begin
     return;
   end if;
   perform set_config('app.actor_label', 'seed:dev-time-model', true);   -- the audit trail names the process, as section 3
-  for t in select x.id from cma.tenant x order by x.id loop
+  -- only the tenants of the dev seed's people (03_seed_dev_test_data.sql), never another dev tenant
+  for t in select x.id from cma.tenant x
+           where exists (select 1 from cma.app_user u where u.tenant_id = x.id and u.email like '%@example.com')
+           order by x.id loop
     if (select count(*) from cma.market m where m.tenant_id = t.id and m.status = 'active') >= 3
        and not exists (select 1 from cma.market m where m.tenant_id = t.id and m.hours_market_code <> m.code) then
       select m.code into v_first from cma.market m where m.tenant_id = t.id and m.status = 'active'
        order by m.sort_order, m.code collate "C" limit 1;
       select m.code into v_last from cma.market m where m.tenant_id = t.id and m.status = 'active'
        order by m.sort_order desc, m.code collate "C" desc limit 1;
-      update cma.market set hours_market_code = v_first where tenant_id = t.id and code = v_last;
+      -- never a market someone holds as Default market (the table's trigger would refuse it): then nothing is mapped
+      if not exists (select 1 from cma.app_user u where u.tenant_id = t.id and u.default_hours_market_code = v_last) then
+        update cma.market set hours_market_code = v_first where tenant_id = t.id and code = v_last;
+      end if;
     end if;
     with h as (
       select m.code, row_number() over (order by m.sort_order, m.code collate "C") as n

@@ -25,7 +25,7 @@
 -- market, else the market of their last day, else none (D4), a manager corrects it with a reason (D5), the Live board
 -- and the CSVs show it (D6), every event carries it, pauses included (D7), and no figure changes (D8).
 --
--- Hardened (Martin, 23 November 2026: "zo robuust en hardened mogelijk"): the rules hold in the tables, not only in the
+-- Hardened (Martin, 23 November 2026: "make it as robust and hardened as possible"): the rules hold in the tables, not only in the
 -- functions, so a direct write, an import or a later function cannot break them:
 --   cma.market.hours_market_code     not null; its own code by default (trigger); a foreign key to a market of the same
 --                                    tenant; trigger cma.market_hours_market_rules: a market that is no hours market
@@ -41,7 +41,8 @@
 --                                    status event carries one; trigger cma.time_event_hours_market_ok: an hours market of
 --                                    the event's tenant (inactive allowed: a correction may book a past month's market).
 --                                    time_event stays append-only for the application (05, section 5): nobody rewrites
---                                    the market an event was booked under; a correction supersedes the event
+--                                    the market an event was booked under; a correction supersedes the event. The
+--                                    trigger also checks an owner's update of the market or the kind
 --
 -- What it changes
 --   cma.is_hours_market(text, boolean), cma.assert_hours_market(text, boolean)
@@ -51,6 +52,9 @@
 --   cma.workday_hours_market(uuid, timestamptz)
 --                               new: the market of the day's effective start or status event in force at an instant
 --                               (default: the latest), ordered as workday_summary_of orders current_status_id
+--   cma.resolve_hours_market(text)
+--                               new: the hours market a booked market books under now (itself, or the one the tenant mapped
+--                               it to since); a kept market goes through it, so a remap never blocks a day booked under it
 --   cma.clock_in_hours_market(uuid)
 --                               new: D4's rule for a person: the Default market when it is an active hours market, else
 --                               the market of their latest effective start or status event when it still is one, else null
@@ -63,7 +67,8 @@
 --                               new, as the other People writes (cma.assert_may_manage): set or clear a Default market
 --   cma.directory()             26's list with default_hours_market_code last; dropped and created
 --   cma.set_status(uuid, text, timestamptz, text)
---                               05's write with p_hours_market_code last (default: keep the market in force), and a null
+--                               05's write with p_hours_market_code last (default: keep the market in force, as it books
+--                               now: cma.resolve_hours_market), and a null
 --                               status key for a market change alone (D3: the same status, booked again under the new
 --                               market); the 3-argument signature is dropped, and a 2- or 3-argument call reaches this one
 --   cma.open_workday(timestamptz)
@@ -71,15 +76,18 @@
 --   cma.correct_workday(uuid, date, jsonb, text)
 --                               46's corrections, signature unchanged; a start or status change takes "hoursMarket" (an
 --                               hours market of the tenant, inactive allowed, or null for none); without the key a change
---                               that supersedes a start or status event keeps that event's market, any other none (D5)
+--                               that supersedes a start or status event keeps that event's market, an added one the market
+--                               in force at its time (D5, D3)
 --   cma.correct_time_event(uuid, text, timestamptz, text, uuid, text, uuid)
 --                               46's single correction, signature unchanged; a start or status correction keeps the market
---                               of the start or status event it supersedes
+--                               of the start or status event it supersedes, an added one the market in force
 --   cma.team_day(uuid, date)    50's event list with hours_market_code last (Correct day's Market column)
 --   cma.team_status_time(date, date, uuid)
 --                               228's read with hours_market_code last: the market of the event that opened each stretch,
 --                               grouped by it, so a day's status splits per market; ordered as before, then by market
---   cma.team_now()              228's read with hours_market_code last, the day's current market; jit = off repeated
+--   cma.team_now()              228's read with hours_market_code last, the day's current market; the current status and
+--                               market from one walk of the day's events (the status as the summary's current_status_id:
+--                               same filter, same order; 231 R2 compares); jit = off repeated
 --   cma.export_status_changes(date, date, uuid)
 --                               228's read with hours_market_code last (the status-changes CSV's last column)
 --   cma.export_hours(date, date, uuid)
@@ -101,6 +109,7 @@
 --
 -- Verifies that read what this changes, run again after this script (grep -lw 'cma\.<function>' db/*verify*.sql, the
 -- tables and views):
+--   04_verify.sql                        cma_read.app_user by named columns; unchanged
 --   07_verify_time_model.sql             set_status, open_workday, correct_time_event, cma_read.time_event; unchanged
 --   10_verify_corrections.sql            correct_workday, correct_time_event, team_day; unchanged
 --   14_verify_tenant_settings.sql        export_hours, export_status_changes by named columns; unchanged
@@ -110,20 +119,26 @@
 --   22_verify_teams_skills.sql           directory() by named columns; unchanged
 --   27_verify_configuration.sql          set_status, correct_time_event, cma_read.app_user; unchanged
 --   33_verify_intake_core.sql            cma.market, upsert_market, set_market_status; unchanged
+--   43_verify_messaging.sql              open_workday; unchanged
+--   45_verify_assignment_alerts.sql      open_workday; unchanged
 --   47_verify_workday_window.sql         open_workday(timestamptz), correct_workday, correct_time_event; unchanged
 --   51_verify_legacy_time_import.sql     team_day, cma_read.time_event (columns present, not last); unchanged
 --   53_verify_sources_configuration.sql  markets_all by named columns; unchanged
+--   67_verify_invitations.sql            directory() by named columns; unchanged
+--   77_verify_audit_hardening.sql        every cma function without EXECUTE for public (each new one revokes it); unchanged
 --   111_verify_import_status_reuse.sql   set_status, open_workday, correct_workday; unchanged
 --   127_verify_workday_sessions.sql      open_workday's definition (its pattern kept), team_status_time; unchanged
---   135_verify_hours_reads.sql           the time views (unchanged here), team_now by named columns; unchanged
+--   135_verify_hours_reads.sql           S8 asserts cma_read.time_interval's columns: edited by this change to expect
+--                                        hours_market_code last; team_now by named columns
 --   163_verify_remove_day.sql            open_workday's definition (its pattern kept), team_day; unchanged
 --   199_verify_roster_planned.sql        team_now by named columns; unchanged
 --   201_verify_live_paid_today.sql       S2 asserts team_now's columns: edited by this change to expect hours_market_code last
 --   229_verify_work_area.sql             S3 asserts the reads end with work_area, R1 compares team_status_time row for row:
 --                                        edited by this change (S3: work_area after the previous columns, later ones allowed;
 --                                        R1: the new read summed over its earlier columns, as a status splits per market)
--- 131_time_all.sql's rows 'own day today', 'statuses' and 'directory' are edited by this change to read as the web now does;
--- 'team now' and 'team status time' read n.* and * and take the new column as it is.
+-- 131_time_all.sql's rows 'own day today' and 'statuses' are edited by this change to read as the web now does, and a row
+-- 'hours markets' is added (People's and Correct day's new statement); 'team now', 'team status time' and 'directory' read
+-- n.* and * and take the new column as it is.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -211,6 +226,26 @@ begin
 end
 $$;
 
+-- The hours market a booked market books under now: itself while it is an hours market, else the hours market the tenant
+-- mapped it to since (an inactive one included). A kept market (a status change without one, a correction that replaces
+-- an event) goes through it, so remapping a market never blocks the days booked under it (security review, 23 Nov 2026)
+create or replace function cma.resolve_hours_market(p_code text)
+returns text
+language plpgsql stable
+as $$
+declare
+  v_code text;
+begin
+  if p_code is null then
+    return null;
+  end if;
+  select m.hours_market_code into v_code
+  from cma.market m
+  where m.tenant_id = cma.current_tenant_id() and m.code = p_code;
+  return v_code;
+end
+$$;
+
 -- D4: the market a clock-in books under. The person's Default market when it is an active hours market; else the market of
 -- their latest effective start or status event (the end of their last day, or of the day's earlier session) when it still
 -- is one; else none. The latest event by time_event_user_idx (tenant, person, occurred_at), read backwards
@@ -240,9 +275,9 @@ end
 $$;
 
 revoke execute on function cma.is_hours_market(text, boolean), cma.assert_hours_market(text, boolean),
-  cma.workday_hours_market(uuid, timestamptz), cma.clock_in_hours_market(uuid) from public, cma_readonly;
+  cma.workday_hours_market(uuid, timestamptz), cma.resolve_hours_market(text), cma.clock_in_hours_market(uuid) from public, cma_readonly;
 grant execute on function cma.is_hours_market(text, boolean), cma.assert_hours_market(text, boolean),
-  cma.workday_hours_market(uuid, timestamptz), cma.clock_in_hours_market(uuid) to cma_app;
+  cma.workday_hours_market(uuid, timestamptz), cma.resolve_hours_market(text), cma.clock_in_hours_market(uuid) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. Configuration → Markets: the mapping and the list
@@ -427,8 +462,9 @@ grant execute on function cma.directory() to cma_app;
 -- ---------------------------------------------------------------------------------------------
 -- 05's status change with the hours market (D3). p_hours_market_code null keeps the market in force at p_occurred_at;
 -- a code books the new status under that active hours market. p_status_key null keeps the status in force: a market
--- change alone, booked as a status event with the same status (which must still be active). Asking for the market and
--- status already in force books nothing and answers the event in force, so a repeated click is harmless
+-- change alone, booked as a status event with the same status (which must still be active). A market change alone to
+-- the market in force books nothing and answers the event in force, so a repeated pick is harmless; a status given books
+-- an event as before 0009zo. A kept market books as it books now (cma.resolve_hours_market): a remap never blocks a day
 drop function if exists cma.set_status(uuid, text, timestamptz);
 drop function if exists cma.set_status(uuid, text, timestamptz, text);
 -- based on: 05_time_model.sql
@@ -486,7 +522,7 @@ begin
   end if;
 
   if p_hours_market_code is null then
-    v_market := e.hours_market_code;
+    v_market := cma.resolve_hours_market(e.hours_market_code);   -- the market in force, as it books now
   else
     v_market := cma.assert_hours_market(p_hours_market_code);
   end if;
@@ -494,6 +530,7 @@ begin
   if p_status_key is null and e.id is not null and v_market is not distinct from e.hours_market_code then
     return e;
   end if;
+  -- (a market change alone to the market in force books nothing; a kept market that was remapped books its new one)
 
   insert into cma.time_event (tenant_id, workday_id, user_id, kind, status_id, occurred_at, source, hours_market_code)
   values (v_tenant, w.id, v_user, 'status', v_status, p_occurred_at, 'user', v_market)
@@ -610,7 +647,8 @@ $$;
 
 -- 46's corrections with a market per start or status change (D5): "hoursMarket" is an hours market of the tenant (an
 -- inactive one allowed: a past month may be corrected after its market was retired) or null for none; without the key, a
--- change that supersedes a start or status event keeps that event's market and any other change books none. An end or a
+-- change that supersedes a start or status event keeps that event's market and an added one the market in force at its
+-- time (as a status change, D3), each as it books now (cma.resolve_hours_market). An end or a
 -- void carries no market. The reason, the approver (the caller), the four-eyes rule and every earlier check are 46's
 -- based on: 46_workday_window.sql
 create or replace function cma.correct_workday(
@@ -723,7 +761,11 @@ begin
     if v_kind not in ('start', 'status') and nullif(c->>'hoursMarket', '') is not null then
       raise exception 'change %: only a start or a status carries an hours market', v_n using errcode = 'CMA04';
     end if;
-    if v_kind in ('start', 'status') and nullif(c->>'hoursMarket', '') is not null then
+    -- The superseded event's own market, given again (the editor sends every row's market), is kept as it books now;
+    -- any other code must be an hours market of the tenant
+    if v_kind in ('start', 'status') and nullif(c->>'hoursMarket', '') is not null
+       and not exists (select 1 from cma.time_event x where x.tenant_id = v_tenant and x.id = v_super
+                       and x.kind in ('start', 'status') and x.hours_market_code = c->>'hoursMarket') then
       begin
         perform cma.assert_hours_market(c->>'hoursMarket', true);
       exception
@@ -764,10 +806,13 @@ begin
     v_market := null;
     if v_kind in ('start', 'status') then
       if c ? 'hoursMarket' then
-        v_market := nullif(c->>'hoursMarket', '');
+        v_market := cma.resolve_hours_market(nullif(c->>'hoursMarket', ''));
       elsif v_super is not null then
-        select x.hours_market_code into v_market from cma.time_event x
+        select cma.resolve_hours_market(x.hours_market_code) into v_market from cma.time_event x
         where x.tenant_id = v_tenant and x.id = v_super and x.kind in ('start', 'status');
+      else
+        -- a row added without one keeps the market in force at its time, as a status change does (D3)
+        v_market := cma.resolve_hours_market(cma.workday_hours_market(w.id, v_at));
       end if;
     end if;
 
@@ -847,8 +892,10 @@ begin
       raise exception 'work status "%" is not active in this tenant', p_status_key using errcode = 'CMA02';
     end if;
     if p_supersedes_event_id is not null then
-      select x.hours_market_code into v_market from cma.time_event x
+      select cma.resolve_hours_market(x.hours_market_code) into v_market from cma.time_event x
       where x.tenant_id = v_tenant and x.id = p_supersedes_event_id and x.kind in ('start', 'status');
+    else
+      v_market := cma.resolve_hours_market(cma.workday_hours_market(w.id, p_occurred_at));   -- the market in force
     end if;
   end if;
   if p_kind <> 'void' and (p_occurred_at is null or p_occurred_at > now() + interval '5 minutes') then
@@ -1031,8 +1078,18 @@ begin
     left join lateral (select x.* from cma.workday_summary x
                        where x.user_id = u.id and x.business_date = cma.business_date(now(), tz.zone)
                        limit 1) s on true
+    -- The day's latest effective start or status event, by time_event_workday_idx: its status (as the summary's
+    -- current_status_id, the same filter and order) and its market, from one walk of the day, so they always agree
+    left join lateral (
+      select e.status_id, e.hours_market_code
+      from cma.time_event e
+      where e.tenant_id = u.tenant_id and e.workday_id = s.workday_id and e.kind in ('start', 'status')
+        and not exists (select 1 from cma.time_event x where x.tenant_id = e.tenant_id and x.supersedes_event_id = e.id)
+      order by e.occurred_at desc, e.recorded_at desc
+      limit 1
+    ) hm on s.workday_id is not null
     left join cma.work_status ws
-           on ws.tenant_id = u.tenant_id and ws.id = s.current_status_id
+           on ws.tenant_id = u.tenant_id and ws.id = hm.status_id
     left join lateral (
       select sum(i.seconds) filter (where iws.is_working and (not i.is_open or i.is_capped)) as closed_seconds,
              max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped)  as running_since,
@@ -1043,15 +1100,6 @@ begin
       join cma.work_status iws on iws.tenant_id = u.tenant_id and iws.id = i.status_id
       where i.workday_id = s.workday_id
     ) c on s.workday_id is not null
-    -- The current market: the latest effective start or status event of the day, by time_event_workday_idx
-    left join lateral (
-      select e.hours_market_code
-      from cma.time_event e
-      where e.tenant_id = u.tenant_id and e.workday_id = s.workday_id and e.kind in ('start', 'status')
-        and not exists (select 1 from cma.time_event x where x.tenant_id = e.tenant_id and x.supersedes_event_id = e.id)
-      order by e.occurred_at desc, e.recorded_at desc
-      limit 1
-    ) hm on s.workday_id is not null
     where u.tenant_id = cma.current_tenant_id()
       and cma.time_is_kept(u.id)
     order by u.display_name, u.id;
@@ -1151,10 +1199,13 @@ begin
            s.timezone::text, s.status::text, s.started_at, s.ended_at,
            s.working_seconds, s.productive_seconds, s.paid_seconds, s.billable_seconds,
            s.is_capped, s.needs_correction, s.has_correction,
+           -- one stretch per effective start or status event (134's workday_stretches_of), so the day's markets are those
+           -- events' markets: read from the events by time_event_workday_idx, without the stretches again
            coalesce((select array_agg(distinct (e.hours_market_code::text collate "C") order by (e.hours_market_code::text collate "C") nulls last)
-                     from cma.time_interval i
-                     join cma.time_event e on e.tenant_id = i.tenant_id and e.id = i.event_id
-                     where i.workday_id = s.workday_id), '{}'::text[])
+                     from cma.time_event e
+                     where e.tenant_id = s.tenant_id and e.workday_id = s.workday_id and e.kind in ('start', 'status')
+                       and not exists (select 1 from cma.time_event x where x.tenant_id = e.tenant_id and x.supersedes_event_id = e.id)),
+                    '{}'::text[])
     from cma.workday_summary s
     join cma.app_user u on u.tenant_id = s.tenant_id and u.id = s.user_id
     left join cma.organisation o on o.tenant_id = u.tenant_id and o.id = u.organisation_id
@@ -1261,8 +1312,8 @@ revoke execute on function cma.market_hours_market_rules(), cma.app_user_default
 -- ---------------------------------------------------------------------------------------------
 -- 7. The columns, their constraints and triggers, and the readers' views, last (CLAUDE.md, Performance; 132, section
 --    10; 228): each alter takes an ACCESS EXCLUSIVE lock held to the commit. cma.market first (the others reference it),
---    then cma.app_user (every request reads it) and cma.time_event (every clock action and poll), so only DDL without a
---    scan of either, the readers' views and the record of the addition follow them
+--    then cma.time_event (every clock action and poll), then cma.app_user last (every request reads it), so that lock is
+--    held the shortest: only DDL without a scan, the readers' views and the record of the addition follow
 -- ---------------------------------------------------------------------------------------------
 -- cma.market: the column, every market its own hours market, not null, the foreign key to a market of the same tenant
 alter table cma.market add column if not exists hours_market_code text;
@@ -1281,21 +1332,6 @@ comment on column cma.market.hours_market_code is
 create or replace trigger market_hours_market_rules before insert or update on cma.market
   for each row execute function cma.market_hours_market_rules();
 
--- cma.app_user: the Default market
-alter table cma.app_user add column if not exists default_hours_market_code text;
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conrelid = 'cma.app_user'::regclass and conname = 'app_user_default_hours_market_fk') then
-    alter table cma.app_user add constraint app_user_default_hours_market_fk
-      foreign key (tenant_id, default_hours_market_code) references cma.market (tenant_id, code);
-  end if;
-end
-$$;
-comment on column cma.app_user.default_hours_market_code is
-  'Default market (docs/definitions.md): the hours market a clock-in books under; null without one (clock-in then takes the market of the person''s last day)';
-create or replace trigger app_user_default_hours_market_ok before insert or update of default_hours_market_code on cma.app_user
-  for each row execute function cma.app_user_default_hours_market_ok();
-
 -- cma.time_event: the column without a default (no rewrite), the foreign key and the kind check not valid (no scan: every
 -- existing row is null; both hold for every new row), the trigger
 alter table cma.time_event add column if not exists hours_market_code text;
@@ -1313,8 +1349,23 @@ end
 $$;
 comment on column cma.time_event.hours_market_code is
   'Hours market (docs/definitions.md) the start or status event was booked under; null: no market. The stretch it opens carries it. Never rewritten: a correction supersedes the event';
-create or replace trigger time_event_hours_market_ok before insert on cma.time_event
+create or replace trigger time_event_hours_market_ok before insert or update of hours_market_code, kind on cma.time_event
   for each row execute function cma.time_event_hours_market_ok();
+
+-- cma.app_user: the Default market
+alter table cma.app_user add column if not exists default_hours_market_code text;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'cma.app_user'::regclass and conname = 'app_user_default_hours_market_fk') then
+    alter table cma.app_user add constraint app_user_default_hours_market_fk
+      foreign key (tenant_id, default_hours_market_code) references cma.market (tenant_id, code);
+  end if;
+end
+$$;
+comment on column cma.app_user.default_hours_market_code is
+  'Default market (docs/definitions.md): the hours market a clock-in books under; null without one (clock-in then takes the market of the person''s last day)';
+create or replace trigger app_user_default_hours_market_ok before insert or update of default_hours_market_code on cma.app_user
+  for each row execute function cma.app_user_default_hours_market_ok();
 
 -- The readers' views: each column appended last
 create or replace view cma_read.market as

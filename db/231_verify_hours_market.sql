@@ -55,6 +55,9 @@
 --       start sets as any correction does; team_status_time's seconds per person and status)
 --   B7  the reads answer the market: team_day, team_status_time (split per market), team_now, export_status_changes,
 --       export_hours (a null element for time without one), directory, cma_read.time_event and cma_read.time_interval
+--   B8  a market remapped while a day is booked under it never blocks that day: a status change without a market, a
+--       correction without hoursMarket and one sending the event's own market again book under the market it maps to now
+--       (cma.resolve_hours_market); that market on another event is refused (CMA04)
 --   R1  per active tenant: team_status_time's eighteen earlier columns, summed over its markets, equal 228's definition
 --       over the last 31 days
 --   R2  per active tenant: team_now's twenty-three earlier columns equal 228's definition
@@ -62,12 +65,15 @@
 --   R4  per active tenant: export_hours' sixteen earlier columns equal 13's definition over the last 31 days
 --   R5  per active tenant: markets_all's ten earlier columns equal 52's definition
 --   R6  per active tenant: directory's fifteen earlier columns equal 26's definition
+--   R7  per active tenant: team_day's twelve earlier columns equal 50's definition for one day of the last 31 days (one
+--       with a correction when there is one)
 -- Each R check acts as the tenant's first active person holding the read's permission (131's choice) and reads skip
 -- without one.
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
 -- that check alone fails. The R checks drop the old side's first row, so the comparison itself must find the difference
 -- (a compare of no rows reads FAIL under the switch).
--- Collation: every ordering that feeds a compared text says collate "C".
+-- Collation: every ordering that feeds a compared text says collate "C", but R1's: its new side sorts in the previous
+-- definition's own order (the database's collation, as the old side's function does), so both sides sort alike.
 -- Expected verdict: "PASS | 231_verify_hours_market: <n> PASS, 0 FAIL, <k> skip".
 -- =============================================================================================
 
@@ -329,6 +335,32 @@ end
 $$;
 grant execute on function pg_temp.old_export_hours(date, date, uuid) to cma_app;
 
+-- 50_legacy_time_import.sql
+create or replace function pg_temp.old_team_day(p_user_id uuid, p_business_date date)
+returns table (event_id uuid, kind text, status_key text, status_name text, occurred_at timestamptz, recorded_at timestamptz, source text,
+               supersedes_event_id uuid, reason text, approved_by_name text, is_effective boolean, import_batch_key text)
+language plpgsql stable
+as $$
+#variable_conflict use_column
+begin
+  perform cma.assert_permission('workday.team');
+  return query
+    select e.id, e.kind::text, ws.key::text, ws.name::text, e.occurred_at, e.recorded_at, e.source::text,
+           e.supersedes_event_id, e.reason, a.display_name::text,
+           exists (select 1 from cma.time_event_effective f where f.tenant_id = e.tenant_id and f.id = e.id),
+           ib.key::text
+    from cma.time_event e
+    join cma.workday w on w.tenant_id = e.tenant_id and w.id = e.workday_id
+    left join cma.work_status ws on ws.tenant_id = e.tenant_id and ws.id = e.status_id
+    left join cma.app_user a on a.tenant_id = e.tenant_id and a.id = e.approved_by
+    left join cma.import_batch ib on ib.tenant_id = e.tenant_id and ib.id = e.import_batch_id
+    where w.tenant_id = cma.current_tenant_id()
+      and w.user_id = p_user_id and w.business_date = p_business_date
+    order by e.occurred_at, e.recorded_at, e.id;
+end
+$$;
+grant execute on function pg_temp.old_team_day(uuid, date) to cma_app;
+
 -- 52_sources_configuration.sql
 create or replace function pg_temp.old_markets_all()
 returns table (code text, name text, time_zone text, language_code text, language_skill_key text, min_language_level smallint,
@@ -501,7 +533,7 @@ begin
     v_bad := v_bad || 'set_status''s p_hours_market_code is not last with its default; ';
   end if;
   foreach v_fn in array array['cma.is_hours_market(text,boolean)', 'cma.assert_hours_market(text,boolean)',
-      'cma.workday_hours_market(uuid,timestamptz)', 'cma.clock_in_hours_market(uuid)', 'cma.hours_markets()',
+      'cma.workday_hours_market(uuid,timestamptz)', 'cma.resolve_hours_market(text)', 'cma.clock_in_hours_market(uuid)', 'cma.hours_markets()',
       'cma.set_market_hours_market(text,text)', 'cma.set_person_default_hours_market(uuid,text)',
       'cma.set_status(uuid,text,timestamptz,text)', 'cma.open_workday(timestamptz)', 'cma.correct_workday(uuid,date,jsonb,text)',
       'cma.correct_time_event(uuid,text,timestamptz,text,uuid,text,uuid)',
@@ -556,7 +588,7 @@ declare
   v_e      uuid;
   v_n0     bigint;
   v_b0 text;
-  v_b1 text := ''; v_b2 text := ''; v_b3 text := ''; v_b4 text := ''; v_b5 text := ''; v_b6 text; v_b7 text := '';
+  v_b1 text := ''; v_b2 text := ''; v_b3 text := ''; v_b4 text := ''; v_b5 text := ''; v_b6 text; v_b7 text := ''; v_b8 text := '';
   v_eh0 text; v_th0 text; v_ts0 text;
   v_eh1 text; v_th1 text; v_ts1 text;
   v_err    text;
@@ -759,6 +791,11 @@ begin
     select v_b5 || 'a2 kept ' || string_agg(coalesce(e.hours_market_code, '-'), ' > ' order by e.recorded_at)
     into v_b5
     from cma.time_event e where e.tenant_id = v_t and e.workday_id = w2.id and e.kind = 'start';
+    -- a status added without hoursMarket keeps the market in force at its time
+    perform cma.correct_workday(v_a2, v_d, jsonb_build_array(jsonb_build_object('kind', 'status',
+              'at', to_jsonb((v_d + time '05:10') at time zone v_z), 'statusKey', v_other.key)), 'verify added');
+    select v_b5 || '; added ' || coalesce(e.hours_market_code, '-') into v_b5
+    from cma.time_event e where e.tenant_id = v_t and e.workday_id = w2.id and e.kind = 'status' and e.source = 'correction';
 
     -- B7: the reads
     perform set_config('app.user_id', v_team::text, true);
@@ -796,6 +833,38 @@ begin
     into v_b7
     from cma_read.time_interval i where i.tenant_id = v_t and i.workday_id = w1.id;
 
+    -- B8: a4 books under IT from 05:20 (a pause) and 05:30 (the default status, the market kept); the admin maps IT to DE;
+    -- a4's next status change, a manager's correction of the 05:20 event without hoursMarket and one of the 05:30 event
+    -- that sends IT again (Correct day sends every row's market) book under DE, never refused
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_conf::text, true);
+    perform cma.upsert_market('IT', 'Verify IT', 'UTC', 'it', 'EUR', null, null, 60);
+    perform set_config('app.user_id', v_a4::text, true);
+    perform cma.set_status(w4.id, v_pause.key, (v_d + time '05:20') at time zone v_z, 'IT');
+    perform cma.set_status(w4.id, v_work.key, (v_d + time '05:30') at time zone v_z);
+    perform set_config('app.user_id', v_conf::text, true);
+    v_b8 := pg_temp.v0009zo_try('IT to DE', 'select cma.set_market_hours_market(''IT'', ''DE'')') || '; ';
+    perform set_config('app.user_id', v_a4::text, true);
+    -- each write its own statement, and the read after it: a stable read in the same statement sees the statement's snapshot
+    v_b8 := v_b8 || pg_temp.v0009zo_try('status change', format('select cma.set_status(%L, %L, %L::timestamptz)', w4.id, v_other.key, (v_d + time '05:45') at time zone v_z));
+    v_b8 := v_b8 || ' ' || coalesce(cma.workday_hours_market(w4.id), '-') || '; ';
+    perform set_config('app.user_id', v_team::text, true);
+    select e.id into v_e from cma.time_event e where e.tenant_id = v_t and e.workday_id = w4.id and e.status_id = v_pause.id and e.hours_market_code = 'IT';
+    v_b8 := v_b8 || pg_temp.v0009zo_try('correction without hoursMarket', format('select cma.correct_workday(%L, %L, %L::jsonb, ''verify remap'')', v_a4, v_d,
+           jsonb_build_array(jsonb_build_object('kind', 'status', 'supersedes', v_e, 'at', to_jsonb((v_d + time '05:20') at time zone v_z),
+                                                'statusKey', v_pause.key))));
+    v_b8 := v_b8 || ' ' || coalesce((select e.hours_market_code from cma.time_event e where e.tenant_id = v_t and e.supersedes_event_id = v_e), '-') || '; ';
+    select e.id into v_e from cma.time_event e where e.tenant_id = v_t and e.workday_id = w4.id and e.status_id = v_work.id and e.hours_market_code = 'IT';
+    v_b8 := v_b8 || pg_temp.v0009zo_try('correction sending IT', format('select cma.correct_workday(%L, %L, %L::jsonb, ''verify remap'')', v_a4, v_d,
+           jsonb_build_array(jsonb_build_object('kind', 'status', 'supersedes', v_e, 'at', to_jsonb((v_d + time '05:31') at time zone v_z),
+                                                'statusKey', v_work.key, 'hoursMarket', 'IT'))));
+    v_b8 := v_b8 || ' ' || coalesce((select e.hours_market_code from cma.time_event e where e.tenant_id = v_t and e.supersedes_event_id = v_e), '-') || '; ';
+    -- but IT on an event that was not booked under it is refused: it is no hours market now
+    select e.id into v_e from cma.time_event e where e.tenant_id = v_t and e.workday_id = w4.id and e.kind = 'start';
+    v_b8 := v_b8 || pg_temp.v0009zo_try('IT on another event', format('select cma.correct_workday(%L, %L, %L::jsonb, ''verify remap'')', v_a4, v_d,
+           jsonb_build_array(jsonb_build_object('kind', 'start', 'supersedes', v_e, 'at', to_jsonb((v_d + time '05:00') at time zone v_z),
+                                                'statusKey', v_work.key, 'hoursMarket', 'IT'))));
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -819,13 +888,15 @@ begin
     v_b4, 'a1 NL ok; a4 FR ok; a2 BE CMA04; a2 SE CMA02; agent sets own CMA06; table a2 BE CMA04; FR inactive ok; '
        || 'clock-in a2 yesterday -, a1 NL, a2 DE, a3 -, a4 -');
   perform pg_temp.v0009zo_row(15, 'B5', 'a correction changes the market with reason and approver, keeps it without hoursMarket; refusals; four eyes',
-    v_b5, 'a3 start correction, verify market, approver true, DE; BE CMA04; SE CMA02; end NL CMA04; own day CMA06; a2 kept DE > DE > DE');
+    v_b5, 'a3 start correction, verify market, approver true, DE; BE CMA04; SE CMA02; end NL CMA04; own day CMA06; a2 kept DE > DE > DE; added DE');
   perform pg_temp.v0009zo_row(16, 'B6', 'worked, productive, paid and billable for the day equal before and after the markets change',
     v_b6, 'export hours equal; team hours equal; status time equal');
   perform pg_temp.v0009zo_row(17, 'B7', 'the reads answer the market',
     v_b7, 'team day default:NL, other:NL, other:DE, other:NL, pause:DE; status time default=NL, other=DE, other=NL, pause=DE; '
        || 'team now a1=DE, a2=DE, a3=DE, a4=-; status changes NL, NL, DE, NL, DE; hours a1={DE,NL}, a2={DE}, a3={DE}, a4={NULL}; '
        || 'directory a1=NL, a2=-, a3=-, a4=FR; readers'' events 5 of 5; readers'' stretches NL, NL, DE, NL, DE');
+  perform pg_temp.v0009zo_row(18, 'B8', 'a market remapped while a day is booked under it never blocks that day',
+    v_b8, 'IT to DE ok; status change ok DE; correction without hoursMarket ok DE; correction sending IT ok DE; IT on another event CMA04');
 end
 $$;
 
@@ -842,9 +913,17 @@ declare
   v_any  boolean := false;
   v_from date := current_date - 30;
   v_to   date := current_date;
+  v_du   uuid;
+  v_dd   date;
 begin
   for t in select id, slug from cma.tenant where status = 'active' and slug not like 'verify-%' order by slug collate "C" loop
     v_any := true;
+    -- R7's day: the tenant's latest day of the last 31 days with a correction, else its latest day (as the owner)
+    select w.user_id, w.business_date into v_du, v_dd from cma.workday w
+    where w.tenant_id = t.id and w.business_date between v_from and v_to
+    order by exists (select 1 from cma.time_event e where e.tenant_id = w.tenant_id and e.workday_id = w.id and e.source = 'correction') desc,
+             w.business_date desc, w.id
+    limit 1;
     perform set_config('app.tenant_id', t.id::text, true);
     for c in select * from (values
         (21, 'R1', 'team_status_time', array['performance.team'],
@@ -864,7 +943,10 @@ begin
          'select * from pg_temp.old_markets_all()', 'ten'),
         (26, 'R6', 'directory', array['users.manage_all', 'users.manage_agents'],
          format('select %s from cma.directory()', pg_temp.v0009zo_cols('directory')),
-         'select * from pg_temp.old_directory()', 'fifteen')
+         'select * from pg_temp.old_directory()', 'fifteen'),
+        (27, 'R7', 'team_day', array['workday.team'],
+         format('select %s from cma.team_day(%L::uuid, %L::date)', pg_temp.v0009zo_cols('team_day'), v_du, v_dd),
+         format('select * from pg_temp.old_team_day(%L::uuid, %L::date)', v_du, v_dd), 'twelve (one day)')
       ) as x(ord, id, fn, perms, new_sql, old_sql, n_cols) loop
       v_who := null; v_r := null; v_err := null;
       select u.id into v_who from cma.app_user u
@@ -903,6 +985,7 @@ end
 $$;
 
 drop function if exists pg_temp.old_directory();
+drop function if exists pg_temp.old_team_day(uuid, date);
 drop function if exists pg_temp.old_markets_all();
 drop function if exists pg_temp.old_export_hours(date, date, uuid);
 drop function if exists pg_temp.old_export_status_changes(date, date, uuid);

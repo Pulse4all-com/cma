@@ -1836,7 +1836,19 @@ export const postgresData: CmaData = {
   },
 
   async listStatuses(me: Principal): Promise<WorkStatus[]> {
-    return (await postgresData.listMyDayChoices(me)).statuses;
+    return withTenant(ctx(me), async (q) => {
+      // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
+      // status (addition 0009zn). Its own statement: Welcome and Team hours need no hours markets (performance review)
+      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean }>(
+        `select key, name, is_working, is_productive, work_area, is_default
+           from cma.work_status
+          where tenant_id = cma.current_tenant_id() and status = 'active'
+          order by sort_order, key`,
+      );
+      return r.rows.map((s) => ({
+        key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
+      }));
+    });
   },
 
   async listMyDayChoices(me: Principal): Promise<MyDayChoices> {

@@ -327,6 +327,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'live board', 'tenant settings', $q$select * from cma.tenant_settings()$q$, 'agent', array['monitoring.live']),
 -- Team, Roster, Follow-up
 ('a', 'team people', 'directory', $q$select * from cma.directory()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
+('a', 'team people', 'hours markets', $q$select code, name, status from cma.hours_markets()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'teams', $q$select * from cma.teams()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'skills', $q$select * from cma.skills()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'organisations', $q$select * from cma.organisations()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),

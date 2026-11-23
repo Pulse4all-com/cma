@@ -53,7 +53,8 @@
 -- Edited by addition 0009zo (230_hours_market.sql, 23 November 2026): S3 expects work_area after the previous columns and,
 -- where 0009zo is recorded, hours_market_code after it on team_status_time, team_now and export_status_changes; R1 sums
 -- the new team_status_time over its seventeen earlier columns before the comparison, since 0009zo splits a status's row
--- per hours market (the sums are the previous definition's); nothing else changed. Run it after 230.
+-- per hours market (the sums are the previous definition's; its new side sorts in the previous definition's own order,
+-- the database's collation, as the old side does); nothing else changed. Run it after 230.
 -- =============================================================================================
 
 do $$

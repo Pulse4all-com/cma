@@ -31,7 +31,7 @@
  * counts for it; every later status change keeps it until the person picks another. Time without a market shows as No
  * market. A tenant without hours markets shows no select.
  */
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { HoursMarket, WorkStatus, Workday } from "@/lib/data";
@@ -105,6 +105,8 @@ export function WorkdayPanel({
   const [marketFailed, setMarketFailed] = useState(false);
   /** The market just set, for the live region */
   const [announcedMarket, setAnnouncedMarket] = useState<string | null>(null);
+  /** The market as picked, shown at once while the change and the refresh are in flight; the server's value after */
+  const [shownMarket, showMarket] = useOptimistic(workday.hoursMarket);
   /** The status whose button gets the focus back once the change has landed */
   const refocus = useRef<string | null>(null);
   const working = workday.status === "working";
@@ -175,11 +177,12 @@ export function WorkdayPanel({
   }
 
   function changeMarket(code: string) {
-    if (pendingKey !== null || pendingMarket !== null || !code || code === workday.hoursMarket) return;
+    if (pendingKey !== null || pendingMarket !== null || !code || code === shownMarket) return;
     setMarketFailed(false);
     setStatusFailed(false);
     setPendingMarket(code);
     startTransition(async () => {
+      showMarket(code);
       // The market alone: the database books the status in force again under it (D3)
       const res = await fetch("/api/v1/me/status", {
         method: "POST",
@@ -235,7 +238,7 @@ export function WorkdayPanel({
         </Badge>
         {hoursMarkets.length > 0 ? (
           <Badge tone="neutral">
-            <span data-testid="current-hours-market">{workday.hoursMarket ?? copy.myDay.noMarket}</span>
+            <span data-testid="current-hours-market">{shownMarket ?? copy.myDay.noMarket}</span>
           </Badge>
         ) : null}
         {statusSinceLabel ? (
@@ -305,17 +308,17 @@ export function WorkdayPanel({
               {copy.myDay.hoursMarket} <Keycap>M</Keycap>
             </span>
             <select
-              value={workday.hoursMarket ?? ""}
+              value={shownMarket ?? ""}
               data-shortcut="m"
               data-testid="hours-market-select"
               disabled={pendingMarket !== null}
               onChange={(e) => changeMarket(e.target.value)}
               className="h-10 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
-              {workday.hoursMarket === null ? <option value="" disabled>{copy.myDay.noMarket}</option> : null}
-              {workday.hoursMarket !== null && !hoursMarkets.some((m) => m.code === workday.hoursMarket) ? (
+              {shownMarket === null ? <option value="" disabled>{copy.myDay.noMarket}</option> : null}
+              {shownMarket !== null && !hoursMarkets.some((m) => m.code === shownMarket) ? (
                 // A market no longer offered: shown as booked, not choosable
-                <option value={workday.hoursMarket} disabled>{workday.hoursMarket}</option>
+                <option value={shownMarket} disabled>{shownMarket}</option>
               ) : null}
               {hoursMarkets.map((m) => (
                 <option key={m.code} value={m.code}>

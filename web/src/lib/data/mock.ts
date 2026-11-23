@@ -3311,7 +3311,9 @@ export const mockData: CmaData = {
     if (current.status === "ended") throw new CmaDbError("CMA03", "workday already ended");
     const next = MOCK_STATUSES.find((s) => s.key === (change.key ?? current.statusKey));
     if (!next) throw new CmaDbError("CMA02", "unknown work status");
-    const market = change.hoursMarket === null ? current.hoursMarket : assertMockHoursMarket(me, change.hoursMarket);
+    // A kept market books as it books now (the tenant may have mapped it elsewhere since)
+    const kept = current.hoursMarket ? seedIntakeConfig(me).markets.find((m) => m.code === current.hoursMarket)?.hoursMarketCode ?? null : null;
+    const market = change.hoursMarket === null ? kept : assertMockHoursMarket(me, change.hoursMarket);
     // A market change alone to the market in force books nothing
     if (change.key === null && market === current.hoursMarket) return ownDay(me, current, now);
     closePause(key(me, date), current, now);
@@ -3418,9 +3420,14 @@ export const mockData: CmaData = {
       // start or status keeps its market; never on an end or a void
       if (!carries && c.hoursMarket) throw new CmaDbError("CMA04", `change ${i + 1}: only a start or a status carries an hours market`);
       const replaced = c.supersedes ? events.find((e) => e.id === c.supersedes) : undefined;
+      // A kept market books as it books now (cma.resolve_hours_market): the replaced event's own market, given again or
+      // left out, follows the tenant's mapping; any other code must be an hours market
+      const resolve = (code: string | null) => (code ? seedIntakeConfig(me).markets.find((m) => m.code === code)?.hoursMarketCode ?? null : null);
+      const replacedMarket = replaced && (replaced.kind === "start" || replaced.kind === "status") ? replaced.hoursMarket : null;
       const market = !carries ? null
-        : c.hoursMarket !== undefined ? (c.hoursMarket ? assertMockHoursMarket(me, c.hoursMarket, true) : null)
-        : replaced && (replaced.kind === "start" || replaced.kind === "status") ? replaced.hoursMarket : null;
+        : c.hoursMarket !== undefined
+          ? (!c.hoursMarket ? null : c.hoursMarket === replacedMarket ? resolve(c.hoursMarket) : assertMockHoursMarket(me, c.hoursMarket, true))
+          : resolve(replacedMarket);
       events.push(mockEvent(c.kind, new Date(ms).toISOString(), status?.key ?? null, "correction", {
         supersedes: c.supersedes ?? null, reason, approvedByName: me.displayName, hoursMarket: market,
       }));
