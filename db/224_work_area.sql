@@ -25,7 +25,8 @@
 --   cma.work_status.work_area   text null; check work_status_work_area_ok: 'sales' or 'operations'; check
 --                               work_status_work_area_flags: only a working and productive status carries one. Existing
 --                               rows read null and pass both. The table is small and not on the busy list (CLAUDE.md,
---                               Performance): the checks validate in place, under the script's lock timeout.
+--                               Performance), yet every Live board poll reads it: the alter goes last (section 5), so
+--                               the lock it takes is held for the commit alone, under the script's lock timeout.
 --   cma_read.work_status        work_area, appended last (create or replace view adds a column only at the end)
 --   cma.work_statuses_all()     work_area as its last column (26's definition otherwise); dropped and created (a returned
 --                               column cannot be added in place); execute for cma_app only
@@ -88,32 +89,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 1. The column and its two checks
--- ---------------------------------------------------------------------------------------------
-alter table cma.work_status add column if not exists work_area text;
-comment on column cma.work_status.work_area is
-  'Work area (docs/definitions.md): sales, operations or null; only on a working, productive status. Groups and colours the hours views, never a figure; not frozen by time booked on the status';
-
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conrelid = 'cma.work_status'::regclass and conname = 'work_status_work_area_ok') then
-    alter table cma.work_status add constraint work_status_work_area_ok check (work_area in ('sales', 'operations'));
-  end if;
-  if not exists (select 1 from pg_constraint where conrelid = 'cma.work_status'::regclass and conname = 'work_status_work_area_flags') then
-    alter table cma.work_status add constraint work_status_work_area_flags check (work_area is null or (is_working and is_productive));
-  end if;
-end
-$$;
-
--- The readers' view: 05's columns, work_area last
-create or replace view cma_read.work_status as
-  select id, tenant_id, key, name, is_working, is_productive, is_paid, is_billable, is_default,
-         sort_order, status, created_at, updated_at, work_area
-  from cma.work_status
-  where cma_read.reader_sees(tenant_id);
-
--- ---------------------------------------------------------------------------------------------
--- 2. Configuration: the list and the write
+-- 1. Configuration: the list and the write
 -- ---------------------------------------------------------------------------------------------
 -- 26's list with the work area last
 drop function if exists cma.work_statuses_all();
@@ -195,7 +171,7 @@ revoke execute on function cma.work_statuses_all(), cma.upsert_work_status(text,
 grant execute on function cma.work_statuses_all(), cma.upsert_work_status(text, text, boolean, boolean, boolean, boolean, integer, text) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
--- 3. Time per status (the Dashboard): 15's read with the work area last
+-- 2. Time per status (the Dashboard): 15's read with the work area last
 -- ---------------------------------------------------------------------------------------------
 drop function if exists cma.team_status_time(date, date, uuid);
 -- based on: 15_team_status_time.sql
@@ -252,7 +228,7 @@ revoke execute on function cma.team_status_time(date, date, uuid) from public;
 grant execute on function cma.team_status_time(date, date, uuid) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
--- 4. The team now (the Live board): 200's read with the current status's work area last
+-- 3. The team now (the Live board): 200's read with the current status's work area last
 -- ---------------------------------------------------------------------------------------------
 drop function if exists cma.team_now();
 -- based on: 200_live_paid_today.sql
@@ -327,7 +303,7 @@ grant execute on function cma.team_now() to cma_app;
 alter function cma.team_now() set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
--- 5. The status-changes export: 13's read with the work area last
+-- 4. The status-changes export: 13's read with the work area last
 -- ---------------------------------------------------------------------------------------------
 drop function if exists cma.export_status_changes(date, date, uuid);
 -- based on: 13_tenant_settings.sql
@@ -380,6 +356,34 @@ end
 $$;
 revoke execute on function cma.export_status_changes(date, date, uuid) from public;
 grant execute on function cma.export_status_changes(date, date, uuid) to cma_app;
+
+-- ---------------------------------------------------------------------------------------------
+-- 5. The column, its two checks and the readers' view, last (CLAUDE.md, Performance; 132, section 10): the alter
+--    takes an ACCESS EXCLUSIVE lock on cma.work_status, which every Live board poll and clock action reads, and holds it
+--    to the commit, so nothing follows it but the record of the addition. The functions above are plpgsql and read the
+--    column only when they run
+-- ---------------------------------------------------------------------------------------------
+alter table cma.work_status add column if not exists work_area text;
+comment on column cma.work_status.work_area is
+  'Work area (docs/definitions.md): sales, operations or null; only on a working, productive status. Groups and colours the hours views, never a figure; not frozen by time booked on the status';
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conrelid = 'cma.work_status'::regclass and conname = 'work_status_work_area_ok') then
+    alter table cma.work_status add constraint work_status_work_area_ok check (work_area in ('sales', 'operations'));
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'cma.work_status'::regclass and conname = 'work_status_work_area_flags') then
+    alter table cma.work_status add constraint work_status_work_area_flags check (work_area is null or (is_working and is_productive));
+  end if;
+end
+$$;
+
+-- The readers' view: 05's columns, work_area last
+create or replace view cma_read.work_status as
+  select id, tenant_id, key, name, is_working, is_productive, is_paid, is_billable, is_default,
+         sort_order, status, created_at, updated_at, work_area
+  from cma.work_status
+  where cma_read.reader_sees(tenant_id);
 
 -- ---------------------------------------------------------------------------------------------
 -- 6. The addition
