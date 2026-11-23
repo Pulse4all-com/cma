@@ -3995,7 +3995,7 @@ One step at a time; each says where it runs and what to expect.
 - `222` re-creates `cma.subscription_moves_of` so that a subscription's entry status is the one its first status event names as its previous, active when it names none. Without it, a legacy move followed by a new-shape move would enter in the later move's previous status.
 - The events backfill with `--again` stores the skipped moves. The facts refresh at the minute job's next run, and each store's next figures write counts them (0009zj, #309).
 
-**Order.** It needs 0009zj (#309) in prod for the stored figures, so #309 runs first. #308 (B39d) waits for this phase's acceptance (23.9).
+**Order.** It needs 0009zj (#309) in prod for the stored figures, so #309 runs first. #308 (B39d) waits for this phase's acceptance (23.9). Start 23.5 in the evening (Amsterdam time): the backfill takes 30 to 90 minutes, and while it writes, the minute job recomputes Customers → Active and the facts on prod's one vCPU, which slows pages (21.7). Then the backfill and the first full refresh end before the 05:00 figures write and before the agents' day.
 
 ## 23.1 Studio (cma-prod-pg): B39c's churn and failed moves that no event reports, before
 The high months of 19.18 after February 2026 (GB Sep 2026 2.79, SE Sep 1.67, DE Sep 1.64, NL Sep 1.39 and Apr 1.33, SE May 2.00) are likely moves `cma.subscription_moves_of` infers where a subscription's events do not end in its current status. It dates such a move at the latest of the last event, the cancel or pause time and the subscription's last update at the source, so a move into canceled without an event lands in the month the app last touched the subscription. This lists, per store and month, the churned and moved to failed moves and how many of them no event reports (`inferred`). One Run, as your own IAM login; counts only:
@@ -4003,6 +4003,7 @@ The high months of 19.18 after February 2026 (GB Sep 2026 2.79, SE Sep 1.67, DE 
 **Studio (cma-prod-pg)**
 ```sql
 set statement_timeout = '300s';
+set jit = off;
 set role cma_owner;
 with t as (select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'),
 st as materialized (select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
@@ -4013,7 +4014,9 @@ x as (
                  from cma.subscription s
                  join cma.subscription_event e on e.tenant_id = s.tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
                  where s.id = m.subscription_id and e.occurred_at = m.at
-                   and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')) as reported
+                   and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
+                   and case e.event_type when 'status_changed' then e.status_to when 'canceled' then 'canceled' when 'paused' then 'paused'
+                                         else 'active' end = m.status_to) as reported
   from m)
 select coalesce(st.market, 'unknown') as market, x.month, x.kind, count(*) as moves, count(*) filter (where not x.reported) as inferred
 from x
@@ -4023,7 +4026,7 @@ having count(*) filter (where not x.reported) > 0
 order by coalesce(st.market, 'unknown') collate "C", x.month, x.kind collate "C";
 reset role;
 ```
-Expected: the high months' moves mostly `inferred`, which confirms the cause. `inferred` may read a little low: a move dated at its last event's own time counts as reported. If they are mostly reported by events, the cause is elsewhere (for example a bulk action that moved them): name it in `records/0009zk-prod-<date>`. Keep the output for `records/0009zk-prod-<date>` and compare it with 23.10.
+Expected: the high months' moves mostly `inferred`, which confirms the cause. A move counts as reported only when an event of its subscription at its moment sets its status, so a move inferred at its last event's time is still counted as inferred. If they are mostly reported by events, the cause is elsewhere (for example a bulk action that moved them): name it in `records/0009zk-prod-<date>`. Keep the output for `records/0009zk-prod-<date>` and compare it with 23.10.
 
 ## 23.2 Terminal: 0009zk in dev
 **Terminal**
@@ -4064,6 +4067,33 @@ bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-
 ```
 Expected: the service and the jobs on the new image (`cma-ingest-000NN-…`). From now on the poll stores a legacy-shape update too; Juo writes none since 28 January 2026, so nothing changes until 23.5.
 
+## 23.5a Studio and Terminal: the size first, a dry run of GB's events
+The events are append-only: what the backfill stores stays, and every later facts refresh, Customers → Active refresh and inputs read pays for it. So size it first on the store with the longest legacy period. The GB connection's id:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select s.connection_id,
+       (select count(*) from cma.subscription_event e where e.tenant_id = t.id and e.connection_id = s.connection_id and e.event_type = 'status_changed') as status_changed_held
+from cma.tenant t
+cross join lateral cma.flash_subscription_stores_of(t.id) s
+where t.slug = 'pulse4all-subscriptions' and s.market = 'GB';
+reset role;
+```
+Expected: one row, the connection's id (an identifier, no customer data) and the `status_changed` events the CMA holds for GB (all from 28 January 2026 on).
+
+**Terminal** (the dry run reads and counts, and writes nothing; `<GB conn>` from the row above)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<GB conn>;--object;subscription_event;--dry-run'
+```
+Expected: the execution succeeds; then its log line:
+
+**Terminal**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run"' --project=p4a-cma-prod --freshness=3h --limit=1 --format='value(timestamp,jsonPayload)'
+```
+Expected: `kept` with `status_changed` above the count held. The difference is the legacy moves the backfill will add for GB. It should be of the order of the app's own moves before 28 January 2026: the exits and pauses of 19.13's rows, a few per subscription in the whole period at most. A difference of several per subscription per month means Juo's legacy update carried the status on updates that moved nothing: stop here and report the counts.
+
 ## 23.5 Terminal: the events again, every store, from the history start
 Every Juo store's events read again from its start: the tenant's `subscriptions.history_start_date` (or all of the app's history when it is empty, as 17.6). `--again` because each store's backfill has finished with the same start. Events are append-only (`on conflict do nothing`), so only the legacy moves the earlier runs skipped are stored. Run it away from the hourly figures job (`41 * * * *`) if you can; it may overlap the minute job, as 17.6's did.
 
@@ -4097,6 +4127,14 @@ gcloud scheduler jobs resume ingest-poll-subscriptions --project=p4a-cma-prod --
 ```
 Expected: `ENABLED` with its schedule; its next run reads the events since each store's cursor less five minutes.
 
+The table vacuumed, so the minute job's markers read stays index-only on the new rows (as 21.6). From the Terminal, outside a transaction; it blocks no read or write:
+
+**Terminal**
+```bash
+cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set statement_timeout = '10min'" -c "vacuum (analyze) cma.subscription_event"
+```
+Expected: `VACUUM`, within a minute or two. Then 213's I1 as 21.6 reads it: `heap fetches none` (or under 1 %).
+
 ## 23.6 Studio (cma-prod-pg): the status events per store and month, after
 19.19's query again. Expected: `status_changed` rows in every month from each store's history start, with no gap before 28 January 2026; the months from February 2026 as before (the events were held already).
 
@@ -4105,6 +4143,7 @@ Then the moves the backfill stored without a previous status (Juo's legacy shape
 **Studio (cma-prod-pg)**
 ```sql
 set statement_timeout = '300s';
+set jit = off;
 set role cma_owner;
 with t as (select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'),
 st as materialized (select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
@@ -4135,8 +4174,23 @@ reset role;
 ```
 Expected: `unnamed_moves` per store from its history start to 28 January 2026 (and the few canceled or paused reports Juo left without a previous status), `repeats_other_day` 0 or near it: Juo's legacy update carried the status only when it changed. `repeats` may be higher where one move was reported twice on its day (a `canceled` or `paused` event and a `status_changed`); those do no harm, since the readers count a subscription once per date. A `repeats_other_day` count well above 0 is a finding: those readers then need the previous event's rule before #308 goes on.
 
-## 23.7 Studio or Terminal: the facts' refresh
-The new events change the facts' inputs, so the minute job refreshes them within a few minutes (`cma-refresh-active-customers`). Then time the refresh as 20.8 does (Terminal, `131_time_all.sql` into `~/cma-audit/0009zk-prod-$(date +%F)-131.txt`). Expected: the row "subscription facts refresh" within its budget (10,000 ms). The events grow by the legacy moves, so note the time against 21.9's.
+## 23.7 Terminal and Studio: the facts' refresh, before and after
+The facts' refresh read 11,478 ms against its 10,000 ms budget in prod after 212 (`records/0009zf-prod-2026-11-21`). Of its steps, only `months` reads the moves, so the legacy moves make that step longer.
+- **Before 23.5,** on a quiet database the same day: 131 as 20.8 runs it, into `~/cma-audit/0009zk-prod-$(date +%F)-131-before.txt`.
+- **After the first refresh that follows the backfill** (wait for it as below): 131 again, into `…-131-after.txt`, the next morning on a quiet database.
+- **Expected:** the row "subscription facts refresh" and its `steps_ms` before and after, and only `months` grows.
+- **The day after:** 21.9's query over the job's own runs, for their p50 and p95. Those include the generic plan a pooled connection turns to after five calls, which one forced call in 131 never sees.
+- **A refresh over budget because of `months` alone** comes from the data, not from 222. It brings forward the open decision on the facts' refresh (an incremental refresh); it is no reason to roll back.
+
+The refresh comes after the backfill. The take is computed at most every `subscriptions.take_refresh_minutes` (15) once its inputs change, so wait until it was computed after the backfill finished:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select x.computed_at from cma.subscription_take_state x where x.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+reset role;
+```
+Expected: `computed_at` later than the timestamp of 23.5's `backfill finished` line. Earlier: wait 15 minutes and run it again. 23.8 and 23.9 read the stored take, so they come after this.
 
 ## 23.8 Studio (cma-prod-pg): when each store's rates start
 20.8's query of `cma_read.subscription_store_start`. Expected: the same `rate_start_month` per store as before: the start follows the migrated events, which this does not touch.

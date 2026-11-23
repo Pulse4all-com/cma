@@ -504,7 +504,7 @@ The events come in two families, each its own query with its own backfill cursor
 | `subscription:paused` | `paused` | `previousStatus` → `status_from`, `status_to` paused |
 | `subscription:resumed` | `resumed` | `previousStatus` → `status_from`, `status_to` active |
 | `subscription:reactivated` | `reactivated` | `previousStatus` → `status_from`, `status_to` active |
-| `subscription:updated` whose data names a status | `status_changed` | `data.status` → `status_from`, `data.input.status` → `status_to` (Juo's own move to failed arrives so: ACTIVE → FAILED by the system); an update without a status, or with the same one, is no event of the CMA |
+| `subscription:updated` whose data names a status | `status_changed` | New shape: `data.status` → `status_from`, `data.input.status` → `status_to` (Juo's own move to failed arrives so: ACTIVE → FAILED by the system). Legacy shape (every update before 28 January 2026: no `data.input`): `data.status` is the new status → `status_to`, `status_from` null. An update without a status, or with the same one as its previous, is no event of the CMA |
 
 Since 0009za the table also holds (14 more types, 21 in all):
 

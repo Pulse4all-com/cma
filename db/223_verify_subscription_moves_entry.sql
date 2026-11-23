@@ -111,6 +111,8 @@ declare
   v_bad     text;
   v_now     timestamptz := now();
 begin
+  -- the comparison below plans two set-returning functions of 100,000 rows each per tenant: no JIT for this block
+  perform set_config('jit', 'off', true);
   insert into verify_0009zk values (1, 'A1 addition 0009zk recorded, after 0009ze',
     case when exists (select 1 from cma.schema_migration where version = '0009zk')
               and exists (select 1 from cma.schema_migration where version = '0009ze') and not v_provoke then 'PASS' else 'FAIL' end,
