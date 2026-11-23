@@ -2579,6 +2579,11 @@ export interface MaintenanceFilter {
   /** A model's key or "unknown" */
   model: string | null;
   scope: MaintenanceScope | null;
+  /**
+   * The debt status filter (addition 0009zm): unpaused (the page's default: no debt status that pauses maintenance), none
+   * (without a debt status), any (with one), a debt status's key, or null for every device. Left out: every device
+   */
+  debt?: string | null;
 }
 
 /** One bucket (past_due or a month as its first day), market and model of the grid (cma.maintenance_page) */
@@ -2675,6 +2680,10 @@ export interface MaintenanceReport {
   markets: string[];
   /** The models of the tracked devices with their names, for the filter, unknown last */
   models: { key: string; name: string | null }[];
+  /** Tracked devices of the scope, market and model whose maintenance is paused (addition 0009zm), whatever the debt filter */
+  maintenancePausedDevices: number;
+  /** The tenant's debt statuses in their sort order, for the filter (addition 0009zm) */
+  debtStatuses: { key: string; name: string; pausesMaintenance: boolean }[];
 }
 
 /** One row of the device list of a cell (cma.maintenance_rows): a device's ids and codes, never a name, email, phone or address */
@@ -2700,6 +2709,10 @@ export interface MaintenanceRow {
   crmContactId: string | null;
   /** The contact's link from the CRM connection's record_url_contact template; null without one */
   contactUrl: string | null;
+  /** The device's debt status's key, null without one (addition 0009zm) */
+  debtStatus: string | null;
+  /** Its maintenance is paused: in the field under a debt status that pauses maintenance (addition 0009zm) */
+  maintenancePaused: boolean;
 }
 
 export interface MaintenanceRows {

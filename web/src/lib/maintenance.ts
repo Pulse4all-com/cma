@@ -18,6 +18,8 @@
  *   planned exchange per device in action-date order, an item joins the exchange before it while its action date lies
  *                    within assets.bundle_window_days of that exchange's first action date; counted once, in the month of
  *                    that first action date
+ *   paused           (addition 0009zm) a device in the field under a debt status that pauses maintenance: its items stay
+ *                    in the forecast; the page's default filter (unpaused) leaves them out
  * Team figures only: no figure per person exists. Ids, codes, counts and dates only: never a customer's name.
  */
 import type {
@@ -87,6 +89,32 @@ export function parseScope(value: string | string[] | undefined | null): Mainten
   return (MAINTENANCE_SCOPES as readonly string[]).includes(v) ? (v as MaintenanceScope) : "invalid";
 }
 
+/** The page's default debt status filter (addition 0009zm): no debt status that pauses maintenance */
+export const MAINTENANCE_DEBT_DEFAULT = "unpaused";
+/** The debt status filter's own values beside a debt status's key; all (every device) is the address's word for none */
+export const MAINTENANCE_DEBT_VALUES: readonly string[] = ["unpaused", "none", "any"];
+
+/**
+ * The debt status filter from the address (addition 0009zm): left out or empty the default (unpaused), all every device
+ * (null), unpaused, none, any or a debt status's key; anything else invalid
+ */
+export function parseDebt(value: string | string[] | undefined | null): string | null | "invalid" {
+  const v = Array.isArray(value) ? value[0] : value;
+  if (v === undefined || v === null || v === "") return MAINTENANCE_DEBT_DEFAULT;
+  if (v === "all") return null;
+  if (MAINTENANCE_DEBT_VALUES.includes(v)) return v;
+  return MODEL_RE.test(v) && v.length <= 40 ? v : "invalid";
+}
+
+/** Whether a device matches the debt status filter, as cma.maintenance_debt_matches answers it */
+export function debtMatches(debt: string | null | undefined, key: string | null, paused: boolean): boolean {
+  if (debt === null || debt === undefined) return true;
+  if (debt === "unpaused") return !paused;
+  if (debt === "none") return key === null;
+  if (debt === "any") return key !== null;
+  return key === debt;
+}
+
 export function parseView(value: string | string[] | undefined | null): MaintenanceView | null {
   const v = Array.isArray(value) ? value[0] : value;
   return (MAINTENANCE_VIEWS as readonly string[]).includes(v ?? "") ? (v as MaintenanceView) : null;
@@ -114,6 +142,8 @@ export function parseMaintenanceFilter(sp: Record<string, string | string[] | un
   const market = one("market");
   const model = one("model");
   const scope = parseScope(one("scope"));
+  const debt = parseDebt(one("debt"));
+  if (debt === "invalid") problem = true;
   if (market && !MARKET_RE.test(market)) problem = true;
   if (model && !(MODEL_RE.test(model) && model.length <= 40)) problem = true;
   if (scope === "invalid") problem = true;
@@ -123,6 +153,7 @@ export function parseMaintenanceFilter(sp: Record<string, string | string[] | un
       market: market && MARKET_RE.test(market) ? market : null,
       model: model && MODEL_RE.test(model) && model.length <= 40 ? model : null,
       scope: scope === "invalid" ? null : scope,
+      debt: debt === "invalid" ? MAINTENANCE_DEBT_DEFAULT : debt,
     },
     problem,
   };
@@ -136,6 +167,7 @@ export function maintenanceQuery(filter: MaintenanceFilter, currentMonth: DateKe
   if (filter.market) q.market = filter.market;
   if (filter.model) q.model = filter.model;
   if (filter.scope) q.scope = filter.scope;
+  if (filter.debt !== MAINTENANCE_DEBT_DEFAULT) q.debt = filter.debt ?? "all";
   return q;
 }
 
@@ -174,6 +206,8 @@ export interface MaintenanceDevice {
   components: { kind: string; serial: string | null; expiresOn: DateKey | null; replacementSeenOn?: DateKey | null }[];
   /** The CRM contact of the customer reference's commerce customer (0008h), when there is exactly one */
   crmContactId: string | null;
+  /** The debt status's key (addition 0009zm), null or left out without one */
+  debtStatus?: string | null;
 }
 
 /** The tenant's catalogs and setting the forecast reads */
@@ -184,6 +218,8 @@ export interface MaintenanceCatalog {
   statuses: { key: string; name: string; isInField: boolean; isInStock: boolean; isTracked: boolean }[];
   markets: { code: string; sortOrder: number }[];
   windowDays: number;
+  /** The debt statuses (addition 0009zm); left out: none */
+  debtStatuses?: { key: string; name: string; pausesMaintenance: boolean; sortOrder: number }[];
 }
 
 /** A due item (cma.maintenance_items_of); market and model as stored, null when unmapped */
@@ -204,9 +240,19 @@ export interface DueItem {
   pastDue: boolean;
   exchangeKey: string | null;
   exchangeOn: DateKey | null;
+  /** The device's debt status's key, and whether its maintenance is paused (addition 0009zm) */
+  debtStatus: string | null;
+  paused: boolean;
 }
 
 const LAST = 2147483647;
+
+/** A device's debt status and whether its maintenance is paused: in the field under a debt status that pauses it */
+function debtOf(d: MaintenanceDevice, cat: MaintenanceCatalog, isInField: boolean): { debtStatus: string | null; paused: boolean } {
+  const key = d.debtStatus ?? null;
+  const ds = key === null ? undefined : (cat.debtStatuses ?? []).find((x) => x.key === key);
+  return { debtStatus: key, paused: isInField && (ds?.pausesMaintenance ?? false) };
+}
 
 /** Every due item of the tracked devices as of today (cma.maintenance_items_of), in device and action-date order */
 export function maintenanceItems(devices: readonly MaintenanceDevice[], cat: MaintenanceCatalog, today: DateKey): DueItem[] {
@@ -218,6 +264,7 @@ export function maintenanceItems(devices: readonly MaintenanceDevice[], cat: Mai
     const st = cat.statuses.find((s) => s.key === d.status);
     if (!st || !st.isTracked || d.missing) continue;
     const shipped = d.lastShippedOn ?? d.firstShippedOn;
+    const debt = debtOf(d, cat, st.isInField);
     const items: Omit<DueItem, "pastDue" | "exchangeKey" | "exchangeOn">[] = [];
     for (const k of kinds) {
       const c = d.components.find((x) => x.kind === k.key);
@@ -229,11 +276,11 @@ export function maintenanceItems(devices: readonly MaintenanceDevice[], cat: Mai
       const dueOn = recorded ?? byRule;
       items.push({ deviceId: d.id, sourceId: d.sourceId, serial: d.serial, model: d.model, market: d.market, status: st.key, isInField: st.isInField,
         isInStock: st.isInStock, component: k.key, componentOrder: k.sortOrder, dueOn,
-        basis: recorded ? "recorded" : byRule ? "rule" : "unknown", actionOn: dueOn ? addDays(dueOn, -(rule?.leadDays ?? 0)) : null });
+        basis: recorded ? "recorded" : byRule ? "rule" : "unknown", actionOn: dueOn ? addDays(dueOn, -(rule?.leadDays ?? 0)) : null, ...debt });
     }
     if (d.endOfLifeOn) {
       items.push({ deviceId: d.id, sourceId: d.sourceId, serial: d.serial, model: d.model, market: d.market, status: st.key, isInField: st.isInField,
-        isInStock: st.isInStock, component: END_OF_LIFE, componentOrder: LAST, dueOn: d.endOfLifeOn, basis: "recorded", actionOn: d.endOfLifeOn });
+        isInStock: st.isInStock, component: END_OF_LIFE, componentOrder: LAST, dueOn: d.endOfLifeOn, basis: "recorded", actionOn: d.endOfLifeOn, ...debt });
     }
     items.sort((a, b) => (a.actionOn === null ? 1 : 0) - (b.actionOn === null ? 1 : 0) || (a.actionOn ?? "").localeCompare(b.actionOn ?? "")
       || a.componentOrder - b.componentOrder || a.component.localeCompare(b.component));
@@ -263,6 +310,7 @@ function bucketed(items: readonly DueItem[], filter: MaintenanceFilter, today: D
     .filter((i) => filter.scope === null || (filter.scope === "field" && i.isInField) || (filter.scope === "stock" && i.isInStock))
     .filter((i) => filter.market === null || (i.market ?? "unknown") === filter.market)
     .filter((i) => filter.model === null || (i.model ?? "unknown") === filter.model)
+    .filter((i) => debtMatches(filter.debt, i.debtStatus, i.paused))
     .map((i) => ({
       ...i, m: i.market ?? "unknown", mo: i.model ?? "unknown",
       bucket: i.pastDue ? "past_due" : within(i.actionOn) ? monthOf(i.actionOn!) : null,
@@ -309,8 +357,9 @@ export function maintenanceReport(devices: readonly MaintenanceDevice[], cat: Ma
     .sort((x, y) => order.market(x.market, y.market) || order.model(x.model, y.model));
   const tracked = devices.filter((d) => !d.missing && cat.statuses.some((s) => s.key === d.status && s.isTracked));
   const flags = (d: MaintenanceDevice) => cat.statuses.find((s) => s.key === d.status)!;
-  const scoped = tracked.filter((d) => (filter.scope === null || (filter.scope === "field" && flags(d).isInField) || (filter.scope === "stock" && flags(d).isInStock))
+  const inScope = tracked.filter((d) => (filter.scope === null || (filter.scope === "field" && flags(d).isInField) || (filter.scope === "stock" && flags(d).isInStock))
     && (filter.market === null || (d.market ?? "unknown") === filter.market) && (filter.model === null || (d.model ?? "unknown") === filter.model));
+  const scoped = inScope.filter((d) => { const x = debtOf(d, cat, flags(d).isInField); return debtMatches(filter.debt, x.debtStatus, x.paused); });
   return {
     filter, currentMonth: monthOf(today), bundleWindowDays: Math.max(0, cat.windowDays), isSetUp,
     buckets: ["past_due", ...Array.from({ length: filter.months }, (_, g) => addMonths(filter.fromMonth, g))],
@@ -325,6 +374,9 @@ export function maintenanceReport(devices: readonly MaintenanceDevice[], cat: Ma
     markets: [...new Set(tracked.map((d) => d.market ?? "unknown"))].sort(order.market),
     models: [...new Set(tracked.map((d) => d.model ?? "unknown"))].sort(order.model)
       .map((key) => ({ key, name: cat.models.find((m) => m.key === key)?.name ?? null })),
+    maintenancePausedDevices: inScope.filter((d) => debtOf(d, cat, flags(d).isInField).paused).length,
+    debtStatuses: [...(cat.debtStatuses ?? [])].sort((x, y) => x.sortOrder - y.sortOrder || (x.name < y.name ? -1 : x.name > y.name ? 1 : 0) || (x.key < y.key ? -1 : 1))
+      .map((x) => ({ key: x.key, name: x.name, pausesMaintenance: x.pausesMaintenance })),
   };
 }
 
@@ -352,7 +404,7 @@ export function maintenanceRows(devices: readonly MaintenanceDevice[], cat: Main
       components: sorted.map((i) => i.component), dueOn: minOf(items.map((i) => i.dueOn)),
       bases: [...new Set(items.map((i) => i.basis))].sort() as MaintenanceBasis[], actionOn: minOf(items.map((i) => i.actionOn)),
       exchangeOn: minOf(items.map((i) => i.exchangeOn)), customerRef: d.customerRef, subscriptionRef: d.subscriptionRef, crmContactId: d.crmContactId,
-      contactUrl: null,
+      contactUrl: null, debtStatus: items[0]!.debtStatus, maintenancePaused: items[0]!.paused,
     };
     return { row, grp: k.split("|")[2] ?? "", rawMarket: d.market, rawModel: d.model };
   });
