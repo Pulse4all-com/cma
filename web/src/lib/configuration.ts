@@ -4,7 +4,7 @@
  * stripping. Nothing here knows a status key, a team key or a setting value: it shapes what the
  * tenant configured and explains the database's refusals.
  */
-import type { ConfigStatus, CoverageTargetRow, SkillLevel, TenantSetting } from "@/lib/data/types";
+import type { ConfigStatus, CoverageTargetRow, SkillLevel, TenantSetting, WorkArea } from "@/lib/data/types";
 import { exportSettingsFrom, formatDate, formatDuration, toCsv } from "./csv.ts";
 
 /** Flag changes on a status with time behind it are refused by the database; the form says so first */
@@ -27,11 +27,32 @@ export function visibleStatuses<T extends Pick<ConfigStatus, "isActive" | "sortO
     .sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
 }
 
+/** The work areas a status may carry (addition 0009zl; docs/definitions.md, Work area), in the select's order */
+export const WORK_AREAS: readonly WorkArea[] = ["sales", "operations"];
+
+/** "sales", "operations" or none (null or ""); anything else is undefined, which the route refuses */
+export function parseWorkArea(value: unknown): WorkArea | null | undefined {
+  if (value === null || value === undefined || value === "") return null;
+  return WORK_AREAS.find((a) => a === value);
+}
+
+/**
+ * Only a working and productive status carries a work area: the check the database applies
+ * (cma.work_status, CMA04). The flags of a status with time behind it are frozen; its work area is not
+ */
+export function workAreaAllowed(f: { isWorking: boolean; isProductive: boolean }): boolean {
+  return f.isWorking && f.isProductive;
+}
+
 /** A new or edited status: the shape the route checks, so the form explains before sending */
-export function statusFormProblem(f: { key: string; name: string }, isNew: boolean, existingKeys: string[]): "key" | "name" | "duplicate" | null {
+export function statusFormProblem(
+  f: { key: string; name: string; isWorking?: boolean; isProductive?: boolean; workArea?: WorkArea | null },
+  isNew: boolean, existingKeys: string[],
+): "key" | "name" | "duplicate" | "workArea" | null {
   if (!/^[a-z0-9_]+$/.test(f.key) || f.key.length > 40) return "key";
   if (isNew && existingKeys.includes(f.key)) return "duplicate";
   if (f.name.trim().length === 0 || f.name.trim().length > 40) return "name";
+  if (f.workArea && !workAreaAllowed({ isWorking: f.isWorking === true, isProductive: f.isProductive === true })) return "workArea";
   return null;
 }
 

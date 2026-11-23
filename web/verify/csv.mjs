@@ -38,7 +38,7 @@ const labels = {
   clockedOut: "Clocked out", worked: "Worked", paid: "Paid", billable: "Billable", notClockedOut: "Not clocked out",
   corrected: "Corrected afterwards", status: "Status", from: "From", to: "To", duration: "Duration", working: "Working",
   enteredBy: "Entered by", sourceUser: "Person", sourceSystem: "System", sourceCorrection: "Correction", sourceImport: "Import",
-  yes: "Yes", no: "No",
+  yes: "Yes", no: "No", workArea: "Work area", workAreaSales: "Sales", workAreaOperations: "Operations",
 };
 
 // ---- settings -----------------------------------------------------------------------------------
@@ -94,29 +94,37 @@ expect("a decimal comma with a comma separator stays one cell", commaBoth,
 
 const status = statusChangesCsv([{
   userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-10-05", timeZone: "Europe/Madrid",
-  statusKey: "break", statusName: "Break", isWorking: false, isProductive: false, isPaid: true, isBillable: false,
+  statusKey: "break", statusName: "Break", isWorking: false, isProductive: false, isPaid: true, isBillable: false, workArea: null,
   from: "2026-10-05T09:00:00Z", to: null, isOpen: true, isCapped: true, seconds: 900, source: "correction",
 }], DUTCH, labels).split("\r\n");
 expect("an open stretch has no end and names its source", status[1],
-  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;;0,25;No;Yes;No;Correction;Yes",
-  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;correction;Yes");
-expect("the header is the caller's labels", status[0].replace("\uFEFF", "").split(";").length, 13, 12);
+  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;;0,25;No;Yes;No;Correction;Yes;",
+  "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;correction;Yes;");
+expect("the header is the caller's labels, the work area last", [status[0].replace("\uFEFF", "").split(";").length, status[0].split(";").at(-1)],
+  [14, "Work area"], [13, "Not clocked out"]);
+// The work area (addition 0009zl): the status's label for it in the last column, empty without one
+const areaRow = statusChangesCsv([{
+  userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-10-05", timeZone: "UTC",
+  statusKey: "zz", statusName: "Available", isWorking: true, isProductive: true, isPaid: true, isBillable: true, workArea: "operations",
+  from: "2026-10-05T09:00:00Z", to: "2026-10-05T10:00:00Z", isOpen: false, isCapped: false, seconds: 3600, source: "user",
+}], DUTCH, labels).split("\r\n")[1];
+expect("a status's work area is its label in the last column", areaRow.split(";").at(-1), "Operations", "operations");
 
 // An imported day (addition 0008d): the session as a working stretch, the gap in the gap status,
 // both entered by the import, in the day's own zone
 const imported = statusChangesCsv([
   { userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-03-06", timeZone: "Europe/Amsterdam",
-    statusKey: "legacy_session", statusName: "Earlier session", isWorking: true, isProductive: true, isPaid: true, isBillable: true,
+    statusKey: "legacy_session", statusName: "Earlier session", isWorking: true, isProductive: true, isPaid: true, isBillable: true, workArea: null,
     from: "2026-03-06T07:00:00Z", to: "2026-03-06T09:00:00Z", isOpen: false, isCapped: false, seconds: 7_200, source: "import" },
   { userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-03-06", timeZone: "Europe/Amsterdam",
-    statusKey: "break", statusName: "Break", isWorking: false, isProductive: false, isPaid: false, isBillable: false,
+    statusKey: "break", statusName: "Break", isWorking: false, isProductive: false, isPaid: false, isBillable: false, workArea: null,
     from: "2026-03-06T09:00:00Z", to: "2026-03-06T09:15:00Z", isOpen: false, isCapped: false, seconds: 900, source: "import" },
 ], DUTCH, labels).split("\r\n");
 expect("an imported stretch and its gap name the import", [imported[1], imported[2]],
-  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;Import;No",
-   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;Import;No"],
-  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;;No",
-   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;;No"]);
+  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;Import;No;",
+   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;Import;No;"],
+  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;;No;",
+   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;;No;"]);
 
 // Reports > Forms (addition 0008p): counts only, the period in the tenant's date format
 const formsLabels = { from: "From", to: "To", form: "Form", category: "Category", market: "Market", submissions: "Submissions", previous: "Previous period",

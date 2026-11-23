@@ -1,12 +1,12 @@
 /**
  * The Dashboard's tiles and charts (Pulse4all-Style.md 7.7): server components, plain SVG and
- * CSS, no chart library. Colours come from the flag groups in lib/dashboard, never from a status
- * key or name, and every coloured mark carries its label or a title, so colour is never the only
+ * CSS, no chart library. Colours come from the groups in lib/dashboard (flags and work area), never
+ * from a status key or name, and every coloured mark carries its label or a title, so colour is never the only
  * signal. Gridlines Border Grey, axis labels 12 px Footnote Grey.
  */
 import type { Copy, Locale } from "@/lib/copy";
 import {
-  GROUP_BG, GROUP_FILL, GROUPS, hoursAxis, share, type DayTotal, type Group, type GroupSeconds,
+  GROUP_BG, GROUP_FILL, GROUPS, hoursAxis, legendGroups, share, type DayTotal, type Group, type GroupSeconds,
   type PersonTotal, type StatusTotal,
 } from "@/lib/dashboard";
 import { fmtDate, fmtMinutes, fmtPercent } from "@/lib/time";
@@ -18,6 +18,8 @@ const minutes = (seconds: number) => fmtMinutes(Math.floor(seconds / 60));
 export function groupLabels(copy: Pick<Copy, "dashboard">): Record<Group, { label: string; hint: string }> {
   const t = copy.dashboard;
   return {
+    sales: { label: t.groupSales, hint: t.groupSalesHint },
+    operations: { label: t.groupOperations, hint: t.groupOperationsHint },
     productive: { label: t.groupProductive, hint: t.groupProductiveHint },
     otherWork: { label: t.groupOtherWork, hint: t.groupOtherWorkHint },
     paidPause: { label: t.groupPaidPause, hint: t.groupPaidPauseHint },
@@ -48,14 +50,14 @@ export function Tile({
 }
 
 /**
- * The four groups with their totals: the key to every chart below it. Times only: the shares sit
+ * The groups with their totals (Sales and Operations only with time in the period): the key to every chart below it. Times only: the shares sit
  * in Time per status, so the Productive tile (share of worked time) is the only percentage of its kind.
  */
 export function GroupLegend({ groups, copy }: { groups: GroupSeconds; copy: Copy }) {
   const labels = groupLabels(copy);
   return (
     <ul aria-label={copy.dashboard.groups} className="flex flex-wrap gap-x-8 gap-y-2 text-small">
-      {GROUPS.map((g) => (
+      {legendGroups(groups).map((g) => (
         <li key={g} className="flex items-center gap-2" title={labels[g].hint}>
           <Swatch group={g} />
           <span className="font-semibold text-p4a-body">{labels[g].label}</span>

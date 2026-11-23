@@ -66,6 +66,8 @@
 -- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
 -- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
+-- Since addition 0009zl (224_work_area.sql) the rows 'work status flags' and 'statuses' read work_area as the web does, so
+-- this script runs after 224.
 -- A poll's row (class poll; since 16 November 2026, Martin's brief on 131's poll timings) is the median of
 -- verify.poll_runs runs after verify.poll_warmup untimed ones (5 after 6), not the best of two: a poll runs every few
 -- seconds on a connection the pool keeps, so it pays neither a session's first calls (its plans built, its functions'
@@ -275,7 +277,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.workday_can_clock_in_again(n.workday_id) as can_clock_in_again
    from cma.team_now() n left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at
    from cma.time_event_effective e where e.workday_id = n.workday_id and e.kind = 'start') se on true$q$, 'poll', array['monitoring.live']),
-('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
+('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid, work_area from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'inbound today', $q$select * from cma.inbound_today()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks', $q$select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks summary', $q$select * from cma.missed_callbacks_summary()$q$, 'poll', array['monitoring.live']),
@@ -296,7 +298,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
      from cma.time_interval i join cma.work_status iws on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id where i.workday_id = s.workday_id) c on true
    left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start') se on true
    where s.user_id = cma.current_user_id() and s.business_date = cma.business_date(now(), cma.user_timezone(cma.current_user_id()))$q$, 'agent', array['workday.own']),
-('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, work_area, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),

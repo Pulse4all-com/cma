@@ -19,6 +19,8 @@
 -- Adjusted 11 November 2026 (addition 0009l, 172_active_customers.sql): verify.job_permissions gains customers.refresh,
 -- the right of the refresh of Customers → Active's stored take, which cma.ensure_scheduler_user gives the scheduler role
 -- since 0009l. Before 172 has run the list names a permission no role holds yet, which A4 accepts.
+-- Adjusted 23 November 2026 (addition 0009zl, 224_work_area.sql): A5 names cma.upsert_work_status's 8-argument signature
+-- (p_work_area last, default none); 224 drops the 7-argument one, and the 6- and 7-argument calls of block B reach the new one.
 -- =============================================================================================
 
 do $$
@@ -111,7 +113,7 @@ begin
   -- A5. the functions: the app may execute them, readers and public may not, none runs as owner
   foreach v_fn in array array[
     'cma.close_forgotten_workdays(integer)',
-    'cma.work_statuses_all()', 'cma.upsert_work_status(text,text,boolean,boolean,boolean,boolean,integer)',
+    'cma.work_statuses_all()', 'cma.upsert_work_status(text,text,boolean,boolean,boolean,boolean,integer,text)',
     'cma.set_default_work_status(text)', 'cma.retire_work_status(text)',
     'cma.app_links_all()', 'cma.upsert_app_link(text,text,text,text,integer)', 'cma.retire_app_link(text)',
     'cma.retire_absence_type(text)', 'cma.clear_coverage_target(text,text,smallint)', 'cma.coverage_targets_all()',

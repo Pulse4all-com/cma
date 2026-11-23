@@ -104,3 +104,35 @@ begin
   raise notice 'time model fixture written';
 end
 $$;
+
+-- 4. Work areas (after addition 0009zl, 224_work_area.sql; Martin, 23 November 2026) -----------
+-- So dev shows Sales green and Operations Deep Blue in every hours view. Chosen by rule, naming no tenant and no status
+-- key (D1): in a tenant with two or more active working, productive statuses and no work area anywhere yet, the first in
+-- its order (sort order, then key) gets sales and the second operations; a tenant with one such status (the universal
+-- ladder) keeps none, so its time stays Productive. Rerun-safe: a tenant that has a work area is left as it is, so a
+-- change on Configuration → Statuses survives a rerun. Dev only: it does nothing where the dev seed's test person
+-- (03_seed_dev_test_data.sql) does not exist, and nothing before 224 has run.
+do $$
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'cma' and table_name = 'work_status' and column_name = 'work_area') then
+    raise notice 'cma.work_status.work_area does not exist yet (addition 0009zl): rerun this seed after 224_work_area.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.app_user where email = 'agent.two@example.com' and status = 'active') then
+    raise notice 'not the dev database (no dev seed person): work areas skipped';
+    return;
+  end if;
+  with candidate as (
+    select s.id, row_number() over (partition by s.tenant_id order by s.sort_order, s.key collate "C") as n,
+           count(*) over (partition by s.tenant_id) as of_n
+    from cma.work_status s
+    where s.status = 'active' and s.is_working and s.is_productive
+      and not exists (select 1 from cma.work_status a where a.tenant_id = s.tenant_id and a.work_area is not null)
+  )
+  update cma.work_status s
+     set work_area = case c.n when 1 then 'sales' else 'operations' end
+    from candidate c
+   where s.id = c.id and c.of_n >= 2 and c.n <= 2;
+end
+$$;

@@ -210,6 +210,7 @@ declare
   f     regprocedure := to_regprocedure('cma.team_now()');
   v_bad text := '';
   v_cols text;
+  v_want text;
 begin
   -- S1
   perform pg_temp.v0009z_row(1, 'S1', 'the addition 0009z recorded once, after 0009y',
@@ -229,7 +230,12 @@ begin
     from pg_proc p
     join lateral unnest(p.proargnames, p.proargmodes) with ordinality as a(attname, attmode, n) on true
     where p.oid = f and a.attmode = 't';
-    if v_cols is distinct from pg_temp.v0009z_cols() || ', paid_closed_seconds, paid_running_since' then
+    -- Adjusted 23 November 2026 (addition 0009zl, 224_work_area.sql): work_area follows the paid columns, last
+    v_want := pg_temp.v0009z_cols() || ', paid_closed_seconds, paid_running_since';
+    if exists (select 1 from cma.schema_migration where version = '0009zl') then
+      v_want := v_want || ', work_area';
+    end if;
+    if v_cols is distinct from v_want then
       v_bad := v_bad || 'columns [' || coalesce(v_cols, '') || ']; ';
     end if;
     if (select format_type(p.prorettype, null) from pg_proc p where p.oid = f) <> 'record' or not (select p.proretset from pg_proc p where p.oid = f) then
