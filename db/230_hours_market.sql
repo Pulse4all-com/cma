@@ -136,9 +136,10 @@
 --   229_verify_work_area.sql             S3 asserts the reads end with work_area, R1 compares team_status_time row for row:
 --                                        edited by this change (S3: work_area after the previous columns, later ones allowed;
 --                                        R1: the new read summed over its earlier columns, as a status splits per market)
--- 131_time_all.sql's rows 'own day today' and 'statuses' are edited by this change to read as the web now does, and a row
--- 'hours markets' is added (People's and Correct day's new statement); 'team now', 'team status time' and 'directory' read
--- n.* and * and take the new column as it is.
+-- 131_time_all.sql's row 'own day today' is edited by this change to read as the web now does, and two rows are added:
+-- 'my day' 'statuses and hours markets' (My day's choices, one statement) and 'team people' 'hours markets' (People's new
+-- statement; Correct day's day read takes the same one, and 131 has no Correct day row); 'statuses', 'team now', 'team status time' and 'directory' are unchanged ('statuses' as
+-- Welcome reads it; the others read n.* and * and take the new column as it is).
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';

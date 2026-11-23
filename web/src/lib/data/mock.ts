@@ -3427,7 +3427,9 @@ export const mockData: CmaData = {
       const market = !carries ? null
         : c.hoursMarket !== undefined
           ? (!c.hoursMarket ? null : c.hoursMarket === replacedMarket ? resolve(c.hoursMarket) : assertMockHoursMarket(me, c.hoursMarket, true))
-          : resolve(replacedMarket);
+          : replaced ? resolve(replacedMarket)
+          // an added row keeps the market in force at its time, as a status change does (D3)
+          : resolve(effective(events).filter((e) => (e.kind === "start" || e.kind === "status") && Date.parse(e.at) <= ms).at(-1)?.hoursMarket ?? null);
       events.push(mockEvent(c.kind, new Date(ms).toISOString(), status?.key ?? null, "correction", {
         supersedes: c.supersedes ?? null, reason, approvedByName: me.displayName, hoursMarket: market,
       }));

@@ -302,7 +302,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
      from cma.time_interval i join cma.work_status iws on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id where i.workday_id = s.workday_id) c on true
    left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start') se on true
    where s.user_id = cma.current_user_id() and s.business_date = cma.business_date(now(), cma.user_timezone(cma.current_user_id()))$q$, 'agent', array['workday.own']),
-('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, work_area, is_default,
+('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, work_area, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+-- My day's choices (addition 0009zo): the statuses with the active hours markets in the same statement
+('a', 'my day', 'statuses and hours markets', $q$select key, name, is_working, is_productive, work_area, is_default,
    (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json) from cma.hours_markets() h where h.status = 'active') as hours_markets
    from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),

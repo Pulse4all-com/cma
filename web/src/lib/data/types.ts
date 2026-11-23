@@ -250,7 +250,8 @@ export interface CorrectionChange {
   supersedes?: string;
   /**
    * Start and status only (addition 0009zo, D5): an hours market of the tenant, or null for none. Left out, a change
-   * that replaces a start or status keeps that event's market and any other change books none
+   * that replaces a start or status keeps that event's market and an added one the market in force at its time (D3);
+   * either as it books now, after any remapping
    */
   hoursMarket?: string | null;
 }

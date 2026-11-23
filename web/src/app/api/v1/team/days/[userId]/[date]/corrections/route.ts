@@ -60,7 +60,8 @@ function parseChanges(raw: unknown): CorrectionChange[] {
 /**
  * Correct one person's day: body { "reason": "…", "changes": [ { kind, at, statusKey, supersedes, hoursMarket } ] }.
  * hoursMarket (addition 0009zo): on a start or status, an hours market of the tenant (an inactive one allowed) or null
- * for none; left out, a change that replaces a start or status keeps that event's market.
+ * for none; left out, a change that replaces a start or status keeps that event's market and an added one the market
+ * in force at its time (as it books now, after any remapping).
  * On a date without a day this is Add day, and the first change must be the start. The caller is
  * the approver (V1). Answers { day, events } as the day now stands.
  *

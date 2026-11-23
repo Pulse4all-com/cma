@@ -796,6 +796,10 @@ begin
               'at', to_jsonb((v_d + time '05:10') at time zone v_z), 'statusKey', v_other.key)), 'verify added');
     select v_b5 || '; added ' || coalesce(e.hours_market_code, '-') into v_b5
     from cma.time_event e where e.tenant_id = v_t and e.workday_id = w2.id and e.kind = 'status' and e.source = 'correction';
+    -- and an event cma.correct_time_event adds (no supersedes) keeps it too
+    perform cma.correct_time_event(w2.id, 'status', (v_d + time '05:20') at time zone v_z, v_work.key, null, 'verify added single', v_team);
+    select v_b5 || '; added single ' || coalesce(e.hours_market_code, '-') into v_b5
+    from cma.time_event e where e.tenant_id = v_t and e.workday_id = w2.id and e.reason = 'verify added single';
 
     -- B7: the reads
     perform set_config('app.user_id', v_team::text, true);
@@ -888,7 +892,7 @@ begin
     v_b4, 'a1 NL ok; a4 FR ok; a2 BE CMA04; a2 SE CMA02; agent sets own CMA06; table a2 BE CMA04; FR inactive ok; '
        || 'clock-in a2 yesterday -, a1 NL, a2 DE, a3 -, a4 -');
   perform pg_temp.v0009zo_row(15, 'B5', 'a correction changes the market with reason and approver, keeps it without hoursMarket; refusals; four eyes',
-    v_b5, 'a3 start correction, verify market, approver true, DE; BE CMA04; SE CMA02; end NL CMA04; own day CMA06; a2 kept DE > DE > DE; added DE');
+    v_b5, 'a3 start correction, verify market, approver true, DE; BE CMA04; SE CMA02; end NL CMA04; own day CMA06; a2 kept DE > DE > DE; added DE; added single DE');
   perform pg_temp.v0009zo_row(16, 'B6', 'worked, productive, paid and billable for the day equal before and after the markets change',
     v_b6, 'export hours equal; team hours equal; status time equal');
   perform pg_temp.v0009zo_row(17, 'B7', 'the reads answer the market',
@@ -956,6 +960,11 @@ begin
       if v_who is null then
         insert into pg_temp.verify_0009zo values (c.ord, c.id || ' ' || t.slug || ': ' || c.fn,
           case when pg_temp.v0009zo_p(c.id) then 'FAIL' else 'skip' end, 'no active person holds ' || array_to_string(c.perms, ' or ') || ': not compared');
+        continue;
+      end if;
+      if c.id = 'R7' and v_du is null then
+        insert into pg_temp.verify_0009zo values (c.ord, c.id || ' ' || t.slug || ': ' || c.fn,
+          case when pg_temp.v0009zo_p(c.id) then 'FAIL' else 'skip' end, 'no day in the last 31 days: not compared');
         continue;
       end if;
       begin
