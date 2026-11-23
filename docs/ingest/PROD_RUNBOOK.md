@@ -4002,7 +4002,26 @@ The high months of 19.18 after February 2026 (GB Sep 2026 2.79, SE Sep 1.67, DE 
 
 **Studio (cma-prod-pg)**
 ```sql
-{q}
+set statement_timeout = '300s';
+set role cma_owner;
+with t as (select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'),
+st as materialized (select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
+m as materialized (select m.* from t cross join lateral cma.subscription_moves_of(t.id, now()) m where m.kind in ('churned', 'moved_to_failed')),
+x as (
+  select m.connection_id, date_trunc('month', m.at at time zone (select timezone from t))::date as month, m.kind,
+         exists (select 1
+                 from cma.subscription s
+                 join cma.subscription_event e on e.tenant_id = s.tenant_id and e.connection_id = s.connection_id and e.subscription_source_id = s.source_id
+                 where s.id = m.subscription_id and e.occurred_at = m.at
+                   and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')) as reported
+  from m)
+select coalesce(st.market, 'unknown') as market, x.month, x.kind, count(*) as moves, count(*) filter (where not x.reported) as inferred
+from x
+left join st on st.connection_id = x.connection_id
+group by 1, 2, 3
+having count(*) filter (where not x.reported) > 0
+order by coalesce(st.market, 'unknown') collate "C", x.month, x.kind collate "C";
+reset role;
 ```
 Expected: the high months' moves mostly `inferred`, which confirms the cause. If they are mostly reported by events, the cause is elsewhere (for example a bulk action that moved them): name it in `records/0009zk-prod-<date>`. Keep the output for `records/0009zk-prod-<date>` and compare it with 23.10.
 
