@@ -10,7 +10,10 @@ import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, streamed } from "@/lib/data";
 import { FLASH_ADDRESS, metricKey, modelChoicesOf, narrowDocument, parseFilters, splitOf, splitOrderOf } from "@/lib/flash";
-import { donutSlices, INSTALLED_BASE_ADDRESS, INSTALLED_BASE_PAGE_ROWS, INSTALLED_BASE_PATH, installedBaseState, LIST_PANELS, statusChoicesOf } from "@/lib/installed-base";
+import {
+  BREAKDOWN_PANELS, debtChoicesOf, donutSlices, INSTALLED_BASE_ADDRESS, INSTALLED_BASE_PAGE_ROWS, INSTALLED_BASE_PATH, installedBaseState, LIST_PANELS, modelSplitSetOf,
+  panelSet, statusChoicesOf,
+} from "@/lib/installed-base";
 import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
 import { REPORT_PERMISSIONS } from "@/lib/reports";
@@ -21,7 +24,7 @@ import { resolve } from "../../access";
  * Assets → Installed base, the "now" view (addition 0009f; Martin, 8 November 2026, D1 to D7; a page of the Assets
  * group since 0008zw). No As of: Flash's Installed base tab keeps the history. The default view loads the stored current
  * take's figures alone (0009e: one document read, shown with Refreshed at, live when the take may not be read): the
- * filters (Market K, Model D, Operational status S), the tiles of today, In the field per model as a donut and per market
+ * filters (Market K, Model D, Operational status S, Debt status B since 0009zl), the tiles of today, In the field per model as a donut and per market
  * stacked per model. The records, the two breakdowns, the work lists (Devices past due; In the field without a linked
  * subscription) and the serial search load only when asked, as address state (panel=, serial=), one at a time, each a
  * server-rendered segment under a skeleton sized like its content; a list's read starts with the document's and streams
@@ -71,10 +74,12 @@ export default async function InstalledBasePage({ searchParams }: PageProps<"/re
   // the donut: In the field per model from the set that carries the model with every measure (the split's rule, 0008zy),
   // of the market shown; the page filters narrow it too, and a Model filter leaves that model alone (one slice, not the
   // register's other models at 0)
-  const split = (splitOf(def, narrowed.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder)) ?? [])
+  // under a Debt status filter the one set holding the model and the debt status (0009zl): modelSplitSetOf
+  const splitSet = modelSplitSetOf(def, st.pageFilters);
+  const split = (splitOf(def, narrowed.rows, null, splitOrderOf(def, doc.statusSettings, doc.splitOrder), splitSet) ?? [])
     .filter((x) => !st.pageFilters.model || x.key === st.pageFilters.model);
   const { slices, total } = donutSlices(split);
-  const stacks = stacksOf(def, narrowed.rows, slices);
+  const stacks = stacksOf(def, narrowed.rows, slices, splitSet);
   const splitUnavailable = narrowed.unavailableMeasures.includes(def.headline);
   // the address every link keeps: the market and the page filters, then the open panel or the search, then the list's own
   // filters a breakdown cell set (f_<dim>) and the measure
@@ -100,6 +105,9 @@ export default async function InstalledBasePage({ searchParams }: PageProps<"/re
             labels={{ model: t.modelFilter, allModels: t.allModels, unknownModel: t.unknownModel }} path={INSTALLED_BASE_PATH} />
           <FlashChoice dim="status" value={st.pageFilters.status ?? null} choices={statusChoicesOf(doc.labels, doc.rows)} query={{ ...st.base, ...panelKeys }}
             labels={{ label: ib.statusFilter, all: ib.allStatuses, unknown: ib.unknownStatus }} keycap="s" testId="ib-status" path={INSTALLED_BASE_PATH} />
+          <FlashChoice dim="debt_status" value={st.pageFilters.debt_status ?? null}
+            choices={debtChoicesOf(doc.labels, doc.rows, { without: ib.withoutDebtStatus, with: ib.withDebtStatus })} query={{ ...st.base, ...panelKeys }}
+            labels={{ label: ib.debtFilter, all: ib.allDebtStatuses, unknown: ib.unknownStatus }} keycap="b" testId="ib-debt-status" path={INSTALLED_BASE_PATH} />
         </div>
         <SerialSearch st={st} copy={copy} />
       </div>
@@ -137,9 +145,9 @@ export default async function InstalledBasePage({ searchParams }: PageProps<"/re
 
           <PanelTabs st={st} copy={copy} />
 
-          {panelOpen === "breakdown" || panelOpen === "subscription" ? (
+          {panelOpen && BREAKDOWN_PANELS.includes(panelOpen) ? (
             <BreakdownPanel panel={panelOpen} def={def} doc={doc} rows={narrowed.rows} query={cellQuery} fileQuery={breakdownFileQuery(st)} locale={locale} copy={copy}
-              unavailable={narrowed.unavailableSets.includes((def.sets.find((s) => (panelOpen === "breakdown" ? s.includes("warehouse") : s.includes("subscription_status"))) ?? []).join("+"))} />
+              unavailable={narrowed.unavailableSets.includes((panelSet(panelOpen, def) ?? []).join("+"))} />
           ) : null}
 
           {list && read && (st.serial || (st.panel && LIST_PANELS.includes(st.panel))) ? (

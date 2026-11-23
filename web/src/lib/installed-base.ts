@@ -8,7 +8,9 @@
  * rows, three columns kept for the files). The figures themselves come from the stored current take (lib/flash
  * narrowDocument) and the records from cma.flash_rows.
  */
-import { FLASH_ADDRESS, flashHref, overviewOf, parseMarket, parseSort, type FlashDocRow, type FlashOverviewDef } from "@/lib/flash";
+import {
+  FLASH_ADDRESS, FLASH_ANY_VALUE, FLASH_NONE_VALUE, FLASH_SPLITS, flashHref, overviewOf, parseMarket, parseSort, type FlashDocRow, type FlashOverviewDef,
+} from "@/lib/flash";
 
 export const INSTALLED_BASE_PATH = "/reports/installed-base" as const;
 export const INSTALLED_BASE_KEY = "installed_base" as const;
@@ -16,16 +18,24 @@ export const INSTALLED_BASE_KEY = "installed_base" as const;
 export const INSTALLED_BASE_PAGE_ROWS = 50;
 /** The columns the page's lists leave out (D5: References, Missing references and Subscription linked); their files keep them */
 export const INSTALLED_BASE_HIDDEN_COLUMNS: readonly string[] = ["refs", "missing_refs", "link"];
-/** The dims the page narrows the whole document by (D3): the model and the operational status; the market is the page's own (K) */
-export const INSTALLED_BASE_PAGE_FILTERS: readonly string[] = ["model", "status"];
+/**
+ * The dims the page narrows the whole document by (D3): the model, the operational status and, since addition 0009zl, the
+ * debt status; the market is the page's own (K)
+ */
+export const INSTALLED_BASE_PAGE_FILTERS: readonly string[] = ["model", "status", "debt_status"];
 /** The most slices a donut shows before the smallest models are grouped as Other (D2) */
 export const DONUT_MAX_SLICES = 5;
 /** The key of the grouped slice; never a model's key (a catalog key is lower-case letters, digits and _, and never starts with a dash) */
 export const OTHER_KEY = "-other";
 
-/** The panels (D4), one open at a time: the two breakdowns from the take, the three lists read on demand */
-export type InstalledBasePanel = "breakdown" | "subscription" | "records" | "past_due" | "unlinked";
-export const INSTALLED_BASE_PANELS: readonly InstalledBasePanel[] = ["breakdown", "subscription", "records", "past_due", "unlinked"];
+/**
+ * The panels (D4), one open at a time: the three breakdowns from the take (the debt status's since addition 0009zl), the
+ * three lists read on demand
+ */
+export type InstalledBasePanel = "breakdown" | "subscription" | "debt" | "records" | "past_due" | "unlinked";
+export const INSTALLED_BASE_PANELS: readonly InstalledBasePanel[] = ["breakdown", "subscription", "debt", "records", "past_due", "unlinked"];
+/** The panels that show a breakdown set of the document */
+export const BREAKDOWN_PANELS: readonly InstalledBasePanel[] = ["breakdown", "subscription", "debt"];
 /** The panels that read a list (cma.flash_rows); the breakdowns render from the document already read */
 export const LIST_PANELS: readonly InstalledBasePanel[] = ["records", "past_due", "unlinked"];
 
@@ -58,7 +68,38 @@ export function panelListFilters(panel: InstalledBasePanel): Record<string, stri
 export function panelSet(panel: InstalledBasePanel, def: FlashOverviewDef): readonly string[] | null {
   if (panel === "breakdown") return def.sets.find((s) => s.includes("status") && s.includes("warehouse")) ?? null;
   if (panel === "subscription") return def.sets.find((s) => s.includes("subscription_status")) ?? null;
+  if (panel === "debt") return def.sets.find((s) => s.includes("debt_status")) ?? null;
   return null;
+}
+
+/**
+ * The Debt status selector's choices (addition 0009zl): Without a debt status (none), With a debt status (any), then each
+ * debt status of the tenant's catalog in its sort order (the document's labels debt_status and debt_status_order), by name
+ * where two share an order; a status a row holds that the catalog no longer names follows, as its key
+ */
+export function debtChoicesOf(labels: Readonly<Record<string, Readonly<Record<string, string>>>> | null | undefined, rows: readonly FlashDocRow[],
+  words: { without: string; with: string }): { key: string; name: string | null }[] {
+  const names = labels?.debt_status ?? {};
+  const order = labels?.debt_status_order ?? {};
+  const keys = new Set<string>(Object.keys(names));
+  for (const r of rows) {
+    const k = r.dims.debt_status;
+    if (typeof k === "string" && k !== FLASH_NONE_VALUE) keys.add(k);
+  }
+  const rank = (k: string) => { const n = Number.parseInt(order[k] ?? "", 10); return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER; };
+  const statuses = [...keys].sort((a, b) => rank(a) - rank(b) || (names[a] ?? a).localeCompare(names[b] ?? b) || a.localeCompare(b))
+    .map((key) => ({ key, name: names[key] ?? null }));
+  return [{ key: FLASH_NONE_VALUE, name: words.without }, { key: FLASH_ANY_VALUE, name: words.with }, ...statuses];
+}
+
+/**
+ * The set the donut and the per-market stacks read In the field per model from: the headline split's set, or under a Debt
+ * status filter the set [market, model, debt_status], the one set holding both the model and the debt status (0009zl)
+ */
+export function modelSplitSetOf(def: FlashOverviewDef, pageFilters: Readonly<Record<string, string>>): readonly string[] {
+  const own = FLASH_SPLITS[def.key]?.set ?? [];
+  if (!pageFilters.debt_status) return own;
+  return def.sets.find((s) => s.includes("debt_status") && s.includes("model")) ?? own;
 }
 
 /** A link on the page: its address keys, in one place */

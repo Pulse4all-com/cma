@@ -488,11 +488,13 @@ begin
                where (o.kind = 'flow' and p.f is not null) or (o.kind = 'stock' and p.f is null) loop
         v_cmp := v_cmp + 1;
         select count(*) into v_cards from (
-          (select n.dims, n.measures from cma.flash_compute_of(t.id, o.key, m.f, m.u, m.d) n
+          -- since 224 (0009zl; edited by that change) without the installed base's set [market, model, debt_status] and its
+          -- measure under_debt_status, which 0008zy never computed
+          (select n.dims, n.measures - 'under_debt_status' from cma.flash_compute_of(t.id, o.key, m.f, m.u, m.d) n where not (n.dims ? 'debt_status')
            except select p.dims, p.measures from pg_temp.v0009p_compute_0008zy(t.id, o.key, m.f, m.u, m.d) p where not (pg_temp.v0009p_p('D1') and p.dims = '{}'::jsonb))
           union all
           (select p.dims, p.measures from pg_temp.v0009p_compute_0008zy(t.id, o.key, m.f, m.u, m.d) p where not (pg_temp.v0009p_p('D1') and p.dims = '{}'::jsonb)
-           except select n.dims, n.measures from cma.flash_compute_of(t.id, o.key, m.f, m.u, m.d) n)) x;
+           except select n.dims, n.measures - 'under_debt_status' from cma.flash_compute_of(t.id, o.key, m.f, m.u, m.d) n where not (n.dims ? 'debt_status'))) x;
         if v_cards > 0 then v_diff := v_diff + 1; v_bad := v_bad || o.key || ' '; end if;
       end loop;
     end loop;

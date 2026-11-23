@@ -657,6 +657,9 @@ begin
     -- since 0008zy (146) the subscription-status rows carry the model too (m1 here): taken out, so the figures compare as
     -- 0008zt stored them (the set's sums are the same; 147 checks the new rows)
     v_txt := regexp_replace(v_txt, '(^| )(GB|NL)/m1/(active|canceled|none|not_found|paused|failed):', '\1\2/\3:', 'g');
+    -- since 0009zl (224; edited by that change) the set [market, model, debt_status] (none alone here: no debt status) and
+    -- the measure under_debt_status (0 here): taken out, so the figures compare as before (225 checks them)
+    v_txt := regexp_replace(regexp_replace(v_txt, '(^| )[a-z0-9_]+/(GB|NL)/m1:[^ ]*', '', 'g'), ',under_debt_status=0', '', 'g');
     v_rows := v_rows || array['14', 'B2 installed base: devices, in the field, in stock, past due, due within three months; the subscription link',
       -- since 0008zt (136): in_field_on_holding (active is the only holding status here) and each device's linked subscription's status
       case when v_txt = '*:components_past_due=1,devices=5,in_field=4,in_field_on_holding=1,in_stock=1,items_due_3m=1 '
@@ -823,8 +826,10 @@ begin
     v_rows := v_rows || array['24', 'B8 the snapshot equals the computation as of its date, all eleven overviews',
       -- the definitions' versions: 0008zn, 0008zt for installed_base since 136 and 0008zu for customers and subscriptions
       -- since 138
-      -- since 210 (0009ze) installed_base and subscriptions are 0009ze's (the payment states)
-      case when v_txt = case when exists (select 1 from cma.schema_migration where version = '0009ze') then '11 0008zn,0008zu,0009ze'
+      -- since 210 (0009ze) installed_base and subscriptions are 0009ze's (the payment states); since 224 (0009zl; edited by
+      -- that change) installed_base is 0009zl's
+      case when v_txt = case when exists (select 1 from cma.schema_migration where version = '0009zl') then '11 0008zn,0008zu,0009ze,0009zl'
+                             when exists (select 1 from cma.schema_migration where version = '0009ze') then '11 0008zn,0008zu,0009ze'
                              else '11 0008zn,0008zt,0008zu' end and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B9. a second take of the same date writes nothing; no id list on a date that is no month end

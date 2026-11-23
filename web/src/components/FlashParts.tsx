@@ -252,6 +252,8 @@ function dimLabel(def: FlashOverviewDef, labels: FlashDocumentView["labels"] | n
   // a device's subscription status: the subscription app's word, else no subscription found, else no reference
   if (dim === "subscription_status" && dims[dim] === "not_found") return t.notFound;
   if (dim === "subscription_status" && dims[dim] === "none") return t.noLink;
+  // a device without a debt status (addition 0009zl)
+  if (dim === "debt_status" && dims[dim] === "none") return t.noDebtStatus;
   // an order's kind in the reader's language, as the headline's split names it (addition 0008zw)
   if (def.key === "orders" && dim === "kind") return splitKeyLabel(def.key, dims[dim] ?? "", t);
   // a device's model by its name in the register, as the headline's split names it (addition 0008zy)

@@ -167,13 +167,15 @@ begin
       || 'device_status_key:text:YES,warehouse_ref:text:YES,customer_ref:text:YES,customer_ref_invalid:bool:NO,subscription_ref:text:YES,order_ref:text:YES,'
       || 'first_shipped_on:date:YES,stock_received_on:date:YES,last_shipped_on:date:YES,warranty_until:date:YES,end_of_life_on:date:YES,'
       || 'external_refs:jsonb:NO,raw:jsonb:NO,source_deleted_at:timestamptz:YES,first_seen_at:timestamptz:NO,synced_at:timestamptz:NO'
-      || case when exists (select 1 from cma.schema_migration where version = '0009j') then ',pledge_ref:text:YES,language:text:YES' else '' end,
+      || case when exists (select 1 from cma.schema_migration where version = '0009j') then ',pledge_ref:text:YES,language:text:YES' else '' end
+      || case when exists (select 1 from cma.schema_migration where version = '0009zl') then ',debt_status_key:text:YES' else '' end,
     'device_component=id:uuid:NO,tenant_id:uuid:NO,device_id:uuid:NO,component_key:text:NO,serial:text:YES,expires_on:date:YES,first_seen_at:timestamptz:NO,replaced_at:timestamptz:YES',
     'device_import_row=id:uuid:NO,tenant_id:uuid:NO,batch_key:text:NO,source_row:int4:YES,source_id:text:YES,serial:text:YES,model:text:YES,status:text:YES,'
       || 'country:text:YES,warehouse_ref:text:YES,customer_ref:text:YES,subscription_ref:text:YES,order_ref:text:YES,first_shipped_on:text:YES,'
       || 'stock_received_on:text:YES,last_shipped_on:text:YES,warranty_until:text:YES,end_of_life_on:text:YES,components:text:YES,external_refs:text:YES,'
       || 'staged_at:timestamptz:NO'
-      || case when exists (select 1 from cma.schema_migration where version = '0009j') then ',pledge_ref:text:YES,language:text:YES' else '' end] loop
+      || case when exists (select 1 from cma.schema_migration where version = '0009j') then ',pledge_ref:text:YES,language:text:YES' else '' end
+      || case when exists (select 1 from cma.schema_migration where version = '0009zl') then ',debt_status:text:YES' else '' end] loop
     if (select string_agg(column_name || ':' || udt_name || ':' || is_nullable, ',' order by ordinal_position)
         from information_schema.columns where table_schema = 'cma' and table_name = split_part(v_t, '=', 1))
        is distinct from split_part(v_t, '=', 2) then
@@ -331,6 +333,8 @@ begin
   if (select string_agg(check_key || ':' || sort_order, ',' order by sort_order) from cma.data_quality_assets_checks())
      is distinct from 'device_serial_missing:230,device_serial_duplicate:240,device_model_unmapped:250,device_status_unmapped:260,'
                       || 'device_market_unmapped:270,device_customer_ref_invalid:280,component_due_unknown:290,field_device_without_subscription_ref:300'
+                      -- 0009zl (224) adds device_debt_status_unmapped after them
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009zl') then ',device_debt_status_unmapped:305' else '' end)
      or (select count(*) from cma.schema_migration where version = '0008zi') <> 1 then
     v_bad := v_bad || 'the data-quality catalog or something twice; ';
   end if;
@@ -689,7 +693,10 @@ begin
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin1::text, true);
     v_rows := v_rows || array['23', 'B13 data quality: the eight checks with their totals and values; tenant two without an asset register lists none',
-      case when v_txt = 'component_due_unknown=4,device_customer_ref_invalid=1,device_market_unmapped=1,device_model_unmapped=1,device_serial_duplicate=2,'
+      -- 0009zl (224): the asset register's checks gain device_debt_status_unmapped, which finds nothing here (no row gives a label)
+      case when v_txt = 'component_due_unknown=4,device_customer_ref_invalid=1,'
+                        || case when exists (select 1 from cma.schema_migration where version = '0009zl') then 'device_debt_status_unmapped=0,' else '' end
+                        || 'device_market_unmapped=1,device_model_unmapped=1,device_serial_duplicate=2,'
                         || 'device_serial_missing=2,device_status_unmapped=1,field_device_without_subscription_ref=1 | '
                         || 'component_due_unknown:rec-4:battery component_due_unknown:rec-4:pads component_due_unknown:rec-7:battery component_due_unknown:rec-7:pads '
                         || 'device_customer_ref_invalid:rec-2:- device_market_unmapped:rec-4:Spain device_model_unmapped:rec-4:Model X '

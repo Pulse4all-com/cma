@@ -325,7 +325,7 @@ b = await runBackfill({ connectionId: reg1.id, object: "device", dryRun: true })
 expect("G1 the dry run lists the table's fields (id, name, type) and reads and counts: fetched, mapped, the fields, date failures, values with an @, unknown fields",
   [b.fetched, b.mapped, b.fields, b.tableFields, b.dateFailures, b.valuesWithAt, b.unknownFields, b.typeChangedFields,
     lastLog("backfill dry run")?.tableFieldList?.find((f) => f.name === "aed_sn")],
-  [200, 200, 20, 28, 1, 1, 0, 0, { id: idIn(one, "aed_sn"), name: "aed_sn", type: "singleLineText" }], [0, 0, 0, 0, 0, 0, 1, 1, null]);
+  [200, 200, 20, 29, 1, 1, 0, 0, { id: idIn(one, "aed_sn"), name: "aed_sn", type: "singleLineText" }], [0, 0, 0, 0, 0, 0, 1, 1, null]);
 expect("G2 …and writes nothing: no run, no staged row, the cursor as it was",
   [(await runsOf(reg1.id, null)).length - runs0, (await q("select count(*)::int as n from cma.device_import_row where tenant_id = $1", [T1.t]))[0].n,
     (await cursor(reg1.id, "assets:modified")).at === cursor0.at], [0, 0, true], [1, 1, false]);

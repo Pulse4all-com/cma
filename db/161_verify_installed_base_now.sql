@@ -649,7 +649,19 @@ as $$
   select coalesce((select string_agg(x, ',' order by x collate "C") from unnest(p_ids) x), '')
 $$;
 
+-- A list's answer without each row's debt_status (0009zl, 224: the installed base's rows carry it, which 148's never did;
+-- edited by that change), so A4 compares every other value with 148's
+create or replace function pg_temp.v0009f_no_debt(p_list jsonb)
+returns jsonb
+language sql immutable
+as $$
+  select case when p_list ? 'rows' then jsonb_set(p_list, '{rows}', (select coalesce(jsonb_agg(r.value - 'debt_status' order by r.ord), '[]'::jsonb)
+                                                                       from jsonb_array_elements(p_list -> 'rows') with ordinality r(value, ord)))
+              else p_list end
+$$;
+
 grant execute on function pg_temp.v0009f_dq_0008zt(uuid) to cma_app;
+grant execute on function pg_temp.v0009f_no_debt(jsonb) to cma_app;
 grant execute on function pg_temp.v0009f_rows_of_0008zz(uuid,text,jsonb,text,boolean,integer,integer,date,date) to cma_app;
 grant execute on function pg_temp.v0009f_rows_0008zz(text,jsonb,text,boolean,integer,integer,date,date,date) to cma_app;
 grant execute on function pg_temp.v0009f_code(text) to cma_app;
@@ -895,7 +907,7 @@ begin
       foreach s in array array['serial', 'next_due_on'] loop
         foreach d in array array[false, true] loop
           foreach pg slice 1 in array array[[500, 0], [3, 2]] loop
-            select cma.flash_rows_of(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null), pg_temp.v0009f_rows_of_0008zz(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null)
+            select pg_temp.v0009f_no_debt(cma.flash_rows_of(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null)), pg_temp.v0009f_rows_of_0008zz(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null)
             into v_new, v_old_j;
             v_n := v_n + 1;
             if v_new is distinct from v_old_j then v_bad := v_bad || f::text || ' ' || s || ' ' || d || ' ' || pg[1] || '/' || pg[2] || '; '; end if;
@@ -924,9 +936,9 @@ begin
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_reader::text, true);
-    select cma.flash_rows('installed_base'), pg_temp.v0009f_rows_0008zz('installed_base') into v_new, v_old_j;
+    select pg_temp.v0009f_no_debt(cma.flash_rows('installed_base')), pg_temp.v0009f_rows_0008zz('installed_base') into v_new, v_old_j;
     if v_new is distinct from v_old_j then v_bad := v_bad || 'flash_rows; '; end if;
-    select cma.flash_rows('installed_base', '{"market": "GB", "measure": "in_field"}', 'next_due_on', true, 4, 2),
+    select pg_temp.v0009f_no_debt(cma.flash_rows('installed_base', '{"market": "GB", "measure": "in_field"}', 'next_due_on', true, 4, 2)),
            pg_temp.v0009f_rows_0008zz('installed_base', '{"market": "GB", "measure": "in_field"}', 'next_due_on', true, 4, 2) into v_new, v_old_j;
     if v_new is distinct from v_old_j then v_bad := v_bad || 'flash_rows GB; '; end if;
     v_txt := pg_temp.v0009f_code('select cma.flash_rows(''installed_base'', ''{"serial": "SN-d-1"}'')')
@@ -1039,6 +1051,7 @@ $$;
 
 -- The helpers are dropped first, so the verdict is the last thing the script prints
 drop function if exists pg_temp.v0009f_ids(text[]);
+drop function if exists pg_temp.v0009f_no_debt(jsonb);
 drop function if exists pg_temp.v0009f_code(text);
 drop function if exists pg_temp.v0009f_rows_0008zz(text,jsonb,text,boolean,integer,integer,date,date,date);
 drop function if exists pg_temp.v0009f_rows_of_0008zz(uuid,text,jsonb,text,boolean,integer,integer,date,date);

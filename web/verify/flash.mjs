@@ -30,7 +30,7 @@ import {
   FLASH_SET_MEASURES, FLASH_BAND_DIMS, bandDimOf, bandOrder, bandLowerBound, bandRows, moreThanRows, FLASH_STATUS_HINTS, FLASH_CARD_STATUS_HINTS,
   statusHintPart, measureHint, cardStatusHint, statusSettingsOf, FLASH_SPLITS, splitOf, splitItemsOf, splitLine, definitionChanged,
   FLASH_ORDER_KINDS, splitOrderOf, splitKeyLabel, splitLabelsOf, flashHref,
-  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf, shownSetOf, appliedAsOf,
+  FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf, shownSetOf, appliedAsOf, dimMatches,
 } from "../src/lib/flash.ts";
 import { fmtLastRead } from "../src/lib/time.ts";
 
@@ -67,7 +67,7 @@ const fromSql = tuples.map((t) => ({ key: t[1], kind: t[3], source: t[5] ?? null
   countMeasures: arr(t[9]), headline: t[10], sorts: arr(t[11]) }));
 const fromTs = FLASH_OVERVIEWS.map((o) => ({ key: o.key, kind: o.kind, source: o.source, dims: [...o.dims], sets: o.sets.map((s) => [...s]),
   measures: [...o.measures], countMeasures: [...o.countMeasures], headline: o.headline, sorts: [...o.sorts] }));
-expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "146_installed_base_models.sql"], [0, ""]);
+expect(`eleven overviews in db/${overviewsDef.file}, read from cma.flash_overviews()`, [fromSql.length, overviewsDef.file], [11, "224_device_debt_status.sql"], [0, ""]);
 expect("the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts",
   JSON.stringify(fromTs) === JSON.stringify(fromSql), true, false);
 expect("the keys 1 to 9, 0 and Q in the page's order, each once",
@@ -204,8 +204,9 @@ const noStatus = wanted.filter((k) => {
   const m = /^Definition status: (Decided|Proposed|Pending|Retired)/.exec(String(byKey.get(k)?.notes ?? ""));
   return byKey.has(k) && (!m || m[1] !== FLASH_DEFINITION_STATUS[k.split(".")[1]]);
 });
+// 39 since 0009zl: the installed base's under_debt_status
 expect("every Flash measure has a metric catalog entry whose definition status is the one the page shows",
-  [wanted.length, missing, noStatus, wanted.every((k) => byKey.get(k)?.page === "/reports/flash")], [38, [], [], true], [0, ["x"], ["x"], false]);
+  [wanted.length, missing, noStatus, wanted.every((k) => byKey.get(k)?.page === "/reports/flash")], [39, [], [], true], [0, ["x"], ["x"], false]);
 
 // ---- Sources, not set up -------------------------------------------------------------------------------------------------
 const sources = { commerce: { set_up: true, adapters: ["shopx"], last_read_at: "2026-11-01T13:02:00Z" },
@@ -915,6 +916,7 @@ const zzList = defOf("flash_rows");
 const zzSources = defOf("flash_sources_of");
 const time131 = readFileSync(path.join(dbDir, "131_time_all.sql"), "utf8");
 expect("the database's list (148): the installed base's devices filtered and paged before the payment state of the page's subscriptions; one source's set-up; 131's CMA02 a skip, the page's set the document",
+  // since 0009zl (224) cma.flash_rows_of is 224's (the debt status's filter, measure and column)
   [[zzRows.file, zzList.file, zzSources.file], /v_base := 'cma\.flash_devices_of\(\$2, \$7\)';/.test(zzRows.text.slice(0, 9000)),
     /cma\.subscription_payment_state_of\(\$2, array\(select y\.subscription_id from p y where y\.subscription_id is not null\)\) ps/.test(zzRows.text.slice(0, 9000)),
     /n as \(select x\.\*%s, row_number\(\) over \(order by %s\) as ord from %s\)/.test(zzRows.text.slice(0, zzRows.text.indexOf('\n$$;'))),
@@ -924,7 +926,7 @@ expect("the database's list (148): the installed base's devices filtered and pag
       && /update pg_temp\.reads_0131 set in_set = false\s*where page in \('installed base', 'installed base as of month end'\) and cls = 'list';/.test(time131)
       && /v_skipped := not v_provoke and v_err is not null and v_err = rd\.skip_state;/.test(time131)],
   // cma.flash_sources_of: 148's set-up, its last read per connection since 0009x (196)
-  [["160_installed_base_now.sql", "160_installed_base_now.sql", "196_sync_run_reads.sql"], true, true, true, true, true],
+  [["224_device_debt_status.sql", "160_installed_base_now.sql", "196_sync_run_reads.sql"], true, true, true, true, true],
   [[], false, false, false, false, false]);
 
 // ---- Since addition 0009f: Assets → Installed base as the "now" view ----------------------------------------------------
@@ -969,13 +971,41 @@ expect("narrowDocument: a status filter sums the set that holds the status (the 
   [byStatus.totals, rowsOfSet(byStatus.rows, ["market"]).map((r) => `${r.dims.market}:${r.measures.devices}`), byStatus.unavailableSets, byStatus.unavailableMeasures,
     both.totals?.devices, both.totals?.in_stock, rowsOfSet(both.rows, ["market"]).length, none.totals?.devices, none.rows.length, none.unavailableSets,
     JSON.stringify(narrowDocument(ibDef0009f, totalsZf, rowsZf, { model: "ma" })) === JSON.stringify(filterDocument(ibDef0009f, totalsZf, rowsZf, "model", "ma"))],
-  [{ devices: 11, in_field: 11, in_stock: 0, components_past_due: 3, items_due_3m: 1, in_field_on_holding: 8 }, ["GB:7", "NL:4"], ["market+model+subscription_status"], [],
-    3, 3, 1, 14, 9, [], true],
+  // since 0009zl the debt status's set lacks the status too
+  [{ devices: 11, in_field: 11, in_stock: 0, components_past_due: 3, items_due_3m: 1, in_field_on_holding: 8 }, ["GB:7", "NL:4"],
+    ["market+model+subscription_status", "market+model+debt_status"], [], 3, 3, 1, 14, 9, [], true],
   [null, [], [], ["devices"], 0, 0, 0, 0, 0, ["x"], false]);
 expect("pageFiltersOf: the narrowing dims of the address alone (the model and the status; never the market or a list filter); FLASH_NARROW_DIMS names them for the installed base alone",
   [pageFiltersOf(ibDef0009f, { market: "GB", model: "ma", status: "field", serial: "x", warehouse: "w1" }, FLASH_NARROW_DIMS.installed_base),
     Object.keys(FLASH_NARROW_DIMS), [...ibLib.INSTALLED_BASE_PAGE_FILTERS]],
-  [{ model: "ma", status: "field" }, ["installed_base"], ["model", "status"]], [{}, [], []]);
+  [{ model: "ma", status: "field" }, ["installed_base"], ["model", "status", "debt_status"]], [{}, [], []]);
+// the debt status (addition 0009zl): a key, none and any narrow from the set [market, model, debt_status] (any every
+// value but none); the donut reads the same set under the filter; the selector's choices in the catalog's order
+const rowsZl = [
+  mRow({}, 14, 11, 3, 3, 1, 8), mRow({ market: "GB" }, 10, 7, 3, 2, 1, 5), mRow({ market: "NL" }, 4, 4, 0, 1, 0, 3),
+  mRow({ market: "GB", status: "field", model: "ma", warehouse: "none", link: "linked" }, 7, 7, 0, 2, 1, 5),
+  mRow({ market: "GB", status: "stock", model: "ma", warehouse: "w1", link: "none" }, 3, 0, 3, 0, 0, 0),
+  mRow({ market: "NL", status: "field", model: "ma", warehouse: "none", link: "linked" }, 4, 4, 0, 1, 0, 3),
+  { dims: { market: "GB", model: "ma", debt_status: "none" }, measures: { devices: 7, in_field: 4, in_stock: 3, components_past_due: 1, items_due_3m: 1, in_field_on_holding: 3, under_debt_status: 0 } },
+  { dims: { market: "GB", model: "ma", debt_status: "in_debt_collection" }, measures: { devices: 2, in_field: 2, in_stock: 0, components_past_due: 1, items_due_3m: 0, in_field_on_holding: 1, under_debt_status: 2 } },
+  { dims: { market: "GB", model: "ma", debt_status: "check_first" }, measures: { devices: 1, in_field: 1, in_stock: 0, components_past_due: 0, items_due_3m: 0, in_field_on_holding: 1, under_debt_status: 1 } },
+  { dims: { market: "NL", model: "ma", debt_status: "none" }, measures: { devices: 4, in_field: 4, in_stock: 0, components_past_due: 1, items_due_3m: 0, in_field_on_holding: 3, under_debt_status: 0 } },
+];
+const totalsZl = { ...totalsZf, under_debt_status: 3 };
+const anyZl = narrowDocument(ibDef0009f, totalsZl, rowsZl, { debt_status: "any" });
+const noneZl = narrowDocument(ibDef0009f, totalsZl, rowsZl, { debt_status: "none" });
+const keyZl = narrowDocument(ibDef0009f, totalsZl, rowsZl, { debt_status: "check_first" });
+const bothZl = narrowDocument(ibDef0009f, totalsZl, rowsZl, { debt_status: "any", status: "field" });
+const labelsZl = { debt_status: { in_debt_collection: "In debt collection", check_first: "Check first" }, debt_status_order: { in_debt_collection: "10", check_first: "40" } };
+expect("the debt status: any, none and a key narrow from [market, model, debt_status]; any is every value but none; the donut's set under the filter; the selector's choices in order",
+  [anyZl.totals?.devices, anyZl.totals?.under_debt_status, noneZl.totals?.devices, keyZl.totals?.in_field, anyZl.unavailableSets,
+    bothZl.unavailableMeasures.includes("in_field"), [...ibLib.modelSplitSetOf(ibDef0009f, { debt_status: "any" })], [...ibLib.modelSplitSetOf(ibDef0009f, {})],
+    ibLib.debtChoicesOf(labelsZl, rowsZl, { without: "W", with: "D" }).map((c) => `${c.key}:${c.name}`),
+    dimMatches("debt_status", "any", "none"), dimMatches("debt_status", "any", "check_first"), dimMatches("status", "any", "field"), ibLib.panelSet("debt", ibDef0009f)],
+  [3, 3, 11, 1, ["market+status+model+warehouse+link", "market+model+subscription_status"], true, ["market", "model", "debt_status"],
+    ["market", "status", "model", "warehouse", "link"], ["none:W", "any:D", "in_debt_collection:In debt collection", "check_first:Check first"],
+    false, true, false, ["market", "model", "debt_status"]],
+  [0, 0, 0, 0, [], false, [], [], [], true, false, true, null]);
 // the donut: the split's parts in the register's order, the smallest grouped as Other above five, the colours by position
 const parts = (vals) => vals.map((v, i) => ({ key: `m${i + 1}`, value: v }));
 const five = ibLib.donutSlices(parts([5, 0, 3, 2, 1]));
@@ -1015,7 +1045,7 @@ expect("the list panels' filters: the records none, the devices past due the mea
   [ibLib.panelListFilters("records"), ibLib.panelListFilters("past_due"), ibLib.panelListFilters("unlinked"), [...ibLib.INSTALLED_BASE_PANELS], [...ibLib.LIST_PANELS],
     [...ibLib.INSTALLED_BASE_HIDDEN_COLUMNS], ibLib.INSTALLED_BASE_PAGE_ROWS, ibLib.panelSet("breakdown", ibDef0009f), ibLib.panelSet("subscription", ibDef0009f), ibLib.panelSet("records", ibDef0009f),
     ibLib.installedBaseHref({ market: "GB", panel: "records" })],
-  [{}, { measure: "components_past_due" }, { without_subscription_ref: "true" }, ["breakdown", "subscription", "records", "past_due", "unlinked"], ["records", "past_due", "unlinked"],
+  [{}, { measure: "components_past_due" }, { without_subscription_ref: "true" }, ["breakdown", "subscription", "debt", "records", "past_due", "unlinked"], ["records", "past_due", "unlinked"],
     ["refs", "missing_refs", "link"], 50, ["market", "status", "model", "warehouse", "link"], ["market", "model", "subscription_status"], null, "/reports/installed-base?market=GB&panel=records"],
   [{ x: "y" }, {}, {}, [], [], [], 500, null, null, [], ""]);
 // the mock answers as the database: the serial search exact, trimmed and case-insensitive; the list without a subscription

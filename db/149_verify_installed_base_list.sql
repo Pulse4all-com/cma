@@ -308,6 +308,18 @@ as $$
   select coalesce(string_agg(x::text, ';' order by x ->> 'subscription_id'), '') from jsonb_array_elements(p_rows) x
 $$;
 
+-- A list's answer without each row's debt_status (0009zl, 224: the installed base's rows carry it, which 0008zu's never
+-- did; edited by that change), so the lists compare every other value with 0008zu's
+create or replace function pg_temp.v0008zz_no_debt(p_list jsonb)
+returns jsonb
+language sql immutable
+as $$
+  select case when p_list ? 'rows' then jsonb_set(p_list, '{rows}', (select coalesce(jsonb_agg(r.value - 'debt_status' order by r.ord), '[]'::jsonb)
+                                                                       from jsonb_array_elements(p_list -> 'rows') with ordinality r(value, ord)))
+              else p_list end
+$$;
+
+grant execute on function pg_temp.v0008zz_no_debt(jsonb) to cma_app;
 grant execute on function pg_temp.v0008zz_sources_0008zn(uuid) to cma_app;
 grant execute on function pg_temp.v0008zz_rows_of_0008zu(uuid,text,jsonb,text,boolean,integer,integer,date,date) to cma_app;
 grant execute on function pg_temp.v0008zz_rows_0008zn(text,jsonb,text,boolean,integer,integer,date,date,date) to cma_app;
@@ -471,7 +483,7 @@ begin
         foreach d in array array[false, true] loop
           foreach pg slice 1 in array array[[500, 0], [3, 0], [3, 3], [5, 100]] loop
             continue when s in ('model', 'status') and pg[1] <> 500;
-            v_new := cma.flash_rows_of(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null);
+            v_new := pg_temp.v0008zz_no_debt(cma.flash_rows_of(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null));
             v_old := pg_temp.v0008zz_rows_of_0008zu(v_t1, 'installed_base', f, s, d, pg[1], pg[2], null, null);
             v_n := v_n + 1;
             if v_new is distinct from v_old then v_bad := v_bad || f::text || ' ' || s || ' ' || d || ' ' || pg[1] || '/' || pg[2] || '; '; end if;
@@ -508,8 +520,8 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_reader::text, true);
     v_bad := '';
-    if cma.flash_rows('installed_base') is distinct from pg_temp.v0008zz_rows_0008zn('installed_base') then v_bad := v_bad || 'installed_base; '; end if;
-    if cma.flash_rows('installed_base', '{"market": "GB"}', 'next_due_on', true, 4, 2) is distinct from pg_temp.v0008zz_rows_0008zn('installed_base', '{"market": "GB"}', 'next_due_on', true, 4, 2) then
+    if pg_temp.v0008zz_no_debt(cma.flash_rows('installed_base')) is distinct from pg_temp.v0008zz_rows_0008zn('installed_base') then v_bad := v_bad || 'installed_base; '; end if;
+    if pg_temp.v0008zz_no_debt(cma.flash_rows('installed_base', '{"market": "GB"}', 'next_due_on', true, 4, 2)) is distinct from pg_temp.v0008zz_rows_0008zn('installed_base', '{"market": "GB"}', 'next_due_on', true, 4, 2) then
       v_bad := v_bad || 'GB; ';
     end if;
     if cma.flash_rows('reviews') is distinct from pg_temp.v0008zz_rows_0008zn('reviews') then v_bad := v_bad || 'reviews; '; end if;
@@ -580,7 +592,7 @@ begin
           d := s = 'next_due_on';
           foreach pg slice 1 in array array[[500, 0], [100, 500]] loop
             v_lists := v_lists + 1;
-            if cma.flash_rows_of(t.id, 'installed_base', f, s, d, pg[1], pg[2], null, null)
+            if pg_temp.v0008zz_no_debt(cma.flash_rows_of(t.id, 'installed_base', f, s, d, pg[1], pg[2], null, null))
                is distinct from pg_temp.v0008zz_rows_of_0008zu(t.id, 'installed_base', f, s, d, pg[1], pg[2], null, null) then
               v_bad3 := v_bad3 || t.slug || ' ' || f::text || ' ' || s || ' ' || pg[1] || '/' || pg[2] || '; ';
             end if;
@@ -606,6 +618,7 @@ drop function if exists pg_temp.v0008zz_ps(jsonb);
 drop function if exists pg_temp.v0008zz_rows_0008zn(text,jsonb,text,boolean,integer,integer,date,date,date);
 drop function if exists pg_temp.v0008zz_rows_of_0008zu(uuid,text,jsonb,text,boolean,integer,integer,date,date);
 drop function if exists pg_temp.v0008zz_sources_0008zn(uuid);
+drop function if exists pg_temp.v0008zz_no_debt(jsonb);
 
 -- Verdict: one row per check, then the verdict: no FAIL, a skip only where the check says why
 select check_name, result, detail

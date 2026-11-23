@@ -28,7 +28,7 @@
  * Before every read the mapping is checked: each property must be a field id (fld…; otherwise field_not_an_id, naming
  * it), each field must be in the table (GET /meta/bases/{base}/tables; otherwise unknown_field, naming the field's id:
  * it was deleted) and of the type the connection recorded when it first read it (otherwise field_type_changed, naming
- * the field's id and name and both types); a field mapped to pledge_ref or language (addition 0009j) of a type other than
+ * the field's id and name and both types); a field mapped to pledge_ref or language (addition 0009j) or debt_status (0009zl) of a type other than
  * a single select or text fails the same way (field_type_changed, the allowed types as was); the first read records the
  * types (cma.ingest_record_field_types). A field
  * renamed in Airtable keeps its id and changes nothing. The log names fields, never a value. The base is the

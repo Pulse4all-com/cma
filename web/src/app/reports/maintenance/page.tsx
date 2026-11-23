@@ -8,7 +8,7 @@ import { HeaderHint } from "@/components/HeaderHint";
 import { HintLabel } from "@/components/HintLabel";
 import { data, dataIsMock } from "@/lib/data";
 import {
-  fmtMonth, fromMonthChoices, MAINTENANCE_LIST_ROWS, maintenanceQuery, monthOf, parseBucket, parseMaintenanceFilter, parseView,
+  fmtMonth, fromMonthChoices, MAINTENANCE_DEBT_DEFAULT, MAINTENANCE_LIST_ROWS, maintenanceQuery, monthOf, parseBucket, parseMaintenanceFilter, parseView,
 } from "@/lib/maintenance";
 import { holdsAny } from "@/lib/nav";
 import { fmtCount, REPORT_PERMISSIONS } from "@/lib/reports";
@@ -22,11 +22,14 @@ import { resolve } from "../../access";
  * rule's lead days; a device's end of life is a due item of its own. The grid shows the Past due bucket and a column per
  * month of a forward horizon (from a month, 6, 12 or 24 months; H), per market and model, in planned exchanges (a
  * device's items within the bundling window counted once, in the month of the earliest action date) or in components
- * (G); filtered by market (K), model (D) and scope (S: every tracked device, in the field, in stock). A figure opens its
- * device list below; the due items without a due date are a note with a link to Data quality. Team figures only: no
- * figure per person exists. Shown to people holding reports.view or performance.team, as every report's team figures;
- * the database checks again on every read. Ids, statuses, dates and links only, never a customer's name, email, phone or
- * address. The address keys are from, months, market, model, scope, view, bucket, cellMarket and cellModel.
+ * (G); filtered by market (K), model (D), scope (S: every tracked device, in the field, in stock) and since addition
+ * 0009zl the debt status (B; by default the devices whose maintenance is paused, in the field under a debt status that
+ * pauses it, are left out, and a line says how many, with a link that shows them; their items stay in the forecast and a
+ * row of one is marked Paused). A figure opens its device list below; the due items without a due date are a note with a
+ * link to Data quality. Team figures only: no figure per person exists. Shown to people holding reports.view or
+ * performance.team, as every report's team figures; the database checks again on every read. Ids, statuses, dates and
+ * links only, never a customer's name, email, phone or address. The address keys are from, months, market, model, scope,
+ * debt, view, bucket, cellMarket and cellModel.
  */
 export default async function MaintenancePage({ searchParams }: PageProps<"/reports/maintenance">) {
   const r = await resolve();
@@ -62,8 +65,12 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
   const fileQuery = new URLSearchParams({
     from: filter.fromMonth, months: String(filter.months), bucket: bucket ?? "all", view,
     ...(listFilter.market ? { market: listFilter.market } : {}), ...(listFilter.model ? { model: listFilter.model } : {}),
-    ...(filter.scope ? { scope: filter.scope } : {}),
+    ...(filter.scope ? { scope: filter.scope } : {}), debt: filter.debt ?? "all",
   });
+  // the devices the default filter leaves out (0009zl): the line under the counts, with a link that shows them
+  const leftOut = filter.debt === MAINTENANCE_DEBT_DEFAULT && report.pausedDevices > 0;
+  const showsPaused = filter.debt === "any" || (filter.debt !== null && filter.debt !== undefined
+    && report.debtStatuses.some((d) => d.key === filter.debt && d.pausesMaintenance));
   const cellModelName = cellModel === "unknown" ? t.unknownModel : report.models.find((m) => m.key === cellModel)?.name ?? cellModel;
   const listTitle = bucket === null ? "" : cellMarket || cellModel
     ? t.listCardCell.replace("{bucket}", bucketLabel(bucket, copy, me.locale))
@@ -83,9 +90,11 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
       <div className="mb-6 flex flex-wrap items-end justify-between gap-6">
         <MaintenanceFilters months={fromMonthChoices(currentMonth).map((m) => ({ key: m, label: fmtMonth(m, me.locale) }))} markets={report.markets}
           models={report.models} fromMonth={filter.fromMonth} currentMonth={currentMonth} market={filter.market} model={filter.model}
-          query={Object.fromEntries(Object.entries(withView).filter(([k]) => k !== "from" && k !== "market" && k !== "model"))}
+          debt={filter.debt ?? null} debtStatuses={report.debtStatuses}
+          query={Object.fromEntries(Object.entries(withView).filter(([k]) => k !== "from" && k !== "market" && k !== "model" && k !== "debt"))}
           copy={{ from: t.from, marketFilter: t.marketFilter, allMarkets: t.allMarkets, modelFilter: t.modelFilter, allModels: t.allModels,
-            unknownMarket: copy.reports.unknownMarket, unknownModel: t.unknownModel }} />
+            unknownMarket: copy.reports.unknownMarket, unknownModel: t.unknownModel, debtFilter: t.debtFilter, debtUnpaused: t.debtUnpaused,
+            debtAll: t.debtAll, debtAny: t.debtAny }} />
         <MaintenanceSwitches months={filter.months} scope={filter.scope} view={view} query={withView} copy={copy} />
       </div>
 
@@ -120,6 +129,15 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/repo
           <p className="mb-4 text-small text-p4a-muted" data-testid="maintenance-devices-line">
             {t.devicesLine.replace("{n}", n(report.devices)).replace("{days}", String(report.bundleWindowDays))}
           </p>
+          {leftOut ? (
+            <p className="-mt-2 mb-4 text-small text-p4a-muted" data-testid="maintenance-left-out">
+              {report.pausedDevices === 1 ? t.leftOutOne : t.leftOut.replace("{n}", n(report.pausedDevices))}{" · "}
+              <Link href={{ pathname: "/reports/maintenance", query: { ...withView, debt: "any" } }} className="font-semibold text-p4a-deepblue underline">
+                {t.leftOutLink}
+              </Link>
+            </p>
+          ) : null}
+          {showsPaused ? <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted" data-testid="maintenance-paused-note">{t.pausedNote}</p> : null}
           {report.cells.length === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p>
             : <MaintenanceGrid report={report} view={view} query={withView} copy={copy} locale={me.locale} />}
         </Card>

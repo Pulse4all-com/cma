@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * The filters of Reports → Maintenance (addition 0008zi): the horizon's first month, the market (K) and the model (D).
- * Choosing keeps the horizon's length, the scope and the view and loads the page with the filter; an open device list
- * closes. The address keys are from, market and model.
+ * The filters of Reports → Maintenance (addition 0008zi): the horizon's first month, the market (K), the model (D) and
+ * since addition 0009zl the debt status (B: Without a debt status, the default, leaves out every device whose maintenance
+ * is paused; All devices; With a debt status; each debt status of the catalog in its order). Choosing keeps the horizon's
+ * length, the scope and the view and loads the page with the filter; an open device list closes. The address keys are
+ * from, market, model and debt (left out for the default, all for every device).
  */
 import type { Route } from "next";
 import { Keycap } from "./primitives";
@@ -13,9 +15,13 @@ const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 f
 
 export interface MaintenanceFilterCopy {
   from: string; marketFilter: string; allMarkets: string; modelFilter: string; allModels: string; unknownMarket: string; unknownModel: string;
+  debtFilter: string; debtUnpaused: string; debtAll: string; debtAny: string;
 }
 
-export function MaintenanceFilters({ months, markets, models, fromMonth, currentMonth, market, model, query, copy }: {
+/** The debt filter's value in the address and the select: unpaused (the default, left out of the address), all, any or a key */
+const DEBT_DEFAULT = "unpaused";
+
+export function MaintenanceFilters({ months, markets, models, fromMonth, currentMonth, market, model, debt, debtStatuses, query, copy }: {
   /** The months the horizon may start in, with their labels */
   months: { key: string; label: string }[];
   /** Market codes, "unknown" for a device without one */
@@ -25,19 +31,26 @@ export function MaintenanceFilters({ months, markets, models, fromMonth, current
   currentMonth: string;
   market: string | null;
   model: string | null;
+  /** The debt status filter as the page holds it: unpaused, any, none, a key, or null for every device */
+  debt: string | null;
+  debtStatuses: { key: string; name: string }[];
   /** The rest of the query string (months, scope, view), kept when a filter changes */
   query: Record<string, string>;
   copy: MaintenanceFilterCopy;
 }) {
-  const [pending, shown, choose] = usePendingChoice({ from: fromMonth, market, model });
+  const [pending, shown, choose] = usePendingChoice({ from: fromMonth, market, model, debt: debt ?? "all" });
+  const debtList = shown.debt && !["all", DEBT_DEFAULT, "any"].includes(shown.debt) && !debtStatuses.some((d) => d.key === shown.debt)
+    ? [...debtStatuses, { key: shown.debt, name: shown.debt }] : debtStatuses;
   const marketList = market && !markets.includes(market) ? [...markets, market] : markets;
   const modelList = model && !models.some((m) => m.key === model) ? [...models, { key: model, name: null }] : models;
 
-  function go(next: { from: string; market: string | null; model: string | null }) {
+  function go(next: { from: string; market: string | null; model: string | null; debt: string }) {
     const qs = new URLSearchParams(query);
     if (next.from !== currentMonth) qs.set("from", next.from);
     if (next.market) qs.set("market", next.market);
     if (next.model) qs.set("model", next.model);
+    qs.delete("debt");
+    if (next.debt !== DEBT_DEFAULT) qs.set("debt", next.debt);
     choose(next, `/reports/maintenance?${qs.toString()}` as Route);
   }
 
@@ -63,6 +76,16 @@ export function MaintenanceFilters({ months, markets, models, fromMonth, current
           onChange={(e) => go({ ...shown, model: e.target.value || null })}>
           <option value="">{copy.allModels}</option>
           {modelList.map((m) => <option key={m.key} value={m.key}>{m.key === "unknown" ? copy.unknownModel : m.name ?? m.key}</option>)}
+        </select>
+      </label>
+      <label className="flex flex-col gap-2 text-small font-semibold">
+        <span className="flex items-center gap-2">{copy.debtFilter} <Keycap>B</Keycap></span>
+        <select value={shown.debt} data-shortcut="b" data-testid="maintenance-debt" className={select.replace("w-44", "w-56")}
+          onChange={(e) => go({ ...shown, debt: e.target.value })}>
+          <option value="all">{copy.debtAll}</option>
+          <option value={DEBT_DEFAULT}>{copy.debtUnpaused}</option>
+          <option value="any">{copy.debtAny}</option>
+          {debtList.map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
         </select>
       </label>
     </div>

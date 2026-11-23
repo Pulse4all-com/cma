@@ -60,7 +60,10 @@ create or replace function pg_temp.v0008zu_ver(p text)
 returns text
 language sql
 as $$
-  select case when exists (select 1 from cma.schema_migration where version = '0009ze')
+  -- since 224 (0009zl; edited by that change) installed_base is 0009zl's
+  select case when exists (select 1 from cma.schema_migration where version = '0009zl')
+              then replace(replace(p, '{S}', '0009ze'), '{I}', '0009zl')
+              when exists (select 1 from cma.schema_migration where version = '0009ze')
               then replace(replace(p, '{S}', '0009ze'), '{I}', '0009ze') else replace(replace(p, '{S}', '0008zu'), '{I}', '0008zt') end
 $$;
 

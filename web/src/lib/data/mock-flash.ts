@@ -160,6 +160,9 @@ function fixtureOf(me: Principal, today: string): Fixture {
       customer_id: stock ? null : sub.customer_id, subscription_id: link === "none" ? null : link === "not_found" ? `s-79${i}` : sub.subscription_id, link,
       subscription_status: link === "linked" ? sub.status : link, subscription_payment_state: link === "linked" ? sub.payment_state : null,
       past_due_items: i % 9 === 0 ? 1 : 0, items_due_3m: i % 5 === 0 ? 1 : 0, next_due_on: addDays(today, (i * 23) % 400 - 30),
+      // the register's debt status (addition 0009zl): every seventh device in the field in debt collection, every
+      // seventeenth to be submitted, and one in stock that keeps its label (never counted under_debt_status); else none
+      debt_status: i === 24 ? "in_debt_collection" : stock ? null : i % 7 === 0 ? "in_debt_collection" : i % 17 === 0 ? "to_be_submitted" : null,
     });
   }
   const churn: Rec[] = subscriptions.filter((s) => ENDED.includes(String(s.status))).map((s, k) => {
@@ -303,7 +306,8 @@ function measuresOf(def: FlashOverviewDef, rs: readonly Rec[]): Measures {
     }
     case "installed_base": return { devices: rs.length, in_field: n((r) => r.in_field === true), in_stock: n((r) => r.in_stock === true),
       components_past_due: sum("past_due_items"), items_due_3m: sum("items_due_3m"),
-      in_field_on_holding: n((r) => r.in_field === true && HOLDING.includes(String(r.subscription_status))) };
+      in_field_on_holding: n((r) => r.in_field === true && HOLDING.includes(String(r.subscription_status))),
+      under_debt_status: n((r) => r.in_field === true && r.debt_status !== null && r.debt_status !== undefined) };
     case "churn": return { churned: rs.length };
     case "orders": return { orders: rs.length, units: sum("units"), amount: per("total") };
     case "payments": return { orders: n((r) => r.kind === "order"), amount: per("amount", (r) => r.kind === "order"),
@@ -454,6 +458,7 @@ function labelsOf(def: FlashOverviewDef): Record<string, Record<string, string>>
     queue: { "tp-service": "Service", "tp-support": "Support" }, model: MOCK_MODEL_NAMES,
     status: { installed: "Installed", in_stock: "In stock", NOT_STARTED: "Not started", WAITING: "Waiting" }, type: { CALL: "Call", EMAIL: "Email" },
     warehouse: { "wh-utrecht": "Utrecht" },
+    debt_status: { in_debt_collection: "In debt collection", to_be_submitted: "To be submitted" },
     check: {
       customer_required_ref_missing: "Store customers with an order whose CRM contact lacks a required reference, or is not held",
       device_required_ref_missing: "Devices lacking a required named id, with the ids missing",
@@ -466,7 +471,9 @@ function labelsOf(def: FlashOverviewDef): Record<string, Record<string, string>>
       device_serial_missing: "Devices without a serial number",
     },
   };
-  return Object.fromEntries(def.dims.filter((d) => all[d]).map((d) => [d, all[d]!]));
+  const own = Object.fromEntries(def.dims.filter((d) => all[d]).map((d) => [d, all[d]!]));
+  // the debt statuses' sort order as text, as cma.flash_labels_of answers it (addition 0009zl)
+  return def.key === "installed_base" ? { ...own, debt_status_order: { in_debt_collection: "10", to_be_submitted: "20" } } : own;
 }
 
 // ---- the reads ----------------------------------------------------------------------------------
@@ -648,6 +655,8 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
     // without_subscription_ref the devices of the check field_device_without_subscription_ref (in the field, no reference)
     if (k === "serial") rs = rs.filter((r) => typeof r.serial === "string" && r.serial.toLowerCase() === v.trim().toLowerCase());
     else if (k === "without_subscription_ref") rs = rs.filter((r) => r.in_field === true && r.link === "none");
+    // the debt status's any: every debt status, not none (addition 0009zl)
+    else if (k === "debt_status" && v === "any") rs = rs.filter((r) => r.debt_status !== null && r.debt_status !== undefined);
     else rs = def.key === "orders" && k === "sku" ? rs.filter((r) => (r.skus as string[]).includes(v)) : rs.filter((r) => String(r[k] ?? "none") === v);
   }
   const m = request.filters.measure;
@@ -664,6 +673,7 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
     overdue: (r) => r.overdue === true, negative: (r) => r.negative === true,
     holding_subscriptions: (r) => r.is_holding === true, devices_on_holding: (r) => r.is_holding === true && Number(r.devices_in_field) > 0,
     in_field_on_holding: (r) => r.in_field === true && HOLDING.includes(String(r.subscription_status)),
+    under_debt_status: (r) => r.in_field === true && r.debt_status !== null && r.debt_status !== undefined,
   };
   if (m && keep[m]) rs = rs.filter(keep[m]!);
   if (m === "orders" && def.key === "payments") rs = rs.filter((r) => r.kind === "order");

@@ -539,8 +539,11 @@ begin
   v_bad := '';
   if (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_row')) and attnum > 0 and not attisdropped)
        <> (case when exists (select 1 from cma.schema_migration where version = '0009j') then 19 else 17 end)
+          -- 0009zl (224): debt_status
+          + (case when exists (select 1 from cma.schema_migration where version = '0009zl') then 1 else 0 end)
      or (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_mapped')) and attnum > 0 and not attisdropped)
        <> (case when exists (select 1 from cma.schema_migration where version = '0009j') then 22 else 20 end)
+          + (case when exists (select 1 from cma.schema_migration where version = '0009zl') then 1 else 0 end)
      or (select count(*) from pg_attribute where attrelid = (select typrelid from pg_type where oid = to_regtype('cma.device_load_component')) and attnum > 0) <> 6 then
     v_bad := v_bad || 'types; ';
   end if;

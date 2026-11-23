@@ -1,5 +1,5 @@
 {
-  "_about": "Map of the asset register's CSV export to the device import's staging columns (tools/devices-to-staging.mjs, docs/import/devices.md). These are the headers of Pulse4all Subscriptions' register (the Airtable base's table 2.0 Installed Base, 27 October 2026): configuration, never code. Every header the export holds is either mapped or in ignore; the personal columns (the customer's names and email, who last changed the row) and the free-text note are ignored, so they are never read into the staging file. Since addition 0009j maatje_id (the loan a device secures) and language are mapped; spv_id and language_ns_id stay ignored.",
+  "_about": "Map of the asset register's CSV export to the device import's staging columns (tools/devices-to-staging.mjs, docs/import/devices.md). These are the headers of Pulse4all Subscriptions' register (the Airtable base's table 2.0 Installed Base, 27 October 2026): configuration, never code. Every header the export holds is either mapped or in ignore; the personal columns (the customer's names and email, who last changed the row) and the free-text note are ignored, so they are never read into the staging file. Since addition 0009j maatje_id (the loan a device secures) and language are mapped; spv_id and language_ns_id stay ignored. Since addition 0009zl debt_status (the register's debt status label, empty without one) is mapped.",
   "columns": {
     "source_id": "airtable_record _id",
     "serial": "aed_sn",
@@ -16,7 +16,8 @@
     "warranty_until": "aed_warranty_date_calculated",
     "end_of_life_on": "aed_expected_end_of_life_date_calculated",
     "pledge_ref": "maatje_id",
-    "language": "language"
+    "language": "language",
+    "debt_status": "debt_status"
   },
   "components": {
     "pads": { "serial": "pads_sn", "expires_on": "pads_expiry_date_calculated" },
