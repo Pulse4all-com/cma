@@ -8,7 +8,7 @@
 -- tenant inside a subtransaction that is always rolled back; elsewhere it reads REFUSED and the verdict says PASS, A ONLY
 -- when block A passes. Every check writes one row, PASS or FAIL, and the last row is the verdict, because Cloud SQL Studio
 -- shows no notices. Run as your own IAM login after 222_subscription_moves_entry.sql; then 211 and 213 (and 219 where
--- 0009zi ran).
+-- 0009zi ran, 217 where 0009zh ran).
 --   A  A1 the addition after 0009ze; A2 the function the application's and no one else's, its JIT off, 210's filter on a
 --      named previous status gone; A3 its moves equal 210's on every tenant but for subscriptions whose first status event
 --      names no previous status (before the backfill of the events: Juo's canceled and paused reports without one, if any);
@@ -131,8 +131,8 @@ begin
   with t as (select x.id from cma.tenant x),
   n as (select t.id as tenant_id, m.* from t cross join lateral cma.subscription_moves_of(t.id, v_now) m),
   o0 as (select t.id as tenant_id, m.* from t cross join lateral pg_temp.v0009zk_old(t.id, v_now) m),
-  -- provoked, 210's side loses one move of a subscription whose first status event names a previous status, so the
-  -- comparison itself must find it
+  -- provoked, 210's side loses one move (the earliest with a kind), so the comparison itself must find it: the detail
+  -- then reads one subscription more that differs
   o as (select * from o0
         where not v_provoke
            or (o0.subscription_id, o0.at) is distinct from (select (x.subscription_id, x.at) from o0 x where x.kind is not null
