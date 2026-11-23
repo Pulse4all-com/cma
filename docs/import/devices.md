@@ -172,7 +172,7 @@ many `date_parse_failures`.
 cd ~/cma && node tools/devices-to-staging.mjs ~/import/devices-export.csv --map ~/import/devices-map.json --date-format dmy --batch assets-<yyyy-mm-dd> --out ~/import/devices-staging.csv
 ```
 Use the format of step 4 and the export's date in the batch key (`assets-2026-10-27`). Expected: `rows` (the records
-of the export), `mapped_columns 21`, `ignored_columns 14` (Grid view's 35 headers with the example map; more means
+of the export), `mapped_columns 24`, `ignored_columns 14` (Grid view's 35 headers with the example map; more means
 someone has shown a hidden field in Grid view, step 2), `date_parse_failures 0`,
 `values_with_at` (the mapped cells holding an @, each written as a bare @; the load counts them as invalid customer
 references or dropped references) and the staging file's path. More than a few date failures mean the format is
@@ -205,9 +205,9 @@ Expected: the counts and the phase times. `rows` = step 6's `n`; on the first lo
 records), `updated` (changed ones), `unchanged`, `missing_now` (devices the register no longer holds),
 `components_replaced` (a pads or battery serial that changed), `components_closed` (a kind the register emptied, its
 component closed with no new row; a replaced component counts in `components_replaced` only); `unmapped_model`, `unmapped_status` and
-`unmapped_market` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
+`unmapped_market` and, since addition 0009zl, `unmapped_debt_status` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
 without ES and IT: dev and prod hold both since 27 October 2026; a market added later needs seed `02` again for its
-alias), `customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
+alias; `unmapped_debt_status` is 0 once the debt statuses and aliases are set, Debt status below), `customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
 `CMA04`, `CMA06`) writes nothing and says why, naming the export's line. `true` is a full snapshot: every record of
 the register is in the file. A partial file (a filtered view) is loaded with `false`, so nothing is marked missing.
 The phase times are in milliseconds, beside the counts and in the same run's counts (`sync_run`, job `assets_import`):
@@ -245,11 +245,12 @@ the ignored columns, covering every data-quality check. Steps A and B as above i
 ```bash
 cd ~/cma && node tools/devices-to-staging.mjs tools/fixtures/devices-sample.csv --map docs/import/devices-map.example.json --date-format dmy --batch fixture-1 --out /tmp/devices-staging-1.csv
 ```
-Expected: `rows 30`, `mapped_columns 21`, `ignored_columns 31`, `date_parse_failures 0`, `values_with_at 1` (a customer
+Expected: `rows 30`, `mapped_columns 24`, `ignored_columns 31`, `date_parse_failures 0`, `values_with_at 1` (a customer
 id that is an address), the path. Then steps 6 and 7 with `/tmp/devices-staging-1.csv` and the batch `fixture-1`.
 Expected counts with the seed's catalogs and a market catalog that holds ES and IT, as dev does (27 October 2026):
 `rows 30`, `inserted 30`, `updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `components_closed 0`, `unmapped_model 1`,
 `unmapped_status 1`, `unmapped_market 0` (2 in a catalog without ES and IT: the fixture's Spain and Italy),
+`unmapped_debt_status 0` (the fixture's labels need the four aliases of Debt status below),
 `customer_ref_invalid 1`, `refs_dropped 0`, and the six phase times in milliseconds (`stage_ms`, `map_ms`,
 `upsert_ms`, `components_ms`, `missing_ms`, `cleanup_ms`), whose values vary from run to run.
 
@@ -306,6 +307,51 @@ row; then one row: `devices 27`, `past_due_items 5`, `past_due_exchanges 4`, `mo
 The on-screen check of Reports → Maintenance, its grid, a figure's device list and its file, happens in dev's
 `cma-web` after the merge, with prod's image (docs/RUNBOOK.md, 4. Try a new image in dev first), as the test user
 `admin`.
+
+## Debt status (addition 0009zl)
+
+The register's field `debt_status` (Airtable 2.0, Installed Base; a single select) says that a device's maintenance
+waits on a debt: In debt collection, Write off + restart, To be submitted or Check first. All four pause maintenance
+(docs/definitions.md, Debt status, Pauses maintenance, Maintenance paused) until the register empties the field or the
+device comes back (its status leaves the field); the items stay in the forecast, and Reports → Maintenance leaves the
+paused devices out by default. The CMA reads the field and never writes it.
+
+- The staging file gains `debt_status` after `language` (the label as the register writes it, empty without one). A
+  staging file the tool wrote before this change must be converted again, as `docs/import/copy-devices-staging.psql`
+  says.
+- The order matters: set the statuses and aliases first (the block below, run by Martin after `224`), then map the
+  Airtable field as a single select (a typed text is never read, as it could carry a person's note). Otherwise every
+  labelled device is an unmapped finding (`device_debt_status_unmapped`) and none is paused.
+
+**Studio (cma-dev-pg, then cma-prod-pg)**
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select cma.set_device_debt_status('in_debt_collection', 'In debt collection', true, 10);
+select cma.set_device_debt_status('to_be_submitted', 'To be submitted', true, 20);
+select cma.set_device_debt_status('write_off_restart', 'Write off + restart', true, 30);
+select cma.set_device_debt_status('check_first', 'Check first', true, 40);
+select cma.set_device_debt_status_alias('In debt collection', 'in_debt_collection');
+select cma.set_device_debt_status_alias('To be submitted', 'to_be_submitted');
+select cma.set_device_debt_status_alias('Write off + restart', 'write_off_restart');
+select cma.set_device_debt_status_alias('Check first', 'check_first');
+select key, name, pauses_maintenance, sort_order from cma.device_debt_status order by sort_order;
+reset role;
+```
+Expected: the context row; four rows with the keys; four rows with the aliases lower-cased; then the four statuses, each
+`t`, sort 10 to 40.
+
+The Airtable mapping is one line, with the field's id from the dry run's list as in PROD_RUNBOOK 14.5
+(`docs/ingest/airtable-fields.mjs` prints it from the map):
+
+**Studio (cma-dev-pg, then cma-prod-pg)**
+```sql
+select cma.set_connection_field('<assets connection_id>', 'device', 'debt_status', '', '<fld id of debt_status>');
+```
+Verified locally on PostgreSQL 16, 23 November 2026: `225` 14 PASS (provoked 0 PASS, 14 FAIL), `tools/verify-devices-import`
+15 PASS, the ingest's `verify/assets-mapping` 60 PASS and `verify/assets-flow` 42 PASS.
 
 ## A later snapshot
 
