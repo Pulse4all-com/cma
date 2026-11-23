@@ -25,6 +25,8 @@
 --   a3   no Default market, no history: clock in 05:00 under none; the manager corrects the start to DE (B5)
 --   a4   Default market FR, then FR goes inactive: clock in 05:00 under none (an inactive default is not used, and a4 has
 --        no earlier day)
+--   a5   (B9) Default market NL, workday.clock_in_again on: clock in 05:00 (NL), DE alone at 05:30, out 06:00, in again
+--        06:30 (DE); that start corrected to none, out 07:00, in again 07:30 (NL)
 --
 -- Checks
 --   S1  the addition 0009zo is recorded once, after 0009zn
@@ -58,6 +60,8 @@
 --   B8  a market remapped while a day is booked under it never blocks that day: a status change without a market, a
 --       correction without hoursMarket and one sending the event's own market again book under the market it maps to now
 --       (cma.resolve_hours_market); that market on another event is refused (CMA04)
+--   B9  clocking in again on a day with events books under the day's own market (the one in force at its last event), not
+--       the Default market; on a day whose last event carries none, D4's order (the Default market) (Martin, 23 Nov 2026)
 --   R1  per active tenant: team_status_time's eighteen earlier columns, summed over its markets, equal 228's definition
 --       over the last 31 days
 --   R2  per active tenant: team_now's twenty-three earlier columns equal 228's definition
@@ -574,7 +578,7 @@ declare
   v_y      date;
   v_t      uuid;
   v_t2     uuid;
-  v_admin uuid; v_mgr uuid; v_sup uuid; v_a1 uuid; v_a2 uuid; v_a3 uuid; v_a4 uuid;
+  v_admin uuid; v_mgr uuid; v_sup uuid; v_a1 uuid; v_a2 uuid; v_a3 uuid; v_a4 uuid; v_a5 uuid;
   v_conf   uuid;                  -- holds tenant.configure
   v_users  uuid;                  -- manages the agents (users.manage_all or users.manage_agents)
   v_perf   uuid;                  -- holds performance.team
@@ -584,11 +588,11 @@ declare
   v_work   cma.work_status;       -- the default: working, productive
   v_other  cma.work_status;       -- working, not productive
   v_pause  cma.work_status;       -- not working
-  w1 cma.workday; w2 cma.workday; w2y cma.workday; w3 cma.workday; w4 cma.workday;
+  w1 cma.workday; w2 cma.workday; w2y cma.workday; w3 cma.workday; w4 cma.workday; w5 cma.workday;
   v_e      uuid;
   v_n0     bigint;
   v_b0 text;
-  v_b1 text := ''; v_b2 text := ''; v_b3 text := ''; v_b4 text := ''; v_b5 text := ''; v_b6 text; v_b7 text := ''; v_b8 text := '';
+  v_b1 text := ''; v_b2 text := ''; v_b3 text := ''; v_b4 text := ''; v_b5 text := ''; v_b6 text; v_b7 text := ''; v_b8 text := ''; v_b9 text := '';
   v_eh0 text; v_th0 text; v_ts0 text;
   v_eh1 text; v_th1 text; v_ts1 text;
   v_err    text;
@@ -608,9 +612,10 @@ begin
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'a2@example.invalid', 'a2', v_z) returning id into v_a2;
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'a3@example.invalid', 'a3', v_z) returning id into v_a3;
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'a4@example.invalid', 'a4', v_z) returning id into v_a4;
+    insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'a5@example.invalid', 'a5', v_z) returning id into v_a5;
     insert into cma.user_role (tenant_id, user_id, role_id)
     select v_t, x.uid, ar.id
-    from (values (v_admin, 'admin'), (v_mgr, 'manager'), (v_sup, 'supervisor'), (v_a1, 'agent'), (v_a2, 'agent'), (v_a3, 'agent'), (v_a4, 'agent')) as x(uid, role_key)
+    from (values (v_admin, 'admin'), (v_mgr, 'manager'), (v_sup, 'supervisor'), (v_a1, 'agent'), (v_a2, 'agent'), (v_a3, 'agent'), (v_a4, 'agent'), (v_a5, 'agent')) as x(uid, role_key)
     join cma.app_role ar on ar.tenant_id = v_t and ar.key = x.role_key;
     -- The acting people by permission, never by role name (229's way)
     perform set_config('app.tenant_id', v_t::text, true);
@@ -869,6 +874,33 @@ begin
            jsonb_build_array(jsonb_build_object('kind', 'start', 'supersedes', v_e, 'at', to_jsonb((v_d + time '05:00') at time zone v_z),
                                                 'statusKey', v_work.key, 'hoursMarket', 'IT'))));
 
+    -- B9: clocking in again continues the day under its own market. a5 has Default market NL; clocks in 05:00 (NL),
+    -- books DE alone at 05:30, logs out 06:00, clocks in again 06:30: DE, the day's market, not the Default market. Then
+    -- with a day whose last event carries none, the Default market (a5's day re-booked under none by a correction)
+    perform set_config('role', 'cma_owner', true);
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'workday.clock_in_again', 'true')
+      on conflict (tenant_id, key) do update set value = excluded.value;
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_users::text, true);
+    perform cma.set_person_default_hours_market(v_a5, 'NL');
+    perform set_config('app.user_id', v_a5::text, true);
+    w5 := cma.open_workday((v_d + time '05:00') at time zone v_z);
+    perform cma.set_status(w5.id, null, (v_d + time '05:30') at time zone v_z, 'DE');
+    w5 := cma.end_workday(w5.id, (v_d + time '06:00') at time zone v_z);
+    w5 := cma.open_workday((v_d + time '06:30') at time zone v_z);
+    v_b9 := 'again ' || coalesce((select e.hours_market_code from cma.time_event e where e.tenant_id = v_t and e.workday_id = w5.id
+                                  and e.kind = 'start' order by e.occurred_at desc limit 1), '-');
+    -- the day's last market gone (the 06:30 start corrected to none), out again, in again: the Default market
+    perform set_config('app.user_id', v_team::text, true);
+    select e.id into v_e from cma.time_event e where e.tenant_id = v_t and e.workday_id = w5.id and e.kind = 'start' order by e.occurred_at desc limit 1;
+    perform cma.correct_workday(v_a5, v_d, jsonb_build_array(jsonb_build_object('kind', 'start', 'supersedes', v_e,
+              'at', to_jsonb((v_d + time '06:30') at time zone v_z), 'statusKey', v_work.key, 'hoursMarket', null)), 'verify none');
+    perform set_config('app.user_id', v_a5::text, true);
+    w5 := cma.end_workday(w5.id, (v_d + time '07:00') at time zone v_z);
+    w5 := cma.open_workday((v_d + time '07:30') at time zone v_z);
+    v_b9 := v_b9 || '; again without a day market ' || coalesce((select e.hours_market_code from cma.time_event e where e.tenant_id = v_t
+                                  and e.workday_id = w5.id and e.kind = 'start' order by e.occurred_at desc limit 1), '-');
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -899,6 +931,8 @@ begin
     v_b7, 'team day default:NL, other:NL, other:DE, other:NL, pause:DE; status time default=NL, other=DE, other=NL, pause=DE; '
        || 'team now a1=DE, a2=DE, a3=DE, a4=-; status changes NL, NL, DE, NL, DE; hours a1={DE,NL}, a2={DE}, a3={DE}, a4={NULL}; '
        || 'directory a1=NL, a2=-, a3=-, a4=FR; readers'' events 5 of 5; readers'' stretches NL, NL, DE, NL, DE');
+  perform pg_temp.v0009zo_row(19, 'B9', 'clocking in again continues the day under its own market, else the Default market',
+    v_b9, 'again DE; again without a day market NL');
   perform pg_temp.v0009zo_row(18, 'B8', 'a market remapped while a day is booked under it never blocks that day',
     v_b8, 'IT to DE ok; status change ok DE; correction without hoursMarket ok DE; correction sending IT ok DE; IT on another event CMA04');
 end

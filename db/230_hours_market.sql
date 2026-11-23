@@ -72,7 +72,9 @@
 --                               status key for a market change alone (D3: the same status, booked again under the new
 --                               market); the 3-argument signature is dropped, and a 2- or 3-argument call reaches this one
 --   cma.open_workday(timestamptz)
---                               162's clock-in, signature unchanged; every start event takes cma.clock_in_hours_market (D4)
+--                               162's clock-in, signature unchanged; opening a day takes cma.clock_in_hours_market (D4);
+--                               clocking in again on a day with events takes that day's own market (the one in force at its
+--                               last event, as it books now), else D4's order (Martin, 23 November 2026)
 --   cma.correct_workday(uuid, date, jsonb, text)
 --                               46's corrections, signature unchanged; a start or status change takes "hoursMarket" (an
 --                               hours market of the tenant, inactive allowed, or null for none); without the key a change
@@ -544,8 +546,9 @@ $$;
 revoke execute on function cma.set_status(uuid, text, timestamptz, text) from public, cma_readonly;
 grant execute on function cma.set_status(uuid, text, timestamptz, text) to cma_app;
 
--- 162's clock-in, every start event under cma.clock_in_hours_market (D4); otherwise unchanged, so 127's and 163's pattern
--- checks of its definition still hold
+-- 162's clock-in: opening a day (a new date, or a removed day started again) books under cma.clock_in_hours_market (D4);
+-- clocking in again (0008zp) books under the day's own market, else D4's order. Otherwise unchanged, so 127's and 163's
+-- pattern checks of its definition still hold
 -- based on: 162_remove_day.sql
 create or replace function cma.open_workday(p_occurred_at timestamptz default now())
 returns cma.workday
@@ -602,8 +605,11 @@ begin
         if v_status is null then
           raise exception 'no default work status configured for this tenant' using errcode = 'CMA05';
         end if;
+        -- Clocking in again continues the day under its own market (Martin, 23 November 2026): the market in force at
+        -- its last event, as it books now; without one, D4's order (the Default market, else the last day's, else none)
         insert into cma.time_event (tenant_id, workday_id, user_id, kind, status_id, occurred_at, source, hours_market_code)
-        values (v_tenant, w.id, v_user, 'start', v_status, p_occurred_at, 'user', cma.clock_in_hours_market(v_user));
+        values (v_tenant, w.id, v_user, 'start', v_status, p_occurred_at, 'user',
+                coalesce(cma.resolve_hours_market(cma.workday_hours_market(w.id)), cma.clock_in_hours_market(v_user)));
         perform cma.refresh_workday(w.id);
         select * into w from cma.workday where tenant_id = v_tenant and id = w.id;
       end if;

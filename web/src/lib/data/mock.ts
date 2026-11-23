@@ -3229,7 +3229,12 @@ export const mockData: CmaData = {
           clock: { closedSeconds: existing.clock.closedSeconds, runningSince: DEFAULT_STATUS.isWorking ? now : null },
           sessions: existing.sessions + 1,
           sessionStartedAt: now,
-          hoursMarket: ownClockInMarket(me, date),
+          // Clocking in again continues the day under its own market (Martin, 23 November 2026), else D4's order
+          hoursMarket: (() => {
+            const own = state.ownLastMarket?.get(k) ?? null;
+            const m = own ? seedIntakeConfig(me).markets.find((x) => x.code === own) : undefined;
+            return m ? m.hoursMarketCode : ownClockInMarket(me, date);
+          })(),
         };
         store.set(k, again);
         state.ownLastMarket!.set(k, again.hoursMarket);
