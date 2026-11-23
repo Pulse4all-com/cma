@@ -3246,7 +3246,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 
 ## Time terms
 
-Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Paid and Paid today (addition 0009z) are defined below; hours worked, status, working status and the other time words stay under Domains still to define.
+Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Paid and Paid today (addition 0009z), Work area and the status groups (addition 0009zn) and Hours market, Default market and No market (addition 0009zo) are defined below; hours worked, status, working status and the other time words stay under Domains still to define.
 
 ### Workday
 
@@ -3494,6 +3494,63 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Definitions: Other productive" (this PR, addition 0009zn) |
 | Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board; `GET /api/v1/team/status-time` and `GET /api/v1/team/now` (`tenantHasWorkArea`) |
 | As built today | `web/src/lib/dashboard.ts` (`productiveGroupName`, `hasWorkArea`), `web/src/components/DashboardCharts.tsx` (`groupLabels`); verified by `verify:dashboard`. Matches the definition |
+
+### Hours market
+
+| Field | Value |
+|---|---|
+| Term | Hours market (nl: Urenmarkt), the market under which time is registered and billed |
+| Key | SQL `cma.time_event.hours_market_code` (nullable, an hours market of the tenant), `cma.market.hours_market_code` (the mapping; not null, its own code by default), `cma_read.time_event.hours_market_code`, `cma_read.market.hours_market_code` and `cma_read.time_interval.hours_market_code` (each last); `cma.hours_markets()`, `cma.resolve_hours_market`, `cma.clock_in_hours_market`; API `hoursMarket` (`code`, `name`, `isActive` in `GET /api/v1/me/hours-markets`), `hoursMarketCode` on a market; copy `myDay.hoursMarket`, `dayEditor.hoursMarket`, `live.hoursMarket`, `exports.hoursMarket`, `configMarkets.hoursMarket` |
+| Definition | A market of the tenant that maps to itself and under which time is booked and billed. A tenant maps each market to an hours market in Configuration → Markets (Pulse4all: BE → NL, AT → DE; every other market maps to itself). The mapping is configuration, never code: no migration or seed names a tenant's market. Every start and status event carries the hours market it was booked under (pauses included, so nobody has to think about when it applies; only a status with a work area needs one for billing), and a status interval carries the hours market of the event that opened it. |
+| Source | The CMA: `cma.time_event`, written by the agent on My day (`cma.set_status`), by clock-in (the person's Default market, else the market of the person's last day, else none) and by a manager's correction (Correct day's Hours market column) |
+| Counts / does not count | A dimension of the time figures, never a figure: worked, paid, billable and productive time do not change, and a status with time under two markets on one day is two rows whose sums equal the one before. Time without a market is counted under No market, never dropped. A market that is no hours market is not offered on My day or as a Default market |
+| Unit and display | A market code with its name; the Hours market select on My day (key M), the Hours market column of Correct day and of the Live board's table, the Default market field on People, the last column of the Team hours and status-changes CSVs |
+| Time rule | The market in force at the moment of the event: a status change keeps it until the agent picks another, and picking another books a new status event with the same status and the new market, so time counts for the new market from that moment. A kept market books as it books now (`cma.resolve_hours_market`), so remapping a market never blocks a day; a correction row added without a market keeps the market in force at its time |
+| Scope | Per tenant; every start and status event; the mapping per market |
+| Equivalent in the source system | None |
+| Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area (what an agent does comes from HubSpot, so My day has no activity choice) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #PR, addition 0009zo) |
+| Used by | No catalog key: no metric reads it. Pages: My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
+| As built today | `230` (columns, foreign keys to a market of the same tenant, the kind check on `time_event`, triggers for the mapping rules serialised per tenant, the functions and reads) and `231` (verify); the rules hold in the tables, so a direct write cannot break them. `cma.open_workday` keeps its one-argument signature (an explicit market at clock-in is a market change right after). The capture is built; the billing statement is not (backlog CMA-137). Matches the definition |
+
+### Default market
+
+| Field | Value |
+|---|---|
+| Term | Default market (nl: Standaardmarkt), a setting of a person |
+| Key | SQL `cma.app_user.default_hours_market_code` and `cma_read.app_user.default_hours_market_code` (last column), `cma.set_person_default_hours_market`; API `defaultHoursMarket` on `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`; copy `team.defaultMarket` and `team.noDefaultMarket` |
+| Definition | An optional Hours market of a person, set on People. Clock-in opens the day in the default status with that market; without a Default market, with the market of the person's last day; otherwise with none. It is never a market change on its own: it applies at clock-in only. |
+| Source | The CMA: `cma.app_user`, written by `cma.set_person_default_hours_market` for whoever may manage the person (the other People writes' rule) |
+| Counts / does not count | Counts only an active hours market of the tenant; one that was remapped or deactivated since is skipped at clock-in, which then falls back to the market of the last day or none. Changes no figure |
+| Unit and display | A market code with its name, or "No default market", in the People dialog (nl "Geen standaardmarkt") |
+| Time rule | Read at clock-in; changing it does not change a day already open |
+| Scope | Per person and tenant |
+| Equivalent in the source system | None |
+| Not to use | "Home market" or "country of the person" for it: a person's zone and employer are other fields, and Market keeps its meaning, the country |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #PR, addition 0009zo) |
+| Used by | No catalog key. People, clock-in (Welcome, My day); `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`, `POST /api/v1/me/day/start` |
+| As built today | `230`: a trigger checks an active hours market when the column is set or changed, a market that a person's Default market names keeps mapping to itself (the conflict a market change answers with 409), `cma.clock_in_hours_market(person)` applies the rule at every start event. Matches the definition |
+
+### No market
+
+| Field | Value |
+|---|---|
+| Term | No market (nl: Geen markt), the label of time without an Hours market |
+| Key | `hours_market_code` null on `cma.time_event`, `cma_read.time_interval` and the reads built on them; `hoursMarket` null in the API; a null element of `hoursMarkets` on a day of the hours export; copy `myDay.noMarket`, `dayEditor.noMarket`, `live.noMarket`, `exports.noMarket` |
+| Definition | The label shown where an event or a stretch has no Hours market, for example before anyone chose one on a day of a person without a Default market. Such time is counted under the label, never dropped. |
+| Source | The CMA: a start or status event booked without a market, and every stretch it opens |
+| Counts / does not count | Counts all time without a market in worked, paid, billable and productive time as any other time; it is its own row in a split per market. A day's end and a void carry no market and are not time under No market |
+| Unit and display | The words "No market" (nl "Geen markt"), in the Hours market select, the Hours market column of Correct day, the Live board's table and the CSVs' last columns; the hours CSV's cell lists the day's markets in order and "No market" for time without one, joined by " + " |
+| Time rule | None: the market of the event that opened the stretch |
+| Scope | Per event and stretch |
+| Equivalent in the source system | None |
+| Not to use | "Unknown market", "Other" or "None" for it; an empty cell where a label is shown; a stretch without a market is never left out of a sum |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #PR, addition 0009zo) |
+| Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
+| As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
 
 ## Retired words
 

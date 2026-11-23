@@ -400,8 +400,8 @@
         },
         {
           "name": "time_event",
-          "what": "Clock in, status changes, clock out, corrections",
-          "how": "Every click in the Workspace, immediately; corrections by supervisors"
+          "what": "Clock in, status changes, clock out, corrections; a start or status event carries the hours market it was booked under (hours_market_code, empty for no market)",
+          "how": "Every click in the Workspace, immediately, each start and status event with the hours market in force (the person's default market, else the last day's, at clock-in; the agent's choice on My day); corrections by supervisors, a correction keeping the market of the event it replaces or the market in force at its time unless the manager sets another"
         },
         {
           "name": "roster_week",
@@ -462,7 +462,7 @@
       "tables": [
         {
           "name": "app_user",
-          "what": "People and system users",
+          "what": "People and system users; a person's optional default market (default_hours_market_code), the hours market clock-in books under",
           "how": "People screen, invitations"
         },
         {
@@ -579,8 +579,8 @@
         },
         {
           "name": "market",
-          "what": "Markets: zone, language, currency",
-          "how": "Configuration"
+          "what": "Markets: zone, language, currency, and the hours market each books its time under (hours_market_code: its own code, or the hours market the tenant maps it to)",
+          "how": "Configuration (the hours market mapping in Configuration → Markets)"
         },
         {
           "name": "market_alias",
@@ -801,7 +801,7 @@
     },
     {
       "name": "time_interval",
-      "what": "Every status interval with its length"
+      "what": "Every status interval with its length and the hours market of the event that opened it (hours_market_code)"
     },
     {
       "name": "roster_published_entry",
