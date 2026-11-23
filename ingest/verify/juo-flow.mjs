@@ -193,7 +193,9 @@ const notice = one.events.find((e) => e.type === "renewal:notification-sent");
 const billingEvents = one.events.filter((e) => BILLING.includes(e.type));
 const duplicateEvents = subEvents.filter((e) => e.type === "subscription:chargeback-created");
 const otherEvents = subEvents.filter((e) => ["subscription:delivery-address-changed", "subscription:cancellation-flow/started"].includes(e.type)
-  || (e.type === "subscription:updated" && !e.data?.input?.status));
+  || (e.type === "subscription:updated" && !(e.data?.input && typeof e.data.input === "object" ? e.data.input.status : e.data?.status)));
+/** The update in Juo's legacy shape (before 28 January 2026): the new status at the top level, no input (addition 0009zk) */
+const legacyEvent = subEvents.find((e) => e.type === "subscription:updated" && !e.data?.input && e.data?.status);
 const keptEvents = subEvents.filter((e) => !duplicateEvents.includes(e) && !otherEvents.includes(e));
 const heldCustomers = new Set(one.subscriptions.slice(0, 200).map((x) => x.customer));
 /** An object with its keys in byte order, so a comparison never depends on the order counts were met in */
@@ -215,9 +217,9 @@ expect("B2 the dry run of subscription_event from a date: the subscription famil
   [b.fetched, b.mapped, b.otherType, b.duplicates, b.unreadable, b.eventTypes["subscription:renewed"], b.eventTypes["subscription:updated"],
     Object.fromEntries(Object.entries(b.kept ?? {}).sort(([x], [y]) => x.localeCompare(y))), b.reasonDropped,
     b.customersUnmatched, Math.abs(Date.parse(b.from) - Date.parse(`${FROM}T00:00:00Z`)) <= 86_400_000, Boolean(b.firstEventAt)],
-  [subEvents.length, keptEvents.length, otherEvents.length, duplicateEvents.length, 0, 201, 2,
+  [subEvents.length, keptEvents.length, otherEvents.length, duplicateEvents.length, 0, 201, 3,
     { billing_date_moved: 1, canceled: 1, created: 1, discount_changed: 2, interval_changed: 1, lines_changed: 2, merged_to: 1, migrated: 1, paused: 2,
-      payment_method_changed: 1, purchased: 1, reactivated: 1, renew_failed: 3, renewed: 201, resumed: 1, skipped: 1, status_changed: 1,
+      payment_method_changed: 1, purchased: 1, reactivated: 1, renew_failed: 3, renewed: 201, resumed: 1, skipped: 1, status_changed: 2,
       update_failed: 1 }, 1, eventCustomersUnmatched, true, true],
   [0, 0, 0, 0, 1, 0, 0, {}, 0, 0, false, false]);
 b = await runBackfill({ connectionId: juo1.id, object: "billing_event", from: FROM, dryRun: true });
@@ -240,6 +242,10 @@ expect("C1 the backfill of the events: stream subscription_event, the kept ones 
   [0, "subscription_event", "succeeded", subEvents.length, keptEvents.length, otherEvents.length + duplicateEvents.length, duplicateEvents.length, 1,
     keptEvents.length, 0],
   [1, null, "failed", 0, 0, 0, 0, 0, 0, 1]);
+expect("C1b the update in Juo's legacy shape (before 28 January 2026) stored as a move into its top-level status, its previous status unknown",
+  (await q("select event_type, status_from, status_to from cma.subscription_event where connection_id = $1 and source_id = $2", [juo1.id, legacyEvent?.id]))
+    .map((r) => [r.event_type, r.status_from, r.status_to]),
+  [["status_changed", null, "expired"]], [[]]);
 expect("C2 …its cursor done; the poll's cursor at the backfill's start",
   [(await cursor(juo1.id, "backfill:subscription_event"))?.done, (await cursor(juo1.id, "juo:events"))?.at >= t0],
   [true, true], [false, false]);

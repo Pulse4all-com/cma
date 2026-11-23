@@ -134,6 +134,8 @@ export function juoStore({ handle, key, nowMs = Date.now(), prefix = "s" }) {
   event(202, "subscription:renewed", 60 * 20, { orderId: "6100000202", cycleIndex: 6 });
   event(203, "subscription:updated", 60 * 24 * 3, { input: { status: "FAILED" }, status: "ACTIVE" });
   event(203, "subscription:updated", 60 * 24 * 3 - 1, { nextBillingDate: ago(60) });
+  // the legacy shape Juo wrote before 28 January 2026 (addition 0009zk): the new status at the top level, no input
+  event(206, "subscription:updated", 60 * 24 * 7, { status: "EXPIRED" });
   event(204, "subscription:paused", 60 * 24 * 4, { previousStatus: "ACTIVE" }, { type: "staff", id: "81100000001", name: "Invented Staff", source: null });
   event(205, "subscription:cancelled", 60 * 24 * 3, { previousStatus: "ACTIVE", reason: "Too expensive, mail me at person-0205@example.invalid" },
     { type: "customer", id: cust(205), name: "Invented Person 0205", source: "portal" });
@@ -219,8 +221,11 @@ export const ANALYTICS_METRICS = ["subscriptions:count", "subscriptions:current-
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const dayIn = (iso, tz) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 const STATUS_TO = { "subscription:cancelled": "canceled", "subscription:canceled": "canceled", "subscription:paused": "paused" };
-/** An event's status after it, as Juo's status changes see it (an update's input status in lower case) */
-const statusTo = (e) => STATUS_TO[e.type] ?? (e.type === "subscription:updated" && e.data?.input?.status ? String(e.data.input.status).toLowerCase() : null);
+/** An event's status after it, as Juo's status changes see it (an update's input status in lower case; in the legacy
+ * shape, without input, its top-level status) */
+const statusTo = (e) => STATUS_TO[e.type] ?? (e.type !== "subscription:updated" ? null
+  : e.data?.input && typeof e.data.input === "object" ? (e.data.input.status ? String(e.data.input.status).toLowerCase() : null)
+  : e.data?.status ? String(e.data.status).toLowerCase() : null);
 
 /** One analytics query against a store's fixture: { status, body } (Juo's answer shape: { series, meta }) */
 function analyticsOf(store, body, state) {
