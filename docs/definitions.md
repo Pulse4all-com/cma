@@ -3320,7 +3320,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | The HubSpot sales pipeline; the rail group Sales (Sales → Speed to lead and the other pages) |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Groups: working and productive with work area Sales is Sales …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
 | Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
 | As built today | Matches the definition |
 
@@ -3339,7 +3339,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Back office" or a team name for it |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Groups: working and productive with work area Sales is Sales …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
 | Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
 | As built today | Matches the definition |
 
@@ -3358,7 +3358,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Productive" for Sales or Operations time inside the group; the group's name for the Dashboard's Productive figure |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Groups: working and productive with work area Sales is Sales …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
 | Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
 | As built today | Matches the definition |
 
