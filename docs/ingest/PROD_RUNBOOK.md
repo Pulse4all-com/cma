@@ -3995,7 +3995,11 @@ One step at a time; each says where it runs and what to expect.
 - `222` re-creates `cma.subscription_moves_of` so that a subscription's entry status is the one its first status event names as its previous, active when it names none. Without it, a legacy move followed by a new-shape move would enter in the later move's previous status.
 - The events backfill with `--again` stores the skipped moves. The facts refresh at the minute job's next run, and each store's next figures write counts them (0009zj, #309).
 
-**Order.** It needs 0009zj (#309) in prod for the stored figures, so #309 runs first. #308 (B39d) waits for this phase's acceptance (23.9). Start 23.5 in the evening (Amsterdam time): the backfill takes 30 to 90 minutes, and while it writes, the minute job recomputes Customers → Active and the facts on prod's one vCPU, which slows pages (21.7). Then the backfill and the first full refresh end before the 05:00 figures write and before the agents' day.
+**Order.**
+- It needs 0009zj (#309) in prod for the stored figures: in prod since 23 November 2026.
+- #308 (B39d) waits for this phase's acceptance (23.9).
+- #308's 0009zl and its seed (`subscriptions.rates_start_month` 2026-06) may run before or after this phase: 23.9 reads the month take's counts, which the floor leaves as they are.
+- The rows 19.24 named (events held but counted as no move) stay as they are: the backfill adds no move between their reports (23.11). Start 23.5 in the evening (Amsterdam time): the backfill takes 30 to 90 minutes, and while it writes, the minute job recomputes Customers → Active and the facts on prod's one vCPU, which slows pages (21.7). Then the backfill and the first full refresh end before the 05:00 figures write and before the agents' day.
 
 ## 23.1 Studio (cma-prod-pg): B39c's churn and failed moves that no event reports, before
 The high months of 19.18 after February 2026 (GB Sep 2026 2.79, SE Sep 1.67, DE Sep 1.64, NL Sep 1.39 and Apr 1.33, SE May 2.00) are likely moves `cma.subscription_moves_of` infers where a subscription's events do not end in its current status. It dates such a move at the latest of the last event, the cancel or pause time and the subscription's last update at the source, so a move into canceled without an event lands in the month the app last touched the subscription. This lists, per store and month, the churned and moved to failed moves and how many of them no event reports (`inferred`). One Run, as your own IAM login; counts only:
@@ -4033,7 +4037,7 @@ Expected: the high months' moves mostly `inferred`, which confirms the cause. A 
 ```bash
 run_migration dev 222_subscription_moves_entry.sql 223_verify_subscription_moves_entry.sql 0009zk-dev-$(date +%F) 211_verify_subscription_facts.sql 213_verify_subscription_facts_speed.sql 219_verify_source_figure_moves.sql 217_verify_subscriptions_page.sql
 ```
-`219` exists once #309 is merged and `217` once #308 is: leave out a file this branch does not hold yet, and rerun it in dev after its PR is merged.
+`219` is on main with #309. `217` comes with #308: leave it out until #308 is merged, then rerun it in dev.
 Expected:
 - 222 ends with `COMMIT`.
 - 223's last row reads `PASS | 223_verify_subscription_moves_entry: 4 PASS, 0 FAIL` (A3 `<n> moves, 0 subscriptions differ …` on dev's events); provoked, `PROVOKED, NOT A PASS | … 0 PASS, 4 FAIL`.
@@ -4092,7 +4096,23 @@ Expected: the execution succeeds; then its log line:
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run"' --project=p4a-cma-prod --freshness=3h --limit=1 --format='value(timestamp,jsonPayload)'
 ```
-Expected: `kept` with `status_changed` above the count held. The difference is the legacy moves the backfill will add for GB. It should be of the order of the app's own moves before 28 January 2026: the exits and pauses of 19.13's rows, a few per subscription in the whole period at most. A difference of several per subscription per month means Juo's legacy update carried the status on updates that moved nothing: stop here and report the counts.
+Expected: `kept` with `status_changed` above the count held, and `ms` the time GB's history took to read. The difference is the legacy moves the backfill will add for GB.
+
+The evening step's duration, from that `ms`: the backfill reads every store's history as the dry run read GB's, page by page at the same pace, and writes each page as it goes. So it takes about GB's `ms` × (every store's events ÷ GB's events) × 1.2 (the writes). The events the CMA holds per store give the ratio:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select coalesce(s.market, 'unknown') as market, count(*) as events_held,
+       round(count(*)::numeric / nullif(max(case when coalesce(s.market, 'unknown') = 'GB' then count(*) end) over (), 0), 2) as times_gb
+from cma.subscription_event e
+left join cma.flash_subscription_stores_of((select id from cma.tenant where slug = 'pulse4all-subscriptions')) s on s.connection_id = e.connection_id
+where e.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions')
+group by 1
+order by coalesce(s.market, 'unknown') collate "C";
+reset role;
+```
+Expected: one row per store, `times_gb` 1.00 on GB's. The evening step takes about GB's `ms` × the sum of `times_gb` × 1.2. Start it so that it ends well before 05:00 Amsterdam time; 17.6's full events backfill took 30 to 90 minutes. It should be of the order of the app's own moves before 28 January 2026: the exits and pauses of 19.13's rows, a few per subscription in the whole period at most. A difference of several per subscription per month means Juo's legacy update carried the status on updates that moved nothing: stop here and report the counts.
 
 ## 23.5 Terminal: the events again, every store, from the history start
 Every Juo store's events read again from its start: the tenant's `subscriptions.history_start_date` (or all of the app's history when it is empty, as 17.6). `--again` because each store's backfill has finished with the same start. Events are append-only (`on conflict do nothing`), so only the legacy moves the earlier runs skipped are stored. Run it away from the hourly figures job (`41 * * * *`) if you can; it may overlap the minute job, as 17.6's did.
@@ -4196,19 +4216,60 @@ Expected: `computed_at` later than the timestamp of 23.5's `backfill finished` l
 20.8's query of `cma_read.subscription_store_start`. Expected: the same `rate_start_month` per store as before: the start follows the migrated events, which this does not touch.
 
 ## 23.9 Studio (cma-prod-pg): the acceptance, 19.18 again
-19.18's query (the CMA's churned and moved to failed against the app's exits per store and complete month). Expected:
+19.18's comparison (the CMA's churned and moved to failed against the app's exits per store and month), over every month before the current one. 19.18 reads the month take's complete months; once #308's 0009zl and its seed (`subscriptions.rates_start_month` 2026-06) are in prod, no month before June 2026 is complete, so that form would show nothing before 2026. This form reads the month take's counts, which the floor leaves as they are, so it holds before and after #308. One Run, as your own IAM login; months and ratios only:
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '120s';
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+st as materialized (select s.connection_id, s.handle, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
+c as (
+  -- every month has its start row, so a month without churn still shows
+  select m.connection_id, m.month,
+         sum(m.subscriptions) filter (where m.kind = 'churned') as churned,
+         sum(m.subscriptions) filter (where m.kind = 'moved_to_failed') as failed
+  from cma.subscription_month_take m
+  -- every month before the current one, complete or not: 0009zl's floor (#308) leaves the months before June 2026
+  -- out of the rates, not out of the month take's counts
+  where m.tenant_id = (select id from t) and m.currency = '' and m.kind in ('start', 'churned', 'moved_to_failed')
+    and m.month < (select date_trunc('month', now() at time zone x.timezone)::date from cma.tenant x where x.id = m.tenant_id)
+  group by 1, 2),
+a as (
+  select f.connection_id, date_trunc('month', f.business_date)::date as month,
+         count(distinct f.business_date) as app_days,
+         sum(f.value) filter (where f.dims ->> 'status' in ('canceled', 'expired')) as churned,
+         sum(f.value) filter (where f.dims ->> 'status' = 'failed') as failed
+  from cma.source_figure f
+  where f.tenant_id = (select id from t) and f.figure_key = 'exits'
+  group by 1, 2)
+select coalesce(st.market, 'unknown') as market, st.handle as store, c.month, coalesce(a.app_days, 0) as app_days,
+       case when c.month < date '2026-02-01' then 'before' else 'after' end as events,
+       case when coalesce(a.churned, 0) = 0 then case when coalesce(c.churned, 0) = 0 then 'both 0' else 'app 0' end
+            else round(coalesce(c.churned, 0) / a.churned, 2)::text end as churned_ratio,
+       case when coalesce(a.failed, 0) = 0 then case when coalesce(c.failed, 0) = 0 then 'both 0' else 'app 0' end
+            else round(coalesce(c.failed, 0) / a.failed, 2)::text end as failed_ratio
+from c
+left join a on a.connection_id = c.connection_id and a.month = c.month
+left join st on st.connection_id = c.connection_id
+order by coalesce(st.market, 'unknown') collate "C", st.handle collate "C", c.month;
+reset role;
+```
+Expected:
 - **Before February 2026:** failed and churned near 1 in every store and month.
   - Churned may sit a little below 1: the app counts a move from canceled into expired, which is no churn for the CMA.
   - A month above 1 is a move `cma.subscription_moves_of` infers (23.10).
 - **From February 2026:** as before, or closer to 1.
 
-Keep the output for `records/0009zk-prod-<date>` (months and ratios only). With both near 1 before 2026, #308 (B39d) can go on.
+- **A store's migration months** (before its own rate start) may read off 1: the app's migrated subscriptions enter without a move there. Judge the months after them.
+
+Keep the output for `records/0009zk-prod-<date>` (months and ratios only). With both near 1 before 2026, #308 (B39d) can go on; its rates then start at June 2026 (0009zl), and these months stay visible here and in `cma.subscription_month_take`, not on the page.
 
 ## 23.10 Studio (cma-prod-pg): the moves no event reports, after
 23.1's query again. Expected: `inferred` falls in the months before 2026, and in the high months after February 2026 where those were moves into canceled from before 28 January dated at a later update. An `inferred` count that stays high in a month is a finding: the app moved those subscriptions without any event. Name it with its months in `records/0009zk-prod-<date>`.
 
 ## 23.11 Studio (cma-prod-pg): the stored exits and pauses, the next day
-After each store's next figures write (05:00 Amsterdam time and the job's next :41), 19.13's query again. Expected: the zeros before 29 January 2026 are gone. 0009zj (#309) counts every stored day with new events again at the store's next write. Rows still listed name their cause in `records/0009zk-prod-<date>`.
+After each store's next figures write (05:00 Amsterdam time and the job's next :41), 19.13's query again. Expected: the zeros before 29 January 2026 are gone. 0009zj (#309) counts every stored day with new events again at the store's next write. The rows 19.24 named (the events are held but count as no move: DE canceled 2026-05-20, GB canceled, GB pauses, NL canceled) remain: both reports of each lie after 28 January 2026, Juo writes every status move since with `input`, so the backfill adds no move between them (#309's finding). Rows still listed name their cause in `records/0009zk-prod-<date>`.
 
 ## 23.12 Browser: Reports → Data quality
 Refresh it after the data-quality refresh that follows 23.11. Expected: `source_figure_gap` lists no exits or pauses before 29 January 2026.
