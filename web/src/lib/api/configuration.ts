@@ -131,6 +131,18 @@ const KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automatio
 const REF = /^[A-Za-z0-9_.:@\/+=-]{1,100}$/;
 const MARKET = /^[A-Z]{2}$/;
 
+/**
+ * An hours market in a request (addition 0009zo): a market code (two upper-case letters, GB never UK) or null for none;
+ * whether it is an hours market of the tenant, and active, is the database's answer (CMA02 404, CMA04 400)
+ */
+export function hoursMarketOrNull(value: unknown, name: string): string | null {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !MARKET.test(value) || value === "UK") {
+    throw new ApiError(400, "invalid_hours_market", `${name} is a market code of two upper-case letters (GB, never UK) or null`);
+  }
+  return value;
+}
+
 function ref(v: unknown, name: string): string {
   if (typeof v !== "string" || !REF.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be an id of 1 to 100 characters without spaces`);
   return v;
@@ -403,8 +415,11 @@ export function checkMarketInput(b: Record<string, unknown>): { input: MarketInp
   if (skill !== null && (typeof skill !== "string" || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(skill))) throw new ApiError(400, "invalid_skill", "languageSkillKey must be a skill key or empty");
   const level = b.minLanguageLevel ?? null;
   if (level !== null && (typeof level !== "number" || !Number.isInteger(level) || level < 1 || level > 9)) throw new ApiError(400, "invalid_level", "minLanguageLevel is 1 to 9 or empty");
+  // The hours market (addition 0009zo): left out keeps the market's mapping; null or its own code makes it an hours market
+  const hoursMarket = b.hoursMarketCode === undefined ? undefined : hoursMarketOrNull(b.hoursMarketCode, "hoursMarketCode") ?? code;
   return {
-    input: { code, name: text(b, "name", 80), timeZone: text(b, "timeZone", 64), languageCode, currency, languageSkillKey: skill as string | null, minLanguageLevel: level as number | null, sortOrder: order(b) },
+    input: { code, name: text(b, "name", 80), timeZone: text(b, "timeZone", 64), languageCode, currency, languageSkillKey: skill as string | null, minLanguageLevel: level as number | null, sortOrder: order(b),
+      ...(hoursMarket === undefined ? {} : { hoursMarketCode: hoursMarket }) },
     active: b.active === undefined ? true : flag(b, "active"),
   };
 }

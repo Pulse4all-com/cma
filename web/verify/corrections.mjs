@@ -238,6 +238,37 @@ expect("Add day with two sessions starts with the first clock-in",
     .map((c) => `${c.kind} ${c.at.slice(11, 16)}`),
   ["start 09:00", "end 13:00", "start 17:00", "end 21:00"], ["start 09:00", "start 17:00", "end 13:00", "end 21:00"]);
 
+// ---- Hours market (addition 0009zo, D5) ----------------------------------------------------------
+// Each start or status row carries its market; a changed market replaces its event like any change, and every start or
+// status change of the editor says its market (none included); a clock-out carries none
+const marketDay = [
+  { ...ev(ID(1), "start", "2026-10-05T07:00:00Z", "available"), hoursMarket: "NL" },
+  { ...ev(ID(2), "status", "2026-10-05T09:00:00Z", "break"), hoursMarket: "NL" },
+  { ...ev(ID(3), "end", "2026-10-05T15:30:00Z"), hoursMarket: null },
+];
+const marketRows = rowsFromEvents(marketDay, TZ);
+expect("hours market: rows carry the market each event was booked under", marketRows.map((r) => r.hoursMarket), ["NL", "NL", null], ["NL", "NL", "NL"]);
+expect("hours market: unchanged rows send nothing", run(marketRows, "2026-10-05", marketRows).dayProblems, ["noChange"], []);
+const reMarketed = marketRows.map((r) => (r.eventId === ID(2) ? { ...r, hoursMarket: "DE" } : r));
+expect("hours market: a changed market alone replaces its event, under the new market", run(reMarketed, "2026-10-05", marketRows).changes,
+  [{ kind: "status", at: "2026-10-05T09:00:00Z", statusKey: "break", hoursMarket: "DE", supersedes: ID(2) }],
+  [{ kind: "status", at: "2026-10-05T09:00:00Z", statusKey: "break", hoursMarket: "NL", supersedes: ID(2) }]);
+const cleared = marketRows.map((r) => (r.eventId === ID(1) ? { ...r, hoursMarket: null } : r));
+expect("hours market: No market is sent as null, never left out", run(cleared, "2026-10-05", marketRows).changes,
+  [{ kind: "start", at: "2026-10-05T07:00:00Z", statusKey: "available", hoursMarket: null, supersedes: ID(1) }],
+  [{ kind: "start", at: "2026-10-05T07:00:00Z", statusKey: "available", supersedes: ID(1) }]);
+const marketAdded = [...marketRows, { id: "m1", eventId: null, end: false, statusKey: "available", time: "12:00", offset: null, hoursMarket: "DE" }];
+expect("hours market: a new row books under its market; a clock-out carries none", [
+  run(marketAdded, "2026-10-05", marketRows).changes,
+  run(marketRows.map((r) => (r.end ? { ...r, time: "17:45", hoursMarket: "DE" } : r)), "2026-10-05", marketRows).changes,
+], [
+  [{ kind: "status", at: "2026-10-05T12:00:00+02:00", statusKey: "available", hoursMarket: "DE" }],
+  [{ kind: "end", at: "2026-10-05T17:45:00+02:00", supersedes: ID(3) }],
+], [
+  [{ kind: "status", at: "2026-10-05T12:00:00+02:00", statusKey: "available" }],
+  [{ kind: "end", at: "2026-10-05T17:45:00+02:00", hoursMarket: "DE", supersedes: ID(3) }],
+]);
+
 // ---- Remove day (addition 0009g) -----------------------------------------------------------------
 // Offered in the Correct dialog of someone else's day with an effective event, disabled while the day is open; a
 // refusal of the route reads as the problem the dialog names

@@ -11,6 +11,8 @@
 -- short names; no real person's name.
 -- Edited by addition 0009zn (228_work_area.sql, 23 November 2026): S2 expects work_area after the paid columns where 0009zn
 -- is recorded; nothing else changed.
+-- Edited by addition 0009zo (230_hours_market.sql, 23 November 2026): S2 expects hours_market_code after work_area where
+-- 0009zo is recorded; nothing else changed.
 -- 20_verify_team_now.sql (A3) and 135_verify_hours_reads.sql (E6) are edited by 200 and run again after it, with
 -- 199_verify_roster_planned.sql (B6 reads team_now).
 --
@@ -236,6 +238,10 @@ begin
     v_want := pg_temp.v0009z_cols() || ', paid_closed_seconds, paid_running_since';
     if exists (select 1 from cma.schema_migration where version = '0009zn') then
       v_want := v_want || ', work_area';
+    end if;
+    -- Adjusted 23 November 2026 (addition 0009zo, 230_hours_market.sql): the day's hours market follows, last
+    if exists (select 1 from cma.schema_migration where version = '0009zo') then
+      v_want := v_want || ', hours_market_code';
     end if;
     if v_cols is distinct from v_want then
       v_bad := v_bad || 'columns [' || coalesce(v_cols, '') || ']; ';

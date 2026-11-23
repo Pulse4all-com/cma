@@ -7,7 +7,7 @@
  */
 import type { Locale } from "@/lib/copy";
 import type { LiveBoardData, TeamNowPerson, TodayShift, WorkdayClock } from "@/lib/data";
-import { liveRows, teamKeysByUser, type LiveGroup, type LiveRow } from "@/lib/live";
+import { liveHoursMarketOf, liveRows, teamKeysByUser, type LiveGroup, type LiveRow } from "@/lib/live";
 import { adherence, cellLabel, type Adherence } from "@/lib/roster";
 import { fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
 
@@ -20,6 +20,11 @@ export interface BoardRow {
   group: LiveGroup;
   /** The current status; null without a day and once the day has ended */
   statusName: string | null;
+  /**
+   * The current hours market (addition 0009zo, D6): the code, or null for time without one; undefined without a day
+   * and once the day has ended (the cell stays empty)
+   */
+  hoursMarket?: string | null;
   statusActive: boolean;
   statusSince: string | null;
   /** The clock's inputs; null without a day. An ended day has nothing running */
@@ -69,6 +74,8 @@ export function boardRowsOf(data: LiveBoardData, viewer: LiveViewer): { rows: Li
     organisationName: person.organisationName,
     group,
     statusName: person.status?.name ?? null,
+    // The market the current status was booked under; nothing without an open day
+    ...(liveHoursMarketOf(person) === undefined ? {} : { hoursMarket: liveHoursMarketOf(person) }),
     statusActive: person.status?.isActive ?? true,
     statusSince: person.day?.statusSince ?? null,
     // The clock's inputs; an ended day has nothing running, so its figure stands still

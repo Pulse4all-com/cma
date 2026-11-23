@@ -8,7 +8,7 @@ import type {
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
-  TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
   CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
@@ -81,6 +81,8 @@ type DayRow = HeaderRow & {
   session_started_at: Date;
   clock_in_again: boolean;
   can_clock_in_again: boolean;
+  /** The day's current hours market (addition 0009zo); absent on the Live board's rows before 0009zo */
+  hours_market_code?: string | null;
 };
 
 /**
@@ -115,7 +117,9 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
             coalesce(c.closed_seconds, 0)::int       as closed_seconds,
             c.running_since,
             c.status_since,
-            cma.business_day_end(s.business_date, s.timezone) as day_ends_at,${SESSIONS("s.workday_id")}
+            cma.business_day_end(s.business_date, s.timezone) as day_ends_at,${SESSIONS("s.workday_id")},
+            -- the day's current hours market (addition 0009zo): the latest effective start or status event's, by index
+            cma.workday_hours_market(s.workday_id) as hours_market_code
        from cma.workday_summary s
        left join cma.work_status ws
               on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
@@ -449,6 +453,8 @@ function toWorkday(r: DayRow): Workday {
     sessionStartedAt: r.session_started_at.toISOString(),
     clockInAgain: r.clock_in_again,
     canClockInAgain: ended && r.can_clock_in_again,
+    // As the status: none once the day has ended (addition 0009zo)
+    hoursMarket: ended ? null : r.hours_market_code ?? null,
   };
 }
 
@@ -510,6 +516,7 @@ type EventRow = {
   approved_by_name: string | null;
   is_effective: boolean;
   import_batch_key: string | null;
+  hours_market_code?: string | null;
 };
 
 function toTeamDay(r: TeamRow): TeamDay {
@@ -545,13 +552,23 @@ function toTimeEvent(r: EventRow): TimeEvent {
     approvedByName: r.approved_by_name,
     isEffective: r.is_effective,
     importBatchKey: r.import_batch_key ?? null,
+    hoursMarket: r.hours_market_code ?? null,
   };
+}
+
+type HoursMarketDbRow = { code: string; name: string; status: string };
+
+/** The tenant's hours markets (cma.hours_markets, addition 0009zo), active ones first, in the markets' order */
+async function readHoursMarkets(q: Querier): Promise<HoursMarket[]> {
+  const r = await q.query<HoursMarketDbRow>(`select code, name, status from cma.hours_markets()`);
+  return r.rows.map((m) => ({ code: m.code, name: m.name, isActive: m.status === "active" }));
 }
 
 async function readTeamDay(q: Querier, userId: string, date: DateKey): Promise<TeamDayDetail> {
   const day = await q.query<TeamRow>(TEAM_HOURS("$2::date, $2::date, $1::uuid"), [userId, date]);
   const events = await q.query<EventRow>(`select * from cma.team_day($1::uuid, $2::date)`, [userId, date]);
-  return { day: day.rows[0] ? toTeamDay(day.rows[0]) : null, events: events.rows.map(toTimeEvent) };
+  // Correct day's Market column offers every hours market, an inactive one included (a past day may hold one)
+  return { day: day.rows[0] ? toTeamDay(day.rows[0]) : null, events: events.rows.map(toTimeEvent), hoursMarkets: await readHoursMarkets(q) };
 }
 
 // ---- Exports (migration 0003b): cma.export_hours, cma.export_status_changes, cma.tenant_settings
@@ -568,13 +585,14 @@ type ExportHoursDbRow = {
   status: "open" | "ended"; started_at: Date; ended_at: Date | null;
   working_seconds: number; productive_seconds: number; paid_seconds: number;
   billable_seconds: number; is_capped: boolean; needs_correction: boolean; has_correction: boolean;
+  hours_markets?: (string | null)[];
 };
 
 type StatusChangeDbRow = {
   user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
   status_key: string; status_name: string; is_working: boolean; is_productive: boolean; is_paid: boolean;
   is_billable: boolean; work_area: WorkArea | null; from_at: Date; to_at: Date | null; is_open: boolean; is_capped: boolean;
-  seconds: number; source: StatusChangeRow["source"];
+  seconds: number; source: StatusChangeRow["source"]; hours_market_code?: string | null;
 };
 
 function toExportHoursRow(r: ExportHoursDbRow): ExportHoursRow {
@@ -594,6 +612,7 @@ function toExportHoursRow(r: ExportHoursDbRow): ExportHoursRow {
     isCapped: r.is_capped,
     needsCorrection: r.needs_correction,
     hasCorrection: r.has_correction,
+    hoursMarkets: r.hours_markets ?? [],
   };
 }
 
@@ -601,6 +620,7 @@ type StatusTimeDbRow = {
   user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
   status_key: string; status_name: string; sort_order: number; status_active: boolean; is_working: boolean;
   is_productive: boolean; is_paid: boolean; is_billable: boolean; work_area: WorkArea | null; seconds: number; stretches: number; is_capped: boolean;
+  hours_market_code?: string | null;
 };
 
 function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
@@ -623,6 +643,8 @@ function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
     seconds: r.seconds,
     stretches: r.stretches,
     isCapped: r.is_capped,
+    // The market the stretches were booked under (addition 0009zo): a status splits per market
+    hoursMarket: r.hours_market_code ?? null,
   };
 }
 
@@ -665,6 +687,7 @@ function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
     isCapped: r.is_capped,
     seconds: r.seconds,
     source: r.source,
+    hoursMarket: r.hours_market_code ?? null,
   };
 }
 
@@ -684,6 +707,8 @@ type TeamNowDbRow = {
   status_since: Date | null; closed_seconds: number; running_since: Date | null;
   paid_closed_seconds: number; paid_running_since: Date | null; day_ends_at: Date;
   sessions: number; session_started_at: Date | null; clock_in_again: boolean; can_clock_in_again: boolean;
+  /** The day's current hours market (addition 0009zo); absent before 230 has run */
+  hours_market_code?: string | null;
 };
 
 function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
@@ -704,6 +729,7 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           session_started_at: r.session_started_at,
           clock_in_again: r.clock_in_again,
           can_clock_in_again: r.can_clock_in_again,
+          hours_market_code: r.hours_market_code ?? null,
         })
       : null;
   // The paid inputs (addition 0009z), the board's alone; an ended day has nothing running, as for the worked time.
@@ -756,6 +782,7 @@ type DirectoryDbRow = {
   time_kept: boolean; teams: { key: string; name: string }[];
   skills: { dimension: SkillInfo["dimension"]; key: string; name: string; level: number | null; levelName: string | null }[];
   may_edit: boolean;
+  default_hours_market_code?: string | null;
 };
 
 function toDirectoryPerson(r: DirectoryDbRow): DirectoryPerson {
@@ -774,6 +801,7 @@ function toDirectoryPerson(r: DirectoryDbRow): DirectoryPerson {
     teams: r.teams ?? [],
     skills: (r.skills ?? []).map((k) => ({ dimension: k.dimension, key: k.key, name: k.name, level: k.level, levelName: k.levelName })),
     mayEdit: r.may_edit,
+    defaultHoursMarket: r.default_hours_market_code ?? null,
   };
 }
 
@@ -1420,13 +1448,14 @@ async function computedAt(q: Querier): Promise<string> {
 
 type MarketDbRow = {
   code: string; name: string; time_zone: string; language_code: string; language_skill_key: string | null; min_language_level: number | null;
-  currency: string; status: string; sort_order: number; aliases: string[];
+  currency: string; status: string; sort_order: number; aliases: string[]; hours_market_code?: string;
 };
 
 function toMarket(r: MarketDbRow): MarketConfig {
   return {
     code: r.code, name: r.name, timeZone: r.time_zone, languageCode: r.language_code, languageSkillKey: r.language_skill_key,
     minLanguageLevel: r.min_language_level, currency: r.currency, isActive: r.status === "active", sortOrder: r.sort_order, aliases: r.aliases ?? [],
+    hoursMarketCode: r.hours_market_code ?? r.code,
   };
 }
 
@@ -1807,31 +1836,43 @@ export const postgresData: CmaData = {
   },
 
   async listStatuses(me: Principal): Promise<WorkStatus[]> {
+    return (await postgresData.listMyDayChoices(me)).statuses;
+  },
+
+  async listMyDayChoices(me: Principal): Promise<MyDayChoices> {
     return withTenant(ctx(me), async (q) => {
       // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
-      // status (addition 0009zn)
-      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean }>(
-        `select key, name, is_working, is_productive, work_area, is_default
+      // status (addition 0009zn). The tenant's active hours markets (addition 0009zo, D3) in the same statement: an
+      // uncorrelated scalar subquery, read once, so My day costs no round trip more
+      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean;
+        hours_markets: { code: string; name: string }[] }>(
+        `select key, name, is_working, is_productive, work_area, is_default,
+                (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json)
+                   from cma.hours_markets() h where h.status = 'active') as hours_markets
            from cma.work_status
           where tenant_id = cma.current_tenant_id() and status = 'active'
           order by sort_order, key`,
       );
-      return r.rows.map((s) => ({
-        key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
-      }));
+      return {
+        statuses: r.rows.map((s) => ({
+          key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
+        })),
+        hoursMarkets: (r.rows[0]?.hours_markets ?? []).map((m) => ({ code: m.code, name: m.name, isActive: true })),
+      };
     });
   },
 
-  async setStatus(me: Principal, key: string): Promise<Workday> {
+  async setStatus(me: Principal, change): Promise<Workday> {
     return withTenant(ctx(me), async (q) => {
-      // Today's own day; set_status locks it and enforces own day, not ended, active key
+      // Today's own day; set_status locks it and enforces own day, not ended, active key, and the market (addition
+      // 0009zo): a null key keeps the status in force, a null market the market in force
       const today = await q.query<{ id: string }>(
         `select id from cma.workday
           where tenant_id = cma.current_tenant_id() and ${OWN} and business_date = ${TODAY}`,
       );
       const w = today.rows[0];
       if (!w) throw new CmaDbError("CMA02", "no workday today");
-      await q.query(`select 1 from cma.set_status($1, $2)`, [w.id, key]);
+      await q.query(`select 1 from cma.set_status($1, $2, now(), $3)`, [w.id, change.key, change.hoursMarket]);
       return toWorkday(one(await readDay(q, TODAY, []), "set_status"));
     });
   },
@@ -2056,6 +2097,19 @@ export const postgresData: CmaData = {
       const r = await q.query<DirectoryDbRow>(`select * from cma.directory()`);
       return r.rows.map(toDirectoryPerson);
     });
+  },
+
+  // People's page (addition 0009zo): the directory first (its permission check refuses before anything else is read),
+  // then the tenant's hours markets for Default market, in the same transaction
+  async getPeopleDirectory(me) {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<DirectoryDbRow>(`select * from cma.directory()`);
+      return { people: r.rows.map(toDirectoryPerson), hoursMarkets: await readHoursMarkets(q) };
+    });
+  },
+
+  async setPersonDefaultHoursMarket(me, userId, hoursMarket): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_person_default_hours_market($1::uuid, $2)`, [userId, hoursMarket]));
   },
 
   async listRoles(me): Promise<RoleInfo[]> {
@@ -3203,7 +3257,13 @@ export const postgresData: CmaData = {
     await withTenant(ctx(me), async (q) => {
       await q.query(`select cma.upsert_market($1, $2, $3, $4, $5, $6, $7::smallint, $8)`,
         [input.code, input.name, input.timeZone, input.languageCode, input.currency, input.languageSkillKey, input.minLanguageLevel, input.sortOrder]);
-      const cur = await q.query<{ status: string }>(`select status from cma.markets_all() where code = $1`, [input.code]);
+      const cur = await q.query<{ status: string; hours_market_code: string | null }>(
+        `select status, hours_market_code from cma.markets_all() where code = $1`, [input.code]);
+      // The hours market (addition 0009zo) before the status: the table's trigger checks both (an hours market others book
+      // under stays active and maps to itself), and the refusal rolls the whole save back
+      if (input.hoursMarketCode !== undefined && input.hoursMarketCode !== (cur.rows[0]?.hours_market_code ?? input.code)) {
+        await q.query(`select cma.set_market_hours_market($1, $2)`, [input.code, input.hoursMarketCode]);
+      }
       if ((cur.rows[0]?.status === "active") !== active) await q.query(`select cma.set_market_status($1, $2)`, [input.code, active ? "active" : "inactive"]);
     });
   },

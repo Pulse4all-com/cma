@@ -14,6 +14,9 @@
  *    removed row voids it, a new row adds one. The database validates everything again; these
  *    checks only explain.
  * 3. Remove day (addition 0009g): when the editor offers it, and a refusal as the problem it names.
+ * 4. The hours market (addition 0009zo, D5): every start or status row carries one (or none); a row whose market changed
+ *    replaces its event like any change, with the reason and the approver, and every start or status change says its
+ *    market, so the database never has to guess it.
  *    The database voids every effective event of the day in one correction (cma.remove_workday).
  */
 import type { CorrectionChange, DateKey, TimeEvent, TimeEventKind } from "./data/types";
@@ -123,6 +126,8 @@ export interface EditorRow {
    * its time, it is ordered and sent by this instant, so seconds the minute field cannot show are kept
    */
   eventAt?: string;
+  /** The hours market the row books under (addition 0009zo); null for none and on a clock-out. Absent: none */
+  hoursMarket?: string | null;
 }
 
 /** The editor's starting rows: the day's effective events, in the database's order */
@@ -134,7 +139,7 @@ export function rowsFromEvents(events: TimeEvent[], timeZone: string): EditorRow
       const p = localParts(e.at, timeZone);
       return {
         id: e.id, eventId: e.id, end: e.kind === "end", statusKey: e.kind === "end" ? null : e.statusKey, time: p.time, offset: p.offset,
-        eventKind: e.kind as Exclude<TimeEventKind, "void">, eventAt: e.at,
+        eventKind: e.kind as Exclude<TimeEventKind, "void">, eventAt: e.at, hoursMarket: e.kind === "end" ? null : e.hoursMarket,
       };
     });
 }
@@ -211,7 +216,8 @@ export function check(
   const startIndex = new Map(original.map((r, i) => [r.eventId ?? r.id, i]));
   const untouched = (r: Omit<ResolvedRow, "kind">) => {
     const b = r.eventId ? before.get(r.eventId) : undefined;
-    return !!b && b.time === r.time && b.offset === r.offset && b.end === r.end && (r.end || b.statusKey === r.statusKey);
+    return !!b && b.time === r.time && b.offset === r.offset && b.end === r.end
+      && (r.end || (b.statusKey === r.statusKey && marketOf(b) === marketOf(r)));
   };
   const ordered = resolved
     .map((r, i) => ({ r, i, kept: untouched(r) }))
@@ -258,13 +264,18 @@ function originalKinds(original: EditorRow[]): Map<string, TimeEventKind> {
   return m;
 }
 
+/** A row's hours market: none on a clock-out, and when the row carries none */
+function marketOf(r: Pick<EditorRow, "end" | "hoursMarket">): string | null {
+  return r.end ? null : r.hoursMarket ?? null;
+}
+
 /** The starting rows by the event they show */
 function byEvent(original: EditorRow[]): Map<string, EditorRow> {
   return new Map(original.filter((r) => r.eventId).map((r) => [r.eventId!, r]));
 }
 
 /**
- * True when a row still shows its event as it was: same kind, time, offset and status. Such a
+ * True when a row still shows its event as it was: same kind, time, offset, status and hours market. Such a
  * row sends nothing; any other row with an event replaces it (one definition for the diff and
  * for the inactive-status rule in check)
  */
@@ -272,7 +283,7 @@ function unchanged(before: Map<string, EditorRow>, kinds: Map<string, TimeEventK
   const b = r.eventId ? before.get(r.eventId) : undefined;
   if (!b) return false;
   return kinds.get(r.eventId!) === r.kind && b.time === r.time && b.offset === r.offset
-    && (r.kind === "end" || b.statusKey === r.statusKey);
+    && (r.kind === "end" || (b.statusKey === r.statusKey && marketOf(b) === marketOf(r)));
 }
 
 /**
@@ -288,7 +299,13 @@ export function diff(original: EditorRow[], rows: ResolvedRow[]): CorrectionChan
 
   let first: CorrectionChange | undefined;
   for (const [i, r] of rows.entries()) {
-    let change: CorrectionChange | undefined = { kind: r.kind, at: r.at, ...(r.kind === "end" ? {} : { statusKey: r.statusKey ?? undefined }) };
+    // A start or status row of the editor carries its market, none included (addition 0009zo), and the change says it,
+    // so the database never falls back on the replaced event's; a row without the field sends none (the database keeps
+    // the replaced event's market)
+    let change: CorrectionChange | undefined = {
+      kind: r.kind, at: r.at,
+      ...(r.kind === "end" ? {} : { statusKey: r.statusKey ?? undefined, ...(r.hoursMarket === undefined ? {} : { hoursMarket: marketOf(r) }) }),
+    };
     if (r.eventId && before.has(r.eventId)) {
       kept.add(r.eventId);
       change = unchanged(before, kinds, r) ? undefined : { ...change, supersedes: r.eventId };

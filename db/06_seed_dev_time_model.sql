@@ -14,6 +14,8 @@
 --      pause, a forgotten clock-out fixed by the manager, and an open day from the day before
 --      yesterday that nobody ended. Written once; rerunning skips it.
 --   4. Work areas on the dev tenants' statuses, chosen by rule (section 4), so dev shows Sales and Operations.
+--   5. Hours markets (since addition 0009zo): one dev market mapped to another and two dev people with a Default market,
+--      chosen by rule (section 5), so dev shows a mapping, a clock-in under a Default market and one without.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
 do $$
@@ -136,5 +138,52 @@ begin
      set work_area = case c.n when 1 then 'sales' else 'operations' end
     from candidate c
    where s.id = c.id and c.of_n >= 2 and c.n <= 2;
+end
+$$;
+
+-- 5. Hours markets (after addition 0009zo, 230_hours_market.sql; Martin and Kira, 23 November 2026) ---------------
+-- So dev shows a market booked under another, and a clock-in with and without a Default market. Chosen by rule, naming no
+-- tenant and no market (D1): in a tenant with three or more active markets of which none maps elsewhere yet, the last in
+-- its order (sort order, then code) maps to the first; Agent One gets the tenant's first active hours market as Default
+-- market and Agent Two its second (when there is one); the other dev people keep none, so their clock-in takes the market
+-- of their last day. Rerun-safe: a tenant that maps a market already, and a person with a Default market, are left as
+-- they are, so a change on Configuration → Markets or People survives a rerun. Dev only: it does nothing where the dev
+-- seed's test person does not exist, and nothing before 230 has run. The tables' triggers (230, section 6) check each write.
+do $$
+declare
+  t record;
+  v_first text;
+  v_last  text;
+begin
+  if not exists (select 1 from information_schema.columns
+                 where table_schema = 'cma' and table_name = 'time_event' and column_name = 'hours_market_code') then
+    raise notice 'cma.time_event.hours_market_code does not exist yet (addition 0009zo): rerun this seed after 230_hours_market.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.app_user where email = 'agent.two@example.com' and status = 'active') then
+    raise notice 'not the dev database (no dev seed person): hours markets skipped';
+    return;
+  end if;
+  perform set_config('app.actor_label', 'seed:dev-time-model', true);   -- the audit trail names the process, as section 3
+  for t in select x.id from cma.tenant x order by x.id loop
+    if (select count(*) from cma.market m where m.tenant_id = t.id and m.status = 'active') >= 3
+       and not exists (select 1 from cma.market m where m.tenant_id = t.id and m.hours_market_code <> m.code) then
+      select m.code into v_first from cma.market m where m.tenant_id = t.id and m.status = 'active'
+       order by m.sort_order, m.code collate "C" limit 1;
+      select m.code into v_last from cma.market m where m.tenant_id = t.id and m.status = 'active'
+       order by m.sort_order desc, m.code collate "C" desc limit 1;
+      update cma.market set hours_market_code = v_first where tenant_id = t.id and code = v_last;
+    end if;
+    with h as (
+      select m.code, row_number() over (order by m.sort_order, m.code collate "C") as n
+      from cma.market m
+      where m.tenant_id = t.id and m.status = 'active' and m.hours_market_code = m.code
+    )
+    update cma.app_user u
+       set default_hours_market_code = h.code
+      from h
+     where u.tenant_id = t.id and u.status = 'active' and u.default_hours_market_code is null
+       and ((u.email = 'agent.one@example.com' and h.n = 1) or (u.email = 'agent.two@example.com' and h.n = 2));
+  end loop;
 end
 $$;

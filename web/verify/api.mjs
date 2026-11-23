@@ -540,7 +540,8 @@ expect("the manager's hours file is a private download",
 const hoursLines = hoursFile.text.replace(/^\uFEFF/, "").split("\r\n").filter(Boolean);
 expect("the file follows the tenant's format",
   [hoursFile.bom, hoursLines[0]?.split(SEP).length],
-  [setting("export.csv.utf8_bom") === "true", 11], [setting("export.csv.utf8_bom") !== "true", 11]);
+  // twelve columns since addition 0009zo: the day's hours markets last
+  [setting("export.csv.utf8_bom") === "true", 12], [setting("export.csv.utf8_bom") !== "true", 12]);
 
 const teamDays = (await teamHours(SUPERVISOR, from, today, meA.userId)).body?.data?.days ?? [];
 expect("one hours row per day, as Team hours",
@@ -550,7 +551,8 @@ const statusFile = await download(MANAGER, `/api/v1/team/exports/status-changes?
 const statusLines = statusFile.text.replace(/^\uFEFF/, "").split("\r\n").filter(Boolean);
 expect("every day has at least one status stretch",
   [statusFile.status, statusLines[0]?.split(SEP).length, statusLines.length - 1 >= teamDays.length],
-  [200, 14, true], [200, 14, false]);
+  // fifteen columns since addition 0009zo: the stretch's hours market after the work area
+  [200, 15, true], [200, 15, false]);
 
 const longStart = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
 expect("an export is bounded to 92 days",
@@ -1013,6 +1015,51 @@ expect("an ended day refuses a status change",
 
 // Leave Agent Two in the status the run found (dev data; not a check)
 if (before?.statusKey) await setStatus(AGENT, { key: before.statusKey });
+
+// ---- hours market (addition 0009zo, D3 and D4), 9 checks -------------------------------------------------------
+// The tenant's active hours markets, as My day offers them; no code is assumed. Agent Two's day is open (above)
+const hoursMarkets = (await get(AGENT, "/api/v1/me/hours-markets")).body?.data ?? [];
+expect("hours markets: the active ones, each a code and a name",
+  [hoursMarkets.length > 0, hoursMarkets.every((m) => /^[A-Z]{2}$/.test(m.code) && m.code !== "UK" && typeof m.name === "string" && m.isActive === true)],
+  [true, true], [false, true]);
+const M1 = hoursMarkets[0]?.code ?? "(no hours market in this tenant: Configuration → Markets)";
+const M2 = hoursMarkets[1]?.code ?? M1;
+const dayBefore = (await get(AGENT, "/api/v1/me/day")).body?.data;
+const alone = await setStatus(AGENT, { hoursMarket: M1 });
+expect("hours market: a market change alone keeps the status and books the new market",
+  [alone.status, alone.body?.data?.statusKey ?? null, alone.body?.data?.hoursMarket ?? null], [200, dayBefore?.statusKey ?? null, M1], [200, null, null]);
+const other = statuses.find((s) => s.key !== dayBefore?.statusKey);
+const kept = await setStatus(AGENT, { key: other?.key });
+expect("hours market: a status change without a market keeps the market in force",
+  [kept.status, kept.body?.data?.statusKey ?? null, kept.body?.data?.hoursMarket ?? null], [200, other?.key ?? null, M1], [200, other?.key ?? null, null]);
+const both = await setStatus(AGENT, { key: dayBefore?.statusKey, hoursMarket: M2 });
+expect("hours market: a status change with a market books both",
+  [both.status, both.body?.data?.statusKey ?? null, both.body?.data?.hoursMarket ?? null], [200, dayBefore?.statusKey ?? null, M2], [200, null, M1]);
+expect("hours market: no code, UK, a market the tenant lacks and an empty change are refused",
+  [(await setStatus(AGENT, { hoursMarket: "nl" })).status, (await setStatus(AGENT, { hoursMarket: "UK" })).status,
+   (await setStatus(AGENT, { hoursMarket: "QQ" })).status, (await setStatus(AGENT, {})).status],
+  [400, 400, 404, 400], [200, 200, 200, 200]);
+expect("hours market: the day read carries the market in force",
+  (await get(AGENT, "/api/v1/me/day")).body?.data?.hoursMarket ?? null, M2, null);
+
+// The Default market (D4): set by a manager of the person on People, never by the person; then a clock-in books under it
+const defaultMarket = (s, userId, hoursMarket, headers = { "x-cma-request": "1" }) =>
+  call(s, `/api/v1/team/directory/${userId}/default-market`, { method: "PUT", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify({ hoursMarket }) });
+expect("Default market: the person cannot set it, a code that is no code is a 400",
+  [(await defaultMarket(AGENT, meA.userId, M1)).status, (await defaultMarket(ADMIN, meM.userId, "nl")).status], [403, 400], [200, 200]);
+const setDefault = await defaultMarket(ADMIN, meM.userId, M2);
+expect("Default market: the admin sets the manager's, the person's row answers it",
+  [setDefault.status, setDefault.body?.data?.defaultHoursMarket ?? null], [200, M2], [200, null]);
+// Clock-in under the Default market: only on a day the manager has not clocked in yet (a later run reads the day it made)
+const managerDay = (await get(MANAGER, "/api/v1/me/day")).body?.data ?? null;
+if (managerDay === null) {
+  const opened = await start(MANAGER);
+  expect("clock-in: the day opens under the person's Default market", [opened.status, opened.body?.data?.hoursMarket ?? null], [200, M2], [200, null]);
+} else {
+  console.log(`      (the manager clocked in earlier today: clock-in's market is proven by 231's B4; the day books under ${managerDay.hoursMarket ?? "no market"})`);
+}
+// Nothing of the run stays: the manager's Default market is cleared again (dev data; not a check)
+await defaultMarket(ADMIN, meM.userId, null);
 
 // ---- messaging (migration 0008), 22 checks --------------------------------------------------
 // One urgent message per run from the test supervisor to Agent Two (dev data), then read and

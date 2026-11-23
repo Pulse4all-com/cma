@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
-import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
+import type { DirectoryPerson, HoursMarket, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import { filterPeople, linkedCount, linkedLabel, skillLabel } from "@/lib/team";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
@@ -31,6 +31,7 @@ export function TeamDirectory({
   maySetSkills,
   defaultLoginSystem,
   linked,
+  hoursMarkets = [],
   invite,
   copy,
 }: {
@@ -45,6 +46,8 @@ export function TeamDirectory({
   defaultLoginSystem: string;
   /** Linked accounts (addition 0008e) */
   linked: LinkedAccounts;
+  /** The tenant's hours markets, for a person's Default market (addition 0009zo) */
+  hoursMarkets?: HoursMarket[];
   /** What the Invite dialog needs (addition 0008l) */
   invite: InviteContext;
   copy: Pick<Copy, "invitations" | "team"> & { hints: Pick<Copy["hints"], "about"> };
@@ -261,6 +264,7 @@ export function TeamDirectory({
           maySetSkills={maySetSkills}
           defaultLoginSystem={defaultLoginSystem}
           linked={linked}
+          hoursMarkets={hoursMarkets}
           copy={copy}
           onClose={close}
           onSaved={() => {

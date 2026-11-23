@@ -111,13 +111,24 @@ export function toCsv(header: string[], rows: string[][], s: Pick<ExportSettings
 export interface HoursLabels {
   date: string; person: string; employer: string; timeZone: string; clockedIn: string; clockedOut: string;
   worked: string; paid: string; billable: string; notClockedOut: string; corrected: string; yes: string; no: string;
+  /** The day's hours markets (addition 0009zo): its own last column; time without one reads noMarket */
+  hoursMarket: string; noMarket: string;
 }
 
-/** Hours per person per day: one row per day, as Team hours shows it, plus billable time */
+/** The hours markets of a day as one cell: the codes in order, "No market" for time without one, joined by " + " */
+export function hoursMarketsCell(markets: readonly (string | null)[], noMarket: string): string {
+  return markets.map((m) => (m === null ? noMarket : m)).join(" + ");
+}
+
+/**
+ * Hours per person per day: one row per day, as Team hours shows it, plus billable time. The day's hours markets are the
+ * last column (addition 0009zo), so a file read by position keeps its earlier columns where they were; the split per
+ * market is in the status-changes file, one stretch per row
+ */
 export function hoursCsv(rows: ExportHoursRow[], s: ExportSettings, l: HoursLabels): string {
   const yn = (b: boolean) => (b ? l.yes : l.no);
   return toCsv(
-    [l.date, l.person, l.employer, l.timeZone, l.clockedIn, l.clockedOut, l.worked, l.paid, l.billable, l.notClockedOut, l.corrected],
+    [l.date, l.person, l.employer, l.timeZone, l.clockedIn, l.clockedOut, l.worked, l.paid, l.billable, l.notClockedOut, l.corrected, l.hoursMarket],
     rows.map((r) => [
       formatDate(r.date, s.dateFormat),
       safeText(r.displayName),
@@ -130,6 +141,7 @@ export function hoursCsv(rows: ExportHoursRow[], s: ExportSettings, l: HoursLabe
       formatDuration(r.billableSeconds, s),
       yn(r.isCapped),
       yn(r.hasCorrection),
+      hoursMarketsCell(r.hoursMarkets ?? [], l.noMarket),
     ]),
     s,
   );
@@ -139,20 +151,23 @@ export interface StatusChangeLabels {
   date: string; person: string; employer: string; timeZone: string; status: string; from: string; to: string;
   duration: string; working: string; paid: string; billable: string; enteredBy: string; notClockedOut: string;
   yes: string; no: string; sourceUser: string; sourceSystem: string; sourceCorrection: string; sourceImport: string;
-  /** The status's current work area (addition 0009zn): its own last column, empty without one */
+  /** The status's current work area (addition 0009zn): its own column, empty without one */
   workArea: string; workAreaSales: string; workAreaOperations: string;
+  /** The hours market the stretch was booked under (addition 0009zo): the last column, noMarket without one */
+  hoursMarket: string; noMarket: string;
 }
 
 /**
- * One row per stretch in a status, from its change to the next; an open stretch has no end. The work area is the
- * last column, so a file read by position keeps its earlier columns where they were
+ * One row per stretch in a status, from its change to the next; an open stretch has no end. The work area and then the
+ * hours market (addition 0009zo) are the last columns, so a file read by position keeps its earlier columns where they were
  */
 export function statusChangesCsv(rows: StatusChangeRow[], s: ExportSettings, l: StatusChangeLabels): string {
   const yn = (b: boolean) => (b ? l.yes : l.no);
   const source = { user: l.sourceUser, system: l.sourceSystem, correction: l.sourceCorrection, import: l.sourceImport } as const;
   const area = { sales: l.workAreaSales, operations: l.workAreaOperations } as const;
   return toCsv(
-    [l.date, l.person, l.employer, l.timeZone, l.status, l.from, l.to, l.duration, l.working, l.paid, l.billable, l.enteredBy, l.notClockedOut, l.workArea],
+    [l.date, l.person, l.employer, l.timeZone, l.status, l.from, l.to, l.duration, l.working, l.paid, l.billable, l.enteredBy, l.notClockedOut, l.workArea,
+      l.hoursMarket],
     rows.map((r) => [
       formatDate(r.date, s.dateFormat),
       safeText(r.displayName),
@@ -168,6 +183,7 @@ export function statusChangesCsv(rows: StatusChangeRow[], s: ExportSettings, l: 
       source[r.source],
       yn(r.isCapped),
       r.workArea ? area[r.workArea] : "",
+      r.hoursMarket ?? l.noMarket,
     ]),
     s,
   );

@@ -37,7 +37,7 @@
  */
 import {
   INBOUND_TILES, LIVE_FOLLOW_UP_KEYS, LIVE_GROUPS, LIVE_HINT_KEYS, LIVE_POLL_TIMEOUT_MS, LIVE_STALE_AFTER_FAILURES, OUTBOUND_TILES, boardOfOrganisation, callbackWaiting,
-  employersOf, filterRows, fmtSeconds, hoursDue, inboundHours, inboundTalkToday, inboundTileValue, isStale, LIVE_HOURS_MS, liveBoardWords, liveGroupOf, liveRows,
+  employersOf, filterRows, fmtSeconds, hoursDue, liveHoursMarketOf, inboundHours, inboundTalkToday, inboundTileValue, isStale, LIVE_HOURS_MS, liveBoardWords, liveGroupOf, liveRows,
   missedCallbacks, niceCeiling,
   outboundTileValue, outboundToday, paidSeconds, paidTodayMinutes, secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
@@ -93,6 +93,22 @@ expect("no day is not clocked in", liveGroupOf(people[5]), "notClockedIn", "cloc
 expect("the order is work, pauses, then off the clock (D3)", LIVE_GROUPS,
   ["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"],
   ["productive", "otherWork", "paidPause", "unpaidPause", "clockedOut", "notClockedIn"]);
+
+// The Hours market column (addition 0009zo, D6): the current market of an open day, No market (null) without one, an
+// empty cell without an open day; the board's table has the column, its header in both languages
+const withMarket = (p, m) => ({ ...p, day: p.day && { ...p.day, hoursMarket: m } });
+expect("the market column: the open day's market, null for none, nothing ended or without a day",
+  [liveHoursMarketOf(withMarket(people[0], "NL")), liveHoursMarketOf(withMarket(people[1], null)), liveHoursMarketOf(people[2]),
+   liveHoursMarketOf(withMarket(people[4], "DE")), liveHoursMarketOf(people[5])],
+  ["NL", null, null, undefined, undefined], ["NL", "NL", null, "DE", null]);
+{
+  const boardSrc = readFileSync(new URL("../src/components/LiveBoard.tsx", import.meta.url), "utf8");
+  const rowsSrc = readFileSync(new URL("../src/lib/live-board.ts", import.meta.url), "utf8");
+  expect("the market column: a header and a cell on the board, its words in both languages",
+    [/<th className=\{th\}>\{t\.hoursMarket\}<\/th>/.test(boardSrc), /data-testid="live-hours-market"/.test(boardSrc),
+     /liveHoursMarketOf\(person\)/.test(rowsSrc), copy.en.live.hoursMarket, copy.nl.live.hoursMarket, copy.en.live.noMarket, copy.nl.live.noMarket],
+    [true, true, true, "Hours market", "Urenmarkt", "No market", "Geen markt"], [false, false, false, "Market", "Markt", "", ""]);
+}
 
 // Rows: by group, then by name, never by any figure
 const rows = liveRows(people);
