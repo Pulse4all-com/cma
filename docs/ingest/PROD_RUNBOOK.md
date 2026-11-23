@@ -3513,7 +3513,7 @@ reset role;
 Expected: before February 2026 few or no `status_changed` rows in any store (the moves Juo wrote without `input`, 19.16), from February every store's moves into active, canceled, failed and paused. DE: `status_changed` into canceled from February to May 2026 present means 218's rule leaves them out (a finding on the rule, named with its rows' days); absent, while DE's moves into failed from February are present, means the events never reached the CMA (a finding on the sync, the cause to find before the backfill of 19.18's fix). Keep the output for `records/0009zi-prod-<date>`.
 
 ## 19.20 Studio (cma-prod-pg): the late events behind the differing exits and pauses, before 0009zj
-19.19 (23 November 2026) found DE's `status_changed` events into canceled present every month from February to May 2026 while 218's count reads 0 for DE's exits into canceled until 20 May. 218 counts a day's moves among the events the CMA held when the day's value was taken (`synced_at` up to `cma_at`), and a day's figure is written once. This shows, per store, figure and status, the differing rows and how many of their events the CMA stored after the value was taken. Run it before 19.22, which moves every row's `cma_at` to its own moment. One Run, as your own IAM login; counts and dates only:
+19.19 (23 November 2026) found DE's `status_changed` events into canceled present every month from February to May 2026 while 218's count reads 0 for DE's exits into canceled until 20 May. 218 counts a day's moves among the events the CMA held when the day's value was taken (`synced_at` up to `cma_at`), and a day's figure is written once. This shows, per store, figure and status, the differing rows and how many of their events the CMA stored after the value was taken. Run it before 19.22, which moves every row's `cma_at` to 220's moment. One Run, as your own IAM login; counts and dates only:
 
 **Studio (cma-prod-pg)**
 ```sql
@@ -3557,7 +3557,7 @@ run_migration dev 220_source_figure_late_events.sql 221_verify_source_figure_lat
 ```
 Expected:
 - 220 ends with `COMMIT`. Its NOTICE reads `0009zj: the stored CMA values counted among the events held now: <n> row(s) taken again; values changed: …`, likely `exits 0 row(s); pauses 0 row(s)` in dev.
-- 221's last row reads `PASS | 221_verify_source_figure_late_events: 6 PASS, 0 FAIL`; provoked, `PROVOKED, NOT A PASS | … 0 PASS, 6 FAIL`.
+- 221's last row reads `PASS | 221_verify_source_figure_late_events: 7 PASS, 0 FAIL`; provoked, `PROVOKED, NOT A PASS | … 0 PASS, 7 FAIL`.
 - 215 reads `16 PASS, 0 FAIL` and 219 `6 PASS, 0 FAIL`, as before: neither is edited, and a write without a late event answers as before.
 - `records clean`. No data map refresh: 0009zj changes no table, view or column.
 
@@ -3571,13 +3571,14 @@ run_migration prod 220_source_figure_late_events.sql 221_verify_source_figure_la
 Expected:
 - 220 `COMMIT`. Its NOTICE takes every stored exits and pauses row again (219's A3 counted 15,144) and names the values changed: at least DE's exits canceled from February to 20 May 2026, from 0 to the counts the CMA holds.
 - 221 in prod: A1 to A4 `PASS` (A3 `<n> rows, 0 differ at cma_at | 0 lag the events held now`), B `REFUSED` (no dev seed, as 215 and 219), verdict `PASS, A ONLY | 221_verify_source_figure_late_events: 4 PASS, 0 FAIL`.
-- 219 in prod `PASS, A ONLY | … 3 PASS, 0 FAIL`. A4 reads right after 220; later, a day the minute job synced since a store's last write may lag until that store's next write.
+- 219 in prod `PASS, A ONLY | … 3 PASS, 0 FAIL`. A4 reads right after 220; later, a day the minute job synced since a store's last write may lag until that store's next write. A single lagging row on today or yesterday right after 220 means a sync committed during it; the next write takes it.
 
 ## 19.23 Studio (cma-prod-pg): the exits and pauses after 0009zj
 The query of 19.13 again. Expected:
 - DE's exits into canceled from February to 20 May 2026 are gone from the list.
 - The rows before 29 January 2026 remain in every store (about 620): the next addition's backfill of the events stores them, and each store's next figures write then counts them.
 - GB canceled 1, GB pauses 1 and NL canceled 1 (19.16) remain unless they too were late events (19.20 tells). Each row still listed is named with its cause in `records/0009zj-prod-<date>`.
+- Today's rows (the tenant's zone) may be listed as well: the app's value was read in the morning, the CMA's is counted at 220's moment. They are no finding; data quality compares flows before today only, and the next day's read takes them again.
 - Data quality's `source_figure_gap` (19.17) follows at its next refresh.
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 

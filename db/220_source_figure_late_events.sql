@@ -7,8 +7,8 @@
 -- 221_verify_source_figure_late_events.sql there (normal, then provoked), then the verifies that read what this
 -- re-creates: 215_verify_source_figures.sql and 219_verify_source_figure_moves.sql (cma.ingest_upsert_source_figures;
 -- neither is edited: a write without a late event answers as before). No other verify reads the write (grep -lw
--- 'cma\.ingest_upsert_source_figures' db/*verify*.sql). Prod: this script and 221 (its block B refuses prod's data, as
--- 215's and 219's do), away from the hourly figures job (41 * * * *). No page reads anything new and no ingest code
+-- 'cma\.ingest_upsert_source_figures' db/*verify*.sql). Prod: this script, 221 and 219 (their blocks B refuse prod's data,
+-- as 215's does; 215 runs in dev only), away from the hourly figures job (41 * * * *). No page reads anything new and no ingest code
 -- changes, so the order against the merge does not matter; no index (the late events are found through
 -- subscription_event_synced_idx, 212).
 --
@@ -27,9 +27,12 @@
 --   at each write (cma.ingest_upsert_source_figures, once a day per store): besides the days it was given, every exits and
 --     pauses row of the connection whose business day (the tenant's zone) holds a status event stored since the previous
 --     write (the connection's latest cma_at before this write, one hour earlier: a sync that committed late is still
---     found, and a day counted twice costs a few milliseconds) is counted again among the events the CMA holds now, and
---     its cma_at moves to now. The answer names those rows as recounted, only when there are any
---   now, once (section 3): every stored exits and pauses row of every tenant is counted among the events the CMA holds
+--     found, and a day counted twice costs a few milliseconds), or the next status event of such an event's subscription
+--     (whose previous status the late event may change: a cancellation stored late makes the next day's report into
+--     canceled no move), is counted again among the events the CMA holds now, and its cma_at moves to now. The rows are
+--     locked in key order first, as the write orders its own. The answer names those rows as recounted, only when there
+--     are any (the ingest sums its three counts only, so the run's log does not show it)
+--   now, once (section 2): every stored exits and pauses row of every tenant is counted among the events the CMA holds
 --     now, cma_at now, so the first write after this one starts from a current state
 -- cma_at keeps its meaning (the moment the CMA's value was taken), so 219's A3 (the value equals the rule among the
 -- events held at cma_at) stays exact. A backfill of the events (the next addition's) reaches the stored figures at the
@@ -48,7 +51,8 @@
 -- Cost: the write reads the connection's status events stored since the previous write (a day's sync: hundreds) through
 -- subscription_event_synced_idx (tenant, synced_at), then counts again the few rows of their days (a day's sync touches
 -- the day before and today, both written anyway); after a backfill of the events, every day of the history once (some
--- milliseconds a row). Section 3 counts every stored exits and pauses row once, as 218's recount did.
+-- milliseconds a row: a store's whole history, 1,532 rows, in 390 ms on the volume fixture under one CPU; the next call
+-- 14 ms). Section 2 counts every stored exits and pauses row once, as 218's recount did.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -217,12 +221,36 @@ begin
   -- again among the events the CMA holds now, and its cma_at moves to now. Planned at each call (a range over
   -- subscription_event_synced_idx, whose bound only the call knows)
   if v_since is not null then
-    execute 'select array_agg(distinct (e.occurred_at at time zone $3)::date)
-             from cma.subscription_event e
-             where e.tenant_id = $1 and e.synced_at > $4 and e.connection_id = $2
-               and e.event_type in (''status_changed'', ''canceled'', ''paused'', ''resumed'', ''reactivated'')'
+    -- a late event's own day, and the day of its subscription's next status event, whose previous status it may change
+    -- (a late cancellation on one day makes the next day's report into canceled no move)
+    execute 'with late as (
+               select e.subscription_source_id, e.occurred_at, e.source_id
+               from cma.subscription_event e
+               where e.tenant_id = $1 and e.synced_at > $4 and e.connection_id = $2
+                 and e.event_type in (''status_changed'', ''canceled'', ''paused'', ''resumed'', ''reactivated''))
+             select array_agg(distinct d.day)
+             from (select (l.occurred_at at time zone $3)::date as day from late l
+                   union all
+                   select (n.occurred_at at time zone $3)::date
+                   from late l
+                   cross join lateral (
+                     select x.occurred_at
+                     from cma.subscription_event x
+                     where x.tenant_id = $1 and x.connection_id = $2 and x.subscription_source_id = l.subscription_source_id
+                       and x.event_type in (''status_changed'', ''canceled'', ''paused'', ''resumed'', ''reactivated'')
+                       and (x.occurred_at > l.occurred_at or (x.occurred_at = l.occurred_at and x.source_id collate "C" > l.source_id collate "C"))
+                     order by x.occurred_at, x.source_id collate "C"
+                     limit 1) n) d'
       into v_days using v_tenant, p_connection_id, v_zone, v_since;
     if v_days is not null then
+      -- the rows locked in key order first, as the write above orders its own, so two writes on one connection (the
+      -- hourly job and a month backfill) never wait on each other in a circle
+      perform 1
+      from cma.source_figure f
+      where f.tenant_id = v_tenant and f.connection_id = p_connection_id and f.figure_key in ('exits', 'pauses')
+        and f.business_date = any (v_days) and f.cma_value is not null and f.cma_at < now()
+      order by f.figure_key, f.business_date, f.dims
+      for update;
       update cma.source_figure f
       set cma_value = cma.source_figure_moves_of(v_tenant, p_connection_id, case f.figure_key when 'pauses' then 'paused' else f.dims ->> 'status' end,
                                                  f.business_date::timestamp at time zone v_zone,

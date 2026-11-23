@@ -20,7 +20,9 @@
 --         ago) is counted again (1 to 2, the double report once) and its cma_at moves to now; a day whose event was stored
 --         before its row was taken keeps its value and cma_at; the answer names the one row counted again
 --      B2 a late event of the other connection moves none of this connection's rows; a first write (no earlier row) and a
---         write without a late event answer with the three counts alone
+--         second write once the late days are taken answer with the three counts alone
+--      B3 a late event's subscription's next status event, on a later day, is counted again too (a cancellation stored
+--         late on D-6 makes the report into canceled on D-5 no move)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
 do $$
@@ -128,22 +130,27 @@ begin
     insert into cma.subscription (tenant_id, connection_id, source_system, source_id, customer_source_id, status, billing_interval,
                                   billing_interval_count, amount_per_cycle, currency, source_created_at, source_updated_at)
     select v_t, x.conn, 'verifysubs', x.id, 'c-' || x.id, 'canceled', 'month', 1, 30, 'GBP', now() - interval '100 days', now() - interval '1 day'
-    from (values (v_sub, 'k1'), (v_sub, 'k2'), (v_sub, 'k3'), (v_sub2, 'm1')) x(conn, id);
+    from (values (v_sub, 'k1'), (v_sub, 'k2'), (v_sub, 'k3'), (v_sub, 'k4'), (v_sub2, 'm1')) x(conn, id);
     -- the events, each with the moment the CMA stored it: k1 on D-2 stored before its row was taken; k2 on D-2 one
     -- cancellation reported twice, stored half an hour ago, after the row; k3 on D-3 stored five hours ago, before its row;
-    -- m1, the other connection's, on D-4, stored half an hour ago
+    -- m1, the other connection's, on D-4, stored half an hour ago; k4 a report into canceled on D-5 stored before its row,
+    -- and the cancellation it repeats, on D-6, stored half an hour ago
     insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at,
                                         status_from, status_to, synced_at)
     values (v_t, v_sub, 'verifysubs', 'k1-a', 'k1', 'status_changed', ((v_today - 2)::timestamp + interval '9 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '5 hours'),
            (v_t, v_sub, 'verifysubs', 'k2-a', 'k2', 'status_changed', ((v_today - 2)::timestamp + interval '10 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '30 minutes'),
            (v_t, v_sub, 'verifysubs', 'k2-b', 'k2', 'canceled', ((v_today - 2)::timestamp + interval '10 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '30 minutes'),
            (v_t, v_sub, 'verifysubs', 'k3-a', 'k3', 'status_changed', ((v_today - 3)::timestamp + interval '9 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '5 hours'),
-           (v_t, v_sub2, 'verifysubs', 'm1-a', 'm1', 'status_changed', ((v_today - 4)::timestamp + interval '9 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '30 minutes');
+           (v_t, v_sub2, 'verifysubs', 'm1-a', 'm1', 'status_changed', ((v_today - 4)::timestamp + interval '9 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '30 minutes'),
+           (v_t, v_sub, 'verifysubs', 'k4-b', 'k4', 'status_changed', ((v_today - 5)::timestamp + interval '10 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '5 hours'),
+           (v_t, v_sub, 'verifysubs', 'k4-a', 'k4', 'canceled', ((v_today - 6)::timestamp + interval '10 hours') at time zone 'Europe/London', 'active', 'canceled', now() - interval '30 minutes');
     -- the stored rows of D-2, D-3 and D-4, taken two hours ago with the events held then (D-2 1: k1 only)
     insert into cma.source_figure (tenant_id, connection_id, figure_key, source_metric, business_date, dims, value, unit, cma_value, cma_at, fetched_at)
     values (v_t, v_sub, 'exits', 'subscriptions:churned', v_today - 2, '{"status": "canceled"}', 2, 'count', 1, now() - interval '2 hours', now() - interval '2 hours'),
            (v_t, v_sub, 'exits', 'subscriptions:churned', v_today - 3, '{"status": "canceled"}', 1, 'count', 1, now() - interval '2 hours', now() - interval '2 hours'),
-           (v_t, v_sub, 'exits', 'subscriptions:churned', v_today - 4, '{"status": "canceled"}', 0, 'count', 0, now() - interval '2 hours', now() - interval '2 hours');
+           (v_t, v_sub, 'exits', 'subscriptions:churned', v_today - 4, '{"status": "canceled"}', 0, 'count', 0, now() - interval '2 hours', now() - interval '2 hours'),
+           (v_t, v_sub, 'exits', 'subscriptions:churned', v_today - 5, '{"status": "canceled"}', 0, 'count', 1, now() - interval '2 hours', now() - interval '2 hours'),
+           (v_t, v_sub, 'exits', 'subscriptions:churned', v_today - 6, '{"status": "canceled"}', 1, 'count', 0, now() - interval '2 hours', now() - interval '2 hours');
 
     -- B1. today's write as the ingest
     v_items := jsonb_build_array(
@@ -154,21 +161,29 @@ begin
     perform set_config('role', 'cma_owner', true);
     v_txt := v_j::text || ' | ' || (select string_agg((f.business_date - v_today) || '=' || f.cma_value || case when f.cma_at = now() then ' now' else ' kept' end, ' '
                                                        order by f.business_date)
-                                    from cma.source_figure f where f.tenant_id = v_t and f.connection_id = v_sub);
-    v_rows := v_rows || array['11', 'B1 a day with status events stored after its row was taken is counted again among the events held now (1 to 2, a double report once) and its cma_at moves to now; a day whose event was stored before keeps its value and cma_at; the answer names the one row counted again',
-      case when v_txt = '{"updated": 0, "inserted": 1, "recounted": 1, "unchanged": 0} | -4=0.00 kept -3=1.00 kept -2=2.00 now 0=0.00 now'
+                                    from cma.source_figure f where f.tenant_id = v_t and f.connection_id = v_sub and f.business_date >= v_today - 4);
+    v_rows := v_rows || array['11', 'B1 a day with status events stored after its row was taken is counted again among the events held now (1 to 2, a double report once) and its cma_at moves to now; a day whose event was stored before keeps its value and cma_at; the answer names the rows counted again (with B3''s two)',
+      case when v_txt = '{"updated": 0, "inserted": 1, "recounted": 3, "unchanged": 0} | -4=0.00 kept -3=1.00 kept -2=2.00 now 0=0.00 now'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
+    -- B3. a late event changes the next day's count too: k4's cancellation on D-6, stored late, makes its report into
+    -- canceled on D-5 no move; both days are counted again (D-6 0 to 1, D-5 1 to 0)
+    v_txt := (select string_agg((f.business_date - v_today) || '=' || f.cma_value || case when f.cma_at = now() then ' now' else ' kept' end, ' '
+                                order by f.business_date)
+              from cma.source_figure f where f.tenant_id = v_t and f.connection_id = v_sub and f.business_date < v_today - 4);
+    v_rows := v_rows || array['13', 'B3 a late event''s subscription''s next status event, on a later day, is counted again too: a cancellation on D-6 stored late makes the report into canceled on D-5 no move (D-6 0 to 1, D-5 1 to 0, both taken now)',
+      case when v_txt = '-6=1.00 now -5=0.00 now' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
     -- B2. the other connection: its late event moves none of the first connection's rows (D-4 kept above); its first
-    -- write (no earlier row) answers with the three counts alone; so does a write without a late event in a new transaction
-    -- of the ingest (here: the first connection again, its rows now all taken at now)
+    -- write (no earlier row) answers with the three counts alone; so does a second write of the first connection once its
+    -- late days are taken (their cma_at now: a row is counted again only while its cma_at is older than the write)
     perform set_config('role', 'cma_app', true);
     v_j2 := cma.ingest_upsert_source_figures(v_sub2, null, v_items);
     v_j3 := cma.ingest_upsert_source_figures(v_sub, null, v_items);
     perform set_config('role', 'cma_owner', true);
     v_txt := v_j2::text || ' ' || v_j3::text || ' | '
              || (select string_agg(f.business_date - v_today || '=' || f.cma_value, ' ' order by f.business_date) from cma.source_figure f where f.tenant_id = v_t and f.connection_id = v_sub2);
-    v_rows := v_rows || array['12', 'B2 the other connection''s late event moves none of this connection''s rows (B1''s D-4 kept); a first write and a write without a late event answer with the three counts alone',
+    v_rows := v_rows || array['12', 'B2 the other connection''s late event moves none of this connection''s rows (B1''s D-4 kept); a first write, and a second write once the late days are taken, answer with the three counts alone',
       case when v_txt = '{"updated": 0, "inserted": 1, "unchanged": 0} {"updated": 0, "inserted": 0, "unchanged": 1} | 0=0.00'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -187,7 +202,7 @@ begin
 end
 $$;
 
--- Verdict: one row per check, then the verdict (6 checks in dev; block A's 4 elsewhere)
+-- Verdict: one row per check, then the verdict (7 checks in dev; block A's 4 elsewhere)
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0009zj
       union all
@@ -196,7 +211,7 @@ from (select ord, check_name, result, detail from verify_0009zj
                   when not current_setting('verify.dev')::boolean then
                     case when (select count(*) from verify_0009zj where result = 'PASS' and ord < 10) = 4
                               and not exists (select 1 from verify_0009zj where result not in ('PASS', 'REFUSED')) then 'PASS, A ONLY' else 'FAIL' end
-                  when (select count(*) from verify_0009zj where result = 'PASS') = 6
+                  when (select count(*) from verify_0009zj where result = 'PASS') = 7
                        and not exists (select 1 from verify_0009zj where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('221_verify_source_figure_late_events: %s PASS, %s FAIL', (select count(*) from verify_0009zj where result = 'PASS'),
