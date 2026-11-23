@@ -12,15 +12,16 @@
 -- changes, so the order against the merge does not matter; no index (the late events are found through
 -- subscription_event_synced_idx, 212).
 --
--- Why (Martin, 23 November 2026, PROD_RUNBOOK 19.16, 19.18 and 19.19 after 218 in prod): the CMA read 0 for DE's exits into
--- canceled on days until 20 May 2026 while it holds DE's status_changed events into canceled every month from February to
--- May (12, 11, 15, 11) and B39c's churned equals the app's for DE in February to April. The difference between the two
--- counts is the moment: B39c reads the events the CMA holds now, the source figure the events the CMA held when its value
--- was taken (synced_at <= cma_at, 218's rule, so a stored value can be counted again exactly). An event stored after the
--- value was taken (a late sync or a backfill of the events) never reached it, because a day's figure is written once,
--- when its day is read (the daily read, or the month backfill of PROD_RUNBOOK 19.9), and never again. Every other path
--- of 218's rule (a status_from, a previous status event, the day's bounds in the tenant's zone) is the same in B39c's
--- moves, which match. PROD_RUNBOOK 19.20 shows the late events per row before this runs (counts and dates only).
+-- Why (Martin, 23 November 2026, after 218 in prod): a guard. 218 counts a day's moves among the events the CMA held when
+-- the value was taken (synced_at <= cma_at, so a stored value can be counted again exactly), and a day's figure is written
+-- once, when its day is read (the daily read at source_figures.local_time, or the month backfill of PROD_RUNBOOK 19.9),
+-- and never again. So an event stored after its day's read (a sync that lands after the morning read, or a backfill of
+-- the events such as the next addition's, 0009zk) would never be counted, and the figure would keep a gap that is the
+-- CMA's timing, not a difference with the app. PROD_RUNBOOK 19.20 in prod (23 November 2026) found no such row today:
+-- no differing row holds an event stored after its value was taken. So this recovers no value now; it keeps the source
+-- figures following the events the CMA holds from here on. The differing rows whose events the CMA holds but the rule
+-- counts as no move (DE canceled on 2026-05-20, which 218 turned to 0; GB canceled, GB pauses, NL canceled) have another
+-- cause, which PROD_RUNBOOK 19.24 names per day; this does not change them.
 --
 -- The rule (unchanged): cma.source_figure_moves_of, one move into a status counted once (218). What changes is when a
 -- stored value is taken again:

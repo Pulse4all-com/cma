@@ -3444,7 +3444,7 @@ run_migration prod 218_source_figure_moves.sql 219_verify_source_figure_moves.sq
 Expected: 218 `COMMIT`, its NOTICE `0009zi: the stored CMA values recounted: exits <n> row(s), <old> to <new>` (from 19.13: at least 2 rows, 24 to 12) and a pauses part only where a pause was reported twice; 219 in prod: A1 to A3 `PASS` (A3 `<n> rows, 0 differ`), B `REFUSED` (no dev seed, as 215), verdict `PASS, A ONLY | 219_verify_source_figure_moves: 3 PASS, 0 FAIL`.
 
 ## 19.16 Studio (cma-prod-pg): the exits and pauses after 0009zi
-The query of 19.13 again. Expected: the rows where the CMA's value was exactly double the app's are gone (19.13 in prod, 23 November 2026: 49 rows from about 28 January 2026 on, among them DE and GB exits canceled on 2026-11-21). The rows where the CMA reads 0 and the app a number, on the days before 29 January 2026 (19.13: about 620, every store, exits canceled, failed and expired and pauses), remain: until then Juo sent a status move as `subscription:updated` with the new status at the payload's top level and no `input`, the adapter reads a move's new status from `input` only, so those moves were never stored, and 218 counts the moves the CMA holds. 28 January 2026 is the day of the change and is partly short (in GB the first update in the new shape is at about 13:00 UTC). DE's exits into canceled read 0 on days until 20 May 2026 as well, although the CMA holds those events (19.19): 218 counts the events the CMA held when a day's value was taken, and these were stored after it; 0009zj counts them (19.20 to 19.23). Their fix is the adapter's and a backfill of the events (19.18), not 218. A row still listed outside those two patterns is a finding with its cause, named in `records/0009zi-prod-<date>`. Then 19.7's first query: expected the 108 figures of the first run all equal (106 before). The rule trusts the events' history: a move the app made without an event (the audit's status_chain) hides the next report into the same status, so a failed or pauses figure that matched before and differs now names that cause.
+The query of 19.13 again. Expected: the rows where the CMA's value was exactly double the app's are gone (19.13 in prod, 23 November 2026: 49 rows from about 28 January 2026 on, among them DE and GB exits canceled on 2026-11-21). The rows where the CMA reads 0 and the app a number, on the days before 29 January 2026 (19.13: about 620, every store, exits canceled, failed and expired and pauses), remain: until then Juo sent a status move as `subscription:updated` with the new status at the payload's top level and no `input`, the adapter reads a move's new status from `input` only, so those moves were never stored, and 218 counts the moves the CMA holds. 28 January 2026 is the day of the change and is partly short (in GB the first update in the new shape is at about 13:00 UTC). A few rows also read 0 although the CMA holds events into the status on their day, which the rule counts as no move (after 218 on 23 November 2026: DE canceled 1 row, 2026-05-20, which 218 turned to 0; GB canceled 1, GB pauses 6, NL canceled 8): 19.24 names their days and likely cause. The zeros' fix is the adapter's and a backfill of the events (19.18), not 218. A row still listed outside those two patterns is a finding with its cause, named in `records/0009zi-prod-<date>`. Then 19.7's first query: expected the 108 figures of the first run all equal (106 before). The rule trusts the events' history: a move the app made without an event (the audit's status_chain) hides the next report into the same status, so a failed or pauses figure that matched before and differs now names that cause.
 
 ## 19.17 Browser: Reports → Data quality
 Refresh it after the next data-quality refresh (`data_quality.refresh_minutes`). Expected: `source_figure_gap` lists no DE or GB exits canceled for 21 November. Flash's snapshot of 22 November keeps the finding it took that morning (a stored snapshot is not recomputed); the next morning's snapshot reads the corrected values.
@@ -3513,7 +3513,7 @@ reset role;
 Expected: before February 2026 few or no `status_changed` rows in any store (the moves Juo wrote without `input`, 19.16), from February every store's moves into active, canceled, failed and paused. DE: `status_changed` into canceled from February to May 2026 present means 218's rule leaves them out (a finding on the rule, named with its rows' days); absent, while DE's moves into failed from February are present, means the events never reached the CMA (a finding on the sync, the cause to find before the backfill of 19.18's fix). Keep the output for `records/0009zi-prod-<date>`.
 
 ## 19.20 Studio (cma-prod-pg): the late events behind the differing exits and pauses, before 0009zj
-19.19 (23 November 2026) found DE's `status_changed` events into canceled present every month from February to May 2026 while 218's count reads 0 for DE's exits into canceled until 20 May. 218 counts a day's moves among the events the CMA held when the day's value was taken (`synced_at` up to `cma_at`), and a day's figure is written once. This shows, per store, figure and status, the differing rows and how many of their events the CMA stored after the value was taken. Run it before 19.22, which moves every row's `cma_at` to 220's moment. One Run, as your own IAM login; counts and dates only:
+218 counts a day's moves among the events the CMA held when the day's value was taken (`synced_at` up to `cma_at`), and a day's figure is written once. This shows, per store, figure and status, the differing rows and how many of their events the CMA stored after the value was taken. Run it before 19.22, which moves every row's `cma_at` to 220's moment. One Run, as your own IAM login; counts and dates only:
 
 **Studio (cma-prod-pg)**
 ```sql
@@ -3546,9 +3546,10 @@ order by coalesce(st.market, 'unknown') collate "C", f.figure_key collate "C", f
 reset role;
 ```
 Expected:
-- DE exits canceled: `rows_with_late_events` equal to its rows from February to 20 May 2026, `events_held_then` 0 for them, and `first_stored_after` and `last_stored_after` naming when the CMA stored them.
-- The rows before 29 January 2026 in every store: `events_held_then` 0 and `events_stored_after` 0 (the events are missing, 19.16; the next addition's).
-- A row with neither is a finding of its own. Keep the output for `records/0009zj-prod-<date>`.
+- `rows_with_late_events` 0 and `events_stored_after` 0 in every store, figure and status (prod, 23 November 2026): no value waits on a late event today, and 0009zj is a guard for the ones to come (#311's backfill among them).
+- The rows before 29 January 2026: `events_held_then` 0 (the events are missing, 19.16; #311 stores them).
+- A few rows with `events_held_then` above 0 (prod, 23 November 2026: DE canceled 1, GB canceled 1, GB pauses 6, NL canceled 8): the CMA holds the events and the rule counts them as no move; 19.24 names their days.
+- Keep the output for `records/0009zj-prod-<date>`.
 
 ## 19.21 Terminal: 0009zj in dev
 **Terminal**
@@ -3569,17 +3570,79 @@ After 19.20. Run it away from the hourly figures job (`41 * * * *`). No page and
 run_migration prod 220_source_figure_late_events.sql 221_verify_source_figure_late_events.sql 0009zj-prod-$(date +%F) 219_verify_source_figure_moves.sql
 ```
 Expected:
-- 220 `COMMIT`. Its NOTICE takes every stored exits and pauses row again (219's A3 counted 15,144) and names the values changed: at least DE's exits canceled from February to 20 May 2026, from 0 to the counts the CMA holds.
+- 220 `COMMIT`. Its NOTICE takes every stored exits and pauses row again (219's A3 counted 15,144) and names the values changed: none, or a few on today and yesterday where a sync landed after the morning read (19.20 found no late event).
 - 221 in prod: A1 to A4 `PASS` (A3 `<n> rows, 0 differ at cma_at | 0 lag the events held now`), B `REFUSED` (no dev seed, as 215 and 219), verdict `PASS, A ONLY | 221_verify_source_figure_late_events: 4 PASS, 0 FAIL`.
 - 219 in prod `PASS, A ONLY | … 3 PASS, 0 FAIL`. A4 reads right after 220; later, a day the minute job synced since a store's last write may lag until that store's next write. A single lagging row on today or yesterday right after 220 means a sync committed during it; the next write takes it.
 
 ## 19.23 Studio (cma-prod-pg): the exits and pauses after 0009zj
-The query of 19.13 again. Expected:
-- DE's exits into canceled from February to 20 May 2026 are gone from the list.
-- The rows before 29 January 2026 remain in every store (about 620): the next addition's backfill of the events stores them, and each store's next figures write then counts them.
-- GB canceled 1, GB pauses 1 and NL canceled 1 (19.16) remain unless they too were late events (19.20 tells). Each row still listed is named with its cause in `records/0009zj-prod-<date>`.
+The query of 19.13 again. Expected, as after 218 (19.16):
+- The rows before 29 January 2026, in every store (#311 stores their events; each store's next figures write then counts them through 0009zj).
+- The rows whose events are held but count as no move (19.20: DE canceled 2026-05-20, GB canceled 1, GB pauses 6, NL canceled 8), named by 19.24.
 - Today's rows (the tenant's zone) may be listed as well: the app's value was read in the morning, the CMA's is counted at 220's moment. They are no finding; data quality compares flows before today only, and the next day's read takes them again.
-- Data quality's `source_figure_gap` (19.17) follows at its next refresh.
+- Nothing else. A row outside these is a finding named in `records/0009zj-prod-<date>`. Data quality's `source_figure_gap` (19.17) follows at its next refresh.
+
+## 19.24 Studio (cma-prod-pg): the days whose events are held but count as no move
+Per differing row whose day holds events into the figure's status: the app's value and the CMA's, the events held, and why the rule (218) counts each as no move. `repeat_same_day` means its previous status event set that status the same day: one move reported twice, which the app counts per event and the CMA once. `repeat_earlier_day` means it set it on an earlier day, `earliest_prev_day`: the subscription left that status between without a status event the CMA holds. `kinds_between` gives the kinds of the other events held between, for example `renewed`, a renewal of a canceled subscription, which the app turned active again without a status event. `from_same_status` means the event says it came from that status already. One Run, as your own IAM login; counts, dates and the CMA's event kinds only:
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '120s';
+set jit = off;
+set role cma_owner;
+with t as (select id, timezone from cma.tenant where slug = 'pulse4all-subscriptions'),
+st as materialized (select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
+f as (
+  -- the differing rows whose day holds events into the figure's status
+  select f.connection_id, f.figure_key, coalesce(f.dims ->> 'status', 'paused') as status, f.business_date, f.value, f.cma_value
+  from cma.source_figure f
+  where f.tenant_id = (select id from t) and f.figure_key in ('exits', 'pauses') and f.cma_value is distinct from f.value),
+e as (
+  select f.connection_id, f.figure_key, f.status, f.business_date, f.value, f.cma_value,
+         x.subscription_source_id, x.occurred_at, x.source_id, x.status_from
+  from f
+  join cma.subscription_event x
+    on x.tenant_id = (select id from t) and x.connection_id = f.connection_id
+   and x.occurred_at >= f.business_date::timestamp at time zone (select timezone from t)
+   and x.occurred_at < (f.business_date + 1)::timestamp at time zone (select timezone from t)
+   and x.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
+   and case x.event_type when 'status_changed' then x.status_to when 'canceled' then 'canceled' when 'paused' then 'paused' else 'active' end = f.status),
+p as (
+  -- each held event's previous status event, in 218's order, and the events of other kinds between the two
+  select e.*, pv.prev_status, pv.prev_at,
+         (select string_agg(distinct b.event_type, ',' order by b.event_type)
+          from cma.subscription_event b
+          where b.tenant_id = (select id from t) and b.connection_id = e.connection_id and b.subscription_source_id = e.subscription_source_id
+            and b.occurred_at > pv.prev_at and b.occurred_at < e.occurred_at
+            and b.event_type not in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')) as between_types
+  from e
+  left join lateral (
+    select case q.event_type when 'status_changed' then q.status_to when 'canceled' then 'canceled' when 'paused' then 'paused' else 'active' end as prev_status,
+           q.occurred_at as prev_at
+    from cma.subscription_event q
+    where q.tenant_id = (select id from t) and q.connection_id = e.connection_id and q.subscription_source_id = e.subscription_source_id
+      and q.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
+      and (q.occurred_at < e.occurred_at or (q.occurred_at = e.occurred_at and q.source_id collate "C" < e.source_id collate "C"))
+    order by q.occurred_at desc, q.source_id collate "C" desc
+    limit 1) pv on true)
+select coalesce(st.market, 'unknown') as market, p.figure_key, p.status, p.business_date, p.value as app, p.cma_value as cma,
+       count(*) as held,
+       count(*) filter (where p.prev_status = p.status and (p.prev_at at time zone (select timezone from t))::date = p.business_date) as repeat_same_day,
+       count(*) filter (where p.prev_status = p.status and (p.prev_at at time zone (select timezone from t))::date < p.business_date) as repeat_earlier_day,
+       min((p.prev_at at time zone (select timezone from t))::date) filter (where p.prev_status = p.status) as earliest_prev_day,
+       count(*) filter (where p.prev_status is null and p.status_from = p.status) as from_same_status,
+       string_agg(distinct p.between_types, ' | ') as kinds_between
+from p
+left join st on st.connection_id = p.connection_id
+group by 1, 2, 3, 4, 5, 6
+order by coalesce(st.market, 'unknown') collate "C", p.figure_key collate "C", p.status collate "C", p.business_date;
+reset role;
+```
+Expected: one row per such day (DE canceled 2026-05-20, and GB's and NL's days), each named by its pattern:
+- `repeat_earlier_day` with a kind between (`renewed`, `purchased`, `lines_changed` …): the app moved the subscription out of the status with no status event (the audit's `status_chain`, 218's data prerequisite). The app counts the second report as an exit, the CMA as no move: the CMA follows its definition (one move into a status from another).
+- `repeat_same_day`: one move reported twice on its day. The app's Exit counts per event, the CMA per move.
+- Neither: a finding of its own.
+
+#311's backfill stores the moves Juo wrote before 28 January 2026. These rows' events and the ones before them in the same status were all written after it (the CMA holds no status event before 28 January), and Juo writes every status move since with `input`, so the backfill adds no move between them and leaves these rows as they are. Name each day with its pattern in `records/0009zj-prod-<date>`.
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 
 One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`). 20.0 to 20.5 and 20.8 ran on 21 November 2026 (`records/0009ze-dev-2026-11-21`, `records/0009ze-prod-2026-11-21`); 20.6 and 20.7 are open.
