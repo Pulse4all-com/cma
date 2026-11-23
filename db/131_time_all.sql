@@ -278,7 +278,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.workday_can_clock_in_again(n.workday_id) as can_clock_in_again
    from cma.team_now() n left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at
    from cma.time_event_effective e where e.workday_id = n.workday_id and e.kind = 'start') se on true$q$, 'poll', array['monitoring.live']),
-('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid, work_area, (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a) as tenant_has_work_area from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
+('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid, work_area, (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a where a.tenant_id = cma.current_tenant_id()) as tenant_has_work_area from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'inbound today', $q$select * from cma.inbound_today()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks', $q$select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks summary', $q$select * from cma.missed_callbacks_summary()$q$, 'poll', array['monitoring.live']),

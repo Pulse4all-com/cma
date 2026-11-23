@@ -1576,10 +1576,12 @@ async function readTeamNow(q: Querier): Promise<TeamNow> {
        from cma.team_now() n${SESSIONS_JOIN("n.workday_id")}`,
   );
   // team_now() checked monitoring.live (CMA06), so the plain read of the status flags runs only after that check passed
-  // and whether any status, active or retired, has a work area (the label of Other productive), in the same statement
+  // and whether any status, active or retired, has a work area (the label of Other productive), in the same statement; a
+  // tenant always has an active working status (retire refuses the last one), so the first row carries it
   const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean; work_area: WorkArea | null; tenant_has_work_area: boolean }>(
     `select is_working, is_productive, is_paid, work_area,
-            (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a) as tenant_has_work_area
+            (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a
+              where a.tenant_id = cma.current_tenant_id()) as tenant_has_work_area
        from cma.work_status where status = 'active' order by sort_order, key`,
   );
   return {
