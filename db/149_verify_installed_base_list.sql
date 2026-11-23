@@ -308,7 +308,7 @@ as $$
   select coalesce(string_agg(x::text, ';' order by x ->> 'subscription_id'), '') from jsonb_array_elements(p_rows) x
 $$;
 
--- A list's answer without each row's debt_status (0009zm, 224: the installed base's rows carry it, which 0008zu's never
+-- A list's answer without each row's debt_status (0009zm, 226: the installed base's rows carry it, which 0008zu's never
 -- did; edited by that change), so the lists compare every other value with 0008zu's
 create or replace function pg_temp.v0008zz_no_debt(p_list jsonb)
 returns jsonb

@@ -44,6 +44,7 @@
 --   D1  every active tenant with an asset register: the list without a subscription reference equals the check's devices,
 --       in one statement; read only
 --   D2  every active tenant: cma.data_quality_of equals 136's definition, check by check, in one statement; read only
+--       (the checks added after 136 left out: 0009ze's two, 0009zg's source_figure_gap, 0009zm's device_debt_status_unmapped)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
@@ -649,7 +650,7 @@ as $$
   select coalesce((select string_agg(x, ',' order by x collate "C") from unnest(p_ids) x), '')
 $$;
 
--- A list's answer without each row's debt_status (0009zm, 224: the installed base's rows carry it, which 148's never did;
+-- A list's answer without each row's debt_status (0009zm, 226: the installed base's rows carry it, which 148's never did;
 -- edited by that change), so A4 compares every other value with 148's
 create or replace function pg_temp.v0009f_no_debt(p_list jsonb)
 returns jsonb
@@ -1030,11 +1031,17 @@ begin
       v_devices := v_devices + coalesce(array_length(string_to_array(nullif(v_list, ''), ','), 1), 0);
       if v_check <> v_list then v_bad1 := v_bad1 || t.slug || ': check ' || left(v_check, 120) || ' list ' || left(v_list, 120) || '; '; end if;
     end if;
-    -- D2. data quality as 136's, check by check
+    -- D2. data quality as 136's, check by check, over the checks 136's definition knows: the ones added after it are
+    -- left out (0009ze, 210: subscription_variant_unmapped and subscription_device_units_mismatch; 0009zg, 214:
+    -- source_figure_gap; 0009zm, 226: device_debt_status_unmapped; edited by that change), else a tenant with findings
+    -- in any of them reads FAIL
     select string_agg(x.check_key, ', ' order by x.check_key) into v_txt
     from (select coalesce(a.check_key, b.check_key) as check_key
           from (select q.check_key, pg_temp.v0009f_ids(array_agg(q.object_type || ':' || q.object_id || ':' || coalesce(q.value, ''))) as ids
-                from cma.data_quality_of(t.id) q group by q.check_key) a
+                from cma.data_quality_of(t.id) q
+                where q.check_key not in ('subscription_variant_unmapped', 'subscription_device_units_mismatch',
+                                          'source_figure_gap', 'device_debt_status_unmapped')
+                group by q.check_key) a
           full join (select q.check_key, pg_temp.v0009f_ids(array_agg(q.object_type || ':' || q.object_id || ':' || coalesce(q.value, ''))) as ids
                      from pg_temp.v0009f_dq_0008zt(t.id) q group by q.check_key) b on b.check_key = a.check_key
           where a.ids is distinct from b.ids) x;
