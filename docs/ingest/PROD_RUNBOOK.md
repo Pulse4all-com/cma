@@ -3444,11 +3444,73 @@ run_migration prod 218_source_figure_moves.sql 219_verify_source_figure_moves.sq
 Expected: 218 `COMMIT`, its NOTICE `0009zi: the stored CMA values recounted: exits <n> row(s), <old> to <new>` (from 19.13: at least 2 rows, 24 to 12) and a pauses part only where a pause was reported twice; 219 in prod: A1 to A3 `PASS` (A3 `<n> rows, 0 differ`), B `REFUSED` (no dev seed, as 215), verdict `PASS, A ONLY | 219_verify_source_figure_moves: 3 PASS, 0 FAIL`.
 
 ## 19.16 Studio (cma-prod-pg): the exits and pauses after 0009zi
-The query of 19.13 again. Expected: DE and GB exits canceled on 2026-11-21 are gone from the list (the CMA's 11 and 1 now equal the app's); a row still listed is a finding with its cause, named in `records/0009zi-prod-<date>`. Then 19.7's first query: expected the 108 figures of the first run all equal (106 before). The rule trusts the events' history: a move the app made without an event (the audit's status_chain) hides the next report into the same status, so a failed or pauses figure that matched before and differs now names that cause.
+The query of 19.13 again. Expected: the rows where the CMA's value was exactly double the app's are gone (19.13 in prod, 23 November 2026: 49 rows from about 28 January 2026 on, among them DE and GB exits canceled on 2026-11-21). The rows where the CMA reads 0 and the app a number, on the days before 29 January 2026 (19.13: about 620, every store, exits canceled, failed and expired and pauses), remain: until then Juo sent a status move as `subscription:updated` with the new status at the payload's top level and no `input`, the adapter reads a move's new status from `input` only, so those moves were never stored, and 218 counts the moves the CMA holds. 28 January 2026 is the day of the change and is partly short (in GB the first update in the new shape is at about 13:00 UTC). DE's exits into canceled read 0 on days until 20 May 2026 as well, although the app wrote DE's cancellations in the new shape from February: 19.19 shows whether those events are missing from the CMA or present and not counted. Their fix is the adapter's and a backfill of the events (19.18), not 218. A row still listed outside those two patterns is a finding with its cause, named in `records/0009zi-prod-<date>`. Then 19.7's first query: expected the 108 figures of the first run all equal (106 before). The rule trusts the events' history: a move the app made without an event (the audit's status_chain) hides the next report into the same status, so a failed or pauses figure that matched before and differs now names that cause.
 
 ## 19.17 Browser: Reports → Data quality
 Refresh it after the next data-quality refresh (`data_quality.refresh_minutes`). Expected: `source_figure_gap` lists no DE or GB exits canceled for 21 November. Flash's snapshot of 22 November keeps the finding it took that morning (a stored snapshot is not recomputed); the next morning's snapshot reads the corrected values.
 
+
+## 19.18 Studio (cma-prod-pg): the CMA's churn history against the app's exits
+19.13 shows the events of status moves before 29 January 2026 missing from `cma.subscription_event` (19.16). `cma.subscription_moves_of` then sees a subscription that moved before that day only through the last move it infers into the subscription's current status, so the Churn rate and the Failed rate of those months (`cma_read.subscription_churn_month`, B39c) may read low. This compares, per store and complete month since the store's rates start, the CMA's churned with the app's exits into canceled and expired, and its moved to failed with the app's exits into failed. One Run, as your own IAM login; months and ratios only (the CMA's count over the app's):
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '120s';
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+st as materialized (select s.connection_id, s.handle, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s),
+c as (
+  -- every complete month has its start row, so a month without churn still shows
+  select m.connection_id, m.month,
+         sum(m.subscriptions) filter (where m.kind = 'churned') as churned,
+         sum(m.subscriptions) filter (where m.kind = 'moved_to_failed') as failed
+  from cma.subscription_month_take m
+  where m.tenant_id = (select id from t) and m.currency = '' and m.complete and m.kind in ('start', 'churned', 'moved_to_failed')
+  group by 1, 2),
+a as (
+  select f.connection_id, date_trunc('month', f.business_date)::date as month,
+         count(distinct f.business_date) as app_days,
+         sum(f.value) filter (where f.dims ->> 'status' in ('canceled', 'expired')) as churned,
+         sum(f.value) filter (where f.dims ->> 'status' = 'failed') as failed
+  from cma.source_figure f
+  where f.tenant_id = (select id from t) and f.figure_key = 'exits'
+  group by 1, 2)
+select coalesce(st.market, 'unknown') as market, st.handle as store, c.month, coalesce(a.app_days, 0) as app_days,
+       case when c.month < date '2026-02-01' then 'before' else 'after' end as events,
+       case when coalesce(a.churned, 0) = 0 then case when coalesce(c.churned, 0) = 0 then 'both 0' else 'app 0' end
+            else round(coalesce(c.churned, 0) / a.churned, 2)::text end as churned_ratio,
+       case when coalesce(a.failed, 0) = 0 then case when coalesce(c.failed, 0) = 0 then 'both 0' else 'app 0' end
+            else round(coalesce(c.failed, 0) / a.failed, 2)::text end as failed_ratio
+from c
+left join a on a.connection_id = c.connection_id and a.month = c.month
+left join st on st.connection_id = c.connection_id
+order by coalesce(st.market, 'unknown') collate "C", st.handle collate "C", c.month;
+reset role;
+```
+Expected: one row per store (market and handle) and complete month from the store's rate start, `app_days` the month's days (fewer where 19.9's backfill did not reach). `events` after (February 2026 on): both ratios near 1 (the app also counts a move from canceled into expired, which is no churn for the CMA, so churned may sit a little below). `events` before: failed well below 1 (a failed subscription that recovered or ended leaves no move), churned below 1 wherever a subscription ended and came back, or left an event after 28 January 2026 that names an ended status as its first previous one (it then enters ended, with no churn). Churned before at or above about 0.9 in every store keeps the history for B39c's rates; lower means the rates of those months wait for the fix (the adapter reads the legacy payload's top-level status, then a backfill of the subscription events with `--again` from the history start, then the facts' refresh and a recount of the stored exits and pauses), and B39d (#308) waits with them. Keep the output for `records/0009zi-prod-<date>` (months and ratios only).
+
+## 19.19 Studio (cma-prod-pg): the CMA's status events per store and month
+What the CMA holds behind 19.16 and 19.18: its status events per store, calendar month (UTC) and the status each sets, with the first and last day. One Run, as your own IAM login; counts and dates only:
+
+**Studio (cma-prod-pg)**
+```sql
+set statement_timeout = '120s';
+set role cma_owner;
+with t as (select id from cma.tenant where slug = 'pulse4all-subscriptions'),
+st as materialized (select s.connection_id, s.market from t cross join lateral cma.flash_subscription_stores_of(t.id) s)
+select coalesce(st.market, 'unknown') as market, date_trunc('month', e.occurred_at at time zone 'UTC')::date as month, e.event_type,
+       case e.event_type when 'status_changed' then e.status_to when 'canceled' then 'canceled' when 'paused' then 'paused' else 'active' end as status_to,
+       count(*) as events, min(e.occurred_at)::date as first_day, max(e.occurred_at)::date as last_day
+from cma.subscription_event e
+left join st on st.connection_id = e.connection_id
+where e.tenant_id = (select id from t)
+  and e.event_type in ('status_changed', 'canceled', 'paused', 'resumed', 'reactivated')
+  and e.occurred_at >= timestamptz '2025-05-01 00:00+00' and e.occurred_at < timestamptz '2026-07-01 00:00+00'
+group by 1, 2, 3, 4
+order by coalesce(st.market, 'unknown') collate "C", 2, e.event_type collate "C", 4;
+reset role;
+```
+Expected: before February 2026 few or no `status_changed` rows in any store (the moves Juo wrote without `input`, 19.16), from February every store's moves into active, canceled, failed and paused. DE: `status_changed` into canceled from February to May 2026 present means 218's rule leaves them out (a finding on the rule, named with its rows' days); absent, while DE's moves into failed from February are present, means the events never reached the CMA (a finding on the sync, the cause to find before the backfill of 19.18's fix). Keep the output for `records/0009zi-prod-<date>`.
 # Phase 20. The subscription facts (addition 0009ze, brief B39c)
 
 One step at a time; each says where it runs and what to expect. The change adds six tables, the variant mapping and the facts' refresh (step 2 of the existing minute job), the purchase fill in the ingest and a panel on Configuration → Sources. Nothing here runs before Phase 18's `206` and `207` have run in the database. Customers → Active stays unchanged (its Customer start stays `created`). 20.0 to 20.5 and 20.8 ran on 21 November 2026 (`records/0009ze-dev-2026-11-21`, `records/0009ze-prod-2026-11-21`); 20.6 and 20.7 are open.
