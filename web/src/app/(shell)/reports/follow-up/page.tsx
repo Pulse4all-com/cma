@@ -128,22 +128,22 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
           <LeadsTable rows={page.leads.rows} ctx={ctx} empty={empty(page.counts.leads, t.leadsEmpty)} />
           <Showing list={page.leads} t={t} locale={me.locale} testId="follow-up-leads-showing" />
         </Card>
-        <Card title={t.ticketsTitle} className="cma-below-fold">
+        <Card title={t.ticketsTitle}>
           <TicketsTable rows={page.tickets.rows} ctx={ctx} empty={empty(page.counts.tickets, t.ticketsEmpty)} />
           <Showing list={page.tickets} t={t} locale={me.locale} testId="follow-up-tickets-showing" />
         </Card>
-        <Card title={t.tasksTitle} className="cma-below-fold">
+        <Card title={t.tasksTitle}>
           <TasksTable rows={page.tasks.rows} ctx={ctx} empty={empty(page.counts.tasks, t.tasksEmpty)} />
           <Showing list={page.tasks} t={t} locale={me.locale} testId="follow-up-tasks-showing" />
         </Card>
         {byOwner ? (
-          <Card title={t.byOwnerTitle} className="cma-below-fold">
+          <Card title={t.byOwnerTitle}>
             <p className="-mt-2 mb-4 text-caption text-p4a-grey">{t.byOwnerIntro}</p>
             <ByOwnerTable rows={byOwner} copy={copy} ctx={ctx} />
           </Card>
         ) : null}
         {callbacks ? (
-          <section id="callbacks" className="cma-below-fold rounded-card border border-p4a-border bg-white p-6" data-testid="callbacks-kept">
+          <section id="callbacks" className="rounded-card border border-p4a-border bg-white p-6" data-testid="callbacks-kept">
             <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.callbacksTitle}</h2>
             {!callbacks.connected ? (
               <p className="text-body" data-testid="callbacks-not-connected">
@@ -162,7 +162,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
           </section>
         ) : null}
         {callbacks && callbackOwners ? (
-          <Card title={t.callbacksByOwnerTitle} className="cma-below-fold">
+          <Card title={t.callbacksByOwnerTitle}>
             <p className="-mt-2 mb-4 max-w-3xl text-caption text-p4a-grey">{t.callbacksByOwnerIntro}</p>
             <CallbackOwnersTable rows={callbackOwners} minutes={callbacks.windowMinutes} copy={copy} locale={me.locale} />
           </Card>
