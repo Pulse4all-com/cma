@@ -777,7 +777,7 @@
   "derived": [
     {
       "name": "speed_to_lead",
-      "what": "Per lead deal: the first Attempt, the agent, the deal owner and the owner's CRM reference, the time to the first attempt in business hours, the status (called, not_called_open, closed_before_first_call), the last attempt and the last call of any direction, the Attempts that were a Conversation and the end of the Attempts' window (addition 0009zr)"
+      "what": "Per lead deal: the first Attempt, the agent, the deal owner, the time to the first attempt in business hours, the status (called, not_called_open, closed_before_first_call), the last attempt (last_attempt_at), the last call of any direction (last_call_at), the owner's CRM reference (deal_owner_ref), the Attempts that were a Conversation (conversations_so_far) and the end of the Attempts' window (window_end; addition 0009zr)"
     },
     {
       "name": "lead_to_order",

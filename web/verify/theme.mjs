@@ -59,6 +59,8 @@ const palette = new Set([
   "#e6f6ee", "#f3f4f6", "#d9e2ec", "#5b6472",
   // Assets → Fleet management's Not monitored (addition 0009t, decision D8 of 16 November 2026)
   "#c3cad3",
+  // Success text: success in words on white (Speed to lead's goal status line, addition 0009zr; Martin, 24 November 2026)
+  "#1d7a4f",
 ]);
 
 function rgbToHex(rgb) {

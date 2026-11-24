@@ -4127,6 +4127,15 @@ export const mockData: CmaData = {
     if (value !== null && key === LEAD_TO_ORDER_SETTING && Number(value) < Math.max(0, ...leadAgesOf(mockSetting(LEAD_AGES_SETTING)))) {
       throw new CmaDbError("CMA04", `Setting ${key} takes at least the largest age of ${LEAD_AGES_SETTING}`);
     }
+    // as cma.check_tenant_setting (addition 0009zr): Speed to lead's goals, a whole number of percent 0 to 100 or empty; the
+    // stale days 1 to 30
+    if (value !== null && (key === "speed_to_lead.goal_within_target_pct" || key === "speed_to_lead.goal_before_cutoff_pct")) {
+      value = value.trim();
+      if (value !== "" && !/^(100|[1-9]?[0-9])$/.test(value)) throw new CmaDbError("CMA04", `Setting ${key} takes a whole number of percent from 0 to 100, or nothing (no goal)`);
+    }
+    if (value !== null && key === "speed_to_lead.stale_business_days" && !(/^[0-9]{1,2}$/.test(value) && Number(value) >= 1 && Number(value) <= 30)) {
+      throw new CmaDbError("CMA04", `Setting ${key} takes a whole number of working days from 1 to 30`);
+    }
     // as cma.check_tenant_setting (addition 0009a): the five courtesy settings, kept as the database keeps them
     if (value !== null && (COURTESY_SETTING_KEYS as readonly string[]).includes(key)) {
       const v = parseCourtesySetting(key as CourtesySettingKey, value);

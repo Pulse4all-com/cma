@@ -4,7 +4,7 @@
  * sets the market filter), the trend per day or week with the goals as dashed lines and the weekends shaded (the shared
  * LineChart, no chart library), and the Group by table. Every figure is the database's (cma.speed_to_lead_page); nothing
  * is computed here but the drawing. Pulse4all-Style 7.7: Deep Blue for within the target, Leaf Green for before the
- * cutoff, Light Blue and Border Grey for the rest; a tile's goal colours its surface (success at or above, error below).
+ * cutoff, Light Blue and Border Grey for the rest; the tiles stay white, a goal shown as a status line in words.
  */
 import Link from "next/link";
 import type { Route } from "next";
@@ -21,21 +21,31 @@ import { LinkPending } from "./PendingMark";
 
 export interface Info { about: string; text: string }
 
-/** A tile: the label with its hint, the figure, a detail line and the change; with a goal, the surface says whether it is met */
-export function SpeedTile({ label, value, detail, info, delta, testId, pct = null, goal = null }: {
+/**
+ * A tile: the label with its hint, the figure, a detail line and the change. Always white (Pulse4all-Style 7.7: never a
+ * filled red tile; Martin, 24 November 2026): with a goal, a status line under the share says in words whether it is
+ * below the goal (Error #B8433C) or at or above it (Success text #1D7A4F, Leaf Green's text shade for contrast)
+ */
+export function SpeedTile({ label, value, detail, info, delta, testId, pct = null, goal = null, goalWords }: {
   label: string; value: string; detail: ReactNode; info: Info; delta?: ReactNode; testId: string;
-  /** The share the goal is held against, and the goal (whole percent); without a goal the tile is white */
+  /** The share the goal is held against, and the goal (whole percent); without a goal no status line */
   pct?: number | null; goal?: number | null;
+  /** The status line's words, {pct} the goal: below it, at or above it */
+  goalWords?: { below: string; met: string; fmt: (pct: number) => string };
 }) {
   const tone = goalTone(pct, goal);
-  const surface = tone === "met" ? "border-p4a-success bg-p4a-success-surface" : tone === "below" ? "border-p4a-error bg-p4a-error-surface" : "border-p4a-border bg-white";
   return (
-    <div className={`rounded-card border p-5 ${surface}`} data-tile="" data-testid={testId} data-goal={tone}>
+    <div className="rounded-card border border-p4a-border bg-white p-5" data-tile="" data-testid={testId} data-goal={tone}>
       <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
         {label}
         <HeaderHint label={info.about} text={info.text} />
       </p>
       <p className="tabular mt-1 text-title font-bold text-p4a-heading">{value}</p>
+      {tone !== "none" && goalWords && goal !== null ? (
+        <p className={`mt-1 text-small font-semibold ${tone === "below" ? "text-p4a-error" : "text-p4a-success-text"}`} data-testid="goal-status" data-goal-status={tone}>
+          {(tone === "below" ? goalWords.below : goalWords.met).replace("{pct}", goalWords.fmt(goal))}
+        </p>
+      ) : null}
       <p className="mt-1 text-small text-p4a-muted">{detail}</p>
       {delta}
     </div>

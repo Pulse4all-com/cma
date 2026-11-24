@@ -13,7 +13,7 @@ import { data, dataIsMock, type SpeedToLeadDeal, type SpeedToLeadGroup } from "@
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import {
-  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, goalTone, MAX_REPORT_DAYS, parseCallsFilter, parseGroup, parseSpeedView, REPORT_PERMISSIONS,
+  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, MAX_REPORT_DAYS, parseCallsFilter, parseGroup, parseSpeedView, REPORT_PERMISSIONS,
   SPEED_DEALS_PAGE, speedTimeline, summaryTotals,
 } from "@/lib/reports";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
@@ -81,13 +81,8 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
     <DeltaLine current={current} previous={previous} compared={prevLabel} previousFrom={f.previousFrom} historyStart={null}
       copy={copy} locale={me.locale} better={better} />;
   const minutes = (seconds: number | null) => fmtBusinessMinutes(seconds === null ? null : Math.floor(seconds / 60), me.locale);
-  // the goal in words beside its colour: met or below it
-  const goalText = (pct: number | null, goal: number | null) => {
-    const tone = goalTone(pct, goal);
-    if (goal === null) return "";
-    const g = fmtPct(goal, me.locale);
-    return ` · ${tone === "met" ? t.goalMet.replace("{pct}", g) : tone === "below" ? t.goalBelow.replace("{pct}", g) : t.goal.replace("{pct}", g)}`;
-  };
+  // a goal's status line under its share (the tile stays white): below it, or at or above it
+  const goalWords = { below: t.goalBelow, met: t.goalMet, fmt: (pct: number) => fmtPct(pct, me.locale) };
   const cur = f.current;
   const prev = f.previous;
   const unknownMarket = copy.reports.unknownMarket;
@@ -208,11 +203,11 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
       <div className="flex flex-col gap-6">
         <section className="grid grid-cols-3 gap-4 xl:grid-cols-6" aria-label={t.title} data-testid="speed-tiles">
           <SpeedTile testId="speed-within" label={t.withinTarget} value={fmtPct(cur.withinTargetPct, me.locale)} info={info(t.withinTarget, h.stlTileWithinTarget)}
-            detail={t.withinTargetDetail.replace("{target}", s.targetMinutes === null ? "–" : n(s.targetMinutes)) + goalText(cur.withinTargetPct, s.goalWithinTargetPct)}
-            delta={delta(cur.withinTargetPct, prev.withinTargetPct, "up")} pct={cur.withinTargetPct} goal={s.goalWithinTargetPct} />
+            detail={t.withinTargetDetail.replace("{target}", s.targetMinutes === null ? "–" : n(s.targetMinutes)) }
+            delta={delta(cur.withinTargetPct, prev.withinTargetPct, "up")} pct={cur.withinTargetPct} goal={s.goalWithinTargetPct} goalWords={goalWords} />
           <SpeedTile testId="speed-before" label={beforeLabel} value={fmtPct(cur.beforeNextNoonPct, me.locale)} info={info(beforeLabel, h.stlTileBeforeCutoff)}
-            detail={t.beforeNoonDetail + goalText(cur.beforeNextNoonPct, s.goalBeforeCutoffPct)} delta={delta(cur.beforeNextNoonPct, prev.beforeNextNoonPct, "up")}
-            pct={cur.beforeNextNoonPct} goal={s.goalBeforeCutoffPct} />
+            detail={t.beforeNoonDetail} delta={delta(cur.beforeNextNoonPct, prev.beforeNextNoonPct, "up")}
+            pct={cur.beforeNextNoonPct} goal={s.goalBeforeCutoffPct} goalWords={goalWords} />
           <SpeedTile testId="speed-median" label={t.median} value={fmtBusinessMinutes(cur.medianBusinessMinutes, me.locale)} info={info(t.median, h.stlTileMedian)}
             detail={t.medianDetail} delta={delta(cur.medianBusinessMinutes, prev.medianBusinessMinutes, "down")} />
           <SpeedTile testId="speed-not-called" label={t.notCalledYet} value={n(cur.openNotCalled)} info={info(t.notCalledYet, h.stlTileNotCalled)}
