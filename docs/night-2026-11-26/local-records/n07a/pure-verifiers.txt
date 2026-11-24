@@ -1,0 +1,28 @@
+copy: copy: PASS (4373 keys, en and nl) 
+corrections:  ALL 54 PASS 
+csv:  ALL 24 PASS 
+dashboard:  ALL 40 PASS 
+live:  ALL 82 PASS 
+team:  team: PASS (26 checks) 
+roster:  roster: PASS (53 checks) 
+configuration:  ALL 134 PASS 
+messages:  ALL 24 PASS 
+import:  ALL 30 PASS 
+devices-import:  ALL 15 PASS 
+datamap:   index.html: differs from a fresh build; run node tools/datamap/build.mjs datamap: FAIL (1 problems) 
+signed-out:  signed-out: PASS (20 checks) 
+invitations:  invitations: PASS (27 checks) 
+preview:  preview: PASS (38 checks) 
+follow-up:  follow-up: PASS (34 checks) 
+reports:  ALL 238 PASS 
+flash:  ALL 135 PASS 
+active:  ALL 54 PASS 
+period:  ALL 18 PASS 
+health: PASS  Welcome shows no Plan B: no card, no link to /api/v1/plan-b      got [false,false] ALL 43 PASS 
+boundaries: boundaries: PASS (476 files) 
+jobs:  ALL 51 PASS 
+metrics:   page /configuration/metrics: admin 200, manager refused, analyst refused, agent refused, reader refused ok 
+cache:  ALL 8 PASS 
+function-bases:  ALL 21 PASS 
+pledges:  ALL 18 PASS 
+subscriptions:  ALL 16 PASS 

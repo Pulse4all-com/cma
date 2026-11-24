@@ -5,7 +5,7 @@ SET
  false
 (1 row)
 
-psql:237_verify_jobs_off_the_vcpu.sql:46: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:49: NOTICE:  schema "pg_temp" does not exist, skipping
 DROP TABLE
 CREATE TABLE
 CREATE FUNCTION
@@ -16,15 +16,15 @@ CREATE FUNCTION
 DO
 DO
 CREATE FUNCTION
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_units" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_take" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_units" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_take" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_units" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:552: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:579: NOTICE:  relation "subscription_facts_take" already exists, skipping
 DO
 DO
 DROP FUNCTION
@@ -37,7 +37,7 @@ DROP FUNCTION
 --------------------------------------------------+-------------+--------------------------------------------------------------------------------------------------------------------
  S1 structure                                     | OK          | order, web_busy definer of cma_owner, grants, settings 2/5/10, range refusals CMA04/CMA04, jit off, 8 small tables
  G1 every tenant's gate answers; a person refused | OK          | 2 tenants, web statements now 0
- G2 the timeout's backoff                         | OK          | a backoff/5, b true, c backoff/10, d backoff/2, e true, f backoff/60
+ G2 the wait after statement timeouts             | OK          | a after_timeout/5, b true, c after_timeout/10, d after_timeout/2, e true, f after_timeout/60
  G3 the deferrals in a row                        | OK          | 3 deferrals counted
  G4 nothing to read                               | OK          | follow-up nothing_to_read, data quality go, Flash go
  F1 forced refresh equals 210                     | OK          | 0 rows differ, 578015 outcome rows
