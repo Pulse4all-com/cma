@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Active customer terms of 11 November 2026 (Proposed), the Flash terms of 1 November 2026 (Proposed) and the time terms of 3 November 2026 (Workday, Session, Clocked in) with Remove day of 9 November 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed), the cohort terms of 30 October 2026, the courtesy terms of 6 November 2026, the Active customer terms of 11 November 2026 (Proposed), the Flash terms of 1 November 2026 (Proposed), the time terms of 3 November 2026 (Workday, Session, Clocked in) with Remove day of 9 November 2026 and the intake terms of 24 November 2026 (Lead pipeline, Order pipeline, Lead deal in, Lead deal closed, Other deal in, Call center work, Overall); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -3571,6 +3571,143 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
 | As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
 
+## Intake terms
+
+Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in Open decisions, Indirect sales: the intake counts lead pipelines only as call center work. Lead pipeline, Order pipeline, Lead deal in, Lead deal closed, Other deal in and the two groups of Reports → Intake, Call center work and Overall, are defined below. Lead, deal, closed won, closed lost, lost reason, test deal and lead source stay under Domains still to define.
+
+### Lead pipeline
+
+| Field | Value |
+|---|---|
+| Term | Lead pipeline (nl: Leadpijplijn) |
+| Key | SQL `cma.connection_pipeline.is_lead`, read as `coalesce(p.is_lead, true)` |
+| Definition | A counted deal pipeline of the tenant's CRM whose deals are leads of the call center's work. A pipeline the CMA has not seen yet counts as a lead pipeline. |
+| Source | The CMA: the pipeline flags `is_lead` and `is_counted` on `cma.connection_pipeline`, tenant configuration set on Configuration → Sources (a CRM connection's pipelines: Counted and Lead); the pipeline itself is the CRM's (HubSpot) |
+| Counts / does not count | Counts a pipeline with `is_lead` set, and a pipeline not yet seen. A pipeline flagged both lead and order counts as a lead pipeline: its deals are call center work. Does not count a pipeline that is not counted |
+| Unit and display | A pipeline's label; the flag is the Lead switch on Configuration → Sources |
+| Time rule | None (configuration, read when a figure is computed) |
+| Scope | Per tenant and CRM connection; Pulse4all's value is its configuration (Sales Pipeline – Subscriptions), never code |
+| Equivalent in the source system | None: HubSpot holds the pipeline, not the flag |
+| Not to use | "Sales pipeline" for it; "lead" alone for a pipeline |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Lead pipeline and Order pipeline …" (this PR, addition 0009zp) |
+| Used by | `intake.lead_deals_created`, `intake.lead_deals_closed`, `dashboard.intake.lead_deals_created`, `speed_to_lead.*`; Reports → Intake, Dashboard, Sales → Speed to lead |
+| As built today | `cma.lead_deals_of` (`92`, through `cma.counted_deals_of`) and `cma.intake_per_day_of` (`232`) read `coalesce(p.is_lead, true)`. Matches the definition |
+
+### Order pipeline
+
+| Field | Value |
+|---|---|
+| Term | Order pipeline (nl: Bestelpijplijn) |
+| Key | SQL `cma.connection_pipeline.is_order` |
+| Definition | A counted deal pipeline whose deals are web orders created and closed as won in one go (Pulse4all: Sales Pipeline – Self Serve). It is not call center work: the orders themselves count under Shop, the source of truth for orders. |
+| Source | The CMA: the pipeline flag `is_order` on `cma.connection_pipeline`, tenant configuration set on Configuration → Sources (a CRM connection's pipelines: Order pipeline); the pipeline itself is the CRM's (HubSpot) |
+| Counts / does not count | A pipeline marked order and not lead is not a lead pipeline: its deals count once in Other deals in. A pipeline marked both is a Lead pipeline. A counted order pipeline stays counted: Flash's Open deals, First orders, Direct order and Indirect order and Customers → Active read it |
+| Unit and display | A pipeline's label; the flag is the Order pipeline switch on Configuration → Sources |
+| Time rule | None (configuration) |
+| Scope | Per tenant and CRM connection |
+| Equivalent in the source system | None |
+| Not to use | "Shop" or "order" for the pipeline's deals as a count of orders: an order is a Shop figure |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Lead pipeline and Order pipeline …" (this PR, addition 0009zp) |
+| Used by | `intake.other_deals_created`; Reports → Intake (Overall); Reports → Flash (Open deals), First orders, Customers → Active |
+| As built today | `cma.intake_per_day_of` (`232`) counts the deals of a counted pipeline that is not a lead pipeline as other deals. No pipeline flag changed. Matches the definition |
+
+### Lead deal in
+
+| Field | Value |
+|---|---|
+| Term | Lead deal in (nl: Leaddeal in; labels "Lead deals in" / "Leaddeals in"; the Dashboard tile "Lead deals" / "Leaddeals") |
+| Key | `intake.lead_deals_created`, `dashboard.intake.lead_deals_created`; API `leadDealsCreated`; SQL `lead_deals_created`; copy `intake.leadDealsCreated`, `hints.leadDealsCreated` |
+| Definition | A new deal in a Lead pipeline, created by hand or automatically, counted on the business date of its creation. |
+| Source | `cma.crm_record` (record type deal), its pipeline's flags through `cma.intake_per_day_of`; the creation time from the CRM |
+| Counts / does not count | Counts every new deal of a counted lead pipeline, not deleted, from `intake.start_date`. Test deals count until they can be left out: deals carry no test flag (Gaps, D25). Does not count the deals of other counted pipelines (Other deal in). The column `deals_created`, every counted deal pipeline, keeps its meaning in the data and the API and no screen shows it |
+| Unit and display | A count per business date and market; the Dashboard's Lead deals tile shows the period's count with "Lead pipelines · {closed} closed" |
+| Time rule | The business date in the tenant's zone; the Dashboard's period is clamped at `intake.start_date` |
+| Scope | Per market (the deal's own, else its contact's country, else unknown) |
+| Equivalent in the source system | HubSpot's deals created in the pipeline |
+| Not to use | "Deals in" or "Deals created" for it (they counted every pipeline); "created deal" |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Lead deal in, Lead deal closed and Other deal in …" (this PR, addition 0009zp) |
+| Used by | `intake.lead_deals_created`, `dashboard.intake.lead_deals_created`; Reports → Intake (Call center work), Dashboard (Intake row), `GET /api/v1/reports/intake` |
+| As built today | `cma.intake_per_day_of` (`232`), read by `cma.intake_per_day` and `cma_read.intake_per_day_v`; `233` proves it equals the count of `cma.lead_deals_of` per business date and market. Matches the definition but for test deals (D25) |
+
+### Lead deal closed
+
+| Field | Value |
+|---|---|
+| Term | Lead deal closed (nl: Leaddeal gesloten; labels "Lead deals closed" / "Leaddeals gesloten") |
+| Key | `intake.lead_deals_closed`; API `leadDealsClosed`; SQL `lead_deals_closed`; copy `intake.leadDealsClosed`, `hints.leadDealsClosed` |
+| Definition | A deal of a Lead pipeline closed on the day, won or lost, counted on the business date of its closing time. |
+| Source | `cma.crm_record` (record type deal): the closing time and the stage's closed flag from the CRM |
+| Counts / does not count | Counts a deal of a counted lead pipeline closed won or closed lost, whenever it was created. Does not count the closing of a deal of another pipeline |
+| Unit and display | A count per business date and market; its count also sits in the Lead deal in tile's hint on the Dashboard |
+| Time rule | The business date of the closing time in the tenant's zone, from `intake.start_date` |
+| Scope | Per market, as Lead deal in |
+| Equivalent in the source system | HubSpot's deals closed won or closed lost in the pipeline |
+| Not to use | "Deals closed" for it (it counted every pipeline); "won" for a closed deal |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Lead deal in, Lead deal closed and Other deal in …" (this PR, addition 0009zp) |
+| Used by | `intake.lead_deals_closed`; Reports → Intake (Call center work), Dashboard (Lead deals tile's hint), `GET /api/v1/reports/intake` |
+| As built today | `cma.intake_per_day_of` (`232`); `233` proves `lead_deals_closed` is at most `deals_closed` on every row. Matches the definition |
+
+### Other deal in
+
+| Field | Value |
+|---|---|
+| Term | Other deal in (nl: Overige deal in; labels "Other deals in" / "Overige deals in") |
+| Key | `intake.other_deals_created`; API `otherDealsCreated`; SQL `other_deals_created`; copy `intake.otherDealsCreated`, `hints.otherDealsCreated` |
+| Definition | A new deal in a counted pipeline that is not a Lead pipeline, such as an Order pipeline, counted on the business date of its creation. It is not call center work and shows once, under Overall. |
+| Source | `cma.crm_record` (record type deal), its pipeline's flags through `cma.intake_per_day_of` |
+| Counts / does not count | Counts every new deal of a counted pipeline that is not a lead pipeline, not deleted, from `intake.start_date`. Lead deals in and Other deals in together equal the old `deals_created`. Does not count the orders themselves: they count under Shop |
+| Unit and display | A count per business date and market, in the Overall group of Reports → Intake; no closed count |
+| Time rule | The business date of the creation in the tenant's zone |
+| Scope | Per market, as Lead deal in |
+| Equivalent in the source system | HubSpot's deals created in the pipeline |
+| Not to use | "Orders" for it; "Deals in" alone |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Lead deal in, Lead deal closed and Other deal in …" (this PR, addition 0009zp) |
+| Used by | `intake.other_deals_created`; Reports → Intake (Overall), `GET /api/v1/reports/intake` |
+| As built today | `cma.intake_per_day_of` (`232`); `233` proves lead plus other equals `deals_created` on every row. Matches the definition |
+
+### Call center work (Intake group)
+
+| Field | Value |
+|---|---|
+| Term | Call center work (nl: Callcenterwerk), the first group of Reports → Intake's table |
+| Key | Copy `intake.groupWork`, `hints.groupWork`, `intake.volumeHint`, `hints.volume` |
+| Definition | The group of Intake's columns that count the call center's work: Customer records Leads, Lead deals in, Lead deals closed, Tickets in and Tickets closed, and Telephony Calls in, Calls out and Tagged. The Volume bar counts only this group's leads, lead deals in and tickets in, against the busiest row. |
+| Source | The columns' own sources: forms and CRM records (HubSpot), telephony (Aircall) |
+| Counts / does not count | Does not count Other deals in or the Shop columns; they are Overall |
+| Unit and display | A group label over its columns, underlined by a thin Deep Blue divider (Style 7.1); the Dashboard's Intake row shows the same work in its tiles |
+| Time rule | As each column's |
+| Scope | Per market |
+| Equivalent in the source system | None |
+| Not to use | "Call center" alone for the organisation (Contact-center organisation): the label names the work, not the organisation or a department; "core" or "main" for the group |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
+| Used by | `intake.form_submissions`, `intake.lead_deals_created`, `intake.lead_deals_closed`, `intake.tickets_created`, `intake.tickets_closed`, `intake.calls_in`, `intake.calls_out`, `intake.tagged_calls`, `intake.volume_bar`; Reports → Intake |
+| As built today | `web/src/app/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
+
+### Overall (Intake group)
+
+| Field | Value |
+|---|---|
+| Term | Overall (nl: Totaalbeeld), the second group of Reports → Intake's table and the label above the Dashboard's Shop tile |
+| Key | Copy `intake.groupOverall`, `hints.groupOverall`, `hints.sourceCrmOverall`, `intakeRow.overall`, `intakeRow.overallHint` |
+| Definition | The group of what is counted for the overall picture and is not call center work: Customer records Other deals in, and Shop New customers, First orders, Repeat and Renewals. |
+| Source | The columns' own sources: CRM records (HubSpot), commerce (Shopify) |
+| Counts / does not count | Counts each order and each other deal once. The orders themselves stay under Shop, the source of truth for orders; Other deals in is the CRM's own count of the deals of pipelines that are not lead pipelines |
+| Unit and display | A quieter group: Muted labels and figures, its label underlined in Border grey, a 16 px gap column before it (Style 7.1). On the Dashboard, a Muted semibold label with a hint above the Shop tile, a 1 px Border divider and 16 px padding on its left. It is a group, not a warning |
+| Time rule | As each column's |
+| Scope | Per market |
+| Equivalent in the source system | None |
+| Not to use | "Other" or "Rest" for the group; "Total" (Intake's total row is the sum of every column) |
+| Status | Decided |
+| Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
+| Used by | `intake.other_deals_created`, `intake.new_customers`, `intake.first_orders`, `intake.repeat_orders`, `intake.renewals`, `dashboard.intake.first_orders`; Reports → Intake, Dashboard (Intake row) |
+| As built today | `web/src/app/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.
@@ -3589,7 +3726,7 @@ Status: Retired. A retired word is never introduced again; where it still appear
 Status: Pending for every term below; none is defined yet. Each is added term by term, with a docs/decisions.md row starting "Definitions:".
 
 ### Leads and deals
-Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
+Lead, deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn). Lead pipeline, Order pipeline, Lead deal in (the former created deal), Lead deal closed and Other deal in are defined under Intake terms (addition 0009zp).
 
 ### Customers and orders
 Customers (nl: Klanten) is a rail group label, defined under Rail terms, not this term. Order kind (First, Renewal, Repeat, Unknown) and Renewal (order) are defined under Flash terms (addition 0008zw, #236); the store's First is not the attributed first order below. Contact, customer, new customer, first order, cancellation, minimum term (Juo holds none: its `min_cycles` and `max_cycles` are empty in every store, so the CMA builds nothing for it; where it lives is still for Kira and Arno, docs/open-decisions.md). Direct order and Indirect order are defined under Active customer terms (addition 0009l). B2B and B2C are defined under Customer segment (addition 0008zt): Pulse4all's codes of `crm.customer_segments`. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here. Customers → Active's terms (Customer start, Customer age, Monthly recurring amount, Inflow, Outflow and Net change, Customer cohort, Acquisition channel, Customer lifetime, Retention (customer), Customer lifetime value (realised) and the placeholders) are defined under Active customer terms (addition 0009l); there "customer" in a label means an Active customer, and new customer stays here.
