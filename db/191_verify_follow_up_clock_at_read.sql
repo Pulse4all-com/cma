@@ -626,6 +626,7 @@ drop function if exists pg_temp.v0009u_diff(jsonb, jsonb);
 drop function if exists pg_temp.v0009u_open_leads_at(uuid, timestamptz);
 drop function if exists pg_temp.v0009u_open_tickets_at(uuid, timestamptz);
 drop function if exists pg_temp.v0009u_speed_to_lead_at(uuid, timestamptz, timestamptz, timestamptz);
+drop function if exists pg_temp.v0009u_speed_to_lead_rows_at(uuid, timestamptz, timestamptz, boolean, timestamptz);
 
 select check_name, result, detail
 from (select ord, check_name, result, detail from pg_temp.verify_0009u

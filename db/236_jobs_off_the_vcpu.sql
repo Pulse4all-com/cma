@@ -28,13 +28,13 @@
 --                else (no query text, pid or user); null when cma_owner cannot read other logins' activity. Executable by
 --                cma_app and only for a scheduler user holding the job's permission (cma.assert_permission)
 --   cma.job_gate_of(text)       whether a web minute job computes the current tenant now: nothing_to_read (the
---                follow-up without an active CRM connection, Customers → Active without a store or subscriptions one: one
---                read of the tenant's connections, no computation), backoff (the job's latest
+--                follow-up without an active CRM connection and without stored items: one read of the tenant's
+--                connections, no computation), after_timeout (the job's latest
 --                runs for the tenant were cancelled by the statement timeout, 57014: wait 5, 10, 20, 40, at most 60 minutes
 --                after the last one, reset by any other outcome), deferred (cma.web_busy() at or over
 --                jobs.defer_web_statements and fewer than jobs.defer_max_in_a_row deferrals in a row), else go. Read from
 --                cma.sync_run's own rows (sync_run_job_started_idx), no new table; the run row of a gated run says which
---                wait it was in its counts (backoff_wait, defer_wait, nothing_to_read)
+--                wait it was in its counts (timeout_wait, defer_wait, nothing_to_read)
 --   cma.subscription_take_state two columns: outcomes_read_at (when the last renewal outcomes computation started
 --                reading its inputs) and outcomes_full_at (when the last whole one did)
 --   cma.renewal_outcomes_of(uuid, uuid[], text[])  new: the outcomes of the given subscriptions' cycles and of every
@@ -42,7 +42,7 @@
 --   cma.subscription_facts_refresh_of (based on 212) its step 2, the renewal outcomes, incremental: only the
 --                subscriptions with an event or a row written since the last computation started (less 10 minutes for a
 --                late commit; subscription_event_synced_idx), plus every invoice renewal, computed and compared; the whole
---                set on a forced refresh, a new business date, a billing event written since, or when the last whole
+--                set on a forced refresh, a new business date, a chargeback written since, or when the last whole
 --                computation is an hour old (night default N07-2, to confirm). Equal to the whole computation (237's F1
 --                to F4). Everything else unchanged
 --   cma.speed_to_lead_rows_of(uuid, timestamptz, timestamptz, boolean) new: cma.speed_to_lead_of's one definition (234)
@@ -112,9 +112,6 @@ begin
   return new;
 end
 $$;
-drop trigger if exists check_job_setting on cma.tenant_setting;
-create trigger check_job_setting before insert or update on cma.tenant_setting
-  for each row execute function cma.check_job_setting();
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. cma.web_busy(): the web's active statements now, for the jobs' deferral
@@ -172,15 +169,15 @@ begin
     raise exception 'no such job: %', p_job using errcode = 'CMA04';
   end if;
   perform cma.assert_permission(v_perm);
-  -- 1. nothing to read: the follow-up without an active CRM connection, Customers → Active without an active store or
-  --    subscriptions connection (a connection whose kind is not stored yet counts as a source). Min() over the tenant's
-  --    few connections, never exists(). Data quality and Flash have checks and takes of their own for a tenant without
-  --    sources, so they are never skipped for this reason
-  if p_job in ('refresh_follow_up', 'refresh_active_customers')
+  -- 1. nothing to read: the follow-up of a tenant without an active CRM connection (a connection whose kind is not stored
+  --    yet counts as a source) and without stored items. Min() over the tenant's few rows, never exists(). Customers →
+  --    Active (whose not_set_up branch removes a switched-off tenant's take, 5 ms), data quality and Flash have their
+  --    own answers for a tenant without sources, so they are never skipped for this reason
+  if p_job = 'refresh_follow_up'
      and (select min(ic.id::text) from cma.integration_connection ic
-          where ic.tenant_id = v_tenant and ic.status = 'active'
-            and (ic.kind is null
-                 or ic.kind = any (case p_job when 'refresh_follow_up' then array['crm'] else array['commerce', 'subscriptions'] end))) is null then
+          where ic.tenant_id = v_tenant and ic.status = 'active' and (ic.kind is null or ic.kind = 'crm')) is null
+     -- and nothing stored that a computation would empty: a tenant whose CRM was switched off computes once more
+     and (select min(i.kind) from cma.follow_up_item i where i.tenant_id = v_tenant) is null then
     return jsonb_build_object('go', false, 'reason', 'nothing_to_read');
   end if;
   -- 2. the job's latest finished runs for this tenant, newest first: the timeouts in a row (a gated run neither counts
@@ -190,14 +187,14 @@ begin
     from cma.sync_run x
     where x.tenant_id = v_tenant and x.job = p_job and x.connection_id is null and x.status <> 'running'
     order by x.started_at desc, x.id desc
-    limit 60
+    limit 200
   loop
     if v_deferring and r.counts ? 'defer_wait' then
       n_deferred := n_deferred + 1;
     else
       v_deferring := false;
     end if;
-    if r.counts ? 'defer_wait' or r.counts ? 'backoff_wait' or r.counts ? 'nothing_to_read' then
+    if r.counts ? 'defer_wait' or r.counts ? 'timeout_wait' or r.counts ? 'nothing_to_read' then
       continue;
     end if;
     exit when not (r.status = 'failed' and r.error = '57014');
@@ -207,7 +204,7 @@ begin
   if n_timeouts > 0 then
     v_wait := least(60, 5 * power(2, least(n_timeouts, 5) - 1)::integer);
     if clock_timestamp() < v_last + make_interval(mins => v_wait) then
-      return jsonb_build_object('go', false, 'reason', 'backoff', 'timeouts_in_a_row', n_timeouts, 'wait_minutes', v_wait,
+      return jsonb_build_object('go', false, 'reason', 'after_timeout', 'timeouts_in_a_row', n_timeouts, 'wait_minutes', v_wait,
                                 'wait_until', v_last + make_interval(mins => v_wait));
     end if;
   end if;
@@ -235,6 +232,9 @@ returns table (connection_id uuid, subscription_source_id text, renewal_key text
 language sql stable
 rows 50000
 as $$
+  -- 0009zr: two branches, each behind a condition on the arguments alone (a one-time filter: the branch not taken reads
+  -- nothing): every subscription's cycles without a list, or the listed subscriptions' cycles through
+  -- subscription_event_subscription_idx. An or of the two in one where clause is planned for both and serves neither
   with a as (
     select e.connection_id, e.subscription_source_id, e.cycle_index,
            min(e.occurred_at) as first_at,
@@ -244,10 +244,22 @@ as $$
            (array_agg(e.error_code order by e.occurred_at, e.source_id collate "C") filter (where e.event_type = 'renew_failed'))[1] as error_code,
            (array_agg(e.order_source_id order by e.occurred_at, e.source_id collate "C") filter (where e.event_type = 'renewed'))[1] as order_source_id
     from cma.subscription_event e
-    where e.tenant_id = p_tenant_id and e.event_type in ('renewed', 'renew_failed') and e.cycle_index is not null
-      -- 0009zr: the given subscriptions' cycles only, or every one without a list (subscription_event_subscription_idx)
-      and (p_connections is null
-           or (e.connection_id, e.subscription_source_id) in (select l.c, l.s from unnest(p_connections, p_subscriptions) l(c, s)))
+    where p_connections is null
+      and e.tenant_id = p_tenant_id and e.event_type in ('renewed', 'renew_failed') and e.cycle_index is not null
+    group by 1, 2, 3
+    union all
+    select e.connection_id, e.subscription_source_id, e.cycle_index,
+           min(e.occurred_at) as first_at,
+           min(e.occurred_at) filter (where e.event_type = 'renew_failed') as first_failed_at,
+           min(e.occurred_at) filter (where e.event_type = 'renewed') as renewed_at,
+           count(*) filter (where e.event_type = 'renew_failed') as failures,
+           (array_agg(e.error_code order by e.occurred_at, e.source_id collate "C") filter (where e.event_type = 'renew_failed'))[1] as error_code,
+           (array_agg(e.order_source_id order by e.occurred_at, e.source_id collate "C") filter (where e.event_type = 'renewed'))[1] as order_source_id
+    from unnest(p_connections, p_subscriptions) l(c, s)
+    join cma.subscription_event e
+      on e.tenant_id = p_tenant_id and e.connection_id = l.c and e.subscription_source_id = l.s
+     and e.event_type in ('renewed', 'renew_failed') and e.cycle_index is not null
+    where p_connections is not null
     group by 1, 2, 3
   ), cyc as (
     select a.connection_id, a.subscription_source_id, 'cycle:' || a.cycle_index as renewal_key, a.cycle_index, null::text as renewal_source_id,
@@ -313,10 +325,6 @@ alter function cma.renewal_outcomes_of(uuid) set jit = off;
 -- ---------------------------------------------------------------------------------------------
 -- 5. The subscription facts' refresh with its renewal outcomes incremental (step 2); everything else as 212
 -- ---------------------------------------------------------------------------------------------
-alter table cma.subscription_take_state add column if not exists outcomes_read_at timestamptz;
-alter table cma.subscription_take_state add column if not exists outcomes_full_at timestamptz;
-comment on column cma.subscription_take_state.outcomes_read_at is 'When the last computation of the renewal outcomes started reading its inputs (0009zr): the next one reads what was written since, less 10 minutes';
-comment on column cma.subscription_take_state.outcomes_full_at is 'When the last whole computation of the renewal outcomes started (0009zr): a whole one at least every hour';
 
 -- based on: 212_subscription_facts_speed.sql
 create or replace function cma.subscription_facts_refresh_of(p_tenant_id uuid, p_force boolean default false, p_now timestamptz default null)
@@ -410,15 +418,16 @@ begin
   --    one inserted. A run rewrote every row before; between two runs a handful change
   -- 0009zr: incremental. Only the subscriptions with an event or a row written since the last computation started
   --    reading (less 10 minutes, for a write that committed late) are computed and compared, with every invoice renewal;
-  --    the whole set on a forced refresh, a first or a new business date, a billing event written since (a chargeback
-  --    names an order, not a subscription), or once the last whole computation is an hour old. The same rows as the
+  --    the whole set on a forced refresh, a first or a new business date, a chargeback written since (it names an order,
+  --    not a subscription; every other billing event reaches an invoice renewal, computed whole in every run), or once
+  --    the last whole computation is an hour old. A deleted event is caught by the hourly whole computation. The same rows as the
   --    whole computation (237, F1 to F4)
   v_out_read := clock_timestamp();
   v_out_from := v_state.outcomes_read_at - interval '10 minutes';
   v_out_full := p_force or not v_found or v_state.outcomes_read_at is null or v_state.outcomes_full_at is null
                 or v_state.business_date is distinct from v_today
                 or v_now - v_state.outcomes_full_at >= interval '60 minutes'
-                or (select max(b.synced_at) from cma.billing_event b where b.tenant_id = p_tenant_id) >= v_out_from;
+                or (select max(b.synced_at) from cma.billing_event b where b.tenant_id = p_tenant_id and b.kind = 'chargeback') >= v_out_from;
   if not v_out_full then
     select coalesce(array_agg(x.c order by x.c, x.s), '{}'), coalesce(array_agg(x.s order by x.c, x.s), '{}')
       into v_scope_c, v_scope_s
@@ -973,10 +982,24 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 9. Record the addition
+-- 9. Last, before the addition's row and the commit (CLAUDE.md, Performance; 132, section 10): the trigger on
+--    cma.tenant_setting and the two columns of cma.subscription_take_state take ACCESS EXCLUSIVE locks held to the
+--    commit; every settings read and the facts refresh wait on them for this moment only. The facts refresh above reads
+--    the columns at run time, not at its creation
+-- ---------------------------------------------------------------------------------------------
+drop trigger if exists check_job_setting on cma.tenant_setting;
+create trigger check_job_setting before insert or update on cma.tenant_setting
+  for each row execute function cma.check_job_setting();
+alter table cma.subscription_take_state add column if not exists outcomes_read_at timestamptz;
+alter table cma.subscription_take_state add column if not exists outcomes_full_at timestamptz;
+comment on column cma.subscription_take_state.outcomes_read_at is 'When the last computation of the renewal outcomes started reading its inputs (0009zr): the next one reads what was written since, less 10 minutes';
+comment on column cma.subscription_take_state.outcomes_full_at is 'When the last whole computation of the renewal outcomes started (0009zr): a whole one at least every hour';
+
+-- ---------------------------------------------------------------------------------------------
+-- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zr', 'The minute jobs off the vCPU (Martin, 24 Nov 2026; brief N07, D6, D7): settings jobs.defer_web_statements (2) and jobs.defer_max_in_a_row (5), checked by cma.check_job_setting(); customers.refresh_minutes defaults to 10; cma.web_busy(text) (SECURITY DEFINER, the web''s active statements now) and cma.job_gate_of(text) (nothing_to_read, backoff 5 to 60 minutes after a 57014, deferred, go) for the web minute jobs; cma.subscription_take_state.outcomes_read_at and outcomes_full_at; cma.renewal_outcomes_of(uuid, uuid[], text[]) and the facts refresh''s renewal outcomes incremental (the subscriptions written since, a whole one hourly and on a new date or a billing event); cma.speed_to_lead_rows_of (the one definition with an open-only bound) under cma.speed_to_lead_of and cma.open_leads_of; autovacuum analyze thresholds on the small configuration tables; cma.refresh_follow_up_of set jit = off')
+values ('0009zr', 'The minute jobs off the vCPU (Martin, 24 Nov 2026; brief N07, D6, D7): settings jobs.defer_web_statements (2) and jobs.defer_max_in_a_row (5), checked by cma.check_job_setting(); customers.refresh_minutes defaults to 10; cma.web_busy(text) (SECURITY DEFINER, the web''s active statements now) and cma.job_gate_of(text) (nothing_to_read, after_timeout: 5 to 60 minutes after a 57014, deferred, go) for the web minute jobs; cma.subscription_take_state.outcomes_read_at and outcomes_full_at; cma.renewal_outcomes_of(uuid, uuid[], text[]) and the facts refresh''s renewal outcomes incremental (the subscriptions written since, a whole one hourly and on a new date or a billing event); cma.speed_to_lead_rows_of (the one definition with an open-only bound) under cma.speed_to_lead_of and cma.open_leads_of; autovacuum analyze thresholds on the small configuration tables; cma.refresh_follow_up_of set jit = off')
 on conflict (version) do nothing;
 
 commit;

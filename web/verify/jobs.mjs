@@ -534,11 +534,11 @@ expect("snapshot: the pledge take's counts (one answer 1, the devices of a file 
 }
 
 // ---- The gate (addition 0009zr, brief N07, decision D7) --------------------------------------------------------------
-expect("gate: a gated run's counts name its wait (backoff, deferred, nothing to read) and skip",
-  [gatedCounts({ reason: "backoff" }), gatedCounts({ reason: "deferred" }), gatedCounts({ reason: "nothing_to_read" }),
-    gatedSeverity("backoff"), gatedSeverity("deferred")],
-  [{ rows: 0, duration_ms: 0, skipped: 1, backoff_wait: 1 }, { rows: 0, duration_ms: 0, skipped: 1, defer_wait: 1 },
-    { rows: 0, duration_ms: 0, skipped: 1, nothing_to_read: 1 }, "WARNING", "INFO"],
+expect("gate: a gated run's counts name its wait (after a timeout, deferred, nothing to read), never skipped",
+  [gatedCounts({ reason: "after_timeout" }), gatedCounts({ reason: "deferred" }), gatedCounts({ reason: "nothing_to_read" }),
+    gatedSeverity("after_timeout"), gatedSeverity("deferred")],
+  [{ rows: 0, duration_ms: 0, timeout_wait: 1 }, { rows: 0, duration_ms: 0, defer_wait: 1 },
+    { rows: 0, duration_ms: 0, nothing_to_read: 1 }, "WARNING", "INFO"],
   [{}, {}, {}, "INFO", "WARNING"]);
 {
   // the follow-up: tenant 1 deferred (the web busy), tenant 2 goes: tenant 1's refresh never sent, its run row succeeded
@@ -548,25 +548,25 @@ expect("gate: a gated run's counts name its wait (backoff, deferred, nothing to 
   lines.length = 0;
   const r = await refreshTenants({ connect: pool.connect, log });
   const sent = (t) => pool.state.statements.filter((x) => x.tenant === t && /cma\.refresh_follow_up\(\)/.test(x.text)).length;
-  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.defer_wait ?? 0}:${x.counts.skipped}`);
+  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.defer_wait ?? 0}:${x.counts.skipped ?? "-"}`);
   expect("gate, follow-up: a deferred tenant computes nothing, its run row succeeded with defer_wait 1; the other refreshed",
     [r, sent(T1), sent(T2), fin, lines.map((l) => `${l.severity}:${l.reason ?? "-"}`)],
-    [{ tenants: 2, failed: 0 }, 0, 1, ["t1:succeeded:1:1", "t2:succeeded:0:0"], ["INFO:deferred", "INFO:-"]],
+    [{ tenants: 2, failed: 0 }, 0, 1, ["t1:succeeded:1:-", "t2:succeeded:0:0"], ["INFO:deferred", "INFO:-"]],
     [{ tenants: 2, failed: 1 }, 1, 0, [], []]);
 }
 {
   // Customers → Active: tenant 1 in the timeout's backoff: neither Active nor the facts computed, the run row counts
   // backoff_wait, the log line a WARNING; tenant 2 goes
-  const gate = (tenant) => (tenant === T1 ? { go: false, reason: "backoff", timeouts_in_a_row: 2, wait_minutes: 10 } : { go: true });
+  const gate = (tenant) => (tenant === T1 ? { go: false, reason: "after_timeout", timeouts_in_a_row: 2, wait_minutes: 10 } : { go: true });
   const pool = mockPool({ gate });
   lines.length = 0;
   const r = await refreshActiveCustomers({ connect: pool.connect, log });
   const sent = (t, re) => pool.state.statements.filter((x) => x.tenant === t && re.test(x.text)).length;
-  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.backoff_wait ?? 0}`);
-  expect("gate, Active: a tenant in the backoff computes neither Active nor the facts; backoff_wait 1, a WARNING line",
+  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.timeout_wait ?? 0}`);
+  expect("gate, Active: a tenant waiting after timeouts computes neither Active nor the facts; timeout_wait 1, a WARNING line",
     [r, sent(T1, /cma\.active_refresh\(\)/), sent(T1, /cma\.subscription_facts_refresh\(\)/), sent(T2, /cma\.active_refresh\(\)/), fin,
       lines.map((l) => `${l.severity}:${l.reason ?? "-"}`)],
-    [{ tenants: 2, failed: 0 }, 0, 0, 1, ["t1:succeeded:1", "t2:succeeded:0"], ["WARNING:backoff", "INFO:fresh"]],
+    [{ tenants: 2, failed: 0 }, 0, 0, 1, ["t1:succeeded:1", "t2:succeeded:0"], ["WARNING:after_timeout", "INFO:fresh"]],
     [{ tenants: 2, failed: 1 }, 1, 1, 0, [], []]);
 }
 {

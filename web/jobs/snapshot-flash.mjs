@@ -258,7 +258,7 @@ export async function snapshotTenants({ connect, log }) {
         // figures the page reads. Idempotent (a take just refreshed is fresh), so a retry whose first answer was lost asks
         // again. A database error of the whole call (a timeout, a database without 0009e) is a failed refresh with its
         // code: the run row fails, and the dated take still runs
-        // 3a. The gate (addition 0009zr, decision D7): the timeout's backoff or the web's load defers the current takes, the
+        // 3a. The gate (addition 0009zr, decision D7): the wait after statement timeouts or the web's load defers the current takes, the
         // minute's heavy step, to a later minute (the dated take and the pledge file below still run: once a day each)
         if (!current && gateWait === null) {
           const g = await gateOf((text, values) => asScheduler(client, tenant_id, me, text, values), JOB);

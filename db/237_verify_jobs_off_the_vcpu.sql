@@ -7,9 +7,9 @@
 -- name, address or phone number of anyone); the comparisons print counts, never a row. Every check writes one row, OK or
 -- FAIL (its detail then starts "FAIL <id>"), because Cloud SQL Studio shows no notices. Run as your own IAM login after
 -- 236_jobs_off_the_vcpu.sql, dev first, then prod. Expected: S1, G1 to G4, F1 to F4, L1, L2 OK, then "PASS 0009zr".
--- Provoked (verify.provoke true at the top): every row FAIL and the verdict PROVOKED, NOT A PASS; F1 and L1 then also
--- compare with a deliberate difference (one stored outcome removed, one deal left out of 234's side), which their details
--- show (1 row differs, at least 1 row differs).
+-- Provoked (verify.provoke true at the top): every row FAIL and the verdict PROVOKED, NOT A PASS; F1, L1 and L2 then also
+-- compare with a deliberate difference (one stored outcome removed, one deal and one open lead left out of 234's side),
+-- which their details show (1 row differs).
 --
 --   S1  0009zr recorded after 0009zq; cma.web_busy(text) SECURITY DEFINER owned by cma_owner with its search path pinned; it, cma.job_gate_of(text),
 --       cma.speed_to_lead_rows_of and cma.renewal_outcomes_of(uuid, uuid[], text[]) the application's only (not
@@ -18,12 +18,13 @@
 --       JIT; the small configuration tables with their analyze threshold
 --   G1  the gate of every active tenant's jobs answers go or a known reason; a person without the job's permission is
 --       refused (CMA06) by the gate and by cma.web_busy, which counts no statement of its own session
---   G2  backoff: one run cancelled by the statement timeout (57014) 3 minutes ago waits (5 minutes), 6 minutes ago goes;
+--   G2  after_timeout: one run cancelled by the statement timeout (57014) 3 minutes ago waits (5 minutes), 6 minutes ago goes;
 --       two in a row 8 minutes ago wait (10); a gated run between them neither counts nor resets them; a succeeded run
 --       after them resets the wait; six in a row wait at most 60 minutes
 --   G3  the deferrals in a row are counted from the newest run back to the first one that did not defer
 --   G4  nothing to read: the follow-up's gate for a tenant without an active CRM connection (all made inactive inside
---       the block) answers nothing_to_read; Flash's and data quality's never do
+--       the block) answers nothing_to_read once it holds no items (with items it computes once more, to empty them);
+--       Flash's and data quality's never do
 --   F1  a forced facts refresh stores exactly the outcomes 210's whole computation (kept below) gives
 --   F2  new events on three subscriptions (a renewal, a failed renewal then a renewal, a new cycle) and a refresh twenty
 --       minutes later: incremental (outcomes_whole false, its scope the subscriptions written), the stored outcomes equal
@@ -304,8 +305,14 @@ declare
   c2    text;
   n_tab integer;
 begin
-  c1 := pg_temp.v9zr_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''jobs.defer_web_statements'', ''0'')', v_t));
-  c2 := pg_temp.v9zr_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''jobs.defer_max_in_a_row'', ''61'')', v_t));
+  -- inside a block that is always rolled back: a trigger that failed to refuse would commit nothing
+  begin
+    c1 := pg_temp.v9zr_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''jobs.defer_web_statements'', ''0'')', v_t));
+    c2 := pg_temp.v9zr_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''jobs.defer_max_in_a_row'', ''61'')', v_t));
+    raise exception using errcode = 'V9ZR0', message = 'rolled back';
+  exception when sqlstate 'V9ZR0' then
+    null;
+  end;
   select count(*) into n_tab from pg_class c
   where c.relnamespace = 'cma'::regnamespace and c.relkind = 'r'
     and c.relname in ('setting', 'tenant_setting', 'market', 'market_alias', 'business_hours', 'business_holiday', 'telephony_tag', 'app_user_external_id')
@@ -360,7 +367,7 @@ begin
     perform set_config('app.user_id', v_sched::text, true);
     foreach v_job in array array['refresh_follow_up', 'refresh_data_quality', 'refresh_active_customers', 'flash_snapshot'] loop
       g := cma.job_gate_of(v_job);
-      if not ((g ->> 'go')::boolean or g ->> 'reason' in ('nothing_to_read', 'backoff', 'deferred')) then
+      if not ((g ->> 'go')::boolean or g ->> 'reason' in ('nothing_to_read', 'after_timeout', 'deferred')) then
         ok1 := false;
         d1 := d1 || format(' %s answered %s;', v_job, g);
       end if;
@@ -410,7 +417,7 @@ begin
     r := r || jsonb_build_object('c', cma.job_gate_of('refresh_data_quality'));
     -- d) a gated run after them: still two in a row
     insert into cma.sync_run (tenant_id, job, started_at, finished_at, status, counts)
-    values (v_t, 'refresh_data_quality', now() - interval '2 minutes', now() - interval '2 minutes', 'succeeded', '{"skipped": 1, "backoff_wait": 1}');
+    values (v_t, 'refresh_data_quality', now() - interval '2 minutes', now() - interval '2 minutes', 'succeeded', '{"timeout_wait": 1}');
     r := r || jsonb_build_object('d', cma.job_gate_of('refresh_data_quality'));
     -- e) a succeeded run after them: the wait is gone
     insert into cma.sync_run (tenant_id, job, started_at, finished_at, status, counts)
@@ -427,25 +434,28 @@ begin
     delete from cma.sync_run x where x.tenant_id = v_t and x.job = 'refresh_data_quality' and x.connection_id is null;
     insert into cma.sync_run (tenant_id, job, started_at, finished_at, status, counts)
     values (v_t, 'refresh_data_quality', now() - interval '4 minutes', now() - interval '4 minutes', 'succeeded', '{"rows": 1}'),
-           (v_t, 'refresh_data_quality', now() - interval '3 minutes', now() - interval '3 minutes', 'succeeded', '{"skipped": 1, "defer_wait": 1}'),
-           (v_t, 'refresh_data_quality', now() - interval '2 minutes', now() - interval '2 minutes', 'succeeded', '{"skipped": 1, "defer_wait": 1}'),
-           (v_t, 'refresh_data_quality', now() - interval '1 minute', now() - interval '1 minute', 'succeeded', '{"skipped": 1, "defer_wait": 1}');
+           (v_t, 'refresh_data_quality', now() - interval '3 minutes', now() - interval '3 minutes', 'succeeded', '{"defer_wait": 1}'),
+           (v_t, 'refresh_data_quality', now() - interval '2 minutes', now() - interval '2 minutes', 'succeeded', '{"defer_wait": 1}'),
+           (v_t, 'refresh_data_quality', now() - interval '1 minute', now() - interval '1 minute', 'succeeded', '{"defer_wait": 1}');
     r := r || jsonb_build_object('g3', cma.job_gate_of('refresh_data_quality'));
     -- G4: the tenant's CRM connections (and those without a kind) inactive: the follow-up has nothing to read
     update cma.integration_connection ic set status = 'inactive' where ic.tenant_id = v_t and (ic.kind = 'crm' or ic.kind is null);
+    -- with items stored the follow-up computes once more (it empties them); without, nothing to read
+    r := r || jsonb_build_object('g4items', cma.job_gate_of('refresh_follow_up'));
+    delete from cma.follow_up_item i where i.tenant_id = v_t;
     r := r || jsonb_build_object('g4fu', cma.job_gate_of('refresh_follow_up'), 'g4dq', cma.job_gate_of('refresh_data_quality'),
                                  'g4fl', cma.job_gate_of('flash_snapshot'));
     raise exception using errcode = 'V9ZR0', message = 'rolled back';
   exception when sqlstate 'V9ZR0' then
     null;
   end;
-  perform pg_temp.v9zr_row(11, 'G2', 'the timeout''s backoff',
-    r -> 'a' ->> 'reason' = 'backoff' and (r -> 'a' ->> 'wait_minutes')::integer = 5
+  perform pg_temp.v9zr_row(11, 'G2', 'the wait after statement timeouts',
+    r -> 'a' ->> 'reason' = 'after_timeout' and (r -> 'a' ->> 'wait_minutes')::integer = 5
     and (r -> 'b' ->> 'go')::boolean and (r -> 'b' ->> 'timeouts_in_a_row')::integer = 1
-    and r -> 'c' ->> 'reason' = 'backoff' and (r -> 'c' ->> 'wait_minutes')::integer = 10
-    and r -> 'd' ->> 'reason' = 'backoff' and (r -> 'd' ->> 'timeouts_in_a_row')::integer = 2
+    and r -> 'c' ->> 'reason' = 'after_timeout' and (r -> 'c' ->> 'wait_minutes')::integer = 10
+    and r -> 'd' ->> 'reason' = 'after_timeout' and (r -> 'd' ->> 'timeouts_in_a_row')::integer = 2
     and (r -> 'e' ->> 'go')::boolean and (r -> 'e' ->> 'timeouts_in_a_row')::integer = 0
-    and r -> 'f' ->> 'reason' = 'backoff' and (r -> 'f' ->> 'wait_minutes')::integer = 60,
+    and r -> 'f' ->> 'reason' = 'after_timeout' and (r -> 'f' ->> 'wait_minutes')::integer = 60,
     format('a %s/%s, b %s, c %s/%s, d %s/%s, e %s, f %s/%s', r -> 'a' ->> 'reason', r -> 'a' ->> 'wait_minutes', r -> 'b' ->> 'go',
            r -> 'c' ->> 'reason', r -> 'c' ->> 'wait_minutes', r -> 'd' ->> 'reason', r -> 'd' ->> 'timeouts_in_a_row', r -> 'e' ->> 'go',
            r -> 'f' ->> 'reason', r -> 'f' ->> 'wait_minutes'));
@@ -454,6 +464,7 @@ begin
     format('%s deferrals counted', r -> 'g3' ->> 'deferrals_in_a_row'));
   perform pg_temp.v9zr_row(13, 'G4', 'nothing to read',
     r -> 'g4fu' ->> 'reason' = 'nothing_to_read' and coalesce(r -> 'g4dq' ->> 'reason', 'go') <> 'nothing_to_read'
+    and (not exists (select 1 from cma.follow_up_item i where i.tenant_id = v_t) or coalesce(r -> 'g4items' ->> 'reason', 'go') <> 'nothing_to_read')
     and coalesce(r -> 'g4fl' ->> 'reason', 'go') <> 'nothing_to_read',
     format('follow-up %s, data quality %s, Flash %s', coalesce(r -> 'g4fu' ->> 'reason', 'go'), coalesce(r -> 'g4dq' ->> 'reason', 'go'),
            coalesce(r -> 'g4fl' ->> 'reason', 'go')));
@@ -497,6 +508,8 @@ declare
   d3    integer;
   n     integer := 0;
   v_sub record;
+  v_tz  text;
+  v_at  timestamptz;
 begin
   v_t := (select t.id from cma.tenant t where t.status = 'active' and coalesce(cma.flash_source_set_up_of(t.id, 'subscriptions'), false)
           order by t.slug collate "C" limit 1);
@@ -509,7 +522,13 @@ begin
   end if;
   begin
     perform set_config('app.tenant_id', v_t::text, true);
-    r0 := cma.subscription_facts_refresh_of(v_t, true);
+    -- the four refreshes on one business date and every quarter of an hour due, whatever the hour the script runs:
+    -- from v_at, at most 22:00 of the tenant's day, and with subscriptions.take_refresh_minutes 15 inside the block
+    v_tz := (select x.timezone from cma.tenant x where x.id = v_t);
+    v_at := least(now(), ((now() at time zone v_tz)::date + time '22:00') at time zone v_tz);
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'subscriptions.take_refresh_minutes', '15')
+    on conflict (tenant_id, key) do update set value = excluded.value;
+    r0 := cma.subscription_facts_refresh_of(v_t, true, v_at);
     -- provoked: one stored outcome removed, a deliberate difference the comparison must see (its detail then says 1)
     if current_setting('verify.provoke')::boolean then
       delete from cma.renewal_outcome x
@@ -527,19 +546,19 @@ begin
       where v_sub.k = 2 or e.n = 1;
       n := n + 1;
     end loop;
-    r1 := cma.subscription_facts_refresh_of(v_t, false, now() + interval '20 minutes');
+    r1 := cma.subscription_facts_refresh_of(v_t, false, v_at + interval '20 minutes');
     d1 := pg_temp.v9zr_outcome_diff(v_t);
     -- F3: a fourth subscription's row written (its instrument type)
     update cma.subscription x set payment_instrument_type = case when x.payment_instrument_type = 'card' then 'paypal' else 'card' end, synced_at = now()
     where x.id = (select y.id from cma.subscription y where y.tenant_id = v_t and y.source_deleted_at is null
                   order by y.connection_id, y.source_id collate "C" offset 3 limit 1);
-    r2 := cma.subscription_facts_refresh_of(v_t, false, now() + interval '40 minutes');
+    r2 := cma.subscription_facts_refresh_of(v_t, false, v_at + interval '40 minutes');
     d2 := pg_temp.v9zr_outcome_diff(v_t);
     -- F4: a billing event written: the whole set next time (56 minutes: before the hourly whole computation is due)
     insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at)
     select v_t, x.connection_id, 'v9zr', 'v9zr-billing-1', 'chargeback', now()
     from cma.subscription x where x.tenant_id = v_t order by x.connection_id, x.source_id collate "C" limit 1;
-    r3 := cma.subscription_facts_refresh_of(v_t, false, now() + interval '56 minutes');
+    r3 := cma.subscription_facts_refresh_of(v_t, false, v_at + interval '56 minutes');
     d3 := pg_temp.v9zr_outcome_diff(v_t);
     raise exception using errcode = 'V9ZR0', message = 'rolled back';
   exception when sqlstate 'V9ZR0' then
@@ -591,7 +610,12 @@ begin
     select count(*) into x from (select * from pg_temp.v9zr_stl_234(t.id, v_from, v_to) except all select * from cma.speed_to_lead_of(t.id, v_from, v_to)) a;
     n1 := n1 + x;
     rows1 := rows1 + (select count(*) from cma.speed_to_lead_of(t.id, null, null));
-    select count(*) into x from (select * from cma.open_leads_of(t.id) except all select * from pg_temp.v9zr_ol_234(t.id)) a;
+    -- provoked: 234's side without its first open lead, a deliberate difference the comparison must see
+    select count(*) into x from (select * from cma.open_leads_of(t.id)
+                                 except all
+                                 select * from pg_temp.v9zr_ol_234(t.id) z
+                                 where not current_setting('verify.provoke')::boolean
+                                    or z.deal_id <> (select min(w.deal_id::text)::uuid from pg_temp.v9zr_ol_234(t.id) w)) a;
     n2 := n2 + x;
     select count(*) into x from (select * from pg_temp.v9zr_ol_234(t.id) except all select * from cma.open_leads_of(t.id)) a;
     n2 := n2 + x;
