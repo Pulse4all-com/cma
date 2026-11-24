@@ -2,7 +2,7 @@
 -- 237_verify_speed_to_lead_cockpit.sql: verifies addition 0009zr, Sales → Speed to lead as a cockpit
 -- (24 November 2026; brief B40b)
 -- =============================================================================================
--- Universal: no seed is assumed. W1 checks the structure on the database itself; W2 to W12 work on two throwaway tenants
+-- Universal: no seed is assumed. W1 checks the structure on the database itself; W2 to W13 work on two throwaway tenants
 -- inside a subtransaction that is always rolled back, so nothing stays and the script runs in dev and in prod. W3, W4
 -- and W5 compare besides on every tenant of the database (the seeds, dev's and prod's own data), as the application
 -- acting for the tenant (row-level security). Synthetic data only (example.invalid people, invented ids, no name,
@@ -12,12 +12,12 @@
 -- Studio shows no notices; the block ends with a row of its own ("ran to the end"), which the verdict requires, so a
 -- block that an error ended reads FAIL. Run as your own IAM login after 236_speed_to_lead_cockpit.sql, dev first, then
 -- prod.
--- Expected: W1 to W12 OK, then the verdict "PASS 0009zr". Provoked (verify.provoke true at the top): every row reads
+-- Expected: W1 to W13 OK, then the verdict "PASS 0009zr". Provoked (verify.provoke true at the top): every row reads
 -- FAIL with its own id, and the verdict PROVOKED, NOT A PASS.
 --
 --   W1  structure: 0009zr recorded after 0009zq; cma.speed_to_lead_row has no first_call_* (D36) and ends in
 --       last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far, window_end (35 columns), cma_read.speed_to_lead
---       the same columns in the same order, and no function of cma or cma_read names a first_call_ column; the three
+--       the same columns in the same order and the readers' only, and no function of cma or cma_read names a first_call_ column; the three
 --       settings (two goals text, empty; stale days integer, 2); the new functions and the summary the application's
 --       only; cma.speed_to_lead_of without a setting (so it is inlined), the plpgsql reads with jit off and
 --       force_custom_plan, cma.open_leads_of with jit off; cma.check_tenant_setting keeps 224's rules
@@ -47,6 +47,7 @@
 --   W11 a Conversation: dA's connected call of 60 s is one; the share of the week's eight deals with a Conversation is
 --       the summary's conversation_share and the figures'
 --   W12 tenant isolation: tenant two's figures, deals list, page and summary hold none of tenant one's deals
+--   W13 the database refuses the summary, the figures, the deals list and the page to an agent (CMA06)
 -- =============================================================================================
 
 do $$
@@ -346,6 +347,9 @@ begin
   if v_view is distinct from v_type then
     v_bad := v_bad || 'cma_read.speed_to_lead is ' || coalesce(v_view, 'missing') || '; ';
   end if;
+  if not has_table_privilege('cma_readonly', 'cma_read.speed_to_lead', 'select') or has_table_privilege('cma_app', 'cma_read.speed_to_lead', 'select') then
+    v_bad := v_bad || 'cma_read.speed_to_lead is not the readers'' alone; ';
+  end if;
   select string_agg(n.nspname || '.' || p.proname, ', ' order by p.proname collate "C") into v_txt
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('cma', 'cma_read') and p.prosrc ~ 'first_call_(id|source_id|at|linked)';
@@ -401,7 +405,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- W2 to W12, on two throwaway tenants (rolled back)
+-- W2 to W13, on two throwaway tenants (rolled back)
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -762,6 +766,17 @@ begin
     rows_ := rows_ || pg_temp.v9zr_row(12, 'W12', 'tenant isolation on the figures, the deals list, the page and the summary',
       v_txt = 'figures 2 deals; list dA (0 of one); page 2 deals, 0 of one; summary 2; of one as two 0', v_txt);
 
+    -- W13. the database refuses the reads to a person holding neither reports.view nor performance.team (an agent):
+    --      CMA06 from the summary, the figures, the deals list and the page, whatever the web checked before
+    perform set_config('app.user_id', v_anna::text, true);
+    v_txt := pg_temp.v9zr_code('select * from cma.speed_to_lead_summary(''2026-10-05'', ''2026-10-11'', ''day'')')
+             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_figures(''2026-10-05'', ''2026-10-11'')')
+             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 50, 0)')
+             || ',' || pg_temp.v9zr_code('select cma.speed_to_lead_page(''2026-10-05'', ''2026-10-11'', null, ''day'', ''called'', 50, 0)');
+    perform set_config('app.user_id', v_analyst1::text, true);
+    rows_ := rows_ || pg_temp.v9zr_row(13, 'W13', 'an agent is refused every read in the database (CMA06)',
+      v_txt = 'CMA06,CMA06,CMA06,CMA06', v_txt);
+
     raise exception using errcode = 'CMAOK';
   exception
     when sqlstate 'CMAOK' then null;
@@ -772,7 +787,7 @@ begin
   insert into verify_0009zr (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
   insert into verify_0009zr values (98, 'ran to the end',
-    case when v_provoke or cardinality(rows_) / 4 <> 11 or '99' = any (rows_) then 'FAIL' else 'OK' end,
+    case when v_provoke or cardinality(rows_) / 4 <> 12 or '99' = any (rows_) then 'FAIL' else 'OK' end,
     format('%s fixture rows', cardinality(rows_) / 4));
 end
 $$;
@@ -791,7 +806,7 @@ from (select ord, check_name, result, detail from pg_temp.verify_0009zr
       select 1000000, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from pg_temp.verify_0009zr where result <> 'OK') then 'FAIL'
-                  when (select count(*) from pg_temp.verify_0009zr where result = 'OK') <> 13 then 'FAIL'
+                  when (select count(*) from pg_temp.verify_0009zr where result = 'OK') <> 14 then 'FAIL'
                   else 'PASS 0009zr' end,
              format('237_verify_speed_to_lead_cockpit: %s OK, %s FAIL', (select count(*) from pg_temp.verify_0009zr where result = 'OK'),
                     (select count(*) from pg_temp.verify_0009zr where result <> 'OK'))) x

@@ -1137,6 +1137,8 @@ alter function cma.speed_to_lead_rows(date, date) set plan_cache_mode = force_cu
 -- ---------------------------------------------------------------------------------------------
 create or replace view cma_read.speed_to_lead as
   select * from cma_read.speed_to_lead_rows();
+-- the readers' grant stated, as 232's, not left to cma_read's default privileges (237 W1 checks it)
+grant select on cma_read.speed_to_lead to cma_readonly;
 
 -- ---------------------------------------------------------------------------------------------
 -- 9. Grants: the application only, as 0009zq's (234); the view as 0007d's (40)
