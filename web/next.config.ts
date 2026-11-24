@@ -7,10 +7,10 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "same-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   // The first Content-Security-Policy step (the IT audit of 17 October 2026): no framing, no <base> or
-  // form-target hijack, no plugins. It sets no script-src or style-src, so nothing Next.js renders can
-  // break on it; a per-request nonce for script-src is the second step (docs/audits/2026-10-17-full-audit). That step must
-  // allow the desktop fit's inline script in <head> (src/lib/desktop-fit.ts, FIT_SCRIPT: static, so its sha256 or the nonce)
-  // and, with a style-src, the style element it writes; blocked, the zoom stays 1 and verify:layout's fit checks fail
+  // form-target hijack, no plugins, on every answer. The second step (brief N07, WP8, 25 November 2026) is proxy.ts's: every
+  // answer it passes on gets a second policy with script-src and a per-request nonce (src/lib/csp.ts, which repeats these
+  // four directives; a browser applies both policies). It allows the desktop fit's inline script in <head> by its sha256;
+  // style-src is not set, so the style element the fit writes stays allowed; blocked, verify:layout's fit checks fail
   { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
 ];
 
