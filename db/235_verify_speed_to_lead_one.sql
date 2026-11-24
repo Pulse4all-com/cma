@@ -10,6 +10,9 @@
 -- starts "FAIL V<n>"), because Cloud SQL Studio shows no notices; the block ends with a row of its own ("ran to the
 -- end"), which the verdict requires, so a block that an error ended reads FAIL. Run as your own IAM login after
 -- 234_speed_to_lead_one.sql, dev first, then prod.
+-- Edited by 0009zr (236, 24 November 2026; brief B40b, D36): V1 expects the row type of whichever addition ran last (34
+-- columns with first_call_* under 0009zq, 35 without them under 0009zr), and V2 finds the deal's first outbound CRM call
+-- itself (pg_temp.v9zp_first_crm_call, 0009zq's rule), so the script passes before and after 236.
 -- Expected: V1 to V13 OK, then the verdict "PASS 0009zq". Provoked (verify.provoke true at the top): every row reads
 -- FAIL with its own id, and the verdict PROVOKED, NOT A PASS.
 --
@@ -169,6 +172,20 @@ as $$
     and not co.is_test and co.cancelled_at is null and co.source_deleted_at is null
 $$;
 
+-- A deal's first outbound CRM call, linked or not (0009zq's first_call_*; the row no longer has them since 0009zr, D36):
+-- cma.lead_calls_of from the creation less the pre-window, the earliest by start, then id. V2 reads it (edited by 0009zr)
+create or replace function pg_temp.v9zp_first_crm_call(p_tenant uuid, p_deal uuid, out source_id text, out linked boolean)
+language sql stable
+as $$
+  select lc.call_source_id, lc.is_linked
+  from cma.lead_deals_of(p_tenant, null, null) ld
+  cross join lateral cma.lead_calls_of(p_tenant, ld.connection_id, ld.record_type, ld.source_id, ld.contacts,
+                                       ld.created_at - make_interval(mins => greatest(0, cma.setting_of(p_tenant, 'speed_to_lead.pre_window_minutes')::integer))) lc
+  where ld.deal_id = p_deal and lc.direction = 'outbound'
+  order by lc.effective_at, lc.call_id
+  limit 1
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- V1. Structure
 -- ---------------------------------------------------------------------------------------------
@@ -185,7 +202,14 @@ begin
                and a.attnum > 0 and not a.attisdropped);
   v_view := (select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod), ',' order by a.attnum)
              from pg_attribute a where a.attrelid = 'cma_read.speed_to_lead'::regclass and a.attnum > 0 and not a.attisdropped);
-  if v_type !~ ',first_attempt_call_id:uuid,first_attempt_at:timestamp with time zone,attempts_so_far:integer,deal_owner_user_id:uuid$'
+  -- since 0009zr (236, D36) the row has no first_call_* and five more columns at its end: 35 columns (edited by 0009zr)
+  if exists (select 1 from cma.schema_migration where version = '0009zr') then
+    if v_type !~ ',first_attempt_call_id:uuid,first_attempt_at:timestamp with time zone,attempts_so_far:integer,deal_owner_user_id:uuid,last_attempt_at:timestamp with time zone,last_call_at:timestamp with time zone,deal_owner_ref:text,conversations_so_far:integer,window_end:timestamp with time zone$'
+       or (select count(*) from regexp_split_to_table(v_type, ',')) <> 35 or position('first_call_' in v_type) > 0
+       or v_type !~ '^tenant_id:uuid,deal_id:uuid,.*,status:text,first_any_call_at:.*,agent_user_id:uuid,agent_ref:text,agent_from:text,.*,waiting_business_seconds:integer,first_attempt_call_id' then
+      v_bad := v_bad || 'the row type is ' || v_type || '; ';
+    end if;
+  elsif v_type !~ ',first_attempt_call_id:uuid,first_attempt_at:timestamp with time zone,attempts_so_far:integer,deal_owner_user_id:uuid$'
      or (select count(*) from regexp_split_to_table(v_type, ',')) <> 34
      or v_type !~ '^tenant_id:uuid,deal_id:uuid,.*,status:text,first_call_id:uuid,.*,agent_user_id:uuid,agent_ref:text,agent_from:text,.*,waiting_business_seconds:integer,first_attempt_call_id' then
     v_bad := v_bad || 'the row type is ' || v_type || '; ';
@@ -221,7 +245,9 @@ begin
   end if;
   rows_ := rows_ || pg_temp.v9zp_row(1, 'V1', 'structure: the addition, the row type and the view, the status values, the setting, the grants',
                                      v_ok and v_bad = '', case when not v_ok then '0009zq or 0009zp not recorded; ' else '' end
-                                                          || coalesce(nullif(v_bad, ''), '34 columns, the four new last; the view the same; three status values; time 12:00; grants as designed'));
+                                                          || coalesce(nullif(v_bad, ''), case when exists (select 1 from cma.schema_migration where version = '0009zr')
+                                                                                             then '35 columns (0009zr: no first_call_*, five more last)' else '34 columns, the four new last' end
+                                                                                        || '; the view the same; three status values; time 12:00; grants as designed'));
   insert into verify_0009zq (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
 end
@@ -412,14 +438,16 @@ begin
     -- V2. dA: a CRM call without a telephony call (cA0, 08:05) before the Aircall attempt (cA1, 08:59:50): the end is the
     --     attempt, 3590 business seconds; cA0 stays the first outbound CRM call shown. dH: only such a call, not called
     select * into r from cma.speed_to_lead_of(v_t1, v_from, v_to) x where x.deal_source_id = 'dA';
+    v_a := (pg_temp.v9zp_first_crm_call(v_t1, r.deal_id)).source_id;
     v_txt := format('dA %s %s at %s, %s s, first call %s linked %s, attempts %s', r.status, r.first_attempt_call_id is not null,
-                    r.first_attempt_at, r.business_seconds, r.first_call_source_id, r.first_call_linked, r.attempts_so_far);
+                    r.first_attempt_at, r.business_seconds, v_a, (pg_temp.v9zp_first_crm_call(v_t1, r.deal_id)).linked, r.attempts_so_far);
     v_ok := r.status = 'called' and r.first_attempt_at = '2026-10-05T08:59:50Z' and r.business_seconds = 3590 and r.elapsed_seconds = 3590
-            and r.first_call_source_id = 'cA0' and r.first_call_linked is false and r.attempts_so_far = 1
+            and v_a = 'cA0' and (pg_temp.v9zp_first_crm_call(v_t1, r.deal_id)).linked is false and r.attempts_so_far = 1
             and r.first_attempt_call_id = (select c.id from cma.crm_call c where c.tenant_id = v_t1 and c.source_id = 'cA1');
     select * into r from cma.speed_to_lead_of(v_t1, v_from, v_to) x where x.deal_source_id = 'dH';
-    v_txt := v_txt || format('; dH %s, first call %s, attempt %s, attempts %s', r.status, r.first_call_source_id, r.first_attempt_at, r.attempts_so_far);
-    v_ok := v_ok and r.status = 'not_called_open' and r.first_call_source_id = 'cH1' and r.first_attempt_at is null
+    v_a := (pg_temp.v9zp_first_crm_call(v_t1, r.deal_id)).source_id;
+    v_txt := v_txt || format('; dH %s, first call %s, attempt %s, attempts %s', r.status, v_a, r.first_attempt_at, r.attempts_so_far);
+    v_ok := v_ok and r.status = 'not_called_open' and v_a = 'cH1' and r.first_attempt_at is null
             and r.first_attempt_call_id is null and r.attempts_so_far = 0 and r.business_seconds is null;
     rows_ := rows_ || pg_temp.v9zp_row(3, 'V2', 'a CRM call without a telephony call never ends speed to lead; the Aircall attempt does', v_ok, v_txt);
 
@@ -667,6 +695,7 @@ $$;
 
 drop function if exists pg_temp.v9zp_speed_to_lead_at(uuid, timestamptz, timestamptz, timestamptz);
 drop function if exists pg_temp.v9zp_code(text);
+drop function if exists pg_temp.v9zp_first_crm_call(uuid, uuid);
 drop function if exists pg_temp.v9zp_noon_of_40(uuid, text, timestamptz);
 drop function if exists pg_temp.v9zp_cso_94(uuid);
 drop function if exists pg_temp.v9zp_noon_in_178(text, integer[], date[], timestamptz);

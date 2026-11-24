@@ -93,6 +93,7 @@ import {
   groupInbound, groupSpeedToLead, inboundBar, inboundCalls, inboundFigures, inboundGroupDisplay, INTAKE_FIELDS, intakeMarkets, intakeTotals, isMuted, missedReasonOf,
   nextGroup, nextInboundGroup, openNotCalled, orderChecks, parseGroup, parseInboundGroup, percentileCont, personalDataIn, rangeProblem, REASON_SERIES,
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
+  goalTone, parseSpeedView, speedDealsPage, speedPeriodFigures, speedTimeline, speedTrendGroup,
   barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
   historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, untaggedPct, callRules,
@@ -163,10 +164,11 @@ expect("92 days pass, 93 and a backwards range do not",
 // Fixture rows: invented ids; owner refs never appear in a row, the agent is a person id or null. Since addition 0009zq
 // the agent is the person who made the first attempt (none without one), and a deal closed before its first attempt
 // (closed_before_first_call) is in neither share
-const base = { connectionId: "c1", pipelineId: "p1", pipelineLabel: "Sales", marketSource: "record", isClosed: false, firstCallSourceId: null,
-  firstCallLinked: null, firstAnyCallAt: null, firstAnyDirection: null, inboundFirst: false, firstConnectedAt: null, agentFrom: null,
+const base = { connectionId: "c1", pipelineId: "p1", pipelineLabel: "Sales", marketSource: "record", isClosed: false,
+  firstAnyCallAt: null, firstAnyDirection: null, inboundFirst: false, firstConnectedAt: null, agentFrom: null,
   elapsedSeconds: null, targetSeconds: 3600, nextBusinessNoon: null, waitingBusinessSeconds: null, firstAttemptCallId: null,
-  attemptsSoFar: 0, dealOwnerUserId: null, recordUrl: null };
+  attemptsSoFar: 0, dealOwnerUserId: null, lastAttemptAt: null, lastCallAt: null, conversationsSoFar: 0, windowEnd: "2026-10-07T00:00:00Z",
+  recordUrl: null };
 let seq = 0;
 const deal = (date, market, status, businessSeconds, withinTarget, beforeNextNoon, agentUserId, extra = {}) => ({
   ...base, dealId: `d${++seq}`, dealSourceId: String(1000 + seq), date, createdAt: `${date}T09:0${seq % 10}:00Z`, market, status,
@@ -174,11 +176,11 @@ const deal = (date, market, status, businessSeconds, withinTarget, beforeNextNoo
   isClosed: status === "closed_before_first_call", ...extra,
 });
 const rows = [
-  deal("2026-10-05", "NL", "called", 420, true, true, "u-ana"),            // 7 business minutes
-  deal("2026-10-05", "NL", "called", 900, true, true, "u-ana"),            // 15
-  deal("2026-10-05", "GB", "called", 7200, false, true, null),             // 120, owner not mapped
+  deal("2026-10-05", "NL", "called", 420, true, true, "u-ana", { attemptsSoFar: 3, conversationsSoFar: 1 }),  // 7 business minutes
+  deal("2026-10-05", "NL", "called", 900, true, true, "u-ana", { attemptsSoFar: 1 }),                         // 15
+  deal("2026-10-05", "GB", "called", 7200, false, true, null, { attemptsSoFar: 2 }),  // 120, owner not mapped
   deal("2026-10-06", "GB", "not_called_open", null, null, null, null, { waitingBusinessSeconds: 1800 }),
-  deal("2026-10-06", "unknown", "called", null, null, null, "u-bo"),      // no business hours: measures empty
+  deal("2026-10-06", "unknown", "called", null, null, null, "u-bo", { attemptsSoFar: 1, conversationsSoFar: 1 }),  // no business hours: measures empty
   deal("2026-10-06", "NL", "closed_before_first_call", null, null, null, null, { pipelineId: null, pipelineLabel: null, dealOwnerUserId: "u-bo" }),
   deal("2026-10-06", "NL", "not_called_open", null, false, null, null, { waitingBusinessSeconds: 5400, dealOwnerUserId: "u-bo" }),
   deal("2026-10-06", "unknown", "not_called_open", null, null, null, null),
@@ -186,15 +188,22 @@ const rows = [
 expect("percentile_cont: median and 80th percentile interpolate",
   [percentileCont([420, 900, 7200], 0.5), percentileCont([420, 900, 7200], 0.8), percentileCont([10, 20, 30, 40], 0.5), percentileCont([], 0.5)],
   [900, 4680, 25, null], [900, 7200, 20, null]);
+// since 0009zr the attempts per deal (mean over every deal to 2 places, median to 1) and the share with a Conversation
 expect("period figures as the summary computes them (closed before the first call apart)", speedFigures(rows),
-  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 50, beforeNextNoonPct: 100, openNotCalled: 3, closedBeforeFirstCall: 1 },
-  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 40, beforeNextNoonPct: 75, openNotCalled: 3, closedBeforeFirstCall: 0 });
+  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 50, beforeNextNoonPct: 100, openNotCalled: 3, closedBeforeFirstCall: 1,
+    attemptsMean: 0.88, attemptsMedian: 0.5, conversationShare: 25 },
+  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 40, beforeNextNoonPct: 75, openNotCalled: 3, closedBeforeFirstCall: 0,
+    attemptsMean: 1.75, attemptsMedian: 1, conversationShare: 50 });
 expect("nothing known yet: shares and minutes are empty, not 0",
-  speedFigures([rows[3]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 1, closedBeforeFirstCall: 0 },
-  { deals: 1, called: 0, medianBusinessMinutes: 0, p80BusinessMinutes: 0, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 1, closedBeforeFirstCall: 0 });
+  speedFigures([rows[3]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 1, closedBeforeFirstCall: 0,
+    attemptsMean: 0, attemptsMedian: 0, conversationShare: 0 },
+  { deals: 1, called: 0, medianBusinessMinutes: 0, p80BusinessMinutes: 0, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 1, closedBeforeFirstCall: 0,
+    attemptsMean: 0, attemptsMedian: 0, conversationShare: 0 });
 expect("a deal closed before its first call: counted apart, in no share",
-  speedFigures([rows[5]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 0, closedBeforeFirstCall: 1 },
-  { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 0, closedBeforeFirstCall: 1 });
+  speedFigures([rows[5]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 0, closedBeforeFirstCall: 1,
+    attemptsMean: 0, attemptsMedian: 0, conversationShare: 0 },
+  { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 0, closedBeforeFirstCall: 1,
+    attemptsMean: 0, attemptsMedian: 0, conversationShare: 0 });
 
 const names = { "u-ana": "Ana", "u-bo": "Bo" };
 const byDay = groupSpeedToLead(rows, "day", (id) => names[id] ?? null);
@@ -205,6 +214,9 @@ const byAgent = groupSpeedToLead(rows, "agent", (id) => names[id] ?? null);
 expect("by agent: the first attempt's person as key, not mapped under unknown, no attempt apart",
   byAgent.map((g) => [g.groupKey, g.groupLabel, g.deals]), [["no_attempt", null, 4], ["u-ana", "Ana", 2], ["u-bo", "Bo", 1], ["unknown", null, 1]],
   [["u-ana", "Ana", 2], ["u-bo", "Bo", 3], ["unknown", null, 3]]);
+expect("no_attempt: its shares and medians null (shown as –), its attempts 0 (0009zr, 237's W9)",
+  byAgent.filter((g) => g.groupKey === "no_attempt").map((g) => [g.medianBusinessMinutes, g.p80BusinessMinutes, g.withinTargetPct, g.beforeNextNoonPct, g.conversationShare, g.attemptsMean, g.attemptsMedian]),
+  [[null, null, null, null, null, 0, 0]], [[null, null, 0, 0, 0, 0, 0]]);
 expect("an agent who is not mapped shows as Not mapped, deals without an attempt as No attempt yet",
   byAgent.map((g) => groupDisplay(g, "agent").kind), ["noAttempt", "text", "text", "notMapped"], ["notMapped", "text", "text", "notMapped"]);
 const byMarket = groupSpeedToLead(rows, "market", () => null);
@@ -215,12 +227,43 @@ const byPipeline = groupSpeedToLead(rows, "pipeline", () => null);
 expect("by pipeline: connection and pipeline as key, a missing label unknown",
   byPipeline.map((g) => [g.groupKey, groupDisplay(g, "pipeline").kind]), [["c1:", "unknownPipeline"], ["c1:p1", "text"]],
   [["c1:p1", "text"], ["c1:", "unknownPipeline"]]);
+expect("by week: the Monday of the business date's ISO week (0009zr), shown as a date",
+  groupSpeedToLead([...rows, deal("2026-10-11", "NL", "called", 60, true, true, null), deal("2026-10-12", "NL", "called", 60, true, true, null)], "week", () => null)
+    .map((g) => [g.groupKey, g.deals, groupDisplay(g, "week").kind]),
+  [["2026-10-05", 9, "date"], ["2026-10-12", 1, "date"]], [["2026-10-05", 10, "date"]]);
 expect("totals add counts only", summaryTotals(byDay), { deals: 8, called: 4, openNotCalled: 3, closedBeforeFirstCall: 1 },
   { deals: 8, called: 4, openNotCalled: 0, closedBeforeFirstCall: 0 });
 expect("open deals not called: longest waiting first, no business time last",
   openNotCalled(rows).map((r) => r.dealSourceId), ["1007", "1004", "1008"], ["1004", "1007", "1008"]);
 expect("no row carries an owner id or a personal field",
   [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => /^(email|phone|name|firstname|ownerRef|agentRef)$/i.test(k)), [], ["agentRef"]);
+
+// ---- speed to lead's cockpit (addition 0009zr) -------------------------------------------------------------------
+expect("the page's groups are four, the API's five (week); the view not_called or called",
+  [parseGroup("week"), parseGroup("week", true), parseGroup("day", true), parseSpeedView("called"), parseSpeedView("not_called"), parseSpeedView("all"), parseSpeedView(null)],
+  [null, "week", "day", "called", "not_called", null, null], ["week", "week", "day", "called", "not_called", "all", null]);
+expect("the trend per day up to 31 days, per week over",
+  [speedTrendGroup({ from: "2026-10-01", to: "2026-10-31" }), speedTrendGroup({ from: "2026-10-01", to: "2026-11-01" })], ["day", "week"], ["day", "day"]);
+expect("a goal colours a share: none without a goal or a share, met at or above, below under it",
+  [goalTone(80, null), goalTone(null, 80), goalTone(80, 80), goalTone(80.1, 80), goalTone(79.9, 80), goalTone(0, 0)],
+  ["none", "none", "met", "met", "below", "met"], ["none", "none", "below", "met", "below", "met"]);
+expect("the period's figures: the summary's, with the longest wait of the open deals not called",
+  [speedPeriodFigures(rows).oldestWaitingBusinessSeconds, speedPeriodFigures(rows).deals, speedPeriodFigures([]).oldestWaitingBusinessSeconds, speedPeriodFigures([]).attemptsMean],
+  [5400, 8, null, null], [1800, 8, 0, 0]);
+expect("the deals list: a view newest first, then by id, a page and the view's count",
+  [speedDealsPage(rows, "not_called", 2, 0), speedDealsPage(rows, "not_called", 2, 2), speedDealsPage(rows, "called", 50, 0)]
+    .map((p) => `${p.total}:${p.rows.map((r) => r.dealSourceId).join(",")}`),
+  ["3:1008,1007", "3:1004", "4:1005,1003,1002,1001"], ["3:1004,1007", "3:1008", "4:1001,1002,1003,1005"]);
+const tl = speedTimeline({ spanBusinessSeconds: 43200, cutoffBusinessSeconds: 21600, status: "called", businessSeconds: 600, attemptsSoFar: 3,
+  attempts: [{ n: 1, businessSeconds: 600, connected: false, conversation: false }, { n: 2, businessSeconds: 4320, connected: true, conversation: false },
+             { n: 3, businessSeconds: 50000, connected: true, conversation: true }] }, 3600);
+expect("the timeline: target and cutoff marks, a dot per attempt in the span (hollow, filled, a conversation), an arrow beyond",
+  [tl.target, tl.cutoff, tl.dots.map((d) => `${d.n}@${d.at}:${d.kind}`).join(" "), tl.beyond, tl.waiting],
+  [8.3, 50, "1@1.4:notConnected 2@10:connected", true, null], [8.3, 50, "1@1.4:notConnected 2@10:connected 3@100:conversation", false, null]);
+expect("the timeline of a deal not called: its wait as a bar; none without a span (an unknown market)",
+  [speedTimeline({ spanBusinessSeconds: 43200, cutoffBusinessSeconds: 21600, status: "not_called_open", businessSeconds: 64800, attemptsSoFar: 0, attempts: [] }, 3600)?.waiting,
+   speedTimeline({ spanBusinessSeconds: null, cutoffBusinessSeconds: null, status: "called", businessSeconds: null, attemptsSoFar: 1, attempts: [] }, 3600)],
+  [100, null], [64800, null]);
 
 // ---- intake and the not-connected states -------------------------------------------------------
 // each row: n leads and n lead deals in, three other deals in (an order pipeline's, created and closed in one go), so

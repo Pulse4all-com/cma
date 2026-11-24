@@ -31,6 +31,9 @@
 -- Attempts that end speed to lead (the telephony rule is 235's): a deal closed before its first call reads
 -- closed_before_first_call and stays out of both percentages, the agent is the first attempt's telephony user (none
 -- here: no attempt has one; the deal's owner is deal_owner_user_id), the summary takes a market and the group total.
+-- Since addition 0009zr (236, brief B40b) the row has no first_call_* (D36): A5 names first_attempt_at, and block B reads
+-- the first outbound CRM call it checked as the first Attempt's CRM call (first_attempt_call_id; under attempts.source
+-- crm the same call) and whether it is linked from the call link.
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- =============================================================================================
@@ -147,7 +150,7 @@ begin
   end if;
   select count(*) into v_n from information_schema.columns
   where table_schema = 'cma_read' and table_name = 'speed_to_lead'
-    and column_name in ('tenant_id', 'deal_id', 'market', 'status', 'first_call_at', 'business_seconds', 'within_target',
+    and column_name in ('tenant_id', 'deal_id', 'market', 'status', 'first_attempt_at', 'business_seconds', 'within_target',
                         'before_next_noon', 'inbound_first', 'first_connected_at', 'agent_user_id', 'elapsed_seconds');
   if v_n <> 12 then
     raise exception 'FAIL A5: cma_read.speed_to_lead lacks % of 12 columns', 12 - v_n;
@@ -407,7 +410,7 @@ begin
     if r.elapsed_seconds <> 420 or r.agent_user_id is not null or r.agent_from is not null
        or r.deal_owner_user_id is distinct from (f ->> 'agent1')::uuid or r.first_attempt_at <> '2026-09-15T08:07:00Z'
        or r.first_connected_at <> '2026-09-15T08:07:00Z' or r.market <> 'NL' or r.market_source <> 'record'
-       or r.first_call_source_id <> 'c1' or r.first_call_linked then
+       or (select c.source_id from cma.crm_call c where c.id = r.first_attempt_call_id) is distinct from 'c1' or exists (select 1 from cma.call_link l where l.crm_call_id = r.first_attempt_call_id and l.unlinked_at is null) then
       raise exception 'FAIL B3: d1 gives elapsed %, agent % from %, connected at %', r.elapsed_seconds, r.agent_user_id, r.agent_from, r.first_connected_at;
     end if;
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd16';
@@ -418,10 +421,10 @@ begin
     -- B4. never called: open (still waiting, no agent, the deal owner's person apart; 0009zq) and closed before the
     --     first call (not waiting, out of both percentages)
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd3';
-    if r.first_call_at is not null or r.waiting_business_seconds is null or r.waiting_business_seconds <= 3600
+    if r.first_attempt_at is not null or r.waiting_business_seconds is null or r.waiting_business_seconds <= 3600
        or r.agent_user_id is not null or r.agent_from is not null or r.deal_owner_user_id is distinct from (f ->> 'agent2')::uuid
        or r.attempts_so_far <> 0 then
-      raise exception 'FAIL B4: d3 gives first call %, waiting %, agent % from %', r.first_call_at, r.waiting_business_seconds, r.agent_user_id, r.agent_from;
+      raise exception 'FAIL B4: d3 gives first attempt %, waiting %, agent % from %', r.first_attempt_at, r.waiting_business_seconds, r.agent_user_id, r.agent_from;
     end if;
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd4';
     if r.waiting_business_seconds is not null or not r.is_closed or r.agent_user_id is not null
@@ -432,7 +435,7 @@ begin
     -- B5. an inbound call first: reported, connected first, the outbound call measured
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd5';
     if not r.inbound_first or r.first_any_direction <> 'inbound' or r.first_any_call_at <> '2026-09-17T07:40:00Z'
-       or r.first_connected_at <> '2026-09-17T07:40:00Z' or r.first_call_source_id <> 'c5b' then
+       or r.first_connected_at <> '2026-09-17T07:40:00Z' or (select c.source_id from cma.crm_call c where c.id = r.first_attempt_call_id) is distinct from 'c5b' then
       raise exception 'FAIL B5: d5 gives inbound first %, first any % at %, connected %', r.inbound_first, r.first_any_direction,
         r.first_any_call_at, r.first_connected_at;
     end if;
@@ -443,18 +446,19 @@ begin
     -- B6. a call on the deal only counts; a call on a second associated contact counts; the deal's
     --     market as written ('Holland') counts through the alias added after it arrived
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd6';
-    if r.first_call_source_id is distinct from 'c6' or r.market <> 'NL' or r.market_source <> 'record' then
-      raise exception 'FAIL B6: d6 gives call %, market % from %', r.first_call_source_id, r.market, r.market_source;
+    if (select c.source_id from cma.crm_call c where c.id = r.first_attempt_call_id) is distinct from 'c6' or r.market <> 'NL' or r.market_source <> 'record' then
+      raise exception 'FAIL B6: d6 gives call %, market % from %', (select c.source_id from cma.crm_call c where c.id = r.first_attempt_call_id), r.market, r.market_source;
     end if;
-    if (select x.first_call_source_id from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd7') is distinct from 'c7' then
+    if (select c.source_id from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x join cma.crm_call c on c.id = x.first_attempt_call_id
+        where x.deal_source_id = 'd7') is distinct from 'c7' then
       raise exception 'FAIL B6: the call on d7''s second contact did not count';
     end if;
 
     -- B7. the pre-window (10 minutes): a call 15 minutes before creation does not count, one 5 minutes
     --     before does and measures 0
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd9';
-    if r.first_call_source_id is distinct from 'c9' or r.elapsed_seconds <> 0 or r.business_seconds <> 0 then
-      raise exception 'FAIL B7: d9 gives call %, elapsed %', r.first_call_source_id, r.elapsed_seconds;
+    if (select c.source_id from cma.crm_call c where c.id = r.first_attempt_call_id) is distinct from 'c9' or r.elapsed_seconds <> 0 or r.business_seconds <> 0 then
+      raise exception 'FAIL B7: d9 gives call %, elapsed %', (select c.source_id from cma.crm_call c where c.id = r.first_attempt_call_id), r.elapsed_seconds;
     end if;
     if (select x.first_any_call_at from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd8') is not null then
       raise exception 'FAIL B7: d8 counted a call outside the pre-window';
@@ -463,12 +467,13 @@ begin
     -- B8. the linked telephony call moves the start 90 seconds earlier and was answered (connected,
     --     although the CRM outcome is not)
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd10';
-    if not r.first_call_linked or r.first_call_at <> '2026-09-17T13:38:30Z' or r.first_connected_at <> '2026-09-17T13:38:30Z' then
-      raise exception 'FAIL B8: d10 gives linked %, start %, connected %', r.first_call_linked, r.first_call_at, r.first_connected_at;
+    if not exists (select 1 from cma.call_link l where l.crm_call_id = r.first_attempt_call_id and l.unlinked_at is null) or r.first_attempt_at <> '2026-09-17T13:38:30Z' or r.first_connected_at <> '2026-09-17T13:38:30Z' then
+      raise exception 'FAIL B8: d10 gives linked %, start %, connected %', exists (select 1 from cma.call_link l where l.crm_call_id = r.first_attempt_call_id and l.unlinked_at is null), r.first_attempt_at, r.first_connected_at;
     end if;
 
     -- B9. a removed association no longer counts (d11 measures from its second call)
-    if (select x.first_call_source_id from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd11') is distinct from 'c11b' then
+    if (select c.source_id from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x join cma.crm_call c on c.id = x.first_attempt_call_id
+        where x.deal_source_id = 'd11') is distinct from 'c11b' then
       raise exception 'FAIL B9: d11 still counts the call whose association was removed';
     end if;
 

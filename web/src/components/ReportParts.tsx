@@ -36,7 +36,7 @@ export function GroupSwitch({
   group, query, copy,
 }: { group: SpeedToLeadGroup; query: Record<string, string>; copy: Copy }) {
   const t = copy.speedToLead;
-  const labels: Record<SpeedToLeadGroup, string> = { day: t.day, market: t.market, agent: t.agent, pipeline: t.pipeline };
+  const labels: Record<SpeedToLeadGroup, string> = { day: t.day, week: t.week, market: t.market, agent: t.agent, pipeline: t.pipeline };
   const next = nextGroup(group);
   return (
     <div className="flex flex-col gap-2 text-small font-semibold">

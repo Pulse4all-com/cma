@@ -112,8 +112,8 @@
   {
     "path": "/reports/speed-to-lead",
     "subject": "manager",
-    "tx": 3,
-    "rt": 13
+    "tx": 2,
+    "rt": 11
   },
   {
     "path": "/reports/intake",

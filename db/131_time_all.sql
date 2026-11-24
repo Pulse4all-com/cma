@@ -32,6 +32,9 @@
 -- Since addition 0009zq (234_speed_to_lead_one.sql) the Dashboard's speed-to-lead row reads the one-row total of
 -- cma.speed_to_lead_summary ('speed to lead total', which needs 234: before it the group is refused, CMA04), and Speed to
 -- lead's page has its rows read timed as a row of its own ('speed to lead {P}', 'rows').
+-- Since addition 0009zr (236_speed_to_lead_cockpit.sql) Speed to lead's page is the cockpit: its two rows ('summary by
+-- day', 'rows') are its one read, cma.speed_to_lead_page ('page (not called yet, first page)'), and the Called tab's page
+-- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own); both need 236 (before it the function does not exist: they read FAIL).
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
@@ -443,8 +446,12 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'speed to lead total', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'total')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'callbacks kept', $q$select * from cma.callbacks_kept_report('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'speed to lead {P}', 'summary by day', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'speed to lead {P}', 'rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
+-- Speed to lead's cockpit (addition 0009zr): the page makes one read (cma.speed_to_lead_page: the figures with the
+-- previous period, the markets, the trend, the Group by table and the deals list's first page of 50), the Not called yet
+-- tab first; a tab or a further page is the same read again (the Called tab's page 2 its own row). A report core
+-- (overview, 500 ms) that holds a list's first page
+('b', 'speed to lead {P}', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'not_called', 50, 0)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'speed to lead further page {P}', 'page (called, page 2)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'called', 50, 50)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by day', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by market', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'market') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),

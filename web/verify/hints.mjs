@@ -99,10 +99,12 @@ const COURTESY_LAST_MONTH = (() => {
 const cases = [
   // [subject, path, at least this many headers, at least this many tiles]; on the Dashboard the tiles
   // only: the charts' own tables (time per status, per person) are not report headers
-  ["manager", "/reports/speed-to-lead?range=month&group=day", 12, 0],
-  ["manager", "/reports/speed-to-lead?range=month&group=market", 7, 0],
-  ["manager", "/reports/speed-to-lead?range=month&group=agent", 7, 0],
-  ["manager", "/reports/speed-to-lead?range=month&group=pipeline", 7, 0],
+  // Speed to lead's cockpit (addition 0009zr): six tiles; the per-market card's eight headers, the Group by table's ten and
+  // the deals list's seven, in each grouping and in the Called view (its rows' attempts open with Show attempts)
+  ["manager", "/reports/speed-to-lead?range=month&group=day", 25, 6],
+  ["manager", "/reports/speed-to-lead?range=month&group=market", 25, 6],
+  ["manager", "/reports/speed-to-lead?range=month&group=agent", 25, 6],
+  ["manager", "/reports/speed-to-lead?range=month&group=pipeline&view=called", 25, 6],
   ["manager", "/reports/intake?range=month", 18, 0],
   ["invest-analyst", "/reports/intake?range=month", 18, 0],
   ["manager", "/reports/data-quality", 3, 0],

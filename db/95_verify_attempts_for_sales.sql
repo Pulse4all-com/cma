@@ -64,6 +64,9 @@
 --       Attempt), where 0007d's measured 120 s to the CRM call
 --   B12 lost: dL2, lost and never attempted, is no longer a known answer of called before the cutoff (1of2 becomes 1of1)
 --   B14 the same deal out of the known answers of the period (8of11 becomes 8of10)
+-- Amended for addition 0009zr (236, brief B40b, D36): cma.speed_to_lead_of no longer carries first_call_*, so B8 finds
+-- each deal's first outbound CRM call (linked or not) itself, as 0009zq's row did (cma.lead_calls_of from the creation
+-- less the pre-window, the earliest by start, then id); its answer is unchanged.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of PASS.
 -- =============================================================================================
 
@@ -665,11 +668,20 @@ begin
                   coalesce(string_agg(format('%s %s<>%s', e.src, e.ours, e.theirs), ' ' order by e.src) filter (where not e.same), '-'))
       into v_txt
     from (select x.deal_source_id as src, x.speed_to_lead_seconds as ours, sl.business_seconds as theirs,
-                 coalesce(sl.first_call_linked and sl.first_call_at = x.first_attempt_at, false) as same,
+                 coalesce(fo.is_linked and fo.effective_at = x.first_attempt_at, false) as same,
                  x.speed_to_lead_seconds is not distinct from sl.business_seconds
                    and x.called_before_next_noon is not distinct from sl.before_next_noon as equal
           from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x
           join cma.speed_to_lead_of(v_t1, v_from, v_to) sl on sl.deal_id = x.deal_id
+          -- the deal's first outbound CRM call, linked or not, as 0009zq's first_call_* gave it (gone since 0009zr, D36)
+          left join lateral (
+            select lc.is_linked, lc.effective_at
+            from cma.lead_deals_of(v_t1, v_from, v_to) ld
+            cross join lateral cma.lead_calls_of(v_t1, ld.connection_id, ld.record_type, ld.source_id, ld.contacts,
+                                                 ld.created_at - make_interval(mins => greatest(0, cma.setting_of(v_t1, 'speed_to_lead.pre_window_minutes')::integer))) lc
+            where ld.deal_id = x.deal_id and lc.direction = 'outbound'
+            order by lc.effective_at, lc.call_id
+            limit 1) fo on true
           where x.first_attempt_at is not null) e;
     v_rows := v_rows || array['18', 'B8 the speed to lead is cma.speed_to_lead_of''s for every attempted deal, dT (a first CRM call without the telephony call) included',
       case when v_txt = '8 equal of 8; differ: dT 5390<>5390' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
