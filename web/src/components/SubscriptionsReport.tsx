@@ -119,7 +119,8 @@ export function SubscriptionsTiles({ page, t, copy, locale, dataQuality }: { pag
   const { churn, failed } = ratesOf(rates);
   const month = rates ? monthName(rates.month, locale) : "";
   const flashChurn = rates ? flashHref("/reports/flash", {
-    o: "churn", ...(page.filter.market ? { market: page.filter.market } : {}), from: rates.month, to: monthEnd(rates.month),
+    // range=custom: Flash's period bar (lib/period resolvePeriod) reads from and to with it alone, and opens on Today without it
+    o: "churn", ...(page.filter.market ? { market: page.filter.market } : {}), range: "custom", from: rates.month, to: monthEnd(rates.month),
   }) : null;
   return (
     <div role="group" aria-label={t.tilesLabel} className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6" data-testid="subscriptions-tiles">

@@ -17,7 +17,9 @@
  * every set-up source feeding it read after that end; else "so far", en and nl). Since addition 0009f Assets → Installed
  * base's own view (src/lib/installed-base.ts): the list's own filters against db/160, the document narrowed by several page
  * filters, the donut's slices and arcs, the per-market stacks, a breakdown's chart, the page's state, the mock's serial
- * search and unlinked list against its data-quality check, and the page's shape. Invented values only.
+ * search and unlinked list against its data-quality check, and the page's shape. Since 24 November 2026 (PROD_RUNBOOK 22.6):
+ * every link into /reports/flash in web/src that names from or to says range: "custom" beside them (--provoke adds one
+ * that does not). Invented values only.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -32,7 +34,8 @@ import {
   FLASH_ORDER_KINDS, splitOrderOf, splitKeyLabel, splitLabelsOf, flashHref,
   FLASH_DOCUMENT_FILTERS, documentFilterOf, filterDocument, modelChoicesOf, shownSetOf, appliedAsOf, dimMatches,
 } from "../src/lib/flash.ts";
-import { fmtLastRead } from "../src/lib/time.ts";
+import { addDays, fmtLastRead } from "../src/lib/time.ts";
+import { resolvePeriod } from "../src/lib/period.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const here = path.dirname(new URL(import.meta.url).pathname);
@@ -1110,6 +1113,77 @@ const zeroStacks = ibLib.marketStacks([...rowsZf, mRow({ market: "BE", status: "
 expect("CMA-104 (4): a market whose In the field is 0 keeps its bar and total, and the page writes no split line under it",
   [zeroStacks.map((x) => `${x.market}=${x.total}`), /\{s\.total > 0 \? \(\s*<span className="tabular col-span-2 col-start-2/.test(ibParts0009f)],
   [["GB=7", "NL=4", "BE=0"], true], [[], false]);
+
+// ---- Since the Flash churn link fix (PROD_RUNBOOK 22.6, 24 November 2026): a link into Reports → Flash that names a
+// period says range=custom. lib/period's resolvePeriod reads from and to with range=custom alone; without it Flash opens
+// on Today (Customers → Subscriptions' "{n} churned in {month}" opened Today and showed 0). Every flashHref("/reports/flash",
+// { … }) and `/reports/flash?${new URLSearchParams({ … })}` in web/src is read: each object literal in its query (a
+// spread's own included) that holds a from or a to key holds range: "custom" beside it. The provoked run adds a link
+// written as the Subscriptions churn link was before the fix
+/** The object literals of a query's source, innermost first, each with only its own text (nested literals left out) */
+function objectLiterals(text) {
+  const out = [];
+  const stack = [];
+  let quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === "\\") { if (stack.length) stack[stack.length - 1] += c + text[i + 1]; i++; continue; }
+      if (c === quote) quote = null;
+      if (stack.length) stack[stack.length - 1] += c;
+      continue;
+    }
+    // a comment is no part of the query (an apostrophe in one is no string)
+    if (c === "/" && text[i + 1] === "/") { const end = text.indexOf("\n", i); i = end < 0 ? text.length : end; continue; }
+    if (c === "/" && text[i + 1] === "*") { const end = text.indexOf("*/", i + 2); i = end < 0 ? text.length : end + 1; continue; }
+    if (c === '"' || c === "'" || c === "`") { quote = c; if (stack.length) stack[stack.length - 1] += c; continue; }
+    if (c === "{") { stack.push("{"); continue; }
+    if (c === "}") { out.push(stack.pop() + "}"); if (stack.length === 0) break; continue; }
+    if (stack.length) stack[stack.length - 1] += c;
+  }
+  return out;
+}
+const PERIOD_KEY = /(?:^|[{,])\s*["']?(?:from|to)["']?\s*(?=[:,}])/;
+const CUSTOM_RANGE = /(?:^|[{,])\s*["']?range["']?\s*:\s*["']custom["']/;
+const FLASH_LINK = /flashHref\(\s*"\/reports\/flash"\s*,\s*|`\/reports\/flash\?\$\{new URLSearchParams\(\s*/g;
+/** The links into /reports/flash of a set of sources: [{ at, period, custom }] (period: a literal names from or to) */
+function flashLinksOf(files) {
+  const links = [];
+  for (const [file, source] of Object.entries(files)) {
+    for (const m of source.matchAll(FLASH_LINK)) {
+      const start = m.index + m[0].length;
+      if (source[start] !== "{") continue;
+      const lits = objectLiterals(source.slice(start));
+      const named = lits.filter((l) => PERIOD_KEY.test(l));
+      links.push({ at: `${file}:${source.slice(0, m.index).split("\n").length}`, period: named.length > 0, custom: named.every((l) => CUSTOM_RANGE.test(l)) });
+    }
+  }
+  return links;
+}
+const srcRoot = path.join(here, "..", "src");
+const srcFiles = {};
+(function walkSrc(dir) {
+  for (const name of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, name.name);
+    if (name.isDirectory()) walkSrc(p);
+    else if (/\.(ts|tsx)$/.test(name.name)) srcFiles[path.relative(srcRoot, p)] = readFileSync(p, "utf8");
+  }
+})(srcRoot);
+if (PROVOKE) srcFiles["provoked/ChurnLink.tsx"] = 'const href = flashHref("/reports/flash", {\n  o: "churn", ...(market ? { market } : {}), from: rates.month, to: monthEnd(rates.month),\n});';
+const flashLinks = flashLinksOf(srcFiles);
+const periodLinks = flashLinks.filter((l) => l.period);
+expect("a link into /reports/flash that names from or to says range: \"custom\" beside them (lib/period reads them with it alone)",
+  periodLinks.filter((l) => !l.custom).map((l) => l.at), [], []);
+expect("the scan sees the links: the churn links of Customers → Subscriptions and Customers → Active name their period",
+  [flashLinks.length >= 8, periodLinks.map((l) => l.at.replace(/:\d+$/, "")).filter((f) => !f.startsWith("provoked/")).sort()],
+  [true, ["app/reports/active/page.tsx", "components/SubscriptionsReport.tsx"]], [false, []]);
+const subsChurnQuery = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", market: "GB", range: "custom", from: "2026-10-01", to: "2026-10-31" }), "http://x").searchParams);
+const oldChurnQuery = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", market: "GB", from: "2026-10-01", to: "2026-10-31" }), "http://x").searchParams);
+const active30 = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", range: "custom", from: addDays("2026-11-24", -29), to: "2026-11-24" }), "http://x").searchParams);
+expect("Flash reads the fixed links' period back: the month (the old link opened Today), and the 30 business dates to the take's",
+  [resolvePeriod(subsChurnQuery, "2026-11-24", 366), resolvePeriod(oldChurnQuery, "2026-11-24", 366).period, resolvePeriod(active30, "2026-11-24", 366).period],
+  [{ range: "custom", period: { from: "2026-10-01", to: "2026-10-31" }, invalid: null }, { from: "2026-11-24", to: "2026-11-24" }, { from: "2026-10-26", to: "2026-11-24" }],
+  [{ range: "today", period: { from: "2026-11-24", to: "2026-11-24" }, invalid: null }, { from: "2026-10-01", to: "2026-10-31" }, { from: "2026-10-25", to: "2026-11-24" }]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
