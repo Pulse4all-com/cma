@@ -1,0 +1,16 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:191_verify_follow_up_clock_at_read.sql:69: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+DO
