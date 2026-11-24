@@ -47,6 +47,7 @@
     "verify:function-bases": "node ../tools/verify-function-bases.mjs",
     "verify:pledges": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/pledges.mjs",
     "verify:active": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./verify/lib/alias.mjs verify/active.mjs",
+    "verify:csp": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/csp.mjs",
     "verify:telemetry": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/telemetry.mjs",
     "verify:subscriptions": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./verify/lib/alias.mjs verify/subscriptions.mjs"
   },

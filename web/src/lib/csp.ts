@@ -9,12 +9,13 @@
  *     script in <head> (src/lib/desktop-fit.ts) is static: allowed by its hash, so the root layout needs no request data.
  *     In development, 'unsafe-eval' too (React rebuilds server error stacks with eval; never in production).
  *   frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
- *     step 1, unchanged (next.config.ts sends it on every answer, also the ones proxy.ts does not see).
+ *     step 1, unchanged and repeated here: proxy.ts's header replaces next.config.ts's on the answers it passes on, so the
+ *     answer carries one policy; next.config.ts's step 1 stays on the answers proxy.ts gives itself or never sees.
  * style-src is not set: inline style attributes (42 in web/src) and the fit's style element stay allowed (night N07: not
  * tightened tonight).
  *
  * Every page is rendered per request (the build lists only app.webmanifest and icon.png as static), so every page gets
- * its nonce; a page made static later would render without nonces and its scripts would be refused: verify:security
+ * its nonce; a page made static later would render without nonces and its scripts would be refused: verify:csp
  * checks the build's static routes.
  */
 import { createHash, getRandomValues } from "node:crypto";

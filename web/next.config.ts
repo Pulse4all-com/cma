@@ -7,10 +7,12 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "same-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   // The first Content-Security-Policy step (the IT audit of 17 October 2026): no framing, no <base> or
-  // form-target hijack, no plugins, on every answer. The second step (brief N07, WP8, 25 November 2026) is proxy.ts's: every
-  // answer it passes on gets a second policy with script-src and a per-request nonce (src/lib/csp.ts, which repeats these
-  // four directives; a browser applies both policies). It allows the desktop fit's inline script in <head> by its sha256;
-  // style-src is not set, so the style element the fit writes stays allowed; blocked, verify:layout's fit checks fail
+  // form-target hijack, no plugins. The second step (brief N07, WP8, 25 November 2026) is proxy.ts's: on every answer it
+  // passes on, its header replaces this one with one policy, script-src with a per-request nonce followed by these four
+  // directives (src/lib/csp.ts repeats them; verify:theme checks the one header). This one stays on the answers proxy.ts
+  // gives itself or never sees (its 401 and 400, /api/health, static files). The policy allows the desktop fit's inline
+  // script in <head> by its sha256; style-src is not set, so the style element the fit writes stays allowed; blocked,
+  // verify:layout's fit checks fail
   { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
 ];
 
