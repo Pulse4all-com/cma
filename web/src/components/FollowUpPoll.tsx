@@ -18,7 +18,9 @@ export function FollowUpPoll({ computedAt }: { computedAt: string }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const shown = useRef(computedAt);
-  shown.current = computedAt;
+  useEffect(() => {
+    shown.current = computedAt;
+  }, [computedAt]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;

@@ -70,12 +70,13 @@ const withAll = (dir = new URL("../src/app/", import.meta.url).pathname) => read
 expect("All: its own letter A, offered by Reviews alone; range=all is today everywhere else",
   [ALL_RANGE_KEY, Object.values(RANGE_KEYS).includes(ALL_RANGE_KEY), withAll(), at("all", "2026-11-01").range, at("all", "2026-11-01").period,
     barSource.includes("allLabel ? RANGES.flatMap((k) => (k === \"custom\" ? [\"all\", k] as const : [k])) : RANGES")],
-  ["A", false, ["reports/reviews/page.tsx"], "today", { from: "2026-11-01", to: "2026-11-01" }, true],
+  ["A", false, ["(shell)/reports/reviews/page.tsx"], "today", { from: "2026-11-01", to: "2026-11-01" }, true],
   ["M", true, [], "all", { from: "2026-01-01", to: "2026-11-01" }, false]);
 
 // ---- every page with the period bar ------------------------------------------------------------
 const pathnames = [...barSource.match(/pathname:\s*([^;]+);/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-const pageFile = (p) => `../src/app${p}/page.tsx`;
+// every page with the bar sits in the persistent frame's route group (night N07, D2)
+const pageFile = (p) => `../src/app/(shell)${p}/page.tsx`;
 const rendering = pathnames.filter((p) => {
   // Reports → Flash resolves its period and renders its bar through components/FlashOverview (flashState, FlashTop) since 0008zw
   const page = src(pageFile(p)) + (p === "/reports/flash" ? src("../src/components/FlashOverview.tsx") : "");
