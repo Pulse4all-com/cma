@@ -15,7 +15,7 @@
 -- rule in Open decisions, Indirect sales: "once Shopify is connected, orders come from Shopify and the intake tiles count
 -- lead pipelines only"; Decision log, 24 Nov 2026): Intake's Deals in and Deals closed counted every counted deal
 -- pipeline, the order pipelines included, whose deals are web orders created and closed as won in one go. That inflated
--- both columns (23 Nov 2026: GB 68 in and 85 closed) and showed the same orders twice, as they are under Shop too.
+-- both columns and showed the same orders twice, as they are under Shop too.
 --   1. Call center work counts deals of lead pipelines only: a counted deal pipeline with is_lead; a pipeline not yet
 --      seen counts as lead, as in cma.lead_deals_of; a pipeline marked both lead and order counts as lead.
 --   2. Deals of the other counted deal pipelines are no call center work: they show once, as a count (other deals in).
